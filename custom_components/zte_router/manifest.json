@@ -7,9 +7,9 @@
   "requirements": ["requests", "urllib3"],
   "issue_tracker": "",
   "iot_class": "local_polling",
-  "version": "1.4.5.3",
+  "version": "1.4.5.4",
   "ver_change_note_1_4_3": "Persist Polling Pause (after first fetch) and Interval (make resilent)",
   "ver_change_note_1_4_4": "Restore full list of attributes",
-  "ver_change_note_1_4_5": "Remove DT name IDs",
+  "ver_change_note_1_4_5": "Remove DT name IDs update Readme",
   "config_flow": true
 }

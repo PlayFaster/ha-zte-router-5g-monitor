@@ -1,9 +1,11 @@
 # ZTE Router Monitor for Home Assistant
 
-A native Home Assistant integration for ZTE 5G Routers (MC7010, MC801, etc.) that provides detailed signal statistics, data usage tracking, and SMS management.
+Home Assistant integration for ZTE MC7010 5G Routers that provides detailed signal statistics, data usage tracking, and SMS management.
 
 ## Features
 
+- **Works with ZTE 7010**: This works with, and has only been tested with, ZTE 7010 5G Outdoor CPE Router. It may work with other similiar ZTE devices.
+  
 - **Categorized Devices**: Separate devices for Router Stats, Data Usage, and SMS Services.
   
 - **Signal Monitoring**: Real-time RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
