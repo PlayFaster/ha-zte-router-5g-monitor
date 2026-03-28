@@ -9,12 +9,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the number platform."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data[COORDINATOR]
+    
+    # Read from persisted storage (hass.data was initialized from options in __init__)
     initial_value = data.get(CONF_SCAN_INTERVAL, 180)
     
     async_add_entities([ZTEPollingInterval(coordinator, entry, initial_value)])
 
 class ZTEPollingInterval(NumberEntity):
-    """Number entity to control the polling interval with debounced immediate effect."""
+    """Number entity to control the polling interval with persistence."""
     
     def __init__(self, coordinator, entry, initial_value):
         self._coordinator = coordinator
@@ -27,8 +29,6 @@ class ZTEPollingInterval(NumberEntity):
         self._attr_native_unit_of_measurement = UnitOfTime.SECONDS
         self._attr_entity_category = EntityCategory.CONFIG
         self._attr_native_value = initial_value
-        
-        # Task tracker for the debounce logic
         self._refresh_task = None
 
     async def async_set_native_value(self, value: float) -> None:
@@ -45,20 +45,24 @@ class ZTEPollingInterval(NumberEntity):
         self._refresh_task = asyncio.create_task(self._async_debounced_apply(value))
 
     async def _async_debounced_apply(self, value: float) -> None:
-        """Wait for the user to stop moving the slider, then apply."""
+        """Apply change and persist to ConfigEntry Options."""
         try:
-            # Wait for 2 seconds of inactivity
             await asyncio.sleep(2)
+            val_int = int(value)
             
-            # 4. Update the data store and the coordinator's interval
-            self.hass.data[DOMAIN][self._entry.entry_id][CONF_SCAN_INTERVAL] = int(value)
-            self._coordinator.update_interval = timedelta(seconds=int(value))
+            # 1. Update session memory
+            self.hass.data[DOMAIN][self._entry.entry_id][CONF_SCAN_INTERVAL] = val_int
+            self._coordinator.update_interval = timedelta(seconds=val_int)
             
-            # 5. Trigger an IMMEDIATE fetch and reset the coordinator's timer
+            # 2. Persist to ConfigEntry Options (saves to .storage)
+            new_options = dict(self._entry.options)
+            new_options[CONF_SCAN_INTERVAL] = val_int
+            self.hass.config_entries.async_update_entry(self._entry, options=new_options)
+            
+            # 3. Trigger immediate refresh
             await self._coordinator.async_request_refresh()
             
         except asyncio.CancelledError:
-            # This happens if the user moves the slider again within the 2-second window
             pass
 
     @property

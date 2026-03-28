@@ -15,32 +15,43 @@ from .const import DOMAIN, COORDINATOR
 # groups: router, data, sms
 SENSOR_TYPES = [
     # Main Router Signal
-    ("lte_rsrp", "ZTE 5G LTE RSRP DT509", "mdi:signal", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dBm", None, "router"),
-    ("lte_rsrq", "ZTE 5G LTE RSRQ DT510", "mdi:signal", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dBm", None, "router"),
-    ("lte_rssi", "ZTE 5G LTE RSSi DT511", "mdi:signal", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dBm", None, "router"),
-    ("lte_snr", "ZTE 5G LTE SNR DT512", "mdi:waveform", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dB", None, "router"),
-    ("Z5g_rsrp", "ZTE 5G Z5G RSRP DT535", "mdi:signal", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dBm", None, "router"),
-    ("Z5g_SINR", "ZTE 5G Z5G SiNr DT536", "mdi:waveform", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dB", None, "router"),
-    ("signalbar", "ZTE 5G SignalBar DT527", "mdi:signal", None, SensorStateClass.MEASUREMENT, None, None, "router"),
-    ("network_type", "ZTE 5G Network Type DT518", "mdi:transmission-tower", None, None, None, None, "router"),
+    ("lte_rsrp", "LTE RSRP", "mdi:signal", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dBm", None, "router"),
+    ("lte_rsrq", "LTE RSRQ", "mdi:signal", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dBm", None, "router"),
+    ("lte_rssi", "LTE RSSi", "mdi:signal", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dBm", None, "router"),
+    ("lte_snr", "LTE SNR", "mdi:waveform", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dB", None, "router"),
+    ("Z5g_rsrp", "Z5G RSRP", "mdi:signal", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dBm", None, "router"),
+    ("Z5g_SINR", "Z5G SiNr", "mdi:waveform", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dB", None, "router"),
+    ("signalbar", "SignalBar", "mdi:signal", None, SensorStateClass.MEASUREMENT, None, None, "router"),
+    ("network_type", "Network Type", "mdi:transmission-tower", None, None, None, None, "router"),
     
     # Data Usage Device
-    ("monthly_rx_bytes", "ZTE 5G Monthly Download DT515", "mdi:download", SensorDeviceClass.DATA_SIZE, SensorStateClass.TOTAL_INCREASING, UnitOfInformation.GIGABYTES, None, "data"),
-    ("monthly_tx_bytes", "ZTE 5G Monthly Upload DT516", "mdi:upload", SensorDeviceClass.DATA_SIZE, SensorStateClass.TOTAL_INCREASING, UnitOfInformation.GIGABYTES, None, "data"),
-    ("monthly_total_bytes", "ZTE 5G Monthly Data UpDown DT517", "mdi:swap-vertical-bold", SensorDeviceClass.DATA_SIZE, SensorStateClass.TOTAL_INCREASING, UnitOfInformation.GIGABYTES, None, "data"),
+    ("monthly_rx_bytes", "Download GB", "mdi:download", SensorDeviceClass.DATA_SIZE, SensorStateClass.TOTAL_INCREASING, UnitOfInformation.GIGABYTES, None, "data"),
+    ("monthly_tx_bytes", "Upload GB", "mdi:upload", SensorDeviceClass.DATA_SIZE, SensorStateClass.TOTAL_INCREASING, UnitOfInformation.GIGABYTES, None, "data"),
+    ("monthly_total_bytes", "Data UpDown GB", "mdi:swap-vertical-bold", SensorDeviceClass.DATA_SIZE, SensorStateClass.TOTAL_INCREASING, UnitOfInformation.GIGABYTES, None, "data"),
 
     # Diagnostics
     ("last_updated", "Last Updated", "mdi:update", SensorDeviceClass.TIMESTAMP, None, None, EntityCategory.DIAGNOSTIC, "router"),
     ("device_uptime", "Device Uptime", "mdi:clock-start", SensorDeviceClass.TIMESTAMP, None, None, EntityCategory.DIAGNOSTIC, "router"),
-    ("cell_id", "ZTE 5G Cell ID DT502", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
-    ("lan_ipaddr", "ZTE 5G LAN IPAddr DT503", "mdi:map-marker-outline", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
-    ("wan_ipaddr", "ZTE 5G WAN IPAddr DT532", "mdi:map-marker-outline", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
-    ("wan_apn", "ZTE 5G WAN APN DT530", "mdi:numeric-3-circle-outline", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
-    ("wan_connect_status", "ZTE 5G WAN Connect Status DT531", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
-    ("lte_ca_pcell_band", "ZTE 5G LTE CA PCell Band DT504", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
-    ("wa_inner_version", "ZTE 5G Wa Inner Version DT534", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
-    ("mdm_mcc", "ZTE 5G MDM MCC DT513", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
-    ("mdm_mnc", "ZTE 5G MDM MNC DT514", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("cell_id", "Cell ID", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("lan_ipaddr", "LAN IPAddr", "mdi:map-marker-outline", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("wan_ipaddr", "WAN IPAddr", "mdi:map-marker-outline", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("wan_apn", "WAN APN", "mdi:numeric-3-circle-outline", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("wan_connect_status", "WAN Connect Status", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("lte_ca_pcell_band", "LTE CA PCell Band", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("lte_ca_pcell_bandwidth", "LTE CA PCell Bandwidth", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("lte_pci", "LTE Pci", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("mdm_mcc", "MDM MCC", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("mdm_mnc", "MDM MNC", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("network_provider", "Network Provider", "mdi:numeric-3-circle-outline", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("nr5g_action_band", "NR5G Action Band", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("nr5g_action_channel", "NR5G Action Channel", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("nr5g_pci", "NR5G Pci", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("rmcc", "RMCC", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("rmnc", "RMNC", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("wan_active_band", "WAN Active Band", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("wan_active_channel", "WAN Active Channel", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("wan_lte_ca", "WAN LTE CA", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
+    ("wa_inner_version", "Wa Inner Version", "mdi:transmission-tower", None, None, None, EntityCategory.DIAGNOSTIC, "router"),
 ]
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -103,8 +114,8 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
         host = self.coordinator.data.get("lan_ipaddr", "zte_router")
         if self._group == "data":
             return {
-                "identifiers": {(DOMAIN, f"{host}_data")},
-                "name": "ZTE Router Data Usage",
+                "identifiers": {(DOMAIN, f"{host}_monthly")},
+                "name": "Monthly",
                 "manufacturer": "ZTE",
                 "via_device": (DOMAIN, host),
             }
@@ -118,8 +129,8 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
 class ZTESMSSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
-        self._attr_name = "ZTE 5G SMS Total DT543"
-        self._attr_unique_id = f"{entry.unique_id}_sms_total"
+        self._attr_name = "Total"
+        self._attr_unique_id = f"{entry.unique_id}_total"
         self._attr_icon = "mdi:message-plus-outline"
         self._attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -149,7 +160,7 @@ class ZTESMSSensor(CoordinatorEntity, SensorEntity):
         host = self.coordinator.data.get("lan_ipaddr", "zte_router")
         return {
             "identifiers": {(DOMAIN, f"{host}_sms")},
-            "name": "ZTE Router SMS Service",
+            "name": "SMS",
             "manufacturer": "ZTE",
             "via_device": (DOMAIN, host),
         }
@@ -157,8 +168,8 @@ class ZTESMSSensor(CoordinatorEntity, SensorEntity):
 class ZTESMSContentSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
-        self._attr_name = "ZTE 5G SMS Recent DT542"
-        self._attr_unique_id = f"{entry.unique_id}_sms_recent"
+        self._attr_name = "Recent"
+        self._attr_unique_id = f"{entry.unique_id}_recent"
         self._attr_icon = "mdi:message-badge-outline"
 
     @property

@@ -9,7 +9,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class ZTEBestConnectionSensor(CoordinatorEntity, BinarySensorEntity):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
-        self._attr_name = "ZTE 5G Best Connection DT540"
+        self._attr_name = "Best Connection"
         self._attr_unique_id = f"{entry.unique_id}_best_conn"
         self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
 
