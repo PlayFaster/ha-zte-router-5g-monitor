@@ -1,0 +1,13 @@
+{
+  "domain": "zte_5g_monitor",
+  "name": "ZTE 5G Router Monitor",
+  "documentation": "https://github.com/home-assistant/example",
+  "dependencies": [],
+  "manufacturer": "ZTE",  
+  "codeowners": [],
+  "requirements": ["requests", "urllib3"],
+  "issue_tracker": "",
+  "iot_class": "local_polling",
+  "version": "1.5.7",
+  "config_flow": true
+}

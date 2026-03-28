@@ -2,10 +2,10 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from .api import ZTERouterAPI
-from .const import DOMAIN
+from .const import DOMAIN, NAME
 
 class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for ZTE Router."""
+    """Handle a config flow for ZTE 5G Router Monitor."""
 
     VERSION = 1
 
@@ -31,7 +31,7 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_configured()
 
                 return self.async_create_entry(
-                    title=f"ZTE Router ({user_input[CONF_HOST]})",
+                    title=f"{NAME} ({user_input[CONF_HOST]})",
                     data=user_input
                 )
             except Exception:

@@ -9,7 +9,7 @@ from homeassistant.components.sensor import (
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.const import UnitOfInformation
-from .const import DOMAIN, COORDINATOR
+from .const import DOMAIN, COORDINATOR # Removed NAME as we use entry.title
 
 # Mapping: (key, name, icon, device_class, state_class, unit, category, device_group)
 # groups: router, data, sms
@@ -64,6 +64,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class ZTEDataSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry, key, name, icon, device_class, state_class, unit, category, group):
         super().__init__(coordinator)
+        self._entry = entry # FIX: Store entry for dynamic naming
         self._key = key
         self._group = group
         self._attr_name = name
@@ -111,24 +112,26 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        host = self.coordinator.data.get("lan_ipaddr", "zte_router")
+        host = self.coordinator.data.get("lan_ipaddr", DOMAIN)
         if self._group == "data":
             return {
                 "identifiers": {(DOMAIN, f"{host}_monthly")},
-                "name": "Monthly",
+                "name": f"{self._entry.title} Monthly",
                 "manufacturer": "ZTE",
                 "via_device": (DOMAIN, host),
             }
         return {
             "identifiers": {(DOMAIN, host)},
-            "name": "ZTE 5G Router",
+            "name": self._entry.title,
             "manufacturer": "ZTE",
-            "model": "MC7010/MC801",
+            "configuration_url": f"http://{host}",
+            "model": "MC7010"
         }
 
 class ZTESMSSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
+        self._entry = entry # FIX: Store entry for dynamic naming
         self._attr_name = "Total"
         self._attr_unique_id = f"{entry.unique_id}_total"
         self._attr_icon = "mdi:message-plus-outline"
@@ -157,10 +160,10 @@ class ZTESMSSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        host = self.coordinator.data.get("lan_ipaddr", "zte_router")
+        host = self.coordinator.data.get("lan_ipaddr", DOMAIN)
         return {
             "identifiers": {(DOMAIN, f"{host}_sms")},
-            "name": "SMS",
+            "name": f"{self._entry.title} SMS",
             "manufacturer": "ZTE",
             "via_device": (DOMAIN, host),
         }
@@ -168,6 +171,7 @@ class ZTESMSSensor(CoordinatorEntity, SensorEntity):
 class ZTESMSContentSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
+        self._entry = entry # FIX: Store entry for dynamic naming
         self._attr_name = "Recent"
         self._attr_unique_id = f"{entry.unique_id}_recent"
         self._attr_icon = "mdi:message-badge-outline"
@@ -188,9 +192,9 @@ class ZTESMSContentSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        host = self.coordinator.data.get("lan_ipaddr", "zte_router")
+        host = self.coordinator.data.get("lan_ipaddr", DOMAIN)
         return {
             "identifiers": {(DOMAIN, f"{host}_sms")},
-            "name": "ZTE Router SMS Service",
+            "name": f"{self._entry.title} SMS",
             "via_device": (DOMAIN, host),
         }

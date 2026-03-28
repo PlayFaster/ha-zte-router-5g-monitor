@@ -3,7 +3,7 @@ from datetime import timedelta
 from homeassistant.components.number import NumberEntity
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.const import UnitOfTime
-from .const import DOMAIN, COORDINATOR, CONF_SCAN_INTERVAL
+from .const import DOMAIN, COORDINATOR, CONF_SCAN_INTERVAL # Removed NAME
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the number platform."""
@@ -19,6 +19,7 @@ class ZTEPollingInterval(NumberEntity):
     """Number entity to control the polling interval with persistence."""
     
     def __init__(self, coordinator, entry, initial_value):
+        """Initialize the number entity."""
         self._coordinator = coordinator
         self._entry = entry
         self._attr_name = "Polling Interval"
@@ -47,6 +48,7 @@ class ZTEPollingInterval(NumberEntity):
     async def _async_debounced_apply(self, value: float) -> None:
         """Apply change and persist to ConfigEntry Options."""
         try:
+            # Wait for 2 seconds of inactivity
             await asyncio.sleep(2)
             val_int = int(value)
             
@@ -63,11 +65,17 @@ class ZTEPollingInterval(NumberEntity):
             await self._coordinator.async_request_refresh()
             
         except asyncio.CancelledError:
+            # This happens if the user moves the slider again within the 2-second window
             pass
 
     @property
     def device_info(self):
+        """Return device information linking to the main router device."""
+        host = self._coordinator.data.get("lan_ipaddr", DOMAIN)
         return {
-            "identifiers": {(DOMAIN, self._coordinator.data.get("lan_ipaddr", "zte_router"))},
-            "name": "ZTE 5G Router"
+            "identifiers": {(DOMAIN, host)},
+            "name": self._entry.title, # FIX: Dynamic integration title
+            "manufacturer": "ZTE",
+            "configuration_url": f"http://{host}",
+            "model": "MC7010"
         }

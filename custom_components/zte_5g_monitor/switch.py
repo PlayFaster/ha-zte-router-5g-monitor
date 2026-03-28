@@ -1,13 +1,13 @@
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity import EntityCategory
-from .const import DOMAIN, COORDINATOR, CONF_STOP_POLLING
+from .const import DOMAIN, COORDINATOR, CONF_STOP_POLLING # Removed NAME
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the switch platform."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data[COORDINATOR]
     
-    # Read initial state from session memory (initialized from options in __init__)
+    # Read initial state from session memory
     initial_state = data.get(CONF_STOP_POLLING, False)
     
     async_add_entities([ZTEPausePollingSwitch(coordinator, entry, initial_state)])
@@ -16,6 +16,7 @@ class ZTEPausePollingSwitch(SwitchEntity):
     """Switch to pause/resume polling with persistence."""
 
     def __init__(self, coordinator, entry, initial_state):
+        """Initialize the switch."""
         self._coordinator = coordinator
         self._entry = entry
         self._attr_name = "Pause Polling"
@@ -30,11 +31,11 @@ class ZTEPausePollingSwitch(SwitchEntity):
         return self.hass.data[DOMAIN][self._entry.entry_id].get(CONF_STOP_POLLING, False)
 
     async def async_turn_on(self, **kwargs):
-        """Pause polling and persist."""
+        """Pause polling."""
         await self._async_set_state(True)
 
     async def async_turn_off(self, **kwargs):
-        """Resume polling and persist."""
+        """Resume polling."""
         await self._async_set_state(False)
 
     async def _async_set_state(self, state: bool):
@@ -55,7 +56,12 @@ class ZTEPausePollingSwitch(SwitchEntity):
 
     @property
     def device_info(self):
+        """Return device information linking to the main router device."""
+        host = self._coordinator.data.get("lan_ipaddr", DOMAIN)
         return {
-            "identifiers": {(DOMAIN, self._coordinator.data.get("lan_ipaddr", "zte_router"))},
-            "name": "ZTE 5G Router"
+            "identifiers": {(DOMAIN, host)},
+            "name": self._entry.title, # FIX: Dynamic integration title
+            "manufacturer": "ZTE",
+            "configuration_url": f"http://{host}",
+            "model": "MC7010"
         }
