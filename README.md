@@ -5,40 +5,37 @@ A native Home Assistant integration for ZTE 5G Routers (MC7010, MC801, etc.) tha
 ## Features
 
 - **Categorized Devices**: Separate devices for Router Stats, Data Usage, and SMS Services.
-    
+  
 - **Signal Monitoring**: Real-time RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
-    
+  
 - **Data Tracking**: Monthly download, upload, and total usage (GB).
-    
+  
 - **SMS Management**: View recent messages and delete the mailbox directly from HA.
-    
+  
 - **Resilient Polling**: Includes a hybrid retry logic (30s retry) and stale-data grace periods to prevent "Unavailable" flickers during router reboots.
-    
-
+  
 ## Installation
 
 ### Manual
 
-1.  Copy the `custom_components/zte_router` folder to your Home Assistant `custom_components` directory.
-    
-2.  Restart Home Assistant.
-    
-3.  Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router Monitor".
-    
-
+1. Copy the `custom_components/zte_router` folder to your Home Assistant `custom_components` directory.
+  
+2. Restart Home Assistant.
+  
+3. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router Monitor".
+  
 ### HACS
 
-1.  Add this URL as a **Custom Repository** in HACS.
-    
-2.  Click Download.
-    
-3.  Restart Home Assistant and add via the UI.
-    
-
+1. Add this URL as a **Custom Repository** in HACS.
+  
+2. Click Download.
+  
+3. Restart Home Assistant and add via the UI.
+  
 ## Configuration
 
 Setup is handled entirely via the UI. You will need:
 
 - Router IP Address (e.g., 192.168.0.1)
-    
+- Router Username
 - Admin Password
