@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.3] - 2026-03-28
+
+### Changed
+
+- **Reduced Startup Risk**: Moved to async for startup to avoid any potential for slowness/hangs/locks if router is unavaile at HA start..
+  
 ## [1.5.7] - 2026-03-28
 
 ### Added

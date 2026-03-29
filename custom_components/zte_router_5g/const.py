@@ -1,7 +1,7 @@
-"""Constants for the ZTE 5G Router Monitor integration."""
+"""Constants for the ZTE Router 5G Monitor integration."""
 
-DOMAIN = "zte_5g_monitor"
-NAME = "ZTE 5G Router Monitor"
+DOMAIN = "zte_router_5g"
+NAME = "ZTE Router 5G Monitor"
 COORDINATOR = "coordinator"
 
 # Storage keys

@@ -1,4 +1,4 @@
-# ZTE 5G Router Monitor for Home Assistant
+# ZTE Router 5G Monitor for Home Assistant
 
 Home Assistant integration for ZTE MC7010 5G Router that provides detailed signal statistics, data usage tracking, and SMS management.
   
@@ -33,11 +33,11 @@ This works with, and has only been tested with, ZTE MC7010. It may work with oth
   
 ### Manual
 
-1. Copy the `custom_components/zte_5g_monitor` folder to your Home Assistant `custom_components` directory.
+1. Copy the `custom_components/zte_router_5g` folder to your Home Assistant `custom_components` directory.
   
 2. Restart Home Assistant.
   
-3. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE 5G Router Monitor".
+3. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor".
   
 ## Configuration
 

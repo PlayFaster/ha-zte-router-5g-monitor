@@ -1,6 +1,7 @@
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity import EntityCategory
-from .const import DOMAIN, COORDINATOR, CONF_STOP_POLLING # Removed NAME
+from homeassistant.const import CONF_HOST
+from .const import DOMAIN, CONF_STOP_POLLING, COORDINATOR
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the switch platform."""
@@ -9,7 +10,6 @@ async def async_setup_entry(hass, entry, async_add_entities):
     
     # Read initial state from session memory
     initial_state = data.get(CONF_STOP_POLLING, False)
-    
     async_add_entities([ZTEPausePollingSwitch(coordinator, entry, initial_state)])
 
 class ZTEPausePollingSwitch(SwitchEntity):
@@ -47,7 +47,6 @@ class ZTEPausePollingSwitch(SwitchEntity):
         new_options = dict(self._entry.options)
         new_options[CONF_STOP_POLLING] = state
         self.hass.config_entries.async_update_entry(self._entry, options=new_options)
-        
         self.async_write_ha_state()
         
         # If we just resumed, trigger a refresh
@@ -56,11 +55,11 @@ class ZTEPausePollingSwitch(SwitchEntity):
 
     @property
     def device_info(self):
-        """Return device information linking to the main router device."""
-        host = self._coordinator.data.get("lan_ipaddr", DOMAIN)
+        # FIX: Use IP from entry.data
+        host = self._entry.data[CONF_HOST]
         return {
             "identifiers": {(DOMAIN, host)},
-            "name": self._entry.title, # FIX: Dynamic integration title
+            "name": self._entry.title,
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
             "model": "MC7010"
