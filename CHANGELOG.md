@@ -2,11 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.1.1] - 2026-03-29
+
+### Added
+
+- **Error Logging**: Significantly improved home assistant (logger) error logging.
+  
+## [2.0.1] - 2026-03-29
+
+### Added
+
+- **Options Flow**: Allow reconfiguration of intedration in-situ rather then delete and re-add.
+  
+## [1.9.4] - 2026-03-29
+
+### Added
+
+- **Model Number**: Pulls model number from device.
+  
+### Changed
+
+- **Exception Handling**: Improved exception handling.
+  
+### Fixed
+
+- **Strings and Translate**: Fixed strings en.json structure and moved all elements to this.
+- **Sessions Handling**: Explicit closing of sessions.
+  
+## [1.8.1] - 2026-03-29
+
+### Changed
+
+- **Strings and Translate**: Added translation folder structure, just en for now.
+  
+## [1.7.3] - 2026-03-29
+
+### Fixed
+
+- **Entity Naming**: Fixed entity sensor naming approach.
+  
 ## [1.6.3] - 2026-03-28
 
 ### Changed
 
-- **Reduced Startup Risk**: Moved to async for startup to avoid any potential for slowness/hangs/locks if router is unavaile at HA start..
+- **Reduced Startup Risk**: Moved to async for startup to avoid any potential for slowness/hangs/locks if router is unavaile at HA start.
   
 ## [1.5.7] - 2026-03-28
 
