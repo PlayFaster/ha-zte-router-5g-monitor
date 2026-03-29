@@ -5,7 +5,7 @@ from .api import ZTERouterAPI
 from .const import DOMAIN, NAME
 
 class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for ZTE 5G Router Monitor."""
+    """Handle a config flow for ZTE Router 5G Monitor."""
 
     VERSION = 1
 

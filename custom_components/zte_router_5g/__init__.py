@@ -9,7 +9,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import ZTERouterAPI
-from .const import DOMAIN, NAME, COORDINATOR, CONF_SCAN_INTERVAL, CONF_STOP_POLLING
+from .const import DOMAIN, COORDINATOR, CONF_SCAN_INTERVAL, CONF_STOP_POLLING
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,22 +22,18 @@ PLATFORMS = [
 ]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up ZTE 5G Router Monitor from a config entry."""
+    """Set up ZTE Router 5G Monitor from a config entry with Background Safety."""
     api = ZTERouterAPI(
         entry.data[CONF_HOST],
         entry.data.get(CONF_USERNAME),
         entry.data[CONF_PASSWORD]
     )
 
-    await hass.async_add_executor_job(api.try_set_protocol)
-    # FIX: Log in during setup so the first poll doesn't trigger the "Safe Startup" bypass
-    await hass.async_add_executor_job(api.login)
-
-    # Read persisted values
+    # Initial state from options
     stop_polling = entry.options.get(CONF_STOP_POLLING, False)
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, 180)
 
-    # State tracking for polling controls and resilience
+    # Initialize data storage immediately
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
@@ -47,10 +43,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     async def async_update_data():
-        """Fetch data from API with enhanced fail-safe for startup."""
+        """Fetch data from API with resilience and pausing."""
         entry_data = hass.data[DOMAIN][entry.entry_id]
         
-        # FIX: Check entry.options directly for real-time responsiveness to the switch
+        # Check entry.options directly for real-time responsiveness to the switch
         is_paused = entry.options.get(CONF_STOP_POLLING, False)
         is_first_run = coordinator.data is None
 
@@ -63,7 +59,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         last_error = None
         for attempt in range(2):
             try:
+                # Primary data fetch
                 data = await hass.async_add_executor_job(api.get_all_data)
+                
+                # Secondary fetches
                 sms_cap = await hass.async_add_executor_job(api.get_sms_capacity)
                 last_sms = await hass.async_add_executor_job(api.get_last_sms_content)
                 
@@ -78,34 +77,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except Exception as err:
                 last_error = err
                 if attempt == 0:
-                    # Use entry.title for dynamic logging
                     _LOGGER.warning("%s: Fetch failed, retrying in 30 seconds...", entry.title)
                     await asyncio.sleep(30)
-                else:
-                    # Use entry.title for dynamic logging
-                    _LOGGER.warning("%s: Second fetch attempt failed for this cycle", entry.title)
 
-        # 3. Hybrid Resilience (Grace Period)
         entry_data["consecutive_failures"] += 1
         
-        # If we have data from a previous success, use it to prevent "Unavailable"
         if coordinator.data is not None:
             if entry_data["consecutive_failures"] == 1:
-                # Use entry.title for dynamic logging
-                _LOGGER.warning("%s: Fetch failed. Holding last known values for one cycle.", entry.title)
+                _LOGGER.warning("%s: Fetch failed. Holding last known values.", entry.title)
             return coordinator.data
 
-        # 4. Critical Logic: Safe Startup
-        # If we are PAUSED and the first fetch fails, return an empty dict.
-        # This prevents UpdateFailed from "bricking" the entities in the UI.
+        # 4. Safe Startup Bypass
         if is_paused:
-            _LOGGER.warning("%s: Initial fetch failed while paused. Starting with empty data.", entry.title)
             return {}
 
-        # Use entry.title for dynamic logging
         _LOGGER.error("%s: Connection lost. Marking entities unavailable.", entry.title)
-        raise UpdateFailed(f"Error communicating with API: {last_error}")
+        raise UpdateFailed(f"Communication error: {last_error}")
 
+    # Create the coordinator
     coordinator = DataUpdateCoordinator(
         hass,
         _LOGGER,
@@ -113,14 +102,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         update_method=async_update_data,
         update_interval=timedelta(seconds=scan_interval),
     )
-    
     coordinator.last_update_success_time = None
-
-    # This will now finish successfully even if the router is offline, provided it's paused
-    await coordinator.async_config_entry_first_refresh()
     hass.data[DOMAIN][entry.entry_id][COORDINATOR] = coordinator
 
+    # Forward platforms immediately
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # BACKGROUND INITIALIZATION TASK
+    async def _async_background_setup():
+        try:
+            # 1. Check protocol with aggressive 5s timeout
+            await hass.async_add_executor_job(api.try_set_protocol, 5)
+            
+            # 2. Login with aggressive 5s timeout
+            await hass.async_add_executor_job(api.login, 5)
+            
+            # 3. Trigger first refresh
+            # FIX: Use async_refresh() instead of async_config_entry_first_refresh()
+            # because the entry is already LOADED.
+            await coordinator.async_refresh()
+            
+            _LOGGER.info("%s: Background initialization complete.", entry.title)
+        except Exception as err:
+            _LOGGER.warning("%s: Background initialization failed (will retry): %s", entry.title, err)
+
+    hass.async_create_task(_async_background_setup())
+
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

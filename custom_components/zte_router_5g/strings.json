@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "Setup ZTE 5G Router Monitor",
+        "title": "Setup ZTE Router 5G Monitor",
         "data": {
           "host": "IP Address",
           "username": "Username (Optional)",

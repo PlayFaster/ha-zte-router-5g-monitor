@@ -1,6 +1,6 @@
 {
-  "name": "ZTE 5G Router Monitor",
-  "content_directory": "custom_components/zte_5g_monitor",
+  "name": "ZTE Router 5G Monitor",
+  "content_directory": "custom_components/zte_router_5g",
   "type": "integration",
   "iot_class": "local_polling",
   "homeassistant": "2024.1.0",

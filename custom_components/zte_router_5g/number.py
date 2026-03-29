@@ -2,15 +2,15 @@ import asyncio
 from datetime import timedelta
 from homeassistant.components.number import NumberEntity
 from homeassistant.helpers.entity import EntityCategory
-from homeassistant.const import UnitOfTime
-from .const import DOMAIN, COORDINATOR, CONF_SCAN_INTERVAL # Removed NAME
+from homeassistant.const import UnitOfTime, CONF_HOST # Added CONF_HOST
+from .const import DOMAIN, COORDINATOR, CONF_SCAN_INTERVAL
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the number platform."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data[COORDINATOR]
     
-    # Read from persisted storage (hass.data was initialized from options in __init__)
+    # Read from persisted storage
     initial_value = data.get(CONF_SCAN_INTERVAL, 180)
     
     async_add_entities([ZTEPollingInterval(coordinator, entry, initial_value)])
@@ -34,7 +34,6 @@ class ZTEPollingInterval(NumberEntity):
 
     async def async_set_native_value(self, value: float) -> None:
         """Handle the UI slider change."""
-        # 1. Update the UI state immediately so the slider stays where the user put it
         self._attr_native_value = value
         self.async_write_ha_state()
 
@@ -71,10 +70,11 @@ class ZTEPollingInterval(NumberEntity):
     @property
     def device_info(self):
         """Return device information linking to the main router device."""
-        host = self._coordinator.data.get("lan_ipaddr", DOMAIN)
+        # FIX: Use IP from entry.data to prevent NoneType crash during background setup
+        host = self._entry.data[CONF_HOST]
         return {
             "identifiers": {(DOMAIN, host)},
-            "name": self._entry.title, # FIX: Dynamic integration title
+            "name": self._entry.title,
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
             "model": "MC7010"

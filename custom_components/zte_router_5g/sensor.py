@@ -1,6 +1,6 @@
 from datetime import timedelta
 from homeassistant.util import dt as dt_util
-
+from homeassistant.const import CONF_HOST, UnitOfInformation
 from homeassistant.components.sensor import (
     SensorEntity,
     SensorDeviceClass,
@@ -9,10 +9,8 @@ from homeassistant.components.sensor import (
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.const import UnitOfInformation
-from .const import DOMAIN, COORDINATOR # Removed NAME as we use entry.title
+from .const import DOMAIN, COORDINATOR
 
-# Mapping: (key, name, icon, device_class, state_class, unit, category, device_group)
-# groups: router, data, sms
 SENSOR_TYPES = [
     # Main Router Signal
     ("lte_rsrp", "LTE RSRP", "mdi:signal", SensorDeviceClass.SIGNAL_STRENGTH, SensorStateClass.MEASUREMENT, "dBm", None, "router"),
@@ -64,7 +62,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 class ZTEDataSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry, key, name, icon, device_class, state_class, unit, category, group):
         super().__init__(coordinator)
-        self._entry = entry # FIX: Store entry for dynamic naming
+        self._entry = entry
         self._key = key
         self._group = group
         self._attr_name = name
@@ -78,31 +76,23 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         data = self.coordinator.data
-        
-        # New: Last Successful Update Timestamp
+        if not data: return None
         if self._key == "last_updated":
             return self.coordinator.last_update_success_time
-
-        # New: Locked Device Uptime (Boot Time)
         if self._key == "device_uptime":
             uptime_seconds = data.get("realtime_time")
-            if uptime_seconds is None or uptime_seconds == "":
-                return None
+            if not uptime_seconds: return None
             try:
-                # Calculate boot time and round to nearest minute to prevent jitter
                 seconds = int(float(uptime_seconds))
                 boot_time = dt_util.now() - timedelta(seconds=seconds)
                 return boot_time.replace(second=0, microsecond=0)
-            except:
-                return None
-
+            except: return None
         if self._key == "monthly_total_bytes":
             try:
                 rx = float(data.get("monthly_rx_bytes", 0))
                 tx = float(data.get("monthly_tx_bytes", 0))
                 return round((rx + tx) / 1073741824, 2)
             except: return None
-            
         val = data.get(self._key)
         if val in [None, ""]: return None
         if "monthly" in self._key and "_bytes" in self._key:
@@ -112,7 +102,8 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        host = self.coordinator.data.get("lan_ipaddr", DOMAIN)
+        # FIX: Use IP from entry.data instead of coordinator.data to prevent NoneType crash
+        host = self._entry.data[CONF_HOST]
         if self._group == "data":
             return {
                 "identifiers": {(DOMAIN, f"{host}_monthly")},
@@ -131,7 +122,7 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
 class ZTESMSSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
-        self._entry = entry # FIX: Store entry for dynamic naming
+        self._entry = entry
         self._attr_name = "Total"
         self._attr_unique_id = f"{entry.unique_id}_total"
         self._attr_icon = "mdi:message-plus-outline"
@@ -140,6 +131,7 @@ class ZTESMSSensor(CoordinatorEntity, SensorEntity):
     @property
     def native_value(self):
         data = self.coordinator.data
+        if not data: return None
         keys = ['sms_nv_rev_total', 'sms_nv_send_total', 'sms_nv_draftbox_total',
                 'sms_sim_rev_total', 'sms_sim_send_total', 'sms_sim_draftbox_total']
         return sum(int(data.get(k, 0)) for k in keys)
@@ -147,6 +139,7 @@ class ZTESMSSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         data = self.coordinator.data
+        if not data: return {}
         return {
             "sms_nv_total": int(data.get("sms_nv_total", 0)),
             "sms_sim_total": int(data.get("sms_sim_total", 0)),
@@ -160,7 +153,8 @@ class ZTESMSSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        host = self.coordinator.data.get("lan_ipaddr", DOMAIN)
+        # FIX: Use IP from entry.data
+        host = self._entry.data[CONF_HOST]
         return {
             "identifiers": {(DOMAIN, f"{host}_sms")},
             "name": f"{self._entry.title} SMS",
@@ -171,18 +165,20 @@ class ZTESMSSensor(CoordinatorEntity, SensorEntity):
 class ZTESMSContentSensor(CoordinatorEntity, SensorEntity):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator)
-        self._entry = entry # FIX: Store entry for dynamic naming
+        self._entry = entry
         self._attr_name = "Recent"
         self._attr_unique_id = f"{entry.unique_id}_recent"
         self._attr_icon = "mdi:message-badge-outline"
 
     @property
     def native_value(self):
+        if not self.coordinator.data: return "No messages"
         msg = self.coordinator.data.get("last_sms", {})
         return msg.get("content_decoded", "No messages")
 
     @property
     def extra_state_attributes(self):
+        if not self.coordinator.data: return {}
         msg = self.coordinator.data.get("last_sms", {})
         return {
             "id": msg.get("id"),
@@ -192,7 +188,8 @@ class ZTESMSContentSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def device_info(self):
-        host = self.coordinator.data.get("lan_ipaddr", DOMAIN)
+        # FIX: Use IP from entry.data
+        host = self._entry.data[CONF_HOST]
         return {
             "identifiers": {(DOMAIN, f"{host}_sms")},
             "name": f"{self._entry.title} SMS",

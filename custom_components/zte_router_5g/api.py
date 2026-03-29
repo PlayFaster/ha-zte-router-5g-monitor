@@ -19,7 +19,7 @@ class ZTERouterAPI:
         self.session = requests.Session()
         self.session.verify = False
         self.referer = f"http://{self.ip}/"
-        self.timeout = 15
+        self.timeout = 15 # Default timeout for standard polling
         self.stok = None
 
     def _hash(self, val):
@@ -53,57 +53,45 @@ class ZTERouterAPI:
         except: pass
         return date_str
 
-    def try_set_protocol(self):
+    def try_set_protocol(self, timeout=5):
+        """Identify if router is on http or https with a short timeout."""
         protocols = ["http", "https"]
         for proto in protocols:
             url = f"{proto}://{self.ip}"
             try:
-                r = self.session.get(url, timeout=5)
+                r = self.session.get(url, timeout=timeout)
                 if r.ok:
                     self.protocol = proto
                     self.referer = f"{self.protocol}://{self.ip}/"
                     return
             except: pass
 
-    def get_version(self):
+    def get_version(self, timeout=None):
+        tout = timeout or self.timeout
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=wa_inner_version"
         try:
-            r = self.session.get(url, headers={"Referer": self.referer})
+            r = self.session.get(url, headers={"Referer": self.referer}, timeout=tout)
             return r.json().get("wa_inner_version", "")
         except: return ""
 
-    def get_LD(self):
+    def get_LD(self, timeout=None):
+        tout = timeout or self.timeout
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=LD"
         try:
-            r = self.session.get(url, headers={"Referer": self.referer})
+            r = self.session.get(url, headers={"Referer": self.referer}, timeout=tout)
             return r.json().get("LD", "").upper()
         except Exception as e:
             raise Exception(f"Failed to get LD token: {e}")
 
-    def get_RD(self):
-        url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=RD"
-        headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
-        try:
-            r = self.session.get(url, headers=headers)
-            return r.json().get("RD", "")
-        except: return ""
-
-    def get_AD(self):
-        version = self.get_version()
-        if not version: return ""
-        is_new_gen = any(m in version for m in ["MC888", "MC889"])
-        hash_func = (lambda s: hashlib.sha256(s.encode()).hexdigest().upper()) if is_new_gen else (lambda s: hashlib.md5(s.encode()).hexdigest())
-        a = hash_func(version)
-        rd = self.get_RD()
-        return hash_func(a + rd)
-
-    def login(self):
+    def login(self, timeout=None):
         """Clean login that resets the internal session state."""
+        tout = timeout or self.timeout
         self.stok = None
         self.session.cookies.clear()
         
-        ld = self.get_LD()
-        version = self.get_version()
+        ld = self.get_LD(timeout=tout)
+        version = self.get_version(timeout=tout)
+        
         if not self.password: raise Exception("No password provided")
         pass_hash = self._hash(self.password).upper()
         zte_pass = self._hash(pass_hash + ld).upper()
@@ -119,14 +107,14 @@ class ZTERouterAPI:
         }
         if self.username: payload['username'] = self.username
         
-        r = self.session.post(f"{self.referer}goform/goform_set_cmd_process", data=payload, headers={"Referer": self.referer})
+        r = self.session.post(f"{self.referer}goform/goform_set_cmd_process", data=payload, headers={"Referer": self.referer}, timeout=tout)
         stok = r.cookies.get("stok", "").strip('\"')
         if not stok: raise Exception("Login failed")
         self.stok = f"stok={stok}"
         return self.stok
 
     def get_all_data(self):
-        """Fetch the 37 technical elements requested."""
+        """Fetch primary technical data."""
         if not self.stok: self.login()
         
         params = [
@@ -137,7 +125,10 @@ class ZTERouterAPI:
             "nr5g_action_channel", "nr5g_pci", "realtime_time", "rmcc", "rmnc", 
             "signalbar", "wan_active_band", "wan_active_channel", "wan_apn", 
             "wan_connect_status", "wan_ipaddr", "wan_lte_ca", "wa_inner_version", 
-            "Z5g_rsrp", "Z5g_SINR", "rssi", "rscp", "sms_unread_num", "sms_received_flag"
+            "Z5g_rsrp", "Z5g_SINR", "rssi", "rscp", "sms_unread_num", "sms_received_flag",
+            "sms_nv_rev_total", "sms_nv_send_total", "sms_nv_draftbox_total",
+            "sms_sim_rev_total", "sms_sim_send_total", "sms_sim_draftbox_total",
+            "sms_nv_total", "sms_sim_total"
         ]
         cmd = ",".join(params)
         url = f"{self.referer}goform/goform_get_cmd_process?multi_data=1&isTest=false&sms_received_flag_flag=0&cmd={cmd}"
@@ -145,6 +136,7 @@ class ZTERouterAPI:
         try:
             response = self.session.get(url, headers=headers, timeout=self.timeout)
             data = response.json()
+            # Session expired check
             if data.get("network_type") == "" and data.get("signalbar") == "":
                 self.login()
                 return self.get_all_data()
@@ -224,7 +216,6 @@ class ZTERouterAPI:
             url = f"{self.referer}goform/goform_get_cmd_process"
             payload = {"isTest": "false", "cmd": "sms_data_total", "page": "0", "data_per_page": "500", "mem_store": "1", "tags": "10", "order_by": "order by id desc"}
             headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
-            
             r = self.session.post(url, data=payload, headers=headers, timeout=self.timeout)
             ids = [m['id'] for m in r.json().get('messages', [])]
             
@@ -235,6 +226,24 @@ class ZTERouterAPI:
         except Exception:
             self.stok = None
             raise
+
+    def get_AD(self):
+        version = self.get_version()
+        if not version: return ""
+        is_new_gen = any(m in version for m in ["MC888", "MC889"])
+        hash_func = (lambda s: hashlib.sha256(s.encode()).hexdigest().upper()) if is_new_gen else (lambda s: hashlib.md5(s.encode()).hexdigest())
+        a = hash_func(version)
+        rd = self.get_RD()
+        return hash_func(a + rd)
+
+    def get_RD(self):
+        url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=RD"
+        headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
+        try:
+            r = self.session.get(url, headers=headers, timeout=self.timeout)
+            return r.json().get("RD", "")
+        except: return ""
+
 
 if __name__ == "__main__":
     # Local debugging
@@ -259,4 +268,3 @@ if __name__ == "__main__":
         print(json.dumps(data, indent=2))
     except Exception as e:
         print(f"Error: {e}")
-
