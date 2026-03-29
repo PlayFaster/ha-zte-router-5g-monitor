@@ -1,42 +1,68 @@
-from homeassistant.components.binary_sensor import BinarySensorEntity, BinarySensorDeviceClass
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.components.binary_sensor import (
+    BinarySensorDeviceClass,
+    BinarySensorEntity,
+    BinarySensorEntityDescription,
+)
 from homeassistant.const import CONF_HOST
-from .const import DOMAIN, COORDINATOR
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
+
+from .const import COORDINATOR, DOMAIN
+from .helpers import get_router_model
+
+# Define the entity description for static metadata
+BEST_CONN_DESCRIPTION = BinarySensorEntityDescription(
+    key="best_connection",
+    translation_key="best_connection",
+    device_class=BinarySensorDeviceClass.CONNECTIVITY,
+)
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the binary sensor platform."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
-    async_add_entities([ZTEBestConnectionSensor(coordinator, entry)])
+    # Pass the description object into the sensor
+    async_add_entities([ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION)])
 
 class ZTEBestConnectionSensor(CoordinatorEntity, BinarySensorEntity):
     """Binary sensor to check for optimal 5G/LTE CA connection."""
 
-    def __init__(self, coordinator, entry):
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    entity_description: BinarySensorEntityDescription
+
+    def __init__(self, coordinator, entry, description: BinarySensorEntityDescription):
+        """Initialize the binary sensor."""
         super().__init__(coordinator)
-        self._entry = entry # Store entry
-        self._attr_name = "Best Connection"
-        self._attr_unique_id = f"{entry.unique_id}_best_conn"
-        self._attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+        self.entity_description = description
+        self._entry = entry
+        
+        # Unique ID generated from description key for registry stability
+        self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
     @property
-    def is_on(self):
+    def is_on(self) -> bool:
         """Return true if both 5G and LTE CA are active."""
         data = self.coordinator.data
-        if not data: return False
-        return data.get("network_type") == "ENDC" and data.get("wan_lte_ca") == "ca_activated"
+        if not data:
+            return False
+        # Optimal connection logic based on raw data keys
+        return (
+            data.get("network_type") == "ENDC"
+            and data.get("wan_lte_ca") == "ca_activated"
+        )
 
     @property
-    def icon(self):
+    def icon(self) -> str:
+        """Return icon based on connection status."""
         return "mdi:signal" if self.is_on else "mdi:signal-cellular-1"
 
     @property
     def device_info(self):
-        # FIX: Use IP from entry.data to prevent NoneType crash during background setup
-        host = self._entry.data[CONF_HOST]
+        """Return device information linking to the main router device."""
+        host = self._entry.options[CONF_HOST]
         return {
-            "identifiers": {(DOMAIN, host)}, 
+            "identifiers": {(DOMAIN, host)},
             "name": self._entry.title,
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
-            "model": "MC7010"
+            "model": get_router_model(self.coordinator.data),
         }

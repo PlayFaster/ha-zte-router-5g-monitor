@@ -1,14 +1,20 @@
 import requests
 import hashlib
-import binascii
 import urllib3
 import json
-import time
+import logging
 from datetime import datetime
-from requests.exceptions import RequestException
 
 # Suppress SSL warnings for local router access
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+_LOGGER = logging.getLogger(__name__)
+
+class ZTEConnectionError(Exception):
+    """Raised when the router cannot be reached."""
+
+class ZTEAuthError(Exception):
+    """Raised when login credentials are rejected."""
 
 class ZTERouterAPI:
     def __init__(self, ip, username, password):
@@ -22,6 +28,10 @@ class ZTERouterAPI:
         self.timeout = 15 # Default timeout for standard polling
         self.stok = None
 
+    def close(self):
+        """Close the underlying requests session to free resources."""
+        self.session.close()
+
     def _hash(self, val):
         if val is None:
             raise ValueError("Input to hash function cannot be None")
@@ -34,7 +44,8 @@ class ZTERouterAPI:
             for i in range(0, len(hex_str), 4):
                 decoded += chr(int(hex_str[i:i+4], 16))
             return decoded
-        except Exception:
+        except Exception as e:
+            _LOGGER.debug("Failed to decode hex string '%s': %s", hex_str, e)
             return "[Decoding Error]"
 
     def _parse_date(self, date_str):
@@ -50,7 +61,8 @@ class ZTERouterAPI:
                 second = int(parts[5])
                 dt = datetime(year, month, day, hour, minute, second)
                 return dt.isoformat()
-        except: pass
+        except Exception as e:
+            _LOGGER.debug("Failed to parse date string '%s': %s", date_str, e)
         return date_str
 
     def try_set_protocol(self, timeout=5):
@@ -59,12 +71,14 @@ class ZTERouterAPI:
         for proto in protocols:
             url = f"{proto}://{self.ip}"
             try:
-                r = self.session.get(url, timeout=timeout)
+                # Use verify=False because local router certs are often self-signed
+                r = self.session.get(url, timeout=timeout, verify=False)
                 if r.ok:
                     self.protocol = proto
                     self.referer = f"{self.protocol}://{self.ip}/"
                     return
-            except: pass
+            except Exception as e:
+                _LOGGER.debug("Failed to connect via %s: %s", proto, e)
 
     def get_version(self, timeout=None):
         tout = timeout or self.timeout
@@ -72,7 +86,9 @@ class ZTERouterAPI:
         try:
             r = self.session.get(url, headers={"Referer": self.referer}, timeout=tout)
             return r.json().get("wa_inner_version", "")
-        except: return ""
+        except Exception as e:
+            _LOGGER.debug("Failed to get version: %s", e)
+            return ""
 
     def get_LD(self, timeout=None):
         tout = timeout or self.timeout
@@ -81,7 +97,7 @@ class ZTERouterAPI:
             r = self.session.get(url, headers={"Referer": self.referer}, timeout=tout)
             return r.json().get("LD", "").upper()
         except Exception as e:
-            raise Exception(f"Failed to get LD token: {e}")
+            raise ZTEConnectionError(f"Failed to reach router: {e}")
 
     def login(self, timeout=None):
         """Clean login that resets the internal session state."""
@@ -109,7 +125,9 @@ class ZTERouterAPI:
         
         r = self.session.post(f"{self.referer}goform/goform_set_cmd_process", data=payload, headers={"Referer": self.referer}, timeout=tout)
         stok = r.cookies.get("stok", "").strip('\"')
-        if not stok: raise Exception("Login failed")
+        if not stok:
+            _LOGGER.error("Login failed: missing stok in response. Status: %s", r.status_code)
+            raise ZTEAuthError("Login failed")
         self.stok = f"stok={stok}"
         return self.stok
 
@@ -141,26 +159,31 @@ class ZTERouterAPI:
                 self.login()
                 return self.get_all_data()
             return data
-        except:
+        except Exception as e:
+            _LOGGER.error("Failed to fetch all data: %s", e)
             self.stok = None
             raise
 
-    def get_sms_capacity(self):
-        if not self.stok: self.login()
+    def get_sms_capacity(self, timeout=None):
+        tout = timeout or self.timeout
+        if not self.stok: self.login(timeout=tout)
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=sms_capacity_info"
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
         try:
-            r = self.session.get(url, headers=headers, timeout=self.timeout)
+            r = self.session.get(url, headers=headers, timeout=tout)
             return r.json()
-        except: return {}
+        except Exception as e:
+            _LOGGER.debug("Failed to get SMS capacity: %s", e)
+            return {}
 
-    def get_last_sms_content(self):
-        if not self.stok: self.login()
+    def get_last_sms_content(self, timeout=None):
+        tout = timeout or self.timeout
+        if not self.stok: self.login(timeout=tout)
         url = f"{self.referer}goform/goform_get_cmd_process"
         payload = {"isTest": "false", "cmd": "sms_data_total", "page": "0", "data_per_page": "1", "mem_store": "1", "tags": "10", "order_by": "order by id desc"}
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
         try:
-            r = self.session.post(url, data=payload, headers=headers, timeout=self.timeout)
+            r = self.session.post(url, data=payload, headers=headers, timeout=tout)
             messages = r.json().get("messages", [])
             if messages:
                 msg = messages[0]
@@ -169,7 +192,9 @@ class ZTERouterAPI:
                 msg["date_decoded"] = self._parse_date(msg.get("date", ""))
                 return msg
             return {}
-        except: return {}
+        except Exception as e:
+            _LOGGER.debug("Failed to get last SMS content: %s", e)
+            return {}
 
     def reboot(self):
         """Execute a device reboot using string-based payload. Confirmed working."""
@@ -184,12 +209,13 @@ class ZTERouterAPI:
             }
             r = self.session.post(f"{self.referer}goform/goform_set_cmd_process", headers=headers, data=payload, timeout=self.timeout)
             return r.status_code
-        except Exception:
+        except Exception as e:
+            _LOGGER.error("Failed to execute reboot: %s", e)
             self.stok = None
             raise
 
     def delete_sms(self, msg_id):
-        """Helper to delete SMS using specific session. Use delete_all_sms for button action."""
+        """Helper to delete SMS using specific session. Use delete_all for button action."""
         if not self.stok: self.login()
         ad = self.get_AD()
         payload = f'isTest=false&goformId=DELETE_SMS&msg_id={msg_id}&AD=' + ad
@@ -201,7 +227,7 @@ class ZTERouterAPI:
         r = self.session.post(f"{self.referer}goform/goform_set_cmd_process", headers=headers, data=payload, timeout=self.timeout)
         return r.status_code
 
-    def delete_all_sms(self):
+    def delete_all(self):
         """
         Action Button Logic:
         1. Force a clean login (robustness).
@@ -223,32 +249,38 @@ class ZTERouterAPI:
             if ids:
                 return self.delete_sms(";".join(ids))
             return 200
-        except Exception:
+        except Exception as e:
+            _LOGGER.error("Failed to delete all SMS: %s", e)
             self.stok = None
             raise
 
-    def get_AD(self):
-        version = self.get_version()
+    def get_AD(self, timeout=None):
+        tout = timeout or self.timeout
+        version = self.get_version(timeout=tout)
         if not version: return ""
         is_new_gen = any(m in version for m in ["MC888", "MC889"])
         hash_func = (lambda s: hashlib.sha256(s.encode()).hexdigest().upper()) if is_new_gen else (lambda s: hashlib.md5(s.encode()).hexdigest())
         a = hash_func(version)
-        rd = self.get_RD()
+        rd = self.get_RD(timeout=tout)
         return hash_func(a + rd)
 
-    def get_RD(self):
+    def get_RD(self, timeout=None):
+        tout = timeout or self.timeout
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=RD"
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
         try:
-            r = self.session.get(url, headers=headers, timeout=self.timeout)
+            r = self.session.get(url, headers=headers, timeout=tout)
             return r.json().get("RD", "")
-        except: return ""
+        except Exception as e:
+            _LOGGER.debug("Failed to get RD: %s", e)
+            return ""
 
 
 if __name__ == "__main__":
     # Local debugging
+    import sys
     TEST_IP = "TYPE_IP_HERE" 
-    TEST_USER = "TYPE_USER_HER"
+    TEST_USER = "TYPE_USER_HERE"
     TEST_PWD = "TYPE_PASSOWRD_HERE_AND_RUN_MANUAL_IN_TERMINAL_FOR_DEBUG"
 
     print(f"--- Comprehensive ZTE Data Fetch ---")
