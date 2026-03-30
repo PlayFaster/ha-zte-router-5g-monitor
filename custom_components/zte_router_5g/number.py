@@ -1,6 +1,6 @@
 import asyncio
-from datetime import timedelta
 import logging
+from datetime import timedelta
 
 from homeassistant.components.number import (
     NumberEntity,
@@ -9,7 +9,7 @@ from homeassistant.components.number import (
 from homeassistant.const import CONF_HOST, UnitOfTime
 from homeassistant.helpers.entity import EntityCategory
 
-from .const import COORDINATOR, DOMAIN, CONF_SCAN_INTERVAL
+from .const import CONF_SCAN_INTERVAL, COORDINATOR, DOMAIN
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,34 +25,42 @@ POLLING_INTERVAL_DESCRIPTION = NumberEntityDescription(
     entity_category=EntityCategory.CONFIG,
 )
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the number platform."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data[COORDINATOR]
-    
+
     # Read initial value from session memory (or default to 180s)
     initial_value = data.get(CONF_SCAN_INTERVAL, 180)
-    
-    async_add_entities([
-        ZTEPollingInterval(coordinator, entry, POLLING_INTERVAL_DESCRIPTION, initial_value)
-    ])
+
+    async_add_entities(
+        [
+            ZTEPollingInterval(
+                coordinator, entry, POLLING_INTERVAL_DESCRIPTION, initial_value
+            )
+        ]
+    )
+
 
 class ZTEPollingInterval(NumberEntity):
     """Number entity to control the polling interval with persistence."""
-    
+
     _attr_has_entity_name = True
     _attr_should_poll = False
     entity_description: NumberEntityDescription
 
-    def __init__(self, coordinator, entry, description: NumberEntityDescription, initial_value):
+    def __init__(
+        self, coordinator, entry, description: NumberEntityDescription, initial_value
+    ):
         """Initialize the number entity."""
         self._coordinator = coordinator
         self._entry = entry
         self.entity_description = description
-        
+
         # Registry identification
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
-        
+
         # Local state
         self._attr_native_value = initial_value
         self._refresh_task = None
@@ -76,24 +84,26 @@ class ZTEPollingInterval(NumberEntity):
             # Wait for 2 seconds of inactivity before committing
             await asyncio.sleep(2)
             val_int = int(value)
-            
+
             _LOGGER.debug("Applying new polling interval: %s seconds", val_int)
-            
+
             # 1. Update session memory for the current running instance
             self.hass.data[DOMAIN][self._entry.entry_id][CONF_SCAN_INTERVAL] = val_int
-            
+
             # 2. Update the coordinator's actual update interval
             self._coordinator.update_interval = timedelta(seconds=val_int)
-            
+
             # 3. Persist to ConfigEntry Options (saves to .storage/core.config_entries)
             # This ensures the setting survives a Home Assistant restart.
             new_options = dict(self._entry.options)
             new_options[CONF_SCAN_INTERVAL] = val_int
-            self.hass.config_entries.async_update_entry(self._entry, options=new_options)
-            
+            self.hass.config_entries.async_update_entry(
+                self._entry, options=new_options
+            )
+
             # 4. Trigger an immediate refresh using the new interval
             await self._coordinator.async_request_refresh()
-            
+
         except asyncio.CancelledError:
             # Task was cancelled because the user moved the slider again
             pass

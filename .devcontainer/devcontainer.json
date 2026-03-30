@@ -3,12 +3,21 @@
   "dockerComposeFile": "docker-compose.yml",
   "service": "homeassistant",
   "workspaceFolder": "/workspaces/ha-zte-router-5g-monitor",
+  // Added -U to ensure it upgrades if a cached version is old
+  "postCreateCommand": "pip install -r requirements_test.txt",
   "customizations": {
     "vscode": {
       "extensions": [
         "ms-python.python",
-        "keesschollaart.vscode-home-assistant"
-      ]
+        "keesschollaart.vscode-home-assistant",
+        "charliermarsh.ruff"
+      ],
+      "settings": {
+        // This helps VS Code find your imports correctly
+        "python.analysis.extraPaths": [
+          "/workspaces/ha-zte-router-5g-monitor/custom_components"
+        ]
+      }
     }
   },
   "remoteUser": "root" 

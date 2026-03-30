@@ -1,29 +1,33 @@
 import logging
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.data_entry_flow import AbortFlow
-from .api import ZTERouterAPI, ZTEAuthError, ZTEConnectionError
-from .const import DOMAIN, DEFAULT_NAME
+
+from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
+from .const import DEFAULT_NAME, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
 
 def _user_schema(defaults: dict) -> vol.Schema:
     """Return the user/options form schema, pre-filled with defaults."""
-    return vol.Schema({
-        vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")) : str,
-        vol.Optional(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")) : str,
-        vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "")) : str,
-    })
+    return vol.Schema(
+        {
+            vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
+            vol.Optional(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): str,
+            vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "")): str,
+        }
+    )
 
 
 async def _validate_credentials(hass, user_input: dict) -> None:
-    """Validate router credentials. Raises ZTEConnectionError or ZTEAuthError on failure."""
+    """Validate router credentials.
+    Raises ZTEConnectionError or ZTEAuthError on failure.
+    """
     api = ZTERouterAPI(
-        user_input[CONF_HOST],
-        user_input.get(CONF_USERNAME),
-        user_input[CONF_PASSWORD]
+        user_input[CONF_HOST], user_input.get(CONF_USERNAME), user_input[CONF_PASSWORD]
     )
     try:
         await hass.async_add_executor_job(api.try_set_protocol, 5)

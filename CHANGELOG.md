@@ -2,15 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.2.4] - 2026-03-30
+
+### Added
+
+- **Coverage**: Added basic test coverage.
+
+### Changed
+
+- **Clean Code**: Code clean-up and formatting/linting rules.
+- **Testing**: Improved scope of testing.
+- **Strings**: Added strings.json in addition to en.json.
+  
 ## [2.2.3] - 2026-03-30
 
 ### Added
 
 - **Testing Infrastructure**: Added python tests.
 
-### Changed
+### Fixed
 
-- **Manifest**: Fixed Manifest.json for GitHub tests.
+- **Manifest**: Fixed manifest.json for GitHub tests.
   
 ## [2.1.1] - 2026-03-29
 
@@ -41,7 +53,7 @@ All notable changes to this project will be documented in this file.
   
 ## [1.8.1] - 2026-03-29
 
-### Changed
+### Added
 
 - **Strings and Translate**: Added translation folder structure, just en for now.
   
@@ -71,7 +83,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Aligned Integration Naming**: All naming now ZTE 5G Router Monitor.
+- **Aligned Integration Naming**: All naming now ZTE Router 5G Monitor.
   
 ## [1.4.5] - 2026-03-28
 

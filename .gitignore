@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+.ruff_cache/
 .venv/
 venv/
 dist/
@@ -32,6 +33,14 @@ sync.ffs_lock
 
 # Test Dev
 .devconfig/
+.coverage
 
 # Note Scratch Compare Area
-loc_only/
+/loc_only/
+/loc_only
+loc_only
+
+# AI
+*.gptcache
+.geminignore
+.aiexclude

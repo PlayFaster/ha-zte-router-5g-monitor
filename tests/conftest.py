@@ -1,6 +1,8 @@
-import pytest
 from unittest.mock import MagicMock
+
+import pytest
 from homeassistant.const import CONF_HOST
+
 
 @pytest.fixture
 def mock_config_entry():
@@ -9,8 +11,9 @@ def mock_config_entry():
     mock_entry.title = "My ZTE Router"
     # Your code specifically looks in .options for the host
     mock_entry.options = {CONF_HOST: "192.168.0.1"}
-    mock_entry.data = {} 
+    mock_entry.data = {}
     return mock_entry
+
 
 @pytest.fixture
 def mock_coordinator():

@@ -1,5 +1,5 @@
-import logging
 import asyncio
+import logging
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
@@ -9,7 +9,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import ZTERouterAPI
-from .const import DOMAIN, COORDINATOR, CONF_SCAN_INTERVAL, CONF_STOP_POLLING
+from .const import CONF_SCAN_INTERVAL, CONF_STOP_POLLING, COORDINATOR, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -18,18 +18,18 @@ PLATFORMS = [
     Platform.BUTTON,
     Platform.BINARY_SENSOR,
     Platform.NUMBER,
-    Platform.SWITCH
+    Platform.SWITCH,
 ]
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ZTE Router 5G Monitor from a config entry with Background Safety."""
-
     # Credentials and settings are stored in entry.options (written by both
     # the initial config flow and the options flow on reconfigure).
     api = ZTERouterAPI(
         entry.options[CONF_HOST],
         entry.options.get(CONF_USERNAME),
-        entry.options[CONF_PASSWORD]
+        entry.options[CONF_PASSWORD],
     )
 
     # Runtime state — persisted values from slider/switch changes
@@ -42,7 +42,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "api": api,
         CONF_STOP_POLLING: stop_polling,
         CONF_SCAN_INTERVAL: scan_interval,
-        "consecutive_failures": 0
+        "consecutive_failures": 0,
     }
 
     async def async_update_data():
@@ -77,22 +77,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             except Exception as err:
                 last_error = err
                 if attempt == 0:
-                    _LOGGER.warning("%s: Fetch failed: %s. Retrying in 30 seconds...", entry.title, err)
+                    _LOGGER.warning(
+                        "%s: Fetch failed: %s. Retrying in 30 seconds...",
+                        entry.title,
+                        err,
+                    )
                     await asyncio.sleep(30)
                 else:
-                    _LOGGER.warning("%s: Second fetch attempt failed for this cycle: %s", entry.title, err)
+                    _LOGGER.warning(
+                        "%s: Second fetch attempt failed for this cycle: %s",
+                        entry.title,
+                        err,
+                    )
 
         # 3. Failure resilience — hold last known values for one cycle
         entry_data["consecutive_failures"] += 1
 
         if coordinator.data is not None:
             if entry_data["consecutive_failures"] == 1:
-                _LOGGER.warning("%s: Fetch failed. Holding last known values.", entry.title)
+                _LOGGER.warning(
+                    "%s: Fetch failed. Holding last known values.", entry.title
+                )
             return coordinator.data
 
         # 4. Safe startup bypass — if paused on first run, start with empty data
         if is_paused:
-            _LOGGER.warning("%s: Initial fetch failed while paused. Starting with empty data.", entry.title)
+            _LOGGER.warning(
+                "%s: Initial fetch failed while paused. Starting with empty data.",
+                entry.title,
+            )
             return {}
 
         _LOGGER.error("%s: Connection lost. Marking entities unavailable.", entry.title)
@@ -121,7 +134,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await coordinator.async_refresh()
             _LOGGER.info("%s: Background initialization complete.", entry.title)
         except Exception as err:
-            _LOGGER.warning("%s: Background initialization failed (will retry): %s", entry.title, err)
+            _LOGGER.warning(
+                "%s: Background initialization failed (will retry): %s",
+                entry.title,
+                err,
+            )
 
     hass.async_create_task(_async_background_setup())
 
