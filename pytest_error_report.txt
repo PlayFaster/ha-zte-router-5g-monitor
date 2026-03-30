@@ -1,0 +1,527 @@
+
+================================================================================
+FAILED tests/test_api.py::test_api_login_no_password - AssertionError: Regex pattern did not match.
+FAILED tests/test_init.py::test_async_update_data_success - homeassistant.helpers.update_coordinator.UpdateFailed: Communication error: Failed to reach router: A test tried to use socket.socket.
+FAILED tests/test_init.py::test_async_update_data_paused - TypeError: 'MagicMock' object can't be awaited
+FAILED tests/test_init.py::test_async_update_data_retry_and_resilience - TypeError: 'MagicMock' object can't be awaited
+======================================================================= 4 failed, 64 passed, 2 warnings in 36.64s 
+
+================================================================================== test session starts ==================================================================================
+platform linux -- Python 3.14.2, pytest-9.0.0, pluggy-1.6.0
+rootdir: /workspaces/ha-zte-router-5g-monitor
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+plugins: aiohttp-1.1.0, requests-mock-1.12.1, respx-0.22.0, unordered-0.7.0, homeassistant-custom-component-0.13.320, syrupy-5.0.0, picked-0.5.1, asyncio-1.3.0, timeout-2.4.0, github-actions-annotate-failures-0.3.0, cov-7.0.0, xdist-3.8.0, socket-0.7.0, pytest_freezer-0.4.9, rerunfailures-16.0.1, typeguard-4.5.1, anyio-4.10.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 68 items                                                                                                                                                                      
+
+tests/test_api.py ..........F..............                                                                                                                                       [ 36%]
+tests/test_binary_sensor.py ...                                                                                                                                                   [ 41%]
+tests/test_button.py ....                                                                                                                                                         [ 47%]
+tests/test_config_flow.py ......                                                                                                                                                  [ 55%]
+tests/test_helpers.py ....                                                                                                                                                        [ 61%]
+tests/test_init.py ..FFF.                                                                                                                                                         [ 70%]
+tests/test_number.py ....                                                                                                                                                         [ 76%]
+tests/test_sensor.py .............                                                                                                                                                [ 95%]
+tests/test_switch.py ...                                                                                                                                                          [100%]
+
+======================================================================================= FAILURES ========================================================================================
+______________________________________________________________________________ test_api_login_no_password _______________________________________________________________________________
+
+self = <custom_components.zte_router_5g.api.ZTERouterAPI object at 0x7d867155ab70>, timeout = 15
+
+    def get_LD(self, timeout=None):
+        tout = timeout or self.timeout
+        url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=LD"
+        try:
+>           r = self.session.get(url, headers={"Referer": self.referer}, timeout=tout)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+custom_components/zte_router_5g/api.py:106: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/usr/local/lib/python3.14/site-packages/requests/sessions.py:602: in get
+    return self.request("GET", url, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.14/site-packages/requests/sessions.py:589: in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.14/site-packages/requests/sessions.py:703: in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.14/site-packages/requests/adapters.py:644: in send
+    resp = conn.urlopen(
+/usr/local/lib/python3.14/site-packages/urllib3/connectionpool.py:787: in urlopen
+    response = self._make_request(
+/usr/local/lib/python3.14/site-packages/urllib3/connectionpool.py:493: in _make_request
+    conn.request(
+/usr/local/lib/python3.14/site-packages/urllib3/connection.py:500: in request
+    self.endheaders()
+/usr/local/lib/python3.14/http/client.py:1353: in endheaders
+    self._send_output(message_body, encode_chunked=encode_chunked)
+/usr/local/lib/python3.14/http/client.py:1113: in _send_output
+    self.send(msg)
+/usr/local/lib/python3.14/http/client.py:1057: in send
+    self.connect()
+/usr/local/lib/python3.14/site-packages/urllib3/connection.py:331: in connect
+    self.sock = self._new_conn()
+                ^^^^^^^^^^^^^^^^
+/usr/local/lib/python3.14/site-packages/urllib3/connection.py:204: in _new_conn
+    sock = connection.create_connection(
+/usr/local/lib/python3.14/site-packages/urllib3/util/connection.py:64: in create_connection
+    sock = socket.socket(af, socktype, proto)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+cls = <class 'pytest_socket.disable_socket.<locals>.GuardedSocket'>, family = <AddressFamily.AF_INET: 2>, type = <SocketKind.SOCK_STREAM: 1>, proto = 6, fileno = None
+
+    def __new__(cls, family=-1, type=-1, proto=-1, fileno=None):
+        if _is_unix_socket(family) and allow_unix_socket:
+            return super().__new__(cls, family, type, proto, fileno)
+    
+>       raise SocketBlockedError()
+E       pytest_socket.SocketBlockedError: A test tried to use socket.socket.
+
+/usr/local/lib/python3.14/site-packages/pytest_socket.py:89: SocketBlockedError
+
+The above exception was the direct cause of the following exception:
+
+    def test_api_login_no_password():
+        """Test login failure when no password provided."""
+        api = ZTERouterAPI("192.168.0.1", "admin", "")
+        with pytest.raises(Exception, match="No password provided"):
+>           api.login()
+
+tests/test_api.py:108: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+custom_components/zte_router_5g/api.py:117: in login
+    ld = self.get_LD(timeout=tout)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <custom_components.zte_router_5g.api.ZTERouterAPI object at 0x7d867155ab70>, timeout = 15
+
+    def get_LD(self, timeout=None):
+        tout = timeout or self.timeout
+        url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=LD"
+        try:
+            r = self.session.get(url, headers={"Referer": self.referer}, timeout=tout)
+            return r.json().get("LD", "").upper()
+        except Exception as e:
+>           raise ZTEConnectionError(f"Failed to reach router: {e}") from e
+E           custom_components.zte_router_5g.api.ZTEConnectionError: Failed to reach router: A test tried to use socket.socket.
+
+custom_components/zte_router_5g/api.py:109: ZTEConnectionError
+
+During handling of the above exception, another exception occurred:
+
+    def test_api_login_no_password():
+        """Test login failure when no password provided."""
+        api = ZTERouterAPI("192.168.0.1", "admin", "")
+>       with pytest.raises(Exception, match="No password provided"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'No password provided'
+E         Actual message: 'Failed to reach router: A test tried to use socket.socket.'
+
+tests/test_api.py:107: AssertionError
+____________________________________________________________________________ test_async_update_data_success _____________________________________________________________________________
+
+mock_config_entry = <MagicMock id='138016363899472'>
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_success(mock_config_entry):
+        """Test the coordinator's update method success path."""
+        hass = MagicMock()
+        hass.data = {}
+        mock_config_entry.entry_id = "test_entry"
+        mock_config_entry.options = {
+            "host": "192.168.0.1",
+            "password": "pass",
+            CONF_STOP_POLLING: False,
+            CONF_SCAN_INTERVAL: 60,
+        }
+    
+        with patch("custom_components.zte_router_5g.api.ZTERouterAPI") as mock_api_class:
+            mock_api = mock_api_class.return_value
+            mock_api.get_all_data.return_value = {"network_type": "LTE"}
+            mock_api.get_sms_capacity.return_value = {"total": 10}
+            mock_api.get_last_sms_content.return_value = {"content": "hello"}
+    
+            hass.config_entries.async_forward_entry_setups = AsyncMock()
+    
+            # Setup to get the coordinator
+            await async_setup_entry(hass, mock_config_entry)
+            coordinator = hass.data[DOMAIN]["test_entry"][COORDINATOR]
+    
+            # Mock executor job to call functions directly
+            async def mock_executor(func, *args):
+                return func(*args)
+            hass.async_add_executor_job = mock_executor
+    
+>           data = await coordinator._async_update_data()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_init.py:91: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+/usr/src/homeassistant/homeassistant/helpers/update_coordinator.py:309: in _async_update_data
+    return await self.update_method()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    async def async_update_data():
+        """Fetch data from API with resilience and pausing."""
+        entry_data = hass.data[DOMAIN][entry.entry_id]
+    
+        # Check entry.options directly for real-time responsiveness to the UI switch
+        is_paused = entry.options.get(CONF_STOP_POLLING, False)
+        is_first_run = coordinator.data is None
+    
+        # 1. If paused and NOT the first run, return cached data immediately
+        if is_paused and not is_first_run:
+            _LOGGER.debug("%s: Polling is paused; returning cached data.", entry.title)
+            return coordinator.data
+    
+        # 2. Attempt fetch with 1 retry
+        last_error = None
+        for attempt in range(2):
+            try:
+                data = await hass.async_add_executor_job(api.get_all_data)
+                sms_cap = await hass.async_add_executor_job(api.get_sms_capacity)
+                last_sms = await hass.async_add_executor_job(api.get_last_sms_content)
+    
+                data.update(sms_cap)
+                data["last_sms"] = last_sms
+    
+                # Success path
+                coordinator.last_update_success_time = dt_util.now()
+                entry_data["consecutive_failures"] = 0
+                return data
+    
+            except Exception as err:
+                last_error = err
+                if attempt == 0:
+                    _LOGGER.warning(
+                        "%s: Fetch failed: %s. Retrying in 30 seconds...",
+                        entry.title,
+                        err,
+                    )
+                    await asyncio.sleep(30)
+                else:
+                    _LOGGER.warning(
+                        "%s: Second fetch attempt failed for this cycle: %s",
+                        entry.title,
+                        err,
+                    )
+    
+        # 3. Failure resilience — hold last known values for one cycle
+        entry_data["consecutive_failures"] += 1
+    
+        if coordinator.data is not None:
+            if entry_data["consecutive_failures"] == 1:
+                _LOGGER.warning(
+                    "%s: Fetch failed. Holding last known values.", entry.title
+                )
+            return coordinator.data
+    
+        # 4. Safe startup bypass — if paused on first run, start with empty data
+        if is_paused:
+            _LOGGER.warning(
+                "%s: Initial fetch failed while paused. Starting with empty data.",
+                entry.title,
+            )
+            return {}
+    
+        _LOGGER.error("%s: Connection lost. Marking entities unavailable.", entry.title)
+>       raise UpdateFailed(f"Communication error: {last_error}")
+E       homeassistant.helpers.update_coordinator.UpdateFailed: Communication error: Failed to reach router: A test tried to use socket.socket.
+
+custom_components/zte_router_5g/__init__.py:112: UpdateFailed
+--------------------------------------------------------------------------------- Captured stderr call ----------------------------------------------------------------------------------
+WARNING:custom_components.zte_router_5g:My ZTE Router: Fetch failed: Failed to reach router: A test tried to use socket.socket.. Retrying in 30 seconds...
+WARNING:custom_components.zte_router_5g:My ZTE Router: Second fetch attempt failed for this cycle: Failed to reach router: A test tried to use socket.socket.
+ERROR:custom_components.zte_router_5g:My ZTE Router: Connection lost. Marking entities unavailable.
+----------------------------------------------------------------------------------- Captured log call -----------------------------------------------------------------------------------
+WARNING  custom_components.zte_router_5g:__init__.py:80 My ZTE Router: Fetch failed: Failed to reach router: A test tried to use socket.socket.. Retrying in 30 seconds...
+WARNING  custom_components.zte_router_5g:__init__.py:87 My ZTE Router: Second fetch attempt failed for this cycle: Failed to reach router: A test tried to use socket.socket.
+ERROR    custom_components.zte_router_5g:__init__.py:111 My ZTE Router: Connection lost. Marking entities unavailable.
+_____________________________________________________________________________ test_async_update_data_paused _____________________________________________________________________________
+
+mock_config_entry = <MagicMock id='138016362892992'>
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_paused(mock_config_entry):
+        """Test update data when paused."""
+        hass = MagicMock()
+        hass.data = {}
+        mock_config_entry.entry_id = "test_entry"
+        # Set paused in options
+        mock_config_entry.options = {
+            "host": "192.168.0.1",
+            "password": "pass",
+            CONF_STOP_POLLING: True,
+            CONF_SCAN_INTERVAL: 60,
+        }
+    
+        with patch("custom_components.zte_router_5g.api.ZTERouterAPI"):
+>           await async_setup_entry(hass, mock_config_entry)
+
+tests/test_init.py:113: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+hass = <MagicMock id='138016362893328'>, entry = <MagicMock id='138016362892992'>
+
+    async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+        """Set up ZTE Router 5G Monitor from a config entry with Background Safety."""
+        # Credentials and settings are stored in entry.options (written by both
+        # the initial config flow and the options flow on reconfigure).
+        api = ZTERouterAPI(
+            entry.options[CONF_HOST],
+            entry.options.get(CONF_USERNAME),
+            entry.options[CONF_PASSWORD],
+        )
+    
+        # Runtime state — persisted values from slider/switch changes
+        stop_polling = entry.options.get(CONF_STOP_POLLING, False)
+        scan_interval = entry.options.get(CONF_SCAN_INTERVAL, 180)
+    
+        # Initialize data storage immediately so platforms can access it
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN][entry.entry_id] = {
+            "api": api,
+            CONF_STOP_POLLING: stop_polling,
+            CONF_SCAN_INTERVAL: scan_interval,
+            "consecutive_failures": 0,
+        }
+    
+        async def async_update_data():
+            """Fetch data from API with resilience and pausing."""
+            entry_data = hass.data[DOMAIN][entry.entry_id]
+    
+            # Check entry.options directly for real-time responsiveness to the UI switch
+            is_paused = entry.options.get(CONF_STOP_POLLING, False)
+            is_first_run = coordinator.data is None
+    
+            # 1. If paused and NOT the first run, return cached data immediately
+            if is_paused and not is_first_run:
+                _LOGGER.debug("%s: Polling is paused; returning cached data.", entry.title)
+                return coordinator.data
+    
+            # 2. Attempt fetch with 1 retry
+            last_error = None
+            for attempt in range(2):
+                try:
+                    data = await hass.async_add_executor_job(api.get_all_data)
+                    sms_cap = await hass.async_add_executor_job(api.get_sms_capacity)
+                    last_sms = await hass.async_add_executor_job(api.get_last_sms_content)
+    
+                    data.update(sms_cap)
+                    data["last_sms"] = last_sms
+    
+                    # Success path
+                    coordinator.last_update_success_time = dt_util.now()
+                    entry_data["consecutive_failures"] = 0
+                    return data
+    
+                except Exception as err:
+                    last_error = err
+                    if attempt == 0:
+                        _LOGGER.warning(
+                            "%s: Fetch failed: %s. Retrying in 30 seconds...",
+                            entry.title,
+                            err,
+                        )
+                        await asyncio.sleep(30)
+                    else:
+                        _LOGGER.warning(
+                            "%s: Second fetch attempt failed for this cycle: %s",
+                            entry.title,
+                            err,
+                        )
+    
+            # 3. Failure resilience — hold last known values for one cycle
+            entry_data["consecutive_failures"] += 1
+    
+            if coordinator.data is not None:
+                if entry_data["consecutive_failures"] == 1:
+                    _LOGGER.warning(
+                        "%s: Fetch failed. Holding last known values.", entry.title
+                    )
+                return coordinator.data
+    
+            # 4. Safe startup bypass — if paused on first run, start with empty data
+            if is_paused:
+                _LOGGER.warning(
+                    "%s: Initial fetch failed while paused. Starting with empty data.",
+                    entry.title,
+                )
+                return {}
+    
+            _LOGGER.error("%s: Connection lost. Marking entities unavailable.", entry.title)
+            raise UpdateFailed(f"Communication error: {last_error}")
+    
+        # Create the coordinator
+        coordinator = DataUpdateCoordinator(
+            hass,
+            _LOGGER,
+            name=f"{entry.title} Data",
+            update_method=async_update_data,
+            update_interval=timedelta(seconds=scan_interval),
+        )
+        coordinator.last_update_success_time = None
+        hass.data[DOMAIN][entry.entry_id][COORDINATOR] = coordinator
+    
+        # Forward platforms immediately so entities appear in HA (initially as 'Unknown')
+>       await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+E       TypeError: 'MagicMock' object can't be awaited
+
+custom_components/zte_router_5g/__init__.py:126: TypeError
+______________________________________________________________________ test_async_update_data_retry_and_resilience ______________________________________________________________________
+
+mock_config_entry = <MagicMock id='138016362897024'>
+
+    @pytest.mark.asyncio
+    async def test_async_update_data_retry_and_resilience(mock_config_entry):
+        """Test retry logic and failure resilience (holding last known values)."""
+        hass = MagicMock()
+        hass.data = {}
+        mock_config_entry.entry_id = "test_entry"
+        mock_config_entry.options = {
+            "host": "192.168.0.1",
+            "password": "pass",
+            CONF_STOP_POLLING: False,
+            CONF_SCAN_INTERVAL: 60,
+        }
+    
+        with patch("custom_components.zte_router_5g.api.ZTERouterAPI") as mock_api_class:
+            mock_api = mock_api_class.return_value
+>           await async_setup_entry(hass, mock_config_entry)
+
+tests/test_init.py:146: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+hass = <MagicMock id='138016362895680'>, entry = <MagicMock id='138016362897024'>
+
+    async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+        """Set up ZTE Router 5G Monitor from a config entry with Background Safety."""
+        # Credentials and settings are stored in entry.options (written by both
+        # the initial config flow and the options flow on reconfigure).
+        api = ZTERouterAPI(
+            entry.options[CONF_HOST],
+            entry.options.get(CONF_USERNAME),
+            entry.options[CONF_PASSWORD],
+        )
+    
+        # Runtime state — persisted values from slider/switch changes
+        stop_polling = entry.options.get(CONF_STOP_POLLING, False)
+        scan_interval = entry.options.get(CONF_SCAN_INTERVAL, 180)
+    
+        # Initialize data storage immediately so platforms can access it
+        hass.data.setdefault(DOMAIN, {})
+        hass.data[DOMAIN][entry.entry_id] = {
+            "api": api,
+            CONF_STOP_POLLING: stop_polling,
+            CONF_SCAN_INTERVAL: scan_interval,
+            "consecutive_failures": 0,
+        }
+    
+        async def async_update_data():
+            """Fetch data from API with resilience and pausing."""
+            entry_data = hass.data[DOMAIN][entry.entry_id]
+    
+            # Check entry.options directly for real-time responsiveness to the UI switch
+            is_paused = entry.options.get(CONF_STOP_POLLING, False)
+            is_first_run = coordinator.data is None
+    
+            # 1. If paused and NOT the first run, return cached data immediately
+            if is_paused and not is_first_run:
+                _LOGGER.debug("%s: Polling is paused; returning cached data.", entry.title)
+                return coordinator.data
+    
+            # 2. Attempt fetch with 1 retry
+            last_error = None
+            for attempt in range(2):
+                try:
+                    data = await hass.async_add_executor_job(api.get_all_data)
+                    sms_cap = await hass.async_add_executor_job(api.get_sms_capacity)
+                    last_sms = await hass.async_add_executor_job(api.get_last_sms_content)
+    
+                    data.update(sms_cap)
+                    data["last_sms"] = last_sms
+    
+                    # Success path
+                    coordinator.last_update_success_time = dt_util.now()
+                    entry_data["consecutive_failures"] = 0
+                    return data
+    
+                except Exception as err:
+                    last_error = err
+                    if attempt == 0:
+                        _LOGGER.warning(
+                            "%s: Fetch failed: %s. Retrying in 30 seconds...",
+                            entry.title,
+                            err,
+                        )
+                        await asyncio.sleep(30)
+                    else:
+                        _LOGGER.warning(
+                            "%s: Second fetch attempt failed for this cycle: %s",
+                            entry.title,
+                            err,
+                        )
+    
+            # 3. Failure resilience — hold last known values for one cycle
+            entry_data["consecutive_failures"] += 1
+    
+            if coordinator.data is not None:
+                if entry_data["consecutive_failures"] == 1:
+                    _LOGGER.warning(
+                        "%s: Fetch failed. Holding last known values.", entry.title
+                    )
+                return coordinator.data
+    
+            # 4. Safe startup bypass — if paused on first run, start with empty data
+            if is_paused:
+                _LOGGER.warning(
+                    "%s: Initial fetch failed while paused. Starting with empty data.",
+                    entry.title,
+                )
+                return {}
+    
+            _LOGGER.error("%s: Connection lost. Marking entities unavailable.", entry.title)
+            raise UpdateFailed(f"Communication error: {last_error}")
+    
+        # Create the coordinator
+        coordinator = DataUpdateCoordinator(
+            hass,
+            _LOGGER,
+            name=f"{entry.title} Data",
+            update_method=async_update_data,
+            update_interval=timedelta(seconds=scan_interval),
+        )
+        coordinator.last_update_success_time = None
+        hass.data[DOMAIN][entry.entry_id][COORDINATOR] = coordinator
+    
+        # Forward platforms immediately so entities appear in HA (initially as 'Unknown')
+>       await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+E       TypeError: 'MagicMock' object can't be awaited
+
+custom_components/zte_router_5g/__init__.py:126: TypeError
+=================================================================================== warnings summary ====================================================================================
+tests/test_init.py::test_async_update_data_success
+  /usr/local/lib/python3.14/weakref.py:475: RuntimeWarning: coroutine 'async_setup_entry.<locals>._async_background_setup' was never awaited
+    info = self._Info()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_number.py::test_polling_interval_number
+  /usr/local/lib/python3.14/site-packages/pytest_homeassistant_custom_component/plugins.py:262: RuntimeWarning: coroutine 'async_setup_entry.<locals>._async_background_setup' was never awaited
+    gc.collect()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================================================================ short test summary info ================================================================================
+FAILED tests/test_api.py::test_api_login_no_password - AssertionError: Regex pattern did not match.
+FAILED tests/test_init.py::test_async_update_data_success - homeassistant.helpers.update_coordinator.UpdateFailed: Communication error: Failed to reach router: A test tried to use socket.socket.
+FAILED tests/test_init.py::test_async_update_data_paused - TypeError: 'MagicMock' object can't be awaited
+FAILED tests/test_init.py::test_async_update_data_retry_and_resilience - TypeError: 'MagicMock' object can't be awaited
+======================================================================= 4 failed, 64 passed, 2 warnings in 36.64s =======================================================================
