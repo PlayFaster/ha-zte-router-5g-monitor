@@ -2,6 +2,7 @@ import logging
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.data_entry_flow import AbortFlow
 from .api import ZTERouterAPI, ZTEAuthError, ZTEConnectionError
 from .const import DOMAIN, DEFAULT_NAME
 
@@ -57,6 +58,9 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     options=user_input,
                 )
 
+            except AbortFlow:
+                # Re-raise AbortFlow so HA can show the "Already Configured" message
+                raise
             except ZTEAuthError:
                 errors["base"] = "invalid_auth"
             except ZTEConnectionError:

@@ -5,9 +5,13 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+dist/
+build/
+*.egg-info/
 
 # Home Assistant
 .storage/
+testing_config/
 *.log
 *.db
 *.db-shm
@@ -25,3 +29,9 @@ Thumbs.db
 sync.ffs_*
 sync.ffs_db
 sync.ffs_lock
+
+# Test Dev
+.devconfig/
+
+# Note Scratch Compare Area
+loc_only/

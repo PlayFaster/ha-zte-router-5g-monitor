@@ -1,0 +1,16 @@
+services:
+  homeassistant:
+    container_name: zte-dev-ha
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      # This line mounts your project root into the container
+      - ..:/workspaces/ha-zte-router-5g-monitor
+      # This line handles the simulated HA config
+      - ./.devconfig:/config
+      # This line maps your code into the simulated HA folder
+      - ../custom_components/zte_router_5g:/config/custom_components/zte_router_5g
+    ports:
+      - "8123:8123"
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/London

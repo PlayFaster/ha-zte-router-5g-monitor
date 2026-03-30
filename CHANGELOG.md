@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Options Flow**: Allow reconfiguration of intedration in-situ rather then delete and re-add.
+- **Options Flow**: Allow reconfiguration of integration in-situ rather than delete and re-add.
   
 ## [1.9.4] - 2026-03-29
 
@@ -45,7 +45,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Reduced Startup Risk**: Moved to async for startup to avoid any potential for slowness/hangs/locks if router is unavaile at HA start.
+- **Reduced Startup Risk**: Moved to async for startup to avoid any potential for slowness/hangs/locks if router is unavailable at HA start.
   
 ## [1.5.7] - 2026-03-28
 
@@ -71,13 +71,13 @@ All notable changes to this project will be documented in this file.
   
 ### Changed
 
-- **Standard Names**: Changed specifc sensor names (with ID tag) to standard names.
+- **Standard Names**: Changed specific sensor names (with ID tag) to standard names.
 
 ## [1.4.4] - 2026-03-28
 
 ### Added
 
-- **All Relevent Attributes**: Added all relevent signal and status attributes available from the router as sensors.
+- **All Relevant Attributes**: Added all relevant signal and status attributes available from the router as sensors.
 
 ## [1.4.3] - 2026-03-28
 
@@ -114,7 +114,7 @@ All notable changes to this project will be documented in this file.
 - Core sensors: Signal Strength (RSRP/RSRQ/SINR), Network Type, and Data Usage.
 - Connection status binary sensor.
   
-## [Previous 1.0.1 > 1.3.6] - 2026-03-25
+## [1.3.6] - 2026-03-25
 
 ### Added
 
@@ -129,4 +129,3 @@ All notable changes to this project will be documented in this file.
   
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-  

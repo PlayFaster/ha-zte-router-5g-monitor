@@ -1,0 +1,15 @@
+{
+  "name": "ZTE Router Dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "homeassistant",
+  "workspaceFolder": "/workspaces/ha-zte-router-5g-monitor",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "keesschollaart.vscode-home-assistant"
+      ]
+    }
+  },
+  "remoteUser": "root" 
+}
