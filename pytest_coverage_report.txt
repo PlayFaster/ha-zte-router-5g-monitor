@@ -1,4 +1,4 @@
- *  Executing task: PYTHONPATH=. pytest --cov=custom_components/zte_router_5g/ --cov-report=term-missing tests/ 
+ Executing task: PYTHONPATH=. pytest --cov=custom_components/zte_router_5g/ --cov-report=term-missing tests/ 
 
 ================================================================================== test session starts ==================================================================================
 platform linux -- Python 3.14.2, pytest-9.0.0, pluggy-1.6.0
@@ -23,7 +23,7 @@ ____________________________________________________________________ coverage: p
 
 Name                                               Stmts   Miss  Cover   Missing
 --------------------------------------------------------------------------------
-custom_components/zte_router_5g/__init__.py           76      3    96%   133-135
+custom_components/zte_router_5g/__init__.py           75      3    96%   132-134
 custom_components/zte_router_5g/api.py               229     33    86%   37, 108-109, 127, 157, 228, 244, 266-268, 298, 345-348, 354, 371, 379-399
 custom_components/zte_router_5g/binary_sensor.py      30      0   100%
 custom_components/zte_router_5g/button.py             54      0   100%
@@ -34,6 +34,6 @@ custom_components/zte_router_5g/number.py             50      2    96%   76, 109
 custom_components/zte_router_5g/sensor.py            134      6    96%   306, 354, 413, 435, 456-457
 custom_components/zte_router_5g/switch.py             43      0   100%
 --------------------------------------------------------------------------------
-TOTAL                                                690     45    93%
-================================================================================== 68 passed in 4.87s ===================================================================================
- *  Terminal will be reused by tasks, press any key to close it. 
+TOTAL                                                689     45    93%
+================================================================================== 68 passed in 4.18s ===================================================================================
+ * 
