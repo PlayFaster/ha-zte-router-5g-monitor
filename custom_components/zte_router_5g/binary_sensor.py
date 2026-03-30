@@ -16,11 +16,15 @@ BEST_CONN_DESCRIPTION = BinarySensorEntityDescription(
     device_class=BinarySensorDeviceClass.CONNECTIVITY,
 )
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the binary sensor platform."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
     # Pass the description object into the sensor
-    async_add_entities([ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION)])
+    async_add_entities(
+        [ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION)]
+    )
+
 
 class ZTEBestConnectionSensor(CoordinatorEntity, BinarySensorEntity):
     """Binary sensor to check for optimal 5G/LTE CA connection."""
@@ -34,7 +38,7 @@ class ZTEBestConnectionSensor(CoordinatorEntity, BinarySensorEntity):
         super().__init__(coordinator)
         self.entity_description = description
         self._entry = entry
-        
+
         # Unique ID generated from description key for registry stability
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 

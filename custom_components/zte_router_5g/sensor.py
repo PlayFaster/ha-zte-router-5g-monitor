@@ -19,10 +19,13 @@ from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
 
+
 @dataclass(frozen=True, kw_only=True)
 class ZTESensorEntityDescription(SensorEntityDescription):
     """Describes ZTE sensor entity."""
+
     group: str = "router"
+
 
 # Descriptions for technical router sensors
 SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
@@ -270,13 +273,17 @@ MSG_RECENT_DESCRIPTION = ZTESensorEntityDescription(
     group="sms",
 )
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the sensor platform."""
     coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
-    entities = [ZTEDataSensor(coordinator, entry, description) for description in SENSOR_TYPES]
+    entities = [
+        ZTEDataSensor(coordinator, entry, description) for description in SENSOR_TYPES
+    ]
     entities.append(ZTEMsgSensor(coordinator, entry, MSG_TOTAL_DESCRIPTION))
     entities.append(ZTEMsgContentSensor(coordinator, entry, MSG_RECENT_DESCRIPTION))
     async_add_entities(entities)
+
 
 class ZTEDataSensor(CoordinatorEntity, SensorEntity):
     """Implementation of technical router sensors."""
@@ -312,11 +319,14 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
                 boot_time = dt_util.now() - timedelta(seconds=seconds)
                 return boot_time.replace(second=0, microsecond=0)
             except Exception as e:
-                _LOGGER.debug("Failed to calculate device_uptime for %s: %s", self._entry.title, e)
+                _LOGGER.debug(
+                    "Failed to calculate device_uptime for %s: %s", self._entry.title, e
+                )
                 return None
 
         # monthly_total_bytes is calculated here by summing rx+tx.
-        # The router returns these as bytes but we convert them to GB values sum and round.
+        # The router returns these as bytes but we convert
+        #    them to GB values sum and round.
         # NOTE: Do NOT add 'monthly_total_bytes' to the generic conversion
         # block below — it would cause a double-conversion bug.
         if key == "monthly_total_bytes":
@@ -325,16 +335,23 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
                 tx = float(data.get("monthly_tx_bytes", 0))
                 return round((rx + tx) / 1073741824, 2)
             except Exception as e:
-                _LOGGER.debug("Failed to calculate monthly_total_bytes for %s: %s", self._entry.title, e)
+                _LOGGER.debug(
+                    "Failed to calculate monthly_total_bytes for %s: %s",
+                    self._entry.title,
+                    e,
+                )
                 return None
 
         # Case-sensitive mapping for specific raw data keys
         raw_key = key
-        if key == "z5g_rsrp": raw_key = "Z5g_rsrp"
-        if key == "z5g_sinr": raw_key = "Z5g_SINR"
+        if key == "z5g_rsrp":
+            raw_key = "Z5g_rsrp"
+        if key == "z5g_sinr":
+            raw_key = "Z5g_SINR"
 
         val = data.get(raw_key)
-        if val in [None, ""]: return None
+        if val in [None, ""]:
+            return None
 
         # Round rx/tx values to 2dp for display consistency.
         # The router returns Bytes but changing to GB values rounded.
@@ -344,7 +361,13 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
             try:
                 return round(float(val) / 1073741824, 2)
             except Exception as e:
-                _LOGGER.debug("Failed to convert %s value '%s' to GB for %s: %s", key, val, self._entry.title, e)
+                _LOGGER.debug(
+                    "Failed to convert %s value '%s' to GB for %s: %s",
+                    key,
+                    val,
+                    self._entry.title,
+                    e,
+                )
                 return val
 
         return val
@@ -368,6 +391,7 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
             "model": get_router_model(self.coordinator.data),
         }
 
+
 class ZTEMsgSensor(CoordinatorEntity, SensorEntity):
     """Implementation of the message total count sensor."""
 
@@ -387,12 +411,20 @@ class ZTEMsgSensor(CoordinatorEntity, SensorEntity):
         data = self.coordinator.data
         if not data:
             return None
-        keys = ['sms_nv_rev_total', 'sms_nv_send_total', 'sms_nv_draftbox_total',
-                'sms_sim_rev_total', 'sms_sim_send_total', 'sms_sim_draftbox_total']
+        keys = [
+            "sms_nv_rev_total",
+            "sms_nv_send_total",
+            "sms_nv_draftbox_total",
+            "sms_sim_rev_total",
+            "sms_sim_send_total",
+            "sms_sim_draftbox_total",
+        ]
         try:
             return sum(int(data.get(k, 0)) for k in keys)
         except Exception as e:
-            _LOGGER.debug("Failed to calculate total SMS count for %s: %s", self._entry.title, e)
+            _LOGGER.debug(
+                "Failed to calculate total SMS count for %s: %s", self._entry.title, e
+            )
             return None
 
     @property
@@ -413,7 +445,9 @@ class ZTEMsgSensor(CoordinatorEntity, SensorEntity):
                 "sms_sim_draftbox_total": int(data.get("sms_sim_draftbox_total", 0)),
             }
         except Exception as e:
-            _LOGGER.debug("Failed to parse SMS attributes for %s: %s", self._entry.title, e)
+            _LOGGER.debug(
+                "Failed to parse SMS attributes for %s: %s", self._entry.title, e
+            )
             return {}
 
     @property
@@ -426,6 +460,7 @@ class ZTEMsgSensor(CoordinatorEntity, SensorEntity):
             "manufacturer": "ZTE",
             "via_device": (DOMAIN, host),
         }
+
 
 class ZTEMsgContentSensor(CoordinatorEntity, SensorEntity):
     """Implementation of the most recent message content sensor."""

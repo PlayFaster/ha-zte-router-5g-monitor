@@ -1,6 +1,5 @@
 import logging
 from dataclasses import dataclass
-from typing import Final
 
 from homeassistant.components.button import (
     ButtonDeviceClass,
@@ -8,15 +7,19 @@ from homeassistant.components.button import (
     ButtonEntityDescription,
 )
 from homeassistant.const import CONF_HOST
-from .const import DOMAIN, COORDINATOR
+
+from .const import COORDINATOR, DOMAIN
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
 
+
 @dataclass(frozen=True, kw_only=True)
 class ZTEButtonEntityDescription(ButtonEntityDescription):
     """Describes ZTE button entity."""
+
     group: str = "router"
+
 
 # Define metadata for the Reboot button
 REBOOT_DESCRIPTION = ZTEButtonEntityDescription(
@@ -35,6 +38,7 @@ DELETE_SMS_DESCRIPTION = ZTEButtonEntityDescription(
     group="sms",
 )
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the button platform."""
     data = hass.data[DOMAIN][entry.entry_id]
@@ -42,10 +46,14 @@ async def async_setup_entry(hass, entry, async_add_entities):
     coordinator = data[COORDINATOR]
 
     # Create the button entities using their respective descriptions
-    async_add_entities([
-        ZTERebootButton(api, coordinator, entry, REBOOT_DESCRIPTION),
-        ZTEDeleteAllSMSButton(api, coordinator, entry, DELETE_SMS_DESCRIPTION)
-    ], True)
+    async_add_entities(
+        [
+            ZTERebootButton(api, coordinator, entry, REBOOT_DESCRIPTION),
+            ZTEDeleteAllSMSButton(api, coordinator, entry, DELETE_SMS_DESCRIPTION),
+        ],
+        True,
+    )
+
 
 class ZTERebootButton(ButtonEntity):
     """Button to reboot the ZTE router."""
@@ -54,13 +62,15 @@ class ZTERebootButton(ButtonEntity):
     _attr_should_poll = False
     entity_description: ZTEButtonEntityDescription
 
-    def __init__(self, api, coordinator, entry, description: ZTEButtonEntityDescription):
+    def __init__(
+        self, api, coordinator, entry, description: ZTEButtonEntityDescription
+    ):
         """Initialize the reboot button."""
         self.entity_description = description
         self._api = api
         self._coordinator = coordinator
         self._entry = entry
-        
+
         # Registry identification based on the description key
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
@@ -83,6 +93,7 @@ class ZTERebootButton(ButtonEntity):
         except Exception as err:
             _LOGGER.error("%s: Reboot failed: %s", self._entry.title, err)
 
+
 class ZTEDeleteAllSMSButton(ButtonEntity):
     """Button to delete all SMS messages."""
 
@@ -90,13 +101,15 @@ class ZTEDeleteAllSMSButton(ButtonEntity):
     _attr_should_poll = False
     entity_description: ZTEButtonEntityDescription
 
-    def __init__(self, api, coordinator, entry, description: ZTEButtonEntityDescription):
+    def __init__(
+        self, api, coordinator, entry, description: ZTEButtonEntityDescription
+    ):
         """Initialize the delete all SMS button."""
         self.entity_description = description
         self._api = api
         self._coordinator = coordinator
         self._entry = entry
-        
+
         self._attr_unique_id = f"{entry.unique_id}_delete_all"
 
     @property

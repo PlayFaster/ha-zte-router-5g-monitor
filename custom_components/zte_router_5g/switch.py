@@ -1,5 +1,4 @@
 import logging
-from dataclasses import dataclass
 
 from homeassistant.components.switch import (
     SwitchEntity,
@@ -8,7 +7,7 @@ from homeassistant.components.switch import (
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers.entity import EntityCategory
 
-from .const import COORDINATOR, DOMAIN, CONF_STOP_POLLING
+from .const import CONF_STOP_POLLING, COORDINATOR, DOMAIN
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
@@ -21,17 +20,23 @@ PAUSE_POLLING_DESCRIPTION = SwitchEntityDescription(
     entity_category=EntityCategory.CONFIG,
 )
 
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the switch platform."""
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data[COORDINATOR]
-    
+
     # Read initial state from session memory (defaults to False if not set)
     initial_state = data.get(CONF_STOP_POLLING, False)
-    
-    async_add_entities([
-        ZTEPausePollingSwitch(coordinator, entry, PAUSE_POLLING_DESCRIPTION, initial_state)
-    ])
+
+    async_add_entities(
+        [
+            ZTEPausePollingSwitch(
+                coordinator, entry, PAUSE_POLLING_DESCRIPTION, initial_state
+            )
+        ]
+    )
+
 
 class ZTEPausePollingSwitch(SwitchEntity):
     """Switch to pause/resume polling with persistence."""
@@ -40,12 +45,14 @@ class ZTEPausePollingSwitch(SwitchEntity):
     _attr_should_poll = False  # State is managed by user interaction and memory
     entity_description: SwitchEntityDescription
 
-    def __init__(self, coordinator, entry, description: SwitchEntityDescription, initial_state):
+    def __init__(
+        self, coordinator, entry, description: SwitchEntityDescription, initial_state
+    ):
         """Initialize the switch."""
         self._coordinator = coordinator
         self._entry = entry
         self.entity_description = description
-        
+
         # Registry identification
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
         self._attr_is_on = initial_state
@@ -53,7 +60,9 @@ class ZTEPausePollingSwitch(SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Return true if polling is paused."""
-        return self.hass.data[DOMAIN][self._entry.entry_id].get(CONF_STOP_POLLING, False)
+        return self.hass.data[DOMAIN][self._entry.entry_id].get(
+            CONF_STOP_POLLING, False
+        )
 
     async def async_turn_on(self, **kwargs):
         """Pause polling."""
@@ -69,16 +78,16 @@ class ZTEPausePollingSwitch(SwitchEntity):
         """Update memory, state, and persist to options."""
         # 1. Update session memory for the current running instance
         self.hass.data[DOMAIN][self._entry.entry_id][CONF_STOP_POLLING] = state
-        
+
         # 2. Persist to ConfigEntry Options (saves to .storage)
         # This ensures the pause state survives a Home Assistant restart.
         new_options = dict(self._entry.options)
         new_options[CONF_STOP_POLLING] = state
         self.hass.config_entries.async_update_entry(self._entry, options=new_options)
-        
+
         # Signal to HA that the state has changed
         self.async_write_ha_state()
-        
+
         # 3. If we just resumed, trigger an immediate coordinator refresh
         if not state:
             await self._coordinator.async_request_refresh()
