@@ -2,11 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [2.2.1] - 2026-03-30
+## [2.2.3] - 2026-03-30
 
 ### Added
 
 - **Testing Infrastructure**: Added python tests.
+
+### Changed
+
+- **Manifest**: Fixed Manifest.json for GitHub tests.
   
 ## [2.1.1] - 2026-03-29
 

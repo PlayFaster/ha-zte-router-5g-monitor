@@ -1,13 +1,13 @@
 {
   "domain": "zte_router_5g",
   "name": "ZTE Router 5G Monitor",
-  "documentation": "https://github.com/PlayFaster/ha-zte-router-5g-monitor",
-  "dependencies": [],
-  "integration_type": "hub",
   "codeowners": ["@PlayFaster"],
-  "requirements": ["requests", "urllib3"],
-  "issue_tracker":"https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues",
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/PlayFaster/ha-zte-router-5g-monitor",
+  "integration_type": "hub",
   "iot_class": "local_polling",
-  "version": "2.2.1",
-  "config_flow": true
+  "issue_tracker":"https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues",
+  "requirements": ["requests", "urllib3"],
+  "version": "2.2.3"
 }
