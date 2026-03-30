@@ -155,10 +155,7 @@ async def test_async_update_data_retry_and_resilience(mock_hass, mock_config_ent
             assert data == {"old": "data"}
             assert mock_hass.data[DOMAIN]["test_entry"]["consecutive_failures"] == 1
             
-            # NOTE: Due to a bug in the project code, it currently continues to hold 
-            # data indefinitely as long as coordinator.data is not None.
-            # To test the UpdateFailed path, we manually set data to None.
-            coordinator.data = None
+            # Second consecutive failure should now correctly raise UpdateFailed
             with pytest.raises(UpdateFailed):
                 await coordinator._async_update_data()
             assert mock_hass.data[DOMAIN]["test_entry"]["consecutive_failures"] == 2
