@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file.
 
 - **Icon and Logo**: Added required icon and logo.
 - **.reports**: Added (hidden) .reports/ folder for test and error reports.
+- **HassFest Check**: Added ability to check HassFest prior to GitHub.
 
 
 ### Changed
