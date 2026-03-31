@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - Now
+
+### Added
+
+- **Icon and Logo**: Added required icon and logo.
+
+### Changed
+
+- **Changed**: Changed.
+  
+### Fixed
+
+- **Unavailable Grace**: Fixed an issue where the grace period before turning the sensors unavailable never expired.
+- **Validation**: GitHub and HassFest validation fixes, mostly formatting.
+
+  
 ## [2.2.4] - 2026-03-30
 
 ### Added
