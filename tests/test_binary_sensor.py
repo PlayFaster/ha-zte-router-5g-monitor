@@ -1,11 +1,13 @@
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
+
 import pytest
+
 from custom_components.zte_router_5g.binary_sensor import (
     BEST_CONN_DESCRIPTION,
     ZTEBestConnectionSensor,
     async_setup_entry,
 )
-from custom_components.zte_router_5g.const import DOMAIN, COORDINATOR
+from custom_components.zte_router_5g.const import COORDINATOR, DOMAIN
 
 
 def test_binary_sensor_is_on(mock_coordinator, mock_config_entry):
@@ -48,7 +50,7 @@ async def test_binary_sensor_setup_entry():
     entry.entry_id = "test"
     coordinator = MagicMock()
     hass.data = {DOMAIN: {"test": {COORDINATOR: coordinator}}}
-    
+
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
     async_add_entities.assert_called_once()

@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Icon and Logo**: Added required icon and logo.
+- **.reports**: Added (hidden) .reports/ folder for test and error reports.
+
 
 ### Changed
 

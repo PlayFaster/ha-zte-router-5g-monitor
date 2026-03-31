@@ -1,9 +1,10 @@
 from datetime import timedelta
-from unittest.mock import patch, MagicMock
-import pytest
+from unittest.mock import MagicMock, patch
 
+import pytest
 from homeassistant.util import dt as dt_util
 
+from custom_components.zte_router_5g.const import COORDINATOR, DOMAIN
 from custom_components.zte_router_5g.sensor import (
     MSG_RECENT_DESCRIPTION,
     MSG_TOTAL_DESCRIPTION,
@@ -13,7 +14,6 @@ from custom_components.zte_router_5g.sensor import (
     ZTEMsgSensor,
     async_setup_entry,
 )
-from custom_components.zte_router_5g.const import DOMAIN, COORDINATOR
 
 # --- TESTS FOR ZTEDataSensor ---
 
@@ -63,7 +63,7 @@ def test_data_sensor_monthly_total_sum(mock_coordinator, mock_config_entry):
     sensor = ZTEDataSensor(mock_coordinator, mock_config_entry, description)
 
     assert sensor.native_value == 1.5
-    
+
     # Test error path
     mock_coordinator.data = {"monthly_rx_bytes": "invalid"}
     assert sensor.native_value is None
@@ -83,11 +83,11 @@ def test_data_sensor_uptime_calculation(mock_coordinator, mock_config_entry):
         # Result should be exactly 1 hour ago
         expected_time = now - timedelta(seconds=3600)
         assert sensor.native_value == expected_time
-    
+
     # Test empty case
     mock_coordinator.data = {"realtime_time": ""}
     assert sensor.native_value is None
-    
+
     # Test exception case
     mock_coordinator.data = {"realtime_time": "invalid"}
     assert sensor.native_value is None
@@ -149,7 +149,7 @@ def test_msg_sensor_summing(mock_coordinator, mock_config_entry):
 
     # Sum: 10 + 5 + 1 + 2 + 0 + 1 = 19
     assert sensor.native_value == 19
-    
+
     # Test exception handling
     mock_coordinator.data = {"sms_nv_rev_total": "invalid"}
     assert sensor.native_value is None
@@ -163,7 +163,7 @@ def test_msg_sensor_attributes(mock_coordinator, mock_config_entry):
     attrs = sensor.extra_state_attributes
     assert attrs["sms_nv_total"] == 15
     assert attrs["sms_sim_total"] == 5
-    
+
     # Test exception handling
     mock_coordinator.data = {"sms_nv_total": "invalid"}
     assert sensor.extra_state_attributes == {}
@@ -210,7 +210,7 @@ async def test_sensor_setup_entry():
     entry = MagicMock()
     entry.entry_id = "test"
     hass.data = {DOMAIN: {"test": {COORDINATOR: MagicMock()}}}
-    
+
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
     async_add_entities.assert_called_once()

@@ -2,13 +2,19 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
-.ruff_cache/
 .venv/
 venv/
 dist/
 build/
 *.egg-info/
+
+# Test and coverage reports
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+.reports/
 
 # Home Assistant
 .storage/
@@ -33,7 +39,6 @@ sync.ffs_lock
 
 # Test Dev
 .devconfig/
-.coverage
 
 # Note Scratch Compare Area
 /loc_only/
