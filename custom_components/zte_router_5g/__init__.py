@@ -94,9 +94,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry_data["consecutive_failures"] += 1
 
         if coordinator.data is not None and entry_data["consecutive_failures"] == 1:
-            _LOGGER.warning(
-                "%s: Fetch failed. Holding last known values.", entry.title
-            )
+            _LOGGER.warning("%s: Fetch failed. Holding last known values.", entry.title)
             return coordinator.data
 
         # 4. Safe startup bypass — if paused on first run, start with empty data

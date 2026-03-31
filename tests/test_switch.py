@@ -1,6 +1,8 @@
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from custom_components.zte_router_5g.const import CONF_STOP_POLLING, DOMAIN, COORDINATOR
+
+from custom_components.zte_router_5g.const import CONF_STOP_POLLING, COORDINATOR, DOMAIN
 from custom_components.zte_router_5g.switch import (
     PAUSE_POLLING_DESCRIPTION,
     ZTEPausePollingSwitch,
@@ -44,7 +46,9 @@ async def test_pause_polling_switch(mock_coordinator, mock_config_entry):
 
 def test_switch_device_info(mock_coordinator, mock_config_entry):
     """Test device_info."""
-    switch = ZTEPausePollingSwitch(mock_coordinator, mock_config_entry, PAUSE_POLLING_DESCRIPTION, False)
+    switch = ZTEPausePollingSwitch(
+        mock_coordinator, mock_config_entry, PAUSE_POLLING_DESCRIPTION, False
+    )
     assert switch.device_info["identifiers"] == {(DOMAIN, "192.168.0.1")}
 
 
@@ -55,7 +59,7 @@ async def test_switch_setup_entry():
     entry = MagicMock()
     entry.entry_id = "test"
     hass.data = {DOMAIN: {"test": {COORDINATOR: MagicMock(), CONF_STOP_POLLING: False}}}
-    
+
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
     async_add_entities.assert_called_once()

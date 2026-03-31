@@ -1,6 +1,12 @@
 from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from custom_components.zte_router_5g.const import CONF_SCAN_INTERVAL, DOMAIN, COORDINATOR
+
+from custom_components.zte_router_5g.const import (
+    CONF_SCAN_INTERVAL,
+    COORDINATOR,
+    DOMAIN,
+)
 from custom_components.zte_router_5g.number import (
     POLLING_INTERVAL_DESCRIPTION,
     ZTEPollingInterval,
@@ -43,10 +49,12 @@ async def test_polling_interval_number(mock_coordinator, mock_config_entry):
 @pytest.mark.asyncio
 async def test_polling_interval_error_handling(mock_coordinator, mock_config_entry):
     """Test exception handling in debounced task."""
-    number = ZTEPollingInterval(mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180)
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
     number.hass = MagicMock()
     number.hass.data = {DOMAIN: {mock_config_entry.entry_id: {}}}
-    
+
     with patch("asyncio.sleep", side_effect=Exception("Async Error")):
         # This will trigger the exception block in _async_debounced_apply
         await number._async_debounced_apply(300)
@@ -55,7 +63,9 @@ async def test_polling_interval_error_handling(mock_coordinator, mock_config_ent
 
 def test_number_device_info(mock_coordinator, mock_config_entry):
     """Test device_info."""
-    number = ZTEPollingInterval(mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180)
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
     assert number.device_info["identifiers"] == {(DOMAIN, "192.168.0.1")}
 
 
@@ -66,7 +76,7 @@ async def test_number_setup_entry():
     entry = MagicMock()
     entry.entry_id = "test"
     hass.data = {DOMAIN: {"test": {COORDINATOR: MagicMock(), CONF_SCAN_INTERVAL: 180}}}
-    
+
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
     async_add_entities.assert_called_once()

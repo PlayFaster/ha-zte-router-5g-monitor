@@ -1,10 +1,16 @@
 from unittest.mock import MagicMock, patch
+
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.data_entry_flow import FlowResultType, AbortFlow
+from homeassistant.data_entry_flow import AbortFlow, FlowResultType
+
 from custom_components.zte_router_5g.api import ZTEAuthError, ZTEConnectionError
-from custom_components.zte_router_5g.config_flow import ZTEConfigFlow, ZTEOptionsFlow, _validate_credentials
-from custom_components.zte_router_5g.const import DEFAULT_NAME, DOMAIN
+from custom_components.zte_router_5g.config_flow import (
+    ZTEConfigFlow,
+    ZTEOptionsFlow,
+    _validate_credentials,
+)
+from custom_components.zte_router_5g.const import DEFAULT_NAME
 
 
 @pytest.mark.asyncio
@@ -12,14 +18,18 @@ async def test_validate_credentials_success():
     """Test _validate_credentials success."""
     hass = MagicMock()
     user_input = {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "pass"}
-    
-    with patch("custom_components.zte_router_5g.config_flow.ZTERouterAPI") as mock_api_class:
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow.ZTERouterAPI"
+    ) as mock_api_class:
         mock_api = mock_api_class.return_value
+
         # Mock executor to call functions directly
         async def mock_executor(func, *args):
             return func(*args)
+
         hass.async_add_executor_job = mock_executor
-        
+
         await _validate_credentials(hass, user_input)
         mock_api.login.assert_called_once()
         mock_api.close.assert_called_once()
@@ -56,24 +66,38 @@ async def test_config_flow_user_step_errors():
     flow = ZTEConfigFlow()
     flow.hass = MagicMock()
     flow.context = {}
-    
+
     # Test ZTEAuthError
-    with patch("custom_components.zte_router_5g.config_flow._validate_credentials", side_effect=ZTEAuthError):
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=ZTEAuthError,
+    ):
         result = await flow.async_step_user({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
         assert result["errors"] == {"base": "invalid_auth"}
 
     # Test ZTEConnectionError
-    with patch("custom_components.zte_router_5g.config_flow._validate_credentials", side_effect=ZTEConnectionError):
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=ZTEConnectionError,
+    ):
         result = await flow.async_step_user({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
         assert result["errors"] == {"base": "cannot_connect"}
 
     # Test AbortFlow
-    with patch("custom_components.zte_router_5g.config_flow._validate_credentials", side_effect=AbortFlow("already_configured")):
-        with pytest.raises(AbortFlow):
-            await flow.async_step_user({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
+    with (
+        patch(
+            "custom_components.zte_router_5g.config_flow._validate_credentials",
+            side_effect=AbortFlow("already_configured"),
+        ),
+        pytest.raises(AbortFlow),
+    ):
+        await flow.async_step_user({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
 
     # Test Exception (unknown)
-    with patch("custom_components.zte_router_5g.config_flow._validate_credentials", side_effect=Exception("Unknown")):
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=Exception("Unknown"),
+    ):
         result = await flow.async_step_user({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
         assert result["errors"] == {"base": "unknown"}
 
@@ -113,13 +137,19 @@ async def test_options_flow_errors():
     entry.options = {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"}
     flow = ZTEOptionsFlow(entry)
     flow.hass = MagicMock()
-    
+
     # Test ZTEConnectionError
-    with patch("custom_components.zte_router_5g.config_flow._validate_credentials", side_effect=ZTEConnectionError):
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=ZTEConnectionError,
+    ):
         result = await flow.async_step_init({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
         assert result["errors"] == {"base": "cannot_connect"}
 
     # Test Exception
-    with patch("custom_components.zte_router_5g.config_flow._validate_credentials", side_effect=Exception):
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=Exception,
+    ):
         result = await flow.async_step_init({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
         assert result["errors"] == {"base": "unknown"}
