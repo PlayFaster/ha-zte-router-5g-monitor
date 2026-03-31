@@ -7,7 +7,11 @@
   "documentation": "https://github.com/PlayFaster/ha-zte-router-5g-monitor",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker":"https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues",
-  "requirements": ["requests", "urllib3"],
+  "homeassistant": "2025.1.0",
+  "issue_tracker": "https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues",
+  "requirements": [
+    "requests",
+    "urllib3"
+  ],
   "version": "2.2.4"
 }
