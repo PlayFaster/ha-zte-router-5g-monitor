@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - **Unavailable Grace**: Fixed an issue where the grace period before turning the sensors unavailable never expired.
-- **Validation**: GitHub and HassFest validation fixes, mostly formatting.
+- **Validation**: GitHub and HassFest validation fixes, mostly formatting, across many files.
 
   
 ## [2.2.4] - 2026-03-30
