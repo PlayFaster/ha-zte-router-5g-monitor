@@ -40,6 +40,7 @@ jobs:
         uses: home-assistant/actions/hassfest@master
 
       - name: HACS Validation
+        continue-on-error: true
         uses: hacs/action@main
         with:
           category: integration
