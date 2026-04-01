@@ -18,10 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # 1. HACS Validation (Official HACS metadata check)
       - name: HACS Validate
         uses: hacs/action@main
         with:
           category: integration
+          github_token: ${{ secrets.GITHUB_TOKEN }}
