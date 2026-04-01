@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased] - Now
+
+### Added
+
+- **Added**: Added.
+  
+### Changed
+
+- **README**: Improve screenshot visibility.
+- **Tests and Coverage**: Added Testing and Coverage to GitHub Validation (previously only local).
+- **Changed**: Changed.
+  
+### Fixed
+
+- **Fixed**: Fixed.
+  
+### Removed
+
+- **Removed**: Removed.
+  
+### Deprecated
+
+- **Deprecated**: Deprecated.
+  
+### Security
+
+- **Security**: Security
+  
 ## [3.0.0] - 2026-04-01
 
 ### Added
