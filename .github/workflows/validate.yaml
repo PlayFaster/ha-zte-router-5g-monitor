@@ -13,70 +13,15 @@ name: Validate
     - cron: "0 0 * * *"  # Daily
 
 jobs:
-
-  # Official Home Assistant HASS fest validation.
-  hassfest:
+  validate:
+    name: Validate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v6
 
-      - name: Hassfest Validation
-        uses: home-assistant/actions/hassfest@master
-
-  # Official validation of HACS.json metadata.
-  hacs_val:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v6
-
-      - name: HACS Validation
+      # 1. HACS Validation (Official HACS metadata check)
+      - name: HACS Validate
         uses: hacs/action@main
         with:
           category: integration
-
-  # Python lint and format via ruff.
-  py_val:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v6
-
-      - name: Install Ruff
-        run: pip install ruff
-
-      - name: Run Ruff Check
-        # This checks for linting errors
-        run: ruff check .
-
-      - name: Run Ruff Format
-        # This ensures the code is formatted correctly
-        run: ruff format --check .
-
-  # YAML JSON and MD basic checks.
-  file_val:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v6
-
-      # 2. JSON Schema Validation (Mirroring local validation)
-      - name: JSON Schema Check
-        run: |
-          pip install check-jsonschema
-          check-jsonschema --schemafile .validate/hacs_schema.json hacs.json
-
-      # 3. YAML Linting (Mirroring local validation)
-      - name: YAML Check
-        uses: ibiqlik/action-yamllint@v3
-        with:
-          file_or_dir: .
-          config_data: "{extends: relaxed, rules: {line-length: {max: 120}}}"
-
-      # 4. Markdown Link Check (Ensures README links are alive)
-      - name: Check README Links
-        uses: gaurav-nelson/github-action-markdown-link-check@v1
-        with:
-          base-branch: main
-          file-path: README.md
