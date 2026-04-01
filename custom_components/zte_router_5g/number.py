@@ -9,7 +9,8 @@ from homeassistant.components.number import (
 from homeassistant.const import CONF_HOST, UnitOfTime
 from homeassistant.helpers.entity import EntityCategory
 
-from .const import CONF_SCAN_INTERVAL, COORDINATOR, DOMAIN
+from .const import CONF_SCAN_INTERVAL, DOMAIN
+from .coordinator import ZTERouterDataUpdateCoordinator
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,11 +29,10 @@ POLLING_INTERVAL_DESCRIPTION = NumberEntityDescription(
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the number platform."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator = data[COORDINATOR]
+    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # Read initial value from session memory (or default to 180s)
-    initial_value = data.get(CONF_SCAN_INTERVAL, 180)
+    # Read initial value from entry options (survives restarts)
+    initial_value = entry.options.get(CONF_SCAN_INTERVAL, 180)
 
     async_add_entities(
         [
@@ -51,7 +51,11 @@ class ZTEPollingInterval(NumberEntity):
     entity_description: NumberEntityDescription
 
     def __init__(
-        self, coordinator, entry, description: NumberEntityDescription, initial_value
+        self,
+        coordinator: ZTERouterDataUpdateCoordinator,
+        entry,
+        description: NumberEntityDescription,
+        initial_value,
     ):
         """Initialize the number entity."""
         self._coordinator = coordinator
@@ -87,13 +91,10 @@ class ZTEPollingInterval(NumberEntity):
 
             _LOGGER.debug("Applying new polling interval: %s seconds", val_int)
 
-            # 1. Update session memory for the current running instance
-            self.hass.data[DOMAIN][self._entry.entry_id][CONF_SCAN_INTERVAL] = val_int
-
-            # 2. Update the coordinator's actual update interval
+            # 1. Update the coordinator's actual update interval
             self._coordinator.update_interval = timedelta(seconds=val_int)
 
-            # 3. Persist to ConfigEntry Options (saves to .storage/core.config_entries)
+            # 2. Persist to ConfigEntry Options (saves to .storage/core.config_entries)
             # This ensures the setting survives a Home Assistant restart.
             new_options = dict(self._entry.options)
             new_options[CONF_SCAN_INTERVAL] = val_int
@@ -101,7 +102,7 @@ class ZTEPollingInterval(NumberEntity):
                 self._entry, options=new_options
             )
 
-            # 4. Trigger an immediate refresh using the new interval
+            # 3. Trigger an immediate refresh using the new interval
             await self._coordinator.async_request_refresh()
 
         except asyncio.CancelledError:

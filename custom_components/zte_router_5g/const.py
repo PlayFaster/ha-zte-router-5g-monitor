@@ -9,8 +9,6 @@ DEFAULT_NAME = "ZTE 5G"
 # Legacy or internal naming if needed
 NAME = "ZTE Router 5G Monitor"
 
-COORDINATOR = "coordinator"
-
 # Storage keys
 CONF_SCAN_INTERVAL = "scan_interval"
 CONF_STOP_POLLING = "stop_polling"

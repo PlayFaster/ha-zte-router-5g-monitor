@@ -2,13 +2,19 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
-.ruff_cache/
 .venv/
 venv/
 dist/
 build/
 *.egg-info/
+
+# Test and coverage reports
+htmlcov/
+.pytest_cache/
+.ruff_cache/
+coverage.xml
+.coverage
+.reports/
 
 # Home Assistant
 .storage/
@@ -23,7 +29,8 @@ testing_config/
 Thumbs.db
 
 # IDEs
-.vscode/
+# .vscode/
+*.code-workspace
 .idea/
 
 # Sync
@@ -33,7 +40,7 @@ sync.ffs_lock
 
 # Test Dev
 .devconfig/
-.coverage
+uv.lock
 
 # Note Scratch Compare Area
 /loc_only/

@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.3.1] - 2026-04-01
+
+### Added
+
+- **Development Documentation**: Added `DEVELOPMENT.md` containing architectural notes and project history.
+- **Screenshots**: Added images to `README.md`.
+- **Icon and Logo**: Added required assets for HACS and Home Assistant branding.
+- **Automated Validation**: Integrated specialized GitHub Actions for Hassfest, HACS, and Python quality.
+
+### Changed
+
+- **Architecture Refactor**: Introduced `coordinator.py` to centralize and optimize data fetching logic.
+  
+### Fixed
+
+- **Unavailable Bug**: Fixed an issue where sensors would never go unavailable due to misconfigured grace period.
+
 ## [2.2.4] - 2026-03-30
 
 ### Added
