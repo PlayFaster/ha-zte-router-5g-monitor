@@ -7,9 +7,9 @@ from custom_components.zte_router_5g import async_setup_entry, async_unload_entr
 from custom_components.zte_router_5g.const import (
     CONF_SCAN_INTERVAL,
     CONF_STOP_POLLING,
-    COORDINATOR,
     DOMAIN,
 )
+from custom_components.zte_router_5g.coordinator import ZTERouterDataUpdateCoordinator
 
 
 @pytest.fixture(autouse=True)
@@ -58,8 +58,10 @@ async def test_setup_entry_success(mock_hass, mock_config_entry):
         assert await async_setup_entry(mock_hass, mock_config_entry) is True
 
         assert mock_config_entry.entry_id in mock_hass.data[DOMAIN]
-        assert "api" in mock_hass.data[DOMAIN][mock_config_entry.entry_id]
-        assert COORDINATOR in mock_hass.data[DOMAIN][mock_config_entry.entry_id]
+        # hass.data[DOMAIN][entry_id] is the coordinator
+        coordinator = mock_hass.data[DOMAIN][mock_config_entry.entry_id]
+        assert isinstance(coordinator, ZTERouterDataUpdateCoordinator)
+        assert coordinator.api is not None
 
         mock_hass.config_entries.async_forward_entry_setups.assert_called_once()
         mock_hass.async_create_task.assert_called_once()
@@ -69,8 +71,10 @@ async def test_setup_entry_success(mock_hass, mock_config_entry):
 async def test_unload_entry_success(mock_hass, mock_config_entry):
     """Test successful unloading of the integration."""
     mock_api = MagicMock()
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
     mock_config_entry.entry_id = "test_entry"
-    mock_hass.data = {DOMAIN: {"test_entry": {"api": mock_api}}}
+    mock_hass.data = {DOMAIN: {"test_entry": mock_coordinator}}
 
     assert await async_unload_entry(mock_hass, mock_config_entry) is True
     assert DOMAIN not in mock_hass.data
@@ -97,14 +101,14 @@ async def test_async_update_data_success(mock_hass, mock_config_entry):
 
         # Setup to get the coordinator
         await async_setup_entry(mock_hass, mock_config_entry)
-        coordinator = mock_hass.data[DOMAIN]["test_entry"][COORDINATOR]
+        coordinator = mock_hass.data[DOMAIN]["test_entry"]
 
         data = await coordinator._async_update_data()
 
         assert data["network_type"] == "LTE"
         assert data["total"] == 10
         assert data["last_sms"] == {"content": "hello"}
-        assert mock_hass.data[DOMAIN]["test_entry"]["consecutive_failures"] == 0
+        assert coordinator.consecutive_failures == 0
 
 
 @pytest.mark.asyncio
@@ -121,7 +125,7 @@ async def test_async_update_data_paused(mock_hass, mock_config_entry):
 
     with patch("custom_components.zte_router_5g.ZTERouterAPI"):
         await async_setup_entry(mock_hass, mock_config_entry)
-        coordinator = mock_hass.data[DOMAIN]["test_entry"][COORDINATOR]
+        coordinator = mock_hass.data[DOMAIN]["test_entry"]
 
         # Case 1: Paused but NOT first run -> returns cached data
         coordinator.data = {"cached": "data"}
@@ -150,7 +154,7 @@ async def test_async_update_data_retry_and_resilience(mock_hass, mock_config_ent
 
     with patch("custom_components.zte_router_5g.ZTERouterAPI"):
         await async_setup_entry(mock_hass, mock_config_entry)
-        coordinator = mock_hass.data[DOMAIN]["test_entry"][COORDINATOR]
+        coordinator = mock_hass.data[DOMAIN]["test_entry"]
         coordinator.data = {"old": "data"}
 
         # Mock executor to always fail
@@ -161,12 +165,12 @@ async def test_async_update_data_retry_and_resilience(mock_hass, mock_config_ent
             data = await coordinator._async_update_data()
             # Returns old data due to resilience
             assert data == {"old": "data"}
-            assert mock_hass.data[DOMAIN]["test_entry"]["consecutive_failures"] == 1
+            assert coordinator.consecutive_failures == 1
 
             # Second consecutive failure should now correctly raise UpdateFailed
             with pytest.raises(UpdateFailed):
                 await coordinator._async_update_data()
-            assert mock_hass.data[DOMAIN]["test_entry"]["consecutive_failures"] == 2
+            assert coordinator.consecutive_failures == 2
 
 
 @pytest.mark.asyncio

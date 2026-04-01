@@ -2,39 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - Now
+## [2.3.1] - 2026-04-01
 
 ### Added
 
-- **Icon and Logo**: Added required icon and logo.
-- **.reports**: Added (hidden) .reports/ folder for test and error reports.
-- **HassFest Check**: Added ability to check HassFest prior to GitHub.
+- **Development Documentation**: Added `DEVELOPMENT.md` containing architectural notes and project history.
+- **Screenshots**: Added images to `README.md`.
+- **Icon and Logo**: Added required assets for HACS and Home Assistant branding.
+- **Automated Validation**: Integrated specialized GitHub Actions for Hassfest, HACS, and Python quality.
 
 ### Changed
 
-- **GitHub Validation**: Additional GitHub validation checks.
-- **Pinned requirements**: Confirmed requirements in manifest.json.
-- **HACS**: Updated HACS.json with necessary info.
-- **Changed**: Changed.
+- **Architecture Refactor**: Introduced `coordinator.py` to centralize and optimize data fetching logic.
   
 ### Fixed
 
-- **Unavailable Grace**: Fixed an issue where the grace period before turning the sensors unavailable never expired.
-- **Validation**: GitHub and HassFest validation fixes, mostly formatting, across many files.
-  
-### Removed
+- **Unavailable Bug**: Fixed an issue where sensors would never go unavailable due to misconfigured grace period.
 
-- **pytest.ini**: Removed pytest.ini and consolidated into pyproject.toml.
-- **Removed**: Removed.
-  
-### Deprecated
-
-- **Deprecated**: Deprecated.
-  
-### Security
-
-- **Security**: Security
-  
 ## [2.2.4] - 2026-03-30
 
 ### Added

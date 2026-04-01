@@ -14,7 +14,8 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import COORDINATOR, DOMAIN
+from .const import DOMAIN
+from .coordinator import ZTERouterDataUpdateCoordinator
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
@@ -276,7 +277,7 @@ MSG_RECENT_DESCRIPTION = ZTESensorEntityDescription(
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the sensor platform."""
-    coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
+    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities = [
         ZTEDataSensor(coordinator, entry, description) for description in SENSOR_TYPES
     ]

@@ -1,5 +1,5 @@
 ---
-# This workflow runs a comprehensive suite of validations for the Home Assistant integration.
+# Workflow runs a suite of validations for the Home Assistant integration.
 # It contains multiple independent jobs (Hassfest, HACS, Ruff, etc.),
 # it generates a SINGLE workflow badge for the README.
 
@@ -18,7 +18,7 @@ name: Validate
 
 jobs:
   # Job 1: Official Home Assistant HASSfest validation.
-  # This is the gold standard for HA integration structure, manifest, and translation checks.
+  # Standard for HA integration structure, manifest, and translation checks.
   hassfest:
     name: "HA Hassfest"
     runs-on: ubuntu-latest
@@ -37,17 +37,11 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # HACS sometimes needs history for version/tag checks
 
       - name: HACS Validation
         uses: hacs/action@main
         with:
           category: integration
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          # The '@${{ github.ref_name }}' ensures HACS looks at the CURRENT branch (like 'dev')
-          # instead of defaulting to the main branch on every run.
-          repository: ${{ github.repository }}@${{ github.ref_name }}
 
   # Job 3: Python quality check via Ruff.
   # Matches your DevContainer environment by using standard Python and pip.
@@ -61,17 +55,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14" # Matches Home Assistant's current target
+          python-version: "3.14"
 
       - name: Install Ruff
         run: pip install ruff
 
       - name: Run Ruff Check
-        # Checks for logic errors, unused imports, and Home Assistant style violations.
+        # Checks for logic errors, unused imports, HA style violations.
         run: ruff check .
 
       - name: Run Ruff Format
-        # Ensures the code matches the project's formatting standard (Black/Ruff style).
+        # Ensure code matches projects formatting standard (Ruff style).
         run: ruff format --check .
 
   # Job 4: File-level integrity (JSON, YAML, and Markdown).
@@ -95,7 +89,7 @@ jobs:
           check-jsonschema --schemafile .validate/hacs_schema.json hacs.json
 
       - name: YAML Check
-        # Ensures GitHub Actions and Home Assistant YAML files are syntactically correct.
+        # Ensures GitHub Actions and HA YAML files are valid.
         uses: ibiqlik/action-yamllint@v3
         with:
           file_or_dir: .

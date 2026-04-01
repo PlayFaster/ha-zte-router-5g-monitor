@@ -22,7 +22,17 @@ This works with, and has only been tested with, ZTE MC7010. It may work with oth
 - **Resilient Polling**: Includes a hybrid retry logic (30s retry) and stale-data grace periods to prevent "Unavailable" flickers during router reboots.
 
 - **Pause Polling**: Switch to allow uninterrupted access to the router webui if needed (zte only allow a single login).
-  
+
+## 📸 Screenshots
+
+| Integration Overview | Signal & Controls |
+| :---: | :---: |
+| ![Integration](.github/images/zte_5g_integration_screen.png) | ![Sensors](.github/images/zte_5g_sensor_control_info.png) |
+
+| Data Usage | SMS Management |
+| :---: | :---: |
+| ![Data](.github/images/zte_5g_data_info.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
+
 ## ✨ Installation
 
 ### HACS
@@ -48,7 +58,11 @@ Setup is handled entirely via the UI. You will need:
 - Router IP Address (e.g., 192.168.0.1)
 - Router Username
 - Admin Password
-  
+
+## 🛠 Maintenance Status
+
+This is a **personal project**. Support and updates are provided on a **"best-effort"** basis only. While I use this integration daily and aim to keep it functional with the latest Home Assistant releases, I cannot guarantee immediate fixes for issues or compatibility with all router firmware versions.
+
 ## Contributors & Acknowledgements
 
 🙏 Special Thanks

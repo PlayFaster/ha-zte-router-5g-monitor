@@ -8,7 +8,8 @@ from homeassistant.components.button import (
 )
 from homeassistant.const import CONF_HOST
 
-from .const import COORDINATOR, DOMAIN
+from .const import DOMAIN
+from .coordinator import ZTERouterDataUpdateCoordinator
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
@@ -41,9 +42,8 @@ DELETE_SMS_DESCRIPTION = ZTEButtonEntityDescription(
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the button platform."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    api = data["api"]
-    coordinator = data[COORDINATOR]
+    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    api = coordinator.api
 
     # Create the button entities using their respective descriptions
     async_add_entities(
@@ -63,7 +63,11 @@ class ZTERebootButton(ButtonEntity):
     entity_description: ZTEButtonEntityDescription
 
     def __init__(
-        self, api, coordinator, entry, description: ZTEButtonEntityDescription
+        self,
+        api,
+        coordinator: ZTERouterDataUpdateCoordinator,
+        entry,
+        description: ZTEButtonEntityDescription,
     ):
         """Initialize the reboot button."""
         self.entity_description = description
@@ -102,7 +106,11 @@ class ZTEDeleteAllSMSButton(ButtonEntity):
     entity_description: ZTEButtonEntityDescription
 
     def __init__(
-        self, api, coordinator, entry, description: ZTEButtonEntityDescription
+        self,
+        api,
+        coordinator: ZTERouterDataUpdateCoordinator,
+        entry,
+        description: ZTEButtonEntityDescription,
     ):
         """Initialize the delete all SMS button."""
         self.entity_description = description
