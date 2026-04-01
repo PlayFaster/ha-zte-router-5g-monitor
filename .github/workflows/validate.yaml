@@ -1,6 +1,7 @@
+---
 name: Validate
 
-on:
+'on':
   push:
     branches:
       - main
@@ -9,11 +10,34 @@ on:
     branches:
       - main
   schedule:
-    - cron: "0 0 * * *" # Daily
+    - cron: "0 0 * * *"  # Daily
 
 jobs:
-  # Added Lint Job
-  lint:
+
+  # Official Home Assistant HASS fest validation.
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Hassfest Validation
+        uses: home-assistant/actions/hassfest@master
+
+  # Official validation of HACS.json metadata.
+  hacs_val:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: HACS Validation
+        uses: hacs/action@main
+        with:
+          category: integration
+
+  # Python lint and format via ruff.
+  py_val:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -30,17 +54,29 @@ jobs:
         # This ensures the code is formatted correctly
         run: ruff format --check .
 
-  hassfest:
+  # YAML JSON and MD basic checks.
+  file_val:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Hassfest Validation
-        uses: home-assistant/actions/hassfest@master
+      # 2. JSON Schema Validation (Mirroring local validation)
+      - name: JSON Schema Check
+        run: |
+          pip install check-jsonschema
+          check-jsonschema --schemafile .validate/hacs_schema.json hacs.json
 
-      - name: HACS Validation
-        continue-on-error: true
-        uses: hacs/action@main
+      # 3. YAML Linting (Mirroring local validation)
+      - name: YAML Check
+        uses: ibiqlik/action-yamllint@v3
         with:
-          category: integration
+          file_or_dir: .
+          config_data: "{extends: relaxed, rules: {line-length: {max: 120}}}"
+
+      # 4. Markdown Link Check (Ensures README links are alive)
+      - name: Check README Links
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          base-branch: main
+          file-path: README.md

@@ -3,14 +3,13 @@
   "name": "ZTE Router 5G Monitor",
   "codeowners": ["@PlayFaster"],
   "config_flow": true,
-  "dependencies": [],
   "documentation": "https://github.com/PlayFaster/ha-zte-router-5g-monitor",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues",
   "requirements": [
-    "requests",
-    "urllib3"
+    "requests==2.32.3",
+    "urllib3==2.2.2"
   ],
   "version": "2.2.4"
 }

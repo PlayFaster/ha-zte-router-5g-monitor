@@ -1,3 +1,4 @@
+---
 services:
   homeassistant:
     container_name: zte-dev-ha
@@ -7,7 +8,8 @@ services:
       - ..:/workspaces/ha-zte-router-5g-monitor
       # Mount your local dev config
       - ./.devconfig:/config
-      # IMPORTANT: Use a relative path from the project root inside the container
+      # IMPORTANT: Use a relative path from the
+      #  project root inside the container
       # This ensures HA sees your code as an integration
       - ../custom_components/zte_router_5g:/config/custom_components/zte_router_5g:ro
     ports:

@@ -1,4 +1,0 @@
-pytest-homeassistant-custom-component
-ruff
-check-jsonschema
-pytest-cov

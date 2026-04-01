@@ -10,16 +10,30 @@ All notable changes to this project will be documented in this file.
 - **.reports**: Added (hidden) .reports/ folder for test and error reports.
 - **HassFest Check**: Added ability to check HassFest prior to GitHub.
 
-
 ### Changed
 
+- **GitHub Validation**: Additional GitHub validation checks.
+- **Pinned requirements**: Confirmed requirements in manifest.json.
+- **HACS**: Updated HACS.json with necessary info.
 - **Changed**: Changed.
   
 ### Fixed
 
 - **Unavailable Grace**: Fixed an issue where the grace period before turning the sensors unavailable never expired.
 - **Validation**: GitHub and HassFest validation fixes, mostly formatting, across many files.
+  
+### Removed
 
+- **pytest.ini**: Removed pytest.ini and consolidated into pyproject.toml.
+- **Removed**: Removed.
+  
+### Deprecated
+
+- **Deprecated**: Deprecated.
+  
+### Security
+
+- **Security**: Security
   
 ## [2.2.4] - 2026-03-30
 
