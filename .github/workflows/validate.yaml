@@ -28,4 +28,5 @@ jobs:
         with:
           category: integration
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
+          # Explicitly tell HACS to use the checked-out branch/ref
+          repository: ${{ github.repository }}@${{ github.ref_name }}
