@@ -8,7 +8,8 @@ The integration follows the standard Home Assistant Custom Component pattern, op
 
 ### Core Files (`custom_components/zte_router_5g/`)
 - **`api.py`**: Low-level wrapper for `requests.Session`. Handles Z-hashed authentication, hex decoding, and protocol detection (HTTP/HTTPS).
-- **`__init__.py`**: Implements the `DataUpdateCoordinator`. Centralizes polling logic to ensure only one API call is made per refresh interval, distributing data to all entities. Also handles background initialization to prevent blocking HA startup.
+- **`coordinator.py`**: Specialized `DataUpdateCoordinator` implementation. Centralizes polling logic to ensure only one API call is made per refresh interval, distributing data to all entities. Includes retry logic and "Pause Polling" detection.
+- **`__init__.py`**: Manages the integration lifecycle (setup/unload). Also handles background initialization to prevent blocking HA startup.
 - **`sensor.py`**: Extracts technical metrics and handles transformations (e.g., Bytes to GB, Uptime to ISO Datetime).
 - **`binary_sensor.py`**: Maps boolean states (e.g., `best_connection` logic).
 - **`switch.py`**: Implements "Pause Polling" to stop API calls without disabling the integration, allowing temporary exclusive access to the router WebUI.

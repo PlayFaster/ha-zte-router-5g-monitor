@@ -7,7 +7,8 @@ from homeassistant.components.switch import (
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers.entity import EntityCategory
 
-from .const import CONF_STOP_POLLING, COORDINATOR, DOMAIN
+from .const import CONF_STOP_POLLING, DOMAIN
+from .coordinator import ZTERouterDataUpdateCoordinator
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
@@ -23,11 +24,10 @@ PAUSE_POLLING_DESCRIPTION = SwitchEntityDescription(
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the switch platform."""
-    data = hass.data[DOMAIN][entry.entry_id]
-    coordinator = data[COORDINATOR]
+    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
-    # Read initial state from session memory (defaults to False if not set)
-    initial_state = data.get(CONF_STOP_POLLING, False)
+    # Read initial state from entry options (survives restarts)
+    initial_state = entry.options.get(CONF_STOP_POLLING, False)
 
     async_add_entities(
         [
@@ -46,7 +46,11 @@ class ZTEPausePollingSwitch(SwitchEntity):
     entity_description: SwitchEntityDescription
 
     def __init__(
-        self, coordinator, entry, description: SwitchEntityDescription, initial_state
+        self,
+        coordinator: ZTERouterDataUpdateCoordinator,
+        entry,
+        description: SwitchEntityDescription,
+        initial_state,
     ):
         """Initialize the switch."""
         self._coordinator = coordinator
@@ -60,9 +64,7 @@ class ZTEPausePollingSwitch(SwitchEntity):
     @property
     def is_on(self) -> bool:
         """Return true if polling is paused."""
-        return self.hass.data[DOMAIN][self._entry.entry_id].get(
-            CONF_STOP_POLLING, False
-        )
+        return self._entry.options.get(CONF_STOP_POLLING, False)
 
     async def async_turn_on(self, **kwargs):
         """Pause polling."""
@@ -76,10 +78,7 @@ class ZTEPausePollingSwitch(SwitchEntity):
 
     async def _async_set_state(self, state: bool):
         """Update memory, state, and persist to options."""
-        # 1. Update session memory for the current running instance
-        self.hass.data[DOMAIN][self._entry.entry_id][CONF_STOP_POLLING] = state
-
-        # 2. Persist to ConfigEntry Options (saves to .storage)
+        # 1. Persist to ConfigEntry Options (saves to .storage)
         # This ensures the pause state survives a Home Assistant restart.
         new_options = dict(self._entry.options)
         new_options[CONF_STOP_POLLING] = state
@@ -88,7 +87,7 @@ class ZTEPausePollingSwitch(SwitchEntity):
         # Signal to HA that the state has changed
         self.async_write_ha_state()
 
-        # 3. If we just resumed, trigger an immediate coordinator refresh
+        # 2. If we just resumed, trigger an immediate coordinator refresh
         if not state:
             await self._coordinator.async_request_refresh()
 

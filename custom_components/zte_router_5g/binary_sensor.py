@@ -6,7 +6,8 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import COORDINATOR, DOMAIN
+from .const import DOMAIN
+from .coordinator import ZTERouterDataUpdateCoordinator
 from .helpers import get_router_model
 
 # Define the entity description for static metadata
@@ -19,21 +20,28 @@ BEST_CONN_DESCRIPTION = BinarySensorEntityDescription(
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the binary sensor platform."""
-    coordinator = hass.data[DOMAIN][entry.entry_id][COORDINATOR]
+    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
     # Pass the description object into the sensor
     async_add_entities(
         [ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION)]
     )
 
 
-class ZTEBestConnectionSensor(CoordinatorEntity, BinarySensorEntity):
+class ZTEBestConnectionSensor(
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator], BinarySensorEntity
+):
     """Binary sensor to check for optimal 5G/LTE CA connection."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
     entity_description: BinarySensorEntityDescription
 
-    def __init__(self, coordinator, entry, description: BinarySensorEntityDescription):
+    def __init__(
+        self,
+        coordinator: ZTERouterDataUpdateCoordinator,
+        entry,
+        description: BinarySensorEntityDescription,
+    ):
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self.entity_description = description

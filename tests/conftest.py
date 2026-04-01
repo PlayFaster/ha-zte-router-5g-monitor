@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.const import CONF_HOST
@@ -20,4 +20,5 @@ def mock_coordinator():
     coordinator = MagicMock()
     coordinator.data = {}
     coordinator.last_update_success_time = None
+    coordinator.async_request_refresh = AsyncMock()
     return coordinator

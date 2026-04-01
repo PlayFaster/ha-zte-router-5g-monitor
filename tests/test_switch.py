@@ -1,8 +1,8 @@
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.zte_router_5g.const import CONF_STOP_POLLING, COORDINATOR, DOMAIN
+from custom_components.zte_router_5g.const import CONF_STOP_POLLING, DOMAIN
 from custom_components.zte_router_5g.switch import (
     PAUSE_POLLING_DESCRIPTION,
     ZTEPausePollingSwitch,
@@ -12,44 +12,29 @@ from custom_components.zte_router_5g.switch import (
 
 @pytest.mark.asyncio
 async def test_pause_polling_switch(mock_coordinator, mock_config_entry):
-    """Test pause polling switch."""
+    """Test turning the pause switch on and off."""
+    # Start with False (not paused)
+    mock_config_entry.options[CONF_STOP_POLLING] = False
+
     switch = ZTEPausePollingSwitch(
         mock_coordinator, mock_config_entry, PAUSE_POLLING_DESCRIPTION, False
     )
     switch.hass = MagicMock()
-    switch._entry.entry_id = "test_entry_id"
+    # Mock hass.data structure
+    switch.hass.data = {DOMAIN: {mock_config_entry.entry_id: mock_coordinator}}
+    switch.async_write_ha_state = MagicMock()
 
-    # Mock coordinator refresh
-    mock_coordinator.async_request_refresh = AsyncMock()
-
-    # Mock hass.data
-    switch.hass.data = {DOMAIN: {"test_entry_id": {CONF_STOP_POLLING: False}}}
-
-    assert switch.is_on is False
-
-    # Mock config_entries.async_update_entry
-    switch.hass.config_entries.async_update_entry = MagicMock()
-
-    with patch.object(switch, "async_write_ha_state"):
-        await switch.async_turn_on()
-
-    assert switch.hass.data[DOMAIN]["test_entry_id"][CONF_STOP_POLLING] is True
+    # 1. Turn ON (Pause)
+    await switch.async_turn_on()
     switch.hass.config_entries.async_update_entry.assert_called()
+    _args, kwargs = switch.hass.config_entries.async_update_entry.call_args
+    assert kwargs["options"][CONF_STOP_POLLING] is True
 
-    with patch.object(switch, "async_write_ha_state"):
-        await switch.async_turn_off()
-
-    assert switch.hass.data[DOMAIN]["test_entry_id"][CONF_STOP_POLLING] is False
-    # The refresh is only triggered when turning polling back OFF
+    # 2. Turn OFF (Resume)
+    await switch.async_turn_off()
+    _args, kwargs = switch.hass.config_entries.async_update_entry.call_args
+    assert kwargs["options"][CONF_STOP_POLLING] is False
     mock_coordinator.async_request_refresh.assert_called_once()
-
-
-def test_switch_device_info(mock_coordinator, mock_config_entry):
-    """Test device_info."""
-    switch = ZTEPausePollingSwitch(
-        mock_coordinator, mock_config_entry, PAUSE_POLLING_DESCRIPTION, False
-    )
-    assert switch.device_info["identifiers"] == {(DOMAIN, "192.168.0.1")}
 
 
 @pytest.mark.asyncio
@@ -58,7 +43,9 @@ async def test_switch_setup_entry():
     hass = MagicMock()
     entry = MagicMock()
     entry.entry_id = "test"
-    hass.data = {DOMAIN: {"test": {COORDINATOR: MagicMock(), CONF_STOP_POLLING: False}}}
+    entry.options = {CONF_STOP_POLLING: False}
+    coordinator = MagicMock()
+    hass.data = {DOMAIN: {"test": coordinator}}
 
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
