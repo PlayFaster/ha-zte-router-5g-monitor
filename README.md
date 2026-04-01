@@ -1,6 +1,6 @@
 # ZTE Router 5G Monitor for Home Assistant
   
-![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg) ![Latest Release](https://img.shields.io/github/v/release/PlayFaster/ha-zte-router-5g-monitor?label=Release&logo=github) [![Validate](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml/badge.svg)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml) ![Last Commit](https://img.shields.io/github/last-commit/PlayFaster/ha-zte-router-5g-monitor?label=Last%20commit)
+![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg) ![Latest Release](https://img.shields.io/github/v/release/PlayFaster/ha-zte-router-5g-monitor?label=Release&logo=github) [![Validate](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml/badge.svg)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml) ![Coverage](https://img.shields.io/badge/coverage-94%25-brightgreen.svg) ![Last Commit](https://img.shields.io/github/last-commit/PlayFaster/ha-zte-router-5g-monitor?label=Last%20commit)
 
 Home Assistant integration for ZTE MC7010 5G Router that provides detailed signal statistics, data usage tracking, and SMS management.
   
@@ -25,13 +25,17 @@ This works with, and has only been tested with, ZTE MC7010. It may work with oth
 
 ## 📸 Screenshots
 
-| Integration Overview | Signal & Controls |
-| :---: | :---: |
-| ![Integration](.github/images/zte_5g_integration_screen.png) | ![Sensors](.github/images/zte_5g_sensor_control_info.png) |
+### Integration Overview
+![Integration](.github/images/zte_5g_integration_screen.png)
 
-| Data Usage | SMS Management |
-| :---: | :---: |
-| ![Data](.github/images/zte_5g_data_info.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
+### Signal & Controls
+![Sensors](.github/images/zte_5g_sensor_control_info.png)
+
+### Data Usage
+![Data](.github/images/zte_5g_data_info.png)
+
+### SMS Management
+![SMS](.github/images/zte_5g_sms_info.png)
 
 ## ✨ Installation
 
