@@ -28,3 +28,4 @@ jobs:
         with:
           category: integration
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
