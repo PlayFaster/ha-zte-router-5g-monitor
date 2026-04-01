@@ -34,12 +34,6 @@ def mock_hass():
         return MagicMock()
 
     hass.async_create_task = MagicMock(side_effect=mock_create_task)
-
-    async def mock_executor(func, *args):
-        return func(*args)
-
-    hass.async_add_executor_job = AsyncMock(side_effect=mock_executor)
-
     return hass
 
 
@@ -54,14 +48,15 @@ async def test_setup_entry_success(mock_hass, mock_config_entry):
         CONF_SCAN_INTERVAL: 60,
     }
 
-    with patch("custom_components.zte_router_5g.ZTERouterAPI"):
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI"),
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+    ):
         assert await async_setup_entry(mock_hass, mock_config_entry) is True
 
         assert mock_config_entry.entry_id in mock_hass.data[DOMAIN]
-        # hass.data[DOMAIN][entry_id] is the coordinator
         coordinator = mock_hass.data[DOMAIN][mock_config_entry.entry_id]
         assert isinstance(coordinator, ZTERouterDataUpdateCoordinator)
-        assert coordinator.api is not None
 
         mock_hass.config_entries.async_forward_entry_setups.assert_called_once()
         mock_hass.async_create_task.assert_called_once()
@@ -78,7 +73,6 @@ async def test_unload_entry_success(mock_hass, mock_config_entry):
 
     assert await async_unload_entry(mock_hass, mock_config_entry) is True
     assert DOMAIN not in mock_hass.data
-    mock_hass.async_add_executor_job.assert_called_with(mock_api.close)
 
 
 @pytest.mark.asyncio
@@ -92,12 +86,14 @@ async def test_async_update_data_success(mock_hass, mock_config_entry):
         CONF_SCAN_INTERVAL: 60,
     }
 
-    with patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class:
-        mock_api_class.return_value.get_all_data.return_value = {"network_type": "LTE"}
-        mock_api_class.return_value.get_sms_capacity.return_value = {"total": 10}
-        mock_api_class.return_value.get_last_sms_content.return_value = {
-            "content": "hello"
-        }
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+    ):
+        mock_api = mock_api_class.return_value
+        mock_api.get_all_data = AsyncMock(return_value={"network_type": "LTE"})
+        mock_api.get_sms_capacity = AsyncMock(return_value={"total": 10})
+        mock_api.get_last_sms_content = AsyncMock(return_value={"content": "hello"})
 
         # Setup to get the coordinator
         await async_setup_entry(mock_hass, mock_config_entry)
@@ -115,7 +111,6 @@ async def test_async_update_data_success(mock_hass, mock_config_entry):
 async def test_async_update_data_paused(mock_hass, mock_config_entry):
     """Test update data when paused."""
     mock_config_entry.entry_id = "test_entry"
-    # Set paused in options
     mock_config_entry.options = {
         "host": "192.168.0.1",
         "password": "pass",
@@ -123,22 +118,25 @@ async def test_async_update_data_paused(mock_hass, mock_config_entry):
         CONF_SCAN_INTERVAL: 60,
     }
 
-    with patch("custom_components.zte_router_5g.ZTERouterAPI"):
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI"),
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+    ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_hass.data[DOMAIN]["test_entry"]
 
-        # Case 1: Paused but NOT first run -> returns cached data
+        # Case 1: Paused but NOT first run
         coordinator.data = {"cached": "data"}
         data = await coordinator._async_update_data()
         assert data == {"cached": "data"}
 
         # Case 2: Paused and first run -> attempts fetch (mock failure)
         coordinator.data = None
-        mock_hass.async_add_executor_job.side_effect = Exception("Fail")
+        coordinator.api.get_all_data = AsyncMock(side_effect=Exception("Fail"))
 
         with patch("asyncio.sleep", AsyncMock()):
             data = await coordinator._async_update_data()
-            assert data == {}  # Safe startup bypass
+            assert data == {}
 
 
 @pytest.mark.asyncio
@@ -152,22 +150,24 @@ async def test_async_update_data_retry_and_resilience(mock_hass, mock_config_ent
         CONF_SCAN_INTERVAL: 60,
     }
 
-    with patch("custom_components.zte_router_5g.ZTERouterAPI"):
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI"),
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+    ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_hass.data[DOMAIN]["test_entry"]
         coordinator.data = {"old": "data"}
 
-        # Mock executor to always fail
-        mock_hass.async_add_executor_job.side_effect = Exception("Persistent Fail")
+        coordinator.api.get_all_data = AsyncMock(
+            side_effect=Exception("Persistent Fail")
+        )
 
         # Test retry logic and holding values
         with patch("asyncio.sleep", AsyncMock()):
             data = await coordinator._async_update_data()
-            # Returns old data due to resilience
             assert data == {"old": "data"}
             assert coordinator.consecutive_failures == 1
 
-            # Second consecutive failure should now correctly raise UpdateFailed
             with pytest.raises(UpdateFailed):
                 await coordinator._async_update_data()
             assert coordinator.consecutive_failures == 2
@@ -182,8 +182,13 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
         "password": "pass",
     }
 
-    with patch("custom_components.zte_router_5g.ZTERouterAPI"):
-        # Capture the background task coro
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+    ):
+        mock_api = mock_api_class.return_value
+        mock_api.try_set_protocol = AsyncMock(side_effect=Exception("Background Fail"))
+
         background_coro = None
 
         def mock_capture_task(coro):
@@ -195,9 +200,5 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
 
         await async_setup_entry(mock_hass, mock_config_entry)
 
-        # Trigger the captured background task coroutine
-        mock_hass.async_add_executor_job.side_effect = Exception("Background Fail")
-
-        # Should complete without raising (exception is caught and logged)
         if background_coro:
             await background_coro

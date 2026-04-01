@@ -4,6 +4,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.data_entry_flow import AbortFlow
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
 from .const import DEFAULT_NAME, DOMAIN
@@ -23,18 +24,17 @@ def _user_schema(defaults: dict) -> vol.Schema:
 
 
 async def _validate_credentials(hass, user_input: dict) -> None:
-    """Validate router credentials.
-    Raises ZTEConnectionError or ZTEAuthError on failure.
-    """
+    """Validate router credentials."""
+    session = async_get_clientsession(hass)
     api = ZTERouterAPI(
-        user_input[CONF_HOST], user_input.get(CONF_USERNAME), user_input[CONF_PASSWORD]
+        session,
+        user_input[CONF_HOST],
+        user_input.get(CONF_USERNAME),
+        user_input[CONF_PASSWORD],
     )
-    try:
-        await hass.async_add_executor_job(api.try_set_protocol, 5)
-        await hass.async_add_executor_job(api.login, 5)
-    finally:
-        # Always close the validation session regardless of outcome
-        await hass.async_add_executor_job(api.close)
+    # Fully async validation
+    await api.try_set_protocol(5)
+    await api.login(5)
 
 
 class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -54,8 +54,7 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(user_input[CONF_HOST])
                 self._abort_if_unique_id_configured()
 
-                # Store credentials in options (not data) so the options flow
-                # can update them without needing a migration.
+                # Store credentials in options (not data)
                 return self.async_create_entry(
                     title=DEFAULT_NAME,
                     data={},
@@ -63,7 +62,6 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
 
             except AbortFlow:
-                # Re-raise AbortFlow so HA can show the "Already Configured" message
                 raise
             except ZTEAuthError:
                 errors["base"] = "invalid_auth"
@@ -89,7 +87,7 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class ZTEOptionsFlow(config_entries.OptionsFlow):
     """Handle reconfiguration of an existing ZTE Router entry."""
 
-    def __init__(self, entry: config_entries.ConfigEntry) -> None:
+    def __init__(self, entry: config_entries.OptionsFlow) -> None:
         self._entry = entry
 
     async def async_step_init(self, user_input=None):
@@ -100,8 +98,7 @@ class ZTEOptionsFlow(config_entries.OptionsFlow):
             try:
                 await _validate_credentials(self.hass, user_input)
 
-                # Preserve existing runtime options (scan interval, stop polling)
-                # and merge in the updated credentials
+                # Preserve existing runtime options and merge in the updated credentials
                 updated_options = dict(self._entry.options)
                 updated_options.update(user_input)
 

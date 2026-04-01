@@ -67,5 +67,6 @@ This is a **personal project**. Support and updates are provided on a **"best-ef
 
 🙏 Special Thanks
 
-This is based on the original work done by @Kajkac on ZTE Routers. A big thanks for the heavy lifting!
+- This project is based on the original work done by @Kajkac on ZTE Routers. A big thanks for the heavy lifting!
+- This project was developed with the assistance of Gemini AI to ensure code quality and best practices.
   

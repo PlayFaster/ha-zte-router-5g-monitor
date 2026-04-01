@@ -49,13 +49,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         last_error = None
         for attempt in range(2):
             try:
-                data = await self.hass.async_add_executor_job(self.api.get_all_data)
-                sms_cap = await self.hass.async_add_executor_job(
-                    self.api.get_sms_capacity
-                )
-                last_sms = await self.hass.async_add_executor_job(
-                    self.api.get_last_sms_content
-                )
+                # Direct async calls, no more executor jobs!
+                data = await self.api.get_all_data()
+                sms_cap = await self.api.get_sms_capacity()
+                last_sms = await self.api.get_last_sms_content()
 
                 data.update(sms_cap)
                 data["last_sms"] = last_sms
