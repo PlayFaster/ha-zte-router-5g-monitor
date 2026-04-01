@@ -40,7 +40,13 @@ ignore = [
 ]
 
 [tool.pytest.ini_options]
-# This helps fix "asyncio_mode" warning
 asyncio_mode = "auto"
 testpaths = ["tests"]
 norecursedirs = [".git", "testing_config"]
+markers = [
+    "asyncio: mark test as an asyncio test",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:homeassistant.components.http.*",
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]

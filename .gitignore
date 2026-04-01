@@ -29,7 +29,8 @@ testing_config/
 Thumbs.db
 
 # IDEs
-.vscode/
+# .vscode/
+*.code-workspace
 .idea/
 
 # Sync
