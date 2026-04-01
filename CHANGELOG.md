@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0] - 2026-04-01
+
+### Added
+
+- **Native Async Architecture**: Migrated the entire API and polling layer to `aiohttp` for native asynchronous execution.
+- **Improved Performance**: Removed thread-based `executor_job` wrappers, aligning the integration with the Home Assistant event loop.
+- **Dependency Simplification**: Removed `requests` as a required dependency, eliminating maintenance of version pinning.
+
+### Changed
+
+- **Version Bump**: Major version update to reflect the complete architectural shift.
+
 ## [2.3.1] - 2026-04-01
 
 ### Added

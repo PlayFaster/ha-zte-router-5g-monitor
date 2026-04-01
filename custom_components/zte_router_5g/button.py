@@ -93,7 +93,8 @@ class ZTERebootButton(ButtonEntity):
     async def async_press(self) -> None:
         """Handle the button press."""
         try:
-            await self.hass.async_add_executor_job(self._api.reboot)
+            # Direct async call
+            await self._api.reboot()
         except Exception as err:
             _LOGGER.error("%s: Reboot failed: %s", self._entry.title, err)
 
@@ -134,7 +135,8 @@ class ZTEDeleteAllSMSButton(ButtonEntity):
     async def async_press(self) -> None:
         """Handle the button press."""
         try:
-            await self.hass.async_add_executor_job(self._api.delete_all)
+            # Direct async call
+            await self._api.delete_all()
             # Request refresh so SMS sensors update immediately
             await self._coordinator.async_request_refresh()
         except Exception as err:

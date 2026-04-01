@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
@@ -19,20 +19,18 @@ async def test_validate_credentials_success():
     hass = MagicMock()
     user_input = {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "pass"}
 
-    with patch(
-        "custom_components.zte_router_5g.config_flow.ZTERouterAPI"
-    ) as mock_api_class:
+    with (
+        patch(
+            "custom_components.zte_router_5g.config_flow.ZTERouterAPI"
+        ) as mock_api_class,
+        patch("custom_components.zte_router_5g.config_flow.async_get_clientsession"),
+    ):
         mock_api = mock_api_class.return_value
-
-        # Mock executor to call functions directly
-        async def mock_executor(func, *args):
-            return func(*args)
-
-        hass.async_add_executor_job = mock_executor
+        mock_api.try_set_protocol = AsyncMock()
+        mock_api.login = AsyncMock()
 
         await _validate_credentials(hass, user_input)
         mock_api.login.assert_called_once()
-        mock_api.close.assert_called_once()
 
 
 @pytest.mark.asyncio

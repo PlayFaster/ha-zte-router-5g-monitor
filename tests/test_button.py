@@ -12,43 +12,27 @@ from custom_components.zte_router_5g.button import (
 from custom_components.zte_router_5g.const import DOMAIN
 
 
-@pytest.fixture
-def mock_hass_executor():
-    """Fixture to provide a hass mock that executes executor jobs."""
-    hass = MagicMock()
-
-    async def mock_executor(func, *args):
-        return func(*args)
-
-    hass.async_add_executor_job = AsyncMock(side_effect=mock_executor)
-    return hass
-
-
 @pytest.mark.asyncio
-async def test_reboot_button_press(
-    mock_coordinator, mock_config_entry, mock_hass_executor
-):
+async def test_reboot_button_press(mock_coordinator, mock_config_entry):
     """Test reboot button trigger."""
     mock_api = MagicMock()
+    mock_api.reboot = AsyncMock()
     button = ZTERebootButton(
         mock_api, mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION
     )
-    button.hass = mock_hass_executor
 
     await button.async_press()
     mock_api.reboot.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_delete_sms_button_press(
-    mock_coordinator, mock_config_entry, mock_hass_executor
-):
+async def test_delete_sms_button_press(mock_coordinator, mock_config_entry):
     """Test delete SMS button trigger."""
     mock_api = MagicMock()
+    mock_api.delete_all = AsyncMock()
     button = ZTEDeleteAllSMSButton(
         mock_api, mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
     )
-    button.hass = mock_hass_executor
 
     await button.async_press()
     mock_api.delete_all.assert_called_once()
