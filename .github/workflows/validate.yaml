@@ -1,4 +1,8 @@
 ---
+# This workflow runs a comprehensive suite of validations for the Home Assistant integration.
+# It contains multiple independent jobs (Hassfest, HACS, Ruff, etc.),
+# it generates a SINGLE workflow badge for the README.
+
 name: Validate
 
 'on':
@@ -10,23 +14,96 @@ name: Validate
     branches:
       - main
   schedule:
-    - cron: "0 0 * * *"  # Daily
+    - cron: "0 0 * * *"  # Daily at midnight
 
 jobs:
-  validate:
-    name: Validate
+  # Job 1: Official Home Assistant HASSfest validation.
+  # This is the gold standard for HA integration structure, manifest, and translation checks.
+  hassfest:
+    name: "HA Hassfest"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Hassfest Validation
+        uses: home-assistant/actions/hassfest@master
+
+  # Job 2: Official HACS metadata validation.
+  # Checks hacs.json, manifest.json, and brand assets (icons/logos).
+  hacs_val:
+    name: "HACS Check"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # HACS sometimes needs history for version/tag checks
 
-      # 1. HACS Validation (Official HACS metadata check)
-      - name: HACS Validate
+      - name: HACS Validation
         uses: hacs/action@main
         with:
           category: integration
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          # Explicitly tell HACS to use the checked-out branch/ref
+          # The '@${{ github.ref_name }}' ensures HACS looks at the CURRENT branch (like 'dev')
+          # instead of defaulting to the main branch on every run.
           repository: ${{ github.repository }}@${{ github.ref_name }}
+
+  # Job 3: Python quality check via Ruff.
+  # Matches your DevContainer environment by using standard Python and pip.
+  py_val:
+    name: "Python Lint (Ruff)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14" # Matches Home Assistant's current target
+
+      - name: Install Ruff
+        run: pip install ruff
+
+      - name: Run Ruff Check
+        # Checks for logic errors, unused imports, and Home Assistant style violations.
+        run: ruff check .
+
+      - name: Run Ruff Format
+        # Ensures the code matches the project's formatting standard (Black/Ruff style).
+        run: ruff format --check .
+
+  # Job 4: File-level integrity (JSON, YAML, and Markdown).
+  # Catches typos in config files and dead links in documentation.
+  file_val:
+    name: "File Integrity"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: JSON Schema Check
+        # Validates hacs.json against the official schema using standard pip.
+        run: |
+          pip install check-jsonschema
+          check-jsonschema --schemafile .validate/hacs_schema.json hacs.json
+
+      - name: YAML Check
+        # Ensures GitHub Actions and Home Assistant YAML files are syntactically correct.
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: .
+          config_data: "{extends: relaxed, rules: {line-length: {max: 120}}}"
+
+      - name: Check README Links
+        # Validates that all external links in your README are still alive.
+        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        with:
+          base-branch: main
+          file-path: README.md
