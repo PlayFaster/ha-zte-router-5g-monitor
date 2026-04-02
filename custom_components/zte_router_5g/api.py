@@ -1,3 +1,5 @@
+"""ZTE Router 5G API client."""
+
 import hashlib
 import logging
 from datetime import datetime
@@ -81,6 +83,7 @@ class ZTERouterAPI:
                 _LOGGER.debug("Failed to connect via %s: %s", proto, e)
 
     async def get_version(self, timeout_sec=None):
+        """Get the router firmware version."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         url = (
             f"{self.referer}goform/goform_get_cmd_process"
@@ -96,7 +99,8 @@ class ZTERouterAPI:
             _LOGGER.debug("Failed to get version: %s", e)
             return ""
 
-    async def get_LD(self, timeout_sec=None):
+    async def get_ld(self, timeout_sec=None):
+        """Get the LD parameter for login."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=LD"
         try:
@@ -113,7 +117,7 @@ class ZTERouterAPI:
         tout = timeout_sec or 15
         self.stok = None
 
-        ld = await self.get_LD(timeout_sec=tout)
+        ld = await self.get_ld(timeout_sec=tout)
         version = await self.get_version(timeout_sec=tout)
 
         if not self.password:
@@ -235,6 +239,7 @@ class ZTERouterAPI:
             raise
 
     async def get_sms_capacity(self, timeout_sec=None):
+        """Get SMS capacity information."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         if not self.stok:
             await self.login()
@@ -253,6 +258,7 @@ class ZTERouterAPI:
             return {}
 
     async def get_last_sms_content(self, timeout_sec=None):
+        """Get the content of the last received SMS."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         if not self.stok:
             await self.login()
@@ -288,7 +294,7 @@ class ZTERouterAPI:
         """Execute a device reboot."""
         try:
             await self.login()
-            ad = await self.get_AD()
+            ad = await self.get_ad()
             payload = f"isTest=false&goformId=REBOOT_DEVICE&AD={ad}"
             headers = {
                 "Referer": self.referer,
@@ -306,10 +312,10 @@ class ZTERouterAPI:
             raise
 
     async def delete_sms(self, msg_id):
-        """Helper to delete SMS."""
+        """Delete SMS."""
         if not self.stok:
             await self.login()
-        ad = await self.get_AD()
+        ad = await self.get_ad()
         payload = f"isTest=false&goformId=DELETE_SMS&msg_id={msg_id}&AD=" + ad
         headers = {
             "Referer": self.referer,
@@ -323,7 +329,7 @@ class ZTERouterAPI:
             return r.status
 
     async def delete_all(self):
-        """Action Button Logic to delete all SMS."""
+        """Delete all SMS."""
         try:
             await self.login()
             url = f"{self.referer}goform/goform_get_cmd_process"
@@ -351,7 +357,8 @@ class ZTERouterAPI:
             self.stok = None
             raise
 
-    async def get_AD(self, timeout_sec=None):
+    async def get_ad(self, timeout_sec=None):
+        """Get the AD parameter for commands."""
         version = await self.get_version(timeout_sec=timeout_sec)
         if not version:
             return ""
@@ -362,10 +369,11 @@ class ZTERouterAPI:
             else (lambda s: hashlib.md5(s.encode()).hexdigest())
         )
         a = hash_func(version)
-        rd = await self.get_RD(timeout_sec=timeout_sec)
+        rd = await self.get_rd(timeout_sec=timeout_sec)
         return hash_func(a + rd)
 
-    async def get_RD(self, timeout_sec=None):
+    async def get_rd(self, timeout_sec=None):
+        """Get the RD parameter for AD generation."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=RD"
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}

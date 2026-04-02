@@ -1,3 +1,5 @@
+"""DataUpdateCoordinator for ZTE Router 5G."""
+
 import asyncio
 import logging
 from datetime import timedelta

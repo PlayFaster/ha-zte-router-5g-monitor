@@ -1,3 +1,5 @@
+"""Tests for the ZTE Router config flow."""
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
