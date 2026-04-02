@@ -1,3 +1,5 @@
+"""Tests for the ZTE Router sensor."""
+
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 

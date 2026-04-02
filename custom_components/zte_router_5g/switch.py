@@ -1,3 +1,5 @@
+"""Switch platform for ZTE Router 5G."""
+
 import logging
 
 from homeassistant.components.switch import (

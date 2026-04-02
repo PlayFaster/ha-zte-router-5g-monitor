@@ -1,3 +1,5 @@
+"""Button platform for ZTE Router 5G."""
+
 import logging
 from dataclasses import dataclass
 

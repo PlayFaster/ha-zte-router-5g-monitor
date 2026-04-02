@@ -1,3 +1,5 @@
+"""Tests for ZTE Router 5G API."""
+
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,6 +13,7 @@ from .conftest import MockResponse
 
 
 def test_api_hash():
+    """Test the SHA256 hashing helper."""
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
     assert (
         api._hash("test")
@@ -26,6 +29,7 @@ def test_api_hash_none():
 
 
 def test_api_hex_decode():
+    """Test hex decoding helper."""
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
     assert api._hex_decode("00480065006c006c006f") == "Hello"
     assert api._hex_decode("") == ""
@@ -33,6 +37,7 @@ def test_api_hex_decode():
 
 
 def test_api_parse_date():
+    """Test date parsing helper."""
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
     assert api._parse_date("23,10,10,10,0,0,+1") == "2023-10-10T10:00:00"
     assert api._parse_date("") is None
@@ -47,6 +52,7 @@ def test_api_parse_date_error():
 
 @pytest.mark.asyncio
 async def test_api_try_set_protocol(mock_aiohttp_client):
+    """Test protocol detection logic."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
 
     # Success on first attempt (http)
@@ -69,6 +75,7 @@ async def test_api_try_set_protocol_error(mock_aiohttp_client):
 
 @pytest.mark.asyncio
 async def test_api_get_version(mock_aiohttp_client):
+    """Test version fetching."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     mock_aiohttp_client.get.return_value = MockResponse(
         json_data={"wa_inner_version": "test_v"}
@@ -86,6 +93,7 @@ async def test_api_get_version_error(mock_aiohttp_client):
 
 @pytest.mark.asyncio
 async def test_api_login_success(mock_aiohttp_client):
+    """Test successful login."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
 
     # LD, Version, then Post for Login
@@ -110,7 +118,7 @@ async def test_api_login_no_password(mock_aiohttp_client):
     """Test login failure when no password provided."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "")
     with (
-        patch.object(api, "get_LD", return_value="LD"),
+        patch.object(api, "get_ld", return_value="LD"),
         patch.object(api, "get_version", return_value="VER"),
         pytest.raises(Exception, match="No password provided"),
     ):
@@ -134,6 +142,7 @@ async def test_api_login_failure_no_stok(mock_aiohttp_client):
 
 @pytest.mark.asyncio
 async def test_api_get_all_data_expired_session(mock_aiohttp_client):
+    """Test session expiry handling in get_all_data."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=old_stok"
 
@@ -219,7 +228,7 @@ async def test_api_reboot_success(mock_aiohttp_client):
     api.stok = "stok=test"
     with (
         patch.object(api, "login"),
-        patch.object(api, "get_AD", return_value="test_ad"),
+        patch.object(api, "get_ad", return_value="test_ad"),
     ):
         mock_aiohttp_client.post.return_value = MockResponse(status=200)
         assert await api.reboot() == 200
@@ -232,7 +241,7 @@ async def test_api_reboot_error(mock_aiohttp_client):
     api.stok = "stok=test"
     with (
         patch.object(api, "login"),
-        patch.object(api, "get_AD", return_value="test_ad"),
+        patch.object(api, "get_ad", return_value="test_ad"),
         pytest.raises(RuntimeError, match="Fail"),
     ):
         mock_aiohttp_client.post.side_effect = RuntimeError("Fail")
@@ -245,7 +254,7 @@ async def test_api_delete_sms(mock_aiohttp_client):
     """Test single SMS deletion."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
-    with patch.object(api, "get_AD", return_value="test_ad"):
+    with patch.object(api, "get_ad", return_value="test_ad"):
         mock_aiohttp_client.post.return_value = MockResponse(status=200)
         assert await api.delete_sms("1") == 200
 
@@ -261,7 +270,7 @@ async def test_api_delete_all_success(mock_aiohttp_client):
         MockResponse(status=200),
     ]
 
-    with patch.object(api, "login"), patch.object(api, "get_AD", return_value="ad"):
+    with patch.object(api, "login"), patch.object(api, "get_ad", return_value="ad"):
         assert await api.delete_all() == 200
 
 
@@ -276,20 +285,20 @@ async def test_api_delete_all_empty(mock_aiohttp_client):
 
 
 @pytest.mark.asyncio
-async def test_api_get_AD_new_gen(mock_aiohttp_client):
+async def test_api_get_ad_new_gen(mock_aiohttp_client):
     """Test AD hash generation for new generation models (MC888/MC889)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     with (
         patch.object(api, "get_version", return_value="MC888_VER"),
-        patch.object(api, "get_RD", return_value="test_rd"),
+        patch.object(api, "get_rd", return_value="test_rd"),
     ):
-        ad = await api.get_AD()
+        ad = await api.get_ad()
         assert len(ad) == 64
 
 
 @pytest.mark.asyncio
-async def test_api_get_RD_error(mock_aiohttp_client):
+async def test_api_get_rd_error(mock_aiohttp_client):
     """Test RD fetch error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     mock_aiohttp_client.get.side_effect = Exception("Fail")
-    assert await api.get_RD() == ""
+    assert await api.get_rd() == ""

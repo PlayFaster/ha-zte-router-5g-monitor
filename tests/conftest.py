@@ -1,3 +1,5 @@
+"""Fixtures and utilities for testing the ZTE Router integration."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -6,6 +8,7 @@ from homeassistant.const import CONF_HOST
 
 @pytest.fixture
 def mock_config_entry():
+    """Fixture to mock a ConfigEntry."""
     mock_entry = MagicMock()
     mock_entry.unique_id = "zte_unique_123"
     mock_entry.title = "My ZTE Router"
@@ -17,6 +20,7 @@ def mock_config_entry():
 
 @pytest.fixture
 def mock_coordinator():
+    """Fixture to mock a DataUpdateCoordinator."""
     coordinator = MagicMock()
     coordinator.data = {}
     coordinator.last_update_success_time = None
@@ -28,17 +32,21 @@ class MockResponse:
     """Helper to mock aiohttp responses."""
 
     def __init__(self, json_data=None, status=200, cookies=None):
+        """Initialize the mock response."""
         self._json_data = json_data
         self.status = status
         self.cookies = cookies or {}
 
     async def json(self, **kwargs):
+        """Return the JSON data."""
         return self._json_data
 
     async def __aenter__(self):
+        """Enter the context manager."""
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit the context manager."""
         pass
 
 

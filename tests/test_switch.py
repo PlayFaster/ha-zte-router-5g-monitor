@@ -1,3 +1,5 @@
+"""Tests for the ZTE Router switch."""
+
 from unittest.mock import MagicMock
 
 import pytest

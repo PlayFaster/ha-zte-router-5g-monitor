@@ -1,3 +1,5 @@
+"""Tests for the ZTE Router helpers."""
+
 from custom_components.zte_router_5g.helpers import get_router_model
 
 

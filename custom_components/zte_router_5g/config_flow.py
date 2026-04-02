@@ -1,3 +1,5 @@
+"""Config flow for ZTE Router 5G integration."""
+
 import logging
 
 import voluptuous as vol
@@ -88,6 +90,7 @@ class ZTEOptionsFlow(config_entries.OptionsFlow):
     """Handle reconfiguration of an existing ZTE Router entry."""
 
     def __init__(self, entry: config_entries.OptionsFlow) -> None:
+        """Initialize the options flow."""
         self._entry = entry
 
     async def async_step_init(self, user_input=None):

@@ -1,3 +1,5 @@
+"""Binary sensor platform for ZTE Router 5G."""
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
