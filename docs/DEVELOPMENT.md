@@ -30,6 +30,11 @@ To reach its current "modern" state, the project underwent two major refactors:
 - **Change**: Migrated the entire API layer to `aiohttp`.
 - **Result**: Native asynchronous execution. Removed the overhead of thread-switching, simplified the code by removing executor wrappers, and eliminated the need to pin and maintain the `requests` dependency in `manifest.json`.
 
+### Python Standards & Strict Linting (Unreleased)
+- **Standard**: Adherence to PEP8 naming conventions and `pydocstyle` requirements.
+- **Change**: Renamed internal API methods (e.g., `get_LD` to `get_ld`) and enabled strict linting (`N`, `D`) in `pyproject.toml`.
+- **Result**: Improved codebase maintainability and alignment with Home Assistant's core coding standards.
+
 ## 4. Success Patterns
 - **`DataUpdateCoordinator`**: Essential for preventing the router from being overwhelmed by simultaneous requests. Using `coordinator.async_request_refresh()` for write actions ensures immediate UI feedback.
 - **Protocol Discovery**: The `api.try_set_protocol` method identifies whether a router is on HTTP or HTTPS by attempting short-timeout requests before authentication.
@@ -37,6 +42,10 @@ To reach its current "modern" state, the project underwent two major refactors:
 - **Single-Domain Discovery**: Configuring `hacs.json` to be minimal allows HACS to automatically discover the domain and class from the `manifest.json`.
 
 ## 5. Technical Pitfalls & Fixes
+- **ConfigEntry Data vs. Options**: Using `entry.options` is preferred for settings that can be reconfigured via `OptionsFlow`. If the `config_flow.py` saves to `options`, the `__init__.py` must read from `options` to avoid a `KeyError`.
+  - *Fix*: Standardized the integration to use `entry.options` for host, username, and password.
+- **None-Data Handling**: The `DataUpdateCoordinator` might return `None` or an empty dictionary if a poll fails early or during initialization.
+  - *Fix*: Implemented safety checks in every sensor's `native_value` and `is_on` properties to handle empty data gracefully.
 - **Catching `AbortFlow`**: Using a generic `except Exception:` block in `config_flow.py` can break HA’s "Already Configured" logic.
   - *Fix*: Explicitly allow `AbortFlow` to propagate before catching generic exceptions.
 - **NTFS/OneDrive Locking**: Development within OneDrive-synced Windows folders causes intermittent `.git` corruption and `PermissionError` during test runs.

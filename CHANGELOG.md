@@ -6,15 +6,23 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Strict Linting**: Enabled `N` (pep8-naming) and `D` (pydocstyle) rules in `ruff` configuration for ongoing code quality.
+- **Comprehensive Documentation**: Added module, class, and method-level docstrings across the entire codebase.
 - **Added**: Added.
   
 ### Changed
 
+- **PEP8 Naming**: Internal API methods to lowercase (Python standards).
+- **Docstring Style**: Add missins docstrings and standardize to use imperative tone.
 - **README**: Improve screenshot visibility.
 - **Tests and Coverage**: Added Testing and Coverage to GitHub Validation (previously only local).
 - **Changed**: Changed.
-  
+
 ### Fixed
+
+- **Config Entry Setup**: Resolved a `KeyError: 'host'` by correctly reading configuration from `entry.options` instead of `entry.data`.
+- **Data Safety**: Implemented safety checks for `None` data in sensors to prevent runtime errors during initialization or connection loss.
+- **Exception Handling**: Fixed invalid syntax in multiple exception handlers.
 
 - **Fixed**: Fixed.
   
@@ -29,6 +37,7 @@ All notable changes to this project will be documented in this file.
 ### Security
 
 - **Security**: Security
+
   
 ## [3.0.0] - 2026-04-01
 
