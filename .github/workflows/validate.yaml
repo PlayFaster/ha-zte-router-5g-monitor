@@ -5,7 +5,7 @@
 
 name: Validate
 
-'on':
+"on":
   push:
     branches:
       - main
@@ -14,10 +14,11 @@ name: Validate
     branches:
       - main
   schedule:
-    - cron: "0 0 * * *"  # Daily at midnight
+    - cron: "0 0 * * *" # Daily at midnight
 
 permissions:
-  contents: write  # Required for updating the coverage badge in README
+  contents: write # Required for updating the coverage badge in README
+  pull-requests: write # For creating/updating PR comments
 
 jobs:
   # Job 1: Official Home Assistant HASSfest validation.
@@ -38,16 +39,12 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: HACS Validation
         uses: hacs/action@main
         continue-on-error: true
         with:
           category: integration
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}@${{ github.ref_name }}
 
   # Job 3: Python quality check via Ruff.
   py_val:
@@ -93,7 +90,10 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest --cov=custom_components/zte_router_5g --cov-report=xml tests/
+          pytest --cov=custom_components/zte_router_5g \
+            --cov-report=xml \
+            --junitxml=pytest.xml \
+            tests/
 
       - name: Pytest coverage comment
         uses: MishaKav/pytest-coverage-comment@main
@@ -105,6 +105,8 @@ jobs:
           hide-comment: false
           create-new-comment: false
           junitxml-path: ./pytest.xml
+          create-badge: true
+          badge-filename: coverage-badge.json
 
   # Job 5: File-level integrity (JSON, YAML, and Markdown).
   file_val:
