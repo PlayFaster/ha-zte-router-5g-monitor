@@ -1,6 +1,5 @@
 """The ZTE Router 5G integration."""
 
-import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -58,7 +57,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 err,
             )
 
-    hass.async_create_task(_async_background_setup())
+    # Use the modern background task API for better lifecycle management
+    entry.async_create_background_task(
+        hass, _async_background_setup(), "zte-router-setup"
+    )
 
     return True
 

@@ -102,5 +102,5 @@ class ZTEPausePollingSwitch(SwitchEntity):
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
             "model": self._coordinator.model,
-            "sw_version": self._coordinator.version,
+            "sw_version": self._coordinator.sw_version,
         }

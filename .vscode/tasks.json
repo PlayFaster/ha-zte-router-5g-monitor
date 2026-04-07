@@ -75,7 +75,7 @@
     {
       "label": "Ruff: Format Fix (Auto-Repair)",
       "type": "shell",
-      "command": "ruff format .",
+      "command": "ruff format . || true",
       "problemMatcher": [],
       "presentation": {
         "reveal": "always",
@@ -86,7 +86,7 @@
     {
       "label": "Ruff: Check Fix (Auto-Repair Lint)",
       "type": "shell",
-      "command": "ruff check --fix .",
+      "command": "ruff check --fix . || true",
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
@@ -117,7 +117,7 @@
     {
       "label": "Markdown: Lint (Auto-Fix)",
       "type": "shell",
-      "command": "git ls-files -z --cached --others --exclude-standard '*.md' | xargs -0 -r markdownlint --config .validate/.markdownlint.json --fix",
+      "command": "git ls-files -z --cached --others --exclude-standard '*.md' | xargs -0 -r markdownlint --config .validate/.markdownlint.json --fix || true",
       "presentation": {
         "reveal": "always",
         "panel": "dedicated"
@@ -137,7 +137,7 @@
     {
       "label": "Prettier: Format (Auto-Fix)",
       "type": "shell",
-      "command": "git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .validate/.prettierrc --write",
+      "command": "git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .validate/.prettierrc --write || true",
       "presentation": {
         "reveal": "always",
         "panel": "dedicated"

@@ -2,7 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] - Now
+## [3.1.0] - 2026-04-07
+
+### Added
+
+- **Declarative Entity Engine**: Refactored the sensor platform to use a modern callback-based architecture (`value_fn`). This replaces 100+ lines of imperative logic with clean, maintainable entity descriptions.
+- **Dynamic Sub-Device Routing**: Unified multiple sensor classes into a single dynamic engine that automatically routes entities to the correct sub-device (SMS, Monthly Data, or Main Router) based on metadata.
+
+### Changed
+
+- **Modern Background Tasks**: Migrated the non-blocking startup sequence to the modern `entry.async_create_background_task` API. This ensures the setup task is formally tracked by Home Assistant and automatically cancelled if the integration is unloaded.
+- **Standardized Resilience**: Aligned the Data Update Coordinator with Home Assistant best practices. Removed manual retry sleeps and implemented `asyncio.timeout` with structured `UpdateFailed` reporting.
+- **Flat Identity Pattern**: Refactored `device_info` across all platforms to use persistent coordinator-level attributes. This ensures hardware model information is visible in the UI from the exact second of boot, even before the first network fetch.
+
+### Fixed
+
+- **Domain Cleanup**: Implemented standardized unloading logic to ensure the `DOMAIN` key is scrubbed from Home Assistant's internal memory when no integration instances remain.
+
+## [3.0.1] - 2026-04-07
 
 ### Added
 
@@ -14,7 +31,7 @@ All notable changes to this project will be documented in this file.
 
 - **Non-Blocking Startup**: Removed the initial blocking data fetch during integration setup. Home Assistant now starts instantly, and the first data poll occurs in the background.
 - **PEP8 Naming**: Internal API methods to lowercase (Python standards).
-- **Docstring Style**: Add missins docstrings and standardize to use imperative tone.
+- **Docstring Style**: Add missing docstrings and standardize to use imperative tone.
 - **README**: Improve screenshot visibility.
 - **Tests and Coverage**: Added Testing and Coverage to GitHub Validation (previously only local).
 
@@ -24,18 +41,6 @@ All notable changes to this project will be documented in this file.
 - **Config Entry Setup**: Resolved a `KeyError: 'host'` by correctly reading configuration from `entry.options` instead of `entry.data`.
 - **Data Safety**: Implemented safety checks for `None` data in sensors to prevent runtime errors during initialization or connection loss.
 - **Exception Handling**: Fixed invalid syntax in multiple exception handlers.
-
-### Removed
-
-- **Removed**: Removed.
-
-### Deprecated
-
-- **Deprecated**: Deprecated.
-
-### Security
-
-- **Security**: Security
 
 ## [3.0.0] - 2026-04-01
 
