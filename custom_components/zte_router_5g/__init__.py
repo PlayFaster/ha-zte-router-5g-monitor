@@ -1,5 +1,6 @@
 """The ZTE Router 5G integration."""
 
+import asyncio
 import logging
 
 from homeassistant.config_entries import ConfigEntry
@@ -43,7 +44,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
     # BACKGROUND INITIALIZATION TASK
-    # Offloads the initial connection to prevent blocking HA startup
+    # Offloads the initial connection to keep startup instant.
     async def _async_background_setup():
         try:
             await api.try_set_protocol(5)

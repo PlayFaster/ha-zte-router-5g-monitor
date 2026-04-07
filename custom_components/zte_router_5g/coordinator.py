@@ -10,6 +10,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .const import CONF_SCAN_INTERVAL, CONF_STOP_POLLING
+from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +24,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self.consecutive_failures = 0
         self.last_update_success_time = None
+
+        # Load hardware identity from persistent ConfigEntry data
+        self.model = entry.data.get("model", "ZTE Router")
+        self.version = entry.data.get("sw_version")
 
         # Determine the initial update interval from entry options
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, 180)
@@ -58,6 +63,26 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
                 data.update(sms_cap)
                 data["last_sms"] = last_sms
+
+                # Update model and version metadata
+                new_model = get_router_model(data)
+                new_version = data.get("wa_inner_version")
+
+                # If version changed, persist it to the ConfigEntry
+                if new_version != self.version:
+                    _LOGGER.info(
+                        "%s: Firmware update detected: %s -> %s",
+                        self.entry.title,
+                        self.version,
+                        new_version,
+                    )
+                    self.version = new_version
+                    self.model = new_model
+                    new_data = dict(self.entry.data)
+                    new_data.update({"model": new_model, "sw_version": new_version})
+                    self.hass.config_entries.async_update_entry(
+                        self.entry, data=new_data
+                    )
 
                 # Success path
                 self.last_update_success_time = dt_util.now()

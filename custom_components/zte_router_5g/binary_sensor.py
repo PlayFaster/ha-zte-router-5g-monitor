@@ -10,7 +10,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import get_router_model
 
 # Define the entity description for static metadata
 BEST_CONN_DESCRIPTION = BinarySensorEntityDescription(
@@ -78,5 +77,6 @@ class ZTEBestConnectionSensor(
             "name": self._entry.title,
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
-            "model": get_router_model(self.coordinator.data),
+            "model": self.coordinator.model,
+            "sw_version": self.coordinator.version,
         }

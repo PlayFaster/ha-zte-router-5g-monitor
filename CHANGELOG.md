@@ -6,25 +6,24 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Persistent Metadata**: The integration now fetches and stores the hardware model and software version in the `ConfigEntry` during setup. This ensures the Device Page is always populated correctly, even if the router is offline.
 - **Strict Linting**: Enabled `N` (pep8-naming) and `D` (pydocstyle) rules in `ruff` configuration for ongoing code quality.
 - **Comprehensive Documentation**: Added module, class, and method-level docstrings across the entire codebase.
-- **Added**: Added.
 
 ### Changed
 
+- **Non-Blocking Startup**: Removed the initial blocking data fetch during integration setup. Home Assistant now starts instantly, and the first data poll occurs in the background.
 - **PEP8 Naming**: Internal API methods to lowercase (Python standards).
 - **Docstring Style**: Add missins docstrings and standardize to use imperative tone.
 - **README**: Improve screenshot visibility.
 - **Tests and Coverage**: Added Testing and Coverage to GitHub Validation (previously only local).
-- **Changed**: Changed.
 
 ### Fixed
 
+- **Standardized Device Info**: All 46+ entities now use consistent coordinator-based metadata for the Home Assistant Device Registry.
 - **Config Entry Setup**: Resolved a `KeyError: 'host'` by correctly reading configuration from `entry.options` instead of `entry.data`.
 - **Data Safety**: Implemented safety checks for `None` data in sensors to prevent runtime errors during initialization or connection loss.
 - **Exception Handling**: Fixed invalid syntax in multiple exception handlers.
-
-- **Fixed**: Fixed.
 
 ### Removed
 

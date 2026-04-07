@@ -13,7 +13,6 @@ from homeassistant.helpers.entity import EntityCategory
 
 from .const import CONF_SCAN_INTERVAL, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -122,5 +121,6 @@ class ZTEPollingInterval(NumberEntity):
             "name": self._entry.title,
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
-            "model": get_router_model(self._coordinator.data),
+            "model": self._coordinator.model,
+            "sw_version": self._coordinator.version,
         }
