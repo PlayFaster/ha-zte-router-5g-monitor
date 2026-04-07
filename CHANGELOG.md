@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 - **Strict Linting**: Enabled `N` (pep8-naming) and `D` (pydocstyle) rules in `ruff` configuration for ongoing code quality.
 - **Comprehensive Documentation**: Added module, class, and method-level docstrings across the entire codebase.
 - **Added**: Added.
-  
+
 ### Changed
 
 - **PEP8 Naming**: Internal API methods to lowercase (Python standards).
@@ -25,20 +25,19 @@ All notable changes to this project will be documented in this file.
 - **Exception Handling**: Fixed invalid syntax in multiple exception handlers.
 
 - **Fixed**: Fixed.
-  
+
 ### Removed
 
 - **Removed**: Removed.
-  
+
 ### Deprecated
 
 - **Deprecated**: Deprecated.
-  
+
 ### Security
 
 - **Security**: Security
 
-  
 ## [3.0.0] - 2026-04-01
 
 ### Added
@@ -63,7 +62,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **Architecture Refactor**: Introduced `coordinator.py` to centralize and optimize data fetching logic.
-  
+
 ### Fixed
 
 - **Unavailable Bug**: Fixed an issue where sensors would never go unavailable due to misconfigured grace period.
@@ -79,7 +78,7 @@ All notable changes to this project will be documented in this file.
 - **Clean Code**: Code clean-up and formatting/linting rules.
 - **Testing**: Improved scope of testing.
 - **Strings**: Added strings.json in addition to en.json.
-  
+
 ## [2.2.3] - 2026-03-30
 
 ### Added
@@ -89,74 +88,74 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - **Manifest**: Fixed manifest.json for GitHub tests.
-  
+
 ## [2.1.1] - 2026-03-29
 
 ### Added
 
 - **Error Logging**: Significantly improved home assistant (logger) error logging.
-  
+
 ## [2.0.1] - 2026-03-29
 
 ### Added
 
 - **Options Flow**: Allow reconfiguration of integration in-situ rather than delete and re-add.
-  
+
 ## [1.9.4] - 2026-03-29
 
 ### Added
 
 - **Model Number**: Pulls model number from device.
-  
+
 ### Changed
 
 - **Exception Handling**: Improved exception handling.
-  
+
 ### Fixed
 
 - **Strings and Translate**: Fixed strings en.json structure and moved all elements to this.
 - **Sessions Handling**: Explicit closing of sessions.
-  
+
 ## [1.8.1] - 2026-03-29
 
 ### Added
 
 - **Strings and Translate**: Added translation folder structure, just en for now.
-  
+
 ## [1.7.3] - 2026-03-29
 
 ### Fixed
 
 - **Entity Naming**: Fixed entity sensor naming approach.
-  
+
 ## [1.6.3] - 2026-03-28
 
 ### Changed
 
 - **Reduced Startup Risk**: Moved to async for startup to avoid any potential for slowness/hangs/locks if router is unavailable at HA start.
-  
+
 ## [1.5.7] - 2026-03-28
 
 ### Added
 
 - **Integration Icon**: Added ZTE icons.
-  
+
 ### Fixed
 
 - **Sub Device Sensors**: Properly align sub device (data, sms) sensor naming.
-  
+
 ## [1.5.1] - 2026-03-28
 
 ### Changed
 
 - **Aligned Integration Naming**: All naming now ZTE Router 5G Monitor.
-  
+
 ## [1.4.5] - 2026-03-28
 
 ### Added
 
 - **Changelog**: Added Changelog (this) as CHANGELOG.md.
-  
+
 ### Changed
 
 - **Standard Names**: Changed specific sensor names (with ID tag) to standard names.
@@ -201,7 +200,7 @@ All notable changes to this project will be documented in this file.
 
 - Core sensors: Signal Strength (RSRP/RSRQ/SINR), Network Type, and Data Usage.
 - Connection status binary sensor.
-  
+
 ## [1.3.6] - 2026-03-25
 
 ### Added
@@ -210,10 +209,9 @@ All notable changes to this project will be documented in this file.
 - Moved from one sensor with all data as sensor attributes to separate sensors.
 - Added config flow.
 - Added single device, then sub-devices (router, data, sms).
-  
-***
-  
+
+---
+
 ### Format
-  
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).

@@ -73,6 +73,22 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement="dBm",
     ),
     ZTESensorEntityDescription(
+        key="z5g_rsrq",
+        translation_key="z5g_rsrq",
+        icon="mdi:signal",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+    ),
+    ZTESensorEntityDescription(
+        key="z5g_rssi",
+        translation_key="z5g_rssi",
+        icon="mdi:signal",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dBm",
+    ),
+    ZTESensorEntityDescription(
         key="z5g_sinr",
         translation_key="z5g_sinr",
         icon="mdi:waveform",
@@ -174,6 +190,18 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="lte_ca_pcell_bandwidth",
         translation_key="lte_ca_pcell_bandwidth",
+        icon="mdi:transmission-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZTESensorEntityDescription(
+        key="lte_ca_scell_band",
+        translation_key="lte_ca_scell_band",
+        icon="mdi:transmission-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    ZTESensorEntityDescription(
+        key="lte_ca_scell_bandwidth",
+        translation_key="lte_ca_scell_bandwidth",
         icon="mdi:transmission-tower",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -349,6 +377,10 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
         raw_key = key
         if key == "z5g_rsrp":
             raw_key = "Z5g_rsrp"
+        if key == "z5g_rsrq":
+            raw_key = "Z5g_rsrq"
+        if key == "z5g_rssi":
+            raw_key = "Z5g_rssi"
         if key == "z5g_sinr":
             raw_key = "Z5g_SINR"
 

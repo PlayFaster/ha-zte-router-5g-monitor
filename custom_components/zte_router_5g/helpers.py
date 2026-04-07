@@ -8,12 +8,19 @@ _KNOWN_MODELS = ["MC7010", "MC801", "MC888", "MC889"]
 def get_router_model(coordinator_data: dict | None) -> str:
     """Extract the router model from coordinator data.
 
-    Reads the 'wa_inner_version' field (e.g. 'IRL_H3G_MC7010DV1.0.0B01')
-    and returns the first matching known model string.
-    Falls back to 'ZTE Router' if data is unavailable or no model is recognised.
+    Checks 'model_name' first (e.g. 'MC7010'), then falls back to parsing
+    'wa_inner_version' (e.g. 'IRL_H3G_MC7010DV1.0.0B01').
+    Returns 'ZTE Router' if no model is recognised.
     """
     if not coordinator_data:
         return "ZTE Router"
+
+    # 1. Direct model name check
+    model_name = coordinator_data.get("model_name")
+    if model_name:
+        return model_name
+
+    # 2. Firmware version parsing fallback
     version = coordinator_data.get("wa_inner_version", "")
     for model in _KNOWN_MODELS:
         if model in version:
