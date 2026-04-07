@@ -10,6 +10,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
 from .const import DEFAULT_NAME, DOMAIN
+from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,8 +26,8 @@ def _user_schema(defaults: dict) -> vol.Schema:
     )
 
 
-async def _validate_credentials(hass, user_input: dict) -> None:
-    """Validate router credentials."""
+async def _validate_credentials(hass, user_input: dict) -> dict:
+    """Validate router credentials and return basic device info."""
     session = async_get_clientsession(hass)
     api = ZTERouterAPI(
         session,
@@ -37,6 +38,12 @@ async def _validate_credentials(hass, user_input: dict) -> None:
     # Fully async validation
     await api.try_set_protocol(5)
     await api.login(5)
+    data = await api.get_all_data()
+
+    return {
+        "model": get_router_model(data),
+        "sw_version": data.get("wa_inner_version"),
+    }
 
 
 class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -50,16 +57,17 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             try:
-                await _validate_credentials(self.hass, user_input)
+                info = await _validate_credentials(self.hass, user_input)
 
                 # Use the host IP as the unique ID so two routers are separate devices
                 await self.async_set_unique_id(user_input[CONF_HOST])
                 self._abort_if_unique_id_configured()
 
                 # Store credentials in options (not data)
+                # Store hardware metadata in data (not options)
                 return self.async_create_entry(
                     title=DEFAULT_NAME,
-                    data={},
+                    data=info,
                     options=user_input,
                 )
 
@@ -99,6 +107,8 @@ class ZTEOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             try:
+                # We call validation but don't need to update 'data' here
+                # since it's already populated and will be updated by the coordinator
                 await _validate_credentials(self.hass, user_input)
 
                 # Preserve existing runtime options and merge in the updated credentials

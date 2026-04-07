@@ -12,7 +12,6 @@ from homeassistant.const import CONF_HOST
 
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,7 +88,8 @@ class ZTERebootButton(ButtonEntity):
             "name": self._entry.title,
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
-            "model": get_router_model(self._coordinator.data),
+            "model": self._coordinator.model,
+            "sw_version": self._coordinator.version,
         }
 
     async def async_press(self) -> None:
@@ -131,6 +131,8 @@ class ZTEDeleteAllSMSButton(ButtonEntity):
             "identifiers": {(DOMAIN, f"{host}_sms")},
             "name": f"{self._entry.title} SMS",
             "manufacturer": "ZTE",
+            "model": self._coordinator.model,
+            "sw_version": self._coordinator.version,
             "via_device": (DOMAIN, host),
         }
 

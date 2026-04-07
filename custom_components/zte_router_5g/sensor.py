@@ -18,7 +18,6 @@ from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -423,7 +422,8 @@ class ZTEDataSensor(CoordinatorEntity, SensorEntity):
             "name": self._entry.title,
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
-            "model": get_router_model(self.coordinator.data),
+            "model": self.coordinator.model,
+            "sw_version": self.coordinator.version,
         }
 
 
@@ -493,6 +493,8 @@ class ZTEMsgSensor(CoordinatorEntity, SensorEntity):
             "identifiers": {(DOMAIN, f"{host}_sms")},
             "name": f"{self._entry.title} SMS",
             "manufacturer": "ZTE",
+            "model": self.coordinator.model,
+            "sw_version": self.coordinator.version,
             "via_device": (DOMAIN, host),
         }
 
@@ -537,5 +539,8 @@ class ZTEMsgContentSensor(CoordinatorEntity, SensorEntity):
         return {
             "identifiers": {(DOMAIN, f"{host}_sms")},
             "name": f"{self._entry.title} SMS",
+            "manufacturer": "ZTE",
+            "model": self.coordinator.model,
+            "sw_version": self.coordinator.version,
             "via_device": (DOMAIN, host),
         }
