@@ -78,5 +78,5 @@ class ZTEBestConnectionSensor(
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
             "model": self.coordinator.model,
-            "sw_version": self.coordinator.version,
+            "sw_version": self.coordinator.sw_version,
         }

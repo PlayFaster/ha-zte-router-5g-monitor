@@ -89,7 +89,7 @@ class ZTERebootButton(ButtonEntity):
             "manufacturer": "ZTE",
             "configuration_url": f"http://{host}",
             "model": self._coordinator.model,
-            "sw_version": self._coordinator.version,
+            "sw_version": self._coordinator.sw_version,
         }
 
     async def async_press(self) -> None:
@@ -132,7 +132,7 @@ class ZTEDeleteAllSMSButton(ButtonEntity):
             "name": f"{self._entry.title} SMS",
             "manufacturer": "ZTE",
             "model": self._coordinator.model,
-            "sw_version": self._coordinator.version,
+            "sw_version": self._coordinator.sw_version,
             "via_device": (DOMAIN, host),
         }
 

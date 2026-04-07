@@ -25,9 +25,11 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self.consecutive_failures = 0
         self.last_update_success_time = None
 
-        # Load hardware identity from persistent ConfigEntry data
+        # Load hardware identity from persistent ConfigEntry data.
+        # This ensures device info is stable from boot (The "Flat Identity" pattern).
         self.model = entry.data.get("model", "ZTE Router")
-        self.version = entry.data.get("sw_version")
+        self.sw_version = entry.data.get("sw_version")
+        self.mac = entry.data.get("mac")
 
         # Determine the initial update interval from entry options
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, 180)
@@ -41,7 +43,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch data from API with resilience and pausing."""
-        # Check entry.options directly for real-time responsiveness to the UI switch
         is_paused = self.entry.options.get(CONF_STOP_POLLING, False)
         is_first_run = self.data is None
 
@@ -52,11 +53,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             )
             return self.data
 
-        # 2. Attempt fetch with 1 retry
-        last_error = None
-        for attempt in range(2):
-            try:
-                # Direct async calls, no more executor jobs!
+        try:
+            # Use standard timeout wrapper (HA Best Practice)
+            async with asyncio.timeout(30):
+                # Fetch all primary data components
                 data = await self.api.get_all_data()
                 sms_cap = await self.api.get_sms_capacity()
                 last_sms = await self.api.get_last_sms_content()
@@ -64,20 +64,20 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 data.update(sms_cap)
                 data["last_sms"] = last_sms
 
-                # Update model and version metadata
+                # Identify if hardware metadata has changed
                 new_model = get_router_model(data)
                 new_version = data.get("wa_inner_version")
 
-                # If version changed, persist it to the ConfigEntry
-                if new_version != self.version:
+                if new_version != self.sw_version or new_model != self.model:
                     _LOGGER.info(
-                        "%s: Firmware update detected: %s -> %s",
+                        "%s: Hardware metadata updated: %s (%s)",
                         self.entry.title,
-                        self.version,
+                        new_model,
                         new_version,
                     )
-                    self.version = new_version
+                    self.sw_version = new_version
                     self.model = new_model
+
                     new_data = dict(self.entry.data)
                     new_data.update({"model": new_model, "sw_version": new_version})
                     self.hass.config_entries.async_update_entry(
@@ -89,40 +89,36 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 self.consecutive_failures = 0
                 return data
 
-            except Exception as err:
-                last_error = err
-                if attempt == 0:
-                    _LOGGER.warning(
-                        "%s: Fetch failed: %s. Retrying in 30 seconds...",
-                        self.entry.title,
-                        err,
-                    )
-                    await asyncio.sleep(30)
-                else:
-                    _LOGGER.warning(
-                        "%s: Second fetch attempt failed for this cycle: %s",
-                        self.entry.title,
-                        err,
-                    )
+        except TimeoutError as err:
+            self.consecutive_failures += 1
+            if self.data is not None and self.consecutive_failures <= 2:
+                _LOGGER.warning(
+                    "%s: Fetch timed out. Holding last known values.", self.entry.title
+                )
+                return self.data
+            _LOGGER.error("%s: API request timed out", self.entry.title)
+            raise UpdateFailed("API request timed out") from err
 
-        # 3. Failure resilience — hold last known values for one cycle
-        self.consecutive_failures += 1
+        except Exception as err:
+            self.consecutive_failures += 1
+            # Failure resilience — hold last known values for two cycles
+            if self.data is not None and self.consecutive_failures <= 2:
+                _LOGGER.warning(
+                    "%s: Fetch failed (%s). Holding last known values.",
+                    self.entry.title,
+                    err,
+                )
+                return self.data
 
-        if self.data is not None and self.consecutive_failures == 1:
-            _LOGGER.warning(
-                "%s: Fetch failed. Holding last known values.", self.entry.title
+            # Safe startup bypass — if paused on first run, start with empty data
+            if is_paused:
+                _LOGGER.warning(
+                    "%s: Initial fetch failed while paused. Starting with empty data.",
+                    self.entry.title,
+                )
+                return {}
+
+            _LOGGER.error(
+                "%s: Connection lost. Marking entities unavailable.", self.entry.title
             )
-            return self.data
-
-        # 4. Safe startup bypass — if paused on first run, start with empty data
-        if is_paused:
-            _LOGGER.warning(
-                "%s: Initial fetch failed while paused. Starting with empty data.",
-                self.entry.title,
-            )
-            return {}
-
-        _LOGGER.error(
-            "%s: Connection lost. Marking entities unavailable.", self.entry.title
-        )
-        raise UpdateFailed(f"Communication error: {last_error}")
+            raise UpdateFailed(f"Communication error: {err}") from err

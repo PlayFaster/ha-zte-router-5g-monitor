@@ -13,7 +13,7 @@ The integration follows the standard Home Assistant Custom Component pattern, op
 - **`api.py`**: Async wrapper for the router's internal `goform` API using `aiohttp`. Handles Z-hashed authentication, hex decoding, and protocol detection (HTTP/HTTPS).
 - **`coordinator.py`**: Specialized `DataUpdateCoordinator` implementation. Centralizes polling logic to ensure only one API call is made per refresh interval, distributing data to all entities. Includes retry logic and "Pause Polling" detection.
 - **`__init__.py`**: Manages the integration lifecycle (setup/unload). Also handles background initialization to prevent blocking HA startup.
-- **`sensor.py`**: Extracts technical metrics and handles transformations (e.g., Bytes to GB, Uptime to ISO Datetime).
+- **`sensor.py`**: Extracts technical metrics using declarative `value_fn` callbacks and handles transformations (e.g., Bytes to GB, Uptime to ISO Datetime).
 - **`binary_sensor.py`**: Maps boolean states (e.g., `best_connection` logic).
 - **`switch.py`**: Implements "Pause Polling" to stop API calls without disabling the integration, allowing temporary exclusive access to the router WebUI.
 - **`button.py`**: Triggers stateless actions (Reboot, Delete All SMS).
@@ -22,7 +22,7 @@ The integration follows the standard Home Assistant Custom Component pattern, op
 
 ## 3. Historical Architectural Shifts
 
-To reach its current "modern" state, the project underwent two major refactors:
+To reach its current "modern" state, the project underwent several major refactors:
 
 ### From Monolithic to Orchestrated (v2.2.4 -> v2.3.1)
 
@@ -36,32 +36,35 @@ To reach its current "modern" state, the project underwent two major refactors:
 - **Change**: Migrated the entire API layer to `aiohttp`.
 - **Result**: Native asynchronous execution. Removed the overhead of thread-switching, simplified the code by removing executor wrappers, and eliminated the need to pin and maintain the `requests` dependency in `manifest.json`.
 
-### Python Standards & Strict Linting (Unreleased)
+### Python Standards & Strict Linting (v3.0.1)
 
 - **Standard**: Adherence to PEP8 naming conventions and `pydocstyle` requirements.
 - **Change**: Renamed internal API methods (e.g., `get_LD` to `get_ld`) and enabled strict linting (`N`, `D`) in `pyproject.toml`.
 - **Result**: Improved codebase maintainability and alignment with Home Assistant's core coding standards.
 
+### Architectural Synchronization & Declarative Refactor (v3.1.0)
+
+- **Initial State**: Imperative `if/elif` blocks in sensors and manual retry loops in the coordinator.
+- **Change**: Refactored the entity engine to use **Declarative Callbacks** (`value_fn`). Standardized on the **Flat Identity Pattern** (loading hardware info from `entry.data` at boot). Unified background tasks using `entry.async_create_background_task`.
+- **Result**: **100% architectural parity** with the TP-Link and WiFi Monitor integrations. Massive reduction in boilerplate code and improved reliability through native HA lifecycle management.
+
 ## 4. Success Patterns
 
 - **`DataUpdateCoordinator`**: Essential for preventing the router from being overwhelmed by simultaneous requests. Using `coordinator.async_request_refresh()` for write actions ensures immediate UI feedback.
-- **Protocol Discovery**: The `api.try_set_protocol` method identifies whether a router is on HTTP or HTTPS by attempting short-timeout requests before authentication.
-- **Background Safety**: Connection and login are offloaded to a background task in `async_setup_entry` to ensure Home Assistant starts quickly even if the router is slow to respond.
-- **Single-Domain Discovery**: Configuring `hacs.json` to be minimal allows HACS to automatically discover the domain and class from the `manifest.json`.
+- **Declarative Entities**: Using a `value_fn` lambda in `EntityDescription` allows for a completely generic entity class. This makes adding new sensors a "data entry" task rather than a coding task.
+- **Flat Identity Pattern**: By storing Model, Version, and MAC in `entry.data` and loading them into the coordinator at `__init__`, the integration provides stable metadata to the UI instantly at boot, even if the hardware is offline.
+- **Dynamic Routing**: Entities are automatically routed to sub-devices (SMS, Monthly Data) based on their `group` attribute, ensuring a clean and organized Home Assistant Device Registry.
 
 ## 5. Technical Pitfalls & Fixes
 
-- **ConfigEntry Data vs. Options**: Using `entry.options` is preferred for settings that can be reconfigured via `OptionsFlow`. If the `config_flow.py` saves to `options`, the `__init__.py` must read from `options` to avoid a `KeyError`.
-  - _Fix_: Standardized the integration to use `entry.options` for host, username, and password.
-- **None-Data Handling**: The `DataUpdateCoordinator` might return `None` or an empty dictionary if a poll fails early or during initialization.
-  - _Fix_: Implemented safety checks in every sensor's `native_value` and `is_on` properties to handle empty data gracefully.
-- **Catching `AbortFlow`**: Using a generic `except Exception:` block in `config_flow.py` can break HA’s "Already Configured" logic.
-  - _Fix_: Explicitly allow `AbortFlow` to propagate before catching generic exceptions.
-- **NTFS/OneDrive Locking**: Development within OneDrive-synced Windows folders causes intermittent `.git` corruption and `PermissionError` during test runs.
+- **ConfigEntry Data vs. Options**: In this integration, `entry.options` is used for user-changeable settings (credentials, polling interval), while `entry.data` is reserved for immutable hardware metadata (Model, MAC, Version).
+  - _Fix_: Standardized all platforms to initialize from `entry.data` and update via `hass.config_entries.async_update_entry` only when hardware changes are detected.
+- **Manual Sleep in Coordinators**: Sleeping inside `_async_update_data` blocks the coordinator task and delays other integrations.
+  - _Fix_: Removed `asyncio.sleep` retries. Use `asyncio.timeout` and raise `UpdateFailed` to let HA handle backoffs.
+- **Background Task Orphaning**: Standard `hass.async_create_task` is not tracked by the entry.
+  - _Fix_: Migrated to `entry.async_create_background_task` for automatic cleanup on unload.
 - **MappingProxy TypeError**: In unit tests, `ZTEConfigFlow().context` is a read-only `mappingproxy`.
   - _Fix_: Explicitly set `flow.context = {}` in test setups.
-- **HACS Branch Resolution**: HACS validation actions on non-default branches (like `dev`) often fail to find the manifest or brand assets.
-  - _Fix_: Explicitly provide the repository context as `repository: ${{ github.repository }}@${{ github.ref_name }}` in the workflow.
 
 ## 6. Environment Constraints
 
@@ -73,4 +76,4 @@ To reach its current "modern" state, the project underwent two major refactors:
 
 - **Token Persistence**: Currently, the `stok` (Session Token) is stored in memory. A fresh login is required on every integration restart.
 - **SMS Page Limits**: The `delete_all` feature is limited to the first 500 messages to avoid API timeouts.
-- **Debounce Dependency**: The `ZTEPollingInterval` entity uses an `asyncio.sleep(2)` debounce. This creates a task that must be handled carefully in unit tests to avoid `UnraisableExceptionWarnings`.
+- **Service Integration**: Evaluate implementing a `send_sms` service to match the TP-Link integration's capability if the ZTE API supports it.
