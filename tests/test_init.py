@@ -29,13 +29,6 @@ def mock_hass():
     hass.config_entries.async_forward_entry_setups = AsyncMock(return_value=True)
     hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
     hass.config_entries.async_update_entry = MagicMock()
-
-    # Mock async_create_task and close coroutine to avoid RuntimeWarning
-    def mock_create_task(coro):
-        coro.close()
-        return MagicMock()
-
-    hass.async_create_task = MagicMock(side_effect=mock_create_task)
     return hass
 
 
@@ -61,7 +54,7 @@ async def test_setup_entry_success(mock_hass, mock_config_entry):
         assert isinstance(coordinator, ZTERouterDataUpdateCoordinator)
 
         mock_hass.config_entries.async_forward_entry_setups.assert_called_once()
-        mock_hass.async_create_task.assert_called_once()
+        mock_config_entry.async_create_background_task.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -136,14 +129,13 @@ async def test_async_update_data_paused(mock_hass, mock_config_entry):
         coordinator.data = None
         coordinator.api.get_all_data = AsyncMock(side_effect=Exception("Fail"))
 
-        with patch("asyncio.sleep", AsyncMock()):
-            data = await coordinator._async_update_data()
-            assert data == {}
+        data = await coordinator._async_update_data()
+        assert data == {}
 
 
 @pytest.mark.asyncio
-async def test_async_update_data_retry_and_resilience(mock_hass, mock_config_entry):
-    """Test retry logic and failure resilience."""
+async def test_async_update_data_resilience(mock_hass, mock_config_entry):
+    """Test failure resilience."""
     mock_config_entry.entry_id = "test_entry"
     mock_config_entry.options = {
         "host": "192.168.0.1",
@@ -164,15 +156,19 @@ async def test_async_update_data_retry_and_resilience(mock_hass, mock_config_ent
             side_effect=Exception("Persistent Fail")
         )
 
-        # Test retry logic and holding values
-        with patch("asyncio.sleep", AsyncMock()):
-            data = await coordinator._async_update_data()
-            assert data == {"old": "data"}
-            assert coordinator.consecutive_failures == 1
+        # First and second failures: should return old data
+        data = await coordinator._async_update_data()
+        assert data == {"old": "data"}
+        assert coordinator.consecutive_failures == 1
 
-            with pytest.raises(UpdateFailed):
-                await coordinator._async_update_data()
-            assert coordinator.consecutive_failures == 2
+        data = await coordinator._async_update_data()
+        assert data == {"old": "data"}
+        assert coordinator.consecutive_failures == 2
+
+        # Third failure: should raise UpdateFailed
+        with pytest.raises(UpdateFailed):
+            await coordinator._async_update_data()
+        assert coordinator.consecutive_failures == 3
 
 
 @pytest.mark.asyncio
@@ -193,12 +189,12 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
 
         background_coro = None
 
-        def mock_capture_task(coro):
+        def mock_capture_task(hass, coro, name):
             nonlocal background_coro
             background_coro = coro
             return MagicMock()
 
-        mock_hass.async_create_task = mock_capture_task
+        mock_config_entry.async_create_background_task = mock_capture_task
 
         await async_setup_entry(mock_hass, mock_config_entry)
 
