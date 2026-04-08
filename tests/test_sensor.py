@@ -8,8 +8,6 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import (
-    MSG_RECENT_DESCRIPTION,
-    MSG_TOTAL_DESCRIPTION,
     SENSOR_TYPES,
     ZTESensor,
     async_setup_entry,
@@ -134,7 +132,8 @@ def test_sensor_device_info(mock_coordinator, mock_config_entry):
     assert info["name"] == "My ZTE Router Monthly"
 
     # SMS group sensor
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, MSG_TOTAL_DESCRIPTION)
+    description = next(d for d in SENSOR_TYPES if d.key == "msg_total")
+    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
     info = sensor.device_info
     assert info["identifiers"] == {(DOMAIN, "192.168.0.1_sms")}
     assert info["name"] == "My ZTE Router SMS"
@@ -153,7 +152,8 @@ def test_sensor_sms_summing(mock_coordinator, mock_config_entry):
         "sms_sim_send_total": "0",
         "sms_sim_draftbox_total": "1",
     }
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, MSG_TOTAL_DESCRIPTION)
+    description = next(d for d in SENSOR_TYPES if d.key == "msg_total")
+    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
 
     # Sum: 10 + 5 + 1 + 2 + 0 + 1 = 19
     assert sensor.native_value == 19
@@ -162,7 +162,8 @@ def test_sensor_sms_summing(mock_coordinator, mock_config_entry):
 def test_sensor_sms_attributes(mock_coordinator, mock_config_entry):
     """Test that extra state attributes provide the raw breakdown."""
     mock_coordinator.data = {"sms_nv_total": "15", "sms_sim_total": "5"}
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, MSG_TOTAL_DESCRIPTION)
+    description = next(d for d in SENSOR_TYPES if d.key == "msg_total")
+    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
 
     attrs = sensor.extra_state_attributes
     assert attrs["sms_nv_total"] == 15
@@ -179,7 +180,8 @@ def test_sensor_sms_content_extraction(mock_coordinator, mock_config_entry):
             "date_decoded": "2023-10-10 10:00:00",
         }
     }
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, MSG_RECENT_DESCRIPTION)
+    description = next(d for d in SENSOR_TYPES if d.key == "msg_recent")
+    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
 
     assert sensor.native_value == "Hello from ZTE!"
     assert sensor.extra_state_attributes["number"] == "123456"

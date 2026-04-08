@@ -42,7 +42,6 @@ jobs:
 
       - name: HACS Validation
         uses: hacs/action@main
-        continue-on-error: true
         with:
           category: integration
 
@@ -90,13 +89,14 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest --cov=custom_components/tplink_router_5g \
+          pytest --cov=custom_components/zte_router_5g \
             --cov-report=xml \
             --cov-report=term-missing \
             --junitxml=pytest.xml \
             tests/
 
       - name: Pytest coverage comment
+        id: coverageComment # Added ID to access the badge output
         uses: MishaKav/pytest-coverage-comment@main
         with:
           pytest-xml-coverage-path: ./coverage.xml
@@ -106,8 +106,6 @@ jobs:
           hide-comment: false
           create-new-comment: false
           junitxml-path: ./pytest.xml
-          create-badge: true
-          badge-filename: coverage-badge.json
 
       - name: Extract Coverage Percentage
         id: extract_cov
@@ -156,7 +154,6 @@ jobs:
 
       - name: Check README Links
         uses: gaurav-nelson/github-action-markdown-link-check@v1
-        continue-on-error: true
         with:
           base-branch: main
           file-path: README.md
