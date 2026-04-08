@@ -30,9 +30,11 @@ async def test_validate_credentials_success():
         mock_api = mock_api_class.return_value
         mock_api.try_set_protocol = AsyncMock()
         mock_api.login = AsyncMock()
+        mock_api.get_all_data = AsyncMock(return_value={"wa_inner_version": "1.2.3"})
 
         await _validate_credentials(hass, user_input)
         mock_api.login.assert_called_once()
+        mock_api.get_all_data.assert_called_once()
 
 
 @pytest.mark.asyncio
