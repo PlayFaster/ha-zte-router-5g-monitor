@@ -29,6 +29,8 @@ class ZTESensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[Any], Any]
     group: str = "main"
+    min_limit: float | None = None
+    max_limit: float | None = None
 
 
 def _get_bytes_to_gb(val: Any) -> float | None:
@@ -70,6 +72,17 @@ def _get_total_sms(data: Any) -> int | None:
         return None
 
 
+# Helper to safely convert router string values to float
+def _safe_float(val: Any) -> float | None:
+    """Safely convert value to float or return None."""
+    if val in [None, ""]:
+        return None
+    try:
+        return float(val)
+    except ValueError, TypeError:
+        return None
+
+
 # Technical Router Sensors
 SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
@@ -79,7 +92,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dBm",
-        value_fn=lambda data: data.get("lte_rsrp"),
+        min_limit=-140,
+        max_limit=-30,
+        value_fn=lambda data: _safe_float(data.get("lte_rsrp")),
     ),
     ZTESensorEntityDescription(
         key="lte_rsrq",
@@ -87,8 +102,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         icon="mdi:signal",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="dBm",
-        value_fn=lambda data: data.get("lte_rsrq"),
+        native_unit_of_measurement="dB",
+        min_limit=-40,
+        max_limit=0,
+        value_fn=lambda data: _safe_float(data.get("lte_rsrq")),
     ),
     ZTESensorEntityDescription(
         key="lte_rssi",
@@ -97,7 +114,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dBm",
-        value_fn=lambda data: data.get("lte_rssi"),
+        min_limit=-120,
+        max_limit=-20,
+        value_fn=lambda data: _safe_float(data.get("lte_rssi")),
     ),
     ZTESensorEntityDescription(
         key="lte_snr",
@@ -106,7 +125,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
-        value_fn=lambda data: data.get("lte_snr"),
+        min_limit=-20,
+        max_limit=50,
+        value_fn=lambda data: _safe_float(data.get("lte_snr")),
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrp",
@@ -115,7 +136,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dBm",
-        value_fn=lambda data: data.get("Z5g_rsrp"),
+        min_limit=-140,
+        max_limit=-30,
+        value_fn=lambda data: _safe_float(data.get("Z5g_rsrp")),
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrq",
@@ -124,7 +147,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
-        value_fn=lambda data: data.get("Z5g_rsrq"),
+        min_limit=-40,
+        max_limit=0,
+        value_fn=lambda data: _safe_float(data.get("Z5g_rsrq")),
     ),
     ZTESensorEntityDescription(
         key="z5g_rssi",
@@ -133,7 +158,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dBm",
-        value_fn=lambda data: data.get("Z5g_rssi"),
+        min_limit=-120,
+        max_limit=-20,
+        value_fn=lambda data: _safe_float(data.get("Z5g_rssi")),
     ),
     ZTESensorEntityDescription(
         key="z5g_sinr",
@@ -142,14 +169,18 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
-        value_fn=lambda data: data.get("Z5g_SINR"),
+        min_limit=-20,
+        max_limit=50,
+        value_fn=lambda data: _safe_float(data.get("Z5g_SINR")),
     ),
     ZTESensorEntityDescription(
         key="signalbar",
         translation_key="signalbar",
         icon="mdi:signal",
         state_class=SensorStateClass.MEASUREMENT,
-        value_fn=lambda data: data.get("signalbar"),
+        min_limit=0,
+        max_limit=5,
+        value_fn=lambda data: _safe_float(data.get("signalbar")),
     ),
     ZTESensorEntityDescription(
         key="network_type",
@@ -166,6 +197,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=2,
         group="data",
+        min_limit=0,
+        max_limit=100000,
         value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_rx_bytes")),
     ),
     ZTESensorEntityDescription(
@@ -177,6 +210,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=2,
         group="data",
+        min_limit=0,
+        max_limit=100000,
         value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_tx_bytes")),
     ),
     ZTESensorEntityDescription(
@@ -188,6 +223,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=2,
         group="data",
+        min_limit=0,
+        max_limit=100000,
         value_fn=lambda data: (
             round(
                 (
@@ -378,6 +415,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         icon="mdi:message-plus-outline",
         state_class=SensorStateClass.MEASUREMENT,
         group="sms",
+        min_limit=0,
+        max_limit=1000,
         value_fn=_get_total_sms,
     ),
     ZTESensorEntityDescription(
@@ -416,7 +455,7 @@ class ZTESensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity)
 
     @property
     def native_value(self):
-        """Return the value of the sensor."""
+        """Return the value of the sensor with guard band validation."""
         if not self.coordinator.data:
             return None
 
@@ -425,7 +464,34 @@ class ZTESensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity)
             return self.coordinator.last_update_success_time
 
         try:
-            return self.entity_description.value_fn(self.coordinator.data)
+            val = self.entity_description.value_fn(self.coordinator.data)
+
+            # Standard 4: Declarative Guard Bands
+            if val is not None and isinstance(val, (int, float)):
+                if (
+                    self.entity_description.min_limit is not None
+                    and val < self.entity_description.min_limit
+                ):
+                    _LOGGER.debug(
+                        "%s: Value %s below min_limit %s",
+                        self.entity_id,
+                        val,
+                        self.entity_description.min_limit,
+                    )
+                    return None
+                if (
+                    self.entity_description.max_limit is not None
+                    and val > self.entity_description.max_limit
+                ):
+                    _LOGGER.debug(
+                        "%s: Value %s above max_limit %s",
+                        self.entity_id,
+                        val,
+                        self.entity_description.max_limit,
+                    )
+                    return None
+
+            return val
         except KeyError, AttributeError, ValueError, TypeError:
             return None
 

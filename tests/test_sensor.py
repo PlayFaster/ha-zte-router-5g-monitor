@@ -22,7 +22,7 @@ def test_sensor_rsrp_simple(mock_coordinator, mock_config_entry):
     description = next(d for d in SENSOR_TYPES if d.key == "lte_rsrp")
     sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
 
-    assert sensor.native_value == "-95"
+    assert sensor.native_value == -95.0
 
 
 def test_sensor_z5g_case_sensitivity(mock_coordinator, mock_config_entry):
@@ -31,13 +31,13 @@ def test_sensor_z5g_case_sensitivity(mock_coordinator, mock_config_entry):
     mock_coordinator.data = {"Z5g_rsrp": "-102"}
     description = next(d for d in SENSOR_TYPES if d.key == "z5g_rsrp")
     sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
-    assert sensor.native_value == "-102"
+    assert sensor.native_value == -102.0
 
     # Test sinr
     mock_coordinator.data = {"Z5g_SINR": "15"}
     description = next(d for d in SENSOR_TYPES if d.key == "z5g_sinr")
     sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
-    assert sensor.native_value == "15"
+    assert sensor.native_value == 15.0
 
 
 def test_sensor_byte_to_gb_conversion(mock_coordinator, mock_config_entry):

@@ -9,7 +9,7 @@ from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
-from .const import DEFAULT_NAME, DOMAIN
+from .const import CONF_NAME, DEFAULT_NAME, DOMAIN
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
@@ -19,6 +19,7 @@ def _user_schema(defaults: dict) -> vol.Schema:
     """Return the user/options form schema, pre-filled with defaults."""
     return vol.Schema(
         {
+            vol.Optional(CONF_NAME, default=defaults.get(CONF_NAME, DEFAULT_NAME)): str,
             vol.Required(CONF_HOST, default=defaults.get(CONF_HOST, "")): str,
             vol.Optional(CONF_USERNAME, default=defaults.get(CONF_USERNAME, "")): str,
             vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD, "")): str,
@@ -63,10 +64,10 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(user_input[CONF_HOST])
                 self._abort_if_unique_id_configured()
 
-                # Store credentials in options (not data)
-                # Store hardware metadata in data (not options)
+                # Store credentials and custom name in options
+                # Store hardware metadata in data
                 return self.async_create_entry(
-                    title=DEFAULT_NAME,
+                    title=user_input.get(CONF_NAME, DEFAULT_NAME),
                     data=info,
                     options=user_input,
                 )
@@ -110,6 +111,13 @@ class ZTEOptionsFlow(config_entries.OptionsFlow):
                 # We call validation but don't need to update 'data' here
                 # since it's already populated and will be updated by the coordinator
                 await _validate_credentials(self.hass, user_input)
+
+                # Synchronize the integration title if the name changed
+                new_name = user_input.get(CONF_NAME, DEFAULT_NAME)
+                if new_name != self._entry.title:
+                    self.hass.config_entries.async_update_entry(
+                        self._entry, title=new_name
+                    )
 
                 # Preserve existing runtime options and merge in the updated credentials
                 updated_options = dict(self._entry.options)
