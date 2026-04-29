@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 
 from homeassistant.components.number import (
@@ -10,14 +11,23 @@ from homeassistant.components.number import (
 )
 from homeassistant.const import CONF_HOST, UnitOfTime
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_SCAN_INTERVAL, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+
+@dataclass(frozen=True, kw_only=True)
+class ZTENumberEntityDescription(NumberEntityDescription):
+    """Describes ZTE number entity."""
+
+    group: str = "system"
+
+
 # Define the entity description for static metadata
-POLLING_INTERVAL_DESCRIPTION = NumberEntityDescription(
+POLLING_INTERVAL_DESCRIPTION = ZTENumberEntityDescription(
     key="polling_interval",
     translation_key="polling_interval",
     native_min_value=30,
@@ -25,6 +35,7 @@ POLLING_INTERVAL_DESCRIPTION = NumberEntityDescription(
     native_step=30,
     native_unit_of_measurement=UnitOfTime.SECONDS,
     entity_category=EntityCategory.CONFIG,
+    group="system",
 )
 
 
@@ -44,22 +55,24 @@ async def async_setup_entry(hass, entry, async_add_entities):
     )
 
 
-class ZTEPollingInterval(NumberEntity):
+class ZTEPollingInterval(
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator], NumberEntity
+):
     """Number entity to control the polling interval with persistence."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    entity_description: NumberEntityDescription
+    entity_description: ZTENumberEntityDescription
 
     def __init__(
         self,
         coordinator: ZTERouterDataUpdateCoordinator,
         entry,
-        description: NumberEntityDescription,
+        description: ZTENumberEntityDescription,
         initial_value,
     ):
         """Initialize the number entity."""
-        self._coordinator = coordinator
+        super().__init__(coordinator)
         self._entry = entry
         self.entity_description = description
 
@@ -93,7 +106,7 @@ class ZTEPollingInterval(NumberEntity):
             _LOGGER.debug("Applying new polling interval: %s seconds", val_int)
 
             # 1. Update the coordinator's actual update interval
-            self._coordinator.update_interval = timedelta(seconds=val_int)
+            self.coordinator.update_interval = timedelta(seconds=val_int)
 
             # 2. Persist to ConfigEntry Options (saves to .storage/core.config_entries)
             # This ensures the setting survives a Home Assistant restart.
@@ -104,7 +117,7 @@ class ZTEPollingInterval(NumberEntity):
             )
 
             # 3. Trigger an immediate refresh using the new interval
-            await self._coordinator.async_request_refresh()
+            await self.coordinator.async_request_refresh()
 
         except asyncio.CancelledError:
             # Task was cancelled because the user moved the slider again
@@ -114,13 +127,31 @@ class ZTEPollingInterval(NumberEntity):
 
     @property
     def device_info(self):
-        """Return device information linking to the main router device."""
+        """Return device information with sub-device support."""
         host = self._entry.options[CONF_HOST]
-        return {
-            "identifiers": {(DOMAIN, host)},
-            "name": self._entry.title,
-            "manufacturer": "ZTE",
-            "configuration_url": f"http://{host}",
-            "model": self._coordinator.model,
-            "sw_version": self._coordinator.sw_version,
+        group = self.entity_description.group
+
+        group_names = {
+            "system": "System",
+            "signal": "Signal",
+            "data": "Data",
+            "sms": "SMS",
         }
+        display_group = group_names.get(group, group.capitalize())
+        sub_name = f"{self._entry.title} {display_group}"
+
+        sub_id_prefix = self.coordinator.mac if self.coordinator.mac else f"host_{host}"
+
+        info = {
+            "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},
+            "name": sub_name,
+            "manufacturer": "ZTE",
+            "model": self.coordinator.model,
+            "sw_version": self.coordinator.sw_version,
+            "configuration_url": f"http://{host}",
+        }
+
+        if group != "system":
+            info["via_device"] = (DOMAIN, f"{sub_id_prefix}_system")
+
+        return info

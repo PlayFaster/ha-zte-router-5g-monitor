@@ -9,6 +9,7 @@ from homeassistant.components.button import (
     ButtonEntityDescription,
 )
 from homeassistant.const import CONF_HOST
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
@@ -20,7 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 class ZTEButtonEntityDescription(ButtonEntityDescription):
     """Describes ZTE button entity."""
 
-    group: str = "router"
+    group: str = "system"
 
 
 # Define metadata for the Reboot button
@@ -29,7 +30,7 @@ REBOOT_DESCRIPTION = ZTEButtonEntityDescription(
     translation_key="reboot",
     icon="mdi:restart",
     device_class=ButtonDeviceClass.RESTART,
-    group="router",
+    group="system",
 )
 
 # Define metadata for the Delete SMS button
@@ -44,104 +45,85 @@ DELETE_SMS_DESCRIPTION = ZTEButtonEntityDescription(
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the button platform."""
     coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    api = coordinator.api
 
     # Create the button entities using their respective descriptions
     async_add_entities(
         [
-            ZTERebootButton(api, coordinator, entry, REBOOT_DESCRIPTION),
-            ZTEDeleteAllSMSButton(api, coordinator, entry, DELETE_SMS_DESCRIPTION),
+            ZTERebootButton(coordinator, entry, REBOOT_DESCRIPTION),
+            ZTEDeleteAllSMSButton(coordinator, entry, DELETE_SMS_DESCRIPTION),
         ],
         True,
     )
 
 
-class ZTERebootButton(ButtonEntity):
-    """Button to reboot the ZTE router."""
+class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity):
+    """Base class for ZTE Router buttons."""
 
     _attr_has_entity_name = True
-    _attr_should_poll = False
     entity_description: ZTEButtonEntityDescription
 
     def __init__(
         self,
-        api,
         coordinator: ZTERouterDataUpdateCoordinator,
         entry,
         description: ZTEButtonEntityDescription,
     ):
-        """Initialize the reboot button."""
+        """Initialize the button."""
+        super().__init__(coordinator)
         self.entity_description = description
-        self._api = api
-        self._coordinator = coordinator
         self._entry = entry
-
-        # Registry identification based on the description key
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
     @property
     def device_info(self):
-        """Return device information linking to the main router device."""
+        """Return device information with sub-device support."""
         host = self._entry.options[CONF_HOST]
-        return {
-            "identifiers": {(DOMAIN, host)},
-            "name": self._entry.title,
-            "manufacturer": "ZTE",
-            "configuration_url": f"http://{host}",
-            "model": self._coordinator.model,
-            "sw_version": self._coordinator.sw_version,
+        group = self.entity_description.group
+
+        group_names = {
+            "system": "System",
+            "signal": "Signal",
+            "data": "Data",
+            "sms": "SMS",
         }
+        display_group = group_names.get(group, group.capitalize())
+        sub_name = f"{self._entry.title} {display_group}"
+
+        sub_id_prefix = self.coordinator.mac if self.coordinator.mac else f"host_{host}"
+
+        info = {
+            "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},
+            "name": sub_name,
+            "manufacturer": "ZTE",
+            "model": self.coordinator.model,
+            "sw_version": self.coordinator.sw_version,
+            "configuration_url": f"http://{host}",
+        }
+
+        if group != "system":
+            info["via_device"] = (DOMAIN, f"{sub_id_prefix}_system")
+
+        return info
+
+
+class ZTERebootButton(ZTEButton):
+    """Button to reboot the ZTE router."""
 
     async def async_press(self) -> None:
         """Handle the button press."""
         try:
-            # Direct async call
-            await self._api.reboot()
+            await self.coordinator.api.reboot()
         except Exception as err:
             _LOGGER.error("%s: Reboot failed: %s", self._entry.title, err)
 
 
-class ZTEDeleteAllSMSButton(ButtonEntity):
+class ZTEDeleteAllSMSButton(ZTEButton):
     """Button to delete all SMS messages."""
-
-    _attr_has_entity_name = True
-    _attr_should_poll = False
-    entity_description: ZTEButtonEntityDescription
-
-    def __init__(
-        self,
-        api,
-        coordinator: ZTERouterDataUpdateCoordinator,
-        entry,
-        description: ZTEButtonEntityDescription,
-    ):
-        """Initialize the delete all SMS button."""
-        self.entity_description = description
-        self._api = api
-        self._coordinator = coordinator
-        self._entry = entry
-
-        self._attr_unique_id = f"{entry.unique_id}_delete_all"
-
-    @property
-    def device_info(self):
-        """Return device information. Anchors to the SMS sub-device."""
-        host = self._entry.options[CONF_HOST]
-        return {
-            "identifiers": {(DOMAIN, f"{host}_sms")},
-            "name": f"{self._entry.title} SMS",
-            "manufacturer": "ZTE",
-            "model": self._coordinator.model,
-            "sw_version": self._coordinator.sw_version,
-            "via_device": (DOMAIN, host),
-        }
 
     async def async_press(self) -> None:
         """Handle the button press."""
         try:
-            # Direct async call
-            await self._api.delete_all()
-            # Request refresh so SMS sensors update immediately
-            await self._coordinator.async_request_refresh()
+            await self.coordinator.api.delete_all()
+            await self.coordinator.async_request_refresh()
         except Exception as err:
             _LOGGER.error("%s: Delete SMS failed: %s", self._entry.title, err)

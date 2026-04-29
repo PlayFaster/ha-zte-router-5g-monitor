@@ -5,6 +5,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ZTERouterAPI
@@ -38,6 +39,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store for platform access
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    # Register the System root device early to prevent via_device warnings in platforms
+    device_registry = dr.async_get(hass)
+    host = entry.options[CONF_HOST]
+    mac = entry.data.get("mac")
+    sub_id_prefix = mac if mac else f"host_{host}"
+
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, f"{sub_id_prefix}_system")},
+        name=f"{entry.title} System",
+        manufacturer="ZTE",
+        model=entry.data.get("model", "ZTE Router"),
+        sw_version=entry.data.get("sw_version"),
+        configuration_url=f"http://{host}",
+    )
 
     # Forward platforms immediately so entities appear in HA
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
