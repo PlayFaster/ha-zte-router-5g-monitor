@@ -156,7 +156,7 @@ async def test_async_update_data_resilience(mock_hass, mock_config_entry):
             side_effect=Exception("Persistent Fail")
         )
 
-        # First and second failures: should return old data
+        # First, second and third failures: should return old data
         data = await coordinator._async_update_data()
         assert data == {"old": "data"}
         assert coordinator.consecutive_failures == 1
@@ -165,10 +165,14 @@ async def test_async_update_data_resilience(mock_hass, mock_config_entry):
         assert data == {"old": "data"}
         assert coordinator.consecutive_failures == 2
 
-        # Third failure: should raise UpdateFailed
+        data = await coordinator._async_update_data()
+        assert data == {"old": "data"}
+        assert coordinator.consecutive_failures == 3
+
+        # Fourth failure: should raise UpdateFailed
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
-        assert coordinator.consecutive_failures == 3
+        assert coordinator.consecutive_failures == 4
 
 
 @pytest.mark.asyncio

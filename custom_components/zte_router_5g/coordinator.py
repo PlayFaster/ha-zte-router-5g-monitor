@@ -91,9 +91,13 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
         except TimeoutError as err:
             self.consecutive_failures += 1
-            if self.data is not None and self.consecutive_failures <= 2:
+            if self.data is not None and self.consecutive_failures <= 3:
                 _LOGGER.warning(
-                    "%s: Fetch timed out. Holding last known values.", self.entry.title
+                    "%s: Error fetching ZTE data (failure %d/3), "
+                    "holding last known values: %s",
+                    self.entry.title,
+                    self.consecutive_failures,
+                    err,
                 )
                 return self.data
             _LOGGER.error("%s: API request timed out", self.entry.title)
@@ -101,11 +105,13 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
         except Exception as err:
             self.consecutive_failures += 1
-            # Failure resilience — hold last known values for two cycles
-            if self.data is not None and self.consecutive_failures <= 2:
+            # Failure resilience — hold last known values for three cycles
+            if self.data is not None and self.consecutive_failures <= 3:
                 _LOGGER.warning(
-                    "%s: Fetch failed (%s). Holding last known values.",
+                    "%s: Error fetching ZTE data (failure %d/3), "
+                    "holding last known values: %s",
                     self.entry.title,
+                    self.consecutive_failures,
                     err,
                 )
                 return self.data

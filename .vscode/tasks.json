@@ -125,6 +125,26 @@
       "problemMatcher": []
     },
     {
+      "label": "Codespell: Check (View Only)",
+      "type": "shell",
+      "command": "mkdir -p .reports && codespell . --config .validate/.codespellrc | tee .reports/codespell.txt",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Codespell: Fix (Auto-Repair)",
+      "type": "shell",
+      "command": "codespell . --config .validate/.codespellrc -w || true",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "Prettier: Check (View Only)",
       "type": "shell",
       "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .validate/.prettierrc --check | tee .reports/prettier_check.txt",
@@ -138,6 +158,16 @@
       "label": "Prettier: Format (Auto-Fix)",
       "type": "shell",
       "command": "git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .validate/.prettierrc --write || true",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Prettier: Fix Notes",
+      "type": "shell",
+      "command": "prettier --config .validate/.prettierrc --ignore-path /dev/null --write \".notes/**/*.{md,json,yaml,yml}\" || true",
       "presentation": {
         "reveal": "always",
         "panel": "dedicated"
@@ -204,6 +234,7 @@
         "Ruff: Format Check (View Only)",
         "Markdown: Check Links",
         "Markdown: Lint (View Only)",
+        "Codespell: Check (View Only)",
         "Prettier: Check (View Only)",
         "Pytest: Run All Tests",
         "Pytest: Check Test Coverage"
@@ -225,7 +256,9 @@
         "Ruff: Check Fix (Auto-Repair Lint)",
         "Ruff: Format Fix (Auto-Repair)",
         "Markdown: Lint (Auto-Fix)",
-        "Prettier: Format (Auto-Fix)"
+        "Codespell: Fix (Auto-Repair)",
+        "Prettier: Format (Auto-Fix)",
+        "Prettier: Fix Notes"
       ],
       "dependsOrder": "sequence",
       "problemMatcher": [],

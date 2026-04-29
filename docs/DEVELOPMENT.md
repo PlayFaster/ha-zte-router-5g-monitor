@@ -48,10 +48,15 @@ To reach its current "modern" state, the project underwent several major refacto
 - **Change**: Refactored the entity engine to use **Declarative Callbacks** (`value_fn`). Standardized on the **Flat Identity Pattern** (loading hardware info from `entry.data` at boot). Unified background tasks using `entry.async_create_background_task`.
 - **Result**: **100% architectural parity** with the TP-Link and WiFi Monitor integrations. Massive reduction in boilerplate code and improved reliability through native HA lifecycle management.
 
+- **Standardized Resilience (v3.1.1)**: Aligned the Data Update Coordinator with the "PlayFaster" architectural standards. Increased the failure threshold to 3 cycles and synchronized warning logs. The coordinator now holds last known values for up to 3 consecutive failures before reporting "Unavailable", ensuring stable sensor data during brief API interruptions.
+- **Custom User Naming (v3.1.1)**: Implemented global name prefixing using `CONF_NAME`. Users can define a custom string (e.g., "Guest Gateway") that is prepended to every device and entity, allowing for multiple instances to be clearly distinguished in the UI without technical entity ID conflicts.
+- **Declarative Guard Bands (v3.1.1)**: Implemented "Standard 4" data integrity validation. Technical sensors (Signal Strength, SNR, Signal Bar, and SMS counts) now utilize declarative `min_limit` and `max_limit` boundaries to filter out transient hardware reporting spikes, preventing dashboard corruption.
+
 ## 4. Success Patterns
 
 - **`DataUpdateCoordinator`**: Essential for preventing the router from being overwhelmed by simultaneous requests. Using `coordinator.async_request_refresh()` for write actions ensures immediate UI feedback.
 - **Declarative Entities**: Using a `value_fn` lambda in `EntityDescription` allows for a completely generic entity class. This makes adding new sensors a "data entry" task rather than a coding task.
+- **Data Integrity (Guard Bands)**: Validating sensor values against realistic boundaries (e.g., -140 to -30 for RSRP) before committing them to the state machine. This ensures that transient API artifacts or hardware glitches don't trigger false automation states or corrupt historical graphs.
 - **Flat Identity Pattern**: By storing Model, Version, and MAC in `entry.data` and loading them into the coordinator at `__init__`, the integration provides stable metadata to the UI instantly at boot, even if the hardware is offline.
 - **Dynamic Routing**: Entities are automatically routed to sub-devices (SMS, Monthly Data) based on their `group` attribute, ensuring a clean and organized Home Assistant Device Registry.
 
