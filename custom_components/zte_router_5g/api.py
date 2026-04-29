@@ -30,6 +30,7 @@ class ZTERouterAPI:
         self.referer = f"http://{self.ip}/"
         self.timeout = aiohttp.ClientTimeout(total=15)
         self.stok = None
+        self.is_multi = True
 
     def _hash(self, val):
         if val is None:
@@ -125,14 +126,14 @@ class ZTERouterAPI:
         pass_hash = self._hash(self.password).upper()
         zte_pass = self._hash(pass_hash + ld).upper()
 
-        is_multi = True
+        self.is_multi = True
         if version and any(m in version for m in ["MC801", "MC7010"]):
-            is_multi = False
+            self.is_multi = False
 
         payload = {
             "isTest": "false",
             "goformId": "LOGIN"
-            if (self.username and not is_multi)
+            if (self.username and not self.is_multi)
             else "LOGIN_MULTI_USER",
             "password": zte_pass,
         }
@@ -258,6 +259,7 @@ class ZTERouterAPI:
                 return await r.json(content_type=None)
         except Exception as e:
             _LOGGER.debug("Failed to get SMS capacity: %s", e)
+            self.stok = None
             return {}
 
     async def get_last_sms_content(self, timeout_sec=None):
@@ -291,6 +293,7 @@ class ZTERouterAPI:
                 return {}
         except Exception as e:
             _LOGGER.debug("Failed to get last SMS content: %s", e)
+            self.stok = None
             return {}
 
     async def reboot(self):

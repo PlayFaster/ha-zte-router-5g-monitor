@@ -21,19 +21,56 @@ All notable changes to this project will be documented in this file.
 #### New Features & Customization
 
 - **Custom Entity Naming**: You can now set a custom prefix (e.g., _"Downstairs Gateway"_) for all devices and entities during setup or via the **Configure** menu.
-- **Smarter Device Organization**: Entities are now automatically grouped into logical sub-devices (e.g., **SMS**, **Monthly Usage**, and **Main Router**) for a cleaner Look in your Dashboards.
+- **Smarter Device Organization**: Entities are now automatically grouped into logical sub-devices (e.g., **System**, , **Signal**, **Data**, and **SMS**) to reduce the overwhelm factor and make it easy to disable certain sections if desired.
 - **Data Integrity Guards**: New "Guard Bands" and safety checks ensure your sensors don't report impossible values or cause errors during initial connection.
+- **Monthly Data in Bytes**: Added Monthly data in native bytes unit (up, down, total). This is the default. Legacy GB data sensors are now disabled.
 
-## [3.0.0-dev6] - Now - Unreleased
+## [3.0.0-dev8] - 2026-04-29 - Unreleased
+
+### Added
+
+- **Sub-device Architecture**: Grouped entities into System (Root), Signal, Data, and SMS devices for better Home Assistant UI organization.
+- **Data Standards Alignment**: Implemented `SensorDeviceClass.DATA_SIZE` and `UnitOfInformation.BYTES` for all volume sensors.
+- **Standardized Units**: Aligned Signal units with 3GPP standards (RSRP/RSSI in dBm; RSRQ/SNR/SINR in dB).
+- **Entity Identity**: Implemented stable `unique_id` strategy using lowercase internal keys (e.g., `z5g_rsrp`) and MAC address prefix.
+- **SMS Resilience**: Added logic to maintain sensor state attributes during update failures, preventing data loss in the UI.
+- Added `zte_all_sensors.md` which documents all sensors/data-elements, their source and unit etc.
+- **Monthly Data in Bytes**: Added Monthly data in native bytes unit (up, down, total). This is the default.
+
+### Changed
+
+- **Coordinator Logic**: Enhanced with a 3-strike failure counter before raising `UpdateFailed`, improving stability against transient network timeouts.
+- **API Authentication**: Refined `stok` reset logic to force re-authentication after specific service failures (SMS/Reboot).
+- **Volume Sensors**: Legacy GB sensors are now disabled by default in favor of standard Byte sensors. They remain available for legacy reasons.
+- **Disabled by Default**: Set several unknown sensors and some not useful to Disabled by Default. These can be enabled by the user if desired.
+- **Entity Naming**: Improved many entity names to be more human readable, not just the shortened router element name.
+
+### Fixed
+
+- **Test Suite Stability**: Resolved `AttributeError` on `MockConfigEntry.options` by using `object.__setattr__` for immutable properties.
+- **Resource Warnings**: Eliminated `RuntimeWarning` from background tasks by falling back to `asyncio.create_task` when the HA mock is present.
+- **Config Flow**: Fixed `KeyError: 'host'` in tests by ensuring mandatory connection parameters are preserved during mocking.
+- **Linting**: Achieved zero violations across the codebase (Ruff format/check).
+
+### Removed
+
+- **Redundant Logic**: Removed "just-in-case" error swallowing in the coordinator that masked legitimate API timeouts.
+
+### Security
+
+- **Credential Protection**: Verified that no sensitive tokens or passwords are logged or persisted in state attributes.
 
 ## [3.0.0-dev5] - 2026-04-07 - Unreleased
 
-### Changed - Unreleased
+### Added
+
+- **Declarative Guard Bands**: Implemented "Standard 4" data integrity validation. Technical sensors (Signal Strength, SNR, Signal Bar, and SMS counts) now utilize declarative `min_limit` and `max_limit` boundaries to filter out transient hardware reporting spikes.
+
+### Changed
 
 - **Standardized Resilience**: Aligned the Data Update Coordinator with the "PlayFaster" architectural standards. Increased the failure threshold to 3 cycles and synchronized warning logs to provide consistent status reporting across all PlayFaster router integrations.
 - **Custom User Naming**: Implemented `CONF_NAME` support. Users can now define a custom prefix (e.g., "Home Gateway") during setup or reconfiguration, which is applied to the integration title, device name, and all child entities.
 - **Standardized Device Info**: Updated the sensor platform to strictly use the integration title for device naming, ensuring full compatibility with the new custom naming standard.
-- **Declarative Guard Bands**: Implemented "Standard 4" data integrity validation. Technical sensors (Signal Strength, SNR, Signal Bar, and SMS counts) now utilize declarative `min_limit` and `max_limit` boundaries to filter out transient hardware reporting spikes.
 
 ### Fixed
 
