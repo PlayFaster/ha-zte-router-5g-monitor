@@ -46,6 +46,7 @@ async def test_setup_entry_success(mock_hass, mock_config_entry):
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI"),
         patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
     ):
         assert await async_setup_entry(mock_hass, mock_config_entry) is True
 
@@ -84,6 +85,7 @@ async def test_async_update_data_success(mock_hass, mock_config_entry):
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
         patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
     ):
         mock_api = mock_api_class.return_value
         mock_api.get_all_data = AsyncMock(return_value={"network_type": "LTE"})
@@ -116,6 +118,7 @@ async def test_async_update_data_paused(mock_hass, mock_config_entry):
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI"),
         patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_hass.data[DOMAIN]["test_entry"]
@@ -147,6 +150,7 @@ async def test_async_update_data_resilience(mock_hass, mock_config_entry):
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI"),
         patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_hass.data[DOMAIN]["test_entry"]
@@ -187,6 +191,7 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
         patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
     ):
         mock_api = mock_api_class.return_value
         mock_api.try_set_protocol = AsyncMock(side_effect=Exception("Background Fail"))

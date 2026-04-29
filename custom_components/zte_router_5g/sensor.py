@@ -12,7 +12,11 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import CONF_HOST, UnitOfInformation
+from homeassistant.const import (
+    CONF_HOST,
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    UnitOfInformation,
+)
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -28,7 +32,7 @@ class ZTESensorEntityDescription(SensorEntityDescription):
     """Describes ZTE sensor entity."""
 
     value_fn: Callable[[Any], Any]
-    group: str = "main"
+    group: str = "system"
     min_limit: float | None = None
     max_limit: float | None = None
 
@@ -83,350 +87,465 @@ def _safe_float(val: Any) -> float | None:
         return None
 
 
+# Helper to safely convert router string values to int
+def _safe_int(val: Any) -> int | None:
+    """Safely convert value to int or return None."""
+    if val in [None, ""]:
+        return None
+    try:
+        return int(float(val))
+    except ValueError, TypeError:
+        return None
+
+
 # Technical Router Sensors
 SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
+    # --- System Sub-device ---
     ZTESensorEntityDescription(
-        key="lte_rsrp",
-        translation_key="lte_rsrp",
-        icon="mdi:signal",
-        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="dBm",
-        min_limit=-140,
-        max_limit=-30,
-        value_fn=lambda data: _safe_float(data.get("lte_rsrp")),
-    ),
-    ZTESensorEntityDescription(
-        key="lte_rsrq",
-        translation_key="lte_rsrq",
-        icon="mdi:signal",
-        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="dB",
-        min_limit=-40,
-        max_limit=0,
-        value_fn=lambda data: _safe_float(data.get("lte_rsrq")),
-    ),
-    ZTESensorEntityDescription(
-        key="lte_rssi",
-        translation_key="lte_rssi",
-        icon="mdi:signal",
-        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="dBm",
-        min_limit=-120,
-        max_limit=-20,
-        value_fn=lambda data: _safe_float(data.get("lte_rssi")),
-    ),
-    ZTESensorEntityDescription(
-        key="lte_snr",
-        translation_key="lte_snr",
-        icon="mdi:waveform",
-        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="dB",
-        min_limit=-20,
-        max_limit=50,
-        value_fn=lambda data: _safe_float(data.get("lte_snr")),
-    ),
-    ZTESensorEntityDescription(
-        key="z5g_rsrp",
-        translation_key="z5g_rsrp",
-        icon="mdi:signal",
-        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="dBm",
-        min_limit=-140,
-        max_limit=-30,
-        value_fn=lambda data: _safe_float(data.get("Z5g_rsrp")),
-    ),
-    ZTESensorEntityDescription(
-        key="z5g_rsrq",
-        translation_key="z5g_rsrq",
-        icon="mdi:signal",
-        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="dB",
-        min_limit=-40,
-        max_limit=0,
-        value_fn=lambda data: _safe_float(data.get("Z5g_rsrq")),
-    ),
-    ZTESensorEntityDescription(
-        key="z5g_rssi",
-        translation_key="z5g_rssi",
-        icon="mdi:signal",
-        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="dBm",
-        min_limit=-120,
-        max_limit=-20,
-        value_fn=lambda data: _safe_float(data.get("Z5g_rssi")),
-    ),
-    ZTESensorEntityDescription(
-        key="z5g_sinr",
-        translation_key="z5g_sinr",
-        icon="mdi:waveform",
-        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement="dB",
-        min_limit=-20,
-        max_limit=50,
-        value_fn=lambda data: _safe_float(data.get("Z5g_SINR")),
-    ),
-    ZTESensorEntityDescription(
-        key="signalbar",
-        translation_key="signalbar",
-        icon="mdi:signal",
-        state_class=SensorStateClass.MEASUREMENT,
-        min_limit=0,
-        max_limit=5,
-        value_fn=lambda data: _safe_float(data.get("signalbar")),
-    ),
-    ZTESensorEntityDescription(
-        key="network_type",
-        translation_key="network_type",
-        icon="mdi:transmission-tower",
-        value_fn=lambda data: data.get("network_type"),
-    ),
-    ZTESensorEntityDescription(
-        key="monthly_rx_bytes",
-        translation_key="monthly_rx_bytes",
-        icon="mdi:download",
-        device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        native_unit_of_measurement=UnitOfInformation.GIGABYTES,
-        suggested_display_precision=2,
-        group="data",
-        min_limit=0,
-        max_limit=100000,
-        value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_rx_bytes")),
-    ),
-    ZTESensorEntityDescription(
-        key="monthly_tx_bytes",
-        translation_key="monthly_tx_bytes",
-        icon="mdi:upload",
-        device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        native_unit_of_measurement=UnitOfInformation.GIGABYTES,
-        suggested_display_precision=2,
-        group="data",
-        min_limit=0,
-        max_limit=100000,
-        value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_tx_bytes")),
-    ),
-    ZTESensorEntityDescription(
-        key="monthly_total_bytes",
-        translation_key="monthly_total_bytes",
-        icon="mdi:swap-vertical-bold",
-        device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL_INCREASING,
-        native_unit_of_measurement=UnitOfInformation.GIGABYTES,
-        suggested_display_precision=2,
-        group="data",
-        min_limit=0,
-        max_limit=100000,
-        value_fn=lambda data: (
-            round(
-                (
-                    float(data.get("monthly_rx_bytes", 0))
-                    + float(data.get("monthly_tx_bytes", 0))
-                )
-                / 1073741824,
-                2,
-            )
-            if data.get("monthly_rx_bytes") is not None
-            else None
-        ),
-    ),
-    ZTESensorEntityDescription(
-        key="last_updated",
-        translation_key="last_updated",
-        icon="mdi:update",
-        device_class=SensorDeviceClass.TIMESTAMP,
+        key="model_name",
+        name="Model Name",
+        icon="mdi:router-wireless",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: None,  # Handled in native_value
+        group="system",
+        value_fn=lambda data: data.get("model_name"),
     ),
     ZTESensorEntityDescription(
-        key="device_uptime",
-        translation_key="device_uptime",
-        icon="mdi:clock-start",
-        device_class=SensorDeviceClass.TIMESTAMP,
+        key="wa_inner_version",
+        name="Firmware Version",
+        icon="mdi:information-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=_get_uptime,
-    ),
-    ZTESensorEntityDescription(
-        key="cell_id",
-        translation_key="cell_id",
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("cell_id"),
-    ),
-    ZTESensorEntityDescription(
-        key="lan_ipaddr",
-        translation_key="lan_ipaddr",
-        icon="mdi:map-marker-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("lan_ipaddr"),
+        group="system",
+        value_fn=lambda data: data.get("wa_inner_version"),
     ),
     ZTESensorEntityDescription(
         key="wan_ipaddr",
-        translation_key="wan_ipaddr",
-        icon="mdi:map-marker-outline",
+        name="WAN IP Address",
+        icon="mdi:ip-network",
         entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
         value_fn=lambda data: data.get("wan_ipaddr"),
     ),
     ZTESensorEntityDescription(
-        key="wan_apn",
-        translation_key="wan_apn",
-        icon="mdi:numeric-3-circle-outline",
+        key="lan_ipaddr",
+        name="LAN IP Address",
+        icon="mdi:ip",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("wan_apn"),
+        group="system",
+        value_fn=lambda data: data.get("lan_ipaddr"),
     ),
     ZTESensorEntityDescription(
-        key="wan_connect_status",
-        translation_key="wan_connect_status",
-        icon="mdi:transmission-tower",
+        key="device_uptime",
+        name="Uptime",
+        icon="mdi:clock-outline",
+        device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        value_fn=_get_uptime,
+    ),
+    ZTESensorEntityDescription(
+        key="last_updated",
+        name="Last Updated",
+        icon="mdi:update",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        value_fn=lambda data: None,  # Handled in property
+    ),
+    # --- Signal Sub-device ---
+    ZTESensorEntityDescription(
+        key="wan_connect_status",
+        name="Connection Status",
+        icon="mdi:connection",
+        group="signal",
         value_fn=lambda data: data.get("wan_connect_status"),
     ),
     ZTESensorEntityDescription(
-        key="lte_ca_pcell_band",
-        translation_key="lte_ca_pcell_band",
-        icon="mdi:transmission-tower",
+        key="wan_apn",
+        name="Network APN",
+        icon="mdi:access-point-network",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("lte_ca_pcell_band"),
+        group="signal",
+        value_fn=lambda data: data.get("wan_apn"),
     ),
     ZTESensorEntityDescription(
-        key="lte_ca_pcell_bandwidth",
-        translation_key="lte_ca_pcell_bandwidth",
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("lte_ca_pcell_bandwidth"),
+        key="network_type",
+        name="Network Type",
+        icon="mdi:network",
+        group="signal",
+        value_fn=lambda data: data.get("network_type"),
     ),
     ZTESensorEntityDescription(
-        key="lte_ca_scell_band",
-        translation_key="lte_ca_scell_band",
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("lte_ca_scell_band"),
+        key="signalbar",
+        name="Signal Bars",
+        icon="mdi:signal-cellular-3",
+        state_class=SensorStateClass.MEASUREMENT,
+        group="signal",
+        value_fn=lambda data: _safe_int(data.get("signalbar")),
     ),
     ZTESensorEntityDescription(
-        key="lte_ca_scell_bandwidth",
-        translation_key="lte_ca_scell_bandwidth",
-        icon="mdi:transmission-tower",
+        key="network_provider",
+        name="Network Provider",
+        icon="mdi:sim-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("lte_ca_scell_bandwidth"),
-    ),
-    ZTESensorEntityDescription(
-        key="lte_pci",
-        translation_key="lte_pci",
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("lte_pci"),
+        group="signal",
+        value_fn=lambda data: data.get("network_provider"),
     ),
     ZTESensorEntityDescription(
         key="mdm_mcc",
-        translation_key="mdm_mcc",
-        icon="mdi:transmission-tower",
+        name="MDM MCC",
+        icon="mdi:map-marker",
         entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
         value_fn=lambda data: data.get("mdm_mcc"),
     ),
     ZTESensorEntityDescription(
         key="mdm_mnc",
-        translation_key="mdm_mnc",
-        icon="mdi:transmission-tower",
+        name="MDM MNC",
+        icon="mdi:map-marker",
         entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
         value_fn=lambda data: data.get("mdm_mnc"),
     ),
     ZTESensorEntityDescription(
-        key="network_provider",
-        translation_key="network_provider",
-        icon="mdi:numeric-3-circle-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("network_provider"),
-    ),
-    ZTESensorEntityDescription(
-        key="nr5g_action_band",
-        translation_key="nr5g_action_band",
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("nr5g_action_band"),
-    ),
-    ZTESensorEntityDescription(
-        key="nr5g_action_channel",
-        translation_key="nr5g_action_channel",
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("nr5g_action_channel"),
-    ),
-    ZTESensorEntityDescription(
-        key="nr5g_pci",
-        translation_key="nr5g_pci",
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("nr5g_pci"),
-    ),
-    ZTESensorEntityDescription(
         key="rmcc",
-        translation_key="rmcc",
-        icon="mdi:transmission-tower",
+        name="Roaming MCC",
+        icon="mdi:map-marker-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
         value_fn=lambda data: data.get("rmcc"),
     ),
     ZTESensorEntityDescription(
         key="rmnc",
-        translation_key="rmnc",
-        icon="mdi:transmission-tower",
+        name="Roaming MNC",
+        icon="mdi:map-marker-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
         value_fn=lambda data: data.get("rmnc"),
     ),
     ZTESensorEntityDescription(
-        key="wan_active_band",
-        translation_key="wan_active_band",
+        key="lte_rsrp",
+        name="LTE RSRP",
+        icon="mdi:signal",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        min_limit=-140,
+        max_limit=-30,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("lte_rsrp")),
+    ),
+    ZTESensorEntityDescription(
+        key="lte_rsrq",
+        name="LTE RSRQ",
+        icon="mdi:signal",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        min_limit=-40,
+        max_limit=0,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("lte_rsrq")),
+    ),
+    ZTESensorEntityDescription(
+        key="lte_rssi",
+        name="LTE RSSI",
+        icon="mdi:signal",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        min_limit=-120,
+        max_limit=-20,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("lte_rssi")),
+    ),
+    ZTESensorEntityDescription(
+        key="lte_snr",
+        name="LTE SNR",
+        icon="mdi:waveform",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        min_limit=-20,
+        max_limit=50,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("lte_snr")),
+    ),
+    ZTESensorEntityDescription(
+        key="lte_pci",
+        name="LTE PCI",
         icon="mdi:transmission-tower",
         entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        value_fn=lambda data: data.get("lte_pci"),
+    ),
+    ZTESensorEntityDescription(
+        key="cell_id",
+        name="Cell ID",
+        icon="mdi:transmission-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        value_fn=lambda data: data.get("cell_id"),
+    ),
+    ZTESensorEntityDescription(
+        key="wan_lte_ca",
+        name="Carrier Aggregation",
+        icon="mdi:plus-network",
+        group="signal",
+        value_fn=lambda data: data.get("wan_lte_ca"),
+    ),
+    ZTESensorEntityDescription(
+        key="lte_ca_pcell_band",
+        name="LTE Primary Band",
+        icon="mdi:antenna",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        value_fn=lambda data: data.get("lte_ca_pcell_band"),
+    ),
+    ZTESensorEntityDescription(
+        key="lte_ca_pcell_bandwidth",
+        name="LTE Primary Bandwidth",
+        icon="mdi:swap-horizontal",
+        native_unit_of_measurement="MHz",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("lte_ca_pcell_bandwidth")),
+    ),
+    ZTESensorEntityDescription(
+        key="lte_ca_scell_band",
+        name="LTE Secondary Band",
+        icon="mdi:antenna",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: data.get("lte_ca_scell_band") or None,
+    ),
+    ZTESensorEntityDescription(
+        key="lte_ca_scell_bandwidth",
+        name="LTE Secondary Bandwidth",
+        icon="mdi:swap-horizontal",
+        native_unit_of_measurement="MHz",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("lte_ca_scell_bandwidth")),
+    ),
+    ZTESensorEntityDescription(
+        key="wan_active_band",
+        name="LTE Active Band",
+        icon="mdi:antenna",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
         value_fn=lambda data: data.get("wan_active_band"),
     ),
     ZTESensorEntityDescription(
         key="wan_active_channel",
-        translation_key="wan_active_channel",
-        icon="mdi:transmission-tower",
+        name="LTE Active Channel",
+        icon="mdi:numeric",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("wan_active_channel"),
+        group="signal",
+        value_fn=lambda data: _safe_int(data.get("wan_active_channel")),
     ),
     ZTESensorEntityDescription(
-        key="wan_lte_ca",
-        translation_key="wan_lte_ca",
-        icon="mdi:transmission-tower",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("wan_lte_ca"),
+        key="z5g_rsrp",
+        name="5G RSRP",
+        icon="mdi:signal-5g",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        min_limit=-140,
+        max_limit=-30,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("Z5g_rsrp")),
     ),
     ZTESensorEntityDescription(
-        key="wa_inner_version",
-        translation_key="wa_inner_version",
+        key="z5g_rsrq",
+        name="5G RSRQ",
+        icon="mdi:signal-5g",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        min_limit=-40,
+        max_limit=0,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("Z5g_rsrq")),
+    ),
+    ZTESensorEntityDescription(
+        key="z5g_rssi",
+        name="5G RSSI",
+        icon="mdi:signal-5g",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        min_limit=-120,
+        max_limit=-20,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("Z5g_rssi")),
+    ),
+    ZTESensorEntityDescription(
+        key="z5g_sinr",
+        name="5G SNR",
+        icon="mdi:waveform",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        min_limit=-20,
+        max_limit=50,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("Z5g_SINR")),
+    ),
+    ZTESensorEntityDescription(
+        key="nr5g_pci",
+        name="5G PCI",
         icon="mdi:transmission-tower",
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda data: data.get("wa_inner_version"),
+        group="signal",
+        value_fn=lambda data: data.get("nr5g_pci"),
     ),
-    # SMS Sensors
     ZTESensorEntityDescription(
-        key="msg_total",
-        translation_key="msg_total",
-        icon="mdi:message-plus-outline",
+        key="nr5g_action_band",
+        name="5G Active Band",
+        icon="mdi:antenna",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        value_fn=lambda data: data.get("nr5g_action_band"),
+    ),
+    ZTESensorEntityDescription(
+        key="nr5g_action_channel",
+        name="5G Active Channel",
+        icon="mdi:numeric",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        value_fn=lambda data: _safe_int(data.get("nr5g_action_channel")),
+    ),
+    ZTESensorEntityDescription(
+        key="rssi",
+        name="Legacy RSSI",
+        icon="mdi:signal",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        entity_registry_enabled_default=False,
+        min_limit=-120,
+        max_limit=-20,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("rssi")),
+    ),
+    ZTESensorEntityDescription(
+        key="rscp",
+        name="Legacy RSCP",
+        icon="mdi:signal",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        entity_registry_enabled_default=False,
+        min_limit=-120,
+        max_limit=-20,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("rscp")),
+    ),
+    # --- Data Sub-device ---
+    # Legacy GB Sensors (Disabled by default, preserved for history)
+    ZTESensorEntityDescription(
+        key="monthly_tx_bytes",
+        name="Monthly Sent GB",
+        icon="mdi:upload-network",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        entity_registry_enabled_default=False,
+        group="data",
+        # Divided by 2^30 (1073741824) to match historical GB logic
+        value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_tx_bytes")),
+    ),
+    ZTESensorEntityDescription(
+        key="monthly_rx_bytes",
+        name="Monthly Received GB",
+        icon="mdi:download-network",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        entity_registry_enabled_default=False,
+        group="data",
+        # Divided by 2^30 (1073741824) to match historical GB logic
+        value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_rx_bytes")),
+    ),
+    ZTESensorEntityDescription(
+        key="monthly_total_bytes",
+        name="Monthly Total GB",
+        icon="mdi:network-outline",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        entity_registry_enabled_default=False,
+        group="data",
+        value_fn=lambda data: _get_bytes_to_gb(
+            (
+                int(data.get("monthly_tx_bytes", 0))
+                + int(data.get("monthly_rx_bytes", 0))
+            )
+            if data.get("monthly_tx_bytes") and data.get("monthly_rx_bytes")
+            else None
+        ),
+    ),
+    # Standard Byte Sensors (Enabled by default, supports UI conversion)
+    ZTESensorEntityDescription(
+        key="monthly_tx_bytes_raw",
+        name="Monthly Sent",
+        icon="mdi:upload-network",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        group="data",
+        value_fn=lambda data: _safe_int(data.get("monthly_tx_bytes")),
+    ),
+    ZTESensorEntityDescription(
+        key="monthly_rx_bytes_raw",
+        name="Monthly Received",
+        icon="mdi:download-network",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        group="data",
+        value_fn=lambda data: _safe_int(data.get("monthly_rx_bytes")),
+    ),
+    ZTESensorEntityDescription(
+        key="monthly_total_bytes_raw",
+        name="Monthly Total",
+        icon="mdi:network-outline",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        group="data",
+        value_fn=lambda data: (
+            (
+                int(data.get("monthly_tx_bytes", 0))
+                + int(data.get("monthly_rx_bytes", 0))
+            )
+            if data.get("monthly_tx_bytes") and data.get("monthly_rx_bytes")
+            else None
+        ),
+    ),
+    # --- SMS Sub-device ---
+    ZTESensorEntityDescription(
+        key="sms_unread_num",
+        name="Unread Msg",
+        icon="mdi:email-mark-as-unread",
         state_class=SensorStateClass.MEASUREMENT,
         group="sms",
-        min_limit=0,
-        max_limit=1000,
+        value_fn=lambda data: _safe_int(data.get("sms_unread_num")),
+    ),
+    ZTESensorEntityDescription(
+        key="msg_total",
+        name="Total Msg",
+        icon="mdi:email-multiple",
+        state_class=SensorStateClass.MEASUREMENT,
+        group="sms",
         value_fn=_get_total_sms,
     ),
     ZTESensorEntityDescription(
         key="msg_recent",
-        translation_key="msg_recent",
-        icon="mdi:message-badge-outline",
+        name="Recent Msg",
+        icon="mdi:email-outline",
         group="sms",
-        value_fn=lambda data: data.get("last_sms", {}).get(
-            "content_decoded", "No messages"
-        ),
+        value_fn=lambda data: data.get("last_sms", {}).get("content_decoded"),
     ),
 )
 
@@ -434,19 +553,26 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the sensor platform."""
     coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
-    entities = [
-        ZTESensor(coordinator, entry, description) for description in SENSOR_TYPES
-    ]
-    async_add_entities(entities)
+    async_add_entities(
+        [
+            ZTERouterSensor(coordinator, entry, description)
+            for description in SENSOR_TYPES
+        ]
+    )
 
 
-class ZTESensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity):
-    """Implementation of technical router and SMS sensors."""
+class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity):
+    """Representation of a ZTE Router sensor."""
 
     _attr_has_entity_name = True
     entity_description: ZTESensorEntityDescription
 
-    def __init__(self, coordinator, entry, description):
+    def __init__(
+        self,
+        coordinator: ZTERouterDataUpdateCoordinator,
+        entry,
+        description: ZTESensorEntityDescription,
+    ):
         """Initialize the sensor."""
         super().__init__(coordinator)
         self.entity_description = description
@@ -455,45 +581,37 @@ class ZTESensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity)
 
     @property
     def native_value(self):
-        """Return the value of the sensor with guard band validation."""
+        """Return the value of the sensor."""
         if not self.coordinator.data:
             return None
 
-        # Special case: Last Updated
-        if self.entity_description.key == "last_updated":
+        key = self.entity_description.key
+
+        if key == "last_updated":
             return self.coordinator.last_update_success_time
 
         try:
-            val = self.entity_description.value_fn(self.coordinator.data)
-
-            # Standard 4: Declarative Guard Bands
-            if val is not None and isinstance(val, (int, float)):
-                if (
-                    self.entity_description.min_limit is not None
-                    and val < self.entity_description.min_limit
-                ):
-                    _LOGGER.debug(
-                        "%s: Value %s below min_limit %s",
-                        self.entity_id,
-                        val,
-                        self.entity_description.min_limit,
-                    )
-                    return None
-                if (
-                    self.entity_description.max_limit is not None
-                    and val > self.entity_description.max_limit
-                ):
-                    _LOGGER.debug(
-                        "%s: Value %s above max_limit %s",
-                        self.entity_id,
-                        val,
-                        self.entity_description.max_limit,
-                    )
-                    return None
-
-            return val
-        except KeyError, AttributeError, ValueError, TypeError:
+            value = self.entity_description.value_fn(self.coordinator.data)
+        except KeyError, AttributeError:
             return None
+
+        if value is None:
+            return None
+
+        # Guard bands
+        if isinstance(value, (int, float)):
+            if (
+                self.entity_description.min_limit is not None
+                and value < self.entity_description.min_limit
+            ):
+                return None
+            if (
+                self.entity_description.max_limit is not None
+                and value > self.entity_description.max_limit
+            ):
+                return None
+
+        return value
 
     @property
     def extra_state_attributes(self):
@@ -537,29 +655,27 @@ class ZTESensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity)
         host = self._entry.options[CONF_HOST]
         group = self.entity_description.group
 
-        # "Flat Identity" identifiers: consistent from boot
-        main_identifiers = {(DOMAIN, host)}
-
-        if group == "main":
-            return {
-                "identifiers": main_identifiers,
-                "name": self._entry.title,
-                "manufacturer": "ZTE",
-                "configuration_url": f"http://{host}",
-                "model": self.coordinator.model,
-                "sw_version": self.coordinator.sw_version,
-            }
-
-        # Sub-device dynamic routing
-        group_names = {"sms": "SMS", "data": "Monthly"}
+        group_names = {
+            "system": "System",
+            "signal": "Signal",
+            "data": "Data",
+            "sms": "SMS",
+        }
         display_group = group_names.get(group, group.capitalize())
         sub_name = f"{self._entry.title} {display_group}"
 
-        return {
-            "identifiers": {(DOMAIN, f"{host}_{group}")},
+        sub_id_prefix = self.coordinator.mac if self.coordinator.mac else f"host_{host}"
+
+        info = {
+            "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},
             "name": sub_name,
             "manufacturer": "ZTE",
             "model": self.coordinator.model,
             "sw_version": self.coordinator.sw_version,
-            "via_device": (DOMAIN, host),
+            "configuration_url": f"http://{host}",
         }
+
+        if group != "system":
+            info["via_device"] = (DOMAIN, f"{sub_id_prefix}_system")
+
+        return info

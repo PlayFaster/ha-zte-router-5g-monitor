@@ -1,21 +1,33 @@
 """Binary sensor platform for ZTE Router 5G."""
 
+from dataclasses import dataclass
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 
+
+@dataclass(frozen=True, kw_only=True)
+class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
+    """Describes ZTE binary sensor entity."""
+
+    group: str = "signal"
+
+
 # Define the entity description for static metadata
-BEST_CONN_DESCRIPTION = BinarySensorEntityDescription(
+BEST_CONN_DESCRIPTION = ZTEBinarySensorEntityDescription(
     key="best_connection",
     translation_key="best_connection",
     device_class=BinarySensorDeviceClass.CONNECTIVITY,
+    entity_category=EntityCategory.DIAGNOSTIC,
+    group="signal",
 )
 
 
@@ -35,13 +47,13 @@ class ZTEBestConnectionSensor(
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    entity_description: BinarySensorEntityDescription
+    entity_description: ZTEBinarySensorEntityDescription
 
     def __init__(
         self,
         coordinator: ZTERouterDataUpdateCoordinator,
         entry,
-        description: BinarySensorEntityDescription,
+        description: ZTEBinarySensorEntityDescription,
     ):
         """Initialize the binary sensor."""
         super().__init__(coordinator)
@@ -70,13 +82,31 @@ class ZTEBestConnectionSensor(
 
     @property
     def device_info(self):
-        """Return device information linking to the main router device."""
+        """Return device information with sub-device support."""
         host = self._entry.options[CONF_HOST]
-        return {
-            "identifiers": {(DOMAIN, host)},
-            "name": self._entry.title,
+        group = self.entity_description.group
+
+        group_names = {
+            "system": "System",
+            "signal": "Signal",
+            "data": "Data",
+            "sms": "SMS",
+        }
+        display_group = group_names.get(group, group.capitalize())
+        sub_name = f"{self._entry.title} {display_group}"
+
+        sub_id_prefix = self.coordinator.mac if self.coordinator.mac else f"host_{host}"
+
+        info = {
+            "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},
+            "name": sub_name,
             "manufacturer": "ZTE",
-            "configuration_url": f"http://{host}",
             "model": self.coordinator.model,
             "sw_version": self.coordinator.sw_version,
+            "configuration_url": f"http://{host}",
         }
+
+        if group != "system":
+            info["via_device"] = (DOMAIN, f"{sub_id_prefix}_system")
+
+        return info

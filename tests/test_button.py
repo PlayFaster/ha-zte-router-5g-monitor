@@ -19,9 +19,8 @@ async def test_reboot_button_press(mock_coordinator, mock_config_entry):
     """Test reboot button trigger."""
     mock_api = MagicMock()
     mock_api.reboot = AsyncMock()
-    button = ZTERebootButton(
-        mock_api, mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION
-    )
+    mock_coordinator.api = mock_api
+    button = ZTERebootButton(mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION)
 
     await button.async_press()
     mock_api.reboot.assert_called_once()
@@ -32,8 +31,9 @@ async def test_delete_sms_button_press(mock_coordinator, mock_config_entry):
     """Test delete SMS button trigger."""
     mock_api = MagicMock()
     mock_api.delete_all = AsyncMock()
+    mock_coordinator.api = mock_api
     button = ZTEDeleteAllSMSButton(
-        mock_api, mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
+        mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
     )
 
     await button.async_press()
@@ -44,15 +44,14 @@ async def test_delete_sms_button_press(mock_coordinator, mock_config_entry):
 def test_button_device_info(mock_coordinator, mock_config_entry):
     """Test device_info for router and SMS group."""
     mock_api = MagicMock()
-    reboot = ZTERebootButton(
-        mock_api, mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION
-    )
+    mock_coordinator.api = mock_api
+    reboot = ZTERebootButton(mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION)
     delete = ZTEDeleteAllSMSButton(
-        mock_api, mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
+        mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
     )
 
-    assert reboot.device_info["identifiers"] == {(DOMAIN, "192.168.0.1")}
-    assert delete.device_info["identifiers"] == {(DOMAIN, "192.168.0.1_sms")}
+    assert reboot.device_info["identifiers"] == {(DOMAIN, "00:11:22:33:44:55_system")}
+    assert delete.device_info["identifiers"] == {(DOMAIN, "00:11:22:33:44:55_sms")}
 
 
 @pytest.mark.asyncio

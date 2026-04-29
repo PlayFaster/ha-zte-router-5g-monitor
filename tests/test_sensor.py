@@ -9,34 +9,34 @@ from homeassistant.util import dt as dt_util
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import (
     SENSOR_TYPES,
-    ZTESensor,
+    ZTERouterSensor,
     async_setup_entry,
 )
 
-# --- TESTS FOR ZTESensor ---
+# --- TESTS FOR ZTERouterSensor ---
 
 
 def test_sensor_rsrp_simple(mock_coordinator, mock_config_entry):
     """Test standard technical sensor extraction."""
     mock_coordinator.data = {"lte_rsrp": "-95"}
     description = next(d for d in SENSOR_TYPES if d.key == "lte_rsrp")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     assert sensor.native_value == -95.0
 
 
 def test_sensor_z5g_case_sensitivity(mock_coordinator, mock_config_entry):
     """Test the specific case-sensitive mapping for 5G keys."""
-    # The router provides 'Z5g_rsrp' but our key is 'z5g_rsrp'
+    # The router provides 'Z5g_rsrp'
     mock_coordinator.data = {"Z5g_rsrp": "-102"}
     description = next(d for d in SENSOR_TYPES if d.key == "z5g_rsrp")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
     assert sensor.native_value == -102.0
 
     # Test sinr
     mock_coordinator.data = {"Z5g_SINR": "15"}
     description = next(d for d in SENSOR_TYPES if d.key == "z5g_sinr")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
     assert sensor.native_value == 15.0
 
 
@@ -45,7 +45,7 @@ def test_sensor_byte_to_gb_conversion(mock_coordinator, mock_config_entry):
     # 2GB in bytes
     mock_coordinator.data = {"monthly_rx_bytes": "2147483648"}
     description = next(d for d in SENSOR_TYPES if d.key == "monthly_rx_bytes")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     # 2147483648 / 1073741824 = 2.0
     assert sensor.native_value == 2.0
@@ -58,7 +58,7 @@ def test_sensor_monthly_total_sum(mock_coordinator, mock_config_entry):
         "monthly_tx_bytes": "536870912",  # 0.5GB
     }
     description = next(d for d in SENSOR_TYPES if d.key == "monthly_total_bytes")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     assert sensor.native_value == 1.5
 
@@ -75,7 +75,7 @@ def test_sensor_uptime_calculation(mock_coordinator, mock_config_entry):
     mock_coordinator.data = {"realtime_time": "3600"}
 
     description = next(d for d in SENSOR_TYPES if d.key == "device_uptime")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     with patch("homeassistant.util.dt.now", return_value=now):
         # Result should be exactly 1 hour ago
@@ -99,7 +99,7 @@ def test_sensor_last_updated(mock_coordinator, mock_config_entry):
     mock_coordinator.data = {"some": "data"}
 
     description = next(d for d in SENSOR_TYPES if d.key == "last_updated")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     assert sensor.native_value == now
 
@@ -108,35 +108,47 @@ def test_sensor_error_handling(mock_coordinator, mock_config_entry):
     """Test error handling in native_value."""
     mock_coordinator.data = {"monthly_rx_bytes": "invalid"}
     description = next(d for d in SENSOR_TYPES if d.key == "monthly_rx_bytes")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     # Should return None if callback fails (e.g. ValueError)
     assert sensor.native_value is None
 
 
 def test_sensor_device_info(mock_coordinator, mock_config_entry):
-    """Test device_info for main, data, and sms groups."""
-    # Main group sensor
-    description = next(d for d in SENSOR_TYPES if d.key == "lte_rsrp")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    """Test device_info for main (system), signal, data, and sms groups."""
+    mac = "00:11:22:33:44:55"
+
+    # System (Root) group sensor
+    description = next(d for d in SENSOR_TYPES if d.key == "device_uptime")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
     info = sensor.device_info
-    assert info["identifiers"] == {(DOMAIN, "192.168.0.1")}
-    assert info["name"] == "My ZTE Router"
-    assert info["model"] == "MC7010"
+    assert info["identifiers"] == {(DOMAIN, f"{mac}_system")}
+    assert info["name"] == "My ZTE Router System"
+    assert "via_device" not in info
+
+    # Signal group sensor
+    description = next(d for d in SENSOR_TYPES if d.key == "lte_rsrp")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    info = sensor.device_info
+    assert info["identifiers"] == {(DOMAIN, f"{mac}_signal")}
+    assert info["name"] == "My ZTE Router Signal"
+    assert info["via_device"] == (DOMAIN, f"{mac}_system")
 
     # Data group sensor
     description = next(d for d in SENSOR_TYPES if d.key == "monthly_rx_bytes")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
     info = sensor.device_info
-    assert info["identifiers"] == {(DOMAIN, "192.168.0.1_data")}
-    assert info["name"] == "My ZTE Router Monthly"
+    assert info["identifiers"] == {(DOMAIN, f"{mac}_data")}
+    assert info["name"] == "My ZTE Router Data"
+    assert info["via_device"] == (DOMAIN, f"{mac}_system")
 
     # SMS group sensor
     description = next(d for d in SENSOR_TYPES if d.key == "msg_total")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
     info = sensor.device_info
-    assert info["identifiers"] == {(DOMAIN, "192.168.0.1_sms")}
+    assert info["identifiers"] == {(DOMAIN, f"{mac}_sms")}
     assert info["name"] == "My ZTE Router SMS"
+    assert info["via_device"] == (DOMAIN, f"{mac}_system")
 
 
 # --- SMS SPECIFIC TESTS ---
@@ -153,7 +165,7 @@ def test_sensor_sms_summing(mock_coordinator, mock_config_entry):
         "sms_sim_draftbox_total": "1",
     }
     description = next(d for d in SENSOR_TYPES if d.key == "msg_total")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     # Sum: 10 + 5 + 1 + 2 + 0 + 1 = 19
     assert sensor.native_value == 19
@@ -163,7 +175,7 @@ def test_sensor_sms_attributes(mock_coordinator, mock_config_entry):
     """Test that extra state attributes provide the raw breakdown."""
     mock_coordinator.data = {"sms_nv_total": "15", "sms_sim_total": "5"}
     description = next(d for d in SENSOR_TYPES if d.key == "msg_total")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     attrs = sensor.extra_state_attributes
     assert attrs["sms_nv_total"] == 15
@@ -181,7 +193,7 @@ def test_sensor_sms_content_extraction(mock_coordinator, mock_config_entry):
         }
     }
     description = next(d for d in SENSOR_TYPES if d.key == "msg_recent")
-    sensor = ZTESensor(mock_coordinator, mock_config_entry, description)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     assert sensor.native_value == "Hello from ZTE!"
     assert sensor.extra_state_attributes["number"] == "123456"

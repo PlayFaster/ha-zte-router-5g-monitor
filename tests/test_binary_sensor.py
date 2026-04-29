@@ -39,7 +39,7 @@ def test_binary_sensor_device_info(mock_coordinator, mock_config_entry):
         mock_coordinator, mock_config_entry, BEST_CONN_DESCRIPTION
     )
     info = sensor.device_info
-    assert info["identifiers"] == {(DOMAIN, "192.168.0.1")}
+    assert info["identifiers"] == {(DOMAIN, "00:11:22:33:44:55_signal")}
     assert info["manufacturer"] == "ZTE"
 
 
