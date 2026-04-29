@@ -36,34 +36,45 @@ To reach its current "modern" state, the project underwent several major refacto
 - **Change**: Migrated the entire API layer to `aiohttp`.
 - **Result**: Native asynchronous execution. Removed the overhead of thread-switching, simplified the code by removing executor wrappers, and eliminated the need to pin and maintain the `requests` dependency in `manifest.json`.
 
-### Python Standards & Strict Linting (v3.0.1)
+### Python Standards & Strict Linting (v3.0.0)
 
 - **Standard**: Adherence to PEP8 naming conventions and `pydocstyle` requirements.
 - **Change**: Renamed internal API methods (e.g., `get_LD` to `get_ld`) and enabled strict linting (`N`, `D`) in `pyproject.toml`.
 - **Result**: Improved codebase maintainability and alignment with Home Assistant's core coding standards.
 
-### Architectural Synchronization & Declarative Refactor (v3.1.0)
+### Architectural Synchronization & Declarative Refactor (v3.0.0)
 
 - **Initial State**: Imperative `if/elif` blocks in sensors and manual retry loops in the coordinator.
 - **Change**: Refactored the entity engine to use **Declarative Callbacks** (`value_fn`). Standardized on the **Flat Identity Pattern** (loading hardware info from `entry.data` at boot). Unified background tasks using `entry.async_create_background_task`.
 - **Result**: **100% architectural parity** with the TP-Link and WiFi Monitor integrations. Massive reduction in boilerplate code and improved reliability through native HA lifecycle management.
 
-- **Standardized Resilience (v3.1.1)**: Aligned the Data Update Coordinator with the "PlayFaster" architectural standards. Increased the failure threshold to 3 cycles and synchronized warning logs. The coordinator now holds last known values for up to 3 consecutive failures before reporting "Unavailable", ensuring stable sensor data during brief API interruptions.
-- **Custom User Naming (v3.1.1)**: Implemented global name prefixing using `CONF_NAME`. Users can define a custom string (e.g., "Guest Gateway") that is prepended to every device and entity, allowing for multiple instances to be clearly distinguished in the UI without technical entity ID conflicts.
-- **Declarative Guard Bands (v3.1.1)**: Implemented "Standard 4" data integrity validation. Technical sensors (Signal Strength, SNR, Signal Bar, and SMS counts) now utilize declarative `min_limit` and `max_limit` boundaries to filter out transient hardware reporting spikes, preventing dashboard corruption.
+- **Standardized Resilience (v3.0.0)**: Aligned the Data Update Coordinator with the "PlayFaster" architectural standards. Increased the failure threshold to 3 cycles and synchronized warning logs. The coordinator now holds last known values for up to 3 consecutive failures before reporting "Unavailable", ensuring stable sensor data during brief API interruptions.
+- **Custom User Naming (v3.0.0)**: Implemented global name prefixing using `CONF_NAME`. Users can define a custom string (e.g., "Guest Gateway") that is prepended to every device and entity, allowing for multiple instances to be clearly distinguished in the UI without technical entity ID conflicts.
+- **Declarative Guard Bands (v3.0.0)**: Implemented "Standard 4" data integrity validation. Technical sensors (Signal Strength, SNR, Signal Bar, and SMS counts) now utilize declarative `min_limit` and `max_limit` boundaries to filter out transient hardware reporting spikes, preventing dashboard corruption.
+
+### Sub-Device Architecture & Standards Alignment (v3.0.0)
+
+- **Initial State**: All entities were grouped under a single monolithic "ZTE Router" device. Data volume was reported in GB (legacy), and signal units were inconsistent.
+- **Change**: Refactored the entity engine to support **Sub-Device Grouping** (System, Signal, Data, SMS). Aligned volume sensors with Home Assistant's `DATA_SIZE` standard (Bytes) and normalized signal metrics (RSRP/RSSI in dBm; RSRQ/SNR/SINR in dB).
+- **Result**: Improved UI organization in the Device Registry and full compatibility with Home Assistant's native unit conversion and dashboarding features. Enhanced `unique_id` stability by using lowercase internal keys (e.g., `z5g_rsrp`).
 
 ## 4. Success Patterns
 
 - **`DataUpdateCoordinator`**: Essential for preventing the router from being overwhelmed by simultaneous requests. Using `coordinator.async_request_refresh()` for write actions ensures immediate UI feedback.
+- **Sub-device Grouping**: Automatically routing entities to logical sub-devices (Signal, SMS, Data) via the `group` attribute in `EntityDescription`. This prevents "entity fatigue" in the main device view.
+- **Stable Identity Strategy**: Using hardcoded internal keys (e.g., `z5g_rsrp`) combined with the MAC address for `unique_id`, rather than relying on friendly names. This ensures entity settings (icons, hidden status) survive renames or firmware updates.
 - **Declarative Entities**: Using a `value_fn` lambda in `EntityDescription` allows for a completely generic entity class. This makes adding new sensors a "data entry" task rather than a coding task.
 - **Data Integrity (Guard Bands)**: Validating sensor values against realistic boundaries (e.g., -140 to -30 for RSRP) before committing them to the state machine. This ensures that transient API artifacts or hardware glitches don't trigger false automation states or corrupt historical graphs.
 - **Flat Identity Pattern**: By storing Model, Version, and MAC in `entry.data` and loading them into the coordinator at `__init__`, the integration provides stable metadata to the UI instantly at boot, even if the hardware is offline.
-- **Dynamic Routing**: Entities are automatically routed to sub-devices (SMS, Monthly Data) based on their `group` attribute, ensuring a clean and organized Home Assistant Device Registry.
 
 ## 5. Technical Pitfalls & Fixes
 
 - **ConfigEntry Data vs. Options**: In this integration, `entry.options` is used for user-changeable settings (credentials, polling interval), while `entry.data` is reserved for immutable hardware metadata (Model, MAC, Version).
   - _Fix_: Standardized all platforms to initialize from `entry.data` and update via `hass.config_entries.async_update_entry` only when hardware changes are detected.
+- **MockConfigEntry Immutability**: In Home Assistant tests, `MockConfigEntry.options` is a frozen property. Attempting to update it directly via `entry.options = {...}` fails with an `AttributeError`.
+  - _Fix_: Use `object.__setattr__(entry, "options", new_options)` in test code to bypass the frozen attribute restriction.
+- **Background Task Mocking**: When `hass.async_create_task` is mocked, tasks created via `entry.async_create_background_task` may not execute, leading to `RuntimeWarning: coroutine was never awaited`.
+  - _Fix_: In `conftest.py`, ensure the background task mock explicitly schedules the coroutine via `asyncio.create_task` and that the test awaits `hass.async_block_till_done()`.
 - **Manual Sleep in Coordinators**: Sleeping inside `_async_update_data` blocks the coordinator task and delays other integrations.
   - _Fix_: Removed `asyncio.sleep` retries. Use `asyncio.timeout` and raise `UpdateFailed` to let HA handle backoffs.
 - **Background Task Orphaning**: Standard `hass.async_create_task` is not tracked by the entry.
