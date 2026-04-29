@@ -3,28 +3,49 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.const import CONF_HOST
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
 @pytest.fixture
 def mock_config_entry():
     """Fixture to mock a ConfigEntry."""
-    mock_entry = MagicMock()
-    mock_entry.unique_id = "zte_unique_123"
-    mock_entry.title = "My ZTE Router"
-    # Your code specifically looks in .options for the host
-    mock_entry.options = {CONF_HOST: "192.168.0.1"}
-    mock_entry.data = {}
+    entry = MockConfigEntry(
+        unique_id="zte_unique_123",
+        domain="zte_router_5g",
+        title="My ZTE Router",
+        data={"model": "MC7010", "sw_version": "V1.0.0"},
+        options={
+            CONF_HOST: "192.168.0.1",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "password",
+        },
+    )
 
-    # Mock async_create_background_task and close coroutine to avoid RuntimeWarning
+    # Mock async_create_background_task to actually run the task
     def mock_create_background_task(hass, coro, name):
-        coro.close()
-        return MagicMock()
+        import asyncio
+        from unittest.mock import Mock
 
-    mock_entry.async_create_background_task = MagicMock(
+        # If it's a real HA instance, use its task creation
+        if hasattr(hass, "async_create_task") and not isinstance(
+            hass.async_create_task, (Mock, MagicMock)
+        ):
+            return hass.async_create_task(coro, name)
+
+        # Otherwise, try to run it in the current loop to avoid RuntimeWarning
+        try:
+            loop = asyncio.get_running_loop()
+            return loop.create_task(coro)
+        except RuntimeError:
+            # Fallback if no loop is running
+            coro.close()
+            return MagicMock()
+
+    entry.async_create_background_task = MagicMock(
         side_effect=mock_create_background_task
     )
-    return mock_entry
+    return entry
 
 
 @pytest.fixture

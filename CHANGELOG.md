@@ -21,8 +21,9 @@ All notable changes to this project will be documented in this file.
 #### New Features & Customization
 
 - **Custom Entity Naming**: You can now set a custom prefix (e.g., _"Downstairs Gateway"_) for all devices and entities during setup or via the **Configure** menu.
-- **Smarter Device Organization**: Entities are now automatically grouped into logical sub-devices (e.g., **SMS**, **Monthly Usage**, and **Main Router**) for a cleaner Look in your Dashboards.
+- **Smarter Device Organization**: Entities are now automatically grouped into logical sub-devices (e.g., **System**, , **Signal**, **Data**, and **SMS**) to reduce the overwhelm factor and make it easy to disable certain sections if desired.
 - **Data Integrity Guards**: New "Guard Bands" and safety checks ensure your sensors don't report impossible values or cause errors during initial connection.
+- **Monthly Data in Bytes**: Added Monthly data in native bytes unit (up, down, total). This is the default. Legacy GB data sensors are now disabled.
 
 ### Changed
 

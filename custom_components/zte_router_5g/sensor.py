@@ -617,7 +617,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
     def extra_state_attributes(self):
         """Return detailed attributes for specific sensors."""
         data = self.coordinator.data
-        if not data:
+        if data is None:
             return {}
 
         key = self.entity_description.key
