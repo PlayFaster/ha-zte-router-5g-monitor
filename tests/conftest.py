@@ -58,7 +58,7 @@ def mock_coordinator():
     # Add flat identity attributes for modern tests
     coordinator.model = "MC7010"
     coordinator.sw_version = "V1.0.0"
-    coordinator.mac = "00:11:22:33:44:55"
+    coordinator.imei = "864155042229309"
     return coordinator
 
 

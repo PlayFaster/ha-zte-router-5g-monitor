@@ -122,7 +122,7 @@ async def test_device_info_system_group(mock_coordinator, mock_config_entry):
     )
 
     info = number.device_info
-    assert info["identifiers"] == {(DOMAIN, "00:11:22:33:44:55_system")}
+    assert info["identifiers"] == {(DOMAIN, "864155042229309_system")}
     assert info["name"] == "My ZTE Router System"
     assert info["manufacturer"] == "ZTE"
     assert info["configuration_url"] == "http://192.168.0.1"
@@ -145,14 +145,14 @@ async def test_device_info_signal_group(mock_coordinator, mock_config_entry):
     number = ZTEPollingInterval(mock_coordinator, mock_config_entry, desc, 50)
 
     info = number.device_info
-    assert info["via_device"] == (DOMAIN, "00:11:22:33:44:55_system")
+    assert info["via_device"] == (DOMAIN, "864155042229309_system")
     assert info["name"] == "My ZTE Router Signal"
 
 
 @pytest.mark.asyncio
 async def test_device_info_no_mac(mock_coordinator, mock_config_entry):
     """Test device_info fallback when coordinator has no mac."""
-    mock_coordinator.mac = None
+    mock_coordinator.imei = None
 
     number = ZTEPollingInterval(
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180

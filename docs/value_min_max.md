@@ -26,6 +26,11 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 | **Data Usage**     | Monthly Download | 0    | 100TB | Set to `Unavailable`    |
 |                    | Monthly Upload   | 0    | 100TB | Set to `Unavailable`    |
 |                    | Monthly Total    | 0    | 100TB | Set to `Unavailable`    |
+|                    | Upload Speed     | 0    | —     | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
+|                    | Download Speed   | 0    | —     | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
+|                    | Session Sent     | 0    | —     | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
+|                    | Session Received | 0    | —     | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
+| **Device**         | Battery          | 0    | 100   | Physical percentage bounds.                  |
 | **SMS**            | Total Count      | 0    | 1000  | Set to `Unavailable`    |
 
 ---
@@ -52,3 +57,9 @@ try:
 except (ValueError, TypeError):
     return val
 ```
+
+---
+
+## Version Control
+
+- **v1.1.0** (2026-05-07) - Initial versioned snapshot. Added guard bands for Battery (0–100 %), Upload Speed (min 0 B/s), Download Speed (min 0 B/s), Session Sent (min 0 bytes), Session Received (min 0 bytes), and Device Battery category.

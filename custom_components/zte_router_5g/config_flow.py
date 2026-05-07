@@ -44,6 +44,7 @@ async def _validate_credentials(hass, user_input: dict) -> dict:
     return {
         "model": get_router_model(data),
         "sw_version": data.get("wa_inner_version"),
+        "imei": data.get("imei"),
     }
 
 
@@ -60,8 +61,8 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 info = await _validate_credentials(self.hass, user_input)
 
-                # Use the host IP as the unique ID so two routers are separate devices
-                await self.async_set_unique_id(user_input[CONF_HOST])
+                unique_id = info.get("imei") or user_input[CONF_HOST]
+                await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()
 
                 # Store credentials and custom name in options
