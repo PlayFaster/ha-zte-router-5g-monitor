@@ -201,6 +201,10 @@ async def test_options_flow_init_auth_error():
         result = await flow.async_step_init({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
 
     assert result["errors"] == {"base": "invalid_auth"}
+
+
+@pytest.mark.asyncio
+async def test_reauth_flow_show_form():
     """Test reauth step shows form when entry exists."""
     flow = ZTEConfigFlow()
     flow.hass = MagicMock()

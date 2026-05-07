@@ -7,12 +7,12 @@ from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
-from homeassistant.const import CONF_HOST
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_STOP_POLLING, DOMAIN
+from .const import CONF_STOP_POLLING
 from .coordinator import ZTERouterDataUpdateCoordinator
+from .helpers import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -110,32 +110,6 @@ class ZTEPausePollingSwitch(
     @property
     def device_info(self):
         """Return device information with sub-device support."""
-        host = self._entry.options[CONF_HOST]
-        group = self.entity_description.group
-
-        group_names = {
-            "system": "System",
-            "signal": "Signal",
-            "data": "Data",
-            "sms": "SMS",
-        }
-        display_group = group_names.get(group, group.capitalize())
-        sub_name = f"{self._entry.title} {display_group}"
-
-        sub_id_prefix = (
-            self.coordinator.imei if self.coordinator.imei else f"host_{host}"
+        return build_device_info(
+            self.coordinator, self._entry, self.entity_description.group
         )
-
-        info = {
-            "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},
-            "name": sub_name,
-            "manufacturer": "ZTE",
-            "model": self.coordinator.model,
-            "sw_version": self.coordinator.sw_version,
-            "configuration_url": f"http://{host}",
-        }
-
-        if group != "system":
-            info["via_device"] = (DOMAIN, f"{sub_id_prefix}_system")
-
-        return info

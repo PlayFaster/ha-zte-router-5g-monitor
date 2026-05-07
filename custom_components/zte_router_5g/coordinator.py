@@ -5,12 +5,14 @@ import logging
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .api import ZTEAuthError
-from .const import CONF_SCAN_INTERVAL, CONF_STOP_POLLING
+from .const import CONF_SCAN_INTERVAL, CONF_STOP_POLLING, DOMAIN
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
@@ -80,11 +82,20 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     self.sw_version = new_version
                     self.model = new_model
 
-                    new_data = dict(self.entry.data)
-                    new_data.update({"model": new_model, "sw_version": new_version})
-                    self.hass.config_entries.async_update_entry(
-                        self.entry, data=new_data
+                    # Update device registry instead of writing entry.data on every poll
+                    sub_id_prefix = (
+                        self.imei
+                        if self.imei
+                        else f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
                     )
+                    dev_reg = dr.async_get(self.hass)
+                    device = dev_reg.async_get_device(
+                        identifiers={(DOMAIN, f"{sub_id_prefix}_system")}
+                    )
+                    if device:
+                        dev_reg.async_update_device(
+                            device.id, model=new_model, sw_version=new_version
+                        )
 
                 # Success path
                 self.last_update_success_time = dt_util.now()

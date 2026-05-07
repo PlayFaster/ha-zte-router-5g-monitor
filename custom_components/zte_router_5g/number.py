@@ -9,12 +9,13 @@ from homeassistant.components.number import (
     NumberEntity,
     NumberEntityDescription,
 )
-from homeassistant.const import CONF_HOST, UnitOfTime
+from homeassistant.const import UnitOfTime
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_SCAN_INTERVAL, DOMAIN
+from .const import CONF_SCAN_INTERVAL
 from .coordinator import ZTERouterDataUpdateCoordinator
+from .helpers import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -85,6 +86,11 @@ class ZTEPollingInterval(
         self._attr_native_value = initial_value
         self._refresh_task = None
 
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel any pending debounce task on removal."""
+        if self._refresh_task and not self._refresh_task.done():
+            self._refresh_task.cancel()
+
     async def async_set_native_value(self, value: float) -> None:
         """Handle the UI slider change."""
         # Update local UI state immediately for responsiveness
@@ -130,32 +136,6 @@ class ZTEPollingInterval(
     @property
     def device_info(self):
         """Return device information with sub-device support."""
-        host = self._entry.options[CONF_HOST]
-        group = self.entity_description.group
-
-        group_names = {
-            "system": "System",
-            "signal": "Signal",
-            "data": "Data",
-            "sms": "SMS",
-        }
-        display_group = group_names.get(group, group.capitalize())
-        sub_name = f"{self._entry.title} {display_group}"
-
-        sub_id_prefix = (
-            self.coordinator.imei if self.coordinator.imei else f"host_{host}"
+        return build_device_info(
+            self.coordinator, self._entry, self.entity_description.group
         )
-
-        info = {
-            "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},
-            "name": sub_name,
-            "manufacturer": "ZTE",
-            "model": self.coordinator.model,
-            "sw_version": self.coordinator.sw_version,
-            "configuration_url": f"http://{host}",
-        }
-
-        if group != "system":
-            info["via_device"] = (DOMAIN, f"{sub_id_prefix}_system")
-
-        return info

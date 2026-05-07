@@ -13,7 +13,6 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import (
-    CONF_HOST,
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     UnitOfDataRate,
@@ -23,8 +22,8 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
+from .helpers import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,7 +46,7 @@ def _get_bytes_to_gb(val: Any) -> float | None:
         return None
     try:
         return round(float(val) / 1073741824, 2)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -60,7 +59,7 @@ def _get_uptime(data: Any) -> Any:
         seconds = int(float(uptime_seconds))
         boot_time = dt_util.now() - timedelta(seconds=seconds)
         return boot_time.replace(second=0, microsecond=0)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -76,7 +75,7 @@ def _get_total_sms(data: Any) -> int | None:
     ]
     try:
         return sum(int(data.get(k, 0)) for k in keys)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -87,7 +86,7 @@ def _safe_float(val: Any) -> float | None:
         return None
     try:
         return float(val)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -98,7 +97,7 @@ def _safe_int(val: Any) -> int | None:
         return None
     try:
         return int(float(val))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -711,7 +710,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
 
         try:
             value = self.entity_description.value_fn(self.coordinator.data)
-        except (KeyError, AttributeError):
+        except KeyError, AttributeError, ValueError:
             return None
 
         if value is None:
@@ -755,7 +754,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
                         data.get("sms_sim_draftbox_total", 0)
                     ),
                 }
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return {}
 
         if key == "msg_recent":
@@ -771,32 +770,6 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
     @property
     def device_info(self):
         """Return device information with sub-device support."""
-        host = self._entry.options[CONF_HOST]
-        group = self.entity_description.group
-
-        group_names = {
-            "system": "System",
-            "signal": "Signal",
-            "data": "Data",
-            "sms": "SMS",
-        }
-        display_group = group_names.get(group, group.capitalize())
-        sub_name = f"{self._entry.title} {display_group}"
-
-        sub_id_prefix = (
-            self.coordinator.imei if self.coordinator.imei else f"host_{host}"
+        return build_device_info(
+            self.coordinator, self._entry, self.entity_description.group
         )
-
-        info = {
-            "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},
-            "name": sub_name,
-            "manufacturer": "ZTE",
-            "model": self.coordinator.model,
-            "sw_version": self.coordinator.sw_version,
-            "configuration_url": f"http://{host}",
-        }
-
-        if group != "system":
-            info["via_device"] = (DOMAIN, f"{sub_id_prefix}_system")
-
-        return info
