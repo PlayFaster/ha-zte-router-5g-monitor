@@ -2,28 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.0.0] - Future - Unreleased
+## [3.0.0-dev11] - 2026-05-07
 
-### Added
+### Changed
 
-#### Major Refactoring (Version 3.0)
+- **Badge Links**: Added links to readme badges.
 
-- This release introduces a modern, safer, and more resilient core architecture designed to improve the reliability and customization of the integration.
+## [3.0.0-dev10] - 2026-05-02 - Unreleased
 
-#### Performance & Stability
+### Changed
 
-- **Faster, Non-Blocking Startup**: Integration setup now runs entirely in the background. Home Assistant will not "hang" or slow down while waiting for the router to respond during startup.
-- **Native Async Architecture**: Rewritten to be more efficient and optimize resource utilization. This ensures the integration operates properly with the Home Assistant event loop, preventing the integration from delaying or interfering with other system processes.
-- **Improved Connection Resilience**: Sensors will now hold their last known values for up to three failed connection attempts. This prevents "Unavailable" flickers during brief network hiccups.
-- **Reliable Device Info**: Hardware models and software versions are now saved locally. Your Device Page will stay populated even if the router is rebooted or goes offline.
-- **Domain Cleanup**: Implemented standardized unloading logic to ensure the integration key is scrubbed from Home Assistant's internal memory when no integration instances remain.
+- **Badge Links**: Added links to readme badges.
 
-#### New Features & Customization
-
-- **Custom Entity Naming**: You can now set a custom prefix (e.g., _"Downstairs Gateway"_) for all devices and entities during setup or via the **Configure** menu.
-- **Smarter Device Organization**: Entities are now automatically grouped into logical sub-devices (e.g., **System**, , **Signal**, **Data**, and **SMS**) to reduce the overwhelm factor and make it easy to disable certain sections if desired.
-- **Data Integrity Guards**: New "Guard Bands" and safety checks ensure your sensors don't report impossible values or cause errors during initial connection.
-- **Monthly Data in Bytes**: Added Monthly data in native bytes unit (up, down, total). This is the default. Legacy GB data sensors are now disabled.
+- **Sub-device Architecture**: Grouped entities into System (Root), Signal, Data, and SMS devices for better Home Assistant UI organization.
 
 ## [3.0.0-dev8] - 2026-04-29 - Unreleased
 
