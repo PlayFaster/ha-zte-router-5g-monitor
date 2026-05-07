@@ -294,14 +294,16 @@ async def test_init_background_setup_success(
 async def test_button_reboot_exception(
     hass: HomeAssistant, mock_config_entry, mock_coordinator
 ):
-    """Test reboot button exception handling."""
+    """Test reboot button exception raises HomeAssistantError."""
+    from homeassistant.exceptions import HomeAssistantError
+
     from custom_components.zte_router_5g.button import REBOOT_DESCRIPTION
 
     mock_coordinator.api.reboot.side_effect = Exception("Reboot Fail")
     button = ZTERebootButton(mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION)
 
-    # Should not raise exception, just log error
-    await button.async_press()
+    with pytest.raises(HomeAssistantError, match="Reboot failed"):
+        await button.async_press()
     mock_coordinator.api.reboot.assert_called_once()
 
 
@@ -309,7 +311,9 @@ async def test_button_reboot_exception(
 async def test_button_delete_sms_exception(
     hass: HomeAssistant, mock_config_entry, mock_coordinator
 ):
-    """Test delete SMS button exception handling."""
+    """Test delete SMS button exception raises HomeAssistantError."""
+    from homeassistant.exceptions import HomeAssistantError
+
     from custom_components.zte_router_5g.button import DELETE_SMS_DESCRIPTION
 
     mock_coordinator.api.delete_all.side_effect = Exception("Delete Fail")
@@ -317,8 +321,8 @@ async def test_button_delete_sms_exception(
         mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
     )
 
-    # Should not raise exception, just log error
-    await button.async_press()
+    with pytest.raises(HomeAssistantError, match="Delete SMS failed"):
+        await button.async_press()
     mock_coordinator.api.delete_all.assert_called_once()
 
 

@@ -155,3 +155,144 @@ async def test_options_flow_errors():
     ):
         result = await flow.async_step_init({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
         assert result["errors"] == {"base": "unknown"}
+
+
+@pytest.mark.asyncio
+async def test_config_flow_user_step_show_form():
+    """Test that user step shows form when no input provided."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {}
+
+    result = await flow.async_step_user(user_input=None)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "user"
+    assert "data_schema" in result
+
+
+@pytest.mark.asyncio
+async def test_options_flow_init_show_form():
+    """Test that options step shows form when no input provided."""
+    entry = MagicMock()
+    entry.options = {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"}
+    flow = ZTEOptionsFlow(entry)
+    flow.hass = MagicMock()
+
+    result = await flow.async_step_init(user_input=None)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "init"
+    assert "data_schema" in result
+
+
+@pytest.mark.asyncio
+async def test_options_flow_init_auth_error():
+    """Test options flow ZTEAuthError branch."""
+    entry = MagicMock()
+    entry.options = {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"}
+    flow = ZTEOptionsFlow(entry)
+    flow.hass = MagicMock()
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=ZTEAuthError,
+    ):
+        result = await flow.async_step_init({CONF_HOST: "1.1.1.1", CONF_PASSWORD: "p"})
+
+    assert result["errors"] == {"base": "invalid_auth"}
+    """Test reauth step shows form when entry exists."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {"entry_id": "test_entry"}
+
+    mock_entry = MagicMock()
+    mock_entry.options = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "old"}
+    flow.hass.config_entries.async_get_entry.return_value = mock_entry
+
+    result = await flow.async_step_reauth()
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reauth_confirm"
+
+
+@pytest.mark.asyncio
+async def test_reauth_flow_success():
+    """Test successful reauthentication."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {"entry_id": "test_entry"}
+
+    mock_entry = MagicMock()
+    mock_entry.entry_id = "test_entry"
+    mock_entry.options = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "old"}
+    flow.hass.config_entries.async_get_entry.return_value = mock_entry
+    flow.hass.config_entries.async_reload = AsyncMock()
+
+    user_input = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "new_password"}
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        return_value=None,
+    ):
+        result = await flow.async_step_reauth_confirm(user_input)
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
+    flow.hass.config_entries.async_reload.assert_called_once_with("test_entry")
+
+
+@pytest.mark.asyncio
+async def test_reauth_flow_invalid_auth():
+    """Test reauth with invalid auth returns error."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {"entry_id": "test_entry"}
+
+    mock_entry = MagicMock()
+    flow.hass.config_entries.async_get_entry.return_value = mock_entry
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=ZTEAuthError,
+    ):
+        result = await flow.async_step_reauth_confirm(
+            {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "wrong"}
+        )
+
+    assert result["errors"] == {"base": "invalid_auth"}
+
+
+@pytest.mark.asyncio
+async def test_reauth_flow_cannot_connect():
+    """Test reauth with connection error returns error."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {"entry_id": "test_entry"}
+
+    mock_entry = MagicMock()
+    flow.hass.config_entries.async_get_entry.return_value = mock_entry
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=ZTEConnectionError,
+    ):
+        result = await flow.async_step_reauth_confirm(
+            {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "pass"}
+        )
+
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+@pytest.mark.asyncio
+async def test_reauth_flow_no_entry():
+    """Test reauth aborts when entry is missing."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {"entry_id": "test_entry"}
+    flow.hass.config_entries.async_get_entry.return_value = None
+
+    result = await flow.async_step_reauth()
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"

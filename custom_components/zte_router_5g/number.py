@@ -18,6 +18,10 @@ from .coordinator import ZTERouterDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+PARALLEL_UPDATES = 0
+
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True, kw_only=True)
 class ZTENumberEntityDescription(NumberEntityDescription):
@@ -41,7 +45,7 @@ POLLING_INTERVAL_DESCRIPTION = ZTENumberEntityDescription(
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the number platform."""
-    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
     # Read initial value from entry options (survives restarts)
     initial_value = entry.options.get(CONF_SCAN_INTERVAL, 180)

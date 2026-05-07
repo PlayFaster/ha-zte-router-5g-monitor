@@ -36,9 +36,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Create the specialized coordinator
     coordinator = ZTERouterDataUpdateCoordinator(hass, entry, api)
 
-    # Store for platform access
-    hass.data.setdefault(DOMAIN, {})
-    hass.data[DOMAIN][entry.entry_id] = coordinator
+    # Store for platform access via runtime_data
+    entry.runtime_data = coordinator
 
     # Register the System root device early to prevent via_device warnings in platforms
     device_registry = dr.async_get(hass)
@@ -86,8 +85,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry and release resources."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id)
+        # runtime_data is cleaned up automatically by HA
         # Note: No need to close api.session as it's managed by HA core
-        if not hass.data[DOMAIN]:
-            hass.data.pop(DOMAIN)
+        pass
     return unload_ok

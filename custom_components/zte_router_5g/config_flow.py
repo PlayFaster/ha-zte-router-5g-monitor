@@ -88,6 +88,50 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_reauth(self, user_input=None):
+        """Perform reauthentication when the router password changes."""
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        if entry is None:
+            return self.async_abort(reason="reauth_successful")
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(self, user_input=None):
+        """Reauth confirm step to submit new credentials."""
+        errors = {}
+
+        if user_input is not None:
+            try:
+                entry = self.hass.config_entries.async_get_entry(
+                    self.context["entry_id"]
+                )
+                await _validate_credentials(self.hass, user_input)
+
+                # Merge new credentials into existing entry options
+                updated_options = dict(entry.options)
+                updated_options.update(user_input)
+                self.hass.config_entries.async_update_entry(
+                    entry, options=updated_options
+                )
+
+                # Reload the entry to pick up new credentials
+                await self.hass.config_entries.async_reload(entry.entry_id)
+
+                return self.async_abort(reason="reauth_successful")
+
+            except ZTEAuthError:
+                errors["base"] = "invalid_auth"
+            except ZTEConnectionError:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception("Unexpected error during config flow reauth step")
+                errors["base"] = "unknown"
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=_user_schema({}),
+            errors=errors,
+        )
+
     @staticmethod
     @config_entries.callback
     def async_get_options_flow(entry):

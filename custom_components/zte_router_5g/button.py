@@ -9,12 +9,15 @@ from homeassistant.components.button import (
     ButtonEntityDescription,
 )
 from homeassistant.const import CONF_HOST
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -44,7 +47,7 @@ DELETE_SMS_DESCRIPTION = ZTEButtonEntityDescription(
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the button platform."""
-    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
     # Create the button entities using their respective descriptions
     async_add_entities(
@@ -115,6 +118,7 @@ class ZTERebootButton(ZTEButton):
             await self.coordinator.api.reboot()
         except Exception as err:
             _LOGGER.error("%s: Reboot failed: %s", self._entry.title, err)
+            raise HomeAssistantError(f"Reboot failed: {err}") from err
 
 
 class ZTEDeleteAllSMSButton(ZTEButton):
@@ -127,3 +131,4 @@ class ZTEDeleteAllSMSButton(ZTEButton):
             await self.coordinator.async_request_refresh()
         except Exception as err:
             _LOGGER.error("%s: Delete SMS failed: %s", self._entry.title, err)
+            raise HomeAssistantError(f"Delete SMS failed: {err}") from err

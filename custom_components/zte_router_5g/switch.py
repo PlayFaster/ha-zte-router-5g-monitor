@@ -16,6 +16,10 @@ from .coordinator import ZTERouterDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+PARALLEL_UPDATES = 0
+
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True, kw_only=True)
 class ZTESwitchEntityDescription(SwitchEntityDescription):
@@ -36,7 +40,7 @@ PAUSE_POLLING_DESCRIPTION = ZTESwitchEntityDescription(
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the switch platform."""
-    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
     # Read initial state from entry options (survives restarts)
     initial_state = entry.options.get(CONF_STOP_POLLING, False)

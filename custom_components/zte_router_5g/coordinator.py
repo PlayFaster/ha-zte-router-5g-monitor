@@ -9,6 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from .api import ZTEAuthError
 from .const import CONF_SCAN_INTERVAL, CONF_STOP_POLLING
 from .helpers import get_router_model
 
@@ -24,6 +25,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self.consecutive_failures = 0
         self.last_update_success_time = None
+        self._was_available = True
 
         # Load hardware identity from persistent ConfigEntry data.
         # This ensures device info is stable from boot (The "Flat Identity" pattern).
@@ -87,33 +89,63 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 # Success path
                 self.last_update_success_time = dt_util.now()
                 self.consecutive_failures = 0
+                if not self._was_available:
+                    self._was_available = True
+                    _LOGGER.info(
+                        "%s: Reconnected successfully.",
+                        self.entry.title,
+                    )
                 return data
 
         except TimeoutError as err:
             self.consecutive_failures += 1
             if self.data is not None and self.consecutive_failures <= 3:
-                _LOGGER.warning(
-                    "%s: Error fetching ZTE data (failure %d/3), "
-                    "holding last known values: %s",
-                    self.entry.title,
-                    self.consecutive_failures,
-                    err,
-                )
+                if self.consecutive_failures == 1:
+                    _LOGGER.warning(
+                        "%s: Error fetching ZTE data, holding last known values: %s",
+                        self.entry.title,
+                        err,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "%s: Error fetching ZTE data (failure %d/3): %s",
+                        self.entry.title,
+                        self.consecutive_failures,
+                        err,
+                    )
                 return self.data
             _LOGGER.error("%s: API request timed out", self.entry.title)
+            self._was_available = False
             raise UpdateFailed("API request timed out") from err
+
+        except ZTEAuthError as err:
+            self.consecutive_failures += 1
+            _LOGGER.warning(
+                "%s: Authentication failed, triggering reauth: %s",
+                self.entry.title,
+                err,
+            )
+            self._was_available = False
+            self.entry.async_start_reauth(self.hass)
+            raise UpdateFailed(f"Authentication failed: {err}") from err
 
         except Exception as err:
             self.consecutive_failures += 1
             # Failure resilience — hold last known values for three cycles
             if self.data is not None and self.consecutive_failures <= 3:
-                _LOGGER.warning(
-                    "%s: Error fetching ZTE data (failure %d/3), "
-                    "holding last known values: %s",
-                    self.entry.title,
-                    self.consecutive_failures,
-                    err,
-                )
+                if self.consecutive_failures == 1:
+                    _LOGGER.warning(
+                        "%s: Error fetching ZTE data, holding last known values: %s",
+                        self.entry.title,
+                        err,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "%s: Error fetching ZTE data (failure %d/3): %s",
+                        self.entry.title,
+                        self.consecutive_failures,
+                        err,
+                    )
                 return self.data
 
             # Safe startup bypass — if paused on first run, start with empty data
@@ -127,4 +159,5 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.error(
                 "%s: Connection lost. Marking entities unavailable.", self.entry.title
             )
+            self._was_available = False
             raise UpdateFailed(f"Communication error: {err}") from err

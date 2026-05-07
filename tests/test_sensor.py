@@ -206,8 +206,7 @@ async def test_sensor_setup_entry():
     hass = MagicMock()
     entry = MagicMock()
     entry.entry_id = "test"
-    # hass.data[DOMAIN][entry_id] is the coordinator
-    hass.data = {DOMAIN: {"test": MagicMock()}}
+    entry.runtime_data = MagicMock()
 
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)

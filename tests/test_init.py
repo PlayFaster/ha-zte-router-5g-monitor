@@ -6,9 +6,9 @@ import pytest
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.zte_router_5g import async_setup_entry, async_unload_entry
+from custom_components.zte_router_5g.api import ZTEAuthError
 from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
-    DOMAIN,
 )
 from custom_components.zte_router_5g.coordinator import ZTERouterDataUpdateCoordinator
 
@@ -41,8 +41,7 @@ async def test_setup_entry_success(mock_hass, mock_config_entry):
     ):
         assert await async_setup_entry(mock_hass, mock_config_entry) is True
 
-        assert mock_config_entry.entry_id in mock_hass.data[DOMAIN]
-        coordinator = mock_hass.data[DOMAIN][mock_config_entry.entry_id]
+        coordinator = mock_config_entry.runtime_data
         assert isinstance(coordinator, ZTERouterDataUpdateCoordinator)
 
         mock_hass.config_entries.async_forward_entry_setups.assert_called_once()
@@ -52,13 +51,8 @@ async def test_setup_entry_success(mock_hass, mock_config_entry):
 @pytest.mark.asyncio
 async def test_unload_entry_success(mock_hass, mock_config_entry):
     """Test successful unloading of the integration."""
-    mock_api = MagicMock()
-    mock_coordinator = MagicMock()
-    mock_coordinator.api = mock_api
-    mock_hass.data = {DOMAIN: {mock_config_entry.entry_id: mock_coordinator}}
-
+    mock_config_entry.runtime_data = MagicMock()
     assert await async_unload_entry(mock_hass, mock_config_entry) is True
-    assert DOMAIN not in mock_hass.data
 
 
 @pytest.mark.asyncio
@@ -76,7 +70,7 @@ async def test_async_update_data_success(mock_hass, mock_config_entry):
 
         # Setup to get the coordinator
         await async_setup_entry(mock_hass, mock_config_entry)
-        coordinator = mock_hass.data[DOMAIN][mock_config_entry.entry_id]
+        coordinator = mock_config_entry.runtime_data
 
         data = await coordinator._async_update_data()
 
@@ -101,7 +95,7 @@ async def test_async_update_data_paused(mock_hass, mock_config_entry):
         patch("homeassistant.helpers.device_registry.async_get"),
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
-        coordinator = mock_hass.data[DOMAIN][mock_config_entry.entry_id]
+        coordinator = mock_config_entry.runtime_data
 
         # Case 1: Paused but NOT first run
         coordinator.data = {"cached": "data"}
@@ -125,7 +119,7 @@ async def test_async_update_data_resilience(mock_hass, mock_config_entry):
         patch("homeassistant.helpers.device_registry.async_get"),
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
-        coordinator = mock_hass.data[DOMAIN][mock_config_entry.entry_id]
+        coordinator = mock_config_entry.runtime_data
         coordinator.data = {"old": "data"}
 
         coordinator.api.get_all_data = AsyncMock(
@@ -175,3 +169,23 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
 
         if background_coro:
             await background_coro
+
+
+@pytest.mark.asyncio
+async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
+    """Test that ZTEAuthError triggers reauth."""
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI"),
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+        patch.object(mock_config_entry, "async_start_reauth") as mock_reauth,
+    ):
+        await async_setup_entry(mock_hass, mock_config_entry)
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = {"old": "data"}
+        coordinator.api.get_all_data = AsyncMock(side_effect=ZTEAuthError("Auth fail"))
+
+        with pytest.raises(UpdateFailed, match="Authentication failed"):
+            await coordinator._async_update_data()
+
+        mock_reauth.assert_called_once_with(mock_hass)

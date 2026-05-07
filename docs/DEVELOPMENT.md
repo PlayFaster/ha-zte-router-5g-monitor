@@ -93,3 +93,9 @@ To reach its current "modern" state, the project underwent several major refacto
 - **Token Persistence**: Currently, the `stok` (Session Token) is stored in memory. A fresh login is required on every integration restart.
 - **SMS Page Limits**: The `delete_all` feature is limited to the first 500 messages to avoid API timeouts.
 - **Service Integration**: Evaluate implementing a `send_sms` service to match the TP-Link integration's capability if the ZTE API supports it.
+
+---
+
+## Version Control
+
+- **v1.0.1** (2026-05-07) — Added diagnostics platform, reauthentication flow, runtime-data migration, parallel-updates, button exception handling, log-on-unavailability improvements, config-flow data descriptions, and expanded test coverage.
