@@ -107,6 +107,9 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 await _validate_credentials(self.hass, user_input)
 
+                if entry is None:
+                    return self.async_abort(reason="reauth_successful")
+
                 # Merge new credentials into existing entry options
                 updated_options = dict(entry.options)
                 updated_options.update(user_input)

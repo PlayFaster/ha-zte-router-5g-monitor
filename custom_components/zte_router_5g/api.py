@@ -122,7 +122,7 @@ class ZTERouterAPI:
         version = await self.get_version(timeout_sec=tout)
 
         if not self.password:
-            raise Exception("No password provided")
+            raise ZTEAuthError("No password provided")
         pass_hash = self._hash(self.password).upper()
         zte_pass = self._hash(pass_hash + ld).upper()
 
@@ -165,7 +165,7 @@ class ZTERouterAPI:
                 f"Login failed due to connection error: {e}"
             ) from e
 
-    async def get_all_data(self):
+    async def get_all_data(self, _retry: bool = True):
         """Fetch primary technical data."""
         if not self.stok:
             await self.login()
@@ -246,8 +246,14 @@ class ZTERouterAPI:
 
                 # Session expired check (router returns empty strings for core keys)
                 if data.get("network_type") == "" and data.get("signalbar") == "":
+                    if not _retry:
+                        _LOGGER.warning(
+                            "Session expiry re-login did not resolve empty data; "
+                            "returning partial response"
+                        )
+                        return data
                     await self.login()
-                    return await self.get_all_data()
+                    return await self.get_all_data(_retry=False)
                 return data
         except Exception as e:
             _LOGGER.error("Failed to fetch all data: %s", e)
@@ -341,10 +347,14 @@ class ZTERouterAPI:
             "Content-Type": "application/x-www-form-urlencoded",
         }
         url = f"{self.referer}goform/goform_set_cmd_process"
-        async with self.session.post(
-            url, headers=headers, data=payload, timeout=self.timeout, ssl=False
-        ) as r:
-            return r.status
+        try:
+            async with self.session.post(
+                url, headers=headers, data=payload, timeout=self.timeout, ssl=False
+            ) as r:
+                return r.status
+        except Exception:
+            self.stok = None
+            raise
 
     async def delete_all(self):
         """Delete all SMS."""

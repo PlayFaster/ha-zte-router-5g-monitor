@@ -30,8 +30,6 @@ _LOGGER = logging.getLogger(__name__)
 
 PARALLEL_UPDATES = 0
 
-PARALLEL_UPDATES = 0
-
 
 @dataclass(frozen=True, kw_only=True)
 class ZTESensorEntityDescription(SensorEntityDescription):
@@ -49,7 +47,7 @@ def _get_bytes_to_gb(val: Any) -> float | None:
         return None
     try:
         return round(float(val) / 1073741824, 2)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -62,7 +60,7 @@ def _get_uptime(data: Any) -> Any:
         seconds = int(float(uptime_seconds))
         boot_time = dt_util.now() - timedelta(seconds=seconds)
         return boot_time.replace(second=0, microsecond=0)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -78,7 +76,7 @@ def _get_total_sms(data: Any) -> int | None:
     ]
     try:
         return sum(int(data.get(k, 0)) for k in keys)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -89,7 +87,7 @@ def _safe_float(val: Any) -> float | None:
         return None
     try:
         return float(val)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -100,7 +98,7 @@ def _safe_int(val: Any) -> int | None:
         return None
     try:
         return int(float(val))
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -713,7 +711,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
 
         try:
             value = self.entity_description.value_fn(self.coordinator.data)
-        except KeyError, AttributeError:
+        except (KeyError, AttributeError):
             return None
 
         if value is None:
@@ -757,7 +755,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
                         data.get("sms_sim_draftbox_total", 0)
                     ),
                 }
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return {}
 
         if key == "msg_recent":
@@ -785,7 +783,9 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
         display_group = group_names.get(group, group.capitalize())
         sub_name = f"{self._entry.title} {display_group}"
 
-        sub_id_prefix = self.coordinator.imei if self.coordinator.imei else f"host_{host}"
+        sub_id_prefix = (
+            self.coordinator.imei if self.coordinator.imei else f"host_{host}"
+        )
 
         info = {
             "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},

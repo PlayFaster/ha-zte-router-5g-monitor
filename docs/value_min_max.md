@@ -16,22 +16,22 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 
 ## Validated Signal Limits
 
-| Metric Category    | Metric Name      | Min  | Max   | Action if Out of Bounds |
-| :----------------- | :--------------- | :--- | :---- | :---------------------- |
-| **Signal Power**   | RSRP (5G/LTE)    | -140 | -30   | Set to `Unavailable`    |
-|                    | RSRQ (5G/LTE)    | -40  | 0     | Set to `Unavailable`    |
-|                    | RSSI (5G/LTE)    | -120 | -20   | Set to `Unavailable`    |
-| **Signal Quality** | SNR / SINR       | -20  | 50    | Set to `Unavailable`    |
-| **Diagnostics**    | Signal Bar       | 0    | 5     | Set to `Unavailable`    |
-| **Data Usage**     | Monthly Download | 0    | 100TB | Set to `Unavailable`    |
-|                    | Monthly Upload   | 0    | 100TB | Set to `Unavailable`    |
-|                    | Monthly Total    | 0    | 100TB | Set to `Unavailable`    |
-|                    | Upload Speed     | 0    | —     | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
-|                    | Download Speed   | 0    | —     | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
-|                    | Session Sent     | 0    | —     | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
-|                    | Session Received | 0    | —     | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
-| **Device**         | Battery          | 0    | 100   | Physical percentage bounds.                  |
-| **SMS**            | Total Count      | 0    | 1000  | Set to `Unavailable`    |
+| Metric Category | Metric Name | Min | Max | Action if Out of Bounds |
+| :-- | :-- | :-- | :-- | :-- |
+| **Signal Power** | RSRP (5G/LTE) | -140 | -30 | Set to `Unavailable` |
+|  | RSRQ (5G/LTE) | -40 | 0 | Set to `Unavailable` |
+|  | RSSI (5G/LTE) | -120 | -20 | Set to `Unavailable` |
+| **Signal Quality** | SNR / SINR | -20 | 50 | Set to `Unavailable` |
+| **Diagnostics** | Signal Bar | 0 | 5 | Set to `Unavailable` |
+| **Data Usage** | Monthly Download | 0 | 100TB | Set to `Unavailable` |
+|  | Monthly Upload | 0 | 100TB | Set to `Unavailable` |
+|  | Monthly Total | 0 | 100TB | Set to `Unavailable` |
+|  | Upload Speed | 0 | — | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
+|  | Download Speed | 0 | — | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
+|  | Session Sent | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
+|  | Session Received | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
+| **Device** | Battery | 0 | 100 | Physical percentage bounds. |
+| **SMS** | Total Count | 0 | 1000 | Set to `Unavailable` |
 
 ---
 
