@@ -51,8 +51,8 @@ def test_button_device_info(mock_coordinator, mock_config_entry):
         mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
     )
 
-    assert reboot.device_info["identifiers"] == {(DOMAIN, "00:11:22:33:44:55_system")}
-    assert delete.device_info["identifiers"] == {(DOMAIN, "00:11:22:33:44:55_sms")}
+    assert reboot.device_info["identifiers"] == {(DOMAIN, "864155042229309_system")}
+    assert delete.device_info["identifiers"] == {(DOMAIN, "864155042229309_sms")}
 
 
 @pytest.mark.asyncio

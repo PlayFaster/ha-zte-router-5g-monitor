@@ -42,8 +42,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register the System root device early to prevent via_device warnings in platforms
     device_registry = dr.async_get(hass)
     host = entry.options[CONF_HOST]
-    mac = entry.data.get("mac")
-    sub_id_prefix = mac if mac else f"host_{host}"
+    imei = entry.data.get("imei")
+    sub_id_prefix = imei if imei else f"host_{host}"
 
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,

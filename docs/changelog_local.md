@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0-dev15] - 2026-05-07
+
+### Added
+
+- **12 new sensors** from live router interrogation (MC7010): IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID (System sub-device); eNodeB ID, Network Mode, PPP Status (Signal sub-device); Upload Speed, Download Speed, Session Sent, Session Received (Data sub-device). Entity count: 51 → 63.
+- **Guard bands** on new numeric sensors: Battery (0–100 %), Upload Speed (min 0 B/s), Download Speed (min 0 B/s), Session Sent (min 0 bytes), Session Received (min 0 bytes).
+- **Diagnostics redaction**: `imei`, `sim_imsi`, `sim_iccid` added to `TO_REDACT` in `diagnostics.py`.
+- **Translation entries**: 12 new sensor keys added to `strings.json` and `translations/en.json`.
+
+### Changed
+
+- **Stable device identity**: `unique_id` now uses IMEI (hardware-bound modem identifier) instead of host IP. `config_flow.py` `_validate_credentials` returns `imei`; `async_step_user` uses `info.get("imei") or host` as unique_id. Fallback to `host_{IP}` preserved for firmware that does not expose IMEI.
+- **`coordinator.mac` → `coordinator.imei`**: Renamed across `coordinator.py`, `__init__.py`, and all 5 platform `device_info` properties (`sensor.py`, `binary_sensor.py`, `button.py`, `switch.py`, `number.py`). Sub-device identifiers now use IMEI prefix.
+- **Tests updated**: `conftest.py` fixture renamed to `coordinator.imei = "864155042229309"`; device identifier assertions updated in `test_number.py`, `test_sensor.py`, `test_binary_sensor.py`, `test_button.py`.
+
 ## [3.0.0-dev14] - 2026-05-07
 
 ### Added

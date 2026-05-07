@@ -116,7 +116,7 @@ def test_sensor_error_handling(mock_coordinator, mock_config_entry):
 
 def test_sensor_device_info(mock_coordinator, mock_config_entry):
     """Test device_info for main (system), signal, data, and sms groups."""
-    mac = "00:11:22:33:44:55"
+    mac = "864155042229309"
 
     # System (Root) group sensor
     description = next(d for d in SENSOR_TYPES if d.key == "device_uptime")

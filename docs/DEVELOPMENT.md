@@ -62,14 +62,14 @@ To reach its current "modern" state, the project underwent several major refacto
 
 - **`DataUpdateCoordinator`**: Essential for preventing the router from being overwhelmed by simultaneous requests. Using `coordinator.async_request_refresh()` for write actions ensures immediate UI feedback.
 - **Sub-device Grouping**: Automatically routing entities to logical sub-devices (Signal, SMS, Data) via the `group` attribute in `EntityDescription`. This prevents "entity fatigue" in the main device view.
-- **Stable Identity Strategy**: Using hardcoded internal keys (e.g., `z5g_rsrp`) combined with the MAC address for `unique_id`, rather than relying on friendly names. This ensures entity settings (icons, hidden status) survive renames or firmware updates.
+- **Stable Identity Strategy**: Using hardcoded internal keys (e.g., `z5g_rsrp`) combined with the IMEI (or `host_{IP}` fallback) for `unique_id`, rather than relying on friendly names or the host IP. IMEI is hardware-bound and survives IP changes, SIM swaps, and firmware updates. This ensures entity settings (icons, hidden status) survive renames or router reconfiguration.
 - **Declarative Entities**: Using a `value_fn` lambda in `EntityDescription` allows for a completely generic entity class. This makes adding new sensors a "data entry" task rather than a coding task.
 - **Data Integrity (Guard Bands)**: Validating sensor values against realistic boundaries (e.g., -140 to -30 for RSRP) before committing them to the state machine. This ensures that transient API artifacts or hardware glitches don't trigger false automation states or corrupt historical graphs.
-- **Flat Identity Pattern**: By storing Model, Version, and MAC in `entry.data` and loading them into the coordinator at `__init__`, the integration provides stable metadata to the UI instantly at boot, even if the hardware is offline.
+- **Flat Identity Pattern**: By storing Model, Version, and IMEI in `entry.data` and loading them into the coordinator at `__init__`, the integration provides stable metadata to the UI instantly at boot, even if the hardware is offline.
 
 ## 5. Technical Pitfalls & Fixes
 
-- **ConfigEntry Data vs. Options**: In this integration, `entry.options` is used for user-changeable settings (credentials, polling interval), while `entry.data` is reserved for immutable hardware metadata (Model, MAC, Version).
+- **ConfigEntry Data vs. Options**: In this integration, `entry.options` is used for user-changeable settings (credentials, polling interval), while `entry.data` is reserved for immutable hardware metadata (Model, IMEI, Version).
   - _Fix_: Standardized all platforms to initialize from `entry.data` and update via `hass.config_entries.async_update_entry` only when hardware changes are detected.
 - **MockConfigEntry Immutability**: In Home Assistant tests, `MockConfigEntry.options` is a frozen property. Attempting to update it directly via `entry.options = {...}` fails with an `AttributeError`.
   - _Fix_: Use `object.__setattr__(entry, "options", new_options)` in test code to bypass the frozen attribute restriction.
@@ -99,3 +99,4 @@ To reach its current "modern" state, the project underwent several major refacto
 ## Version Control
 
 - **v1.0.1** (2026-05-07) — Added diagnostics platform, reauthentication flow, runtime-data migration, parallel-updates, button exception handling, log-on-unavailability improvements, config-flow data descriptions, and expanded test coverage.
+- **v1.0.2** (2026-05-07) — Replaced host-IP unique_id with IMEI-based stable device identity. Added 12 new sensors (System: IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID; Signal: eNodeB ID, Network Mode, PPP Status; Data: Upload Speed, Download Speed, Session Sent, Session Received). Guard bands applied to Battery (0–100) and throughput/session-byte sensors (min 0). Added sensitive identifiers (imei, sim_imsi, sim_iccid) to diagnostics redaction.

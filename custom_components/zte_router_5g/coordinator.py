@@ -31,7 +31,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # This ensures device info is stable from boot (The "Flat Identity" pattern).
         self.model = entry.data.get("model", "ZTE Router")
         self.sw_version = entry.data.get("sw_version")
-        self.mac = entry.data.get("mac")
+        self.imei = entry.data.get("imei")
 
         # Determine the initial update interval from entry options
         scan_interval = entry.options.get(CONF_SCAN_INTERVAL, 180)

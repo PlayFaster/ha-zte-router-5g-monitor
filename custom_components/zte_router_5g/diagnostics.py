@@ -14,6 +14,9 @@ TO_REDACT = {
     "username",
     "wan_ipaddr",
     "lan_ipaddr",
+    "imei",
+    "sim_imsi",
+    "sim_iccid",
 }
 
 

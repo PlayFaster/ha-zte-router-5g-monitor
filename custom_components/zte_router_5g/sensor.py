@@ -14,7 +14,9 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     CONF_HOST,
+    PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    UnitOfDataRate,
     UnitOfInformation,
 )
 from homeassistant.helpers.entity import EntityCategory
@@ -154,6 +156,53 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
         value_fn=lambda data: None,  # Handled in property
+    ),
+    ZTESensorEntityDescription(
+        key="imei",
+        name="IMEI",
+        icon="mdi:cellphone-information",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: data.get("imei"),
+    ),
+    ZTESensorEntityDescription(
+        key="hardware_version",
+        name="Hardware Version",
+        icon="mdi:chip",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        value_fn=lambda data: data.get("hardware_version"),
+    ),
+    ZTESensorEntityDescription(
+        key="battery_value",
+        name="Battery",
+        icon="mdi:battery",
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+        min_limit=0,
+        max_limit=100,
+        group="system",
+        value_fn=lambda data: _safe_int(data.get("battery_value")),
+    ),
+    ZTESensorEntityDescription(
+        key="sim_imsi",
+        name="SIM IMSI",
+        icon="mdi:sim",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: data.get("sim_imsi"),
+    ),
+    ZTESensorEntityDescription(
+        key="sim_iccid",
+        name="SIM ICCID",
+        icon="mdi:sim",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: data.get("sim_iccid"),
     ),
     # --- Signal Sub-device ---
     ZTESensorEntityDescription(
@@ -445,6 +494,30 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="signal",
         value_fn=lambda data: _safe_float(data.get("rscp")),
     ),
+    ZTESensorEntityDescription(
+        key="enodeb_id",
+        name="eNodeB ID",
+        icon="mdi:transmission-tower",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        value_fn=lambda data: data.get("enodeb_id"),
+    ),
+    ZTESensorEntityDescription(
+        key="net_select",
+        name="Network Mode",
+        icon="mdi:network",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        value_fn=lambda data: data.get("net_select"),
+    ),
+    ZTESensorEntityDescription(
+        key="ppp_status",
+        name="PPP Status",
+        icon="mdi:connection",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        value_fn=lambda data: data.get("ppp_status"),
+    ),
     # --- Data Sub-device ---
     # Legacy GB Sensors (Disabled by default, preserved for history)
     ZTESensorEntityDescription(
@@ -526,6 +599,50 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             if data.get("monthly_tx_bytes") and data.get("monthly_rx_bytes")
             else None
         ),
+    ),
+    ZTESensorEntityDescription(
+        key="realtime_tx_thrpt",
+        name="Upload Speed",
+        icon="mdi:upload-network",
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+        min_limit=0,
+        group="data",
+        value_fn=lambda data: _safe_int(data.get("realtime_tx_thrpt")),
+    ),
+    ZTESensorEntityDescription(
+        key="realtime_rx_thrpt",
+        name="Download Speed",
+        icon="mdi:download-network",
+        device_class=SensorDeviceClass.DATA_RATE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
+        min_limit=0,
+        group="data",
+        value_fn=lambda data: _safe_int(data.get("realtime_rx_thrpt")),
+    ),
+    ZTESensorEntityDescription(
+        key="realtime_tx_bytes",
+        name="Session Sent",
+        icon="mdi:upload-network",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        min_limit=0,
+        group="data",
+        value_fn=lambda data: _safe_int(data.get("realtime_tx_bytes")),
+    ),
+    ZTESensorEntityDescription(
+        key="realtime_rx_bytes",
+        name="Session Received",
+        icon="mdi:download-network",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        min_limit=0,
+        group="data",
+        value_fn=lambda data: _safe_int(data.get("realtime_rx_bytes")),
     ),
     # --- SMS Sub-device ---
     ZTESensorEntityDescription(
@@ -668,7 +785,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
         display_group = group_names.get(group, group.capitalize())
         sub_name = f"{self._entry.title} {display_group}"
 
-        sub_id_prefix = self.coordinator.mac if self.coordinator.mac else f"host_{host}"
+        sub_id_prefix = self.coordinator.imei if self.coordinator.imei else f"host_{host}"
 
         info = {
             "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},
