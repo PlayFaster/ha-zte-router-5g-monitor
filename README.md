@@ -2,21 +2,151 @@
 
 [![HACS Integration](https://img.shields.io/badge/HACS-Integration-orange.svg)](https://hacs.xyz/) [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=homeassistant&logoColor=white)](https://hacs.xyz/docs/faq/custom_repositories) [![Latest Release](https://img.shields.io/github/v/release/PlayFaster/ha-zte-router-5g-monitor?label=Release&logo=github)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/releases) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![Validate](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml/badge.svg)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml) ![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PlayFaster/ha-zte-router-5g-monitor/python-coverage-comment-action-data/coverage-badge.json) ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/PlayFaster/0376d580e72d0abc493665a80396f701/raw/coverage.json) [![Last Commit](https://img.shields.io/github/last-commit/PlayFaster/ha-zte-router-5g-monitor?label=Last%20commit)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/commits/main)
 
-Home Assistant integration for ZTE MC7010 5G Router that provides detailed signal statistics, data usage tracking, and SMS management.
+Home Assistant integration for **ZTE 5G/LTE Routers** providing detailed signal statistics, data usage tracking, and SMS management.
 
-## Supported Models
+> [!NOTE]
+>
+> **Is this the right integration for you?**
+>
+> - **If you own a ZTE MC7010** and want to monitor your 5G/LTE connection quality, data usage, and manage SMS messages directly from Home Assistant, then **yes**.
+> - **This integration is for you if** you want:
+>   - **Advanced Signal Diagnostics** — Real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
+>   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
+>   - **SMS Management** — View recent message content and delete the mailbox directly from HA.
+>
+> This project is optimized for the ZTE MC7010 5G Outdoor CPE but may work with other similar ZTE devices.
 
-- **ZTE MC7010** – 5G Outdoor CPE. This works with, and has only been tested with, ZTE MC7010. It may work with other similar ZTE devices.
+## 🔧 Compatibility & Requirements
+
+**Router Hardware:**
+
+- **Tested on**: **ZTE MC7010** – 5G Outdoor CPE.
+- **Expected compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
+- **Not Supported**: Non-ZTE hardware.
+
+**Network:**
+
+- Local network access to the router is required.
+
+**Home Assistant Version:**
+
+- Minimum: Home Assistant **2024.6.0**
+
+---
 
 ## ✅ Features
 
-- **Signal Monitoring**: Real-time RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
-- **Data Tracking**: Monthly download, upload, and total usage.
-- **SMS Management**: View recent messages and delete the mailbox directly from HA.
-- **Categorized Devices**: Separate devices for Router Stats, Data Usage, Signal Monitoring and SMS Services.
-- **Resilient Polling**: Includes a hybrid retry logic (30s retry) and stale-data grace periods to prevent "Unavailable" flickers during router reboots.
+### 📡 Advanced 5G/LTE Diagnostics
 
-- **Pause Polling**: Switch to allow uninterrupted access to the router webui if needed (zte only allow a single login).
+- **Detailed Signal Metrics**: RSRP, RSRQ, RSSI, and SNR for both the 5G NR and the LTE anchor cell.
+- **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active frequency bands/channels.
+- **Carrier Aggregation**: Track CA status and primary/secondary band bandwidths.
+
+### 📊 Comprehensive Monitoring
+
+- **Sub-Device Organisation**: Entities are automatically grouped into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+  - **System**: Core router info (Firmware, IMEI, Hardware Version), WAN/LAN IPs, uptime, and battery status.
+  - **Signal**: Extensive 5G NR and LTE signal data including RSRP, RSRQ, SNR, cell ID, and band info.
+  - **Data**: Real-time upload/download speeds, monthly totals (Bytes and GB), and session-based counters.
+  - **SMS**: Unread message count, total counts per storage bank, and the content of the most recent message.
+
+### 📋 Essential Router Management
+
+- **Router Management**: Reboot the device directly from the HA UI.
+- **SMS Management**: View recent messages and a "Delete All" button to clear the mailbox.
+- **100% Local**: No cloud account or internet access required.
+
+---
+
+### 💡 Useful Features
+
+- **Pause Polling**: Switch to halt polling when you need uninterrupted access to the router's web UI (ZTE only allows a single active login session).
+- **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour) via a number entity or automation.
+
+> [!TIP]
+>
+> **Polling Interval can be controlled dynamically, via automation**
+>
+> - Polling Interval is available as a number control within the device, you can change it via automation, if desired.
+> - Set it to 30 seconds during periods of heavy use to examine connection quality and set it higher afterwards, to avoid taxing the router and your Home Assistant database.
+
+---
+
+## 🏗️ Under the Hood
+
+- **Resilient Polling**: Includes a hybrid retry logic (30s retry) and stale-data grace periods to prevent "Unavailable" flickers during router reboots.
+- **Data Validation**: Router values are checked for validity (guard limits), with out-of-range sensors being marked as unknown.
+- **Identity Strategy**: Uses the hardware IMEI as the unique identifier for stable entity tracking across reboots and IP changes.
+
+---
+
+## 📊 What You Get
+
+This integration provides **63 entities** grouped into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+
+| Type | Count | Primary Functions |
+| :-- | :-- | :-- |
+| **Sensors** | 59 | Signal strength, data usage, uptime, SMS content, device info |
+| **Switches** | 1 | Pause Polling |
+| **Buttons** | 2 | Reboot, Delete All SMS |
+| **Controls** | 1 | Polling Interval |
+
+---
+
+## 💡 Example Automations
+
+### Forward Incoming SMS to Mobile
+
+This automation fires when a new SMS is detected and forwards the content to your mobile phone.
+
+```yaml
+alias: "ZTE: Forward SMS to Mobile"
+triggers:
+  - trigger: state
+    entity_id: sensor.zte_router_5g_recent_msg
+actions:
+  - action: notify.mobile_app_your_phone
+    data:
+      title: "New SMS from {{ state_attr('sensor.zte_router_5g_recent_msg', 'number') }}"
+      message: "{{ states('sensor.zte_router_5g_recent_msg') }}"
+```
+
+### Data Usage Alert
+
+Monitor your data consumption and get notified when you approach your monthly limit.
+
+```yaml
+alias: "ZTE: High Data Usage Alert"
+triggers:
+  - trigger: numeric_state
+    entity_id: sensor.zte_router_5g_monthly_total_bytes_raw
+    above: 500000000000 # 500 GB (in bytes)
+actions:
+  - action: notify.mobile_app_your_phone
+    data:
+      title: "ZTE Data Alert"
+      message: "Monthly data usage has exceeded 500GB."
+```
+
+### Signal Quality Alert
+
+Monitor for poor connection quality based on 5G status and signal metrics.
+
+```yaml
+alias: "ZTE: Poor Signal Quality Alert"
+triggers:
+  - trigger: numeric_state
+    entity_id: sensor.zte_router_5g_5g_snr
+    below: 5
+    for: "00:05:00"
+actions:
+  - action: notify.mobile_app_your_phone
+    data:
+      title: "Poor ZTE Signal"
+      message: "5G SNR has been below 5dB for over 5 minutes."
+```
+
+---
 
 ## 📸 Screenshots
 
@@ -36,13 +166,9 @@ Home Assistant integration for ZTE MC7010 5G Router that provides detailed signa
 
 ![SMS](.github/images/zte_5g_sms_info.png)
 
+---
+
 ## ✨ Installation
-
-### Requirements
-
-- **Home Assistant:** 2024.6.0 or later (uses `runtime_data`, background tasks API)
-- **Python:** 3.12 or later
-- **Router Firmware:** Tested on MC7010 firmware V1.0.0+. Other ZTE 5G CPE firmware versions may work but are untested.
 
 ### HACS (Recommended)
 
@@ -61,7 +187,9 @@ Home Assistant integration for ZTE MC7010 5G Router that provides detailed signa
 3. Restart Home Assistant
 4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
 
-## Configuration
+---
+
+## ⚙️ Configuration
 
 ### Initial Setup
 
@@ -82,12 +210,36 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 | Username | – | – | Router login username. |
 | Password | – | – | Admin password (update if changed on the router). |
 
-### Additional Controls
+---
 
-The integration provides these entity-level controls:
+## ❓ FAQ & Troubleshooting
 
-- **Pause Polling** (switch) — Temporarily stops data polling. Useful when you need exclusive access to the router's web UI (ZTE only allows a single active session).
-- **Polling Interval** (number entity) — Adjust the scan interval dynamically from the HA UI without reopening the options flow.
+### **"Failed to connect to router" Error**
+
+- Verify the IP address is correct.
+- Confirm the username and password are correct (ZTE default is usually `admin`).
+- Ensure the router is powered on and reachable from your Home Assistant instance.
+
+### **Some sensors showing "Unknown"**
+
+- Most sensors showing okay with some unknown **is expected behaviour**.
+  - The integration fetches everything it can from the router.
+  - Not every metric is provided by every ISP or firmware version.
+  - 5G NR sensors will show "Unknown" when the router is operating in LTE-only mode.
+
+### **All sensors showing "Unavailable" or "Unknown"**
+
+- This is normal during a router reboot or if the router is unreachable.
+  - The integration will automatically recover once the connection is restored.
+- If it does not recover, check if you can log into the web UI of the router.
+
+### **Why can't I access the router web UI while this is connected?**
+
+- ZTE routers typically only allow **one simultaneous login session**.
+- Use the **Pause Polling** switch in Home Assistant to halt polling before you log into the web UI.
+- Resume polling when done!
+
+---
 
 ## 🗑️ Removal
 
@@ -116,7 +268,7 @@ This is a **personal project**. Support and updates are provided on a **"best-ef
 
 ## 📄 License [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-This project uses the Apache License, Version 2.0, for more details see the [license](LICENSE) document.
+This project is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 
 ---
 

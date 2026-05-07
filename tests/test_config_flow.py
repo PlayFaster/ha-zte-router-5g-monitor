@@ -53,7 +53,7 @@ async def test_config_flow_user_step_success():
 
     with patch(
         "custom_components.zte_router_5g.config_flow._validate_credentials",
-        return_value=None,
+        return_value={"imei": "test_imei", "model": "test_model", "sw_version": "1.0"},
     ):
         result = await flow.async_step_user(user_input)
 
@@ -286,6 +286,47 @@ async def test_reauth_flow_cannot_connect():
         )
 
     assert result["errors"] == {"base": "cannot_connect"}
+
+
+@pytest.mark.asyncio
+async def test_reauth_confirm_unknown_error():
+    """Test reauth confirm with unexpected exception returns error."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {"entry_id": "test_entry"}
+
+    mock_entry = MagicMock()
+    flow.hass.config_entries.async_get_entry.return_value = mock_entry
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=Exception("unexpected"),
+    ):
+        result = await flow.async_step_reauth_confirm(
+            {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "pass"}
+        )
+
+    assert result["errors"] == {"base": "unknown"}
+
+
+@pytest.mark.asyncio
+async def test_reauth_confirm_entry_gone():
+    """Test reauth confirm aborts when entry disappears before update."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {"entry_id": "test_entry"}
+    flow.hass.config_entries.async_get_entry.return_value = None
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        return_value={"imei": "test_imei", "model": "test_model", "sw_version": "1.0"},
+    ):
+        result = await flow.async_step_reauth_confirm(
+            {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "pass"}
+        )
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reauth_successful"
 
 
 @pytest.mark.asyncio
