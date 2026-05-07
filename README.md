@@ -63,6 +63,22 @@ Setup is handled entirely via the UI. You will need:
 - Router Username
 - Admin Password
 
+## 🗑️ Removal
+
+To remove the integration from Home Assistant:
+
+1. Go to **Settings > Devices & Services**.
+2. Find the **ZTE Router 5G Monitor** card.
+3. Click the **three dots** (⋮) and select **Delete**.
+4. Confirm deletion.
+
+To fully uninstall (HACS):
+
+1. Go to **HACS > Integrations**.
+2. Find **ZTE Router 5G Monitor**.
+3. Click the **three dots** (⋮) and select **Remove**.
+4. Restart Home Assistant.
+
 ## 📝 Maintenance Status
 
 This is a **personal project**. Support and updates are provided on a **"best-effort"** basis only. While I use this integration daily and aim to keep it functional with the latest Home Assistant releases, I cannot guarantee immediate fixes for issues or compatibility with all router firmware versions.
