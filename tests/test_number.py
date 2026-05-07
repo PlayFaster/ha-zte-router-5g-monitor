@@ -115,6 +115,7 @@ async def test_async_debounced_apply_exception(
 @pytest.mark.asyncio
 async def test_device_info_system_group(mock_coordinator, mock_config_entry):
     """Test device_info for system group (no via_device)."""
+    mock_coordinator.api.protocol = "http"
     number = ZTEPollingInterval(
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
     )

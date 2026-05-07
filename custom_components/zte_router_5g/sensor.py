@@ -46,7 +46,7 @@ def _get_bytes_to_gb(val: Any) -> float | None:
         return None
     try:
         return round(float(val) / 1073741824, 2)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -59,7 +59,7 @@ def _get_uptime(data: Any) -> Any:
         seconds = int(float(uptime_seconds))
         boot_time = dt_util.now() - timedelta(seconds=seconds)
         return boot_time.replace(second=0, microsecond=0)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -75,7 +75,7 @@ def _get_total_sms(data: Any) -> int | None:
     ]
     try:
         return sum(int(data.get(k, 0)) for k in keys)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -86,7 +86,7 @@ def _safe_float(val: Any) -> float | None:
         return None
     try:
         return float(val)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -97,7 +97,7 @@ def _safe_int(val: Any) -> int | None:
         return None
     try:
         return int(float(val))
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         return None
 
 
@@ -710,7 +710,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
 
         try:
             value = self.entity_description.value_fn(self.coordinator.data)
-        except (KeyError, AttributeError, ValueError):
+        except KeyError, AttributeError, ValueError:
             return None
 
         if value is None:
@@ -754,7 +754,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
                         data.get("sms_sim_draftbox_total", 0)
                     ),
                 }
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return {}
 
         if key == "msg_recent":

@@ -213,11 +213,19 @@ async def test_coordinator_metadata_change(
             "custom_components.zte_router_5g.coordinator.get_router_model",
             return_value="MC888",
         ),
+        patch(
+            "custom_components.zte_router_5g.coordinator.dr.async_get"
+        ) as mock_dr_get,
     ):
+        mock_dev_reg = MagicMock()
+        mock_dr_get.return_value = mock_dev_reg
+        mock_dev_reg.async_get_device.return_value = None  # device doesn't exist yet
+
         await coordinator._async_update_data()
         assert coordinator.sw_version == "NEW_VER"
         assert coordinator.model == "MC888"
-        assert mock_config_entry.data["sw_version"] == "NEW_VER"
+        # sw_version is no longer written to entry.data; it's updated in device registry
+        mock_dev_reg.async_get_device.assert_called_once()
 
 
 @pytest.mark.asyncio
