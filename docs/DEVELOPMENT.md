@@ -11,7 +11,8 @@ The integration follows the standard Home Assistant Custom Component pattern, op
 ### Core Files (`custom_components/zte_router_5g/`)
 
 - **`api.py`**: Async wrapper for the router's internal `goform` API using `aiohttp`. Handles Z-hashed authentication, hex decoding, and protocol detection (HTTP/HTTPS).
-- **`coordinator.py`**: Specialized `DataUpdateCoordinator` implementation. Centralizes polling logic to ensure only one API call is made per refresh interval, distributing data to all entities. Includes retry logic and "Pause Polling" detection.
+- **`coordinator.py`**: Specialized `DataUpdateCoordinator` implementation. Centralizes polling logic to ensure only one API call is made per refresh interval, distributing data to all entities. Includes retry logic, "Pause Polling" detection, and device registry updates for hardware metadata changes.
+- **`helpers.py`**: Shared helper functions (`get_router_model`, `build_device_info` for sub-device grouping).
 - **`__init__.py`**: Manages the integration lifecycle (setup/unload). Also handles background initialization to prevent blocking HA startup.
 - **`sensor.py`**: Extracts technical metrics using declarative `value_fn` callbacks and handles transformations (e.g., Bytes to GB, Uptime to ISO Datetime).
 - **`binary_sensor.py`**: Maps boolean states (e.g., `best_connection` logic).
@@ -63,6 +64,8 @@ To reach its current "modern" state, the project underwent several major refacto
 - **`DataUpdateCoordinator`**: Essential for preventing the router from being overwhelmed by simultaneous requests. Using `coordinator.async_request_refresh()` for write actions ensures immediate UI feedback.
 - **Sub-device Grouping**: Automatically routing entities to logical sub-devices (Signal, SMS, Data) via the `group` attribute in `EntityDescription`. This prevents "entity fatigue" in the main device view.
 - **Stable Identity Strategy**: Using hardcoded internal keys (e.g., `z5g_rsrp`) combined with the IMEI (or `host_{IP}` fallback) for `unique_id`, rather than relying on friendly names or the host IP. IMEI is hardware-bound and survives IP changes, SIM swaps, and firmware updates. This ensures entity settings (icons, hidden status) survive renames or router reconfiguration.
+- **Shared `build_device_info()` Helper**: All five platform files (`sensor.py`, `binary_sensor.py`, `button.py`, `switch.py`, `number.py`) delegate `device_info` to a single shared function in `helpers.py`. This eliminates the 5-way copy-paste drift and ensures identifiers, naming, manufacturer, model, version, and `configuration_url` (using the detected protocol) are always consistent. Adding a new platform requires no `device_info` boilerplate.
+- **Translation-Based Naming**: Sensors use `translation_key="<key>"` instead of hardcoded `name="..."`. This makes `strings.json` the canonical display-name source, enables multi-language support, and ensures display names can be changed without redeploying the integration code.
 - **Declarative Entities**: Using a `value_fn` lambda in `EntityDescription` allows for a completely generic entity class. This makes adding new sensors a "data entry" task rather than a coding task.
 - **Data Integrity (Guard Bands)**: Validating sensor values against realistic boundaries (e.g., -140 to -30 for RSRP) before committing them to the state machine. This ensures that transient API artifacts or hardware glitches don't trigger false automation states or corrupt historical graphs.
 - **Flat Identity Pattern**: By storing Model, Version, and IMEI in `entry.data` and loading them into the coordinator at `__init__`, the integration provides stable metadata to the UI instantly at boot, even if the hardware is offline.
@@ -70,7 +73,7 @@ To reach its current "modern" state, the project underwent several major refacto
 ## 5. Technical Pitfalls & Fixes
 
 - **ConfigEntry Data vs. Options**: In this integration, `entry.options` is used for user-changeable settings (credentials, polling interval), while `entry.data` is reserved for immutable hardware metadata (Model, IMEI, Version).
-  - _Fix_: Standardized all platforms to initialize from `entry.data` and update via `hass.config_entries.async_update_entry` only when hardware changes are detected.
+  - _Fix_: Standardized all platforms to initialize from `entry.data`. Hardware metadata changes detected mid-poll are propagated via the device registry (`device_registry.async_update_device`) rather than rewriting `entry.data`, avoiding unnecessary disk writes and maintaining the principle that `entry.data` is immutable after initial setup.
 - **MockConfigEntry Immutability**: In Home Assistant tests, `MockConfigEntry.options` is a frozen property. Attempting to update it directly via `entry.options = {...}` fails with an `AttributeError`.
   - _Fix_: Use `object.__setattr__(entry, "options", new_options)` in test code to bypass the frozen attribute restriction.
 - **Background Task Mocking**: When `hass.async_create_task` is mocked, tasks created via `entry.async_create_background_task` may not execute, leading to `RuntimeWarning: coroutine was never awaited`.
@@ -91,6 +94,9 @@ To reach its current "modern" state, the project underwent several major refacto
 ## 7. Technical Debt & Future Work
 
 - **Token Persistence**: Currently, the `stok` (Session Token) is stored in memory. A fresh login is required on every integration restart.
+- **Translation-Key Naming**: When migrating from `name="..."` to `translation_key="..."`, both `strings.json` and `translations/en.json` must be kept in sync. `strings.json` is the authoritative source; `translations/en.json` is the runtime-loaded file. Adding a sensor requires adding entries to both files, not just the Python code.
+- **Device Registry Lookup for Metadata Updates**: When the coordinator detects hardware metadata changes (model, firmware version), it looks up the system device by identifier `(DOMAIN, f"{sub_id_prefix}_system")` in the device registry. This avoids needing to pass device IDs around but requires that the device was already created by an entity's `device_info` property in a previous update cycle. If the device doesn't exist yet (first poll), the update is safely skipped.
+
 - **SMS Page Limits**: The `delete_all` feature is limited to the first 500 messages to avoid API timeouts.
 - **Service Integration**: Evaluate implementing a `send_sms` service to match the TP-Link integration's capability if the ZTE API supports it.
 
@@ -100,3 +106,4 @@ To reach its current "modern" state, the project underwent several major refacto
 
 - **v1.0.1** (2026-05-07) — Added diagnostics platform, reauthentication flow, runtime-data migration, parallel-updates, button exception handling, log-on-unavailability improvements, config-flow data descriptions, and expanded test coverage.
 - **v1.0.2** (2026-05-07) — Replaced host-IP unique_id with IMEI-based stable device identity. Added 12 new sensors (System: IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID; Signal: eNodeB ID, Network Mode, PPP Status; Data: Upload Speed, Download Speed, Session Sent, Session Received). Guard bands applied to Battery (0–100) and throughput/session-byte sensors (min 0). Added sensitive identifiers (imei, sim_imsi, sim_iccid) to diagnostics redaction.
+- **v1.0.3** (2026-05-07) — Code review bugfix pass (13 items). Extracted 5-way duplicated `device_info` into shared `build_device_info()` helper. Migrated `configuration_url` to dynamic protocol. Replaced mid-poll `async_update_entry` with device registry updates. Migrated 58 sensor descriptions to `translation_key=` naming. Added `async_will_remove_from_hass` for debounce task cleanup. Added recursion guard to `get_all_data`. Fixed null deref in reauth, Python 2 `except` syntax, `ValueError` escape, bare Exception, `delete_sms()` stok clearing, orphaned test body, and weak type annotation in diagnostics.
