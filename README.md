@@ -38,6 +38,12 @@ Home Assistant integration for ZTE MC7010 5G Router that provides detailed signa
 
 ## ✨ Installation
 
+### Requirements
+
+- **Home Assistant:** 2024.6.0 or later (uses `runtime_data`, background tasks API)
+- **Python:** 3.12 or later
+- **Router Firmware:** Tested on MC7010 firmware V1.0.0+. Other ZTE 5G CPE firmware versions may work but are untested.
+
 ### HACS (Recommended)
 
 1. Add this repository as a **Custom Repository** in HACS:
@@ -57,11 +63,31 @@ Home Assistant integration for ZTE MC7010 5G Router that provides detailed signa
 
 ## Configuration
 
+### Initial Setup
+
 Setup is handled entirely via the UI. You will need:
 
-- Router IP Address (e.g., 192.168.0.1)
-- Router Username
-- Admin Password
+- **Host** — Router IP Address (e.g., 192.168.0.1)
+- **Username** — Router login username (optional, default: admin)
+- **Password** — Admin password for the router web interface
+
+### Runtime Options
+
+After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor > Configure** to adjust:
+
+| Option | Default | Range | Description |
+| --- | --- | --- | --- |
+| Polling Interval | 180 s | 30–3600 s (step: 30 s) | How often the integration fetches data from the router. Lower values give more responsive updates but increase router load. |
+| Host | – | – | Router IP address (change if the router's LAN IP changes). |
+| Username | – | – | Router login username. |
+| Password | – | – | Admin password (update if changed on the router). |
+
+### Additional Controls
+
+The integration provides these entity-level controls:
+
+- **Pause Polling** (switch) — Temporarily stops data polling. Useful when you need exclusive access to the router's web UI (ZTE only allows a single active session).
+- **Polling Interval** (number entity) — Adjust the scan interval dynamically from the HA UI without reopening the options flow.
 
 ## 🗑️ Removal
 

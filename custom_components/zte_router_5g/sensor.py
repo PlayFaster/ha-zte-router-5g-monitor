@@ -26,6 +26,10 @@ from .coordinator import ZTERouterDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+PARALLEL_UPDATES = 0
+
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True, kw_only=True)
 class ZTESensorEntityDescription(SensorEntityDescription):
@@ -552,7 +556,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the sensor platform."""
-    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
     async_add_entities(
         [
             ZTERouterSensor(coordinator, entry, description)

@@ -13,6 +13,10 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 
+PARALLEL_UPDATES = 0
+
+PARALLEL_UPDATES = 0
+
 
 @dataclass(frozen=True, kw_only=True)
 class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
@@ -33,7 +37,7 @@ BEST_CONN_DESCRIPTION = ZTEBinarySensorEntityDescription(
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the binary sensor platform."""
-    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
     # Pass the description object into the sensor
     async_add_entities(
         [ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION)]

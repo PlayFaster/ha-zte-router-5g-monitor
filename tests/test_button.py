@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.zte_router_5g.button import (
     DELETE_SMS_DESCRIPTION,
@@ -60,10 +61,34 @@ async def test_button_setup_entry():
     hass = MagicMock()
     entry = MagicMock()
     entry.entry_id = "test"
-    coordinator = MagicMock()
-    coordinator.api = MagicMock()
-    hass.data = {DOMAIN: {"test": coordinator}}
+    entry.runtime_data = MagicMock()
 
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
     async_add_entities.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_reboot_button_raises_on_failure(mock_coordinator, mock_config_entry):
+    """Test that reboot button raises HomeAssistantError on API failure."""
+    mock_api = MagicMock()
+    mock_api.reboot = AsyncMock(side_effect=Exception("Connection lost"))
+    mock_coordinator.api = mock_api
+    button = ZTERebootButton(mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION)
+
+    with pytest.raises(HomeAssistantError, match="Reboot failed"):
+        await button.async_press()
+
+
+@pytest.mark.asyncio
+async def test_delete_sms_button_raises_on_failure(mock_coordinator, mock_config_entry):
+    """Test that delete SMS button raises HomeAssistantError on API failure."""
+    mock_api = MagicMock()
+    mock_api.delete_all = AsyncMock(side_effect=Exception("Connection lost"))
+    mock_coordinator.api = mock_api
+    button = ZTEDeleteAllSMSButton(
+        mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
+    )
+
+    with pytest.raises(HomeAssistantError, match="Delete SMS failed"):
+        await button.async_press()

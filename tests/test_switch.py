@@ -48,8 +48,7 @@ async def test_switch_setup_entry():
     entry = MagicMock()
     entry.entry_id = "test"
     entry.options = {CONF_STOP_POLLING: False}
-    coordinator = MagicMock()
-    hass.data = {DOMAIN: {"test": coordinator}}
+    entry.runtime_data = MagicMock()
 
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)

@@ -49,8 +49,7 @@ async def test_binary_sensor_setup_entry():
     hass = MagicMock()
     entry = MagicMock()
     entry.entry_id = "test"
-    coordinator = MagicMock()
-    hass.data = {DOMAIN: {"test": coordinator}}
+    entry.runtime_data = MagicMock()
 
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
