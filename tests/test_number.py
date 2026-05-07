@@ -5,6 +5,7 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.helpers.entity import EntityCategory
 
 from custom_components.zte_router_5g.const import CONF_SCAN_INTERVAL, DOMAIN
 from custom_components.zte_router_5g.number import (
@@ -13,7 +14,6 @@ from custom_components.zte_router_5g.number import (
     ZTEPollingInterval,
     async_setup_entry,
 )
-from homeassistant.helpers.entity import EntityCategory
 
 
 @pytest.mark.asyncio
@@ -83,9 +83,7 @@ async def test_polling_interval_cancel_previous_task(
 
 
 @pytest.mark.asyncio
-async def test_async_debounced_apply_cancelled(
-    mock_coordinator, mock_config_entry
-):
+async def test_async_debounced_apply_cancelled(mock_coordinator, mock_config_entry):
     """Test that CancelledError is silently caught (lines 126-128)."""
     number = ZTEPollingInterval(
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180

@@ -7,7 +7,7 @@ from typing import Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from .coordinator import ZTERouterDataUpdateCoordinator
 
 TO_REDACT = {
     "password",
@@ -24,7 +24,7 @@ async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
-    coordinator: DataUpdateCoordinator = entry.runtime_data
+    coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
     diagnostics_data = {
         "entry": {

@@ -15,8 +15,6 @@ from .coordinator import ZTERouterDataUpdateCoordinator
 
 PARALLEL_UPDATES = 0
 
-PARALLEL_UPDATES = 0
-
 
 @dataclass(frozen=True, kw_only=True)
 class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
@@ -99,7 +97,9 @@ class ZTEBestConnectionSensor(
         display_group = group_names.get(group, group.capitalize())
         sub_name = f"{self._entry.title} {display_group}"
 
-        sub_id_prefix = self.coordinator.imei if self.coordinator.imei else f"host_{host}"
+        sub_id_prefix = (
+            self.coordinator.imei if self.coordinator.imei else f"host_{host}"
+        )
 
         info = {
             "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},

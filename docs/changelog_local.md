@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Stable device identity**: `unique_id` now uses IMEI (hardware-bound modem identifier) instead of host IP. `config_flow.py` `_validate_credentials` returns `imei`; `async_step_user` uses `info.get("imei") or host` as unique_id. Fallback to `host_{IP}` preserved for firmware that does not expose IMEI.
+- **Stable device identity**: `unique_id` now uses IMEI (hardware-bound modem identifier) instead of host IP. `config_flow.py` `_validate_credentials` returns `imei`; `async_step_user` uses `info.get("imei") or host` as unique*id. Fallback to `host*{IP}` preserved for firmware that does not expose IMEI.
 - **`coordinator.mac` → `coordinator.imei`**: Renamed across `coordinator.py`, `__init__.py`, and all 5 platform `device_info` properties (`sensor.py`, `binary_sensor.py`, `button.py`, `switch.py`, `number.py`). Sub-device identifiers now use IMEI prefix.
 - **Tests updated**: `conftest.py` fixture renamed to `coordinator.imei = "864155042229309"`; device identifier assertions updated in `test_number.py`, `test_sensor.py`, `test_binary_sensor.py`, `test_button.py`.
 
