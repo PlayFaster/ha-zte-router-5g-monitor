@@ -46,7 +46,7 @@ def _get_bytes_to_gb(val: Any) -> float | None:
         return None
     try:
         return round(float(val) / 1073741824, 2)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -59,7 +59,7 @@ def _get_uptime(data: Any) -> Any:
         seconds = int(float(uptime_seconds))
         boot_time = dt_util.now() - timedelta(seconds=seconds)
         return boot_time.replace(second=0, microsecond=0)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -75,7 +75,7 @@ def _get_total_sms(data: Any) -> int | None:
     ]
     try:
         return sum(int(data.get(k, 0)) for k in keys)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -86,7 +86,7 @@ def _safe_float(val: Any) -> float | None:
         return None
     try:
         return float(val)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -97,7 +97,7 @@ def _safe_int(val: Any) -> int | None:
         return None
     try:
         return int(float(val))
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -106,7 +106,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # --- System Sub-device ---
     ZTESensorEntityDescription(
         key="model_name",
-        name="Model Name",
+        translation_key="model_name",
         icon="mdi:router-wireless",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
@@ -114,7 +114,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wa_inner_version",
-        name="Firmware Version",
+        translation_key="wa_inner_version",
         icon="mdi:information-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
@@ -122,7 +122,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wan_ipaddr",
-        name="WAN IP Address",
+        translation_key="wan_ipaddr",
         icon="mdi:ip-network",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
@@ -130,7 +130,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lan_ipaddr",
-        name="LAN IP Address",
+        translation_key="lan_ipaddr",
         icon="mdi:ip",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
@@ -138,7 +138,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="device_uptime",
-        name="Uptime",
+        translation_key="device_uptime",
         icon="mdi:clock-outline",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -147,7 +147,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="last_updated",
-        name="Last Updated",
+        translation_key="last_updated",
         icon="mdi:update",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -156,7 +156,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="imei",
-        name="IMEI",
+        translation_key="imei",
         icon="mdi:cellphone-information",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -165,7 +165,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="hardware_version",
-        name="Hardware Version",
+        translation_key="hardware_version",
         icon="mdi:chip",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
@@ -173,7 +173,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="battery_value",
-        name="Battery",
+        translation_key="battery_value",
         icon="mdi:battery",
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
@@ -185,7 +185,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="sim_imsi",
-        name="SIM IMSI",
+        translation_key="sim_imsi",
         icon="mdi:sim",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -194,7 +194,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="sim_iccid",
-        name="SIM ICCID",
+        translation_key="sim_iccid",
         icon="mdi:sim",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -204,14 +204,14 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # --- Signal Sub-device ---
     ZTESensorEntityDescription(
         key="wan_connect_status",
-        name="Connection Status",
+        translation_key="wan_connect_status",
         icon="mdi:connection",
         group="signal",
         value_fn=lambda data: data.get("wan_connect_status"),
     ),
     ZTESensorEntityDescription(
         key="wan_apn",
-        name="Network APN",
+        translation_key="wan_apn",
         icon="mdi:access-point-network",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -219,14 +219,14 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="network_type",
-        name="Network Type",
+        translation_key="network_type",
         icon="mdi:network",
         group="signal",
         value_fn=lambda data: data.get("network_type"),
     ),
     ZTESensorEntityDescription(
         key="signalbar",
-        name="Signal Bars",
+        translation_key="signalbar",
         icon="mdi:signal-cellular-3",
         state_class=SensorStateClass.MEASUREMENT,
         group="signal",
@@ -234,7 +234,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="network_provider",
-        name="Network Provider",
+        translation_key="network_provider",
         icon="mdi:sim-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -242,7 +242,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="mdm_mcc",
-        name="MDM MCC",
+        translation_key="mdm_mcc",
         icon="mdi:map-marker",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -250,7 +250,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="mdm_mnc",
-        name="MDM MNC",
+        translation_key="mdm_mnc",
         icon="mdi:map-marker",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -258,7 +258,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="rmcc",
-        name="Roaming MCC",
+        translation_key="rmcc",
         icon="mdi:map-marker-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -267,7 +267,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="rmnc",
-        name="Roaming MNC",
+        translation_key="rmnc",
         icon="mdi:map-marker-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -276,7 +276,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_rsrp",
-        name="LTE RSRP",
+        translation_key="lte_rsrp",
         icon="mdi:signal",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -288,7 +288,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_rsrq",
-        name="LTE RSRQ",
+        translation_key="lte_rsrq",
         icon="mdi:signal",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
@@ -299,7 +299,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_rssi",
-        name="LTE RSSI",
+        translation_key="lte_rssi",
         icon="mdi:signal",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -311,7 +311,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_snr",
-        name="LTE SNR",
+        translation_key="lte_snr",
         icon="mdi:waveform",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
@@ -322,7 +322,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_pci",
-        name="LTE PCI",
+        translation_key="lte_pci",
         icon="mdi:transmission-tower",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -330,7 +330,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="cell_id",
-        name="Cell ID",
+        translation_key="cell_id",
         icon="mdi:transmission-tower",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -338,14 +338,14 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wan_lte_ca",
-        name="Carrier Aggregation",
+        translation_key="wan_lte_ca",
         icon="mdi:plus-network",
         group="signal",
         value_fn=lambda data: data.get("wan_lte_ca"),
     ),
     ZTESensorEntityDescription(
         key="lte_ca_pcell_band",
-        name="LTE Primary Band",
+        translation_key="lte_ca_pcell_band",
         icon="mdi:antenna",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -353,7 +353,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_ca_pcell_bandwidth",
-        name="LTE Primary Bandwidth",
+        translation_key="lte_ca_pcell_bandwidth",
         icon="mdi:swap-horizontal",
         native_unit_of_measurement="MHz",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -362,7 +362,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_ca_scell_band",
-        name="LTE Secondary Band",
+        translation_key="lte_ca_scell_band",
         icon="mdi:antenna",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -371,7 +371,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_ca_scell_bandwidth",
-        name="LTE Secondary Bandwidth",
+        translation_key="lte_ca_scell_bandwidth",
         icon="mdi:swap-horizontal",
         native_unit_of_measurement="MHz",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -381,7 +381,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wan_active_band",
-        name="LTE Active Band",
+        translation_key="wan_active_band",
         icon="mdi:antenna",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -389,7 +389,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wan_active_channel",
-        name="LTE Active Channel",
+        translation_key="wan_active_channel",
         icon="mdi:numeric",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -397,7 +397,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrp",
-        name="5G RSRP",
+        translation_key="z5g_rsrp",
         icon="mdi:signal-5g",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -409,7 +409,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrq",
-        name="5G RSRQ",
+        translation_key="z5g_rsrq",
         icon="mdi:signal-5g",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
@@ -420,7 +420,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="z5g_rssi",
-        name="5G RSSI",
+        translation_key="z5g_rssi",
         icon="mdi:signal-5g",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -432,7 +432,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="z5g_sinr",
-        name="5G SNR",
+        translation_key="z5g_sinr",
         icon="mdi:waveform",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
@@ -443,7 +443,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="nr5g_pci",
-        name="5G PCI",
+        translation_key="nr5g_pci",
         icon="mdi:transmission-tower",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -451,7 +451,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="nr5g_action_band",
-        name="5G Active Band",
+        translation_key="nr5g_action_band",
         icon="mdi:antenna",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -459,7 +459,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="nr5g_action_channel",
-        name="5G Active Channel",
+        translation_key="nr5g_action_channel",
         icon="mdi:numeric",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -467,7 +467,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="rssi",
-        name="Legacy RSSI",
+        translation_key="rssi",
         icon="mdi:signal",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -480,7 +480,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="rscp",
-        name="Legacy RSCP",
+        translation_key="rscp",
         icon="mdi:signal",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -493,7 +493,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="enodeb_id",
-        name="eNodeB ID",
+        translation_key="enodeb_id",
         icon="mdi:transmission-tower",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -501,7 +501,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="net_select",
-        name="Network Mode",
+        translation_key="net_select",
         icon="mdi:network",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -509,7 +509,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="ppp_status",
-        name="PPP Status",
+        translation_key="ppp_status",
         icon="mdi:connection",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -519,7 +519,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # Legacy GB Sensors (Disabled by default, preserved for history)
     ZTESensorEntityDescription(
         key="monthly_tx_bytes",
-        name="Monthly Sent GB",
+        translation_key="monthly_tx_bytes",
         icon="mdi:upload-network",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -531,7 +531,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="monthly_rx_bytes",
-        name="Monthly Received GB",
+        translation_key="monthly_rx_bytes",
         icon="mdi:download-network",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -543,7 +543,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="monthly_total_bytes",
-        name="Monthly Total GB",
+        translation_key="monthly_total_bytes",
         icon="mdi:network-outline",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -562,7 +562,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # Standard Byte Sensors (Enabled by default, supports UI conversion)
     ZTESensorEntityDescription(
         key="monthly_tx_bytes_raw",
-        name="Monthly Sent",
+        translation_key="monthly_tx_bytes_raw",
         icon="mdi:upload-network",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -572,7 +572,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="monthly_rx_bytes_raw",
-        name="Monthly Received",
+        translation_key="monthly_rx_bytes_raw",
         icon="mdi:download-network",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -582,7 +582,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="monthly_total_bytes_raw",
-        name="Monthly Total",
+        translation_key="monthly_total_bytes_raw",
         icon="mdi:network-outline",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -599,7 +599,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="realtime_tx_thrpt",
-        name="Upload Speed",
+        translation_key="realtime_tx_thrpt",
         icon="mdi:upload-network",
         device_class=SensorDeviceClass.DATA_RATE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -610,7 +610,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="realtime_rx_thrpt",
-        name="Download Speed",
+        translation_key="realtime_rx_thrpt",
         icon="mdi:download-network",
         device_class=SensorDeviceClass.DATA_RATE,
         state_class=SensorStateClass.MEASUREMENT,
@@ -621,7 +621,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="realtime_tx_bytes",
-        name="Session Sent",
+        translation_key="realtime_tx_bytes",
         icon="mdi:upload-network",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -632,7 +632,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="realtime_rx_bytes",
-        name="Session Received",
+        translation_key="realtime_rx_bytes",
         icon="mdi:download-network",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL_INCREASING,
@@ -644,7 +644,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # --- SMS Sub-device ---
     ZTESensorEntityDescription(
         key="sms_unread_num",
-        name="Unread Msg",
+        translation_key="sms_unread_num",
         icon="mdi:email-mark-as-unread",
         state_class=SensorStateClass.MEASUREMENT,
         group="sms",
@@ -652,7 +652,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="msg_total",
-        name="Total Msg",
+        translation_key="msg_total",
         icon="mdi:email-multiple",
         state_class=SensorStateClass.MEASUREMENT,
         group="sms",
@@ -660,7 +660,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="msg_recent",
-        name="Recent Msg",
+        translation_key="msg_recent",
         icon="mdi:email-outline",
         group="sms",
         value_fn=lambda data: data.get("last_sms", {}).get("content_decoded"),
@@ -710,7 +710,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
 
         try:
             value = self.entity_description.value_fn(self.coordinator.data)
-        except KeyError, AttributeError, ValueError:
+        except (KeyError, AttributeError, ValueError):
             return None
 
         if value is None:
@@ -754,7 +754,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
                         data.get("sms_sim_draftbox_total", 0)
                     ),
                 }
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return {}
 
         if key == "msg_recent":
