@@ -56,8 +56,8 @@ _Group: `signal`_
 | Carrier Aggregation | `wan_lte_ca` | Sensor | `wan_lte_ca` | - | Sensor |  |
 | LTE Primary Band | `lte_ca_pcell_band` | Sensor | `lte_ca_pcell_band` | - | Diagnostic |  |
 | LTE Primary Bandwidth | `lte_ca_pcell_bandwidth` | Sensor | `lte_ca_pcell_bandwidth` | MHz | Diagnostic |  |
-| LTE Secondary Band | `lte_ca_scell_band` | Sensor | `lte_ca_scell_band` | - | Diagnostic | **Disabled by default.** |
-| LTE Secondary Bandwidth | `lte_ca_scell_bandwidth` | Sensor | `lte_ca_scell_bandwidth` | MHz | Diagnostic | **Disabled by default.** |
+| LTE Secondary Band | `lte_ca_scell_band` | Sensor | `lte_ca_scell_band` | - | Diagnostic | **Disabled by default.** Data may not be available in all configurations. |
+| LTE Secondary Bandwidth | `lte_ca_scell_bandwidth` | Sensor | `lte_ca_scell_bandwidth` | MHz | Diagnostic | **Disabled by default.** Data may not be available in all configurations. |
 | LTE Active Band | `wan_active_band` | Sensor | `wan_active_band` | - | Diagnostic |  |
 | LTE Active Channel | `wan_active_channel` | Sensor | `wan_active_channel` | - | Diagnostic |  |
 | 5G RSRP | `z5g_rsrp` | Sensor | `Z5g_rsrp` | dBm | Sensor | Range: -140 to -30. |
@@ -67,8 +67,8 @@ _Group: `signal`_
 | 5G PCI | `nr5g_pci` | Sensor | `nr5g_pci` | - | Diagnostic |  |
 | 5G Active Band | `nr5g_action_band` | Sensor | `nr5g_action_band` | - | Diagnostic |  |
 | 5G Active Channel | `nr5g_action_channel` | Sensor | `nr5g_action_channel` | - | Diagnostic |  |
-| Legacy RSSI | `rssi` | Sensor | `rssi` | dBm | Sensor | **Disabled by default.** |
-| Legacy RSCP | `rscp` | Sensor | `rscp` | dBm | Sensor | **Disabled by default.** |
+| Legacy RSSI | `rssi` | Sensor | `rssi` | dBm | Sensor | **Disabled by default.** Data may not be available in all configurations. |
+| Legacy RSCP | `rscp` | Sensor | `rscp` | dBm | Sensor | **Disabled by default.** Data may not be available in all configurations. |
 | Best Connection | `best_connection` | Binary | Logic: `ENDC` + `ca_activated` | - | Diagnostic | ON if 5G and LTE-CA are both active. |
 
 ---
@@ -79,9 +79,9 @@ _Group: `data`_
 
 | Name | Key | Type | Source (Raw Key) | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| Monthly Sent | `monthly_tx_bytes_raw` | Sensor | `monthly_tx_bytes` | Bytes | Sensor | Native Byte sensor for UI conversion. |
-| Monthly Received | `monthly_rx_bytes_raw` | Sensor | `monthly_rx_bytes` | Bytes | Sensor | Native Byte sensor for UI conversion. |
-| Monthly Total | `monthly_total_bytes_raw` | Sensor | `TX + RX` | Bytes | Sensor | Native Byte sensor for UI conversion. |
+| Monthly Sent | `monthly_tx_bytes_raw` | Sensor | `monthly_tx_bytes` | Bytes | Sensor | Native Byte sensor for UI conversion. Other display units may be used (e.g. GiB). |
+| Monthly Received | `monthly_rx_bytes_raw` | Sensor | `monthly_rx_bytes` | Bytes | Sensor | Native Byte sensor for UI conversion. Other display units may be used (e.g. GiB). |
+| Monthly Total | `monthly_total_bytes_raw` | Sensor | `TX + RX` | Bytes | Sensor | Native Byte sensor for UI conversion. Other display units may be used (e.g. GB). |
 | Monthly Sent GB | `monthly_tx_bytes` | Sensor | `monthly_tx_bytes / 1024^3` | GB | Sensor | **Disabled by default (Legacy).** |
 | Monthly Received GB | `monthly_rx_bytes` | Sensor | `monthly_rx_bytes / 1024^3` | GB | Sensor | **Disabled by default (Legacy).** |
 | Monthly Total GB | `monthly_total_bytes` | Sensor | `(TX+RX) / 1024^3` | GB | Sensor | **Disabled by default (Legacy).** |

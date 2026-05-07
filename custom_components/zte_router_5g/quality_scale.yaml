@@ -1,0 +1,116 @@
+rules:
+  # Bronze
+  action-setup:
+    status: exempt
+    comment: No service actions in this integration; reboot and SMS deletion use HA button entities, not service calls.
+  appropriate-polling:
+    status: exempt
+    comment: User-configurable polling interval via Number entity is intentional; departs from IQS conservative polling guidance.
+  brands:
+    status: exempt
+    comment: Custom component distributed via HACS; not submitted to the HA brands repository.
+  common-modules: done
+  config-flow-test-coverage:
+    status: todo
+    comment: Missing user_input=None show-form paths in both async_step_user and async_step_init; options flow ZTEAuthError branch not tested.
+  config-flow:
+    status: todo
+    comment: Missing data_description entries in strings.json for all config and options flow fields (host, username, password).
+  dependency-transparency: done
+  docs-actions:
+    status: exempt
+    comment: No service actions registered; buttons are HA button entities, not service calls. Nothing to document.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data:
+    status: todo
+    comment: Uses legacy hass.data[DOMAIN][entry.entry_id] in __init__.py and all five platform files; migrate to entry.runtime_data.
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+
+  # Silver
+  action-exceptions:
+    status: todo
+    comment: ZTERebootButton and ZTEDeleteAllSMSButton async_press handlers catch exceptions and log silently; raise HomeAssistantError so automations can detect failure.
+  config-entry-unloading: done
+  docs-configuration-parameters:
+    status: todo
+    comment: README documents IP/username/password; polling interval range (30-3600 s), defaults, and runtime options flow parameters are not documented.
+  docs-installation-parameters: todo
+  entity-unavailable: done
+  integration-owner:
+    status: exempt
+    comment: Personal project; codeowners field present in manifest.json as good practice.
+  log-when-unavailable:
+    status: todo
+    comment: Coordinator logs a warning on every failure (1/3, 2/3, 3/3) rather than once at unavailability; no reconnection log when connectivity is restored.
+  parallel-updates:
+    status: todo
+    comment: PARALLEL_UPDATES = 0 missing from all five platform files (sensor, binary_sensor, button, switch, number).
+  reauthentication-flow:
+    status: todo
+    comment: No async_step_reauth or async_step_reauth_confirm; credentials can only be updated via options flow, not via HA's built-in reauth mechanism triggered by ConfigEntryAuthFailed.
+  test-coverage:
+    status: todo
+    comment: Test suite covers all platforms; config_flow.py missing show-form paths and several branch paths; exact line coverage unknown.
+
+  # Gold
+  devices: done
+  diagnostics: todo
+  discovery-update-info:
+    status: exempt
+    comment: Depends on discovery, which is exempt for this fixed-IP integration.
+  discovery:
+    status: exempt
+    comment: Fixed-IP polling integration; router requires credentials so discovery would save only the IP entry step.
+  docs-data-update: todo
+  docs-examples: todo
+  docs-known-limitations: todo
+  docs-supported-devices:
+    status: todo
+    comment: README mentions MC7010; no tested firmware versions listed and no explicit supported/untested distinction.
+  docs-supported-functions:
+    status: todo
+    comment: Feature bullet list in README; comprehensive entity table (all 51 entities) not present.
+  docs-troubleshooting: todo
+  docs-use-cases: todo
+  dynamic-devices:
+    status: exempt
+    comment: No device tracker platform; static sub-device architecture (System/Signal/Data/SMS) is complete and does not require dynamic device handling.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default: done
+  entity-translations:
+    status: todo
+    comment: binary_sensor, button, switch, and number use translation_key; sensor.py (46 descriptions) still uses hardcoded name= strings. Also strings.json and en.json are out of sync (different display names, en.json missing sms_unread_num and the three _raw byte sensors).
+  exception-translations:
+    status: todo
+    comment: Low priority; config flow errors already use strings.json keys; no service exceptions to translate. Add as part of any i18n pass.
+  icon-translations:
+    status: todo
+    comment: No icons.json file; entity icons are hardcoded in descriptions; BestConnectionSensor uses a property override for state-dependent icons.
+  reconfiguration-flow:
+    status: todo
+    comment: No async_step_reconfigure; host and credentials can be updated via options flow but that is not the HA-native reconfigure pattern.
+  repair-issues:
+    status: todo
+    comment: Low priority; consider for SMS storage full or firmware incompatibility detection.
+  stale-devices:
+    status: exempt
+    comment: Devices persist intentionally; users control removal via the device registry.
+
+  # Platinum
+  async-dependency:
+    status: done
+    comment: Native aiohttp API client (api.py) with no executor wrapping; overrides the family-level N/A verdict which assumed a synchronous external library.
+  inject-websession:
+    status: done
+    comment: HA's aiohttp session injected via async_get_clientsession in __init__.py and passed to ZTERouterAPI; overrides the family-level N/A verdict.
+  strict-typing:
+    status: todo
+    comment: Aspirational; no strict type annotations or mypy --strict; add to CI when test infrastructure is stable.
