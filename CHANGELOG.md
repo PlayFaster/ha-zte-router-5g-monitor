@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.0.0] - Future - Unreleased
+## [3.0.0] - 2026-05-08
 
 ### Added
 
@@ -13,21 +13,27 @@ All notable changes to this project will be documented in this file.
 #### Performance & Stability
 
 - **Faster, Non-Blocking Startup**: Integration setup now runs entirely in the background. Home Assistant will not "hang" or slow down while waiting for the router to respond during startup.
-- **Native Async Architecture**: Rewritten to be more efficient and optimize resource utilization. This ensures the integration operates properly with the Home Assistant event loop, preventing the integration from delaying or interfering with other system processes.
+- **Native Async Architecture**: Rewritten to be more efficient and optimize resource utilization. This ensures the integration operates properly with the Home Assistant event loop.
 - **Improved Connection Resilience**: Sensors will now hold their last known values for up to three failed connection attempts. This prevents "Unavailable" flickers during brief network hiccups.
-- **Reliable Device Info**: Hardware models and software versions are now saved locally. Your Device Page will stay populated even if the router is rebooted or goes offline.
+- **Reliable Device Info**: Hardware models and software versions are now saved locally. The Device Page will stay populated even if the router is rebooted or goes offline.
+- **Stable Device Identity**: The integration now uses the hardware IMEI as a stable identifier. This ensures your entities and their history remain consistent even if the router's IP address changes.
+- **Enhanced Connection Security**: Verified that no sensitive tokens or passwords are logged or persisted in state attributes.
 - **Domain Cleanup**: Implemented standardized unloading logic to ensure the integration key is scrubbed from Home Assistant's internal memory when no integration instances remain.
 
 #### New Features & Customization
 
-- **Custom Entity Naming**: You can now set a custom prefix (e.g., _"Downstairs Gateway"_) for all devices and entities during setup or via the **Configure** menu.
-- **Smarter Device Organization**: Entities are now automatically grouped into logical sub-devices (e.g., **System**, , **Signal**, **Data**, and **SMS**) to reduce the overwhelm factor and make it easy to disable certain sections if desired.
+- **12 New Sensors**: Significant expansion of monitored metrics including **IMEI**, **Hardware Version**, **SIM IMSI**, **SIM ICCID** (System); **eNodeB ID**, **Network Mode**, **Bridge Mode** (Signal); **Upload/Download Speed**, and **Session Usage** (Data).
+- **Custom Entity Naming**: You can now set a custom prefix (e.g., _"My ZTE Router"_) for all devices and entities during setup or via the **Configure** menu.
+- **Smarter Device Organization**: Entities are now automatically grouped into logical sub-devices (**System**, **Signal**, **Data**, and **SMS**) to reduce the overwhelm factor and make it easy to disable certain sections if desired.
 - **Data Integrity Guards**: New "Guard Bands" and safety checks ensure your sensors don't report impossible values or cause errors during initial connection.
-- **Monthly Data in Bytes**: Added Monthly data in native bytes unit (up, down, total). This is the default. Legacy GB data sensors are now disabled.
+- **Re-authentication Support**: If your router password changes, Home Assistant will now notify you and provide a simple dialog to update your credentials without needing to re-install the integration.
+- **Download Diagnostics**: Added support for Home Assistant's diagnostic tool, allowing you to easily export redacted integration data for troubleshooting.
+- **Monthly Data in Bytes**: Added Monthly data in native bytes unit (up, down, total). This is the default and supports Home Assistant's built-in unit conversion.
 
 ### Changed
 
-- **README**: Improve screenshot visibility.
+- **User-Friendly Labels**: Refined entity labels for better readability (e.g., "PPP Status" → "**Bridge Mode**", "Wa Inner Version" → "**Firmware Version**").
+- **Readme**: Updated and added automation examples.
 
 ## [2.3.1] - 2026-04-01 PUBLIC RELEASE
 
