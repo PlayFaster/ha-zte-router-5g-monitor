@@ -44,11 +44,11 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 ### 📊 Comprehensive Monitoring
 
-- **Sub-Device Organisation**: Entities are automatically grouped into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+- **Sub-Device Organization**: Entities are automatically grouped into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
   - **System**: Core router info (Firmware, IMEI, Hardware Version), WAN/LAN IPs and uptime.
   - **Signal**: Extensive 5G NR and LTE signal data including RSRP, RSRQ, SNR, cell ID, and band info.
   - **Data**: Real-time upload/download speeds, monthly totals, and session-based counters.
-  - **SMS**: Unread and total message count, the content of the most recent message amd a Delete All button.
+  - **SMS**: Unread and total message count, the content of the most recent message and a Delete All button.
 
 ### 📋 Essential Router Management
 
@@ -239,7 +239,7 @@ actions:
 Setup is handled entirely via the UI. You will need:
 
 - **Host** — Router IP Address (e.g., 192.168.0.1)
-- **Username** — Router login username (optional, default: admin)
+- **Username** — Router login username (default: admin)
 - **Password** — Admin password for the router web interface
 
 ### Runtime Options
@@ -265,7 +265,7 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 
 ### **Some sensors showing "Unknown"**
 
-- Most sensors showing okay with some unknown **is expected behaviour**.
+- Most sensors showing okay with some unknown **is expected behavior**.
   - The integration fetches everything it can from the router.
   - Not every metric is provided by every ISP or firmware version.
   - 5G NR sensors will show "Unknown" when the router is operating in LTE-only mode.
@@ -289,15 +289,15 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 To remove the integration from Home Assistant:
 
 1. Go to **Settings > Devices & Services**.
-2. Find the **ZTE Router 5G Monitor** card.
-3. Click the **three dots** (⋮) and select **Delete**.
+2. Find the **ZTE Router 5G Monitor** card and click into it.
+3. Click the **three dots** (⋮) next to the gear icon and select **Delete**.
 4. Confirm deletion.
 
 To fully uninstall (HACS):
 
-1. Go to **HACS > Integrations**.
-2. Find **ZTE Router 5G Monitor**.
-3. Click the **three dots** (⋮) and select **Remove**.
+1. Go to **HACS**.
+2. Find **ZTE Router 5G Monitor** and click into it.
+3. Click the **three dots** (⋮) at the top right and select **Remove**.
 4. Restart Home Assistant.
 
 ## 📝 Maintenance Status
