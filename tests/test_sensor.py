@@ -10,6 +10,7 @@ from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import (
     SENSOR_TYPES,
     ZTERouterSensor,
+    ZTESensorEntityDescription,
     async_setup_entry,
 )
 
@@ -211,3 +212,55 @@ async def test_sensor_setup_entry():
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
     async_add_entities.assert_called_once()
+
+
+def test_sensor_value_fn_exception(mock_coordinator, mock_config_entry):
+    """Test that native_value catches unhandled exceptions in value_fn.
+
+    Covers sensor.py lines 713-714 (outer except in native_value).
+    """
+    mock_coordinator.data = {"some": "data"}
+    desc = ZTESensorEntityDescription(
+        key="test_crash",
+        translation_key="test_crash",
+        value_fn=lambda x: x["nonexistent"],
+    )
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, desc)
+    assert sensor.native_value is None
+
+
+def test_sensor_guard_band_min(mock_coordinator, mock_config_entry):
+    """Test that native_value returns None when value is below min_limit.
+
+    Covers sensor.py line 725.
+    """
+    mock_coordinator.data = {"some": "data"}
+    desc = ZTESensorEntityDescription(
+        key="test_min", translation_key="test_min", value_fn=lambda x: 10, min_limit=20
+    )
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, desc)
+    assert sensor.native_value is None
+
+
+def test_sensor_guard_band_max(mock_coordinator, mock_config_entry):
+    """Test that native_value returns None when value is above max_limit.
+
+    Covers sensor.py line 730.
+    """
+    mock_coordinator.data = {"some": "data"}
+    desc = ZTESensorEntityDescription(
+        key="test_max", translation_key="test_max", value_fn=lambda x: 100, max_limit=50
+    )
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, desc)
+    assert sensor.native_value is None
+
+
+def test_sensor_extra_attributes_other_key(mock_coordinator, mock_config_entry):
+    """Test extra_state_attributes returns {} for a non-sms sensor.
+
+    Covers sensor.py line 768.
+    """
+    mock_coordinator.data = {"some": "data"}
+    description = next(d for d in SENSOR_TYPES if d.key == "lte_rsrp")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    assert sensor.extra_state_attributes == {}

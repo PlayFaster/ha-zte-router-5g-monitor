@@ -84,12 +84,12 @@ Home Assistant integration for **ZTE 5G/LTE Routers** providing detailed signal 
 
 This integration provides **63 entities** grouped into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
-| Type | Count | Primary Functions |
-| :-- | :-- | :-- |
-| **Sensors** | 59 | Signal strength, data usage, uptime, SMS content, device info |
-| **Switches** | 1 | Pause Polling |
-| **Buttons** | 2 | Reboot, Delete All SMS |
-| **Controls** | 1 | Polling Interval |
+| Type         | Count | Primary Functions                                             |
+| :----------- | :---- | :------------------------------------------------------------ |
+| **Sensors**  | 59    | Signal strength, data usage, uptime, SMS content, device info |
+| **Switches** | 1     | Pause Polling                                                 |
+| **Buttons**  | 2     | Reboot, Delete All SMS                                        |
+| **Controls** | 1     | Polling Interval                                              |
 
 ---
 
