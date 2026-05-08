@@ -99,7 +99,7 @@
       "sim_iccid": { "name": "SIM ICCID" },
       "enodeb_id": { "name": "eNodeB ID" },
       "net_select": { "name": "Network Mode" },
-      "ppp_status": { "name": "PPP Status" },
+      "ppp_status": { "name": "Bridge Mode" },
       "realtime_tx_thrpt": { "name": "Upload Speed" },
       "realtime_rx_thrpt": { "name": "Download Speed" },
       "realtime_tx_bytes": { "name": "Session Sent" },

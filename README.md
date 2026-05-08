@@ -1,8 +1,8 @@
 # ZTE Router 5G Monitor for Home Assistant
 
-[![HACS Integration](https://img.shields.io/badge/HACS-Integration-orange.svg)](https://hacs.xyz/) [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=homeassistant&logoColor=white)](https://hacs.xyz/docs/faq/custom_repositories) [![Latest Release](https://img.shields.io/github/v/release/PlayFaster/ha-zte-router-5g-monitor?label=Release&logo=github)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/releases) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![Validate](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml/badge.svg)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml) ![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/PlayFaster/ha-zte-router-5g-monitor/python-coverage-comment-action-data/coverage-badge.json) ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/PlayFaster/0376d580e72d0abc493665a80396f701/raw/coverage.json) [![Last Commit](https://img.shields.io/github/last-commit/PlayFaster/ha-zte-router-5g-monitor?label=Last%20commit)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/commits/main)
+[![HACS Integration](https://img.shields.io/badge/HACS-Integration-orange.svg)](https://hacs.xyz/) [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=homeassistant&logoColor=white)](https://hacs.xyz/docs/faq/custom_repositories) [![Latest Release](https://img.shields.io/github/v/release/PlayFaster/ha-zte-router-5g-monitor?label=Release&logo=github)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/releases) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![Validate](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml/badge.svg)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml) ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/PlayFaster/0376d580e72d0abc493665a80396f701/raw/coverage.json) [![Last Commit](https://img.shields.io/github/last-commit/PlayFaster/ha-zte-router-5g-monitor?label=Last%20commit)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/commits/main)
 
-Home Assistant integration for **ZTE 5G/LTE Routers** providing detailed signal statistics, data usage tracking, and SMS management.
+A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, Data Usage & SMS Management.
 
 > [!NOTE]
 >
@@ -40,15 +40,15 @@ Home Assistant integration for **ZTE 5G/LTE Routers** providing detailed signal 
 
 - **Detailed Signal Metrics**: RSRP, RSRQ, RSSI, and SNR for both the 5G NR and the LTE anchor cell.
 - **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active frequency bands/channels.
-- **Carrier Aggregation**: Track CA status and primary/secondary band bandwidths.
+- **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use.
 
 ### 📊 Comprehensive Monitoring
 
 - **Sub-Device Organisation**: Entities are automatically grouped into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
-  - **System**: Core router info (Firmware, IMEI, Hardware Version), WAN/LAN IPs, uptime, and battery status.
+  - **System**: Core router info (Firmware, IMEI, Hardware Version), WAN/LAN IPs and uptime.
   - **Signal**: Extensive 5G NR and LTE signal data including RSRP, RSRQ, SNR, cell ID, and band info.
-  - **Data**: Real-time upload/download speeds, monthly totals (Bytes and GB), and session-based counters.
-  - **SMS**: Unread message count, total counts per storage bank, and the content of the most recent message.
+  - **Data**: Real-time upload/download speeds, monthly totals, and session-based counters.
+  - **SMS**: Unread and total message count, the content of the most recent message amd a Delete All button.
 
 ### 📋 Essential Router Management
 
@@ -103,7 +103,7 @@ This automation fires when a new SMS is detected and forwards the content to you
 alias: "ZTE: Forward SMS to Mobile"
 triggers:
   - trigger: state
-    entity_id: sensor.zte_router_5g_recent_msg
+    entity_id: sensor.zte_5g_sms_recent_msg
 actions:
   - action: notify.mobile_app_your_phone
     data:
@@ -113,13 +113,13 @@ actions:
 
 ### Data Usage Alert
 
-Monitor your data consumption and get notified when you approach your monthly limit.
+Monitor your data consumption and get notified when you approach your monthly limit. If you change the display unit of data sensors (e.g. from Bytes to GB), you have to change the numbers below as well.
 
 ```yaml
 alias: "ZTE: High Data Usage Alert"
 triggers:
   - trigger: numeric_state
-    entity_id: sensor.zte_router_5g_monthly_total_bytes_raw
+    entity_id: sensor.zte_5g_data_monthly_total
     above: 500000000000 # 500 GB (in bytes)
 actions:
   - action: notify.mobile_app_your_phone
@@ -133,17 +133,60 @@ actions:
 Monitor for poor connection quality based on 5G status and signal metrics.
 
 ```yaml
-alias: "ZTE: Poor Signal Quality Alert"
+alias: "Signal: Poor Quality Connection Alert"
 triggers:
-  - trigger: numeric_state
-    entity_id: sensor.zte_router_5g_5g_snr
-    below: 5
+  - platform: state
+    entity_id:
+      - binary_sensor.zte_5g_signal_best_connection
+    to: "off"
     for: "00:05:00"
+  - platform: state
+    entity_id:
+      - sensor.zte_5g_signal_network_type
+    not_to: "ENDC"
+    for: "00:05:00"
+  - platform: state
+    entity_id:
+      - sensor.zte_5g_signal_carrier_aggregation
+    not_to: "ca_activated"
+    for: "00:05:00"
+  - platform: numeric_state
+    entity_id:
+      - sensor.zte_5g_signal_signal_bars
+    below: 4
+    for: "00:05:00"
+conditions:
+  - condition: or
+    conditions:
+      - condition: numeric_state
+        entity_id: sensor.zte_5g_signal_signal_bars
+        below: 4
+      - condition: state
+        entity_id: binary_sensor.zte_5g_signal_best_connection
+        state:
+          - "off"
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.zte_5g_signal_carrier_aggregation
+            state:
+              - ca_activated
+      - condition: not
+        conditions:
+          - condition: state
+            entity_id: sensor.zte_5g_signal_network_type
+            state:
+              - ENDC
 actions:
   - action: notify.mobile_app_your_phone
     data:
-      title: "Poor ZTE Signal"
-      message: "5G SNR has been below 5dB for over 5 minutes."
+      title: "Poor Signal Quality Detected"
+      message: |
+        The router connection quality is poor.
+        - 5G ENDC: {{ states('sensor.zte_5g_signal_network_type') }}
+        - Best Connection: {{ states('binary_sensor.zte_5g_signal_best_connection') }}
+        - Signal Bars: {{ states('sensor.zte_5g_signal_signal_bars') }}
+        - CA: {{ states('sensor.zte_5g_signal_carrier_aggregation') }}
 ```
 
 ---
@@ -154,17 +197,17 @@ actions:
 
 ![Integration](.github/images/zte_5g_integration_screen.png)
 
-### Signal & Controls
+| Signal | System |
+| :-: | :-: |
+| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_sensor_control_info_mini.png) |
 
-![Sensors](.github/images/zte_5g_sensor_control_info.png)
+| Data | SMS |
+| :-: | :-: |
+| ![Data](.github/images/zte_5g_data_screen_mini.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
 
-### Data Usage
+### Setup
 
-![Data](.github/images/zte_5g_data_info.png)
-
-### SMS Management
-
-![SMS](.github/images/zte_5g_sms_info.png)
+![Setup](.github/images/zte_5g_setup_info.png)
 
 ---
 

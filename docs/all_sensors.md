@@ -24,11 +24,11 @@ _Group: `system`_
 | Firmware Version | `wa_inner_version` | Sensor | `wa_inner_version` | - | Diagnostic |  |
 | WAN IP Address | `wan_ipaddr` | Sensor | `wan_ipaddr` | - | Diagnostic |  |
 | LAN IP Address | `lan_ipaddr` | Sensor | `lan_ipaddr` | - | Diagnostic |  |
-| Uptime | `device_uptime` | Sensor | `realtime_time` | Timestamp | Diagnostic | Calculated as `now() - uptime_seconds`. |
-| Last Updated | `last_updated` | Sensor | `coordinator.last_update_success_time` | Timestamp | Diagnostic | Internal tracking of last successful poll. |
+| Uptime | `device_uptime` | Sensor | `realtime_time` | Timestamp | Sensor | Calculated as `now() - uptime_seconds`. |
+| Last Updated | `last_updated` | Sensor | `coordinator.last_update_success_time` | Timestamp | Sensor | Internal tracking of last successful poll. |
 | IMEI | `imei` | Sensor | `imei` | - | Diagnostic | **Disabled by default (sensitive).** Hardware-bound modem identifier. |
 | Hardware Version | `hardware_version` | Sensor | `hardware_version` | - | Diagnostic | e.g. `MC7010-1`. |
-| Battery | `battery_value` | Sensor | `battery_value` | % | Sensor | Full when plugged in. |
+| Battery | `battery_value` | Sensor | `battery_value` | % | Sensor | **Disabled by default.** Full when plugged in. |
 | SIM IMSI | `sim_imsi` | Sensor | `sim_imsi` | - | Diagnostic | **Disabled by default (sensitive).** SIM network identity. |
 | SIM ICCID | `sim_iccid` | Sensor | `sim_iccid` | - | Diagnostic | **Disabled by default (sensitive).** SIM card serial number. |
 | Reboot | `reboot` | Button | API Call: `REBOOT_DEVICE` | - | Control |  |
@@ -43,7 +43,7 @@ _Group: `signal`_
 
 | Name | Key | Type | Source (Raw Key) | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| Connection Status | `wan_connect_status` | Sensor | `wan_connect_status` | - | Sensor |  |
+| Connection Status | `wan_connect_status` | Sensor | `wan_connect_status` | - | Diagnostic |  |
 | Network APN | `wan_apn` | Sensor | `wan_apn` | - | Diagnostic |  |
 | Network Type | `network_type` | Sensor | `network_type` | - | Sensor | e.g., LTE, ENDC, NR5G. |
 | Signal Bars | `signalbar` | Sensor | `signalbar` | - | Sensor | 0-5 scale. |
@@ -76,8 +76,8 @@ _Group: `signal`_
 | Legacy RSCP | `rscp` | Sensor | `rscp` | dBm | Sensor | **Disabled by default.** Data may not be available in all configurations. |
 | eNodeB ID | `enodeb_id` | Sensor | `enodeb_id` | - | Diagnostic | Serving cell tower identifier (hex string). |
 | Network Mode | `net_select` | Sensor | `net_select` | - | Diagnostic | Configured mode, e.g. `LTE_AND_5G`, `LTE_ONLY`. |
-| PPP Status | `ppp_status` | Sensor | `ppp_status` | - | Diagnostic | PPP layer state, e.g. `ppp_connected`. |
-| Best Connection | `best_connection` | Binary | Logic: `ENDC` + `ca_activated` | - | Diagnostic | ON if 5G and LTE-CA are both active. |
+| Bridge Mode | `ppp_status` | Sensor | `ppp_status` | - | Diagnostic | PPP layer state, e.g. `ppp_connected`. |
+| Best Connection | `best_connection` | Binary | Logic: `ENDC` + `ca_activated` | - | Sensor | ON if 5G and LTE-CA are both active. |
 
 ---
 
@@ -147,4 +147,5 @@ The `Recent Msg` sensor contains:
 
 ## Version Control
 
-- **v1.0.0** (2026-05-07) - Initial versioned snapshot. Entity count updated 51 → 63. Added 12 new sensors (System: IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID; Signal: eNodeB ID, Network Mode, PPP Status; Data: Upload Speed, Download Speed, Session Sent, Session Received). Identity strategy updated from MAC to IMEI.
+- **v1.0.0** (2026-05-07) - Initial versioned snapshot. Entity count updated 51 → 63. Added 12 new sensors (System: IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID; Signal: eNodeB ID, Network Mode, PPP Status; Data: Upload Speed, Download Speed, Session Sent, Session Received). Identity strategy updated from MAC to IMEI. \
+- **v3.0.0-dev23** (2026-05-08) - Updated categories for Uptime, Last Updated, Best Connection, and WAN Connect Status. Renamed PPP Status to Bridge Mode. Set Battery to disabled by default.\
