@@ -1,13 +1,10 @@
+"""ZTE Router 5G API client."""
+
 import hashlib
-import json
 import logging
 from datetime import datetime
 
-import requests
-import urllib3
-
-# Suppress SSL warnings for local router access
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+import aiohttp
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -21,20 +18,19 @@ class ZTEAuthError(Exception):
 
 
 class ZTERouterAPI:
-    def __init__(self, ip, username, password):
+    """Async wrapper for the ZTE Router goform API using aiohttp."""
+
+    def __init__(self, session: aiohttp.ClientSession, ip, username, password):
+        """Initialize the API."""
+        self.session = session
         self.ip = ip
         self.username = username
         self.password = password
         self.protocol = "http"
-        self.session = requests.Session()
-        self.session.verify = False
         self.referer = f"http://{self.ip}/"
-        self.timeout = 15  # Default timeout for standard polling
+        self.timeout = aiohttp.ClientTimeout(total=15)
         self.stok = None
-
-    def close(self):
-        """Close the underlying requests session to free resources."""
-        self.session.close()
+        self.is_multi = True
 
     def _hash(self, val):
         if val is None:
@@ -71,90 +67,108 @@ class ZTERouterAPI:
             _LOGGER.debug("Failed to parse date string '%s': %s", date_str, e)
         return date_str
 
-    def try_set_protocol(self, timeout=5):
+    async def try_set_protocol(self, timeout_sec=5):
         """Identify if router is on http or https with a short timeout."""
         protocols = ["http", "https"]
+        tout = aiohttp.ClientTimeout(total=timeout_sec)
         for proto in protocols:
             url = f"{proto}://{self.ip}"
             try:
-                # Use verify=False because local router certs are often self-signed
-                r = self.session.get(url, timeout=timeout, verify=False)
-                if r.ok:
-                    self.protocol = proto
-                    self.referer = f"{self.protocol}://{self.ip}/"
-                    return
+                # SSL verification is disabled as local routers use self-signed certs
+                async with self.session.get(url, timeout=tout, ssl=False) as r:
+                    if r.status < 400:
+                        self.protocol = proto
+                        self.referer = f"{self.protocol}://{self.ip}/"
+                        return
             except Exception as e:
                 _LOGGER.debug("Failed to connect via %s: %s", proto, e)
 
-    def get_version(self, timeout=None):
-        tout = timeout or self.timeout
+    async def get_version(self, timeout_sec=None):
+        """Get the router firmware version."""
+        tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         url = (
             f"{self.referer}goform/goform_get_cmd_process"
             "?isTest=false&cmd=wa_inner_version"
         )
         try:
-            r = self.session.get(url, headers={"Referer": self.referer}, timeout=tout)
-            return r.json().get("wa_inner_version", "")
+            async with self.session.get(
+                url, headers={"Referer": self.referer}, timeout=tout, ssl=False
+            ) as r:
+                data = await r.json(content_type=None)
+                return data.get("wa_inner_version", "")
         except Exception as e:
             _LOGGER.debug("Failed to get version: %s", e)
             return ""
 
-    def get_LD(self, timeout=None):
-        tout = timeout or self.timeout
+    async def get_ld(self, timeout_sec=None):
+        """Get the LD parameter for login."""
+        tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=LD"
         try:
-            r = self.session.get(url, headers={"Referer": self.referer}, timeout=tout)
-            return r.json().get("LD", "").upper()
+            async with self.session.get(
+                url, headers={"Referer": self.referer}, timeout=tout, ssl=False
+            ) as r:
+                data = await r.json(content_type=None)
+                return data.get("LD", "").upper()
         except Exception as e:
             raise ZTEConnectionError(f"Failed to reach router: {e}") from e
 
-    def login(self, timeout=None):
+    async def login(self, timeout_sec=None):
         """Clean login that resets the internal session state."""
-        tout = timeout or self.timeout
+        tout = timeout_sec or 15
         self.stok = None
-        self.session.cookies.clear()
 
-        ld = self.get_LD(timeout=tout)
-        version = self.get_version(timeout=tout)
+        ld = await self.get_ld(timeout_sec=tout)
+        version = await self.get_version(timeout_sec=tout)
 
         if not self.password:
-            raise Exception("No password provided")
+            raise ZTEAuthError("No password provided")
         pass_hash = self._hash(self.password).upper()
         zte_pass = self._hash(pass_hash + ld).upper()
 
-        is_multi = True
+        self.is_multi = True
         if version and any(m in version for m in ["MC801", "MC7010"]):
-            is_multi = False
+            self.is_multi = False
 
         payload = {
             "isTest": "false",
             "goformId": "LOGIN"
-            if (self.username and not is_multi)
+            if (self.username and not self.is_multi)
             else "LOGIN_MULTI_USER",
             "password": zte_pass,
         }
         if self.username:
             payload["username"] = self.username
 
-        r = self.session.post(
-            f"{self.referer}goform/goform_set_cmd_process",
-            data=payload,
-            headers={"Referer": self.referer},
-            timeout=tout,
-        )
-        stok = r.cookies.get("stok", "").strip('"')
-        if not stok:
-            _LOGGER.error(
-                "Login failed: missing stok in response. Status: %s", r.status_code
-            )
-            raise ZTEAuthError("Login failed")
-        self.stok = f"stok={stok}"
-        return self.stok
+        url = f"{self.referer}goform/goform_set_cmd_process"
+        try:
+            async with self.session.post(
+                url,
+                data=payload,
+                headers={"Referer": self.referer},
+                timeout=aiohttp.ClientTimeout(total=tout),
+                ssl=False,
+            ) as r:
+                stok = r.cookies.get("stok")
+                if not stok:
+                    _LOGGER.error(
+                        "Login failed: missing stok in response. Status: %s", r.status
+                    )
+                    raise ZTEAuthError("Login failed")
 
-    def get_all_data(self):
+                self.stok = f"stok={stok.value.strip('"')}"
+                return self.stok
+        except Exception as e:
+            if isinstance(e, ZTEAuthError):
+                raise
+            raise ZTEConnectionError(
+                f"Login failed due to connection error: {e}"
+            ) from e
+
+    async def get_all_data(self, _retry: bool = True):
         """Fetch primary technical data."""
         if not self.stok:
-            self.login()
+            await self.login()
 
         params = [
             "cell_id",
@@ -190,8 +204,23 @@ class ZTERouterAPI:
             "wa_inner_version",
             "Z5g_rsrp",
             "Z5g_SINR",
+            "Z5g_rsrq",
+            "Z5g_rssi",
+            "model_name",
             "rssi",
             "rscp",
+            "imei",
+            "hardware_version",
+            "battery_value",
+            "sim_imsi",
+            "sim_iccid",
+            "enodeb_id",
+            "net_select",
+            "ppp_status",
+            "realtime_tx_thrpt",
+            "realtime_rx_thrpt",
+            "realtime_tx_bytes",
+            "realtime_rx_bytes",
             "sms_unread_num",
             "sms_received_flag",
             "sms_nv_rev_total",
@@ -210,38 +239,52 @@ class ZTERouterAPI:
         )
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
         try:
-            response = self.session.get(url, headers=headers, timeout=self.timeout)
-            data = response.json()
-            # Session expired check
-            if data.get("network_type") == "" and data.get("signalbar") == "":
-                self.login()
-                return self.get_all_data()
-            return data
+            async with self.session.get(
+                url, headers=headers, timeout=self.timeout, ssl=False
+            ) as r:
+                data = await r.json(content_type=None)
+
+                # Session expired check (router returns empty strings for core keys)
+                if data.get("network_type") == "" and data.get("signalbar") == "":
+                    if not _retry:
+                        _LOGGER.warning(
+                            "Session expiry re-login did not resolve empty data; "
+                            "returning partial response"
+                        )
+                        return data
+                    await self.login()
+                    return await self.get_all_data(_retry=False)
+                return data
         except Exception as e:
             _LOGGER.error("Failed to fetch all data: %s", e)
             self.stok = None
             raise
 
-    def get_sms_capacity(self, timeout=None):
-        tout = timeout or self.timeout
+    async def get_sms_capacity(self, timeout_sec=None):
+        """Get SMS capacity information."""
+        tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         if not self.stok:
-            self.login(timeout=tout)
+            await self.login()
         url = (
             f"{self.referer}goform/goform_get_cmd_process"
             "?isTest=false&cmd=sms_capacity_info"
         )
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
         try:
-            r = self.session.get(url, headers=headers, timeout=tout)
-            return r.json()
+            async with self.session.get(
+                url, headers=headers, timeout=tout, ssl=False
+            ) as r:
+                return await r.json(content_type=None)
         except Exception as e:
             _LOGGER.debug("Failed to get SMS capacity: %s", e)
+            self.stok = None
             return {}
 
-    def get_last_sms_content(self, timeout=None):
-        tout = timeout or self.timeout
+    async def get_last_sms_content(self, timeout_sec=None):
+        """Get the content of the last received SMS."""
+        tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         if not self.stok:
-            self.login(timeout=tout)
+            await self.login()
         url = f"{self.referer}goform/goform_get_cmd_process"
         payload = {
             "isTest": "false",
@@ -254,74 +297,69 @@ class ZTERouterAPI:
         }
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
         try:
-            r = self.session.post(url, data=payload, headers=headers, timeout=tout)
-            messages = r.json().get("messages", [])
-            if messages:
-                msg = messages[0]
-                msg["content_decoded"] = self._hex_decode(msg.get("content", ""))
-                msg["number_decoded"] = self._hex_decode(msg.get("number", ""))
-                msg["date_decoded"] = self._parse_date(msg.get("date", ""))
-                return msg
-            return {}
+            async with self.session.post(
+                url, data=payload, headers=headers, timeout=tout, ssl=False
+            ) as r:
+                resp_json = await r.json(content_type=None)
+                messages = resp_json.get("messages", [])
+                if messages:
+                    msg = messages[0]
+                    msg["content_decoded"] = self._hex_decode(msg.get("content", ""))
+                    msg["number_decoded"] = self._hex_decode(msg.get("number", ""))
+                    msg["date_decoded"] = self._parse_date(msg.get("date", ""))
+                    return msg
+                return {}
         except Exception as e:
             _LOGGER.debug("Failed to get last SMS content: %s", e)
+            self.stok = None
             return {}
 
-    def reboot(self):
-        """Execute a device reboot using string-based payload. Confirmed working."""
+    async def reboot(self):
+        """Execute a device reboot."""
         try:
-            self.login()
-            ad = self.get_AD()
+            await self.login()
+            ad = await self.get_ad()
             payload = f"isTest=false&goformId=REBOOT_DEVICE&AD={ad}"
             headers = {
                 "Referer": self.referer,
                 "Cookie": self.stok,
                 "Content-Type": "application/x-www-form-urlencoded",
             }
-            r = self.session.post(
-                f"{self.referer}goform/goform_set_cmd_process",
-                headers=headers,
-                data=payload,
-                timeout=self.timeout,
-            )
-            return r.status_code
+            url = f"{self.referer}goform/goform_set_cmd_process"
+            async with self.session.post(
+                url, headers=headers, data=payload, timeout=self.timeout, ssl=False
+            ) as r:
+                return r.status
         except Exception as e:
             _LOGGER.error("Failed to execute reboot: %s", e)
             self.stok = None
             raise
 
-    def delete_sms(self, msg_id):
-        """Helper to delete SMS using specific session.
-        Use delete_all for button action.
-        """
+    async def delete_sms(self, msg_id):
+        """Delete SMS."""
         if not self.stok:
-            self.login()
-        ad = self.get_AD()
+            await self.login()
+        ad = await self.get_ad()
         payload = f"isTest=false&goformId=DELETE_SMS&msg_id={msg_id}&AD=" + ad
         headers = {
             "Referer": self.referer,
             "Cookie": self.stok,
             "Content-Type": "application/x-www-form-urlencoded",
         }
-        r = self.session.post(
-            f"{self.referer}goform/goform_set_cmd_process",
-            headers=headers,
-            data=payload,
-            timeout=self.timeout,
-        )
-        return r.status_code
-
-    def delete_all(self):
-        """Action Button Logic:
-        1. Force a clean login (robustness).
-        2. Fetch the latest IDs (the "Read").
-        3. Trigger the deletion (the "Write").
-        """
+        url = f"{self.referer}goform/goform_set_cmd_process"
         try:
-            # Step 1: Force a fresh session
-            self.login()
+            async with self.session.post(
+                url, headers=headers, data=payload, timeout=self.timeout, ssl=False
+            ) as r:
+                return r.status
+        except Exception:
+            self.stok = None
+            raise
 
-            # Step 2: Robust Read
+    async def delete_all(self):
+        """Delete all SMS."""
+        try:
+            await self.login()
             url = f"{self.referer}goform/goform_get_cmd_process"
             payload = {
                 "isTest": "false",
@@ -333,23 +371,23 @@ class ZTERouterAPI:
                 "order_by": "order by id desc",
             }
             headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
-            r = self.session.post(
-                url, data=payload, headers=headers, timeout=self.timeout
-            )
-            ids = [m["id"] for m in r.json().get("messages", [])]
+            async with self.session.post(
+                url, data=payload, headers=headers, timeout=self.timeout, ssl=False
+            ) as r:
+                resp_json = await r.json(content_type=None)
+                ids = [m["id"] for m in resp_json.get("messages", [])]
 
-            # Step 3: Write (Delete) using the same fresh session
             if ids:
-                return self.delete_sms(";".join(ids))
+                return await self.delete_sms(";".join(ids))
             return 200
         except Exception as e:
             _LOGGER.error("Failed to delete all SMS: %s", e)
             self.stok = None
             raise
 
-    def get_AD(self, timeout=None):
-        tout = timeout or self.timeout
-        version = self.get_version(timeout=tout)
+    async def get_ad(self, timeout_sec=None):
+        """Get the AD parameter for commands."""
+        version = await self.get_version(timeout_sec=timeout_sec)
         if not version:
             return ""
         is_new_gen = any(m in version for m in ["MC888", "MC889"])
@@ -359,41 +397,20 @@ class ZTERouterAPI:
             else (lambda s: hashlib.md5(s.encode()).hexdigest())
         )
         a = hash_func(version)
-        rd = self.get_RD(timeout=tout)
+        rd = await self.get_rd(timeout_sec=timeout_sec)
         return hash_func(a + rd)
 
-    def get_RD(self, timeout=None):
-        tout = timeout or self.timeout
+    async def get_rd(self, timeout_sec=None):
+        """Get the RD parameter for AD generation."""
+        tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=RD"
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
         try:
-            r = self.session.get(url, headers=headers, timeout=tout)
-            return r.json().get("RD", "")
+            async with self.session.get(
+                url, headers=headers, timeout=tout, ssl=False
+            ) as r:
+                data = await r.json(content_type=None)
+                return data.get("RD", "")
         except Exception as e:
             _LOGGER.debug("Failed to get RD: %s", e)
             return ""
-
-
-if __name__ == "__main__":
-    # Local debugging
-    TEST_IP = "TYPE_IP_HERE"
-    TEST_USER = "TYPE_USER_HERE"
-    TEST_PWD = "TYPE_PASSOWRD_HERE_AND_RUN_MANUAL_IN_TERMINAL_FOR_DEBUG"
-
-    print("--- Comprehensive ZTE Data Fetch ---")
-    api = ZTERouterAPI(TEST_IP, TEST_USER, TEST_PWD)
-    api.try_set_protocol()
-
-    try:
-        print("Fetching Master Blob (Router Stats)...")
-        data = api.get_all_data()
-
-        print("Fetching SMS Capacity Info (Stats)...")
-        data.update(api.get_sms_capacity())
-
-        print("Fetching and Decoding Last SMS...")
-        data["last_sms"] = api.get_last_sms_content()
-
-        print(json.dumps(data, indent=2))
-    except Exception as e:
-        print(f"Error: {e}")

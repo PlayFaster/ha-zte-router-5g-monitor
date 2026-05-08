@@ -1,26 +1,39 @@
+"""Binary sensor platform for ZTE Router 5G."""
+
+from dataclasses import dataclass
+
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.const import CONF_HOST
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import get_router_model
+from .helpers import build_device_info
+
+PARALLEL_UPDATES = 0
+
+
+@dataclass(frozen=True, kw_only=True)
+class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
+    """Describes ZTE binary sensor entity."""
+
+    group: str = "signal"
+
 
 # Define the entity description for static metadata
-BEST_CONN_DESCRIPTION = BinarySensorEntityDescription(
+BEST_CONN_DESCRIPTION = ZTEBinarySensorEntityDescription(
     key="best_connection",
     translation_key="best_connection",
     device_class=BinarySensorDeviceClass.CONNECTIVITY,
+    group="signal",
 )
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the binary sensor platform."""
-    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
     # Pass the description object into the sensor
     async_add_entities(
         [ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION)]
@@ -34,13 +47,13 @@ class ZTEBestConnectionSensor(
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    entity_description: BinarySensorEntityDescription
+    entity_description: ZTEBinarySensorEntityDescription
 
     def __init__(
         self,
         coordinator: ZTERouterDataUpdateCoordinator,
         entry,
-        description: BinarySensorEntityDescription,
+        description: ZTEBinarySensorEntityDescription,
     ):
         """Initialize the binary sensor."""
         super().__init__(coordinator)
@@ -69,12 +82,7 @@ class ZTEBestConnectionSensor(
 
     @property
     def device_info(self):
-        """Return device information linking to the main router device."""
-        host = self._entry.options[CONF_HOST]
-        return {
-            "identifiers": {(DOMAIN, host)},
-            "name": self._entry.title,
-            "manufacturer": "ZTE",
-            "configuration_url": f"http://{host}",
-            "model": get_router_model(self.coordinator.data),
-        }
+        """Return device information with sub-device support."""
+        return build_device_info(
+            self.coordinator, self._entry, self.entity_description.group
+        )

@@ -1,43 +1,113 @@
 # Development & Architecture Notes: ZTE Router 5G Monitor
 
 ## 1. Project Objective
+
 To develop a high-performance Home Assistant custom component for monitoring and managing ZTE 5G Routers (MC801, MC888, MC7010, MC889 series). The integration leverages the router's internal `goform` API to extract signal metrics (RSRP, RSRQ, SNR), data usage, and SMS management features into the Home Assistant ecosystem.
 
 ## 2. Architecture & File Structure
+
 The integration follows the standard Home Assistant Custom Component pattern, optimized for asynchronous performance.
 
 ### Core Files (`custom_components/zte_router_5g/`)
-- **`api.py`**: Low-level wrapper for `requests.Session`. Handles Z-hashed authentication, hex decoding, and protocol detection (HTTP/HTTPS).
-- **`coordinator.py`**: Specialized `DataUpdateCoordinator` implementation. Centralizes polling logic to ensure only one API call is made per refresh interval, distributing data to all entities. Includes retry logic and "Pause Polling" detection.
+
+- **`api.py`**: Async wrapper for the router's internal `goform` API using `aiohttp`. Handles Z-hashed authentication, hex decoding, and protocol detection (HTTP/HTTPS).
+- **`coordinator.py`**: Specialized `DataUpdateCoordinator` implementation. Centralizes polling logic to ensure only one API call is made per refresh interval, distributing data to all entities. Includes retry logic, "Pause Polling" detection, and device registry updates for hardware metadata changes.
+- **`helpers.py`**: Shared helper functions (`get_router_model`, `build_device_info` for sub-device grouping).
 - **`__init__.py`**: Manages the integration lifecycle (setup/unload). Also handles background initialization to prevent blocking HA startup.
-- **`sensor.py`**: Extracts technical metrics and handles transformations (e.g., Bytes to GB, Uptime to ISO Datetime).
+- **`sensor.py`**: Extracts technical metrics using declarative `value_fn` callbacks and handles transformations (e.g., Bytes to GB, Uptime to ISO Datetime).
 - **`binary_sensor.py`**: Maps boolean states (e.g., `best_connection` logic).
 - **`switch.py`**: Implements "Pause Polling" to stop API calls without disabling the integration, allowing temporary exclusive access to the router WebUI.
 - **`button.py`**: Triggers stateless actions (Reboot, Delete All SMS).
 - **`number.py`**: Provides UI control over the `DataUpdateCoordinator` refresh interval with persistent storage in `ConfigEntry` options.
 - **`config_flow.py`**: Manages initial setup and reconfiguration via `OptionsFlow`, storing credentials in `entry.options`.
 
-## 3. Success Patterns
+## 3. Historical Architectural Shifts
+
+To reach its current "modern" state, the project underwent several major refactors:
+
+### From Monolithic to Orchestrated (v2.2.4 -> v2.3.1)
+
+- **Initial State**: All data fetching and coordination logic resided within `__init__.py`.
+- **Change**: Extracted fetching logic into a dedicated `coordinator.py`.
+- **Result**: Improved separation of concerns, where `__init__.py` handles lifecycle and `coordinator.py` handles data. This aligned the project with Home Assistant's professional development standards.
+
+### From Synchronous to Native Async (v2.3.1 -> v3.0.0)
+
+- **Initial State**: Used the `requests` library, which is synchronous and blocking. This required wrapping every API call in `hass.async_add_executor_job` to avoid stalling the HA event loop.
+- **Change**: Migrated the entire API layer to `aiohttp`.
+- **Result**: Native asynchronous execution. Removed the overhead of thread-switching, simplified the code by removing executor wrappers, and eliminated the need to pin and maintain the `requests` dependency in `manifest.json`.
+
+### Python Standards & Strict Linting (v3.0.0)
+
+- **Standard**: Adherence to PEP8 naming conventions and `pydocstyle` requirements.
+- **Change**: Renamed internal API methods (e.g., `get_LD` to `get_ld`) and enabled strict linting (`N`, `D`) in `pyproject.toml`.
+- **Result**: Improved codebase maintainability and alignment with Home Assistant's core coding standards.
+
+### Architectural Synchronization & Declarative Refactor (v3.0.0)
+
+- **Initial State**: Imperative `if/elif` blocks in sensors and manual retry loops in the coordinator.
+- **Change**: Refactored the entity engine to use **Declarative Callbacks** (`value_fn`). Standardized on the **Flat Identity Pattern** (loading hardware info from `entry.data` at boot). Unified background tasks using `entry.async_create_background_task`.
+- **Result**: **100% architectural parity** with the TP-Link and WiFi Monitor integrations. Massive reduction in boilerplate code and improved reliability through native HA lifecycle management.
+
+- **Standardized Resilience (v3.0.0)**: Aligned the Data Update Coordinator with the "PlayFaster" architectural standards. Increased the failure threshold to 3 cycles and synchronized warning logs. The coordinator now holds last known values for up to 3 consecutive failures before reporting "Unavailable", ensuring stable sensor data during brief API interruptions.
+- **Custom User Naming (v3.0.0)**: Implemented global name prefixing using `CONF_NAME`. Users can define a custom string (e.g., "Guest Gateway") that is prepended to every device and entity, allowing for multiple instances to be clearly distinguished in the UI without technical entity ID conflicts.
+- **Declarative Guard Bands (v3.0.0)**: Implemented "Standard 4" data integrity validation. Technical sensors (Signal Strength, SNR, Signal Bar, and SMS counts) now utilize declarative `min_limit` and `max_limit` boundaries to filter out transient hardware reporting spikes, preventing dashboard corruption.
+
+### Sub-Device Architecture & Standards Alignment (v3.0.0)
+
+- **Initial State**: All entities were grouped under a single monolithic "ZTE Router" device. Data volume was reported in GB (legacy), and signal units were inconsistent.
+- **Change**: Refactored the entity engine to support **Sub-Device Grouping** (System, Signal, Data, SMS). Aligned volume sensors with Home Assistant's `DATA_SIZE` standard (Bytes) and normalized signal metrics (RSRP/RSSI in dBm; RSRQ/SNR/SINR in dB).
+- **Result**: Improved UI organization in the Device Registry and full compatibility with Home Assistant's native unit conversion and dashboarding features. Enhanced `unique_id` stability by using lowercase internal keys (e.g., `z5g_rsrp`).
+
+## 4. Success Patterns
+
 - **`DataUpdateCoordinator`**: Essential for preventing the router from being overwhelmed by simultaneous requests. Using `coordinator.async_request_refresh()` for write actions ensures immediate UI feedback.
-- **Protocol Discovery**: The `api.try_set_protocol` method identifies whether a router is on HTTP or HTTPS by attempting short-timeout requests before authentication.
-- **Background Safety**: Connection and login are offloaded to a background task in `async_setup_entry` to ensure Home Assistant starts quickly even if the router is slow to respond.
-- **Single-Domain Discovery**: Configuring `hacs.json` to be minimal allows HACS to automatically discover the domain and class from the `manifest.json`.
+- **Sub-device Grouping**: Automatically routing entities to logical sub-devices (Signal, SMS, Data) via the `group` attribute in `EntityDescription`. This prevents "entity fatigue" in the main device view.
+- **Stable Identity Strategy**: Using hardcoded internal keys (e.g., `z5g_rsrp`) combined with the IMEI (or `host_{IP}` fallback) for `unique_id`, rather than relying on friendly names or the host IP. IMEI is hardware-bound and survives IP changes, SIM swaps, and firmware updates. This ensures entity settings (icons, hidden status) survive renames or router reconfiguration.
+- **Shared `build_device_info()` Helper**: All five platform files (`sensor.py`, `binary_sensor.py`, `button.py`, `switch.py`, `number.py`) delegate `device_info` to a single shared function in `helpers.py`. This eliminates the 5-way copy-paste drift and ensures identifiers, naming, manufacturer, model, version, and `configuration_url` (using the detected protocol) are always consistent. Adding a new platform requires no `device_info` boilerplate.
+- **Translation-Based Naming**: Sensors use `translation_key="<key>"` instead of hardcoded `name="..."`. This makes `strings.json` the canonical display-name source, enables multi-language support, and ensures display names can be changed without redeploying the integration code.
+- **Declarative Entities**: Using a `value_fn` lambda in `EntityDescription` allows for a completely generic entity class. This makes adding new sensors a "data entry" task rather than a coding task.
+- **Data Integrity (Guard Bands)**: Validating sensor values against realistic boundaries (e.g., -140 to -30 for RSRP) before committing them to the state machine. This ensures that transient API artifacts or hardware glitches don't trigger false automation states or corrupt historical graphs.
+- **Flat Identity Pattern**: By storing Model, Version, and IMEI in `entry.data` and loading them into the coordinator at `__init__`, the integration provides stable metadata to the UI instantly at boot, even if the hardware is offline.
 
-## 4. Technical Pitfalls & Fixes
-- **Catching `AbortFlow`**: Using a generic `except Exception:` block in `config_flow.py` can break HA’s "Already Configured" logic.
-  - *Fix*: Explicitly allow `AbortFlow` to propagate before catching generic exceptions.
-- **NTFS/OneDrive Locking**: Development within OneDrive-synced Windows folders causes intermittent `.git` corruption and `PermissionError` during test runs.
+## 5. Technical Pitfalls & Fixes
+
+- **ConfigEntry Data vs. Options**: In this integration, `entry.options` is used for user-changeable settings (credentials, polling interval), while `entry.data` is reserved for immutable hardware metadata (Model, IMEI, Version).
+  - _Fix_: Standardized all platforms to initialize from `entry.data`. Hardware metadata changes detected mid-poll are propagated via the device registry (`device_registry.async_update_device`) rather than rewriting `entry.data`, avoiding unnecessary disk writes and maintaining the principle that `entry.data` is immutable after initial setup.
+- **MockConfigEntry Immutability**: In Home Assistant tests, `MockConfigEntry.options` is a frozen property. Attempting to update it directly via `entry.options = {...}` fails with an `AttributeError`.
+  - _Fix_: Use `object.__setattr__(entry, "options", new_options)` in test code to bypass the frozen attribute restriction.
+- **Background Task Mocking**: When `hass.async_create_task` is mocked, tasks created via `entry.async_create_background_task` may not execute, leading to `RuntimeWarning: coroutine was never awaited`.
+  - _Fix_: In `conftest.py`, ensure the background task mock explicitly schedules the coroutine via `asyncio.create_task` and that the test awaits `hass.async_block_till_done()`.
+- **Manual Sleep in Coordinators**: Sleeping inside `_async_update_data` blocks the coordinator task and delays other integrations.
+  - _Fix_: Removed `asyncio.sleep` retries. Use `asyncio.timeout` and raise `UpdateFailed` to let HA handle backoffs.
+- **Background Task Orphaning**: Standard `hass.async_create_task` is not tracked by the entry.
+  - _Fix_: Migrated to `entry.async_create_background_task` for automatic cleanup on unload.
 - **MappingProxy TypeError**: In unit tests, `ZTEConfigFlow().context` is a read-only `mappingproxy`.
-  - *Fix*: Explicitly set `flow.context = {}` in test setups.
-- **HACS Branch Resolution**: HACS validation actions on non-default branches (like `dev`) often fail to find the manifest or brand assets.
-  - *Fix*: Explicitly provide the repository context as `repository: ${{ github.repository }}@${{ github.ref_name }}` in the workflow.
+  - _Fix_: Explicitly set `flow.context = {}` in test setups.
+- **Translation Key Synchronization (Hassfest)**: When using `translation_key` in entity descriptions, Home Assistant (via `hassfest`) requires that these keys exist in both `strings.json` and all `translations/*.json` files. Furthermore, `strings.json` must be free of duplicate keys (e.g., accidental duplicate `reauth` blocks).
+  - _Fix_: Consolidated duplicate `reauth` keys and performed a full audit to ensure every `translation_key` used in platform files has a corresponding entry in both translation source files.
 
-## 5. Environment Constraints
-- **I/O Bound API**: The ZTE goform API is synchronous and blocking. All API calls must be wrapped in `hass.async_add_executor_job` to avoid stalling the HA event loop.
-- **SSL Verification**: Local routers typically use self-signed certificates. The `ZTERouterAPI` uses `urllib3.disable_warnings()` and `verify=False`.
-- **Requirements Pinning**: Home Assistant requires all PyPI dependencies in `manifest.json` to be pinned to a specific version (e.g., `requests==2.32.3`).
+## 6. Environment Constraints
 
-## 6. Technical Debt & Future Work
+- **Native Async API**: The integration uses `aiohttp` for all network communication, aligning with the Home Assistant event loop. This removes the need for `executor_job` threading and eliminates the maintenance burden of pinning external libraries like `requests`.
+- **SSL Verification**: Local routers typically use self-signed certificates. The `ZTERouterAPI` uses `ssl=False` in its `aiohttp` calls to maintain connectivity.
+- **Shared Session**: The integration uses `async_get_clientsession(hass)` to leverage Home Assistant's optimized, shared connection pool.
+
+## 7. Technical Debt & Future Work
+
 - **Token Persistence**: Currently, the `stok` (Session Token) is stored in memory. A fresh login is required on every integration restart.
+- **Translation-Key Naming**: When migrating from `name="..."` to `translation_key="..."`, both `strings.json` and `translations/en.json` must be kept in sync. `strings.json` is the authoritative source; `translations/en.json` is the runtime-loaded file. Adding a sensor requires adding entries to both files, not just the Python code.
+- **Device Registry Lookup for Metadata Updates**: When the coordinator detects hardware metadata changes (model, firmware version), it looks up the system device by identifier `(DOMAIN, f"{sub_id_prefix}_system")` in the device registry. This avoids needing to pass device IDs around but requires that the device was already created by an entity's `device_info` property in a previous update cycle. If the device doesn't exist yet (first poll), the update is safely skipped.
+
 - **SMS Page Limits**: The `delete_all` feature is limited to the first 500 messages to avoid API timeouts.
-- **Debounce Dependency**: The `ZTEPollingInterval` entity uses an `asyncio.sleep(2)` debounce. This creates a task that must be handled carefully in unit tests to avoid `UnraisableExceptionWarnings`.
+- **Service Integration**: Evaluate implementing a `send_sms` service to match the TP-Link integration's capability if the ZTE API supports it.
+
+---
+
+## Version Control
+
+- **v1.0.1** (2026-05-07) — Added diagnostics platform, reauthentication flow, runtime-data migration, parallel-updates, button exception handling, log-on-unavailability improvements, config-flow data descriptions, and expanded test coverage.
+- **v1.0.2** (2026-05-07) — Replaced host-IP unique_id with IMEI-based stable device identity. Added 12 new sensors (System: IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID; Signal: eNodeB ID, Network Mode, PPP Status; Data: Upload Speed, Download Speed, Session Sent, Session Received). Guard bands applied to Battery (0–100) and throughput/session-byte sensors (min 0). Added sensitive identifiers (imei, sim_imsi, sim_iccid) to diagnostics redaction.
+- **v1.0.3** (2026-05-07) — Code review bugfix pass (13 items). Extracted 5-way duplicated `device_info` into shared `build_device_info()` helper. Migrated `configuration_url` to dynamic protocol. Replaced mid-poll `async_update_entry` with device registry updates. Migrated 58 sensor descriptions to `translation_key=` naming. Added `async_will_remove_from_hass` for debounce task cleanup. Added recursion guard to `get_all_data`. Fixed null deref in reauth, Python 2 `except` syntax, `ValueError` escape, bare Exception, `delete_sms()` stok clearing, orphaned test body, and weak type annotation in diagnostics.
+- **v1.0.4** (2026-05-08) — Gold Standard README overhaul and Hassfest translation synchronization fix.
+- **v1.0.5** (2026-05-08) — Fixed hassfest CI failure caused by invalid top-level `"reauth"` key in both translation files; HA schema requires reauth steps under `config.step.reauth_confirm`, not a standalone `reauth` block. Fixed `{host}` placeholder not resolving in reauth dialog by passing `description_placeholders` to `async_show_form`.

@@ -1,30 +1,44 @@
+"""Switch platform for ZTE Router 5G."""
+
 import logging
+from dataclasses import dataclass
 
 from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
-from homeassistant.const import CONF_HOST
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_STOP_POLLING, DOMAIN
+from .const import CONF_STOP_POLLING
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import get_router_model
+from .helpers import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
+PARALLEL_UPDATES = 0
+
+
+@dataclass(frozen=True, kw_only=True)
+class ZTESwitchEntityDescription(SwitchEntityDescription):
+    """Describes ZTE switch entity."""
+
+    group: str = "system"
+
+
 # Define the entity description for static metadata
-PAUSE_POLLING_DESCRIPTION = SwitchEntityDescription(
+PAUSE_POLLING_DESCRIPTION = ZTESwitchEntityDescription(
     key="pause_polling",
     translation_key="pause_polling",
     icon="mdi:pause-circle-outline",
     entity_category=EntityCategory.CONFIG,
+    group="system",
 )
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the switch platform."""
-    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
     # Read initial state from entry options (survives restarts)
     initial_state = entry.options.get(CONF_STOP_POLLING, False)
@@ -38,22 +52,24 @@ async def async_setup_entry(hass, entry, async_add_entities):
     )
 
 
-class ZTEPausePollingSwitch(SwitchEntity):
+class ZTEPausePollingSwitch(
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator], SwitchEntity
+):
     """Switch to pause/resume polling with persistence."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False  # State is managed by user interaction and memory
-    entity_description: SwitchEntityDescription
+    entity_description: ZTESwitchEntityDescription
 
     def __init__(
         self,
         coordinator: ZTERouterDataUpdateCoordinator,
         entry,
-        description: SwitchEntityDescription,
+        description: ZTESwitchEntityDescription,
         initial_state,
     ):
         """Initialize the switch."""
-        self._coordinator = coordinator
+        super().__init__(coordinator)
         self._entry = entry
         self.entity_description = description
 
@@ -89,16 +105,11 @@ class ZTEPausePollingSwitch(SwitchEntity):
 
         # 2. If we just resumed, trigger an immediate coordinator refresh
         if not state:
-            await self._coordinator.async_request_refresh()
+            await self.coordinator.async_request_refresh()
 
     @property
     def device_info(self):
-        """Return device information linking to the main router device."""
-        host = self._entry.options[CONF_HOST]
-        return {
-            "identifiers": {(DOMAIN, host)},
-            "name": self._entry.title,
-            "manufacturer": "ZTE",
-            "configuration_url": f"http://{host}",
-            "model": get_router_model(self._coordinator.data),
-        }
+        """Return device information with sub-device support."""
+        return build_device_info(
+            self.coordinator, self._entry, self.entity_description.group
+        )

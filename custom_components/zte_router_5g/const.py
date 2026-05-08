@@ -5,6 +5,7 @@ DOMAIN = "zte_router_5g"
 # This is the default prefix used for the Integration Title and Entity IDs
 # if the user doesn't provide a custom name during setup.
 DEFAULT_NAME = "ZTE 5G"
+CONF_NAME = "name"
 
 # Legacy or internal naming if needed
 NAME = "ZTE Router 5G Monitor"

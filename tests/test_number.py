@@ -1,11 +1,16 @@
+"""Tests for the ZTE Router number."""
+
+import asyncio
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.helpers.entity import EntityCategory
 
 from custom_components.zte_router_5g.const import CONF_SCAN_INTERVAL, DOMAIN
 from custom_components.zte_router_5g.number import (
     POLLING_INTERVAL_DESCRIPTION,
+    ZTENumberEntityDescription,
     ZTEPollingInterval,
     async_setup_entry,
 )
@@ -50,9 +55,107 @@ async def test_number_setup_entry():
     entry = MagicMock()
     entry.entry_id = "test"
     entry.options = {CONF_SCAN_INTERVAL: 180}
-    coordinator = MagicMock()
-    hass.data = {DOMAIN: {"test": coordinator}}
+    entry.runtime_data = MagicMock()
 
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
     async_add_entities.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_polling_interval_cancel_previous_task(
+    mock_coordinator, mock_config_entry
+):
+    """Test that changing the slider cancels any pending debounce task (line 98)."""
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
+    number.hass = MagicMock()
+    number.async_write_ha_state = MagicMock()
+
+    with patch("asyncio.sleep", AsyncMock()):
+        await number.async_set_native_value(120)
+        task1 = number._refresh_task
+        await number.async_set_native_value(300)
+        assert task1 is not None
+        await asyncio.sleep(0)
+        await number._refresh_task
+
+
+@pytest.mark.asyncio
+async def test_async_debounced_apply_cancelled(mock_coordinator, mock_config_entry):
+    """Test that CancelledError is silently caught (lines 126-128)."""
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
+    number.hass = MagicMock()
+
+    with patch("asyncio.sleep", AsyncMock(side_effect=asyncio.CancelledError)):
+        await number._async_debounced_apply(120)
+
+    mock_coordinator.async_request_refresh.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_async_debounced_apply_exception(
+    mock_coordinator, mock_config_entry, caplog
+):
+    """Test that unexpected exceptions are logged (lines 129-130)."""
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
+    number.hass = MagicMock()
+
+    with patch("asyncio.sleep", AsyncMock(side_effect=ValueError("boom"))):
+        await number._async_debounced_apply(120)
+
+    assert "Failed to apply polling interval change" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_device_info_system_group(mock_coordinator, mock_config_entry):
+    """Test device_info for system group (no via_device)."""
+    mock_coordinator.api.protocol = "http"
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
+
+    info = number.device_info
+    assert info["identifiers"] == {(DOMAIN, "864155042229309_system")}
+    assert info["name"] == "My ZTE Router System"
+    assert info["manufacturer"] == "ZTE"
+    assert info["configuration_url"] == "http://192.168.0.1"
+    assert "via_device" not in info
+
+
+@pytest.mark.asyncio
+async def test_device_info_signal_group(mock_coordinator, mock_config_entry):
+    """Test device_info with non-system group (has via_device)."""
+    desc = ZTENumberEntityDescription(
+        key="test",
+        translation_key="test",
+        native_min_value=1,
+        native_max_value=100,
+        native_step=1,
+        entity_category=EntityCategory.CONFIG,
+        group="signal",
+    )
+
+    number = ZTEPollingInterval(mock_coordinator, mock_config_entry, desc, 50)
+
+    info = number.device_info
+    assert info["via_device"] == (DOMAIN, "864155042229309_system")
+    assert info["name"] == "My ZTE Router Signal"
+
+
+@pytest.mark.asyncio
+async def test_device_info_no_mac(mock_coordinator, mock_config_entry):
+    """Test device_info fallback when coordinator has no mac."""
+    mock_coordinator.imei = None
+
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
+
+    info = number.device_info
+    assert info["identifiers"] == {(DOMAIN, "host_192.168.0.1_system")}

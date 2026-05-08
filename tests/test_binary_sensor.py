@@ -1,3 +1,5 @@
+"""Tests for the ZTE Router binary sensor."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -37,7 +39,7 @@ def test_binary_sensor_device_info(mock_coordinator, mock_config_entry):
         mock_coordinator, mock_config_entry, BEST_CONN_DESCRIPTION
     )
     info = sensor.device_info
-    assert info["identifiers"] == {(DOMAIN, "192.168.0.1")}
+    assert info["identifiers"] == {(DOMAIN, "864155042229309_signal")}
     assert info["manufacturer"] == "ZTE"
 
 
@@ -47,8 +49,7 @@ async def test_binary_sensor_setup_entry():
     hass = MagicMock()
     entry = MagicMock()
     entry.entry_id = "test"
-    coordinator = MagicMock()
-    hass.data = {DOMAIN: {"test": coordinator}}
+    entry.runtime_data = MagicMock()
 
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)

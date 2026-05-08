@@ -1,3 +1,5 @@
+"""Tests for the ZTE Router switch."""
+
 from unittest.mock import MagicMock
 
 import pytest
@@ -14,7 +16,9 @@ from custom_components.zte_router_5g.switch import (
 async def test_pause_polling_switch(mock_coordinator, mock_config_entry):
     """Test turning the pause switch on and off."""
     # Start with False (not paused)
-    mock_config_entry.options[CONF_STOP_POLLING] = False
+    new_options = dict(mock_config_entry.options)
+    new_options[CONF_STOP_POLLING] = False
+    object.__setattr__(mock_config_entry, "options", new_options)
 
     switch = ZTEPausePollingSwitch(
         mock_coordinator, mock_config_entry, PAUSE_POLLING_DESCRIPTION, False
@@ -44,8 +48,7 @@ async def test_switch_setup_entry():
     entry = MagicMock()
     entry.entry_id = "test"
     entry.options = {CONF_STOP_POLLING: False}
-    coordinator = MagicMock()
-    hass.data = {DOMAIN: {"test": coordinator}}
+    entry.runtime_data = MagicMock()
 
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)

@@ -1,22 +1,36 @@
+"""Number platform for ZTE Router 5G."""
+
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import timedelta
 
 from homeassistant.components.number import (
     NumberEntity,
     NumberEntityDescription,
 )
-from homeassistant.const import CONF_HOST, UnitOfTime
+from homeassistant.const import UnitOfTime
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_SCAN_INTERVAL, DOMAIN
+from .const import CONF_SCAN_INTERVAL
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import get_router_model
+from .helpers import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
+PARALLEL_UPDATES = 0
+
+
+@dataclass(frozen=True, kw_only=True)
+class ZTENumberEntityDescription(NumberEntityDescription):
+    """Describes ZTE number entity."""
+
+    group: str = "system"
+
+
 # Define the entity description for static metadata
-POLLING_INTERVAL_DESCRIPTION = NumberEntityDescription(
+POLLING_INTERVAL_DESCRIPTION = ZTENumberEntityDescription(
     key="polling_interval",
     translation_key="polling_interval",
     native_min_value=30,
@@ -24,12 +38,13 @@ POLLING_INTERVAL_DESCRIPTION = NumberEntityDescription(
     native_step=30,
     native_unit_of_measurement=UnitOfTime.SECONDS,
     entity_category=EntityCategory.CONFIG,
+    group="system",
 )
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up the number platform."""
-    coordinator: ZTERouterDataUpdateCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
     # Read initial value from entry options (survives restarts)
     initial_value = entry.options.get(CONF_SCAN_INTERVAL, 180)
@@ -43,22 +58,24 @@ async def async_setup_entry(hass, entry, async_add_entities):
     )
 
 
-class ZTEPollingInterval(NumberEntity):
+class ZTEPollingInterval(
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator], NumberEntity
+):
     """Number entity to control the polling interval with persistence."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    entity_description: NumberEntityDescription
+    entity_description: ZTENumberEntityDescription
 
     def __init__(
         self,
         coordinator: ZTERouterDataUpdateCoordinator,
         entry,
-        description: NumberEntityDescription,
+        description: ZTENumberEntityDescription,
         initial_value,
     ):
         """Initialize the number entity."""
-        self._coordinator = coordinator
+        super().__init__(coordinator)
         self._entry = entry
         self.entity_description = description
 
@@ -68,6 +85,11 @@ class ZTEPollingInterval(NumberEntity):
         # Local state
         self._attr_native_value = initial_value
         self._refresh_task = None
+
+    async def async_will_remove_from_hass(self) -> None:
+        """Cancel any pending debounce task on removal."""
+        if self._refresh_task and not self._refresh_task.done():
+            self._refresh_task.cancel()
 
     async def async_set_native_value(self, value: float) -> None:
         """Handle the UI slider change."""
@@ -92,7 +114,7 @@ class ZTEPollingInterval(NumberEntity):
             _LOGGER.debug("Applying new polling interval: %s seconds", val_int)
 
             # 1. Update the coordinator's actual update interval
-            self._coordinator.update_interval = timedelta(seconds=val_int)
+            self.coordinator.update_interval = timedelta(seconds=val_int)
 
             # 2. Persist to ConfigEntry Options (saves to .storage/core.config_entries)
             # This ensures the setting survives a Home Assistant restart.
@@ -103,7 +125,7 @@ class ZTEPollingInterval(NumberEntity):
             )
 
             # 3. Trigger an immediate refresh using the new interval
-            await self._coordinator.async_request_refresh()
+            await self.coordinator.async_request_refresh()
 
         except asyncio.CancelledError:
             # Task was cancelled because the user moved the slider again
@@ -113,12 +135,7 @@ class ZTEPollingInterval(NumberEntity):
 
     @property
     def device_info(self):
-        """Return device information linking to the main router device."""
-        host = self._entry.options[CONF_HOST]
-        return {
-            "identifiers": {(DOMAIN, host)},
-            "name": self._entry.title,
-            "manufacturer": "ZTE",
-            "configuration_url": f"http://{host}",
-            "model": get_router_model(self._coordinator.data),
-        }
+        """Return device information with sub-device support."""
+        return build_device_info(
+            self.coordinator, self._entry, self.entity_description.group
+        )
