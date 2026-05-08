@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0-rc1] - 2026-05-08
+
+### Changed
+
+- **Entity categories and visibility**: Refined sensor categorization and default settings. Moved **Device Uptime**, **Last Updated**, and **Best Connection** to regular Sensor category; moved **WAN Connect Status** to Diagnostic. Set **Battery** to be disabled by default.
+- **User-Friendly Labels**: Renamed **PPP Status** sensor to **Bridge Mode** for better clarity in the UI.
+
+### Fixed
+
+- **Readme**: Updates to Readme including corrections to automation examples.
+
 ## [3.0.0-dev22] - 2026-05-08
 
 ### Fixed

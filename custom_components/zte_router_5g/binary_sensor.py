@@ -7,7 +7,6 @@ from homeassistant.components.binary_sensor import (
     BinarySensorEntity,
     BinarySensorEntityDescription,
 )
-from homeassistant.const import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import ZTERouterDataUpdateCoordinator
@@ -28,7 +27,6 @@ BEST_CONN_DESCRIPTION = ZTEBinarySensorEntityDescription(
     key="best_connection",
     translation_key="best_connection",
     device_class=BinarySensorDeviceClass.CONNECTIVITY,
-    entity_category=EntityCategory.DIAGNOSTIC,
     group="signal",
 )
 
