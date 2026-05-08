@@ -84,6 +84,8 @@ To reach its current "modern" state, the project underwent several major refacto
   - _Fix_: Migrated to `entry.async_create_background_task` for automatic cleanup on unload.
 - **MappingProxy TypeError**: In unit tests, `ZTEConfigFlow().context` is a read-only `mappingproxy`.
   - _Fix_: Explicitly set `flow.context = {}` in test setups.
+- **Translation Key Synchronization (Hassfest)**: When using `translation_key` in entity descriptions, Home Assistant (via `hassfest`) requires that these keys exist in both `strings.json` and all `translations/*.json` files. Furthermore, `strings.json` must be free of duplicate keys (e.g., accidental duplicate `reauth` blocks).
+  - _Fix_: Consolidated duplicate `reauth` keys and performed a full audit to ensure every `translation_key` used in platform files has a corresponding entry in both translation source files.
 
 ## 6. Environment Constraints
 
@@ -107,3 +109,4 @@ To reach its current "modern" state, the project underwent several major refacto
 - **v1.0.1** (2026-05-07) — Added diagnostics platform, reauthentication flow, runtime-data migration, parallel-updates, button exception handling, log-on-unavailability improvements, config-flow data descriptions, and expanded test coverage.
 - **v1.0.2** (2026-05-07) — Replaced host-IP unique_id with IMEI-based stable device identity. Added 12 new sensors (System: IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID; Signal: eNodeB ID, Network Mode, PPP Status; Data: Upload Speed, Download Speed, Session Sent, Session Received). Guard bands applied to Battery (0–100) and throughput/session-byte sensors (min 0). Added sensitive identifiers (imei, sim_imsi, sim_iccid) to diagnostics redaction.
 - **v1.0.3** (2026-05-07) — Code review bugfix pass (13 items). Extracted 5-way duplicated `device_info` into shared `build_device_info()` helper. Migrated `configuration_url` to dynamic protocol. Replaced mid-poll `async_update_entry` with device registry updates. Migrated 58 sensor descriptions to `translation_key=` naming. Added `async_will_remove_from_hass` for debounce task cleanup. Added recursion guard to `get_all_data`. Fixed null deref in reauth, Python 2 `except` syntax, `ValueError` escape, bare Exception, `delete_sms()` stok clearing, orphaned test body, and weak type annotation in diagnostics.
+- **v1.0.4** (2026-05-08) — Gold Standard README overhaul and Hassfest translation synchronization fix.

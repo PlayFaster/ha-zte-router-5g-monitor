@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.0-dev21] - 2026-05-08
+
+### Added
+
+- **Gold Standard README**: Comprehensive documentation overhaul with entity tables, technical context, and YAML automation examples.
+- **Missing Translations**: Added 15+ missing translation keys for 5G signal metrics and hardware diagnostics to ensure 100% coverage.
+
+### Changed
+
+- **User-Friendly Labels**: Refined entity labels in `strings.json` for better readability (e.g., "Wa Inner Version" → "Firmware Version").
+
+### Fixed
+
+- **Hassfest Validation**: Resolved duplicate `reauth` keys in `strings.json` that caused CI/CD failures.
+
 ## [3.0.0-dev19] - 2026-05-07
 
 ### Changed
