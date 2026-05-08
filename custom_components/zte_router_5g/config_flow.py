@@ -99,12 +99,11 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(self, user_input=None):
         """Reauth confirm step to submit new credentials."""
         errors = {}
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        host = entry.options.get(CONF_HOST, "") if entry else ""
 
         if user_input is not None:
             try:
-                entry = self.hass.config_entries.async_get_entry(
-                    self.context["entry_id"]
-                )
                 await _validate_credentials(self.hass, user_input)
 
                 if entry is None:
@@ -134,6 +133,7 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="reauth_confirm",
             data_schema=_user_schema({}),
             errors=errors,
+            description_placeholders={"host": host},
         )
 
     @staticmethod
