@@ -189,8 +189,6 @@ actions:
         - CA: {{ states('sensor.zte_5g_signal_carrier_aggregation') }}
 ```
 
----
-
 ## 📸 Screenshots
 
 ### Integration Overview
@@ -208,8 +206,6 @@ actions:
 ### Setup
 
 ![Setup](.github/images/zte_5g_setup_info.png)
-
----
 
 ## ✨ Installation
 
@@ -229,8 +225,6 @@ actions:
 2. Copy the `custom_components/zte_router_5g` folder to your Home Assistant `custom_components` directory
 3. Restart Home Assistant
 4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
-
----
 
 ## ⚙️ Configuration
 
@@ -252,8 +246,6 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 | Host | – | – | Router IP address (change if the router's LAN IP changes). |
 | Username | – | – | Router login username. |
 | Password | – | – | Admin password (update if changed on the router). |
-
----
 
 ## ❓ FAQ & Troubleshooting
 
@@ -282,8 +274,6 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 - Use the **Pause Polling** switch in Home Assistant to halt polling before you log into the web UI.
 - Resume polling when done!
 
----
-
 ## 🗑️ Removal
 
 To remove the integration from Home Assistant:
@@ -300,6 +290,10 @@ To fully uninstall (HACS):
 3. Click the **three dots** (⋮) at the top right and select **Remove**.
 4. Restart Home Assistant.
 
+## ⚠️ Known Limitations /❔ What's Missing?
+
+- **Comprehensive SMS Management**: Basic functionality is available, including SMS counts, viewing the most recent message, and a "Delete All" action. More comprehensive management (e.g., reading full message threads or deleting specific messages) is not currently supported. These features may be added in the future, pending further investigation into the router’s communication capabilities.
+
 ## 📝 Maintenance Status
 
 This is a **personal project**. Support and updates are provided on a **"best-effort"** basis only. While I use this integration daily and aim to keep it functional with the latest Home Assistant releases, I cannot guarantee immediate fixes for issues or compatibility with all router firmware versions.
@@ -315,4 +309,4 @@ This project is licensed under the Apache License, Version 2.0. See [LICENSE](LI
 
 ---
 
-**For issues, feature requests, or contributions, please visit the [GitHub repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor).**
+**Questions or Issues?** Visit the [GitHub repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor).**
