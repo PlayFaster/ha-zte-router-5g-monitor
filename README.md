@@ -16,12 +16,13 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > This project is optimized for the ZTE MC7010 5G Outdoor CPE but may work with other similar ZTE devices.
 
-## 🔧 Compatibility & Requirements
+## 🔧 Compatibility & Tested Devices
 
-**Router Hardware:**
+**Hardware Support:** This integration is designed for ZTE's "ZTE Link" API platform.
 
-- **Tested on**: **ZTE MC7010** – 5G Outdoor CPE.
-- **Expected compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
+- **Fully Tested**:
+  - **ZTE MC7010** (5G Outdoor CPE)
+- **Expected Compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
 - **Not Supported**: Non-ZTE hardware.
 
 **Network:**
@@ -72,24 +73,44 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 ---
 
-## 🏗️ Under the Hood
+## 🏗️ Under the Hood - Technical Architecture
 
-- **Resilient Polling**: Includes a hybrid retry logic (30s retry) and stale-data grace periods to prevent "Unavailable" flickers during router reboots.
+### 🔄 Data Polling & 3-Strike Resilience
+
+The integration uses a custom `DataUpdateCoordinator` designed for high stability:
+
+- **Polling Loop**: Fetches all diagnostic and SMS data in a single optimized request.
+- **3-Strike Logic**: To avoid "Unavailable" flickers during momentary router congestion or signal loss:
+  1. **First Failure**: Logs a warning; retries immediately.
+  2. **Second Failure**: Logs a warning; retries again.
+  3. **Third Failure**: Marks all entities as `Unavailable` and logs an error.
+- **Auto-Recovery**: Once the router is back online, the integration restores all entities automatically.
+
+### ⏸️ Pause Polling Behavior
+
+ZTE routers typically only allow **one active web/API session** at a time.
+
+- If you log into the router's web interface while the integration is polling, you may be kicked out.
+- **Solution**: Use the **Pause Polling** switch in Home Assistant. This stops all API calls, allowing you to manage the router via your browser without interruption.
+
+### 🆔 Identity & Stable Entities
+
+- **IMEI-Based Identity**: The integration uses the router's unique hardware IMEI as the primary key. This ensures that even if your router's IP address changes (DHCP), Home Assistant will track the same device and preserve your history and automations.
+- **Reconfiguration**: If you change your router's IP or password, use the **Reconfigure** button on the integration card to update settings without losing any data.
 - **Data Validation**: Router values are checked for validity (guard limits), with out-of-range sensors being marked as unknown.
-- **Identity Strategy**: Uses the hardware IMEI as the unique identifier for stable entity tracking across reboots and IP changes.
 
 ---
 
 ## 📊 What You Get
 
-This integration provides **63 entities** grouped into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **55+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
-| Type         | Count | Primary Functions                                             |
-| :----------- | :---- | :------------------------------------------------------------ |
-| **Sensors**  | 59    | Signal strength, data usage, uptime, SMS content, device info |
-| **Switches** | 1     | Pause Polling                                                 |
-| **Buttons**  | 2     | Reboot, Delete All SMS                                        |
-| **Controls** | 1     | Polling Interval                                              |
+| Sub-Device | Entity Types | Key Metrics |
+| :-- | :-- | :-- |
+| **System** | 11 Sensors, 1 Switch, 1 Button, 1 Number | Firmware, IMEI, IP Addresses, Uptime, Reboot, Polling Controls |
+| **Signal** | 25 Sensors, 1 Binary Sensor | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands |
+| **Data** | 10 Sensors | Monthly Usage (GB & Bytes), Real-time Speed, Session Data |
+| **SMS** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Message Content, Delete All |
 
 ---
 
