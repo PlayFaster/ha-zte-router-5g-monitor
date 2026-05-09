@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from datetime import timedelta
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
@@ -11,7 +12,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import ZTEAuthError
+from .api import ZTEAuthError, ZTERouterAPI
 from .const import CONF_SCAN_INTERVAL, CONF_STOP_POLLING, DOMAIN
 from .helpers import get_router_model
 
@@ -21,7 +22,9 @@ _LOGGER = logging.getLogger(__name__)
 class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ZTE Router data with resilience and pausing."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, api):
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, api: ZTERouterAPI
+    ) -> None:
         """Initialize the coordinator."""
         self.api = api
         self.entry = entry
@@ -45,7 +48,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=scan_interval),
         )
 
-    async def _async_update_data(self):
+    async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API with resilience and pausing."""
         is_paused = self.entry.options.get(CONF_STOP_POLLING, False)
         is_first_run = self.data is None

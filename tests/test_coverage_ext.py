@@ -162,6 +162,7 @@ async def test_api_get_ad_empty_version(mock_aiohttp_client):
 async def test_api_get_rd_success(mock_aiohttp_client):
     """Test get_rd success path."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=fake"
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"RD": "test_rd"})
     assert await api.get_rd() == "test_rd"
 

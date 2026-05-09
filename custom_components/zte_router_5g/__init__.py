@@ -60,7 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # BACKGROUND INITIALIZATION TASK
     # Offloads the initial connection to keep startup instant.
-    async def _async_background_setup():
+    async def _async_background_setup() -> None:
         try:
             await api.try_set_protocol(5)
             await api.login(5)

@@ -1,5 +1,7 @@
 """Sensor platform for ZTE Router 5G."""
 
+from __future__ import annotations
+
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -12,13 +14,17 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     UnitOfDataRate,
     UnitOfInformation,
 )
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
@@ -668,7 +674,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
 )
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up the sensor platform."""
     coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
     async_add_entities(
@@ -688,9 +698,9 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
     def __init__(
         self,
         coordinator: ZTERouterDataUpdateCoordinator,
-        entry,
+        entry: ConfigEntry,
         description: ZTESensorEntityDescription,
-    ):
+    ) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator)
         self.entity_description = description
@@ -698,7 +708,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
     @property
-    def native_value(self):
+    def native_value(self) -> Any:
         """Return the value of the sensor."""
         if not self.coordinator.data:
             return None
@@ -732,7 +742,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
         return value
 
     @property
-    def extra_state_attributes(self):
+    def extra_state_attributes(self) -> dict[str, Any]:
         """Return detailed attributes for specific sensors."""
         data = self.coordinator.data
         if data is None:
@@ -768,7 +778,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
         return {}
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         """Return device information with sub-device support."""
         return build_device_info(
             self.coordinator, self._entry, self.entity_description.group

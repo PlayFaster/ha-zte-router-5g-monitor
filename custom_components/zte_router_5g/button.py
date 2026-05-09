@@ -1,5 +1,7 @@
 """Button platform for ZTE Router 5G."""
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 
@@ -8,7 +10,11 @@ from homeassistant.components.button import (
     ButtonEntity,
     ButtonEntityDescription,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.device_registry import DeviceInfo
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import ZTERouterDataUpdateCoordinator
@@ -44,7 +50,11 @@ DELETE_SMS_DESCRIPTION = ZTEButtonEntityDescription(
 )
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up the button platform."""
     coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
@@ -67,9 +77,9 @@ class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity)
     def __init__(
         self,
         coordinator: ZTERouterDataUpdateCoordinator,
-        entry,
+        entry: ConfigEntry,
         description: ZTEButtonEntityDescription,
-    ):
+    ) -> None:
         """Initialize the button."""
         super().__init__(coordinator)
         self.entity_description = description
@@ -77,7 +87,7 @@ class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity)
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         """Return device information with sub-device support."""
         return build_device_info(
             self.coordinator, self._entry, self.entity_description.group

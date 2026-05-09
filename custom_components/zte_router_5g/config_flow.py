@@ -1,11 +1,16 @@
 """Config flow for ZTE Router 5G integration."""
 
+from __future__ import annotations
+
 import logging
+from typing import Any
 
 import voluptuous as vol
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.data_entry_flow import AbortFlow
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
@@ -27,7 +32,9 @@ def _user_schema(defaults: dict) -> vol.Schema:
     )
 
 
-async def _validate_credentials(hass, user_input: dict) -> dict:
+async def _validate_credentials(
+    hass: HomeAssistant, user_input: dict[str, Any]
+) -> dict[str, Any]:
     """Validate router credentials and return basic device info."""
     session = async_get_clientsession(hass)
     api = ZTERouterAPI(
@@ -48,12 +55,17 @@ async def _validate_credentials(hass, user_input: dict) -> dict:
     }
 
 
-class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+class ZTEConfigFlow(
+    config_entries.ConfigFlow,
+    domain=DOMAIN,  # type: ignore[call-arg]
+):
     """Handle a config flow for ZTE Router 5G Monitor."""
 
     VERSION = 2
 
-    async def async_step_user(self, user_input=None):
+    async def async_step_user(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Handle the initial setup step."""
         errors = {}
 
@@ -89,14 +101,18 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_reauth(self, user_input=None):
+    async def async_step_reauth(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Perform reauthentication when the router password changes."""
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         if entry is None:
             return self.async_abort(reason="reauth_successful")
         return await self.async_step_reauth_confirm()
 
-    async def async_step_reauth_confirm(self, user_input=None):
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Reauth confirm step to submit new credentials."""
         errors = {}
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
@@ -138,7 +154,7 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     @config_entries.callback
-    def async_get_options_flow(entry):
+    def async_get_options_flow(entry: ConfigEntry) -> ZTEOptionsFlow:
         """Return the options flow handler."""
         return ZTEOptionsFlow(entry)
 
@@ -146,11 +162,13 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class ZTEOptionsFlow(config_entries.OptionsFlow):
     """Handle reconfiguration of an existing ZTE Router entry."""
 
-    def __init__(self, entry: config_entries.OptionsFlow) -> None:
+    def __init__(self, entry: ConfigEntry) -> None:
         """Initialize the options flow."""
         self._entry = entry
 
-    async def async_step_init(self, user_input=None):
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
         """Manage the options — reconfigure host, username, password."""
         errors = {}
 
