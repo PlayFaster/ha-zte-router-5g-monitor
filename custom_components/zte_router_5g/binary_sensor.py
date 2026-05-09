@@ -31,7 +31,7 @@ class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
 # Define the entity description for static metadata
 BEST_CONN_DESCRIPTION = ZTEBinarySensorEntityDescription(
     key="best_connection",
-    translation_key="best_connection",
+    translation_key="signal_best_connection",
     device_class=BinarySensorDeviceClass.CONNECTIVITY,
     group="signal",
 )

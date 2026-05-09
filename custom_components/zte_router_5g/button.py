@@ -35,7 +35,7 @@ class ZTEButtonEntityDescription(ButtonEntityDescription):
 # Define metadata for the Reboot button
 REBOOT_DESCRIPTION = ZTEButtonEntityDescription(
     key="reboot",
-    translation_key="reboot",
+    translation_key="system_reboot",
     icon="mdi:restart",
     device_class=ButtonDeviceClass.RESTART,
     group="system",
@@ -44,7 +44,7 @@ REBOOT_DESCRIPTION = ZTEButtonEntityDescription(
 # Define metadata for the Delete SMS button
 DELETE_SMS_DESCRIPTION = ZTEButtonEntityDescription(
     key="delete_all",
-    translation_key="delete_all",
+    translation_key="sms_delete_all",
     icon="mdi:email-remove",
     group="sms",
 )

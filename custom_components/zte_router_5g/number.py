@@ -39,7 +39,7 @@ class ZTENumberEntityDescription(NumberEntityDescription):
 # Define the entity description for static metadata
 POLLING_INTERVAL_DESCRIPTION = ZTENumberEntityDescription(
     key="polling_interval",
-    translation_key="polling_interval",
+    translation_key="system_polling_interval",
     native_min_value=30,
     native_max_value=3600,
     native_step=30,

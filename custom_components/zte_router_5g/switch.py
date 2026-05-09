@@ -36,7 +36,7 @@ class ZTESwitchEntityDescription(SwitchEntityDescription):
 # Define the entity description for static metadata
 PAUSE_POLLING_DESCRIPTION = ZTESwitchEntityDescription(
     key="pause_polling",
-    translation_key="pause_polling",
+    translation_key="system_pause_polling",
     icon="mdi:pause-circle-outline",
     entity_category=EntityCategory.CONFIG,
     group="system",
