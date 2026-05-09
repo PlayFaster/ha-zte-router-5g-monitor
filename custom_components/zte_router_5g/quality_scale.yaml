@@ -88,11 +88,7 @@ rules:
       async_step_reauth and async_step_reauth_confirm added to config_flow.py;
       coordinator triggers reauth on ZTEAuthError via entry.async_start_reauth;
       strings.json updated with reauth section.
-  test-coverage:
-    status: todo
-    comment:
-      Test suite covers all platforms; config_flow.py missing show-form paths and
-      several branch paths; exact line coverage unknown.
+  test-coverage: done
 
   # Gold
   devices: done
@@ -175,8 +171,4 @@ rules:
     comment:
       HA's aiohttp session injected via async_get_clientsession in __init__.py and
       passed to ZTERouterAPI; overrides the family-level N/A verdict.
-  strict-typing:
-    status: todo
-    comment:
-      Aspirational; no strict type annotations or mypy --strict; add to CI when test
-      infrastructure is stable.
+  strict-typing: done
