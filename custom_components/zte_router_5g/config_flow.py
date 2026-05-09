@@ -101,6 +101,39 @@ class ZTEConfigFlow(
             errors=errors,
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle reconfiguration of the integration."""
+        errors = {}
+        entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            try:
+                await _validate_credentials(self.hass, user_input)
+
+                return self.async_update_reload_and_abort(
+                    entry,
+                    options={**entry.options, **user_input},
+                )
+
+            except ZTEAuthError:
+                errors["base"] = "invalid_auth"
+            except ZTEConnectionError:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                _LOGGER.exception(
+                    "Unexpected error during config flow reconfigure step"
+                )
+                errors["base"] = "unknown"
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_user_schema(entry.options),
+            errors=errors,
+            description_placeholders={"host": entry.options.get(CONF_HOST, "")},
+        )
+
     async def async_step_reauth(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
