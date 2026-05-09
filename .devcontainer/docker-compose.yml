@@ -12,8 +12,12 @@ services:
       #  project root inside the container
       # This ensures HA sees your code as an integration
       - ../custom_components/zte_router_5g:/config/custom_components/zte_router_5g:ro
+      # Docker Outside Docker (DooD) — allows running docker commands from inside
+      # the container by delegating to the host Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8123:8123"
     restart: unless-stopped
     environment:
       - TZ=Europe/London
+      - SUPERVISOR_TOKEN=mock_dev_token

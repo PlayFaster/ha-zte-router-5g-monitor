@@ -1,5 +1,4 @@
 {
-  "title": "ZTE Router 5G Monitor",
   "config": {
     "step": {
       "user": {
@@ -36,27 +35,6 @@
     "abort": {
       "already_configured": "Device is already configured",
       "reauth_successful": "Re-authentication was successful"
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "Reconfigure ZTE Router 5G Monitor",
-        "data": {
-          "host": "IP Address",
-          "username": "Username (Optional)",
-          "password": "Password"
-        },
-        "data_description": {
-          "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
-          "password": "Admin password for the router web interface"
-        }
-      }
-    },
-    "error": {
-      "cannot_connect": "Failed to connect to router. Check IP address.",
-      "invalid_auth": "Invalid password. Please try again.",
-      "unknown": "Unexpected error occurred."
     }
   },
   "entity": {
@@ -133,5 +111,27 @@
     "number": {
       "polling_interval": { "name": "Polling Interval" }
     }
-  }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Reconfigure ZTE Router 5G Monitor",
+        "data": {
+          "host": "IP Address",
+          "username": "Username (Optional)",
+          "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
+          "password": "Admin password for the router web interface"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to router. Check IP address.",
+      "invalid_auth": "Invalid password. Please try again.",
+      "unknown": "Unexpected error occurred."
+    }
+  },
+  "title": "ZTE Router 5G Monitor"
 }
