@@ -172,6 +172,33 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
 
 
 @pytest.mark.asyncio
+async def test_background_setup_success(mock_hass, mock_config_entry):
+    """Test that background setup success path is covered."""
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+    ):
+        mock_api = mock_api_class.return_value
+        mock_api.try_set_protocol = AsyncMock(return_value=None)
+        mock_api.login = AsyncMock(return_value="stok=test")
+
+        background_coro = None
+
+        def mock_capture_task(hass, coro, name):
+            nonlocal background_coro
+            background_coro = coro
+            return MagicMock()
+
+        mock_config_entry.async_create_background_task = mock_capture_task
+
+        await async_setup_entry(mock_hass, mock_config_entry)
+
+        if background_coro:
+            await background_coro
+
+
+@pytest.mark.asyncio
 async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
     """Test that ZTEAuthError triggers reauth."""
     with (
