@@ -1,8 +1,18 @@
 """Shared helpers for the ZTE Router 5G Monitor integration."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from homeassistant.const import CONF_HOST
+from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN
+
+if TYPE_CHECKING:
+    from homeassistant.config_entries import ConfigEntry
+
+    from .coordinator import ZTERouterDataUpdateCoordinator
 
 # Known model strings to detect from the wa_inner_version firmware string.
 # e.g. 'IRL_H3G_MC7010DV1.0.0B01' → 'MC7010'
@@ -40,7 +50,11 @@ GROUP_NAMES = {
 }
 
 
-def build_device_info(coordinator, entry, group):
+def build_device_info(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    entry: ConfigEntry,
+    group: str,
+) -> DeviceInfo:
     """Build device info dict for a sub-device group.
 
     Returns a dict suitable for Entity.device_info, with identifiers,
@@ -54,7 +68,7 @@ def build_device_info(coordinator, entry, group):
     sub_id_prefix = coordinator.imei if coordinator.imei else f"host_{host}"
 
     protocol = coordinator.api.protocol
-    info = {
+    info: DeviceInfo = {
         "identifiers": {(DOMAIN, f"{sub_id_prefix}_{group}")},
         "name": sub_name,
         "manufacturer": "ZTE",

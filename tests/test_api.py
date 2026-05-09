@@ -300,5 +300,6 @@ async def test_api_get_ad_new_gen(mock_aiohttp_client):
 async def test_api_get_rd_error(mock_aiohttp_client):
     """Test RD fetch error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=fake"
     mock_aiohttp_client.get.side_effect = Exception("Fail")
     assert await api.get_rd() == ""

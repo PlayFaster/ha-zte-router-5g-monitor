@@ -1,16 +1,23 @@
 """Number platform for ZTE Router 5G."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import Any
 
 from homeassistant.components.number import (
     NumberEntity,
     NumberEntityDescription,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTime
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_SCAN_INTERVAL
@@ -42,7 +49,11 @@ POLLING_INTERVAL_DESCRIPTION = ZTENumberEntityDescription(
 )
 
 
-async def async_setup_entry(hass, entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Set up the number platform."""
     coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
@@ -70,10 +81,10 @@ class ZTEPollingInterval(
     def __init__(
         self,
         coordinator: ZTERouterDataUpdateCoordinator,
-        entry,
+        entry: ConfigEntry,
         description: ZTENumberEntityDescription,
-        initial_value,
-    ):
+        initial_value: float,
+    ) -> None:
         """Initialize the number entity."""
         super().__init__(coordinator)
         self._entry = entry
@@ -84,7 +95,7 @@ class ZTEPollingInterval(
 
         # Local state
         self._attr_native_value = initial_value
-        self._refresh_task = None
+        self._refresh_task: asyncio.Task[Any] | None = None
 
     async def async_will_remove_from_hass(self) -> None:
         """Cancel any pending debounce task on removal."""
@@ -134,7 +145,7 @@ class ZTEPollingInterval(
             _LOGGER.error("Failed to apply polling interval change: %s", err)
 
     @property
-    def device_info(self):
+    def device_info(self) -> DeviceInfo:
         """Return device information with sub-device support."""
         return build_device_info(
             self.coordinator, self._entry, self.entity_description.group
