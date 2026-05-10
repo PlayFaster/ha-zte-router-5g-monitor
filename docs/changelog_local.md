@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1-dev6] - 2026-05-10 - Unreleased
+
+### Fixed
+
+- **24 mypy errors in `api.py`**: Added type annotations to all functions, params, and return types. Changed `await self.login()` → `self.stok = await self.login()` in 7 methods so mypy sees `str` after login without breaking tests that mock `login()`.
+- **6 test failures from mypy fix**: Updated 2 test files (`test_api.py`, `test_coverage_ext.py`) to set `api.stok` before calling `get_rd()` in error/success paths. Source in `api.py` changed from `assert` to return-value assignment.
+
+### Test Coverage
+
+- **8 new tests**: `delete_sms` exception handler, `get_all_data` retry-exhausted warning branch, `__init__` background setup success, 5 `config_flow` reconfigure flow tests (success + 3 error branches + form display).
+- **Coverage to 100%**: `api.py` (98→100%), `__init__.py` (92→100%), `config_flow.py` (88→100%). Overall: 99% (824/824, 5 uncovered).
+
+## [3.0.1-dev5] - 2026-05-10 - Unreleased
+
+### Added
+
+- **Reconfiguration Flow**: Support for updating host and credentials via the "Configure" menu.
+- **Hierarchical Translations**: Canonical translation keys for all 63 entities with sub-device grouping.
+
+### Changed
+
+- **Translation Strategy**: Standardized on `translation_key` across all platforms; removed hardcoded `name` parameters.
+- **Documentation**: Expanded README with Technical Architecture, Resilience (3-strike logic), and Firmware Compatibility.
+
 ## [3.0.1-dev4] - 2026-05-09 - Unreleased
 
 ### Changed
