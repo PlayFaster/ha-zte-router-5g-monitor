@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.1-dev8] - 2026-05-10 - Unreleased
+
+### Changed
+
+- **Readme**: Updated Readme with an additional automation example and some new sections.
+-  **`get_rd` auto-login guard** (`api.py`): Replaced `assert self.stok is not None` with `if not self.stok: self.stok = await self.login()` — consistent with 6 other methods.
+- **`get_version` error return** (`api.py`): Changed from `""` to `None` (type updated to `str | None`). Both callers use `if not version`, behavior is identical.
+- **Background task fallback** (`conftest.py`): Replaced `return MagicMock()` with `asyncio.ensure_future(coro)` to properly schedule coroutines and eliminate `RuntimeWarning`.
+
+### Fixed
+
+- **Protocol fallback silent failure** (`api.py`): Added `_LOGGER.warning` when both http/https probes fail — operators now see a log entry instead of silent failure.
+- **Magic number in sensor.py**: Extracted `_BYTES_PER_GB = 1073741824` constant for clarity and maintainability.
+- **2 `RuntimeWarning: coroutine was never awaited`** (`test_setup_entry_success`, `test_background_setup_failure`): Coroutine now scheduled on the event loop instead of discarded via `MagicMock()`.
+- **Test assertion mismatch** (`test_api.py`): Updated `test_api_get_version_error` assertion from `== ""` → `is None` after `get_version` type change.
+
+### Test Coverage
+
+- **1 new test**: `test_coordinator_metadata_update_device_exists` — covers the coordinator path when a device already exists in the registry.
+
 ## [3.0.1-dev6] - 2026-05-10 - Unreleased
 
 ### Fixed

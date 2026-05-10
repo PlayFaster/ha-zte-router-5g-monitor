@@ -88,7 +88,7 @@ async def test_api_get_version_error(mock_aiohttp_client):
     """Test version fetching error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     mock_aiohttp_client.get.side_effect = Exception("Fail")
-    assert await api.get_version() == ""
+    assert await api.get_version() is None
 
 
 @pytest.mark.asyncio

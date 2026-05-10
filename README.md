@@ -35,6 +35,14 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 ---
 
+## 🌟 Real-World Use Cases
+
+- **Remote Signal Optimization**: Use real-time diagnostics (RSRP, SNR) to find the absolute best physical placement or orientation for your 5G CPE, even if it's mounted on a roof or pole.
+- **Data Cap Management**: Automatically get notified when you reach 80% or 90% of your monthly data limit to avoid unexpected overage charges on limited 5G plans.
+- **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your phone via SMS if your primary internet connection goes down.
+
+---
+
 ## ✅ Features
 
 ### 📡 Advanced 5G/LTE Diagnostics
@@ -80,6 +88,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 The integration uses a custom `DataUpdateCoordinator` designed for high stability:
 
 - **Polling Loop**: Fetches all diagnostic and SMS data in a single optimized request.
+- **Triggered Refresh**: Actions like **Reboot**, **Delete SMS**, or **Change Config** trigger an immediate API refresh to provide instant feedback.
 - **3-Strike Logic**: To avoid "Unavailable" flickers during momentary router congestion or signal loss:
   1. **First Failure**: Logs a warning; retries immediately.
   2. **Second Failure**: Logs a warning; retries again.
@@ -97,13 +106,15 @@ ZTE routers typically only allow **one active web/API session** at a time.
 
 - **IMEI-Based Identity**: The integration uses the router's unique hardware IMEI as the primary key. This ensures that even if your router's IP address changes (DHCP), Home Assistant will track the same device and preserve your history and automations.
 - **Reconfiguration**: If you change your router's IP or password, use the **Reconfigure** button on the integration card to update settings without losing any data.
-- **Data Validation**: Router values are checked for validity (guard limits), with out-of-range sensors being marked as unknown.
+- **Data Validation**: Router values are checked for validity against defined guard limits. Out-of-range sensor values (e.g., impossible signal metrics) are ignored or marked as unknown to ensure data integrity.
 
 ---
 
 ## 📊 What You Get
 
 This integration provides **55+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+
+> [!IMPORTANT] **Entity Visibility:** To keep your Home Assistant UI clean, only the most essential entities are enabled by default. Verbose diagnostics (like raw secondary frequency sensors or internal uptime) may be hidden or disabled initially. You can enable them via the **Entities** tab in the device settings.
 
 | Sub-Device | Entity Types | Key Metrics |
 | :-- | :-- | :-- |
@@ -210,6 +221,24 @@ actions:
         - CA: {{ states('sensor.zte_5g_signal_carrier_aggregation') }}
 ```
 
+### Auto-Resume Polling
+
+Ensure polling is turned back on automatically if someone forgets to resume it after managing the router.
+
+```yaml
+alias: "ZTE: Auto-Resume Polling"
+description: "Turn polling back on after 1 hour if it was manually paused."
+triggers:
+  - trigger: state
+    entity_id: switch.zte_5g_system_pause_polling
+    to: "on"
+    for: "01:00:00"
+actions:
+  - action: switch.turn_off
+    target:
+      entity_id: switch.zte_5g_system_pause_polling
+```
+
 ## 📸 Screenshots
 
 ### Integration Overview
@@ -314,6 +343,9 @@ To fully uninstall (HACS):
 ## ⚠️ Known Limitations /❔ What's Missing?
 
 - **Comprehensive SMS Management**: Basic functionality is available, including SMS counts, viewing the most recent message, and a "Delete All" action. More comprehensive management (e.g., reading full message threads or deleting specific messages) is not currently supported. These features may be added in the future, pending further investigation into the router’s communication capabilities.
+- **Firmware Dependencies**: API feature availability varies significantly by ISP and specific firmware builds.
+- **SIM-less Operation**: 5G/LTE metrics are unavailable if the device is configured in a non-SIM mode (e.g., Ethernet WAN).
+- **Entity Persistence**: Entity IDs are assigned on initial setup. If the integration is deleted and re-added, you will need to re-link existing automations or history tracking.
 
 ## 📝 Maintenance Status
 
@@ -330,4 +362,4 @@ This project is licensed under the Apache License, Version 2.0. See [LICENSE](LI
 
 ---
 
-**Questions or Issues?** Visit the [GitHub repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor).\*\*
+**Questions or Issues?** Visit the [GitHub repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor).
