@@ -1,5 +1,4 @@
 {
-  "title": "ZTE Router 5G Monitor",
   "config": {
     "step": {
       "user": {
@@ -26,6 +25,19 @@
           "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
           "password": "Admin password for the router web interface"
         }
+      },
+      "reconfigure": {
+        "title": "Reconfigure ZTE Router",
+        "description": "Update the connection details for {host}.",
+        "data": {
+          "host": "IP Address",
+          "username": "Username (Optional)",
+          "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
+          "password": "Admin password for the router web interface"
+        }
       }
     },
     "error": {
@@ -36,6 +48,81 @@
     "abort": {
       "already_configured": "Device is already configured",
       "reauth_successful": "Re-authentication was successful"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "system_model_name": { "name": "Model Name" },
+      "system_wa_inner_version": { "name": "Firmware Version" },
+      "system_wan_ipaddr": { "name": "WAN IP Address" },
+      "system_lan_ipaddr": { "name": "LAN IP Address" },
+      "system_device_uptime": { "name": "Device Uptime" },
+      "system_last_updated": { "name": "Last Updated" },
+      "system_imei": { "name": "IMEI" },
+      "system_hardware_version": { "name": "Hardware Version" },
+      "system_battery_value": { "name": "Battery" },
+      "system_sim_imsi": { "name": "SIM IMSI" },
+      "system_sim_iccid": { "name": "SIM ICCID" },
+      "signal_wan_connect_status": { "name": "WAN Connect Status" },
+      "signal_wan_apn": { "name": "Network APN" },
+      "signal_network_type": { "name": "Network Type" },
+      "signal_signalbar": { "name": "Signal Bars" },
+      "signal_network_provider": { "name": "Network Provider" },
+      "signal_mdm_mcc": { "name": "MDM MCC" },
+      "signal_mdm_mnc": { "name": "MDM MNC" },
+      "signal_rmcc": { "name": "Roaming MCC" },
+      "signal_rmnc": { "name": "Roaming MNC" },
+      "signal_lte_rsrp": { "name": "LTE RSRP" },
+      "signal_lte_rsrq": { "name": "LTE RSRQ" },
+      "signal_lte_rssi": { "name": "LTE RSSI" },
+      "signal_lte_snr": { "name": "LTE SNR" },
+      "signal_lte_pci": { "name": "LTE PCI" },
+      "signal_cell_id": { "name": "Cell ID" },
+      "signal_wan_lte_ca": { "name": "Carrier Aggregation" },
+      "signal_lte_ca_pcell_band": { "name": "LTE Primary Band" },
+      "signal_lte_ca_pcell_bandwidth": { "name": "LTE Primary Bandwidth" },
+      "signal_lte_ca_scell_band": { "name": "LTE Secondary Band" },
+      "signal_lte_ca_scell_bandwidth": { "name": "LTE Secondary Bandwidth" },
+      "signal_wan_active_band": { "name": "LTE Active Band" },
+      "signal_wan_active_channel": { "name": "LTE Active Channel" },
+      "signal_z5g_rsrp": { "name": "5G RSRP" },
+      "signal_z5g_rsrq": { "name": "5G RSRQ" },
+      "signal_z5g_rssi": { "name": "5G RSSI" },
+      "signal_z5g_sinr": { "name": "5G SNR" },
+      "signal_nr5g_pci": { "name": "5G PCI" },
+      "signal_nr5g_action_band": { "name": "5G Active Band" },
+      "signal_nr5g_action_channel": { "name": "5G Active Channel" },
+      "signal_rssi": { "name": "Legacy RSSI" },
+      "signal_rscp": { "name": "Legacy RSCP" },
+      "signal_enodeb_id": { "name": "eNodeB ID" },
+      "signal_net_select": { "name": "Network Mode" },
+      "signal_ppp_status": { "name": "Bridge Mode" },
+      "data_monthly_tx_bytes": { "name": "Monthly Sent GB" },
+      "data_monthly_rx_bytes": { "name": "Monthly Received GB" },
+      "data_monthly_total_bytes": { "name": "Monthly Total GB" },
+      "data_monthly_tx_bytes_raw": { "name": "Monthly Sent" },
+      "data_monthly_rx_bytes_raw": { "name": "Monthly Received" },
+      "data_monthly_total_bytes_raw": { "name": "Monthly Total" },
+      "data_realtime_tx_thrpt": { "name": "Upload Speed" },
+      "data_realtime_rx_thrpt": { "name": "Download Speed" },
+      "data_realtime_tx_bytes": { "name": "Session Sent" },
+      "data_realtime_rx_bytes": { "name": "Session Received" },
+      "sms_sms_unread_num": { "name": "Unread Msg" },
+      "sms_msg_total": { "name": "Total Msg" },
+      "sms_msg_recent": { "name": "Recent Msg" }
+    },
+    "button": {
+      "system_reboot": { "name": "Reboot" },
+      "sms_delete_all": { "name": "Delete All" }
+    },
+    "binary_sensor": {
+      "signal_best_connection": { "name": "Best Connection" }
+    },
+    "switch": {
+      "system_pause_polling": { "name": "Pause Polling" }
+    },
+    "number": {
+      "system_polling_interval": { "name": "Polling Interval" }
     }
   },
   "options": {
@@ -59,79 +146,5 @@
       "unknown": "Unexpected error occurred."
     }
   },
-  "entity": {
-    "sensor": {
-      "lte_rsrp": { "name": "LTE RSRP" },
-      "lte_rsrq": { "name": "LTE RSRQ" },
-      "lte_rssi": { "name": "LTE RSSI" },
-      "lte_snr": { "name": "LTE SNR" },
-      "z5g_rsrp": { "name": "5G RSRP" },
-      "z5g_rsrq": { "name": "5G RSRQ" },
-      "z5g_rssi": { "name": "5G RSSI" },
-      "z5g_sinr": { "name": "5G SNR" },
-      "model_name": { "name": "Model Name" },
-      "monthly_rx_bytes": { "name": "Monthly Received GB" },
-      "monthly_tx_bytes": { "name": "Monthly Sent GB" },
-      "monthly_total_bytes": { "name": "Monthly Total GB" },
-      "monthly_rx_bytes_raw": { "name": "Monthly Received" },
-      "monthly_tx_bytes_raw": { "name": "Monthly Sent" },
-      "monthly_total_bytes_raw": { "name": "Monthly Total" },
-      "rscp": { "name": "Legacy RSCP" },
-      "rssi": { "name": "Legacy RSSI" },
-      "signalbar": { "name": "Signal Bars" },
-      "network_type": { "name": "Network Type" },
-      "last_updated": { "name": "Last Updated" },
-      "device_uptime": { "name": "Device Uptime" },
-      "cell_id": { "name": "Cell ID" },
-      "lan_ipaddr": { "name": "LAN IP Address" },
-      "wan_ipaddr": { "name": "WAN IP Address" },
-      "wan_apn": { "name": "Network APN" },
-      "wan_connect_status": { "name": "WAN Connect Status" },
-      "lte_ca_pcell_band": { "name": "LTE Primary Band" },
-      "lte_ca_pcell_bandwidth": { "name": "LTE Primary Bandwidth" },
-      "lte_ca_scell_band": { "name": "LTE Secondary Band" },
-      "lte_ca_scell_bandwidth": { "name": "LTE Secondary Bandwidth" },
-      "lte_pci": { "name": "LTE PCI" },
-      "mdm_mcc": { "name": "MDM MCC" },
-      "mdm_mnc": { "name": "MDM MNC" },
-      "network_provider": { "name": "Network Provider" },
-      "nr5g_action_band": { "name": "5G Active Band" },
-      "nr5g_action_channel": { "name": "5G Active Channel" },
-      "nr5g_pci": { "name": "5G PCI" },
-      "rmcc": { "name": "Roaming MCC" },
-      "rmnc": { "name": "Roaming MNC" },
-      "wan_active_band": { "name": "LTE Active Band" },
-      "wan_active_channel": { "name": "LTE Active Channel" },
-      "wan_lte_ca": { "name": "Carrier Aggregation" },
-      "wa_inner_version": { "name": "Firmware Version" },
-      "imei": { "name": "IMEI" },
-      "hardware_version": { "name": "Hardware Version" },
-      "battery_value": { "name": "Battery" },
-      "sim_imsi": { "name": "SIM IMSI" },
-      "sim_iccid": { "name": "SIM ICCID" },
-      "enodeb_id": { "name": "eNodeB ID" },
-      "net_select": { "name": "Network Mode" },
-      "ppp_status": { "name": "Bridge Mode" },
-      "realtime_tx_thrpt": { "name": "Upload Speed" },
-      "realtime_rx_thrpt": { "name": "Download Speed" },
-      "realtime_tx_bytes": { "name": "Session Sent" },
-      "realtime_rx_bytes": { "name": "Session Received" },
-      "sms_unread_num": { "name": "Unread Msg" },
-      "msg_total": { "name": "Total Msg" },
-      "msg_recent": { "name": "Recent Msg" }
-    },
-    "button": {
-      "reboot": { "name": "Reboot" },
-      "delete_all": { "name": "Delete All" }
-    },
-    "binary_sensor": {
-      "best_connection": { "name": "Best Connection" }
-    },
-    "switch": {
-      "pause_polling": { "name": "Pause Polling" }
-    },
-    "number": {
-      "polling_interval": { "name": "Polling Interval" }
-    }
-  }
+  "title": "ZTE Router 5G Monitor"
 }

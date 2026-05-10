@@ -10,18 +10,19 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > - **If you own a ZTE MC7010** and want to monitor your 5G/LTE connection quality, data usage, and manage SMS messages directly from Home Assistant, then **yes**.
 > - **This integration is for you if** you want:
->   - **Advanced Signal Diagnostics** — Real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
+>   - **Advanced Signal Diagnostics** — Near real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
 >   - **SMS Management** — View recent message content and delete the mailbox directly from HA.
 >
 > This project is optimized for the ZTE MC7010 5G Outdoor CPE but may work with other similar ZTE devices.
 
-## 🔧 Compatibility & Requirements
+## 🔧 Compatibility & Tested Devices
 
-**Router Hardware:**
+**Hardware Support:**
 
-- **Tested on**: **ZTE MC7010** – 5G Outdoor CPE.
-- **Expected compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
+- **Fully Tested**:
+  - **ZTE MC7010** (5G Outdoor CPE)
+- **Expected Compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
 - **Not Supported**: Non-ZTE hardware.
 
 **Network:**
@@ -32,7 +33,13 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 - Minimum: Home Assistant **2024.6.0**
 
----
+## 🏠 Use Cases
+
+- **Signal Monitoring**: Near real-time and historical 5G/LTE signal data allows monitoring of router performance.
+  - **Best Signal**: Use signal diagnostics (RSRP, SNR) to optimize the physical placement or orientation of your router.
+  - **Performance Tracking**: Use signal history to check whether the performance from your 5G/LTE ISP is stable or changing.
+- **Data Cap Management**: Create automations to get notified when you reach 80% or 90% of your monthly data limit to avoid unexpected overage charges on limited 5G plans.
+- **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your phone via SMS if your primary internet connection goes down.
 
 ## ✅ Features
 
@@ -42,13 +49,11 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active frequency bands/channels.
 - **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use.
 
-### 📊 Comprehensive Monitoring
+### 📉 Data Usage Tracking
 
-- **Sub-Device Organization**: Entities are automatically grouped into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
-  - **System**: Core router info (Firmware, IMEI, Hardware Version), WAN/LAN IPs and uptime.
-  - **Signal**: Extensive 5G NR and LTE signal data including RSRP, RSRQ, SNR, cell ID, and band info.
-  - **Data**: Real-time upload/download speeds, monthly totals, and session-based counters.
-  - **SMS**: Unread and total message count, the content of the most recent message and a Delete All button.
+- **Monthly Data Usage**: Track your monthly download, upload and total data usage.
+- **Session Usage**: Track your download and upload for this session (i.e. since last router restart).
+- **Download & Upload Speed**: Track your upload and download speeds. Note: This is valid, but only at the instant data was fetched from the router.
 
 ### 📋 Essential Router Management
 
@@ -56,9 +61,9 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **SMS Management**: View recent messages and a "Delete All" button to clear the mailbox.
 - **100% Local**: No cloud account or internet access required.
 
----
+### ⏱️ Dynamic Polling
 
-### 💡 Useful Features
+This integration features **dynamic polling**, the ability to pause polling completely or to change the polling interval.
 
 - **Pause Polling**: Switch to halt polling when you need uninterrupted access to the router's web UI (ZTE only allows a single active login session).
 - **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour) via a number entity or automation.
@@ -67,35 +72,42 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > **Polling Interval can be controlled dynamically, via automation**
 >
-> - Polling Interval is available as a number control within the device, you can change it via automation, if desired.
 > - Set it to 30 seconds during periods of heavy use to examine connection quality and set it higher afterwards, to avoid taxing the router and your Home Assistant database.
 
----
+## 🔍 What You Get
 
-## 🏗️ Under the Hood
+This integration provides **55+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
-- **Resilient Polling**: Includes a hybrid retry logic (30s retry) and stale-data grace periods to prevent "Unavailable" flickers during router reboots.
-- **Data Validation**: Router values are checked for validity (guard limits), with out-of-range sensors being marked as unknown.
-- **Identity Strategy**: Uses the hardware IMEI as the unique identifier for stable entity tracking across reboots and IP changes.
+> [!NOTE] Entity Visibility: To keep your Home Assistant UI clean, some entities are disabled by default. You can enable them via the Entities tab in the device settings.
 
----
+| Sub-Device | Entity Types | Key Metrics |
+| :-- | :-- | :-- |
+| **System** | 11 Sensors, 1 Switch, 1 Button, 1 Number | Firmware, IMEI, IP Addresses, Uptime, Reboot, Polling Controls |
+| **Signal** | 25 Sensors, 1 Binary Sensor | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands |
+| **Data** | 10 Sensors | Monthly Usage, Near real-time Speed, Session Data |
+| **SMS** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Message Content, Delete All |
 
-## 📊 What You Get
+## 📸 Screenshots
 
-This integration provides **63 entities** grouped into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+### Integration Overview
 
-| Type         | Count | Primary Functions                                             |
-| :----------- | :---- | :------------------------------------------------------------ |
-| **Sensors**  | 59    | Signal strength, data usage, uptime, SMS content, device info |
-| **Switches** | 1     | Pause Polling                                                 |
-| **Buttons**  | 2     | Reboot, Delete All SMS                                        |
-| **Controls** | 1     | Polling Interval                                              |
+![Integration](.github/images/zte_5g_integration_screen.png)
 
----
+| Signal | System |
+| :-: | :-: |
+| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_sensor_control_info_mini.png) |
+
+| Data | SMS |
+| :-: | :-: |
+| ![Data](.github/images/zte_5g_data_screen_mini.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
+
+### Setup
+
+![Setup](.github/images/zte_5g_setup_info.png)
 
 ## 💡 Example Automations
 
-### Forward Incoming SMS to Mobile
+### 📨 Forward Incoming SMS to Mobile
 
 This automation fires when a new SMS is detected and forwards the content to your mobile phone.
 
@@ -108,10 +120,10 @@ actions:
   - action: notify.mobile_app_your_phone
     data:
       title: "New SMS from {{ state_attr('sensor.zte_router_5g_recent_msg', 'number') }}"
-      message: "{{ states('sensor.zte_router_5g_recent_msg') }}"
+      message: "{{ states('sensor.zte_5g_sms_recent_msg') }}"
 ```
 
-### Data Usage Alert
+### 🚨 Data Usage Alert
 
 Monitor your data consumption and get notified when you approach your monthly limit. If you change the display unit of data sensors (e.g. from Bytes to GB), you have to change the numbers below as well.
 
@@ -128,7 +140,7 @@ actions:
       message: "Monthly data usage has exceeded 500GB."
 ```
 
-### Signal Quality Alert
+### 📶 Signal Quality Alert
 
 Monitor for poor connection quality based on 5G status and signal metrics.
 
@@ -189,31 +201,27 @@ actions:
         - CA: {{ states('sensor.zte_5g_signal_carrier_aggregation') }}
 ```
 
----
+### ⏯️ Auto-Resume Polling
 
-## 📸 Screenshots
+Ensure polling is turned back on automatically if someone forgets to resume it after managing the router.
 
-### Integration Overview
+```yaml
+alias: "ZTE: Auto-Resume Polling"
+description: "Turn polling back on after 1 hour if it was manually paused."
+triggers:
+  - trigger: state
+    entity_id: switch.zte_5g_system_pause_polling
+    to: "on"
+    for: "01:00:00"
+actions:
+  - action: switch.turn_off
+    target:
+      entity_id: switch.zte_5g_system_pause_polling
+```
 
-![Integration](.github/images/zte_5g_integration_screen.png)
+## 📥 Installation
 
-| Signal | System |
-| :-: | :-: |
-| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_sensor_control_info_mini.png) |
-
-| Data | SMS |
-| :-: | :-: |
-| ![Data](.github/images/zte_5g_data_screen_mini.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
-
-### Setup
-
-![Setup](.github/images/zte_5g_setup_info.png)
-
----
-
-## ✨ Installation
-
-### HACS (Recommended)
+### ✨ HACS (Recommended)
 
 1. Add this repository as a **Custom Repository** in HACS:
    - Open HACS in Home Assistant
@@ -223,37 +231,60 @@ actions:
 3. Restart Home Assistant
 4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
 
-### Manual Installation
+### 💾 Manual Installation
 
 1. Download the repository
 2. Copy the `custom_components/zte_router_5g` folder to your Home Assistant `custom_components` directory
 3. Restart Home Assistant
 4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
 
----
-
 ## ⚙️ Configuration
 
-### Initial Setup
+### 🔧 Initial Setup
 
-Setup is handled entirely via the UI. You will need:
+Setup is handled entirely via the UI. You will need the same details that you use for the router's web UI:
 
 - **Host** — Router IP Address (e.g., 192.168.0.1)
 - **Username** — Router login username (default: admin)
 - **Password** — Admin password for the router web interface
 
-### Runtime Options
+### 🛠️ Runtime Options
 
 After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor > Configure** to adjust:
+
+| Option   | Description                                                |
+| -------- | ---------------------------------------------------------- |
+| Host     | Router IP address (change if the router's LAN IP changes). |
+| Username | Router login username.                                     |
+| Password | Admin password (update if changed on the router).          |
 
 | Option | Default | Range | Description |
 | --- | --- | --- | --- |
 | Polling Interval | 180 s | 30–3600 s (step: 30 s) | How often the integration fetches data from the router. Lower values give more responsive updates but increase router load. |
-| Host | – | – | Router IP address (change if the router's LAN IP changes). |
-| Username | – | – | Router login username. |
-| Password | – | – | Admin password (update if changed on the router). |
 
----
+## 🏗️ Under the Hood - Technical Architecture
+
+### 🔄 Data Polling & 3-Strike Resilience 🩹
+
+The integration uses a custom `DataUpdateCoordinator` designed for high stability:
+
+- **Polling Loop**: Fetches all diagnostic and SMS data in a single optimized request.
+- **Triggered Refresh**: Actions like **Reboot**, **Delete SMS**, or **Change Config** trigger an immediate API refresh to provide instant feedback.
+- **3-Strike Logic**: To avoid "Unavailable" flickers during momentary router congestion or signal loss:
+  1. **First Failure**: Logs a warning; retries immediately.
+  2. **Second Failure**: Logs a warning; retries again.
+  3. **Third Failure**: Marks all entities as `Unavailable` and logs an error.
+- **Auto-Recovery**: Once the router is back online, the integration restores all entities automatically.
+
+### 🆔 Identity & Stable Entities
+
+- **IMEI-Based Identity**: The integration uses the router's unique hardware IMEI as the primary key. This ensures that even if your router's IP address changes (DHCP), Home Assistant will track the same device and preserve your history and automations.
+- **Reconfiguration**: If you change your router's IP or password, use the **Reconfigure** button on the integration card to update settings without losing any data.
+- **Data Validation**: Router values are checked for validity against defined guard limits. Out-of-range sensor values (e.g., impossible signal metrics) are ignored or marked as unknown to ensure data integrity.
+
+### ⏱️ Dynamic Polling & Standard System Options
+
+- **Both Available**: The integration provides dynamic polling controls, to pause polling or change polling interval. It also functions normally with the standard Home Assistant **System options** > **Enable polling for changes** toggle.
 
 ## ❓ FAQ & Troubleshooting
 
@@ -282,8 +313,6 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 - Use the **Pause Polling** switch in Home Assistant to halt polling before you log into the web UI.
 - Resume polling when done!
 
----
-
 ## 🗑️ Removal
 
 To remove the integration from Home Assistant:
@@ -300,6 +329,14 @@ To fully uninstall (HACS):
 3. Click the **three dots** (⋮) at the top right and select **Remove**.
 4. Restart Home Assistant.
 
+## ⚠️ Known Limitations /❔ What's Missing?
+
+- **Comprehensive SMS Management**: Basic functionality is available, including SMS counts, viewing the most recent message, and a "Delete All" action. More comprehensive management (e.g., reading all messages or deleting specific messages) is not currently supported. These features may be added in the future, pending further investigation into the router’s capabilities.
+- **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
+- **Non Bridge Mode Features**: The integration was developed on and has only been tested with the MC7010 which is an outdoor bridge-mode only device without WiFi. This means the integration does not have:
+  - **Client Tracking**: No tracking of connected clients.
+  - **WiFi Monitoring**: There are no WiFi features.
+
 ## 📝 Maintenance Status
 
 This is a **personal project**. Support and updates are provided on a **"best-effort"** basis only. While I use this integration daily and aim to keep it functional with the latest Home Assistant releases, I cannot guarantee immediate fixes for issues or compatibility with all router firmware versions.
@@ -315,4 +352,4 @@ This project is licensed under the Apache License, Version 2.0. See [LICENSE](LI
 
 ---
 
-**For issues, feature requests, or contributions, please visit the [GitHub repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor).**
+💬 **Questions or Issues?** Visit the [GitHub repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor).

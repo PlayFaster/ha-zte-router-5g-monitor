@@ -88,7 +88,7 @@ async def test_api_get_version_error(mock_aiohttp_client):
     """Test version fetching error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     mock_aiohttp_client.get.side_effect = Exception("Fail")
-    assert await api.get_version() == ""
+    assert await api.get_version() is None
 
 
 @pytest.mark.asyncio
@@ -156,6 +156,25 @@ async def test_api_get_all_data_expired_session(mock_aiohttp_client):
     with patch.object(api, "login") as mock_login:
         data = await api.get_all_data()
         assert data["network_type"] == "LTE"
+        assert mock_login.called
+
+
+@pytest.mark.asyncio
+async def test_api_get_all_data_retry_exhausted(mock_aiohttp_client):
+    """Test get_all_data when re-login also returns empty data."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=old_stok"
+
+    # Both calls return empty data — retry is exhausted, returns partial results
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"network_type": "", "signalbar": ""}),
+        MockResponse(json_data={"network_type": "", "signalbar": ""}),
+    ]
+
+    with patch.object(api, "login") as mock_login:
+        data = await api.get_all_data()
+        assert data["network_type"] == ""
+        assert data["signalbar"] == ""
         assert mock_login.called
 
 
@@ -260,6 +279,18 @@ async def test_api_delete_sms(mock_aiohttp_client):
 
 
 @pytest.mark.asyncio
+async def test_api_delete_sms_exception(mock_aiohttp_client):
+    """Test single SMS deletion exception handling."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    with patch.object(api, "get_ad", return_value="test_ad"):
+        mock_aiohttp_client.post.side_effect = RuntimeError("Delete Fail")
+        with pytest.raises(RuntimeError, match="Delete Fail"):
+            await api.delete_sms("1")
+        assert api.stok is None
+
+
+@pytest.mark.asyncio
 async def test_api_delete_all_success(mock_aiohttp_client):
     """Test bulk SMS deletion logic."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
@@ -300,5 +331,6 @@ async def test_api_get_ad_new_gen(mock_aiohttp_client):
 async def test_api_get_rd_error(mock_aiohttp_client):
     """Test RD fetch error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=fake"
     mock_aiohttp_client.get.side_effect = Exception("Fail")
     assert await api.get_rd() == ""

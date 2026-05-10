@@ -3,6 +3,7 @@
 import hashlib
 import logging
 from datetime import datetime
+from typing import Any
 
 import aiohttp
 
@@ -20,7 +21,13 @@ class ZTEAuthError(Exception):
 class ZTERouterAPI:
     """Async wrapper for the ZTE Router goform API using aiohttp."""
 
-    def __init__(self, session: aiohttp.ClientSession, ip, username, password):
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        ip: str,
+        username: str | None,
+        password: str,
+    ) -> None:
         """Initialize the API."""
         self.session = session
         self.ip = ip
@@ -29,15 +36,15 @@ class ZTERouterAPI:
         self.protocol = "http"
         self.referer = f"http://{self.ip}/"
         self.timeout = aiohttp.ClientTimeout(total=15)
-        self.stok = None
+        self.stok: str | None = None
         self.is_multi = True
 
-    def _hash(self, val):
+    def _hash(self, val: str | None) -> str:
         if val is None:
             raise ValueError("Input to hash function cannot be None")
         return hashlib.sha256(val.encode()).hexdigest()
 
-    def _hex_decode(self, hex_str):
+    def _hex_decode(self, hex_str: str) -> str:
         if not hex_str:
             return ""
         decoded = ""
@@ -49,7 +56,7 @@ class ZTERouterAPI:
             _LOGGER.debug("Failed to decode hex string '%s': %s", hex_str, e)
             return "[Decoding Error]"
 
-    def _parse_date(self, date_str):
+    def _parse_date(self, date_str: str) -> str | None:
         if not date_str:
             return None
         try:
@@ -67,7 +74,7 @@ class ZTERouterAPI:
             _LOGGER.debug("Failed to parse date string '%s': %s", date_str, e)
         return date_str
 
-    async def try_set_protocol(self, timeout_sec=5):
+    async def try_set_protocol(self, timeout_sec: int = 5) -> None:
         """Identify if router is on http or https with a short timeout."""
         protocols = ["http", "https"]
         tout = aiohttp.ClientTimeout(total=timeout_sec)
@@ -83,7 +90,9 @@ class ZTERouterAPI:
             except Exception as e:
                 _LOGGER.debug("Failed to connect via %s: %s", proto, e)
 
-    async def get_version(self, timeout_sec=None):
+        _LOGGER.warning("Could not determine router protocol (http/https)")
+
+    async def get_version(self, timeout_sec: int | None = None) -> str | None:
         """Get the router firmware version."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         url = (
@@ -98,9 +107,9 @@ class ZTERouterAPI:
                 return data.get("wa_inner_version", "")
         except Exception as e:
             _LOGGER.debug("Failed to get version: %s", e)
-            return ""
+            return None
 
-    async def get_ld(self, timeout_sec=None):
+    async def get_ld(self, timeout_sec: int | None = None) -> str:
         """Get the LD parameter for login."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=LD"
@@ -113,7 +122,7 @@ class ZTERouterAPI:
         except Exception as e:
             raise ZTEConnectionError(f"Failed to reach router: {e}") from e
 
-    async def login(self, timeout_sec=None):
+    async def login(self, timeout_sec: int | None = None) -> str:
         """Clean login that resets the internal session state."""
         tout = timeout_sec or 15
         self.stok = None
@@ -165,10 +174,10 @@ class ZTERouterAPI:
                 f"Login failed due to connection error: {e}"
             ) from e
 
-    async def get_all_data(self, _retry: bool = True):
+    async def get_all_data(self, _retry: bool = True) -> dict[str, Any]:
         """Fetch primary technical data."""
         if not self.stok:
-            await self.login()
+            self.stok = await self.login()
 
         params = [
             "cell_id",
@@ -252,7 +261,7 @@ class ZTERouterAPI:
                             "returning partial response"
                         )
                         return data
-                    await self.login()
+                    self.stok = await self.login()
                     return await self.get_all_data(_retry=False)
                 return data
         except Exception as e:
@@ -260,11 +269,11 @@ class ZTERouterAPI:
             self.stok = None
             raise
 
-    async def get_sms_capacity(self, timeout_sec=None):
+    async def get_sms_capacity(self, timeout_sec: int | None = None) -> dict[str, Any]:
         """Get SMS capacity information."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         if not self.stok:
-            await self.login()
+            self.stok = await self.login()
         url = (
             f"{self.referer}goform/goform_get_cmd_process"
             "?isTest=false&cmd=sms_capacity_info"
@@ -280,11 +289,13 @@ class ZTERouterAPI:
             self.stok = None
             return {}
 
-    async def get_last_sms_content(self, timeout_sec=None):
+    async def get_last_sms_content(
+        self, timeout_sec: int | None = None
+    ) -> dict[str, Any]:
         """Get the content of the last received SMS."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         if not self.stok:
-            await self.login()
+            self.stok = await self.login()
         url = f"{self.referer}goform/goform_get_cmd_process"
         payload = {
             "isTest": "false",
@@ -314,10 +325,10 @@ class ZTERouterAPI:
             self.stok = None
             return {}
 
-    async def reboot(self):
+    async def reboot(self) -> int:
         """Execute a device reboot."""
         try:
-            await self.login()
+            self.stok = await self.login()
             ad = await self.get_ad()
             payload = f"isTest=false&goformId=REBOOT_DEVICE&AD={ad}"
             headers = {
@@ -335,10 +346,10 @@ class ZTERouterAPI:
             self.stok = None
             raise
 
-    async def delete_sms(self, msg_id):
+    async def delete_sms(self, msg_id: str) -> int:
         """Delete SMS."""
         if not self.stok:
-            await self.login()
+            self.stok = await self.login()
         ad = await self.get_ad()
         payload = f"isTest=false&goformId=DELETE_SMS&msg_id={msg_id}&AD=" + ad
         headers = {
@@ -356,10 +367,10 @@ class ZTERouterAPI:
             self.stok = None
             raise
 
-    async def delete_all(self):
+    async def delete_all(self) -> int:
         """Delete all SMS."""
         try:
-            await self.login()
+            self.stok = await self.login()
             url = f"{self.referer}goform/goform_get_cmd_process"
             payload = {
                 "isTest": "false",
@@ -385,7 +396,7 @@ class ZTERouterAPI:
             self.stok = None
             raise
 
-    async def get_ad(self, timeout_sec=None):
+    async def get_ad(self, timeout_sec: int | None = None) -> str:
         """Get the AD parameter for commands."""
         version = await self.get_version(timeout_sec=timeout_sec)
         if not version:
@@ -400,9 +411,11 @@ class ZTERouterAPI:
         rd = await self.get_rd(timeout_sec=timeout_sec)
         return hash_func(a + rd)
 
-    async def get_rd(self, timeout_sec=None):
+    async def get_rd(self, timeout_sec: int | None = None) -> str:
         """Get the RD parameter for AD generation."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
+        if not self.stok:
+            self.stok = await self.login()
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=RD"
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
         try:

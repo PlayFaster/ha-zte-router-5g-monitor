@@ -341,3 +341,116 @@ async def test_reauth_flow_no_entry():
 
     assert result["type"] == FlowResultType.ABORT
     assert result["reason"] == "reauth_successful"
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_show_form():
+    """Test reconfigure step shows form when no input provided."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {}
+
+    mock_entry = MagicMock()
+    mock_entry.options = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "old"}
+    flow._get_reconfigure_entry = MagicMock(return_value=mock_entry)
+
+    result = await flow.async_step_reconfigure(user_input=None)
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    assert "data_schema" in result
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_success():
+    """Test successful reconfigure updates entry and reloads."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {}
+    flow.async_update_reload_and_abort = MagicMock(
+        return_value={"type": FlowResultType.ABORT, "reason": "reconfigure_successful"}
+    )
+
+    mock_entry = MagicMock()
+    mock_entry.options = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "old"}
+    flow._get_reconfigure_entry = MagicMock(return_value=mock_entry)
+
+    user_input = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "new_password"}
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        return_value=None,
+    ):
+        result = await flow.async_step_reconfigure(user_input)
+
+    assert result["type"] == FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    flow.async_update_reload_and_abort.assert_called_once_with(
+        mock_entry, options={CONF_HOST: "192.168.0.1", CONF_PASSWORD: "new_password"}
+    )
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_invalid_auth():
+    """Test reconfigure with invalid auth returns error."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {}
+
+    mock_entry = MagicMock()
+    mock_entry.options = {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "wrong"}
+    flow._get_reconfigure_entry = MagicMock(return_value=mock_entry)
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=ZTEAuthError,
+    ):
+        result = await flow.async_step_reconfigure(
+            {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "wrong"}
+        )
+
+    assert result["errors"] == {"base": "invalid_auth"}
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_cannot_connect():
+    """Test reconfigure with connection error returns error."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {}
+
+    mock_entry = MagicMock()
+    mock_entry.options = {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "pass"}
+    flow._get_reconfigure_entry = MagicMock(return_value=mock_entry)
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=ZTEConnectionError,
+    ):
+        result = await flow.async_step_reconfigure(
+            {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "pass"}
+        )
+
+    assert result["errors"] == {"base": "cannot_connect"}
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_unknown_error():
+    """Test reconfigure with unexpected exception returns error."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {}
+
+    mock_entry = MagicMock()
+    mock_entry.options = {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "pass"}
+    flow._get_reconfigure_entry = MagicMock(return_value=mock_entry)
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        side_effect=Exception("unexpected"),
+    ):
+        result = await flow.async_step_reconfigure(
+            {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "pass"}
+        )
+
+    assert result["errors"] == {"base": "unknown"}
