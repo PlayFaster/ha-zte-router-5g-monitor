@@ -22,9 +22,8 @@ def mock_config_entry():
         },
     )
 
-    # Mock async_create_background_task to actually run the task
+    # Mock async_create_background_task to schedule the coroutine on the event loop
     def mock_create_background_task(hass, coro, name):
-        import asyncio
         from unittest.mock import Mock
 
         # If it's a real HA instance, use its task creation
@@ -33,14 +32,10 @@ def mock_config_entry():
         ):
             return hass.async_create_task(coro, name)
 
-        # Otherwise, try to run it in the current loop to avoid RuntimeWarning
-        try:
-            loop = asyncio.get_running_loop()
-            return loop.create_task(coro)
-        except RuntimeError:
-            # Fallback if no loop is running
-            coro.close()
-            return MagicMock()
+        # Schedule the coroutine to avoid "coroutine was never awaited" warnings
+        import asyncio
+
+        return asyncio.ensure_future(coro)
 
     entry.async_create_background_task = MagicMock(
         side_effect=mock_create_background_task

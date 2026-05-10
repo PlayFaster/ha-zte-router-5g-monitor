@@ -90,7 +90,9 @@ class ZTERouterAPI:
             except Exception as e:
                 _LOGGER.debug("Failed to connect via %s: %s", proto, e)
 
-    async def get_version(self, timeout_sec: int | None = None) -> str:
+        _LOGGER.warning("Could not determine router protocol (http/https)")
+
+    async def get_version(self, timeout_sec: int | None = None) -> str | None:
         """Get the router firmware version."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
         url = (
@@ -105,7 +107,7 @@ class ZTERouterAPI:
                 return data.get("wa_inner_version", "")
         except Exception as e:
             _LOGGER.debug("Failed to get version: %s", e)
-            return ""
+            return None
 
     async def get_ld(self, timeout_sec: int | None = None) -> str:
         """Get the LD parameter for login."""
@@ -412,7 +414,8 @@ class ZTERouterAPI:
     async def get_rd(self, timeout_sec: int | None = None) -> str:
         """Get the RD parameter for AD generation."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
-        assert self.stok is not None
+        if not self.stok:
+            self.stok = await self.login()
         url = f"{self.referer}goform/goform_get_cmd_process?isTest=false&cmd=RD"
         headers = {"Referer": f"{self.referer}index.html", "Cookie": self.stok}
         try:

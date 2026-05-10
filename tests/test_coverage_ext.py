@@ -230,6 +230,46 @@ async def test_coordinator_metadata_change(
 
 
 @pytest.mark.asyncio
+async def test_coordinator_metadata_update_device_exists(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test coordinator updating device registry when device already exists."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    new_data = {"wa_inner_version": "NEW_VER", "model_name": "MC888"}
+
+    with (
+        patch.object(api, "get_all_data", return_value=new_data),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(api, "get_last_sms_content", return_value={}),
+        patch(
+            "custom_components.zte_router_5g.coordinator.get_router_model",
+            return_value="MC888",
+        ),
+        patch(
+            "custom_components.zte_router_5g.coordinator.dr.async_get"
+        ) as mock_dr_get,
+    ):
+        mock_dev_reg = MagicMock()
+        mock_dr_get.return_value = mock_dev_reg
+        mock_device = MagicMock()
+        mock_dev_reg.async_get_device.return_value = mock_device
+
+        await coordinator._async_update_data()
+        assert coordinator.sw_version == "NEW_VER"
+        assert coordinator.model == "MC888"
+        mock_dev_reg.async_update_device.assert_called_once_with(
+            mock_device.id, model="MC888", sw_version="NEW_VER"
+        )
+
+
+@pytest.mark.asyncio
 async def test_coordinator_timeout_resilience(
     hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
 ):

@@ -33,6 +33,8 @@ from .helpers import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
+_BYTES_PER_GB = 1073741824
+
 PARALLEL_UPDATES = 0
 
 
@@ -51,7 +53,7 @@ def _get_bytes_to_gb(val: Any) -> float | None:
     if val in [None, ""]:
         return None
     try:
-        return round(float(val) / 1073741824, 2)
+        return round(float(val) / _BYTES_PER_GB, 2)
     except ValueError, TypeError:
         return None
 
