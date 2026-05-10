@@ -38,7 +38,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Signal Monitoring**: Near real-time and historical 5G/LTE signal data allows monitoring of router performance.
   - **Best Signal**: Use signal diagnostics (RSRP, SNR) to optimize the physical placement or orientation of your router.
   - **Performance Tracking**: Use signal history to check whether the performance from your 5G/LTE ISP is stable or changing.
-- **Data Cap Management**: Automatically get notified when you reach 80% or 90% of your monthly data limit to avoid unexpected overage charges on limited 5G plans.
+- **Data Cap Management**: Create automations to get notified when you reach 80% or 90% of your monthly data limit to avoid unexpected overage charges on limited 5G plans.
 - **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your phone via SMS if your primary internet connection goes down.
 
 ## ✅ Features
