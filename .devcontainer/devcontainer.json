@@ -39,16 +39,6 @@
       "source": "${localEnv:USERPROFILE}/.gitconfig",
       "target": "/root/.gitconfig",
       "type": "bind"
-    },
-    {
-      "source": "C:/Local/Code/github/PlayFaster/home-assistant/shared/ProjNotes/Notes-ha-zte-router-5g-monitor",
-      "target": "${containerWorkspaceFolder}/.notes",
-      "type": "bind"
-    },
-    {
-      "source": "C:/Local/Code/github/PlayFaster/home-assistant/shared/SharedNotes",
-      "target": "${containerWorkspaceFolder}/.shared",
-      "type": "bind"
     }
   ],
   "name": "ZTE Router Dev",
