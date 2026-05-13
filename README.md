@@ -21,7 +21,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 **Hardware Support:**
 
 - **Fully Tested**:
-  - **ZTE MC7010** (5G Outdoor CPE)
+  - **ZTE MC7010** (5G Outdoor CPE) — tested firmware: V1.0.0B01 and later
 - **Expected Compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
 - **Not Supported**: Non-ZTE hardware.
 

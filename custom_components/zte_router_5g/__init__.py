@@ -1,6 +1,7 @@
 """The ZTE Router 5G integration."""
 
 import logging
+from typing import cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, Platform
@@ -88,4 +89,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # runtime_data is cleaned up automatically by HA
         # Note: No need to close api.session as it's managed by HA core
         pass
-    return unload_ok
+    return cast(bool, unload_ok)

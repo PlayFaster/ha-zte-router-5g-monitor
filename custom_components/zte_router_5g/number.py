@@ -30,7 +30,7 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ZTENumberEntityDescription(NumberEntityDescription):
+class ZTENumberEntityDescription(NumberEntityDescription):  # type: ignore[misc]
     """Describes ZTE number entity."""
 
     group: str = "system"
@@ -70,7 +70,8 @@ async def async_setup_entry(
 
 
 class ZTEPollingInterval(
-    CoordinatorEntity[ZTERouterDataUpdateCoordinator], NumberEntity
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],  # type: ignore[misc]
+    NumberEntity,  # type: ignore[misc]
 ):
     """Number entity to control the polling interval with persistence."""
 

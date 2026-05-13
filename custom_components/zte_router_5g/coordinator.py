@@ -3,12 +3,13 @@
 import asyncio
 import logging
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -19,7 +20,7 @@ from .helpers import get_router_model
 _LOGGER = logging.getLogger(__name__)
 
 
-class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
+class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[misc]
     """Class to manage fetching ZTE Router data with resilience and pausing."""
 
     def __init__(
@@ -58,7 +59,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.debug(
                 "%s: Polling is paused; returning cached data.", self.entry.title
             )
-            return self.data
+            return cast(dict[str, Any], self.data)
 
         try:
             # Use standard timeout wrapper (HA Best Practice)
@@ -109,6 +110,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                         "%s: Reconnected successfully.",
                         self.entry.title,
                     )
+                self._check_sms_storage(data)
                 return data
 
         except TimeoutError as err:
@@ -127,7 +129,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                         self.consecutive_failures,
                         err,
                     )
-                return self.data
+                return cast(dict[str, Any], self.data)
             _LOGGER.error("%s: API request timed out", self.entry.title)
             self._was_available = False
             raise UpdateFailed("API request timed out") from err
@@ -160,7 +162,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                         self.consecutive_failures,
                         err,
                     )
-                return self.data
+                return cast(dict[str, Any], self.data)
 
             # Safe startup bypass — if paused on first run, start with empty data
             if is_paused:
@@ -175,3 +177,26 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             )
             self._was_available = False
             raise UpdateFailed(f"Communication error: {err}") from err
+
+    def _check_sms_storage(self, data: dict[str, Any]) -> None:
+        """Create or clear the SMS storage full repair issue."""
+        try:
+            nv_able = int(data.get("nv_sms_able") or 0)
+            nv_total = int(data.get("sms_nv_total") or 0)
+        except ValueError, TypeError:
+            return
+        if nv_able > 0 and nv_total >= nv_able:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                "sms_storage_full",
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="sms_storage_full",
+                translation_placeholders={
+                    "nv_total": str(nv_total),
+                    "nv_able": str(nv_able),
+                },
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, "sms_storage_full")

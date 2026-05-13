@@ -1,6 +1,7 @@
 ---
 # IQS compliance tracking for ZTE Router 5G Monitor
 # Generated on 2026-05-07 v1.0.1
+# Generated on 2026-05-13 v1.1.0
 rules:
   # Bronze
   action-setup:
@@ -8,15 +9,8 @@ rules:
     comment:
       No service actions in this integration; reboot and SMS deletion use HA button
       entities, not service calls.
-  appropriate-polling:
-    status: exempt
-    comment:
-      User-configurable polling interval via Number entity is intentional; departs from
-      IQS conservative polling guidance.
-  brands:
-    status: exempt
-    comment:
-      Custom component distributed via HACS; not submitted to the HA brands repository.
+  appropriate-polling: done
+  brands: done
   common-modules: done
   config-flow-test-coverage:
     status: done
@@ -64,13 +58,10 @@ rules:
   docs-installation-parameters:
     status: done
     comment:
-      README now documents minimum HA version (2024.6.0), Python version (3.12+), and
-      tested firmware versions.
+      README documents minimum HA version (2024.6.0) and tested firmware version (MC7010
+      V1.0.0B01 and later).
   entity-unavailable: done
-  integration-owner:
-    status: exempt
-    comment:
-      Personal project; codeowners field present in manifest.json as good practice.
+  integration-owner: done
   log-when-unavailable:
     status: done
     comment:
@@ -111,8 +102,8 @@ rules:
     comment:
       README section 'Technical Architecture & Resilience' explicitly documents the
       3-strike resilience logic and the Pause Polling behavior.
-  docs-examples: todo
-  docs-known-limitations: todo
+  docs-examples: done
+  docs-known-limitations: done
   docs-supported-devices:
     status: done
     comment:
@@ -128,7 +119,7 @@ rules:
     comment:
       README section 'FAQ & Troubleshooting' covers common connectivity issues, unknown
       sensors, and simultaneous login conflicts.
-  docs-use-cases: todo
+  docs-use-cases: done
   dynamic-devices:
     status: exempt
     comment:
@@ -150,10 +141,8 @@ rules:
       Config flow errors (cannot_connect, invalid_auth, unknown, already_configured) are
       translated via strings.json. No custom service exceptions required.
   icon-translations:
-    status: todo
-    comment:
-      No icons.json file; entity icons are hardcoded in descriptions;
-      BestConnectionSensor uses a property override for state-dependent icons.
+    status: done
+    comment: All 51+ entities covered incl one dynamic icon (best_connection)
   reconfiguration-flow:
     status: done
     comment:
@@ -161,9 +150,11 @@ rules:
       self._get_reconfigure_entry() and self.async_update_reload_and_abort as per modern
       HA standards. strings.json updated with reconfigure step.
   repair-issues:
-    status: todo
+    status: done
     comment:
-      Low priority; consider for SMS storage full or firmware incompatibility detection.
+      coordinator._check_sms_storage raises sms_storage_full repair issue when
+      sms_nv_total >= nv_sms_able; clears it otherwise. Translated in strings.json and
+      en.json.
   stale-devices:
     status: exempt
     comment:

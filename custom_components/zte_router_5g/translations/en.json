@@ -7,6 +7,10 @@
           "host": "IP Address",
           "username": "Username (Optional)",
           "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
+          "password": "Admin password for the router web interface"
         }
       },
       "reauth_confirm": {
@@ -16,6 +20,10 @@
           "host": "IP Address",
           "username": "Username (Optional)",
           "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
+          "password": "Admin password for the router web interface"
         }
       },
       "reconfigure": {
@@ -25,6 +33,10 @@
           "host": "IP Address",
           "username": "Username (Optional)",
           "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
+          "password": "Admin password for the router web interface"
         }
       }
     },
@@ -113,6 +125,12 @@
       "system_polling_interval": { "name": "Polling Interval" }
     }
   },
+  "issues": {
+    "sms_storage_full": {
+      "title": "SMS Storage Full",
+      "description": "The router's NV SMS storage is full ({nv_total}/{nv_able} messages). Use the Delete All button to clear messages and restore normal SMS reception."
+    }
+  },
   "options": {
     "step": {
       "init": {
@@ -121,6 +139,10 @@
           "host": "IP Address",
           "username": "Username (Optional)",
           "password": "Password"
+        },
+        "data_description": {
+          "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
+          "password": "Admin password for the router web interface"
         }
       }
     },
