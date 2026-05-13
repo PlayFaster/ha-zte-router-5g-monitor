@@ -125,6 +125,12 @@
       "system_polling_interval": { "name": "Polling Interval" }
     }
   },
+  "issues": {
+    "sms_storage_full": {
+      "title": "SMS Storage Full",
+      "description": "The router's NV SMS storage is full ({nv_total}/{nv_able} messages). Use the Delete All button to clear messages and restore normal SMS reception."
+    }
+  },
   "options": {
     "step": {
       "init": {

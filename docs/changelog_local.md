@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2-dev2] - 2026-05-13 - Unreleased
+
+### Added
+
+- **Repair Issue — SMS Storage Full** (`coordinator.py`, `strings.json`, `translations/en.json`): `_check_sms_storage` raises an HA repair issue when NV SMS storage is at capacity; clears it when not. Surfaced in the HA Repairs panel with a description and Delete All button guidance.
+- **`icons.json`**: State-dependent icon declarations for all 51+ entities; `signal_best_connection` uses `on: mdi:signal` / `off: mdi:signal-cellular-1`. Hardcoded `icon` properties removed from entity classes.
+
+### Changed
+
+- **Project Structure Document**: Updated the project structure document to v1.0.4.
+- **IQS Full Compliance**: All 46 trackable rules across Bronze, Silver, Gold, and Platinum tiers now DONE — first project in the PlayFaster family to reach 100% IQS compliance. Records updated in `quality_scale.yaml` and `ha_quality_standard.md`.
+- **README**: Added tested firmware version (MC7010 V1.0.0B01 and later) to Compatibility section.
+
+### Fixed
+
+- **mypy `--strict`**: 0 errors across all 12 source files (`mypy_strict.txt`: "Success: no issues found in 12 source files"). `quality_scale.yaml` `strict-typing` updated to DONE.
+- **Stale test assertions** (`test_binary_sensor.py`): Removed `assert sensor.icon` lines that failed after `icon` property was replaced by `icons.json` declarations. CI unblocked.
+
+## [3.0.2-dev1] - 2026-05-13 - Unreleased
+
+### Changed
+
+- **DevCon**: Devcontainer changes to pull in home assistant files to properly run mypy --strict
+- **Devcontainer mount consolidation**: Moved `.notes` and `.shared` mounts from `devcontainer.json` to `docker-compose.yml` — mounts with absolute paths are unreliable in Docker Compose mode when declared in `devcontainer.json`; compose-file volumes are authoritative for the compose service.
+- **HA core mounted for mypy**: Mounted HA core source (`C:/Local/Code/ha_core/core` → `/ha_core`) into the devcontainer via `docker-compose.yml` as read-only, so mypy can resolve HA type stubs without installing the full HA package.
+- **`mypy_path` configured**: Added `mypy_path = "/ha_core"` to `[tool.mypy]` in `pyproject.toml` to point mypy at the mounted HA source.
+- **mypy scoped to custom component**: Added `[[tool.mypy.overrides]]` for `homeassistant.*` with `ignore_errors = true` and `follow_imports = "silent"` to prevent mypy from checking and reporting errors from HA core files while still using them for type resolution.
+
 ## [3.0.1] - 2026-05-10
 
 ### Changed

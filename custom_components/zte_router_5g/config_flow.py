@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
@@ -20,7 +20,7 @@ from .helpers import get_router_model
 _LOGGER = logging.getLogger(__name__)
 
 
-def _user_schema(defaults: dict) -> vol.Schema:
+def _user_schema(defaults: dict[str, Any]) -> vol.Schema:
     """Return the user/options form schema, pre-filled with defaults."""
     return vol.Schema(
         {
@@ -56,7 +56,7 @@ async def _validate_credentials(
 
 
 class ZTEConfigFlow(
-    config_entries.ConfigFlow,
+    config_entries.ConfigFlow,  # type: ignore[misc]
     domain=DOMAIN,  # type: ignore[call-arg]
 ):
     """Handle a config flow for ZTE Router 5G Monitor."""
@@ -186,13 +186,13 @@ class ZTEConfigFlow(
         )
 
     @staticmethod
-    @config_entries.callback
+    @callback  # type: ignore[untyped-decorator]
     def async_get_options_flow(entry: ConfigEntry) -> ZTEOptionsFlow:
         """Return the options flow handler."""
         return ZTEOptionsFlow(entry)
 
 
-class ZTEOptionsFlow(config_entries.OptionsFlow):
+class ZTEOptionsFlow(config_entries.OptionsFlow):  # type: ignore[misc]
     """Handle reconfiguration of an existing ZTE Router entry."""
 
     def __init__(self, entry: ConfigEntry) -> None:

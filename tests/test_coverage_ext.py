@@ -506,3 +506,65 @@ async def test_switch_properties(
     )
     info_signal = switch_signal.device_info
     assert "via_device" in info_signal
+
+
+@pytest.mark.asyncio
+async def test_coordinator_sms_storage_full_creates_issue(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test that a full NV SMS store raises a repair issue."""
+    from unittest.mock import patch
+
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    full_data = {"nv_sms_able": "20", "sms_nv_total": "20"}
+
+    with (
+        patch.object(api, "get_all_data", return_value=full_data),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(api, "get_last_sms_content", return_value={}),
+        patch(
+            "custom_components.zte_router_5g.coordinator.ir.async_create_issue"
+        ) as mock_create,
+        patch("custom_components.zte_router_5g.coordinator.ir.async_delete_issue"),
+    ):
+        await coordinator._async_update_data()
+        mock_create.assert_called_once()
+        call_kwargs = mock_create.call_args
+        assert call_kwargs.args[2] == "sms_storage_full"
+
+
+@pytest.mark.asyncio
+async def test_coordinator_sms_storage_not_full_deletes_issue(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test that non-full NV SMS store clears any existing repair issue."""
+    from unittest.mock import patch
+
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    partial_data = {"nv_sms_able": "20", "sms_nv_total": "5"}
+
+    with (
+        patch.object(api, "get_all_data", return_value=partial_data),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(api, "get_last_sms_content", return_value={}),
+        patch("custom_components.zte_router_5g.coordinator.ir.async_create_issue"),
+        patch(
+            "custom_components.zte_router_5g.coordinator.ir.async_delete_issue"
+        ) as mock_delete,
+    ):
+        await coordinator._async_update_data()
+        mock_delete.assert_called_once_with(hass, "zte_router_5g", "sms_storage_full")

@@ -22,7 +22,7 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
+class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):  # type: ignore[misc]
     """Describes ZTE binary sensor entity."""
 
     group: str = "signal"
@@ -51,7 +51,8 @@ async def async_setup_entry(
 
 
 class ZTEBestConnectionSensor(
-    CoordinatorEntity[ZTERouterDataUpdateCoordinator], BinarySensorEntity
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],  # type: ignore[misc]
+    BinarySensorEntity,  # type: ignore[misc]
 ):
     """Binary sensor to check for optimal 5G/LTE CA connection."""
 
@@ -80,15 +81,10 @@ class ZTEBestConnectionSensor(
         if not data:
             return False
         # Optimal connection logic based on raw data keys
-        return (
+        return bool(
             data.get("network_type") == "ENDC"
             and data.get("wan_lte_ca") == "ca_activated"
         )
-
-    @property
-    def icon(self) -> str:
-        """Return icon based on connection status."""
-        return "mdi:signal" if self.is_on else "mdi:signal-cellular-1"
 
     @property
     def device_info(self) -> DeviceInfo:

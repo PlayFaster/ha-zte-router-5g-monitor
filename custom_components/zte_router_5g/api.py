@@ -2,8 +2,9 @@
 
 import hashlib
 import logging
+from collections.abc import Callable
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
 
@@ -104,7 +105,7 @@ class ZTERouterAPI:
                 url, headers={"Referer": self.referer}, timeout=tout, ssl=False
             ) as r:
                 data = await r.json(content_type=None)
-                return data.get("wa_inner_version", "")
+                return cast("str | None", data.get("wa_inner_version", ""))
         except Exception as e:
             _LOGGER.debug("Failed to get version: %s", e)
             return None
@@ -118,7 +119,7 @@ class ZTERouterAPI:
                 url, headers={"Referer": self.referer}, timeout=tout, ssl=False
             ) as r:
                 data = await r.json(content_type=None)
-                return data.get("LD", "").upper()
+                return cast(str, data.get("LD", "").upper())
         except Exception as e:
             raise ZTEConnectionError(f"Failed to reach router: {e}") from e
 
@@ -260,10 +261,10 @@ class ZTERouterAPI:
                             "Session expiry re-login did not resolve empty data; "
                             "returning partial response"
                         )
-                        return data
+                        return cast(dict[str, Any], data)
                     self.stok = await self.login()
                     return await self.get_all_data(_retry=False)
-                return data
+                return cast(dict[str, Any], data)
         except Exception as e:
             _LOGGER.error("Failed to fetch all data: %s", e)
             self.stok = None
@@ -283,7 +284,7 @@ class ZTERouterAPI:
             async with self.session.get(
                 url, headers=headers, timeout=tout, ssl=False
             ) as r:
-                return await r.json(content_type=None)
+                return cast(dict[str, Any], await r.json(content_type=None))
         except Exception as e:
             _LOGGER.debug("Failed to get SMS capacity: %s", e)
             self.stok = None
@@ -318,7 +319,7 @@ class ZTERouterAPI:
                     msg["content_decoded"] = self._hex_decode(msg.get("content", ""))
                     msg["number_decoded"] = self._hex_decode(msg.get("number", ""))
                     msg["date_decoded"] = self._parse_date(msg.get("date", ""))
-                    return msg
+                    return cast(dict[str, Any], msg)
                 return {}
         except Exception as e:
             _LOGGER.debug("Failed to get last SMS content: %s", e)
@@ -402,7 +403,7 @@ class ZTERouterAPI:
         if not version:
             return ""
         is_new_gen = any(m in version for m in ["MC888", "MC889"])
-        hash_func = (
+        hash_func: Callable[[str], str] = (
             (lambda s: hashlib.sha256(s.encode()).hexdigest().upper())
             if is_new_gen
             else (lambda s: hashlib.md5(s.encode()).hexdigest())
@@ -423,7 +424,7 @@ class ZTERouterAPI:
                 url, headers=headers, timeout=tout, ssl=False
             ) as r:
                 data = await r.json(content_type=None)
-                return data.get("RD", "")
+                return cast(str, data.get("RD", ""))
         except Exception as e:
             _LOGGER.debug("Failed to get RD: %s", e)
             return ""

@@ -26,7 +26,7 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ZTEButtonEntityDescription(ButtonEntityDescription):
+class ZTEButtonEntityDescription(ButtonEntityDescription):  # type: ignore[misc]
     """Describes ZTE button entity."""
 
     group: str = "system"
@@ -36,7 +36,6 @@ class ZTEButtonEntityDescription(ButtonEntityDescription):
 REBOOT_DESCRIPTION = ZTEButtonEntityDescription(
     key="reboot",
     translation_key="system_reboot",
-    icon="mdi:restart",
     device_class=ButtonDeviceClass.RESTART,
     group="system",
 )
@@ -45,7 +44,6 @@ REBOOT_DESCRIPTION = ZTEButtonEntityDescription(
 DELETE_SMS_DESCRIPTION = ZTEButtonEntityDescription(
     key="delete_all",
     translation_key="sms_delete_all",
-    icon="mdi:email-remove",
     group="sms",
 )
 
@@ -68,7 +66,7 @@ async def async_setup_entry(
     )
 
 
-class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity):
+class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity):  # type: ignore[misc]
     """Base class for ZTE Router buttons."""
 
     _attr_has_entity_name = True

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 _KNOWN_MODELS = ["MC7010", "MC801", "MC888", "MC889"]
 
 
-def get_router_model(coordinator_data: dict | None) -> str:
+def get_router_model(coordinator_data: dict[str, Any] | None) -> str:
     """Extract the router model from coordinator data.
 
     Checks 'model_name' first (e.g. 'MC7010'), then falls back to parsing
@@ -32,7 +32,7 @@ def get_router_model(coordinator_data: dict | None) -> str:
     # 1. Direct model name check
     model_name = coordinator_data.get("model_name")
     if model_name:
-        return model_name
+        return cast(str, model_name)
 
     # 2. Firmware version parsing fallback
     version = coordinator_data.get("wa_inner_version", "")

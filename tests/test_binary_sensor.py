@@ -21,12 +21,10 @@ def test_binary_sensor_is_on(mock_coordinator, mock_config_entry):
     # 1. Both active
     mock_coordinator.data = {"network_type": "ENDC", "wan_lte_ca": "ca_activated"}
     assert sensor.is_on is True
-    assert sensor.icon == "mdi:signal"
 
     # 2. Only one active
     mock_coordinator.data = {"network_type": "LTE", "wan_lte_ca": "ca_activated"}
     assert sensor.is_on is False
-    assert sensor.icon == "mdi:signal-cellular-1"
 
     # 3. None active
     mock_coordinator.data = {}
