@@ -17,12 +17,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    EntityCategory,
     UnitOfDataRate,
     UnitOfInformation,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -37,7 +37,7 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ZTESensorEntityDescription(SensorEntityDescription):  # type: ignore[misc]
+class ZTESensorEntityDescription(SensorEntityDescription):
     """Describes ZTE sensor entity."""
 
     value_fn: Callable[[Any], Any]
@@ -641,7 +641,7 @@ async def async_setup_entry(
     )
 
 
-class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity):  # type: ignore[misc]
+class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity):
     """Representation of a ZTE Router sensor."""
 
     _attr_has_entity_name = True
@@ -697,7 +697,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return detailed attributes for specific sensors."""
         data = self.coordinator.data
-        if data is None:
+        if not data:
             return {}
 
         key = self.entity_description.key

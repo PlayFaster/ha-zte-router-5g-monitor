@@ -11,9 +11,9 @@ from homeassistant.components.switch import (
     SwitchEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -27,7 +27,7 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ZTESwitchEntityDescription(SwitchEntityDescription):  # type: ignore[misc]
+class ZTESwitchEntityDescription(SwitchEntityDescription):
     """Describes ZTE switch entity."""
 
     group: str = "system"
@@ -63,8 +63,8 @@ async def async_setup_entry(
 
 
 class ZTEPausePollingSwitch(
-    CoordinatorEntity[ZTERouterDataUpdateCoordinator],  # type: ignore[misc]
-    SwitchEntity,  # type: ignore[misc]
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    SwitchEntity,
 ):
     """Switch to pause/resume polling with persistence."""
 

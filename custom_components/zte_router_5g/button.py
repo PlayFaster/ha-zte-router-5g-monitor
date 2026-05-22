@@ -26,7 +26,7 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ZTEButtonEntityDescription(ButtonEntityDescription):  # type: ignore[misc]
+class ZTEButtonEntityDescription(ButtonEntityDescription):
     """Describes ZTE button entity."""
 
     group: str = "system"
@@ -66,7 +66,7 @@ async def async_setup_entry(
     )
 
 
-class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity):  # type: ignore[misc]
+class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity):
     """Base class for ZTE Router buttons."""
 
     _attr_has_entity_name = True

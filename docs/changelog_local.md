@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2-dev5] - 2026-05-23 - Unreleased
+
+### Fixed
+
+- **mypy `--strict` import errors** (`sensor.py`, `switch.py`, `number.py`): Resolved `EntityCategory` import errors by importing directly from `homeassistant.const` instead of `homeassistant.helpers.entity`.
+- **Unused import cleanup** (`__init__.py`): Removed unused `typing.Any` import to satisfy `ruff check`.
+
+## [3.0.2-dev4] - 2026-05-23 - Unreleased
+
+### Fixed
+
+- **mypy `--strict` regression** (`coordinator.py`, `sensor.py`, `switch.py`, `number.py`, `button.py`, `binary_sensor.py`, `__init__.py`, `config_flow.py`): Resolved 43 mypy strict errors introduced by recent changes. Fixes include: removed stale `type: ignore` comments, removed redundant `cast()` calls, fixed Python 2 bare-comma `except` syntax, added explicit `datetime | None` type annotations to coordinator `_boot_time` and `last_update_success_time`, suppressed known HA ConfigFlow stub incompatibilities with `type: ignore[override]`, and fixed `MappingProxyType` argument mismatch by converting to `dict()`.
+
 ## [3.0.2-dev3] - 2026-05-22 - Unreleased
 
 ### Added
