@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import Any, Final
 
 from homeassistant.components.sensor import (
@@ -26,14 +25,13 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
-from homeassistant.util import dt as dt_util
 
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .helpers import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
-_BYTES_PER_GB = 1073741824
+_BYTES_PER_GB = 1000000000
 
 PARALLEL_UPDATES = 0
 
@@ -59,16 +57,8 @@ def _get_bytes_to_gb(val: Any) -> float | None:
 
 
 def _get_uptime(data: Any) -> Any:
-    """Calculate boot timestamp from uptime seconds."""
-    uptime_seconds = data.get("realtime_time")
-    if not uptime_seconds:
-        return None
-    try:
-        seconds = int(float(uptime_seconds))
-        boot_time = dt_util.now() - timedelta(seconds=seconds)
-        return boot_time.replace(second=0, microsecond=0)
-    except ValueError, TypeError:
-        return None
+    """Get the cached boot timestamp from data."""
+    return data.get("boot_time")
 
 
 def _get_total_sms(data: Any) -> int | None:
@@ -109,6 +99,14 @@ def _safe_int(val: Any) -> int | None:
         return None
 
 
+# Helper to safely convert router string values to string and map empty to None
+def _safe_str(val: Any) -> str | None:
+    """Safely convert value to string or return None if empty."""
+    if val in [None, ""]:
+        return None
+    return str(val)
+
+
 # Technical Router Sensors
 SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # --- System Sub-device ---
@@ -131,7 +129,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="system_wan_ipaddr",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
-        value_fn=lambda data: data.get("wan_ipaddr"),
+        value_fn=lambda data: _safe_str(data.get("wan_ipaddr")),
     ),
     ZTESensorEntityDescription(
         key="lan_ipaddr",
@@ -146,6 +144,16 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         device_class=SensorDeviceClass.TIMESTAMP,
         group="system",
         value_fn=_get_uptime,
+    ),
+    ZTESensorEntityDescription(
+        key="realtime_time",
+        translation_key="system_uptime_duration",
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="s",
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_int(data.get("realtime_time")),
     ),
     ZTESensorEntityDescription(
         key="last_updated",
@@ -210,13 +218,13 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_wan_apn",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("wan_apn"),
+        value_fn=lambda data: _safe_str(data.get("wan_apn")),
     ),
     ZTESensorEntityDescription(
         key="network_type",
         translation_key="signal_network_type",
         group="signal",
-        value_fn=lambda data: data.get("network_type"),
+        value_fn=lambda data: _safe_str(data.get("network_type")),
     ),
     ZTESensorEntityDescription(
         key="signalbar",
@@ -230,7 +238,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_network_provider",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("network_provider"),
+        value_fn=lambda data: _safe_str(data.get("network_provider")),
     ),
     ZTESensorEntityDescription(
         key="mdm_mcc",
@@ -309,14 +317,14 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_lte_pci",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("lte_pci"),
+        value_fn=lambda data: _safe_str(data.get("lte_pci")),
     ),
     ZTESensorEntityDescription(
         key="cell_id",
         translation_key="signal_cell_id",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("cell_id"),
+        value_fn=lambda data: _safe_str(data.get("cell_id")),
     ),
     ZTESensorEntityDescription(
         key="wan_lte_ca",
@@ -361,7 +369,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_wan_active_band",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("wan_active_band"),
+        value_fn=lambda data: _safe_str(data.get("wan_active_band")),
     ),
     ZTESensorEntityDescription(
         key="wan_active_channel",
@@ -417,14 +425,14 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_nr5g_pci",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("nr5g_pci"),
+        value_fn=lambda data: _safe_str(data.get("nr5g_pci")),
     ),
     ZTESensorEntityDescription(
         key="nr5g_action_band",
         translation_key="signal_nr5g_action_band",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("nr5g_action_band"),
+        value_fn=lambda data: _safe_str(data.get("nr5g_action_band")),
     ),
     ZTESensorEntityDescription(
         key="nr5g_action_channel",
@@ -462,7 +470,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_enodeb_id",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("enodeb_id"),
+        value_fn=lambda data: _safe_str(data.get("enodeb_id")),
     ),
     ZTESensorEntityDescription(
         key="net_select",

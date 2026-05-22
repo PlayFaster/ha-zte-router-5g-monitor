@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2-dev3] - 2026-05-22 - Unreleased
+
+### Added
+
+- **Uptime Duration Sensor** (`sensor.py`, `strings.json`, `translations/en.json`): Added `system_uptime_duration` sensor (disabled by default, device class `duration`, state class `measurement`, unit `"s"`).
+
+### Changed
+
+- **Centralized request helper** (`api.py`): Refactored all API methods to route through a centralized async `_request()` helper, automatically validating responses, handling Content-Type text/html overrides, and managing transparent login retries.
+- **Uptime Timestamp stable calculation** (`coordinator.py`, `sensor.py`): Implemented cached `_boot_time` with a 15-second tolerance check to prevent boot timestamp jitter.
+- **Legacy GB Sensors Correction** (`sensor.py`): Corrected `_BYTES_PER_GB` to use decimal base `1000000000` (GB) instead of binary `1073741824` (GiB) for legacy monthly data sensors.
+- **Host Input Cleaning & Cookie Jar Cleardown** (`api.py`): Stripped HTTP/HTTPS scheme prefixes and trailing slashes from incoming IP/host inputs in `ZTERouterAPI.__init__`. Refined `stok` cookie clearing using a predicate lambda.
+
+### Fixed
+
+- **Empty Values to Unknown** (`sensor.py`): Implemented `_safe_str()` helper to map empty strings and `None` to Python `None` (Unknown state in HA) for candidates and 5G signal sensors.
+- **Reauth Guard & Login Classification** (`api.py`, `coordinator.py`): Classify login responses to raise `ZTEAuthError` specifically on explicit credential error codes, preventing immediate re-auth flows on transient connection drops by holding last known values for 3 consecutive poll cycles.
+- **Python Exception Syntax** (`sensor.py`): Updated legacy exception syntax to tuple format `except (ValueError, TypeError):` for Python 3.12+ compatibility.
+
 ## [3.0.2-dev2] - 2026-05-13 - Unreleased
 
 ### Added

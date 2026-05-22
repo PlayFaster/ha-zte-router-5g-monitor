@@ -57,6 +57,7 @@
       "system_wan_ipaddr": { "name": "WAN IP Address" },
       "system_lan_ipaddr": { "name": "LAN IP Address" },
       "system_device_uptime": { "name": "Device Uptime" },
+      "system_uptime_duration": { "name": "Uptime Duration" },
       "system_last_updated": { "name": "Last Updated" },
       "system_imei": { "name": "IMEI" },
       "system_hardware_version": { "name": "Hardware Version" },
