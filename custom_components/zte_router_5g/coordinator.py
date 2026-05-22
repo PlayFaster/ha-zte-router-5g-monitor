@@ -2,8 +2,8 @@
 
 import asyncio
 import logging
-from datetime import timedelta
-from typing import Any, cast
+from datetime import datetime, timedelta
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
@@ -20,7 +20,7 @@ from .helpers import get_router_model
 _LOGGER = logging.getLogger(__name__)
 
 
-class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[misc]
+class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ZTE Router data with resilience and pausing."""
 
     def __init__(
@@ -30,9 +30,9 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[mis
         self.api = api
         self.entry = entry
         self.consecutive_failures = 0
-        self.last_update_success_time = None
+        self.last_update_success_time: datetime | None = None
         self._was_available = True
-        self._boot_time = None
+        self._boot_time: datetime | None = None
 
         # Load hardware identity from persistent ConfigEntry data.
         # This ensures device info is stable from boot (The "Flat Identity" pattern).
@@ -60,7 +60,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[mis
             _LOGGER.debug(
                 "%s: Polling is paused; returning cached data.", self.entry.title
             )
-            return cast(dict[str, Any], self.data)
+            return self.data
 
         try:
             # Use standard timeout wrapper (HA Best Practice)
@@ -150,7 +150,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[mis
                         self.consecutive_failures,
                         err,
                     )
-                return cast(dict[str, Any], self.data)
+                return self.data
             _LOGGER.error("%s: API request timed out", self.entry.title)
             self._was_available = False
             raise UpdateFailed("API request timed out") from err
@@ -171,7 +171,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[mis
                         self.consecutive_failures,
                         err,
                     )
-                return cast(dict[str, Any], self.data)
+                return self.data
 
             _LOGGER.warning(
                 "%s: Authentication failed: %s",
@@ -205,7 +205,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[mis
                         self.consecutive_failures,
                         err,
                     )
-                return cast(dict[str, Any], self.data)
+                return self.data
 
             # Safe startup bypass — if paused on first run, start with empty data
             if is_paused:

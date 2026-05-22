@@ -22,7 +22,7 @@ PARALLEL_UPDATES = 0
 
 
 @dataclass(frozen=True, kw_only=True)
-class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):  # type: ignore[misc]
+class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
     """Describes ZTE binary sensor entity."""
 
     group: str = "signal"
@@ -51,8 +51,8 @@ async def async_setup_entry(
 
 
 class ZTEBestConnectionSensor(
-    CoordinatorEntity[ZTERouterDataUpdateCoordinator],  # type: ignore[misc]
-    BinarySensorEntity,  # type: ignore[misc]
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    BinarySensorEntity,
 ):
     """Binary sensor to check for optimal 5G/LTE CA connection."""
 
