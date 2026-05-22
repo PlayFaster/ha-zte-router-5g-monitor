@@ -32,6 +32,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[mis
         self.consecutive_failures = 0
         self.last_update_success_time = None
         self._was_available = True
+        self._boot_time = None
 
         # Load hardware identity from persistent ConfigEntry data.
         # This ensures device info is stable from boot (The "Flat Identity" pattern).
@@ -71,6 +72,26 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[mis
 
                 data.update(sms_cap)
                 data["last_sms"] = last_sms
+
+                # Calculate stable boot time with 15s drift tolerance
+                uptime_seconds = data.get("realtime_time")
+                if uptime_seconds:
+                    try:
+                        seconds = int(float(uptime_seconds))
+                        ref_time = dt_util.now()
+                        calc_time = ref_time - timedelta(seconds=seconds)
+                        calc_time = calc_time.replace(microsecond=0)
+
+                        if (
+                            self._boot_time is None
+                            or abs((calc_time - self._boot_time).total_seconds()) > 15
+                        ):
+                            self._boot_time = calc_time
+                        data["boot_time"] = self._boot_time
+                    except ValueError, TypeError:
+                        data["boot_time"] = None
+                else:
+                    data["boot_time"] = None
 
                 # Identify if hardware metadata has changed
                 new_model = get_router_model(data)
@@ -136,13 +157,35 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):  # type: ignore[mis
 
         except ZTEAuthError as err:
             self.consecutive_failures += 1
+            if self.data is not None and self.consecutive_failures <= 3:
+                if self.consecutive_failures == 1:
+                    _LOGGER.warning(
+                        "%s: Authentication failed, holding last known values: %s",
+                        self.entry.title,
+                        err,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "%s: Authentication failed (failure %d/3): %s",
+                        self.entry.title,
+                        self.consecutive_failures,
+                        err,
+                    )
+                return cast(dict[str, Any], self.data)
+
             _LOGGER.warning(
-                "%s: Authentication failed, triggering reauth: %s",
+                "%s: Authentication failed: %s",
                 self.entry.title,
                 err,
             )
             self._was_available = False
-            self.entry.async_start_reauth(self.hass)
+            if self.consecutive_failures >= 3:
+                _LOGGER.error(
+                    "%s: Authentication failed 3 or more times consecutively. "
+                    "Triggering reauth.",
+                    self.entry.title,
+                )
+                self.entry.async_start_reauth(self.hass)
             raise UpdateFailed(f"Authentication failed: {err}") from err
 
         except Exception as err:

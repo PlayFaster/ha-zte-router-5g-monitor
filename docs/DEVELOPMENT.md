@@ -90,6 +90,16 @@ To reach its current "modern" state, the project underwent several major refacto
   - _Fix_: Consolidated duplicate `reauth` keys and performed a full audit to ensure every `translation_key` used in platform files has a corresponding entry in both translation source files.
 - **Stale Icon Assertions after `icons.json` Migration**: When entity `icon` properties are removed in favour of `icons.json` declarations, any existing `assert sensor.icon == "mdi:..."` test assertions silently regress — the property returns `None` rather than raising. This is easy to miss because the test file itself is not touched during the migration.
   - _Fix_: Remove the stale `assert sensor.icon` lines. Icon correctness is validated via `hassfest` linting of `icons.json`, not by entity unit tests.
+- **Centralized `_request()` API Client Wrapper**: Having duplicate logic for checking `stok`, verifying redirects, checking Content-Type text/html, and handling session re-authentication across all endpoints leads to code drift and bugs (e.g. SMS polling dropping).
+  - _Fix_: Implemented a centralized async `_request()` helper in `api.py` to route all calls. The helper extracts and validates responses, logs HTML redirects, and transparently attempts a single login retry upon session expiry.
+- **Uptime Boot-Timestamp Jitter**: Slight variances in the router's reported uptime seconds (`realtime_time`) can cause the calculated Home Assistant boot timestamp sensor (`device_uptime`) to drift by a few seconds on every poll cycle.
+  - _Fix_: Implemented a 15-second tolerance check in `coordinator.py` against a cached `_boot_time`. If the newly calculated timestamp is within 15 seconds of the cache, the cached value is reused, preventing UI jitter.
+- **Reauth Loops on Transient Dropped Connections**: If the coordinator raises `ZTEAuthError` on transient failures, Home Assistant triggers an options reconfiguration flow immediately.
+  - _Fix_: Classified login/polling errors. Raise `ZTEAuthError` only on explicit credential error codes returned from the API (`password_error`, `invalid_password`, `unauth`). Hold last known values for up to 3 consecutive poll cycles on connection errors before declaring failure.
+- **Cookie Jar Cleardown Side-Effects**: Domain-based cookie clearing can have unexpected effects when multiple integrations run in the same container.
+  - _Fix_: Refined cookie jar cleanup in `api.py` to target only the `stok` cookie using a predicate lambda check: `self.session.cookie_jar.clear(predicate=lambda m: m.key == "stok")`.
+- **IP Host Input Prefix Scheme Issues**: Users entering URL scheme prefixes (like `http://` or `https://`) or trailing slashes in the config flow IP field cause malformed paths when endpoints build host URLs dynamically.
+  - _Fix_: Cleaned the incoming host input string in `ZTERouterAPI.__init__` by stripping out any scheme prefixes and trailing slashes.
 
 ## 6. Environment Constraints
 
@@ -117,3 +127,4 @@ To reach its current "modern" state, the project underwent several major refacto
 - **v1.0.5** (2026-05-08) — Fixed hassfest CI failure caused by invalid top-level `"reauth"` key in both translation files; HA schema requires reauth steps under `config.step.reauth_confirm`, not a standalone `reauth` block. Fixed `{host}` placeholder not resolving in reauth dialog by passing `description_placeholders` to `async_show_form`.
 - **v1.0.6** (2026-05-10) — Adopted Option B hierarchical translation pattern and implemented native HA reconfiguration flow.
 - **v1.0.7** (2026-05-13) — Implemented `icons.json` icon translations (state-dependent icons, all 51+ entities; `signal_best_connection` on/off icons). Achieved mypy `--strict` 0-error compliance across 12 source files. IQS SCAN=Full pass: corrected 6 stale matrix cells and 10 stale `quality_scale.yaml` entries. Closed all 3 remaining IQS gaps (`icon-translations`, `strict-typing`, `repair-issues`). Added `sms_storage_full` repair issue via `coordinator._check_sms_storage` with translated strings. `zte_router_5g` reaches 46/46 IQS rules DONE — 100% compliance, first project in the PlayFaster family to achieve this.
+- **v1.0.8** (2026-05-22) — Implemented centralized `_request` API client wrapper, boot time jitter prevention, login response classification, refined cookie jar clearing, and IP input cleaning.
