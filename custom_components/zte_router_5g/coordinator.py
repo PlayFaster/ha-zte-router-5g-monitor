@@ -1,6 +1,7 @@
 """DataUpdateCoordinator for ZTE Router 5G."""
 
 import asyncio
+import contextlib
 import logging
 from datetime import datetime, timedelta
 from typing import Any
@@ -33,6 +34,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self.last_update_success_time: datetime | None = None
         self._was_available = True
         self._boot_time: datetime | None = None
+        boot_time_str = entry.data.get("boot_time")
+        if boot_time_str:
+            with contextlib.suppress(Exception):
+                self._boot_time = dt_util.parse_datetime(boot_time_str)
 
         # Load hardware identity from persistent ConfigEntry data.
         # This ensures device info is stable from boot (The "Flat Identity" pattern).
@@ -73,7 +78,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 data.update(sms_cap)
                 data["last_sms"] = last_sms
 
-                # Calculate stable boot time with 15s drift tolerance
+                # Calculate stable boot time with 30s drift tolerance and persistence
                 uptime_seconds = data.get("realtime_time")
                 if uptime_seconds:
                     try:
@@ -84,9 +89,16 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
                         if (
                             self._boot_time is None
-                            or abs((calc_time - self._boot_time).total_seconds()) > 15
+                            or abs((calc_time - self._boot_time).total_seconds()) > 30
                         ):
                             self._boot_time = calc_time
+                            new_data = {
+                                **self.entry.data,
+                                "boot_time": self._boot_time.isoformat(),
+                            }
+                            self.hass.config_entries.async_update_entry(
+                                self.entry, data=new_data
+                            )
                         data["boot_time"] = self._boot_time
                     except ValueError, TypeError:
                         data["boot_time"] = None

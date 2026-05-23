@@ -504,6 +504,64 @@ class ZTERouterAPI:
             _LOGGER.error("Failed to delete all SMS: %s", e)
             raise
 
+    async def send_sms(self, number: str, message: str) -> int:
+        """Send an SMS message via the router."""
+        ad = await self.get_ad()
+        # Convert message to hex utf-16-be
+        hex_msg = message.encode("utf-16-be").hex()
+
+        # Build sms_time: yy;mm;dd;HH;MM;SS;+0
+        from datetime import datetime
+
+        now = datetime.now()
+        sms_time = now.strftime("%y;%m;%d;%H;%M;%S;+0")
+
+        # URL encode is handled by aiohttp when using dict data,
+        # but to keep it safe and exactly matched with standard ZTE request:
+        import urllib.parse
+
+        escaped_number = urllib.parse.quote_plus(number)
+
+        payload = (
+            f"isTest=false&goformId=SEND_SMS&notCallback=true&Number={escaped_number}"
+            f"&MessageBody={hex_msg}&encode_type=UNICODE&ID=-1&sms_time={sms_time}&AD={ad}"
+        )
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return 200
+
+    async def get_sms_messages(
+        self, mem_store: str = "1", tags: str = "10", timeout_sec: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Get SMS messages from a specific storage bank."""
+        path = "goform/goform_get_cmd_process"
+        payload = {
+            "isTest": "false",
+            "cmd": "sms_data_total",
+            "page": "0",
+            "data_per_page": "500",
+            "mem_store": mem_store,
+            "tags": tags,
+            "order_by": "order by id desc",
+        }
+        try:
+            resp_json = await self._request(
+                "POST", path, data=payload, timeout_sec=timeout_sec
+            )
+            messages = resp_json.get("messages", [])
+            for msg in messages:
+                msg["content_decoded"] = self._hex_decode(msg.get("content", ""))
+                msg["number_decoded"] = self._hex_decode(msg.get("number", ""))
+                msg["date_decoded"] = self._parse_date(msg.get("date", ""))
+            return cast(list[dict[str, Any]], messages)
+        except Exception as e:
+            _LOGGER.debug("Failed to get SMS messages: %s", e)
+            return []
+
     async def get_ad(self, timeout_sec: int | None = None) -> str:
         """Get the AD parameter for commands."""
         version = await self.get_version(timeout_sec=timeout_sec)

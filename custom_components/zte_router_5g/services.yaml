@@ -1,0 +1,111 @@
+---
+send_sms:
+  description: Send an SMS message via the router.
+  fields:
+    entry_id:
+      description: The router to use (optional if only one exists).
+      required: false
+      selector:
+        config_entry:
+          integration: zte_router_5g
+    target:
+      description: The phone number(s) to send the SMS to.
+      example: "+353871234567"
+      required: true
+      selector:
+        text:
+    message:
+      description: The message content.
+      example: "Hello from Home Assistant!"
+      required: true
+      selector:
+        text:
+
+delete_sms:
+  description: Delete an SMS message by its index.
+  fields:
+    entry_id:
+      description: The router to use.
+      required: true
+      selector:
+        config_entry:
+          integration: zte_router_5g
+    index:
+      description: The index of the SMS to delete.
+      required: true
+      selector:
+        number:
+          min: 0
+          mode: box
+
+delete_all_sms:
+  description: Delete all SMS messages from the router inbox.
+  fields:
+    entry_id:
+      description: The router to use.
+      required: true
+      selector:
+        config_entry:
+          integration: zte_router_5g
+    keep_last:
+      description: Number of most recent messages to keep (0 = delete all).
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 50
+          mode: box
+
+get_sms_list:
+  description: Fetch a list of SMS messages from the router.
+  fields:
+    entry_id:
+      description: The router to use.
+      required: true
+      selector:
+        config_entry:
+          integration: zte_router_5g
+    page:
+      description: Page number (starting from 1).
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: box
+    count:
+      description: Number of messages per page.
+      default: 20
+      selector:
+        number:
+          min: 1
+          max: 50
+          mode: box
+    box_type:
+      description:
+        The inbox to read from (1=Local Inbox, 2=Local Sent, 3=Local Draft, 5=SIM
+        Inbox).
+      default: 1
+      selector:
+        select:
+          options:
+            - label: "Local Inbox"
+              value: "1"
+            - label: "Local Sent"
+              value: "2"
+            - label: "Local Draft"
+              value: "3"
+            - label: "Local Trash"
+              value: "4"
+            - label: "SIM Inbox"
+              value: "5"
+            - label: "SIM Sent"
+              value: "6"
+            - label: "SIM Draft"
+              value: "7"
+            - label: "Mix Inbox"
+              value: "8"
+            - label: "Mix Sent"
+              value: "9"
+            - label: "Mix Draft"
+              value: "10"
