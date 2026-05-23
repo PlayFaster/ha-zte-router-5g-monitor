@@ -151,33 +151,41 @@ The `Recent Msg` sensor contains:
 The integration registers several custom Home Assistant services for advanced SMS management:
 
 ### `send_sms`
+
 Send an SMS message via the router.
-* **Fields:**
-  * `entry_id` (optional): The router config entry ID to use (optional if only one exists).
-  * `target` (required): List of phone numbers/targets to send the message to.
-  * `message` (required): Message content (up to 160 characters).
+
+- **Fields:**
+  - `entry_id` (optional): The router config entry ID to use (optional if only one exists).
+  - `target` (required): List of phone numbers/targets to send the message to.
+  - `message` (required): Message content (up to 160 characters).
 
 ### `delete_sms`
+
 Delete a specific SMS message by its index.
-* **Fields:**
-  * `entry_id` (required): The router config entry ID.
-  * `index` (required): The index of the message to delete.
+
+- **Fields:**
+  - `entry_id` (required): The router config entry ID.
+  - `index` (required): The index of the message to delete.
 
 ### `delete_all_sms`
+
 Delete all SMS messages from the router inbox.
-* **Fields:**
-  * `entry_id` (required): The router config entry ID.
-  * `keep_last` (optional): Number of most recent messages to keep (default: 0, which deletes all).
+
+- **Fields:**
+  - `entry_id` (required): The router config entry ID.
+  - `keep_last` (optional): Number of most recent messages to keep (default: 0, which deletes all).
 
 ### `get_sms_list`
+
 Fetch a list of SMS messages from the router. This service returns a response payload.
-* **Fields:**
-  * `entry_id` (required): The router config entry ID.
-  * `page` (optional): Page number (default: 1).
-  * `count` (optional): Messages per page (default: 20).
-  * `box_type` (optional): Box to read from (default: 1 = Local Inbox. Other options: 2=Local Sent, 3=Local Draft, 4=Local Trash, 5=SIM Inbox, 6=SIM Sent, 7=SIM Draft, 8=Mix Inbox, 9=Mix Sent, 10=Mix Draft).
-* **Response Schema:**
-  * Returns a dictionary containing a list of `messages` with `index`, `phone`, `content`, `date`, and `read` status.
+
+- **Fields:**
+  - `entry_id` (required): The router config entry ID.
+  - `page` (optional): Page number (default: 1).
+  - `count` (optional): Messages per page (default: 20).
+  - `box_type` (optional): Box to read from (default: 1 = Local Inbox. Other options: 2=Local Sent, 3=Local Draft, 4=Local Trash, 5=SIM Inbox, 6=SIM Sent, 7=SIM Draft, 8=Mix Inbox, 9=Mix Sent, 10=Mix Draft).
+- **Response Schema:**
+  - Returns a dictionary containing a list of `messages` with `index`, `phone`, `content`, `date`, and `read` status.
 
 ---
 

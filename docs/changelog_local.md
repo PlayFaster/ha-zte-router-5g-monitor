@@ -2,7 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.0.2-dev7] - 2026-05-23 - Unreleased
+## [3.0.2-dev9] - 2026-05-23 - Unreleased
+
+### Added
+
+- **9 new tests** (`test_init.py`): Achieved 100% coverage on `__init__.py`. Covers: `_get_coordinator` with entry_id (ready and not-ready paths), fallback with no entries, exception handling in all 4 SMS services (`send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`), mixed box-type SMS list, and `async_setup` service handler callables.
+- **SMS received event firing** (`coordinator.py`, `test_init.py`): Implemented `zte_router_5g_sms_received` event firing when a new SMS message is parsed. Added unit test `test_sms_received_event_firing` to verify ordered firing and baseline deduplication.
+
+### Test Coverage
+
+- `__init__.py` 83% → 100%
+
+## [3.0.2-dev8] - 2026-05-23 - Unreleased
 
 ### Added
 
@@ -14,7 +25,7 @@ All notable changes to this project will be documented in this file.
 
 - **HASSFEST warning** (`__init__.py`): Defined `CONFIG_SCHEMA` helper to resolve setup validation warning.
 
-## [3.0.2-dev6] - 2026-05-23 - Unreleased
+## [3.0.2-dev7] - 2026-05-23 - Unreleased
 
 ### Fixed
 

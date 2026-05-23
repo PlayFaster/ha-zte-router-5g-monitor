@@ -12,16 +12,16 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 > - **This integration is for you if** you want:
 >   - **Advanced Signal Diagnostics** — Near real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
->   - **SMS Management** — View recent message content and delete the mailbox directly from HA.
+>   - **SMS Management** — view the most recently received message content and attributes directly in HA.
 >
 > This project is optimized for the ZTE MC7010 5G Outdoor CPE but may work with other similar ZTE devices.
 
 ## 🔧 Compatibility & Tested Devices
 
-**Hardware Support:**
+**Router Hardware:**
 
 - **Fully Tested**:
-  - **ZTE MC7010** (5G Outdoor CPE) — tested firmware: V1.0.0B01 and later
+  - **ZTE MC7010** (5G Outdoor CPE) — tested firmware: `V1.0.0B01` and later
 - **Expected Compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
 - **Not Supported**: Non-ZTE hardware.
 
@@ -58,7 +58,6 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 ### 📋 Essential Router Management
 
 - **Router Management**: Reboot the device directly from the HA UI.
-- **SMS Management**: View recent messages and a "Delete All" button to clear the mailbox.
 - **100% Local**: No cloud account or internet access required.
 
 ### ⏱️ Dynamic Polling
@@ -74,6 +73,20 @@ This integration features **dynamic polling**, the ability to pause polling comp
 >
 > - Set it to 30 seconds during periods of heavy use to examine connection quality and set it higher afterwards, to avoid taxing the router and your Home Assistant database.
 
+### 📋 SMS Management
+
+- **SMS Management**: Unread SMS counts, last message content, and advanced SMS actions (Send, Delete, List) plus a "Delete All" button to simply clear the mailbox.
+- **SMS Events & Actions**: Fires a `zte_router_5g_sms_received` event when a new message is detected, enabling automations triggered by incoming texts. Has actions to send, delete and list SMS messages, see below.
+
+## 🛠️ SMS Actions
+
+This integration provides the following actions for SMS management:
+
+- **`zte_router_5g.send_sms`**: Send an SMS message to one or more recipients.
+- **`zte_router_5g.delete_sms`**: Delete a specific SMS message by its storage index.
+- **`zte_router_5g.delete_all_sms`**: Bulk delete messages from the inbox. Includes a `keep_last` parameter to preserve recent messages for safety.
+- **`zte_router_5g.get_sms_list`**: Fetch a list of all SMS messages or those from a specific storage bank (Local, SIM, Sent, or Draft). This action supports **Action Responses**, allowing you to use the output in Home Assistant automations and scripts.
+
 ## 🔍 What You Get
 
 This integration provides **55+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
@@ -85,42 +98,67 @@ This integration provides **55+ entities** (depending on your firmware) organize
 | **System** | 11 Sensors, 1 Switch, 1 Button, 1 Number | Firmware, IMEI, IP Addresses, Uptime, Reboot, Polling Controls |
 | **Signal** | 25 Sensors, 1 Binary Sensor | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands |
 | **Data** | 10 Sensors | Monthly Usage, Near real-time Speed, Session Data |
-| **SMS** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Message Content, Delete All |
-
-## 📸 Screenshots
-
-### Integration Overview
-
-![Integration](.github/images/zte_5g_integration_screen.png)
-
-| Signal | System |
-| :-: | :-: |
-| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_sensor_control_info_mini.png) |
-
-| Data | SMS |
-| :-: | :-: |
-| ![Data](.github/images/zte_5g_data_screen_mini.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
-
-### Setup
-
-![Setup](.github/images/zte_5g_setup_info.png)
+| **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Message Content, Delete All |
+| **SMS Actions** | 4 Actions | Send, Delete, and List SMS |
 
 ## 💡 Example Automations
 
-### 📨 Forward Incoming SMS to Mobile
+### SMS Examples
+
+#### 📨 Forward Incoming SMS to Mobile
 
 This automation fires when a new SMS is detected and forwards the content to your mobile phone.
 
 ```yaml
-alias: "ZTE: Forward SMS to Mobile"
+alias: "SMS: Forward to Mobile"
 triggers:
-  - trigger: state
-    entity_id: sensor.zte_5g_sms_recent_msg
+  - platform: event
+    event_type: zte_router_5g_sms_received
 actions:
   - action: notify.mobile_app_your_phone
     data:
-      title: "New SMS from {{ state_attr('sensor.zte_router_5g_recent_msg', 'number') }}"
-      message: "{{ states('sensor.zte_5g_sms_recent_msg') }}"
+      title: "New SMS from {{ trigger.event.data.phone }}"
+      message: "{{ trigger.event.data.content }}"
+```
+
+#### Automated Inbox Maintenance
+
+Keep your router's SMS storage clean by automatically deleting old messages while keeping the most recent ones for safety.
+
+```yaml
+alias: "SMS: Weekly Inbox Cleanup"
+triggers:
+  - platform: time
+    at: "03:00:00"
+conditions:
+  - condition: time
+    weekday:
+      - sun
+actions:
+  - action: zte_router_5g.delete_all_sms
+    data:
+      device_id: 01KQT9S47HN7R6PN3Y7A7NPRRA # Use your Device ID. This is GUI selectable in the Automation Editor.
+      keep_last: 5
+```
+
+#### Fetch and Process Inbox via Script
+
+Example of using the `get_sms_list` action response in a script to count messages from a specific sender.
+
+```yaml
+alias: "SMS: Count OTP Messages"
+sequence:
+  - action: zte_router_5g.get_sms_list
+    data:
+      device_id: 01KQT9S47HN7R6PN3Y7A7NPRRA
+      count: 50
+    response_variable: inbox
+  - action: notify.persistent_notification
+    data:
+      message: |
+      message: >
+        You have {{ inbox.messages | selectattr('phone', 'search', 'MY_BANK') | list | count }}
+        messages from your bank in the inbox.
 ```
 
 ### 🚨 Data Usage Alert
@@ -219,6 +257,24 @@ actions:
       entity_id: switch.zte_5g_system_pause_polling
 ```
 
+## 📸 Screenshots
+
+### Integration Overview
+
+![Integration](.github/images/zte_5g_integration_screen.png)
+
+| Signal | System |
+| :-: | :-: |
+| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_sensor_control_info_mini.png) |
+
+| Data | SMS |
+| :-: | :-: |
+| ![Data](.github/images/zte_5g_data_screen_mini.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
+
+### Setup
+
+![Setup](.github/images/zte_5g_setup_info.png)
+
 ## 📥 Installation
 
 ### ✨ HACS (Recommended)
@@ -233,7 +289,7 @@ actions:
 
 ### 💾 Manual Installation
 
-1. Download the repository
+1. Download the [latest release](https://github.com/PlayFaster/ha-zte-router-5g-monitor/releases).
 2. Copy the `custom_components/zte_router_5g` folder to your Home Assistant `custom_components` directory
 3. Restart Home Assistant
 4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
@@ -303,9 +359,12 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 
 ### **All sensors showing "Unavailable" or "Unknown"**
 
-- This is normal during a router reboot or if the router is unreachable.
+- This is normal during a router reboot or if the router is temporarily unreachable.
   - The integration will automatically recover once the connection is restored.
-- If it does not recover, check if you can log into the web UI of the router.
+- If sensors do not recover, perform these checks:
+  - Ensure you can log into the router's web UI (confirms it is up and the password is correct).
+  - Check your Home Assistant logs for specific error messages.
+  - Delete and re-add the integration.
 
 ### **Why can't I access the router web UI while this is connected?**
 
@@ -331,7 +390,6 @@ To fully uninstall (HACS):
 
 ## ⚠️ Known Limitations /❔ What's Missing?
 
-- **Comprehensive SMS Management**: Basic functionality is available, including SMS counts, viewing the most recent message, and a "Delete All" action. More comprehensive management (e.g., reading all messages or deleting specific messages) is not currently supported. These features may be added in the future, pending further investigation into the router’s capabilities.
 - **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
 - **Non Bridge Mode Features**: The integration was developed on and has only been tested with the MC7010 which is an outdoor bridge-mode only device without WiFi. This means the integration does not have:
   - **Client Tracking**: No tracking of connected clients.
