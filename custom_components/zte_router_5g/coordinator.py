@@ -34,6 +34,8 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self.last_update_success_time: datetime | None = None
         self._was_available = True
         self._boot_time: datetime | None = None
+        self.last_sms_timestamp: str | None = None
+        self.fired_sms_hashes: set[str] = set()
         boot_time_str = entry.data.get("boot_time")
         if boot_time_str:
             with contextlib.suppress(Exception):
@@ -73,10 +75,18 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 # Fetch all primary data components
                 data = await self.api.get_all_data()
                 sms_cap = await self.api.get_sms_capacity()
-                last_sms = await self.api.get_last_sms_content()
+                # Fetch recent messages to detect events and populate last_sms
+                messages = await self.api.get_sms_messages(mem_store="1", tags="10")
 
                 data.update(sms_cap)
-                data["last_sms"] = last_sms
+                # Sort by ID descending to find the latest message
+                if messages:
+                    sorted_msgs = sorted(
+                        messages, key=lambda x: int(x.get("id", 0)), reverse=True
+                    )
+                    data["last_sms"] = sorted_msgs[0]
+                else:
+                    data["last_sms"] = {}
 
                 # Calculate stable boot time with 30s drift tolerance and persistence
                 uptime_seconds = data.get("realtime_time")
@@ -144,6 +154,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                         self.entry.title,
                     )
                 self._check_sms_storage(data)
+                self._check_new_sms(messages)
                 return data
 
         except TimeoutError as err:
@@ -255,3 +266,63 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             )
         else:
             ir.async_delete_issue(self.hass, DOMAIN, "sms_storage_full")
+
+    def _check_new_sms(self, messages: list[dict[str, Any]]) -> None:
+        """Check for new SMS messages and fire events."""
+        if not messages:
+            return
+
+        # Sort by date decoded ascending (oldest first) to ensure events fire in order.
+        # Filter out messages that lack a valid date_decoded.
+        sms_list = [m for m in messages if m.get("date_decoded")]
+        sms_list.sort(key=lambda x: x["date_decoded"])
+
+        if not sms_list:
+            return
+
+        # On first run, just set the baseline timestamp and hashes
+        if self.last_sms_timestamp is None:
+            self.last_sms_timestamp = sms_list[-1]["date_decoded"]
+            self.fired_sms_hashes = {
+                f"{msg['id']}_{msg['date_decoded']}"
+                for msg in sms_list
+                if msg["date_decoded"] == self.last_sms_timestamp
+            }
+            _LOGGER.debug(
+                "%s: SMS tracking baseline established at %s",
+                self.entry.title,
+                self.last_sms_timestamp,
+            )
+            return
+
+        new_messages = []
+        for msg in sms_list:
+            msg_hash = f"{msg['id']}_{msg['date_decoded']}"
+            if msg["date_decoded"] > self.last_sms_timestamp or (
+                msg["date_decoded"] == self.last_sms_timestamp
+                and msg_hash not in self.fired_sms_hashes
+            ):
+                new_messages.append(msg)
+
+        for msg in new_messages:
+            _LOGGER.info(
+                "%s: New SMS from %s", self.entry.title, msg.get("number_decoded")
+            )
+            self.hass.bus.async_fire(
+                "zte_router_5g_sms_received",
+                {
+                    "entry_id": self.entry.entry_id,
+                    "phone": msg.get("number_decoded"),
+                    "content": msg.get("content_decoded"),
+                    "date": msg.get("date_decoded"),
+                    "index": int(msg.get("id", 0)),
+                },
+            )
+
+            # Update tracking state
+            msg_hash = f"{msg['id']}_{msg['date_decoded']}"
+            if msg["date_decoded"] > self.last_sms_timestamp:
+                self.last_sms_timestamp = msg["date_decoded"]
+                self.fired_sms_hashes = {msg_hash}
+            else:
+                self.fired_sms_hashes.add(msg_hash)

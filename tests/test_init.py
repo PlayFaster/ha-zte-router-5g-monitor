@@ -67,7 +67,18 @@ async def test_async_update_data_success(mock_hass, mock_config_entry):
         mock_api = mock_api_class.return_value
         mock_api.get_all_data = AsyncMock(return_value={"network_type": "LTE"})
         mock_api.get_sms_capacity = AsyncMock(return_value={"total": 10})
-        mock_api.get_last_sms_content = AsyncMock(return_value={"content": "hello"})
+        mock_api.get_sms_messages = AsyncMock(
+            return_value=[
+                {
+                    "id": "1",
+                    "content": "00480065006c006c006f",
+                    "content_decoded": "hello",
+                    "number_decoded": "123",
+                    "date_decoded": "2026-05-23T02:00:00",
+                    "tag": "1",
+                }
+            ]
+        )
 
         # Setup to get the coordinator
         await async_setup_entry(mock_hass, mock_config_entry)
@@ -77,7 +88,14 @@ async def test_async_update_data_success(mock_hass, mock_config_entry):
 
         assert data["network_type"] == "LTE"
         assert data["total"] == 10
-        assert data["last_sms"] == {"content": "hello"}
+        assert data["last_sms"] == {
+            "id": "1",
+            "content": "00480065006c006c006f",
+            "content_decoded": "hello",
+            "number_decoded": "123",
+            "date_decoded": "2026-05-23T02:00:00",
+            "tag": "1",
+        }
         assert coordinator.consecutive_failures == 0
 
 
@@ -382,3 +400,285 @@ async def test_service_get_sms_list(mock_hass, mock_config_entry):
     assert messages[1]["phone"] == "456"
     assert messages[1]["content"] == "text2"
     assert messages[1]["read"] is True
+
+
+@pytest.mark.asyncio
+async def test_get_coordinator_with_entry_id(mock_hass, mock_config_entry):
+    """Test _get_coordinator with specific entry_id (__init__.py:78-81)."""
+    from custom_components.zte_router_5g import _get_coordinator
+
+    mock_coordinator = MagicMock()
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
+
+    result = _get_coordinator(mock_hass, {"entry_id": "test_entry"})
+    assert result is mock_coordinator
+
+
+@pytest.mark.asyncio
+async def test_get_coordinator_with_entry_id_not_ready(mock_hass, mock_config_entry):
+    """Test _get_coordinator with entry_id but entry not ready (__init__.py:82)."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.zte_router_5g import _get_coordinator
+
+    mock_config_entry.runtime_data = None
+    mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
+
+    with pytest.raises(HomeAssistantError, match="is not ready"):
+        _get_coordinator(mock_hass, {"entry_id": "test_entry"})
+
+
+@pytest.mark.asyncio
+async def test_get_coordinator_no_entries(mock_hass):
+    """Test _get_coordinator when no entries exist (__init__.py:90)."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.zte_router_5g import _get_coordinator
+
+    mock_hass.config_entries.async_entries.return_value = []
+
+    with pytest.raises(HomeAssistantError, match="No active ZTE Router"):
+        _get_coordinator(mock_hass, {})
+
+
+@pytest.mark.asyncio
+async def test_service_send_sms_exception(mock_hass, mock_config_entry):
+    """Test send_sms service exception handling (__init__.py:102-103)."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.zte_router_5g import async_send_sms
+
+    mock_api = AsyncMock()
+    mock_api.send_sms.side_effect = RuntimeError("Send failed")
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"target": ["+123456"], "message": "test msg"}
+
+    with pytest.raises(HomeAssistantError, match="Failed to send SMS"):
+        await async_send_sms(mock_hass, call)
+
+
+@pytest.mark.asyncio
+async def test_service_delete_sms_exception(mock_hass, mock_config_entry):
+    """Test delete_sms service exception handling (__init__.py:114-115)."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.zte_router_5g import async_delete_sms
+
+    mock_api = AsyncMock()
+    mock_api.delete_sms.side_effect = RuntimeError("Delete failed")
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"index": 5}
+
+    with pytest.raises(HomeAssistantError, match="Failed to delete SMS"):
+        await async_delete_sms(mock_hass, call)
+
+
+@pytest.mark.asyncio
+async def test_service_delete_all_sms_exception(mock_hass, mock_config_entry):
+    """Test delete_all_sms service exception handling (__init__.py:135-136)."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.zte_router_5g import async_delete_all_sms
+
+    mock_api = AsyncMock()
+    mock_api.delete_all.side_effect = RuntimeError("Delete all failed")
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"keep_last": 0}
+
+    with pytest.raises(HomeAssistantError, match="Failed to delete all SMS"):
+        await async_delete_all_sms(mock_hass, call)
+
+
+@pytest.mark.asyncio
+async def test_service_get_sms_list_mix_box_type(mock_hass, mock_config_entry):
+    """Test get_sms_list with mixed box_type (__init__.py:165-168)."""
+    from custom_components.zte_router_5g import async_get_sms_list
+
+    mock_api = AsyncMock()
+    mock_api.get_sms_messages.side_effect = [
+        [
+            {
+                "id": "1",
+                "tag": "0",
+                "number_decoded": "111",
+                "content_decoded": "nv",
+                "date_decoded": "2026-05-23T01:00:00",
+            }
+        ],
+        [
+            {
+                "id": "2",
+                "tag": "1",
+                "number_decoded": "222",
+                "content_decoded": "sim",
+                "date_decoded": "2026-05-23T02:00:00",
+            }
+        ],
+    ]
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"page": 1, "count": 10, "box_type": 8}
+
+    result = await async_get_sms_list(mock_hass, call)
+    messages = result["messages"]
+    assert len(messages) == 2
+    assert mock_api.get_sms_messages.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_service_get_sms_list_exception(mock_hass, mock_config_entry):
+    """Test get_sms_list service exception handling (__init__.py:188-189)."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.zte_router_5g import async_get_sms_list
+
+    mock_api = AsyncMock()
+    mock_api.get_sms_messages.side_effect = RuntimeError("List failed")
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"page": 1, "count": 10, "box_type": 1}
+
+    with pytest.raises(HomeAssistantError, match="Failed to fetch SMS list"):
+        await async_get_sms_list(mock_hass, call)
+
+
+@pytest.mark.asyncio
+async def test_async_setup_service_handlers(mock_hass, mock_config_entry):
+    """Test async_setup service handlers are callable (__init__.py:196,199,202,205).
+
+    Captures the registered callbacks and invokes them to cover the inner handlers.
+    """
+    from custom_components.zte_router_5g import async_setup
+
+    registered_handlers = {}
+
+    def capture_register(domain, service, handler, **kwargs):
+        registered_handlers[service] = handler
+
+    mock_hass.services.async_register.side_effect = capture_register
+
+    assert await async_setup(mock_hass, {}) is True
+
+    # Set up coordinator for handler calls
+    mock_api = AsyncMock()
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_coordinator.async_request_refresh = AsyncMock()
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+    mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
+
+    # Invoke _handle_send_sms
+    send_call = MagicMock(spec=ServiceCall)
+    send_call.data = {"target": ["+1"], "message": "hi"}
+    await registered_handlers["send_sms"](send_call)
+    mock_api.send_sms.assert_called_once()
+
+    # Invoke _handle_delete_sms
+    delete_call = MagicMock(spec=ServiceCall)
+    delete_call.data = {"index": 1}
+    await registered_handlers["delete_sms"](delete_call)
+    mock_api.delete_sms.assert_called_once_with("1")
+
+    # Invoke _handle_delete_all_sms
+    delete_all_call = MagicMock(spec=ServiceCall)
+    delete_all_call.data = {"keep_last": 0}
+    await registered_handlers["delete_all_sms"](delete_all_call)
+    mock_api.delete_all.assert_called_once()
+
+    # Invoke _handle_get_sms_list
+    mock_api.get_sms_messages.return_value = []
+    list_call = MagicMock(spec=ServiceCall)
+    list_call.data = {"page": 1, "count": 20, "box_type": 1}
+    result = await registered_handlers["get_sms_list"](list_call)
+    assert result == {"messages": []}
+
+
+@pytest.mark.asyncio
+async def test_sms_received_event_firing(mock_hass, mock_config_entry):
+    """Test that the coordinator fires zte_router_5g_sms_received events."""
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+    ):
+        mock_api = mock_api_class.return_value
+        mock_api.get_all_data = AsyncMock(return_value={"network_type": "LTE"})
+        mock_api.get_sms_capacity = AsyncMock(return_value={"total": 10})
+
+        # 1. Establish baseline (first poll)
+        mock_api.get_sms_messages = AsyncMock(
+            return_value=[
+                {
+                    "id": "1",
+                    "content_decoded": "hello",
+                    "number_decoded": "123",
+                    "date_decoded": "2026-05-23T02:00:00",
+                }
+            ]
+        )
+
+        await async_setup_entry(mock_hass, mock_config_entry)
+        coordinator = mock_config_entry.runtime_data
+
+        # Run first update to set last_sms_timestamp = "2026-05-23T02:00:00"
+        await coordinator._async_update_data()
+        assert coordinator.last_sms_timestamp == "2026-05-23T02:00:00"
+        assert coordinator.fired_sms_hashes == {"1_2026-05-23T02:00:00"}
+        mock_hass.bus.async_fire.assert_not_called()
+
+        # 2. Second poll: receives new message
+        mock_api.get_sms_messages.return_value = [
+            {
+                "id": "1",
+                "content_decoded": "hello",
+                "number_decoded": "123",
+                "date_decoded": "2026-05-23T02:00:00",
+            },
+            {
+                "id": "2",
+                "content_decoded": "new message",
+                "number_decoded": "456",
+                "date_decoded": "2026-05-23T02:05:00",
+            },
+        ]
+
+        await coordinator._async_update_data()
+        assert coordinator.last_sms_timestamp == "2026-05-23T02:05:00"
+        assert coordinator.fired_sms_hashes == {"2_2026-05-23T02:05:00"}
+
+        # Verify that the event was fired on the bus
+        mock_hass.bus.async_fire.assert_called_once_with(
+            "zte_router_5g_sms_received",
+            {
+                "entry_id": mock_config_entry.entry_id,
+                "phone": "456",
+                "content": "new message",
+                "date": "2026-05-23T02:05:00",
+                "index": 2,
+            },
+        )
