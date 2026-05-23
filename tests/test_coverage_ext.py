@@ -62,7 +62,9 @@ async def test_api_login_connection_error(mock_aiohttp_client):
         patch.object(api, "get_version", return_value="VER"),
     ):
         mock_aiohttp_client.post.side_effect = Exception("Conn Error")
-        with pytest.raises(Exception, match="Conn Error"):
+        with pytest.raises(
+            ZTEConnectionError, match="Login failed due to connection error"
+        ):
             await api.login()
         assert api.stok is None
 
@@ -144,7 +146,7 @@ async def test_api_delete_all_exception(mock_aiohttp_client):
         # Fail on first call (list messages)
         mock_aiohttp_client.post.side_effect = Exception("Delete All Fail")
 
-        with pytest.raises(Exception, match="Delete All Fail"):
+        with pytest.raises(ZTEConnectionError, match="Request failed: Delete All Fail"):
             await api.delete_all()
         assert api.stok is None
 
@@ -459,7 +461,7 @@ async def test_sensor_extra_attributes_errors(
         key="msg_recent", name="Test Recent", value_fn=lambda x: 0
     )
     sensor_recent = ZTERouterSensor(mock_coordinator, mock_config_entry, desc_recent)
-    mock_coordinator.data = {}
+    mock_coordinator.data = {"dummy": "value"}
     assert sensor_recent.extra_state_attributes == {
         "id": None,
         "number": None,
@@ -568,3 +570,308 @@ async def test_coordinator_sms_storage_not_full_deletes_issue(
     ):
         await coordinator._async_update_data()
         mock_delete.assert_called_once_with(hass, "zte_router_5g", "sms_storage_full")
+
+
+# ---------------------------------------------------------------------------
+# Coverage Expansion: api.py uncovered lines
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_api_ip_with_protocol_prefix(mock_aiohttp_client):
+    """Test API initialization strips protocol prefix from IP (api.py:36)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "https://192.168.0.1", "admin", "password")
+    assert api.ip == "192.168.0.1"
+
+
+@pytest.mark.asyncio
+async def test_api_request_html_via_url_no_retry(mock_aiohttp_client):
+    """Test _request HTML detection via URL, no retry (api.py:122,133-163)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={}, url="http://192.168.0.1/index.html"
+    )
+    with pytest.raises(ZTEConnectionError, match="Received unexpected HTML response"):
+        await api._request("GET", "some/path", authenticated=False)
+
+
+@pytest.mark.asyncio
+async def test_api_request_html_via_url_with_retry(mock_aiohttp_client):
+    """Test _request HTML detection via URL with retry and relogin (api.py:133-147)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={}, url="http://192.168.0.1/index.html"
+    )
+    with patch.object(api, "login", return_value="stok=new") as mock_login:
+        with pytest.raises(
+            ZTEConnectionError, match="Received unexpected HTML response"
+        ):
+            await api._request("GET", "some/path", authenticated=True)
+        assert mock_login.called
+
+
+@pytest.mark.asyncio
+async def test_api_request_html_via_content_type(mock_aiohttp_client):
+    """Test _request HTML detection via Content-Type header (api.py:123-130)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    mock_response = MockResponse(json_data=None, headers={"Content-Type": "text/html"})
+    mock_aiohttp_client.get.return_value = mock_response
+    with (
+        patch.object(
+            mock_response, "text", return_value="<html><body>test</body></html>"
+        ),
+        pytest.raises(ZTEConnectionError, match="Received unexpected HTML response"),
+    ):
+        await api._request("GET", "some/path", authenticated=False)
+
+
+@pytest.mark.asyncio
+async def test_api_request_html_via_content_type_starts_with_angle(mock_aiohttp_client):
+    """Test _request HTML detection when text body starts with '<' (api.py:127)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    mock_response = MockResponse(
+        json_data=None,
+        headers={"Content-Type": "text/html"},
+    )
+    mock_aiohttp_client.get.return_value = mock_response
+    with (
+        patch.object(
+            mock_response, "text", return_value="<html><body>test</body></html>"
+        ),
+        pytest.raises(ZTEConnectionError, match="Received unexpected HTML response"),
+    ):
+        await api._request("GET", "some/path", authenticated=False)
+
+
+@pytest.mark.asyncio
+async def test_api_request_json_parse_retry(mock_aiohttp_client):
+    """Test _request JSON parse failure with retry (api.py:170-184)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+
+    # First response fails json(), second response succeeds
+    fail_response = MockResponse(json_data=None)
+    success_response = MockResponse(json_data={"result": "ok"})
+    mock_aiohttp_client.get.side_effect = [fail_response, success_response]
+
+    with (
+        patch.object(api, "login", return_value="stok=new") as mock_login,
+        patch.object(fail_response, "json", side_effect=Exception("Bad JSON")),
+    ):
+        result = await api._request("GET", "some/path", authenticated=True)
+        assert result == {"result": "ok"}
+        assert mock_login.called
+
+
+@pytest.mark.asyncio
+async def test_api_request_json_parse_no_retry(mock_aiohttp_client):
+    """Test _request JSON parse failure without retry (api.py:184-186)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    mock_response = MockResponse(json_data=None)
+    mock_aiohttp_client.get.return_value = mock_response
+    with (
+        patch.object(mock_response, "json", side_effect=Exception("Bad JSON")),
+        pytest.raises(ZTEConnectionError, match="Failed to parse JSON response"),
+    ):
+        await api._request("GET", "some/path", authenticated=False)
+
+
+@pytest.mark.asyncio
+async def test_api_login_password_error_result(mock_aiohttp_client):
+    """Test login with password_error result in body (api.py:322)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "LD"}),
+        MockResponse(json_data={"wa_inner_version": "VER"}),
+    ]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "password_error"}, cookies={}
+    )
+
+    with pytest.raises(ZTEAuthError, match="Login failed due to invalid credentials"):
+        await api.login()
+
+
+@pytest.mark.asyncio
+async def test_api_request_reauth_error_in_outer_except(mock_aiohttp_client):
+    """Test _request re-raises ZTEAuthError in outer except (api.py:225)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+
+    with (
+        patch.object(api, "session", create=True) as mock_session,
+        pytest.raises(ZTEAuthError, match="Test auth fail"),
+    ):
+        mock_session.request.side_effect = ZTEAuthError("Test auth fail")
+        await api._request("GET", "some/path", authenticated=True)
+
+
+# ---------------------------------------------------------------------------
+# Coverage Expansion: coordinator.py uncovered lines
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_coordinator_boot_time_calculated(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test coordinator boot_time from realtime_time (coordinator.py:79-90)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    with (
+        patch.object(api, "get_all_data", return_value={"realtime_time": "3600"}),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(api, "get_last_sms_content", return_value={}),
+        patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
+    ):
+        data = await coordinator._async_update_data()
+        assert "boot_time" in data
+        assert data["boot_time"] is not None
+
+
+@pytest.mark.asyncio
+async def test_coordinator_boot_time_value_error(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test coordinator boot_time handles ValueError (coordinator.py:91-92)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    with (
+        patch.object(
+            api, "get_all_data", return_value={"realtime_time": "not_a_number"}
+        ),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(api, "get_last_sms_content", return_value={}),
+        patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
+    ):
+        data = await coordinator._async_update_data()
+        assert data.get("boot_time") is None
+
+
+@pytest.mark.asyncio
+async def test_coordinator_boot_time_missing(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test boot_time when realtime_time is missing (coordinator.py:93-94)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    with (
+        patch.object(api, "get_all_data", return_value={"network_type": "LTE"}),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(api, "get_last_sms_content", return_value={}),
+        patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
+    ):
+        data = await coordinator._async_update_data()
+        assert data.get("boot_time") is None
+
+
+@pytest.mark.asyncio
+async def test_coordinator_reconnection_log(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test reconnection log when _was_available flips (coordinator.py:129-130)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+    coordinator._was_available = False  # Simulate previous failure
+
+    with (
+        patch.object(api, "get_all_data", return_value={"network_type": "LTE"}),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(api, "get_last_sms_content", return_value={}),
+        patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
+    ):
+        data = await coordinator._async_update_data()
+        assert coordinator._was_available is True
+        assert data["network_type"] == "LTE"
+
+
+@pytest.mark.asyncio
+async def test_coordinator_sms_storage_check_exception(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test _check_sms_storage handles int errors (coordinator.py:229-230)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    with (
+        patch.object(
+            api,
+            "get_all_data",
+            return_value={"nv_sms_able": "invalid", "sms_nv_total": "20"},
+        ),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(api, "get_last_sms_content", return_value={}),
+        patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
+    ):
+        # Should not raise, just return silently
+        data = await coordinator._async_update_data()
+        assert data is not None
+
+
+@pytest.mark.asyncio
+async def test_api_request_html_text_exception(mock_aiohttp_client):
+    """Test _request HTML detection when r.text() raises (api.py:129-130).
+
+    The exception is caught by the except pass block; execution continues
+    to JSON parsing. This test validates that the pass block is entered.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    mock_response = MockResponse(json_data={}, headers={"Content-Type": "text/html"})
+    mock_aiohttp_client.get.return_value = mock_response
+    with patch.object(mock_response, "text", side_effect=Exception("Read error")):
+        # text() raises, pass suppresses it, then JSON parse returns {}
+        result = await api._request("GET", "some/path", authenticated=False)
+        assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_api_request_html_body_preview_exception(mock_aiohttp_client):
+    """Test _request body preview exception handler (api.py:152-153).
+
+    Triggered when is_html_page is True, authenticated is False or _retry is False,
+    and r.text() raises during body_preview extraction.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    mock_response = MockResponse(json_data={}, url="http://192.168.0.1/index.html")
+    mock_aiohttp_client.get.return_value = mock_response
+    with (
+        patch.object(mock_response, "text", side_effect=Exception("Body read error")),
+        pytest.raises(ZTEConnectionError, match="Received unexpected HTML response"),
+    ):
+        await api._request("GET", "some/path", authenticated=False)

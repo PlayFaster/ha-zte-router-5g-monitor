@@ -60,15 +60,28 @@ def mock_coordinator():
 class MockResponse:
     """Helper to mock aiohttp responses."""
 
-    def __init__(self, json_data=None, status=200, cookies=None):
+    def __init__(self, json_data=None, status=200, cookies=None, headers=None, url=""):
         """Initialize the mock response."""
         self._json_data = json_data
         self.status = status
         self.cookies = cookies or {}
+        self.headers = headers or {"Content-Type": "application/json"}
+        self._url = url
+
+    @property
+    def url(self):
+        """Return the URL."""
+        return self._url
 
     async def json(self, **kwargs):
         """Return the JSON data."""
         return self._json_data
+
+    async def text(self):
+        """Return the text body."""
+        if self._json_data is not None:
+            return str(self._json_data)
+        return ""
 
     async def __aenter__(self):
         """Enter the context manager."""
@@ -83,8 +96,15 @@ class MockResponse:
 def mock_aiohttp_client():
     """Fixture to mock aiohttp ClientSession."""
     session = MagicMock()
-    # We initialize get/post as MagicMocks.
-    # Tests can then set .return_value = MockResponse(...) OR .side_effect = [...]
     session.get = MagicMock()
     session.post = MagicMock()
+
+    def _request_side_effect(method, *args, **kwargs):
+        if method.upper() == "GET":
+            return session.get(*args, **kwargs)
+        elif method.upper() == "POST":
+            return session.post(*args, **kwargs)
+        return MagicMock()
+
+    session.request = MagicMock(side_effect=_request_side_effect)
     return session

@@ -200,7 +200,7 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
 
 @pytest.mark.asyncio
 async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
-    """Test that ZTEAuthError triggers reauth."""
+    """Test that ZTEAuthError triggers reauth after 3 consecutive failures."""
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI"),
         patch("custom_components.zte_router_5g.async_get_clientsession"),
@@ -212,6 +212,13 @@ async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
         coordinator.data = {"old": "data"}
         coordinator.api.get_all_data = AsyncMock(side_effect=ZTEAuthError("Auth fail"))
 
+        # First 3 failures return cached data (resilience)
+        for i in range(3):
+            data = await coordinator._async_update_data()
+            assert data == {"old": "data"}
+            assert coordinator.consecutive_failures == i + 1
+
+        # 4th failure raises UpdateFailed and triggers reauth
         with pytest.raises(UpdateFailed, match="Authentication failed"):
             await coordinator._async_update_data()
 
