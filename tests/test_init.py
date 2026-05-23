@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.core import ServiceCall
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.zte_router_5g import async_setup_entry, async_unload_entry
@@ -223,3 +224,161 @@ async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
             await coordinator._async_update_data()
 
         mock_reauth.assert_called_once_with(mock_hass)
+
+
+@pytest.mark.asyncio
+async def test_async_setup_registers_services(mock_hass):
+    """Test that async_setup registers the integration services."""
+    from custom_components.zte_router_5g import async_setup
+
+    with patch.object(mock_hass.services, "async_register") as mock_register:
+        assert await async_setup(mock_hass, {}) is True
+        assert mock_register.call_count == 4
+        # Verify the service names registered
+        registered_services = [call[0][1] for call in mock_register.call_args_list]
+        assert "send_sms" in registered_services
+        assert "delete_sms" in registered_services
+        assert "delete_all_sms" in registered_services
+        assert "get_sms_list" in registered_services
+
+
+@pytest.mark.asyncio
+async def test_service_send_sms(mock_hass, mock_config_entry):
+    """Test the send_sms service call."""
+    from custom_components.zte_router_5g import async_send_sms
+
+    mock_api = AsyncMock()
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"target": ["+123456"], "message": "test msg"}
+
+    await async_send_sms(mock_hass, call)
+    mock_api.send_sms.assert_called_once_with("+123456", "test msg")
+
+
+@pytest.mark.asyncio
+async def test_service_delete_sms(mock_hass, mock_config_entry):
+    """Test the delete_sms service call."""
+    from custom_components.zte_router_5g import async_delete_sms
+
+    mock_api = AsyncMock()
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_coordinator.async_request_refresh = AsyncMock()
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"index": 5}
+
+    await async_delete_sms(mock_hass, call)
+    mock_api.delete_sms.assert_called_once_with("5")
+    mock_coordinator.async_request_refresh.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_service_delete_all_sms_simple(mock_hass, mock_config_entry):
+    """Test the delete_all_sms service call with keep_last = 0."""
+    from custom_components.zte_router_5g import async_delete_all_sms
+
+    mock_api = AsyncMock()
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_coordinator.async_request_refresh = AsyncMock()
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"keep_last": 0}
+
+    await async_delete_all_sms(mock_hass, call)
+    mock_api.delete_all.assert_called_once()
+    mock_api.get_sms_messages.assert_not_called()
+    mock_coordinator.async_request_refresh.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_service_delete_all_sms_keep_last(mock_hass, mock_config_entry):
+    """Test the delete_all_sms service call with keep_last > 0."""
+    from custom_components.zte_router_5g import async_delete_all_sms
+
+    mock_api = AsyncMock()
+    mock_api.get_sms_messages.return_value = [
+        {"id": "4"},
+        {"id": "3"},
+        {"id": "2"},
+        {"id": "1"},
+    ]
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_coordinator.async_request_refresh = AsyncMock()
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"keep_last": 2}
+
+    await async_delete_all_sms(mock_hass, call)
+    mock_api.get_sms_messages.assert_called_once_with(mem_store="1")
+    mock_api.delete_sms.assert_called_once_with("2;1")
+    mock_coordinator.async_request_refresh.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_service_get_sms_list(mock_hass, mock_config_entry):
+    """Test the get_sms_list service call with response."""
+    from custom_components.zte_router_5g import async_get_sms_list
+
+    mock_api = AsyncMock()
+    mock_api.get_sms_messages.return_value = [
+        {
+            "id": "10",
+            "number_decoded": "123",
+            "content_decoded": "text1",
+            "date_decoded": "2026-05-23T01:27:08",
+            "tag": "1",
+        },
+        {
+            "id": "9",
+            "number_decoded": "456",
+            "content_decoded": "text2",
+            "date_decoded": "2026-05-23T01:25:08",
+            "tag": "0",
+        },
+        {
+            "id": "8",
+            "number_decoded": "789",
+            "content_decoded": "text3",
+            "date_decoded": "2026-05-23T01:20:08",
+            "tag": "2",
+        },
+    ]
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {
+        "page": 1,
+        "count": 10,
+        "box_type": 1,
+    }
+
+    result = await async_get_sms_list(mock_hass, call)
+    messages = result["messages"]
+
+    assert len(messages) == 2
+    assert messages[0]["index"] == 10
+    assert messages[0]["phone"] == "123"
+    assert messages[0]["content"] == "text1"
+    assert messages[0]["read"] is False
+
+    assert messages[1]["index"] == 9
+    assert messages[1]["phone"] == "456"
+    assert messages[1]["content"] == "text2"
+    assert messages[1]["read"] is True

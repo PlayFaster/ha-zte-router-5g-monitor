@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2-dev7] - 2026-05-23 - Unreleased
+
+### Added
+
+- **SMS capabilities and services** (`api.py`, `__init__.py`, `services.yaml`): Implemented `send_sms` (UTF-16BE hex encoding), `delete_sms` (by index/id), `delete_all_sms` (bulk/partial deletes with safety `keep_last` count), and `get_sms_list` (response-supporting action with filtering and pagination).
+- **Service definitions** (`services.yaml`): Added Home Assistant service registration and field configuration.
+- **Service test coverage** (`test_api.py`, `test_init.py`): Added 7 new unit tests covering all services, input formatting, filtering, and error branches.
+
+### Fixed
+
+- **HASSFEST warning** (`__init__.py`): Defined `CONFIG_SCHEMA` helper to resolve setup validation warning.
+
+## [3.0.2-dev6] - 2026-05-23 - Unreleased
+
+### Fixed
+
+- **Uptime Jitter & HA Restarts** (`coordinator.py`): Persisted the calculated boot timestamp in `entry.data` and restored it on startup, applying a 30-second tolerance window to prevent timestamp shifting on Home Assistant reboots.
+
 ## [3.0.2-dev6] - 2026-05-23 - Unreleased
 
 ### Added
