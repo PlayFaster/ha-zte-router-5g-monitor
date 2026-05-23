@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from custom_components.zte_router_5g.api import (
-    ZTEAuthError,
+    ZTEConnectionError,
     ZTERouterAPI,
 )
 
@@ -136,7 +136,7 @@ async def test_api_login_failure_no_stok(mock_aiohttp_client):
     ]
     mock_aiohttp_client.post.return_value = MockResponse(cookies={})
 
-    with pytest.raises(ZTEAuthError, match="Login failed"):
+    with pytest.raises(ZTEConnectionError, match="Failed to obtain stok"):
         await api.login()
 
 
@@ -184,7 +184,7 @@ async def test_api_get_all_data_error(mock_aiohttp_client):
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
     mock_aiohttp_client.get.side_effect = Exception("Network Error")
-    with pytest.raises(Exception, match="Network Error"):
+    with pytest.raises(ZTEConnectionError, match="Request failed: Network Error"):
         await api.get_all_data()
     assert api.stok is None
 
@@ -261,7 +261,7 @@ async def test_api_reboot_error(mock_aiohttp_client):
     with (
         patch.object(api, "login"),
         patch.object(api, "get_ad", return_value="test_ad"),
-        pytest.raises(RuntimeError, match="Fail"),
+        pytest.raises(ZTEConnectionError, match="Request failed: Fail"),
     ):
         mock_aiohttp_client.post.side_effect = RuntimeError("Fail")
         await api.reboot()
@@ -285,7 +285,7 @@ async def test_api_delete_sms_exception(mock_aiohttp_client):
     api.stok = "stok=test"
     with patch.object(api, "get_ad", return_value="test_ad"):
         mock_aiohttp_client.post.side_effect = RuntimeError("Delete Fail")
-        with pytest.raises(RuntimeError, match="Delete Fail"):
+        with pytest.raises(ZTEConnectionError, match="Request failed: Delete Fail"):
             await api.delete_sms("1")
         assert api.stok is None
 

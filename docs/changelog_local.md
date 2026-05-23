@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2-dev6] - 2026-05-23 - Unreleased
+
+### Added
+
+- **14 new tests** (`test_coverage_ext.py`): Achieved 100% coverage on `api.py` and `coordinator.py`. New tests cover: IP protocol prefix stripping, HTML detection via URL and Content-Type (with/without retry), JSON parse retry/no-retry, login password_error result, outer-except re-auth re-raise, boot_time calculation/value-error/missing, reconnection log transition, SMS storage exception handling, and text/body preview exception handlers. Total project coverage: 99%.
+
+### Fixed
+
+- **24 test failures across 4 test files** (`test_api.py`, `test_coverage_ext.py`, `test_sensor.py`, `test_init.py`): Root cause — `MockResponse` lacked `headers`/`text()` methods and `session.request` was not routed to `get`/`post` in the conftest fixture. Additional fixes: aligned sensor byte-to-GB test values with decimal `_BYTES_PER_GB=1000000000`, corrected reauth trigger test to account for 3-tolerance retry logic before `UpdateFailed`, and fixed `extra_state_attributes` test using falsy empty dict.
+
 ## [3.0.2-dev5] - 2026-05-23 - Unreleased
 
 ### Fixed
