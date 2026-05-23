@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.0.2-dev10] - 2026-05-23 - Unreleased
+
+### Added
+
+- **`CLAUDE.md`** (project root): Added Claude Code guidance file documenting project structure, commands, Windows devcontainer usage (docker exec pattern, link to `.shared/prompts/devcon_run_gen.md`), integration architecture overview, and config entry storage convention (including new `last_uptime` field).
+
+### Changed
+
+- **Uptime boot timestamp stabilisation** (`coordinator.py`): Replaced 30-second timestamp-delta tolerance latch with a reboot-detection latch. Boot time is now computed once and frozen; it re-derives only when the router's uptime counter drops by more than `UPTIME_REBOOT_MARGIN` (30 s) — the only clock-independent signal of a genuine reboot. Added bad-reading guard: missing or unparseable `realtime_time` readings leave the latched value untouched and do not advance the anchor. Added `last_uptime` as a persisted reboot-detection anchor in `entry.data` alongside `boot_time`. Eliminates drift caused by recomputing `now() − uptime` against two independently ticking clocks.
+
 ## [3.0.2-dev9] - 2026-05-23 - Unreleased
 
 ### Added
