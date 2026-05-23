@@ -20,6 +20,11 @@ from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
 
+# Minimum drop in the router's uptime counter (seconds) that is treated as a
+# genuine reboot. A real reboot resets uptime to ~0, so this margin only serves
+# to reject small downward blips from coarse resolution or stale readings.
+UPTIME_REBOOT_MARGIN = 30
+
 
 class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ZTE Router data with resilience and pausing."""
@@ -34,12 +39,17 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self.last_update_success_time: datetime | None = None
         self._was_available = True
         self._boot_time: datetime | None = None
+        self._last_uptime: int | None = None
         self.last_sms_timestamp: str | None = None
         self.fired_sms_hashes: set[str] = set()
         boot_time_str = entry.data.get("boot_time")
         if boot_time_str:
             with contextlib.suppress(Exception):
                 self._boot_time = dt_util.parse_datetime(boot_time_str)
+        last_uptime_raw = entry.data.get("last_uptime")
+        if last_uptime_raw is not None:
+            with contextlib.suppress(ValueError, TypeError):
+                self._last_uptime = int(last_uptime_raw)
 
         # Load hardware identity from persistent ConfigEntry data.
         # This ensures device info is stable from boot (The "Flat Identity" pattern).
@@ -88,32 +98,39 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 else:
                     data["last_sms"] = {}
 
-                # Calculate stable boot time with 30s drift tolerance and persistence
-                uptime_seconds = data.get("realtime_time")
-                if uptime_seconds:
-                    try:
-                        seconds = int(float(uptime_seconds))
-                        ref_time = dt_util.now()
-                        calc_time = ref_time - timedelta(seconds=seconds)
-                        calc_time = calc_time.replace(microsecond=0)
+                # Stable boot time: latch once and only re-derive it when the
+                # router's uptime counter drops (a genuine reboot). The boot
+                # instant is physically constant between reboots, so freezing it
+                # eliminates the drift caused by recomputing now() - uptime
+                # against two independently ticking clocks.
+                seconds: int | None = None
+                with contextlib.suppress(ValueError, TypeError):
+                    raw_uptime = data.get("realtime_time")
+                    if raw_uptime is not None:
+                        seconds = int(float(raw_uptime))
 
-                        if (
-                            self._boot_time is None
-                            or abs((calc_time - self._boot_time).total_seconds()) > 30
-                        ):
-                            self._boot_time = calc_time
-                            new_data = {
-                                **self.entry.data,
-                                "boot_time": self._boot_time.isoformat(),
-                            }
-                            self.hass.config_entries.async_update_entry(
-                                self.entry, data=new_data
-                            )
-                        data["boot_time"] = self._boot_time
-                    except ValueError, TypeError:
-                        data["boot_time"] = None
+                if seconds is None or seconds < 0:
+                    # Bad-reading guard: keep the latched value untouched and do
+                    # not advance the reboot anchor on a missing/garbage reading.
+                    data["boot_time"] = self._boot_time
                 else:
-                    data["boot_time"] = None
+                    is_reboot = self._boot_time is None or (
+                        self._last_uptime is not None
+                        and seconds < self._last_uptime - UPTIME_REBOOT_MARGIN
+                    )
+                    if is_reboot:
+                        calc_time = dt_util.now() - timedelta(seconds=seconds)
+                        self._boot_time = calc_time.replace(microsecond=0)
+                        new_data = {
+                            **self.entry.data,
+                            "boot_time": self._boot_time.isoformat(),
+                            "last_uptime": seconds,
+                        }
+                        self.hass.config_entries.async_update_entry(
+                            self.entry, data=new_data
+                        )
+                    self._last_uptime = seconds
+                    data["boot_time"] = self._boot_time
 
                 # Identify if hardware metadata has changed
                 new_model = get_router_model(data)
