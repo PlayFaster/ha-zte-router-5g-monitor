@@ -10,7 +10,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > - **If you own a ZTE MC7010** and want to monitor your 5G/LTE connection quality, data usage, and manage SMS messages directly from Home Assistant, then **yes**.
 > - **This integration is for you if** you want:
->   - **Advanced Signal Diagnostics** — Near real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
+>   - **Advanced Signal Diagnostics** — Near-real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
 >   - **SMS Management** — View the most recently received message content and attributes directly in HA.
 >
@@ -32,11 +32,11 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 **Home Assistant Version:**
 
 - Minimum: Home Assistant **2024.6.0**
-- Minimum Python: **3.12+** (this is built into and handled by HA but relevant for non-standard installs).
+- Minimum Python: **3.12+** (this is built into and handled by HA, but relevant for non-standard installs).
 
 ## 🏠 Use Cases
 
-- **Signal Monitoring**: Near real-time and historical 5G/LTE signal data allows monitoring of router performance.
+- **Signal Monitoring**: Near-real-time and historical 5G/LTE signal data enable the monitoring of router performance.
   - **Best Signal**: Use signal diagnostics (RSRP, SNR) to optimize the physical placement or orientation of your router.
   - **Performance Tracking**: Use signal history to check whether the performance from your 5G/LTE ISP is stable or changing.
   - **Connection Quality**: Know if your router has dropped to a lower capability 4G/LTE only connection.
@@ -80,6 +80,7 @@ This integration features **dynamic polling**, the ability to pause polling comp
 
 Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers, and four service actions for full programmatic control.
 
+- The `Recent Msg` sensor displays the most recent message received **OR** _sent_.
 - In the examples below, the `entry_id:` of your router, where required, is drop-down menu selectable from the editor GUI.
 
 > The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
@@ -189,7 +190,7 @@ This integration provides **52+ entities** (depending on your firmware) organize
 | :-- | :-- | :-- | :-- |
 | **System** | 7 Sensors, 1 Switch, 1 Button, 1 Number (+5) | Firmware, IP Addresses, Uptime, Reboot, Polling Controls | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID |
 | **Signal** | 31 Sensors (+6) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy) |
-| **Data** | 7 Sensors (+3) | Monthly Usage, Near real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors) |
+| **Data** | 7 Sensors (+3) | Monthly Usage, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors) |
 | **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Message Content, Delete All (one-click) | None |
 | **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
 
@@ -263,7 +264,7 @@ actions:
 
 ### 🚨 Data Usage Alert
 
-Monitor your data consumption and get notified when you approach your monthly limit. If you change the display unit of data sensors (e.g. from Bytes to GB), you have to change the numbers below as well.
+Monitor your data consumption and get notified when you approach your monthly limit. If you change the display unit of data sensors (e.g. from Bytes to GB), you must change the numbers below as well.
 
 ```yaml
 alias: "ZTE: High Data Usage Alert"
