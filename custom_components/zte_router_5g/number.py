@@ -13,10 +13,9 @@ from homeassistant.components.number import (
     NumberEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfTime
+from homeassistant.const import EntityCategory, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -70,7 +69,8 @@ async def async_setup_entry(
 
 
 class ZTEPollingInterval(
-    CoordinatorEntity[ZTERouterDataUpdateCoordinator], NumberEntity
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    NumberEntity,
 ):
     """Number entity to control the polling interval with persistence."""
 

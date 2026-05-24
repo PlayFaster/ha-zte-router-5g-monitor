@@ -2,6 +2,142 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.0] - 2026-05-24
+
+### Added
+
+- **SMS Services**: Four new Home Assistant actions — `send_sms`, `delete_sms`, `delete_all_sms`, and `get_sms_list` — for full SMS management from automations and scripts.
+- **SMS Received Event**: Integration now fires a `zte_router_5g_sms_received` event when a new SMS arrives, enabling event-triggered automations.
+- **SMS Storage Full Repair**: A repair issue is raised in the HA Repairs panel when NV SMS storage reaches capacity; it clears automatically when resolved.
+- **Uptime Duration Sensor**: New sensor reporting how long the router has been running (disabled by default).
+- **State-Dependent Entity Icons**: Entity icons now reflect live state (e.g. Best Connection sensor shows an active signal icon when connected).
+
+### Changed
+
+- **Flexible Host Input**: The host field now accepts addresses with `http://` or `https://` prefixes; they are stripped automatically during setup and reconfiguration.
+
+### Fixed
+
+- **Stable Uptime Timestamp**: Boot time is now latched once and only re-derived when the router's uptime counter drops — the only reliable reboot signal. Bad or missing uptime readings leave the cached value untouched, eliminating timestamp drift caused by independently ticking clocks.
+- **Empty Sensor Values**: Sensors receiving an empty string from the router now correctly report **Unknown** state in HA instead of displaying a blank value.
+- **Spurious Re-authentication**: Transient connection drops and network errors no longer incorrectly trigger the re-authentication flow; reauth is reserved for explicit credential rejection from the router.
+- **Monthly Data (Legacy GB Sensors)**: Corrected unit calculation from binary gibibytes (GiB, 1,073,741,824 bytes) to decimal gigabytes (GB, 1,000,000,000 bytes).
+
+## [3.0.2-dev11] - 2026-05-24 - Unreleased
+
+### Changed
+
+- **Documentation**: Added info on new SMS actions and event to README, plus additional automation examples.
+
+## [3.0.2-dev10] - 2026-05-23 - Unreleased
+
+### Added
+
+- **`CLAUDE.md`** (project root): Added Claude Code guidance file documenting project structure, commands, Windows devcontainer usage (docker exec pattern, link to `.shared/prompts/devcon_run_gen.md`), integration architecture overview, and config entry storage convention (including new `last_uptime` field).
+
+### Changed
+
+- **Uptime boot timestamp stabilisation** (`coordinator.py`): Replaced 30-second timestamp-delta tolerance latch with a reboot-detection latch. Boot time is now computed once and frozen; it re-derives only when the router's uptime counter drops by more than `UPTIME_REBOOT_MARGIN` (30 s) — the only clock-independent signal of a genuine reboot. Added bad-reading guard: missing or unparsable `realtime_time` readings leave the latched value untouched and do not advance the anchor. Added `last_uptime` as a persisted reboot-detection anchor in `entry.data` alongside `boot_time`. Eliminates drift caused by recomputing `now() − uptime` against two independently ticking clocks.
+
+## [3.0.2-dev9] - 2026-05-23 - Unreleased
+
+### Added
+
+- **9 new tests** (`test_init.py`): Achieved 100% coverage on `__init__.py`. Covers: `_get_coordinator` with entry_id (ready and not-ready paths), fallback with no entries, exception handling in all 4 SMS services (`send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`), mixed box-type SMS list, and `async_setup` service handler callables.
+- **SMS received event firing** (`coordinator.py`, `test_init.py`): Implemented `zte_router_5g_sms_received` event firing when a new SMS message is parsed. Added unit test `test_sms_received_event_firing` to verify ordered firing and baseline deduplication.
+
+### Test Coverage
+
+- `__init__.py` 83% → 100%
+
+## [3.0.2-dev8] - 2026-05-23 - Unreleased
+
+### Added
+
+- **SMS capabilities and services** (`api.py`, `__init__.py`, `services.yaml`): Implemented `send_sms` (UTF-16BE hex encoding), `delete_sms` (by index/id), `delete_all_sms` (bulk/partial deletes with safety `keep_last` count), and `get_sms_list` (response-supporting action with filtering and pagination).
+- **Service definitions** (`services.yaml`): Added Home Assistant service registration and field configuration.
+- **Service test coverage** (`test_api.py`, `test_init.py`): Added 7 new unit tests covering all services, input formatting, filtering, and error branches.
+
+### Fixed
+
+- **HASSFEST warning** (`__init__.py`): Defined `CONFIG_SCHEMA` helper to resolve setup validation warning.
+
+## [3.0.2-dev7] - 2026-05-23 - Unreleased
+
+### Fixed
+
+- **Uptime Jitter & HA Restarts** (`coordinator.py`): Persisted the calculated boot timestamp in `entry.data` and restored it on startup, applying a 30-second tolerance window to prevent timestamp shifting on Home Assistant reboots.
+
+## [3.0.2-dev6] - 2026-05-23 - Unreleased
+
+### Added
+
+- **14 new tests** (`test_coverage_ext.py`): Achieved 100% coverage on `api.py` and `coordinator.py`. New tests cover: IP protocol prefix stripping, HTML detection via URL and Content-Type (with/without retry), JSON parse retry/no-retry, login password_error result, outer-except re-auth re-raise, boot_time calculation/value-error/missing, reconnection log transition, SMS storage exception handling, and text/body preview exception handlers. Total project coverage: 99%.
+
+### Fixed
+
+- **24 test failures across 4 test files** (`test_api.py`, `test_coverage_ext.py`, `test_sensor.py`, `test_init.py`): Root cause — `MockResponse` lacked `headers`/`text()` methods and `session.request` was not routed to `get`/`post` in the conftest fixture. Additional fixes: aligned sensor byte-to-GB test values with decimal `_BYTES_PER_GB=1000000000`, corrected reauth trigger test to account for 3-tolerance retry logic before `UpdateFailed`, and fixed `extra_state_attributes` test using falsy empty dict.
+
+## [3.0.2-dev5] - 2026-05-23 - Unreleased
+
+### Fixed
+
+- **mypy `--strict` import errors** (`sensor.py`, `switch.py`, `number.py`): Resolved `EntityCategory` import errors by importing directly from `homeassistant.const` instead of `homeassistant.helpers.entity`.
+- **Unused import cleanup** (`__init__.py`): Removed unused `typing.Any` import to satisfy `ruff check`.
+
+## [3.0.2-dev4] - 2026-05-23 - Unreleased
+
+### Fixed
+
+- **mypy `--strict` regression** (`coordinator.py`, `sensor.py`, `switch.py`, `number.py`, `button.py`, `binary_sensor.py`, `__init__.py`, `config_flow.py`): Resolved 43 mypy strict errors introduced by recent changes. Fixes include: removed stale `type: ignore` comments, removed redundant `cast()` calls, fixed Python 2 bare-comma `except` syntax, added explicit `datetime | None` type annotations to coordinator `_boot_time` and `last_update_success_time`, suppressed known HA ConfigFlow stub incompatibilities with `type: ignore[override]`, and fixed `MappingProxyType` argument mismatch by converting to `dict()`.
+
+## [3.0.2-dev3] - 2026-05-22 - Unreleased
+
+### Added
+
+- **Uptime Duration Sensor** (`sensor.py`, `strings.json`, `translations/en.json`): Added `system_uptime_duration` sensor (disabled by default, device class `duration`, state class `measurement`, unit `"s"`).
+
+### Changed
+
+- **Centralized request helper** (`api.py`): Refactored all API methods to route through a centralized async `_request()` helper, automatically validating responses, handling Content-Type text/html overrides, and managing transparent login retries.
+- **Uptime Timestamp stable calculation** (`coordinator.py`, `sensor.py`): Implemented cached `_boot_time` with a 15-second tolerance check to prevent boot timestamp jitter.
+- **Legacy GB Sensors Correction** (`sensor.py`): Corrected `_BYTES_PER_GB` to use decimal base `1000000000` (GB) instead of binary `1073741824` (GiB) for legacy monthly data sensors.
+- **Host Input Cleaning & Cookie Jar Cleardown** (`api.py`): Stripped HTTP/HTTPS scheme prefixes and trailing slashes from incoming IP/host inputs in `ZTERouterAPI.__init__`. Refined `stok` cookie clearing using a predicate lambda.
+
+### Fixed
+
+- **Empty Values to Unknown** (`sensor.py`): Implemented `_safe_str()` helper to map empty strings and `None` to Python `None` (Unknown state in HA) for candidates and 5G signal sensors.
+- **Reauth Guard & Login Classification** (`api.py`, `coordinator.py`): Classify login responses to raise `ZTEAuthError` specifically on explicit credential error codes, preventing immediate re-auth flows on transient connection drops by holding last known values for 3 consecutive poll cycles.
+- **Python Exception Syntax** (`sensor.py`): Updated legacy exception syntax to tuple format `except (ValueError, TypeError):` for Python 3.12+ compatibility.
+
+## [3.0.2-dev2] - 2026-05-13 - Unreleased
+
+### Added
+
+- **Repair Issue — SMS Storage Full** (`coordinator.py`, `strings.json`, `translations/en.json`): `_check_sms_storage` raises an HA repair issue when NV SMS storage is at capacity; clears it when not. Surfaced in the HA Repairs panel with a description and Delete All button guidance.
+- **`icons.json`**: State-dependent icon declarations for all 51+ entities; `signal_best_connection` uses `on: mdi:signal` / `off: mdi:signal-cellular-1`. Hardcoded `icon` properties removed from entity classes.
+
+### Changed
+
+- **Project Structure Document**: Updated the project structure document to v1.0.4.
+- **IQS Full Compliance**: All 46 trackable rules across Bronze, Silver, Gold, and Platinum tiers now DONE — first project in the PlayFaster family to reach 100% IQS compliance. Records updated in `quality_scale.yaml` and `ha_quality_standard.md`.
+- **README**: Added tested firmware version (MC7010 V1.0.0B01 and later) to Compatibility section.
+
+### Fixed
+
+- **mypy `--strict`**: 0 errors across all 12 source files (`mypy_strict.txt`: "Success: no issues found in 12 source files"). `quality_scale.yaml` `strict-typing` updated to DONE.
+- **Stale test assertions** (`test_binary_sensor.py`): Removed `assert sensor.icon` lines that failed after `icon` property was replaced by `icons.json` declarations. CI unblocked.
+
+## [3.0.2-dev1] - 2026-05-13 - Unreleased
+
+### Changed
+
+- **DevCon**: Devcontainer changes to pull in home assistant files to properly run mypy --strict
+- **Devcontainer mount consolidation**: Moved `.notes` and `.shared` mounts from `devcontainer.json` to `docker-compose.yml` — mounts with absolute paths are unreliable in Docker Compose mode when declared in `devcontainer.json`; compose-file volumes are authoritative for the compose service.
+- **HA core mounted for mypy**: Mounted HA core source (`C:/Local/Code/ha_core/core` → `/ha_core`) into the devcontainer via `docker-compose.yml` as read-only, so mypy can resolve HA type stubs without installing the full HA package.
+- **`mypy_path` configured**: Added `mypy_path = "/ha_core"` to `[tool.mypy]` in `pyproject.toml` to point mypy at the mounted HA source.
+- **mypy scoped to custom component**: Added `[[tool.mypy.overrides]]` for `homeassistant.*` with `ignore_errors = true` and `follow_imports = "silent"` to prevent mypy from checking and reporting errors from HA core files while still using them for type resolution.
+
 ## [3.0.1] - 2026-05-10
 
 ### Changed

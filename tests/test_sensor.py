@@ -43,20 +43,20 @@ def test_sensor_z5g_case_sensitivity(mock_coordinator, mock_config_entry):
 
 def test_sensor_byte_to_gb_conversion(mock_coordinator, mock_config_entry):
     """Test that monthly_rx_bytes is converted from bytes to GB."""
-    # 2GB in bytes
-    mock_coordinator.data = {"monthly_rx_bytes": "2147483648"}
+    # 2GB in bytes (decimal: 2 * 1_000_000_000)
+    mock_coordinator.data = {"monthly_rx_bytes": "2000000000"}
     description = next(d for d in SENSOR_TYPES if d.key == "monthly_rx_bytes")
     sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
-    # 2147483648 / 1073741824 = 2.0
+    # 2000000000 / 1000000000 = 2.0
     assert sensor.native_value == 2.0
 
 
 def test_sensor_monthly_total_sum(mock_coordinator, mock_config_entry):
     """Test the manual summing and conversion of monthly_total_bytes."""
     mock_coordinator.data = {
-        "monthly_rx_bytes": "1073741824",  # 1GB
-        "monthly_tx_bytes": "536870912",  # 0.5GB
+        "monthly_rx_bytes": "1000000000",  # 1GB (decimal)
+        "monthly_tx_bytes": "500000000",  # 0.5GB (decimal)
     }
     description = next(d for d in SENSOR_TYPES if d.key == "monthly_total_bytes")
     sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
@@ -72,15 +72,15 @@ def test_sensor_uptime_calculation(mock_coordinator, mock_config_entry):
     """Test the complex uptime to timestamp conversion."""
     # Mock 'now' to a fixed point
     now = dt_util.now().replace(second=0, microsecond=0)
-    # 3600 seconds = 1 hour uptime
-    mock_coordinator.data = {"realtime_time": "3600"}
+    # boot_time is set by the coordinator; simulate it here
+    expected_time = now - timedelta(seconds=3600)
+    mock_coordinator.data = {"boot_time": expected_time}
 
     description = next(d for d in SENSOR_TYPES if d.key == "device_uptime")
     sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
 
     with patch("homeassistant.util.dt.now", return_value=now):
         # Result should be exactly 1 hour ago
-        expected_time = now - timedelta(seconds=3600)
         assert sensor.native_value == expected_time
 
     # Test empty case

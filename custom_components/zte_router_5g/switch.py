@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.switch import (
     SwitchEntity,
     SwitchEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -37,7 +37,6 @@ class ZTESwitchEntityDescription(SwitchEntityDescription):
 PAUSE_POLLING_DESCRIPTION = ZTESwitchEntityDescription(
     key="pause_polling",
     translation_key="system_pause_polling",
-    icon="mdi:pause-circle-outline",
     entity_category=EntityCategory.CONFIG,
     group="system",
 )
@@ -64,7 +63,8 @@ async def async_setup_entry(
 
 
 class ZTEPausePollingSwitch(
-    CoordinatorEntity[ZTERouterDataUpdateCoordinator], SwitchEntity
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    SwitchEntity,
 ):
     """Switch to pause/resume polling with persistence."""
 
@@ -91,7 +91,7 @@ class ZTEPausePollingSwitch(
     @property
     def is_on(self) -> bool:
         """Return true if polling is paused."""
-        return self._entry.options.get(CONF_STOP_POLLING, False)
+        return cast(bool, self._entry.options.get(CONF_STOP_POLLING, False))
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Pause polling."""

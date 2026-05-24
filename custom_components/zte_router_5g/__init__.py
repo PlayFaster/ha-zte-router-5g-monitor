@@ -1,18 +1,62 @@
 """The ZTE Router 5G integration."""
 
 import logging
+from typing import Any, cast
 
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.typing import ConfigType
 
 from .api import ZTERouterAPI
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
+
+SERVICE_SEND_SMS_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entry_id"): str,
+        vol.Required("target"): vol.All(cv.ensure_list, [str]),
+        vol.Required("message"): vol.All(str, vol.Length(min=1, max=160)),
+    }
+)
+
+SERVICE_DELETE_SMS_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): str,
+        vol.Required("index"): vol.Coerce(int),
+    }
+)
+
+SERVICE_DELETE_ALL_SMS_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): str,
+        vol.Optional("keep_last", default=0): vol.All(
+            vol.Coerce(int), vol.Range(min=0, max=50)
+        ),
+    }
+)
+
+SERVICE_GET_SMS_LIST_SCHEMA = vol.Schema(
+    {
+        vol.Required("entry_id"): str,
+        vol.Optional("page", default=1): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=100)
+        ),
+        vol.Optional("count", default=20): vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=50)
+        ),
+        vol.Optional("box_type", default=1): vol.All(
+            vol.Coerce(int), vol.In([1, 2, 3, 5, 6, 7, 8, 9, 10])
+        ),
+    }
+)
 
 PLATFORMS = [
     Platform.SENSOR,
@@ -21,6 +65,175 @@ PLATFORMS = [
     Platform.NUMBER,
     Platform.SWITCH,
 ]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+
+def _get_coordinator(
+    hass: HomeAssistant, call_data: dict[str, Any]
+) -> ZTERouterDataUpdateCoordinator:
+    """Get coordinator from service call data."""
+    entry_id = call_data.get("entry_id")
+    if entry_id:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry and entry.domain == DOMAIN:
+            if hasattr(entry, "runtime_data") and entry.runtime_data:
+                return cast(ZTERouterDataUpdateCoordinator, entry.runtime_data)
+            raise HomeAssistantError(f"Router {entry.title} is not ready")
+
+    # Fallback to first available entry if no specific ID provided
+    entries = hass.config_entries.async_entries(DOMAIN)
+    for entry in entries:
+        if hasattr(entry, "runtime_data") and entry.runtime_data:
+            return cast(ZTERouterDataUpdateCoordinator, entry.runtime_data)
+
+    raise HomeAssistantError("No active ZTE Router 5G entries found")
+
+
+async def async_send_sms(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Service to send an SMS."""
+    coordinator = _get_coordinator(hass, call.data)
+    target = call.data["target"]
+    message = call.data["message"]
+
+    try:
+        for num in target:
+            await coordinator.api.send_sms(num, message)
+    except Exception as err:
+        raise HomeAssistantError(f"Failed to send SMS: {err}") from err
+
+
+async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Service to delete an SMS."""
+    coordinator = _get_coordinator(hass, call.data)
+    index = call.data["index"]
+
+    try:
+        await coordinator.api.delete_sms(str(index))
+        await coordinator.async_request_refresh()
+    except Exception as err:
+        raise HomeAssistantError(f"Failed to delete SMS: {err}") from err
+
+
+async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Service to delete all SMS messages."""
+    coordinator = _get_coordinator(hass, call.data)
+    keep_last = call.data.get("keep_last", 0)
+
+    try:
+        if keep_last == 0:
+            await coordinator.api.delete_all()
+        else:
+            messages = await coordinator.api.get_sms_messages(mem_store="1")
+            messages.sort(key=lambda x: int(x.get("id", 0)), reverse=True)
+            to_delete = messages[keep_last:] if keep_last < len(messages) else []
+            if to_delete:
+                ids = [m["id"] for m in to_delete]
+                await coordinator.api.delete_sms(";".join(ids))
+
+        await coordinator.async_request_refresh()
+    except Exception as err:
+        raise HomeAssistantError(f"Failed to delete all SMS: {err}") from err
+
+
+async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str, Any]:
+    """Service to get SMS list with response."""
+    coordinator = _get_coordinator(hass, call.data)
+    page = call.data["page"]
+    count = call.data["count"]
+    box_type = call.data["box_type"]
+
+    box_mapping = {
+        1: ("1", ["0", "1"]),  # Local Inbox
+        2: ("1", ["2", "3"]),  # Local Sent
+        3: ("1", ["4"]),  # Local Draft
+        5: ("0", ["0", "1"]),  # SIM Inbox
+        6: ("0", ["2", "3"]),  # SIM Sent
+        7: ("0", ["4"]),  # SIM Draft
+        8: (None, ["0", "1"]),  # Mix Inbox
+        9: (None, ["2", "3"]),  # Mix Sent
+        10: (None, ["4"]),  # Mix Draft
+    }
+
+    try:
+        mem_store, target_tags = box_mapping.get(box_type, ("1", ["0", "1"]))
+
+        raw_msgs = []
+        if mem_store is not None:
+            raw_msgs = await coordinator.api.get_sms_messages(mem_store=mem_store)
+        else:
+            nv_msgs = await coordinator.api.get_sms_messages(mem_store="1")
+            sim_msgs = await coordinator.api.get_sms_messages(mem_store="0")
+            raw_msgs = nv_msgs + sim_msgs
+            raw_msgs.sort(key=lambda x: x.get("date", ""), reverse=True)
+
+        filtered_msgs = [m for m in raw_msgs if str(m.get("tag")) in target_tags]
+
+        start_idx = (page - 1) * count
+        end_idx = start_idx + count
+        paginated_msgs = filtered_msgs[start_idx:end_idx]
+
+        formatted_messages = [
+            {
+                "index": int(msg.get("id", 0)),
+                "phone": msg.get("number_decoded", ""),
+                "content": msg.get("content_decoded", ""),
+                "date": msg.get("date_decoded", ""),
+                "read": str(msg.get("tag", "0")) == "0",
+            }
+            for msg in paginated_msgs
+        ]
+
+        return {"messages": formatted_messages}
+    except Exception as err:
+        raise HomeAssistantError(f"Failed to fetch SMS list: {err}") from err
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up the ZTE Router 5G Monitor component."""
+
+    async def _handle_send_sms(call: ServiceCall) -> None:
+        await async_send_sms(hass, call)
+
+    async def _handle_delete_sms(call: ServiceCall) -> None:
+        await async_delete_sms(hass, call)
+
+    async def _handle_delete_all_sms(call: ServiceCall) -> None:
+        await async_delete_all_sms(hass, call)
+
+    async def _handle_get_sms_list(call: ServiceCall) -> dict[str, Any]:
+        return await async_get_sms_list(hass, call)
+
+    hass.services.async_register(
+        DOMAIN,
+        "send_sms",
+        _handle_send_sms,
+        schema=SERVICE_SEND_SMS_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        "delete_sms",
+        _handle_delete_sms,
+        schema=SERVICE_DELETE_SMS_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        "delete_all_sms",
+        _handle_delete_all_sms,
+        schema=SERVICE_DELETE_ALL_SMS_SCHEMA,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        "get_sms_list",
+        _handle_get_sms_list,
+        schema=SERVICE_GET_SMS_LIST_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
+    )
+
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -88,4 +301,4 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # runtime_data is cleaned up automatically by HA
         # Note: No need to close api.session as it's managed by HA core
         pass
-    return unload_ok
+    return unload_ok if isinstance(unload_ok, bool) else False
