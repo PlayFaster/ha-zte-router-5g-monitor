@@ -12,7 +12,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 > - **This integration is for you if** you want:
 >   - **Advanced Signal Diagnostics** — Near real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
->   - **SMS Management** — view the most recently received message content and attributes directly in HA.
+>   - **SMS Management** — View the most recently received message content and attributes directly in HA.
 >
 > This project is optimized for the ZTE MC7010 5G Outdoor CPE but may work with other similar ZTE devices.
 
@@ -32,15 +32,17 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 **Home Assistant Version:**
 
 - Minimum: Home Assistant **2024.6.0**
-- Minimum Python: **3.12+**
+- Minimum Python: **3.12+** (this is built into and handled by HA but relevant for non-standard installs).
 
 ## 🏠 Use Cases
 
 - **Signal Monitoring**: Near real-time and historical 5G/LTE signal data allows monitoring of router performance.
   - **Best Signal**: Use signal diagnostics (RSRP, SNR) to optimize the physical placement or orientation of your router.
   - **Performance Tracking**: Use signal history to check whether the performance from your 5G/LTE ISP is stable or changing.
+  - **Connection Quality**: Know if your router has dropped to a lower capability 4G/LTE only connection.
 - **Data Cap Management**: Create automations to get notified when you reach 80% or 90% of your monthly data limit to avoid unexpected overage charges on limited 5G plans.
 - **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your phone via SMS if your primary internet connection goes down.
+  - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
 
 ## ✅ Features
 
@@ -72,11 +74,13 @@ This integration features **dynamic polling**, the ability to pause polling comp
 >
 > **Polling Interval can be controlled dynamically, via automation**
 >
-> - Set it to 30 seconds during periods of heavy use to examine connection quality and set it higher afterwards, to avoid taxing the router and your Home Assistant database.
+> - Set it to 30 seconds during periods of heavy use, to examine connection quality or when you need to receive new SMS messages quickly, and set it higher afterwards, to avoid taxing the router and your Home Assistant database.
 
 ### 📋 SMS Management Actions
 
 Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers, and four service actions for full programmatic control.
+
+- In the examples below, the `entry_id:` of your router, where required, is drop-down menu selectable from the editor GUI.
 
 > The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
 
@@ -101,10 +105,10 @@ data:
 
 Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
 
-| Parameter | Required | Description |
-| :-- | :-- | :-- |
-| `entry_id` | **Yes** | The router to use. |
-| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
+| Parameter  | Required | Description                                           |
+| :--------- | :------- | :---------------------------------------------------- |
+| `entry_id` | **Yes**  | The router to use.                                    |
+| `index`    | **Yes**  | Storage index of the message to delete (integer ≥ 0). |
 
 ```yaml
 action: zte_router_5g.delete_sms
@@ -133,24 +137,24 @@ data:
 
 Fetch a list of SMS messages. Supports **Action Responses** — use the output directly in automations and scripts.
 
-| Parameter | Required | Default | Range | Description |
-| :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | **Yes** | — | — | The router to use. |
-| `page` | No | `1` | 1–100 | Page number for pagination. |
-| `count` | No | `20` | 1–50 | Messages per page. |
-| `box_type` | No | `1` | See below | Mailbox to read from. |
+| Parameter  | Required | Default | Range     | Description                 |
+| :--------- | :------- | :------ | :-------- | :-------------------------- |
+| `entry_id` | **Yes**  | —       | —         | The router to use.          |
+| `page`     | No       | `1`     | 1–100     | Page number for pagination. |
+| `count`    | No       | `20`    | 1–50      | Messages per page.          |
+| `box_type` | No       | `1`     | See below | Mailbox to read from.       |
 
 **`box_type` values:** `1` Local Inbox · `2` Local Sent · `3` Local Draft · `4` Local Trash · `5` SIM Inbox · `6` SIM Sent · `7` SIM Draft · `8` Mix Inbox · `9` Mix Sent · `10` Mix Draft
 
 **Response — each message in `messages`:**
 
-| Field | Type | Description |
-| :-- | :-- | :-- |
-| `index` | Integer | Storage index — pass to `delete_sms` to delete this message. |
-| `phone` | Text | Sender's phone number. |
-| `content` | Text | Message body. |
-| `date` | Text | Date/time string. |
-| `read` | Boolean | `true` if read, `false` if unread. |
+| Field     | Type    | Description                                                  |
+| :-------- | :------ | :----------------------------------------------------------- |
+| `index`   | Integer | Storage index — pass to `delete_sms` to delete this message. |
+| `phone`   | Text    | Sender's phone number.                                       |
+| `content` | Text    | Message body.                                                |
+| `date`    | Text    | Date/time string.                                            |
+| `read`    | Boolean | `true` if read, `false` if unread.                           |
 
 ```yaml
 action: zte_router_5g.get_sms_list
@@ -181,17 +185,17 @@ This integration provides **52+ entities** (depending on your firmware) organize
 >
 > Entity Visibility: To keep your Home Assistant UI clean, some entities are disabled by default. You can enable them via the Entities tab in the device settings.
 
-| Sub-Device | Entity Types | Key Metrics | Disabled by Default |
+| Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
 | :-- | :-- | :-- | :-- |
-| **System** | 7 Sensors, 1 Switch, 1 Button, 1 Number | Firmware, IP Addresses, Uptime, Reboot, Polling Controls | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID |
-| **Signal** | 31 Sensors | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy) |
-| **Data** | 7 Sensors | Monthly Usage, Near real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors) |
+| **System** | 7 Sensors, 1 Switch, 1 Button, 1 Number (+5) | Firmware, IP Addresses, Uptime, Reboot, Polling Controls | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID |
+| **Signal** | 31 Sensors (+6) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy) |
+| **Data** | 7 Sensors (+3) | Monthly Usage, Near real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors) |
 | **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Message Content, Delete All (one-click) | None |
 | **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
 
 ## 💡 Example Automations
 
-Entity IDs below use the default prefix zte_5g. If you set a custom name during setup, replace zte_5g with your configured prefix.
+Entity IDs below use the default prefix zte_5g. If you set a custom name during setup, or have renamed since, replace zte_5g with your configured prefix.
 
 ### SMS Examples
 
@@ -375,7 +379,7 @@ actions:
 
 ### ✨ HACS (Recommended)
 
-1. Add this repository as a **Custom Repository** in HACS:
+1. Add this [repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor) as a **Custom Repository** in HACS:
    - Open HACS in Home Assistant
    - Click **Custom repositories** (⋮ menu)
    - Add repository URL and Type: `Integration`
@@ -399,7 +403,7 @@ Setup is handled entirely via the UI. You will need the same details that you us
 - **Host** — Router IP Address (e.g., 192.168.0.1)
 - **Username** — Router login username (default: admin)
 - **Password** — Admin password for the router web interface
-- **Name** — Custom prefix for all devices and entities (default: `ZTE 5G`). This determines entity IDs — e.g. the default produces `sensor.zte_5g_signal_rsrp`. Change this if you have multiple routers or prefer a different naming scheme.
+- **Name** — Custom prefix for all devices and entities (default: `ZTE 5G`). This determines entity IDs — e.g. the default produces `sensor.zte_5g_data_monthly_total`. Change this if you have multiple routers or prefer a different naming scheme.
 
 ### 🛠️ Runtime Options
 
@@ -449,6 +453,8 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 
 - Verify the IP address is correct.
 - Confirm the username and password are correct (ZTE default is usually `admin`).
+  - The username and password are the same as you use to login to the router via its webUI.
+  - Username can be changed in the webUI, as well as password, so ensure you are using the current version of both.
 - Ensure the router is powered on and reachable from your Home Assistant instance.
 
 ### **Some sensors showing "Unknown"**
