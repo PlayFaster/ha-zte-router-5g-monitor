@@ -16,13 +16,24 @@ from custom_components.zte_router_5g.number import (
 )
 
 
+def _mock_hass_with_async_create_task():
+    """Return a MagicMock hass where async_create_task returns a real Task."""
+    hass_mock = MagicMock()
+
+    def _async_create_task(coro):
+        return asyncio.ensure_future(coro)
+
+    hass_mock.async_create_task = _async_create_task
+    return hass_mock
+
+
 @pytest.mark.asyncio
 async def test_polling_interval_change(mock_coordinator, mock_config_entry):
     """Test that changing the slider updates the coordinator and options."""
     number = ZTEPollingInterval(
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
     )
-    number.hass = MagicMock()
+    number.hass = _mock_hass_with_async_create_task()
     number.async_write_ha_state = MagicMock()
 
     # Mock the debounced apply method to run immediately
@@ -70,7 +81,7 @@ async def test_polling_interval_cancel_previous_task(
     number = ZTEPollingInterval(
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
     )
-    number.hass = MagicMock()
+    number.hass = _mock_hass_with_async_create_task()
     number.async_write_ha_state = MagicMock()
 
     with patch("asyncio.sleep", AsyncMock()):
