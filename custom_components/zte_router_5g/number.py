@@ -113,7 +113,9 @@ class ZTEPollingInterval(
             self._refresh_task.cancel()
 
         # Start a new debounced task
-        self._refresh_task = asyncio.create_task(self._async_debounced_apply(value))
+        self._refresh_task = self.hass.async_create_task(
+            self._async_debounced_apply(value)
+        )
 
     async def _async_debounced_apply(self, value: float) -> None:
         """Apply change and persist to ConfigEntry Options after a delay."""

@@ -278,7 +278,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             nv_able = int(data.get("nv_sms_able") or 0)
             nv_total = int(data.get("sms_nv_total") or 0)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return
         if nv_able > 0 and nv_total >= nv_able:
             ir.async_create_issue(

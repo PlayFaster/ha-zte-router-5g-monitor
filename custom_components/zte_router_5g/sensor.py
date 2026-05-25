@@ -52,7 +52,7 @@ def _get_bytes_to_gb(val: Any) -> float | None:
         return None
     try:
         return round(float(val) / _BYTES_PER_GB, 2)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -73,7 +73,7 @@ def _get_total_sms(data: Any) -> int | None:
     ]
     try:
         return sum(int(data.get(k, 0)) for k in keys)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -492,7 +492,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         entity_registry_enabled_default=False,
         group="data",
-        # Divided by 2^30 (1073741824) to match historical GB logic
+        # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
         value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_tx_bytes")),
     ),
     ZTESensorEntityDescription(
@@ -503,7 +503,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         entity_registry_enabled_default=False,
         group="data",
-        # Divided by 2^30 (1073741824) to match historical GB logic
+        # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
         value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_rx_bytes")),
     ),
     ZTESensorEntityDescription(
@@ -664,7 +664,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
 
         try:
             value = self.entity_description.value_fn(self.coordinator.data)
-        except KeyError, AttributeError, ValueError:
+        except (KeyError, AttributeError, ValueError):
             return None
 
         if value is None:
@@ -708,7 +708,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
                         data.get("sms_sim_draftbox_total", 0)
                     ),
                 }
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return {}
 
         if key == "msg_recent":
