@@ -52,3 +52,22 @@ async def test_binary_sensor_setup_entry():
     async_add_entities = MagicMock()
     await async_setup_entry(hass, entry, async_add_entities)
     async_add_entities.assert_called_once()
+
+
+# ── Strategy 2: Combinatorial / Path Coverage ──────────────────────────────
+
+
+def test_binary_sensor_endc_without_ca_activated(mock_coordinator, mock_config_entry):
+    """2A: ENDC network with non-activated CA returns False."""
+    sensor = ZTEBestConnectionSensor(
+        mock_coordinator, mock_config_entry, BEST_CONN_DESCRIPTION
+    )
+
+    mock_coordinator.data = {"network_type": "ENDC", "wan_lte_ca": "ca_deactivated"}
+    assert sensor.is_on is False
+
+    mock_coordinator.data = {"network_type": "ENDC", "wan_lte_ca": ""}
+    assert sensor.is_on is False
+
+    mock_coordinator.data = {"network_type": "ENDC"}
+    assert sensor.is_on is False

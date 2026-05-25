@@ -1,6 +1,6 @@
 """Tests for ZTE Router 5G API."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -389,3 +389,50 @@ async def test_api_get_sms_messages_error(mock_aiohttp_client):
     mock_aiohttp_client.post.side_effect = Exception("Fetch Fail")
     with pytest.raises(ZTEConnectionError):
         await api.get_sms_messages(mem_store="1", tags="10")
+
+
+# ── Strategy 1: Boundary Value Analysis ────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "elapsed,stok_cleared",
+    [
+        (149, False),
+        (151, True),
+    ],
+)
+@pytest.mark.asyncio
+async def test_request_inactivity_threshold(elapsed, stok_cleared, mock_aiohttp_client):
+    """1F: Stok is cleared only when last_activity gap is strictly greater than 150s."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=existing"
+    api.last_activity = datetime.now() - timedelta(seconds=elapsed)
+
+    with patch.object(api, "login", return_value="stok=new") as mock_login:
+        mock_aiohttp_client.get.return_value = MockResponse(
+            json_data={"network_type": "LTE", "signalbar": "4"}
+        )
+        await api.get_all_data()
+        if stok_cleared:
+            mock_login.assert_called_once()
+            assert api.stok == "stok=new"
+        else:
+            mock_login.assert_not_called()
+            assert api.stok == "stok=existing"
+
+
+# ── Strategy 3: Error State & Negative Path Engineering ─────────────────────
+
+
+@pytest.mark.parametrize(
+    "date_str,expected",
+    [
+        ("23,13,01,10,0,0,+1", "23,13,01,10,0,0,+1"),
+        ("23,10,32,10,0,0,+1", "23,10,32,10,0,0,+1"),
+        ("23,02,30,10,0,0,+1", "23,02,30,10,0,0,+1"),
+    ],
+)
+def test_api_parse_date_invalid_calendar_values(date_str, expected):
+    """3D: Dates with valid format but invalid calendar values are returned as-is."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._parse_date(date_str) == expected

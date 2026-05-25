@@ -264,3 +264,75 @@ def test_sensor_extra_attributes_other_key(mock_coordinator, mock_config_entry):
     description = next(d for d in SENSOR_TYPES if d.key == "lte_rsrp")
     sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
     assert sensor.extra_state_attributes == {}
+
+
+# ── Strategy 1: Boundary Value Analysis ────────────────────────────────────
+
+
+def test_sensor_guard_exactly_at_min_limit_passes(mock_coordinator, mock_config_entry):
+    """1E: value == min_limit passes through: strict `<`, not `<=`."""
+    mock_coordinator.data = {"some": "data"}
+    desc = ZTESensorEntityDescription(
+        key="test_min", translation_key="test_min", value_fn=lambda x: 20, min_limit=20
+    )
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, desc)
+    assert sensor.native_value == 20
+
+
+def test_sensor_guard_exactly_at_max_limit_passes(mock_coordinator, mock_config_entry):
+    """1E: value == max_limit passes through: strict `>`, not `>=`."""
+    mock_coordinator.data = {"some": "data"}
+    desc = ZTESensorEntityDescription(
+        key="test_max", translation_key="test_max", value_fn=lambda x: 50, max_limit=50
+    )
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, desc)
+    assert sensor.native_value == 50
+
+
+# ── Strategy 3: Error State & Negative Path Engineering ─────────────────────
+
+
+def test_sensor_value_fn_attribute_error_caught(mock_coordinator, mock_config_entry):
+    """3B: AttributeError in value_fn must be caught and return None."""
+    desc = ZTESensorEntityDescription(
+        key="test_attr",
+        translation_key="test_attr",
+        value_fn=lambda x: None.something,
+    )
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, desc)
+    try:
+        result = sensor.native_value
+    except AttributeError as exc:
+        pytest.fail(
+            f"native_value propagated AttributeError (sensor.py:667 bug): {exc}"
+        )
+    assert result is None
+
+
+def test_sensor_value_fn_value_error_caught(mock_coordinator, mock_config_entry):
+    """3B: ValueError in value_fn must be caught and return None."""
+    desc = ZTESensorEntityDescription(
+        key="test_val",
+        translation_key="test_val",
+        value_fn=lambda x: int("not-a-number"),
+    )
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, desc)
+    try:
+        result = sensor.native_value
+    except ValueError as exc:
+        pytest.fail(f"native_value propagated ValueError (sensor.py:667 bug): {exc}")
+    assert result is None
+
+
+def test_sensor_extra_attributes_type_error_caught(mock_coordinator, mock_config_entry):
+    """3C: TypeError in extra_state_attributes must be caught and return {}."""
+    mock_coordinator.data = {"sms_nv_total": ["not", "an", "int"]}
+    description = next(d for d in SENSOR_TYPES if d.key == "msg_total")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    try:
+        attrs = sensor.extra_state_attributes
+    except TypeError as exc:
+        pytest.fail(
+            f"extra_state_attributes raised TypeError (sensor.py:711 bug): {exc}"
+        )
+    assert attrs == {}

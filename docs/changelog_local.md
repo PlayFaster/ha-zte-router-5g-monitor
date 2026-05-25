@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.1-dev6] - 2026-05-25 - Unreleased
+
+### Fixed
+
+- **Exception Syntax** (`coordinator.py`, `sensor.py`): Fixed 3 bare-tuple `except A, B:` expressions to parenthesized `except (A, B):` form for Python 3.12+ compatibility (`coordinator.py:281`, `sensor.py:667`, `sensor.py:711`).
+
+### Added Tests
+
+- **17 new tests** across `test_init.py`, `test_sensor.py`, `test_binary_sensor.py`, and `test_api.py`. Coverage remains at 99% overall; the focus was on improving test depth with boundary value analysis, combinatorial path coverage, and error/negative-path engineering:
+  - Failure resilience edge cases (`data=None`, reset-after-success)
+  - Reboot detection at exact margin boundary (70/69/71 s)
+  - Bad/negative uptime value handling
+  - Sensor guard bands at exact limit boundaries
+  - API inactivity timer at strict `>` threshold
+  - Binary sensor ENDC+CA combinatorial states
+  - Same-timestamp SMS hash detection path
+  - Multiple new SMS chronological ordering
+  - Missing `date_decoded` filtering and early return
+  - Auth retry failure propagating to outer handler
+  - `delete_all_sms` `keep_last` ≥ `total_messages` boundary
+  - Bare-tuple bug proof tests for exception propagation
+  - Invalid calendar values in `_parse_date`
+  - SMS message missing `id` field
+
 ## [3.1.1-dev5] - 2026-05-25 - Unreleased
 
 ### Changed
