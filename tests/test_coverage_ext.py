@@ -1,6 +1,7 @@
 """Additional tests to improve code coverage for ZTE Router 5G."""
 
 import logging
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -117,7 +118,8 @@ async def test_api_get_last_sms_content_exception(mock_aiohttp_client):
     api.stok = "stok=test"
     mock_aiohttp_client.post.side_effect = Exception("SMS Fail")
 
-    assert await api.get_last_sms_content() == {}
+    with pytest.raises(ZTEConnectionError):
+        await api.get_last_sms_content()
     assert api.stok is None
 
 
@@ -165,6 +167,7 @@ async def test_api_get_rd_success(mock_aiohttp_client):
     """Test get_rd success path."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=fake"
+    api.last_activity = datetime.now()
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"RD": "test_rd"})
     assert await api.get_rd() == "test_rd"
 
@@ -211,7 +214,7 @@ async def test_coordinator_metadata_change(
     with (
         patch.object(api, "get_all_data", return_value=new_data),
         patch.object(api, "get_sms_capacity", return_value={}),
-        patch.object(api, "get_last_sms_content", return_value={}),
+        patch.object(api, "get_sms_messages", return_value=[]),
         patch(
             "custom_components.zte_router_5g.coordinator.get_router_model",
             return_value="MC888",
@@ -249,7 +252,7 @@ async def test_coordinator_metadata_update_device_exists(
     with (
         patch.object(api, "get_all_data", return_value=new_data),
         patch.object(api, "get_sms_capacity", return_value={}),
-        patch.object(api, "get_last_sms_content", return_value={}),
+        patch.object(api, "get_sms_messages", return_value=[]),
         patch(
             "custom_components.zte_router_5g.coordinator.get_router_model",
             return_value="MC888",
@@ -530,7 +533,7 @@ async def test_coordinator_sms_storage_full_creates_issue(
     with (
         patch.object(api, "get_all_data", return_value=full_data),
         patch.object(api, "get_sms_capacity", return_value={}),
-        patch.object(api, "get_last_sms_content", return_value={}),
+        patch.object(api, "get_sms_messages", return_value=[]),
         patch(
             "custom_components.zte_router_5g.coordinator.ir.async_create_issue"
         ) as mock_create,
@@ -562,7 +565,7 @@ async def test_coordinator_sms_storage_not_full_deletes_issue(
     with (
         patch.object(api, "get_all_data", return_value=partial_data),
         patch.object(api, "get_sms_capacity", return_value={}),
-        patch.object(api, "get_last_sms_content", return_value={}),
+        patch.object(api, "get_sms_messages", return_value=[]),
         patch("custom_components.zte_router_5g.coordinator.ir.async_create_issue"),
         patch(
             "custom_components.zte_router_5g.coordinator.ir.async_delete_issue"
@@ -733,7 +736,7 @@ async def test_coordinator_boot_time_calculated(
     with (
         patch.object(api, "get_all_data", return_value={"realtime_time": "3600"}),
         patch.object(api, "get_sms_capacity", return_value={}),
-        patch.object(api, "get_last_sms_content", return_value={}),
+        patch.object(api, "get_sms_messages", return_value=[]),
         patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
     ):
         data = await coordinator._async_update_data()
@@ -759,7 +762,7 @@ async def test_coordinator_boot_time_value_error(
             api, "get_all_data", return_value={"realtime_time": "not_a_number"}
         ),
         patch.object(api, "get_sms_capacity", return_value={}),
-        patch.object(api, "get_last_sms_content", return_value={}),
+        patch.object(api, "get_sms_messages", return_value=[]),
         patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
     ):
         data = await coordinator._async_update_data()
@@ -782,7 +785,7 @@ async def test_coordinator_boot_time_missing(
     with (
         patch.object(api, "get_all_data", return_value={"network_type": "LTE"}),
         patch.object(api, "get_sms_capacity", return_value={}),
-        patch.object(api, "get_last_sms_content", return_value={}),
+        patch.object(api, "get_sms_messages", return_value=[]),
         patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
     ):
         data = await coordinator._async_update_data()
@@ -806,7 +809,7 @@ async def test_coordinator_reconnection_log(
     with (
         patch.object(api, "get_all_data", return_value={"network_type": "LTE"}),
         patch.object(api, "get_sms_capacity", return_value={}),
-        patch.object(api, "get_last_sms_content", return_value={}),
+        patch.object(api, "get_sms_messages", return_value=[]),
         patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
     ):
         data = await coordinator._async_update_data()
@@ -834,7 +837,7 @@ async def test_coordinator_sms_storage_check_exception(
             return_value={"nv_sms_able": "invalid", "sms_nv_total": "20"},
         ),
         patch.object(api, "get_sms_capacity", return_value={}),
-        patch.object(api, "get_last_sms_content", return_value={}),
+        patch.object(api, "get_sms_messages", return_value=[]),
         patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
     ):
         # Should not raise, just return silently
@@ -875,3 +878,269 @@ async def test_api_request_html_body_preview_exception(mock_aiohttp_client):
         pytest.raises(ZTEConnectionError, match="Received unexpected HTML response"),
     ):
         await api._request("GET", "some/path", authenticated=False)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 Coverage Expansion: api.py
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_api_login_session_init_success(mock_aiohttp_client):
+    """Test login where session init GET succeeds (api.py:368)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_stok_cookie = MagicMock()
+    mock_stok_cookie.value = "test_stok"
+
+    # Three GET calls: LD, version, session-init
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "test_ld"}),
+        MockResponse(json_data={"wa_inner_version": "test_v"}),
+        MockResponse(json_data={"wa_inner_version": "test_v"}),
+    ]
+
+    mock_aiohttp_client.post.return_value = MockResponse(
+        cookies={"stok": mock_stok_cookie}
+    )
+
+    stok = await api.login()
+    assert stok == "stok=test_stok"
+    assert api.stok == "stok=test_stok"
+
+
+@pytest.mark.asyncio
+async def test_api_get_sms_capacity_other_exception(mock_aiohttp_client):
+    """Test get_sms_capacity defensive handler for non-auth errors (api.py:464-465)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now()
+
+    with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+        result = await api.get_sms_capacity()
+        assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_api_get_last_sms_content_other_exception(mock_aiohttp_client):
+    """Test get_last_sms_content defensive handler (api.py:496-497)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now()
+
+    with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+        result = await api.get_last_sms_content()
+        assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_api_get_sms_messages_other_exception(mock_aiohttp_client):
+    """Test get_sms_messages defensive handler (api.py:604-605)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now()
+
+    with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+        result = await api.get_sms_messages()
+        assert result == []
+
+
+@pytest.mark.asyncio
+async def test_api_get_rd_other_exception(mock_aiohttp_client):
+    """Test get_rd defensive handler (api.py:631-632)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now()
+
+    with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+        result = await api.get_rd()
+        assert result == ""
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 Coverage Expansion: coordinator.py
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_coordinator_boot_time_restored(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test coordinator restores boot_time from entry.data (coordinator.py:47-48)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    # Add boot_time to entry.data so coordinator picks it up
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        data={**mock_config_entry.data, "boot_time": "2024-01-15T10:00:00"},
+    )
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+    assert coordinator._boot_time is not None
+    assert coordinator._boot_time.isoformat() == "2024-01-15T10:00:00"
+
+
+@pytest.mark.asyncio
+async def test_coordinator_boot_time_restored_bad_value(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test coordinator suppresses bad boot_time string (coordinator.py:47-48)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        data={**mock_config_entry.data, "boot_time": "not_a_valid_datetime"},
+    )
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+    assert coordinator._boot_time is None
+
+
+@pytest.mark.asyncio
+async def test_coordinator_last_uptime_restored(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test coordinator restores last_uptime from entry.data (coordinator.py:51-52)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        data={**mock_config_entry.data, "last_uptime": "12345"},
+    )
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+    assert coordinator._last_uptime == 12345
+
+
+@pytest.mark.asyncio
+async def test_coordinator_last_uptime_restored_bad_value(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test coordinator suppresses bad last_uptime (coordinator.py:51-52)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        data={**mock_config_entry.data, "last_uptime": "not_a_number"},
+    )
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+    assert coordinator._last_uptime is None
+
+
+@pytest.mark.asyncio
+async def test_coordinator_sms_auth_retry(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test coordinator retries SMS fetch after ZTEAuthError (coord:100-101)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    with (
+        patch.object(api, "get_all_data", return_value={"network_type": "LTE"}),
+        patch.object(api, "get_sms_capacity", return_value={"sms_cap": 100}),
+        patch.object(
+            api,
+            "get_sms_messages",
+            side_effect=[
+                ZTEAuthError("Session expired"),
+                [
+                    {
+                        "id": "1",
+                        "content_decoded": "hi",
+                        "number_decoded": "123",
+                        "date_decoded": "2024-01-01T00:00:00",
+                    }
+                ],
+            ],
+        ),
+        patch.object(api, "login", return_value="stok=new"),
+        patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
+    ):
+        data = await coordinator._async_update_data()
+        assert data["network_type"] == "LTE"
+        assert data.get("sms_cap") == 100
+        assert data.get("last_sms", {}).get("content_decoded") == "hi"
+
+
+@pytest.mark.asyncio
+async def test_coordinator_check_new_sms_no_date_decoded(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test _check_new_sms early return no date_decoded (coord:310)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    with (
+        patch.object(api, "get_all_data", return_value={"network_type": "LTE"}),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(
+            api,
+            "get_sms_messages",
+            return_value=[{"id": "1"}],
+        ),
+        patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
+    ):
+        data = await coordinator._async_update_data()
+        assert data["network_type"] == "LTE"
+
+
+@pytest.mark.asyncio
+async def test_coordinator_check_new_sms_same_timestamp(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Test _check_new_sms adds hash when same timestamp (coordinator.py:357)."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    # Pre-set baseline so we get past first-run guard
+    coordinator.last_sms_timestamp = "2024-01-01T00:00:00"
+    coordinator.fired_sms_hashes = {"2_2024-01-01T00:00:00"}
+
+    with (
+        patch.object(api, "get_all_data", return_value={"network_type": "LTE"}),
+        patch.object(api, "get_sms_capacity", return_value={}),
+        patch.object(
+            api,
+            "get_sms_messages",
+            return_value=[
+                {
+                    "id": "1",
+                    "content_decoded": "hi",
+                    "number_decoded": "123",
+                    "date_decoded": "2024-01-01T00:00:00",
+                },
+            ],
+        ),
+        patch("custom_components.zte_router_5g.coordinator.dr.async_get"),
+    ):
+        data = await coordinator._async_update_data()
+        assert data["network_type"] == "LTE"
+        assert "1_2024-01-01T00:00:00" in coordinator.fired_sms_hashes

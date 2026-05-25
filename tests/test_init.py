@@ -230,6 +230,7 @@ async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
         coordinator = mock_config_entry.runtime_data
         coordinator.data = {"old": "data"}
         coordinator.api.get_all_data = AsyncMock(side_effect=ZTEAuthError("Auth fail"))
+        coordinator.api.login = AsyncMock(return_value="stok=fake")
 
         # First 3 failures return cached data (resilience)
         for i in range(3):

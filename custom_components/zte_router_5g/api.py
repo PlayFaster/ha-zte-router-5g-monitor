@@ -45,6 +45,7 @@ class ZTERouterAPI:
         self.timeout = aiohttp.ClientTimeout(total=15)
         self.stok: str | None = None
         self.is_multi = True
+        self.last_activity = datetime.min
 
     def _hash(self, val: str | None) -> str:
         if val is None:
@@ -94,6 +95,16 @@ class ZTERouterAPI:
     ) -> Any:
         """Centralized request helper that handles session creation and auto-renewal."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
+
+        # Check if the session is likely expired due to inactivity (e.g. 150 seconds)
+        now = datetime.now()
+        if (
+            authenticated
+            and self.stok
+            and (now - self.last_activity).total_seconds() > 150
+        ):
+            _LOGGER.debug("Session likely expired due to inactivity; resetting stok")
+            self.stok = None
 
         if authenticated and not self.stok:
             self.stok = await self.login(timeout_sec=timeout_sec)
@@ -198,26 +209,29 @@ class ZTERouterAPI:
                         or resp_json.get("status") == "fail"
                     )
 
-                    if (
-                        (is_status_expired or is_auth_error)
-                        and authenticated
-                        and _retry
-                    ):
-                        _LOGGER.debug(
-                            "Session expired in JSON response; renewing session"
-                        )
-                        self.stok = await self.login(timeout_sec=timeout_sec)
-                        return await self._request(
-                            method,
-                            path,
-                            params,
-                            data,
-                            headers,
-                            timeout_sec,
-                            authenticated,
-                            _retry=False,
-                        )
+                    if (is_status_expired or is_auth_error) and authenticated:
+                        if _retry:
+                            _LOGGER.debug(
+                                "Session expired in JSON response; renewing session"
+                            )
+                            self.stok = await self.login(timeout_sec=timeout_sec)
+                            return await self._request(
+                                method,
+                                path,
+                                params,
+                                data,
+                                headers,
+                                timeout_sec,
+                                authenticated,
+                                _retry=False,
+                            )
+                        else:
+                            _LOGGER.warning(
+                                "Session expired/unauthorized and retry exhausted"
+                            )
+                            raise ZTEAuthError("Session expired/unauthorized")
 
+                self.last_activity = datetime.now()
                 return resp_json
 
         except Exception as e:
@@ -334,6 +348,28 @@ class ZTERouterAPI:
                     )
 
                 self.stok = f"stok={stok.value.strip('"')}"
+
+                # Initialize session with a GET request to satisfy POST
+                # restrictions on some ZTE routers
+                init_url = f"{self.referer}goform/goform_get_cmd_process"
+                init_params = {"isTest": "false", "cmd": "wa_inner_version"}
+                init_headers = {
+                    "Referer": f"{self.referer}index.html",
+                    "Cookie": self.stok,
+                }
+                try:
+                    async with self.session.get(
+                        init_url,
+                        params=init_params,
+                        headers=init_headers,
+                        timeout=aiohttp.ClientTimeout(total=tout),
+                        ssl=False,
+                    ) as init_r:
+                        await init_r.read()
+                except Exception as init_err:
+                    _LOGGER.debug("Session initialization GET failed: %s", init_err)
+
+                self.last_activity = datetime.now()
                 return self.stok
         except Exception as e:
             if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
@@ -423,6 +459,8 @@ class ZTERouterAPI:
                 await self._request("GET", path, timeout_sec=timeout_sec),
             )
         except Exception as e:
+            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
+                raise
             _LOGGER.debug("Failed to get SMS capacity: %s", e)
             return {}
 
@@ -453,6 +491,8 @@ class ZTERouterAPI:
                 return cast(dict[str, Any], msg)
             return {}
         except Exception as e:
+            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
+                raise
             _LOGGER.debug("Failed to get last SMS content: %s", e)
             return {}
 
@@ -559,6 +599,8 @@ class ZTERouterAPI:
                 msg["date_decoded"] = self._parse_date(msg.get("date", ""))
             return cast(list[dict[str, Any]], messages)
         except Exception as e:
+            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
+                raise
             _LOGGER.debug("Failed to get SMS messages: %s", e)
             return []
 
@@ -584,5 +626,7 @@ class ZTERouterAPI:
             data = await self._request("GET", path, timeout_sec=timeout_sec)
             return cast(str, data.get("RD", ""))
         except Exception as e:
+            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
+                raise
             _LOGGER.debug("Failed to get RD: %s", e)
             return ""

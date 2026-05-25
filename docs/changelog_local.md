@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.1-dev4] - 2026-05-25 - Unreleased
+
+### Fixed
+
+- **Tests**: Resolved 8 test failures caused by the inactivity-based session reset (150-second threshold) — set `api.last_activity = datetime.now()` in test setup to prevent proactive stok clearing from interfering with test mocks.
+
+### Test Coverage
+
+- `api.py` 93% → 100%, `coordinator.py` 95% → 100%
+- **11 new tests**: session init GET success, non-auth exception handlers for `get_sms_capacity`/`get_last_sms_content`/`get_sms_messages`/`get_rd`, `boot_time` restore (valid + bad value), `last_uptime` restore (valid + bad value), SMS auth retry, `_check_new_sms` early-return, `_check_new_sms` same-timestamp hash dedup.
+
+## [3.1.1-dev3] - 2026-05-25 - Unreleased
+
+### Fixed
+
+- **Authentication**: Implemented proactive inactivity-based session resetting (150-second threshold) inside the centralized `_request()` wrapper to force a login/activation before session tokens expire.
+- **Authentication**: Added a session-initialization GET request inside `login()` immediately after authentication to allow subsequent POST requests to succeed.
+- **Error Handling**: Refined `_request()` to correctly propagate `ZTEAuthError` when retry attempts are exhausted on unauth/expired responses, preventing silent empty states.
+- **Error Handling**: Enabled auth and connection exception propagation in `get_rd()` and `get_last_sms_content()` to prevent silent setup/API failures.
+- **Tests**: Resolved 15 failing unit tests by adjusting mock awaitables, adapting error assertions to the new exception propagation design, and updating obsolete coordinator API method patches.
+
+## [3.1.1-dev2] - 2026-05-24 - Unreleased
+
+### Changed
+
+- **Documentation**: Additional updates to README, more automation examples, more icons.
+
+## [3.1.1-dev1] - 2026-05-24 - Unreleased
+
+### Changed
+
+- **Dependabot**: Bump PlayFaster/.github shared validation from v1.02 to v1.04
+- **Dependabot**: Bump [zizmor](https://github.com/zizmorcore/zizmor-pre-commit) from v1.24.1 to 1.25.2
+- **Dependabot**: Bump [python-typing](https://github.com/cdce8p/python-typing-update) from v0.6.0 to 0.8.1
+
 ## [3.1.0] - 2026-05-24
 
 ### Added
