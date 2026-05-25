@@ -1,5 +1,6 @@
 """Tests for the ZTE Router init."""
 
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -11,7 +12,9 @@ from custom_components.zte_router_5g.api import ZTEAuthError
 from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
 )
-from custom_components.zte_router_5g.coordinator import ZTERouterDataUpdateCoordinator
+from custom_components.zte_router_5g.coordinator import (
+    ZTERouterDataUpdateCoordinator,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -683,3 +686,329 @@ async def test_sms_received_event_firing(mock_hass, mock_config_entry):
                 "index": 2,
             },
         )
+
+
+# ── Fixture for coordinator sync-method tests ──────────────────────────────
+
+
+@pytest.fixture
+def coordinator_fixture(mock_hass, mock_config_entry):
+    """Create a coordinator instance with mocked API for sync method testing."""
+    mock_api = MagicMock()
+    coordinator = ZTERouterDataUpdateCoordinator(mock_hass, mock_config_entry, mock_api)
+    coordinator.last_sms_timestamp = None
+    coordinator.fired_sms_hashes = set()
+    return coordinator
+
+
+# ── Strategy 1: Boundary Value Analysis ────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_failure_no_cached_data_raises_immediately(mock_hass, mock_config_entry):
+    """1A: First failure with data=None raises UpdateFailed immediately (no holding)."""
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI"),
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+    ):
+        await async_setup_entry(mock_hass, mock_config_entry)
+        coordinator = mock_config_entry.runtime_data
+        assert coordinator.data is None
+
+        coordinator.api.get_all_data = AsyncMock(side_effect=Exception("First fail"))
+        with pytest.raises(UpdateFailed, match="Communication error"):
+            await coordinator._async_update_data()
+        assert coordinator.consecutive_failures == 1
+
+
+@pytest.mark.asyncio
+async def test_failure_count_resets_after_success(mock_hass, mock_config_entry):
+    """1B: consecutive_failures resets on success; new failure can hold again."""
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI"),
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+    ):
+        await async_setup_entry(mock_hass, mock_config_entry)
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = {"old": "data"}
+        coordinator.api.get_all_data = AsyncMock(side_effect=Exception("Fail"))
+
+        await coordinator._async_update_data()
+        await coordinator._async_update_data()
+        assert coordinator.consecutive_failures == 2
+
+        coordinator.api.get_all_data = AsyncMock(return_value={"network_type": "LTE"})
+        coordinator.api.get_sms_capacity = AsyncMock(return_value={})
+        coordinator.api.get_sms_messages = AsyncMock(return_value=[])
+        await coordinator._async_update_data()
+        assert coordinator.consecutive_failures == 0
+
+        coordinator.api.get_all_data = AsyncMock(side_effect=Exception("New fail"))
+        result = await coordinator._async_update_data()
+        assert coordinator.consecutive_failures == 1
+        assert result == {"old": "data"}
+
+
+@pytest.mark.parametrize(
+    "uptime,expect_reboot",
+    [
+        (70, False),
+        (69, True),
+        (71, False),
+    ],
+)
+@pytest.mark.asyncio
+async def test_reboot_detection_boundary(
+    uptime, expect_reboot, mock_hass, mock_config_entry
+):
+    """1C: Reboot only when uptime drops strictly more than margin."""
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI"),
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+    ):
+        await async_setup_entry(mock_hass, mock_config_entry)
+        coordinator = mock_config_entry.runtime_data
+        original_boot = datetime(2026, 1, 1, 0, 0, 0)
+        coordinator._boot_time = original_boot
+        coordinator._last_uptime = 100
+
+        coordinator.api.get_all_data = AsyncMock(
+            return_value={"realtime_time": str(uptime), "network_type": "LTE"}
+        )
+        coordinator.api.get_sms_capacity = AsyncMock(return_value={})
+        coordinator.api.get_sms_messages = AsyncMock(return_value=[])
+
+        await coordinator._async_update_data()
+        if expect_reboot:
+            assert coordinator._boot_time != original_boot
+        else:
+            assert coordinator._boot_time == original_boot
+
+
+@pytest.mark.parametrize("bad_value", ["-1", "-100", None, "", "abc"])
+@pytest.mark.asyncio
+async def test_boot_time_unchanged_on_bad_uptime(
+    bad_value, mock_hass, mock_config_entry
+):
+    """1D: Bad/missing uptime leaves boot_time latched, anchor unchanged."""
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI"),
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+    ):
+        await async_setup_entry(mock_hass, mock_config_entry)
+        coordinator = mock_config_entry.runtime_data
+        original_boot = datetime(2026, 1, 1, 0, 0, 0)
+        coordinator._boot_time = original_boot
+        coordinator._last_uptime = 3600
+
+        coordinator.api.get_all_data = AsyncMock(
+            return_value={"realtime_time": bad_value, "network_type": "LTE"}
+        )
+        coordinator.api.get_sms_capacity = AsyncMock(return_value={})
+        coordinator.api.get_sms_messages = AsyncMock(return_value=[])
+
+        data = await coordinator._async_update_data()
+        assert data["boot_time"] == original_boot
+        assert coordinator._last_uptime == 3600
+
+
+# ── Strategy 2: Combinatorial / Path Coverage ──────────────────────────────
+
+
+def test_check_new_sms_same_timestamp_new_hash(coordinator_fixture, mock_hass):
+    """2B: Second message at the same timestamp as baseline is detected by hash only."""
+    coordinator = coordinator_fixture
+    coordinator.last_sms_timestamp = "2026-01-01T10:00:00"
+    coordinator.fired_sms_hashes = {"1_2026-01-01T10:00:00"}
+
+    messages = [
+        {
+            "id": "1",
+            "content_decoded": "old",
+            "number_decoded": "111",
+            "date_decoded": "2026-01-01T10:00:00",
+        },
+        {
+            "id": "2",
+            "content_decoded": "same-time-new",
+            "number_decoded": "222",
+            "date_decoded": "2026-01-01T10:00:00",
+        },
+    ]
+    coordinator._check_new_sms(messages)
+
+    mock_hass.bus.async_fire.assert_called_once()
+    event = mock_hass.bus.async_fire.call_args[0][1]
+    assert event["phone"] == "222"
+    assert "1_2026-01-01T10:00:00" in coordinator.fired_sms_hashes
+    assert "2_2026-01-01T10:00:00" in coordinator.fired_sms_hashes
+    assert coordinator.last_sms_timestamp == "2026-01-01T10:00:00"
+
+
+def test_check_new_sms_multiple_new_fire_in_order(coordinator_fixture, mock_hass):
+    """2C: Multiple new messages all fire, in chronological order."""
+    coordinator = coordinator_fixture
+    coordinator.last_sms_timestamp = "2026-01-01T10:00:00"
+    coordinator.fired_sms_hashes = {"1_2026-01-01T10:00:00"}
+
+    messages = [
+        {
+            "id": "3",
+            "content_decoded": "c",
+            "number_decoded": "333",
+            "date_decoded": "2026-01-01T10:02:00",
+        },
+        {
+            "id": "2",
+            "content_decoded": "b",
+            "number_decoded": "222",
+            "date_decoded": "2026-01-01T10:01:00",
+        },
+        {
+            "id": "1",
+            "content_decoded": "a",
+            "number_decoded": "111",
+            "date_decoded": "2026-01-01T10:00:00",
+        },
+    ]
+    coordinator._check_new_sms(messages)
+
+    assert mock_hass.bus.async_fire.call_count == 2
+    calls = mock_hass.bus.async_fire.call_args_list
+    assert calls[0][0][1]["phone"] == "222"
+    assert calls[1][0][1]["phone"] == "333"
+    assert coordinator.last_sms_timestamp == "2026-01-01T10:02:00"
+    assert coordinator.fired_sms_hashes == {"3_2026-01-01T10:02:00"}
+
+
+def test_check_new_sms_missing_date_decoded_filtered(coordinator_fixture, mock_hass):
+    """2D: Messages lacking date_decoded are silently excluded from event detection."""
+    coordinator = coordinator_fixture
+    coordinator.last_sms_timestamp = "2026-01-01T10:00:00"
+    coordinator.fired_sms_hashes = set()
+
+    messages = [
+        {"id": "1", "number_decoded": "111"},
+        {"id": "2", "number_decoded": "222", "date_decoded": "2026-01-01T11:00:00"},
+    ]
+    coordinator._check_new_sms(messages)
+    mock_hass.bus.async_fire.assert_called_once()
+    assert mock_hass.bus.async_fire.call_args[0][1]["phone"] == "222"
+
+
+def test_check_new_sms_all_missing_date_decoded_early_return(
+    coordinator_fixture, mock_hass
+):
+    """2D: Early return at coordinator.py:309 when no messages have date_decoded."""
+    coordinator = coordinator_fixture
+    coordinator.last_sms_timestamp = "2026-01-01T10:00:00"
+    original_ts = coordinator.last_sms_timestamp
+
+    coordinator._check_new_sms([{"id": "1", "number_decoded": "111"}])
+
+    mock_hass.bus.async_fire.assert_not_called()
+    assert coordinator.last_sms_timestamp == original_ts
+
+
+@pytest.mark.asyncio
+async def test_coordinator_auth_retry_also_raises_outer_handler(
+    mock_hass, mock_config_entry
+):
+    """2E: ZTEAuthError on post-login retry enters outer handler."""
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI"),
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+    ):
+        await async_setup_entry(mock_hass, mock_config_entry)
+        coordinator = mock_config_entry.runtime_data
+        coordinator.data = {"cached": "data"}
+
+        call_count = 0
+
+        def always_auth_error(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            raise ZTEAuthError("Still rejected")
+
+        coordinator.api.get_all_data = AsyncMock(side_effect=always_auth_error)
+        coordinator.api.login = AsyncMock()
+
+        result = await coordinator._async_update_data()
+        assert result == {"cached": "data"}
+        assert coordinator.consecutive_failures == 1
+        assert call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_delete_all_sms_keep_last_gte_total_deletes_nothing(
+    mock_hass, mock_config_entry
+):
+    """2F: keep_last >= total: delete_sms is not called."""
+    from custom_components.zte_router_5g import async_delete_all_sms
+
+    mock_api = AsyncMock()
+    mock_api.get_sms_messages.return_value = [{"id": "3"}, {"id": "2"}, {"id": "1"}]
+    mock_coordinator = MagicMock()
+    mock_coordinator.api = mock_api
+    mock_coordinator.async_request_refresh = AsyncMock()
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+
+    for n in [3, 5, 100]:
+        mock_api.delete_sms.reset_mock()
+        call.data = {"keep_last": n}
+        await async_delete_all_sms(mock_hass, call)
+        mock_api.delete_sms.assert_not_called()
+    mock_coordinator.async_request_refresh.assert_called()
+
+
+# ── Strategy 3: Error State & Negative Path Engineering ─────────────────────
+
+
+def test_check_sms_storage_handles_type_error(coordinator_fixture):
+    """3A: _check_sms_storage must not propagate TypeError."""
+    data = {"nv_sms_able": ["not", "an", "int"], "sms_nv_total": "5"}
+    try:
+        coordinator_fixture._check_sms_storage(data)
+    except TypeError as exc:
+        pytest.fail(
+            "_check_sms_storage raised TypeError (bare-tuple bug"
+            " at coordinator.py:281): " + str(exc)
+        )
+
+
+@pytest.mark.asyncio
+async def test_coordinator_sms_message_missing_id_handled(mock_hass, mock_config_entry):
+    """3E: SMS messages missing the 'id' field sort and process without error."""
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+    ):
+        mock_api = mock_api_class.return_value
+        mock_api.get_all_data = AsyncMock(return_value={"network_type": "LTE"})
+        mock_api.get_sms_capacity = AsyncMock(return_value={})
+        mock_api.get_sms_messages = AsyncMock(
+            return_value=[
+                {
+                    "id": "1",
+                    "content_decoded": "no id here",
+                    "number_decoded": "111",
+                    "date_decoded": "2026-01-01T10:00:00",
+                },
+            ]
+        )
+        mock_api.login = AsyncMock()
+
+        await async_setup_entry(mock_hass, mock_config_entry)
+        coordinator = mock_config_entry.runtime_data
+
+        data = await coordinator._async_update_data()
+        assert data["last_sms"]["number_decoded"] == "111"
