@@ -96,8 +96,8 @@ _Group: `data`_
 | Monthly Total GB | `monthly_total_bytes` | Sensor | `(TX+RX) / 10^9` | GB | Sensor | **Disabled by default (Legacy).** |
 | Upload Speed | `realtime_tx_thrpt` | Sensor | `realtime_tx_thrpt` | B/s | Sensor | Instantaneous TX throughput. |
 | Download Speed | `realtime_rx_thrpt` | Sensor | `realtime_rx_thrpt` | B/s | Sensor | Instantaneous RX throughput. |
-| Session Sent | `realtime_tx_bytes` | Sensor | `realtime_tx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect (`TOTAL_INCREASING`). |
-| Session Received | `realtime_rx_bytes` | Sensor | `realtime_rx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect (`TOTAL_INCREASING`). |
+| Session Sent | `realtime_tx_bytes` | Sensor | `realtime_tx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. |
+| Session Received | `realtime_rx_bytes` | Sensor | `realtime_rx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. |
 
 ---
 
@@ -191,9 +191,10 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 
 ## Version Control
 
-- **v1.0.0** (2026-05-07) - Initial versioned snapshot. Entity count updated 51 → 63. Added 12 new sensors (System: IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID; Signal: eNodeB ID, Network Mode, PPP Status; Data: Upload Speed, Download Speed, Session Sent, Session Received). Identity strategy updated from MAC to IMEI. \
-- **v3.0.0-dev23** (2026-05-08) - Updated categories for Uptime, Last Updated, Best Connection, and WAN Connect Status. Renamed PPP Status to Bridge Mode. Set Battery to disabled by default.\
-- **v3.0.1-dev5** (2026-05-10) - Migrated to hierarchical translation keys across all 63 entities.\
-- **v3.0.2-dev3** (2026-05-22) - Added `system_uptime_duration` sensor and corrected legacy GB sensors to use base-10 (10^9) calculation.\
-- **v3.0.2-dev6** (2026-05-23) - Added documentation for the custom SMS services (`send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`).\
+- **v1.0.0** (2026-05-07) - Initial versioned snapshot. Entity count updated 51 → 63. Added 12 new sensors (System: IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID; Signal: eNodeB ID, Network Mode, PPP Status; Data: Upload Speed, Download Speed, Session Sent, Session Received). Identity strategy updated from MAC to IMEI.
+- **v3.0.0-dev23** (2026-05-08) - Updated categories for Uptime, Last Updated, Best Connection, and WAN Connect Status. Renamed PPP Status to Bridge Mode. Set Battery to disabled by default.
+- **v3.0.1-dev5** (2026-05-10) - Migrated to hierarchical translation keys across all 63 entities.
+- **v3.0.2-dev3** (2026-05-22) - Added `system_uptime_duration` sensor and corrected legacy GB sensors to use base-10 (10^9) calculation.
+- **v3.0.2-dev6** (2026-05-23) - Added documentation for the custom SMS services (`send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`).
 - **v3.0.2-dev7** (2026-05-23) - Documented custom SMS services and verified setup.
+- **v3.1.1-dev5** (2026-05-25) - Updated Session Sent/Received notes to reflect removal of state_class (no LTS).

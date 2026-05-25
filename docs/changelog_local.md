@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.1-dev5] - 2026-05-25 - Unreleased
+
+### Changed
+
+- **Sensors**: Removed `state_class` from 8 sensors (`realtime_time`, `battery_value`, `rssi`, `rscp`, `realtime_tx_bytes`, `realtime_rx_bytes`, `realtime_tx_thrpt`, `realtime_rx_thrpt`) to prevent non-critical sensors from generating Long Term Statistics entries.
+- **Documentation**: Add details on the non-LTS sensors to README
+
 ## [3.1.1-dev4] - 2026-05-25 - Unreleased
 
 ### Fixed

@@ -202,6 +202,42 @@ This integration provides **52+ entities** (depending on your firmware) organize
 > - Devices and their entities can be disabled from the main device page: (⋮ menu) > **Disable Device**.
 > - Individual entities can be disabled via their properties, or in bulk on the entities list page.
 
+### 📊 Long Term Statistics (LTS)
+
+Home Assistant stores Long Term Statistics for numeric sensors that have a `state_class` set. This integration enables LTS only for sensors where long-term trend data is genuinely useful:
+
+| Sensors with LTS enabled | Why |
+| :-- | :-- |
+| LTE & 5G signal metrics (RSRP, RSRQ, RSSI, SNR) | Track connection quality trends over time |
+| Monthly data usage (Sent, Received, Total) | Monitor data consumption month-over-month |
+| SMS counts (Unread, Total) | Track message volume over time |
+| Signal Bars | Coarse signal summary over time |
+
+The following sensors have **no LTS** to avoid unnecessary database growth:
+
+| Sensor | Reason |
+| :-- | :-- |
+| Upload / Download Speed | Instantaneous readings — history at poll intervals has limited analytical value |
+| Session Sent / Received | Resets on every reconnect — not meaningful for long-term trends |
+| Uptime Duration | Resets on reboot; predictable pattern adds no insight |
+| Battery | Always 100% when plugged in |
+| Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
+
+> [!TIP]
+>
+> **Want to add a sensor to Long Term Statistics?**
+>
+> Add a `state_class` override via [Manual Customization](https://www.home-assistant.io/integrations/homeassistant/#manual-customization) in your `configuration.yaml`. For example, to track Upload Speed in LTS:
+>
+> ```yaml
+> homeassistant:
+>   customize:
+>     sensor.zte_5g_data_upload_speed:
+>       state_class: measurement
+> ```
+>
+> Restart Home Assistant after saving. The sensor will begin accumulating LTS from that point forward.
+
 ## 💡 Example Automations
 
 Entity IDs below use the default prefix zte_5g. If you set a custom name during setup, or have renamed since, replace zte_5g with your configured prefix.
