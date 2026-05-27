@@ -441,6 +441,46 @@ class ZTERouterAPI:
             "sms_sim_draftbox_total",
             "sms_nv_total",
             "sms_sim_total",
+            "apn_index",
+            "apn_mode",
+            "apn_interface_version",
+            "ipv6_apn_index",
+            "APN_config0",
+            "APN_config1",
+            "APN_config2",
+            "APN_config3",
+            "APN_config4",
+            "APN_config5",
+            "APN_config6",
+            "APN_config7",
+            "APN_config8",
+            "APN_config9",
+            "APN_config10",
+            "APN_config11",
+            "APN_config12",
+            "APN_config13",
+            "APN_config14",
+            "APN_config15",
+            "APN_config16",
+            "APN_config17",
+            "APN_config18",
+            "APN_config19",
+            "ODU_led_switch",
+            "ODU_led_off_time",
+            "data_volume_limit_switch",
+            "data_volume_alert_percent",
+            "reboot_schedule_enable",
+            "reboot_hour1",
+            "reboot_min1",
+            "reboot_hour2",
+            "reboot_min2",
+            "lte_band_lock",
+            "net_select_mode",
+            "sntp_server0",
+            "sntp_server1",
+            "sntp_dst_enable",
+            "upnpEnabled",
+            "alg_sip_enable",
         ]
         cmd = ",".join(params)
         path = (
@@ -630,3 +670,67 @@ class ZTERouterAPI:
                 raise
             _LOGGER.debug("Failed to get RD: %s", e)
             return ""
+
+    async def set_apn(self, index: int, pdp_type: str) -> dict[str, Any]:
+        """Set the default APN profile index and PDP type."""
+        ad = await self.get_ad()
+        payload = (
+            f"isTest=false&goformId=APN_PROC_EX"
+            f"&apn_mode=manual&apn_action=set_default&set_default_flag=1"
+            f"&pdp_type={pdp_type}&index={index}&AD={ad}"
+        )
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)
+
+    async def set_apn_mode(self, mode: str) -> dict[str, Any]:
+        """Set the APN selection mode (auto or manual)."""
+        ad = await self.get_ad()
+        payload = f"isTest=false&goformId=APN_PROC_EX&apn_mode={mode}&AD={ad}"
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)
+
+    async def set_odu_led_switch(self, status: str) -> dict[str, Any]:
+        """Set the ODU LED switch status (1 = On, 0 = Off)."""
+        ad = await self.get_ad()
+        payload = f"isTest=false&goformId=ODU_LED_SWITCH_SET&ODU_led_switch={status}&AD={ad}"
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)
+
+    async def set_data_limit_switch(self, status: str) -> dict[str, Any]:
+        """Set the data volume limit switch (1 = On, 0 = Off)."""
+        ad = await self.get_ad()
+        payload = f"isTest=false&goformId=DATA_LIMIT_SETTING&data_volume_limit_switch={status}&AD={ad}"
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)
+
+    async def set_bearer_preference(self, preference: str) -> dict[str, Any]:
+        """Set the network bearer preference (e.g. 4G_AND_5G, Only_5G, Only_LTE)."""
+        ad = await self.get_ad()
+        payload = f"isTest=false&goformId=SET_BEARER_PREFERENCE&BearerPreference={preference}&AD={ad}"
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)

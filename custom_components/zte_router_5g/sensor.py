@@ -615,6 +615,34 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="sms",
         value_fn=lambda data: data.get("last_sms", {}).get("content_decoded"),
     ),
+    # --- Discovered Technical Settings & Info ---
+    ZTESensorEntityDescription(
+        key="lte_band_lock",
+        translation_key="signal_lte_band_lock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _safe_str(data.get("lte_band_lock")),
+    ),
+    ZTESensorEntityDescription(
+        key="data_volume_alert_percent",
+        translation_key="data_volume_alert_percent",
+        native_unit_of_measurement="%",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        min_limit=0,
+        max_limit=100,
+        group="data",
+        value_fn=lambda data: _safe_int(data.get("data_volume_alert_percent")),
+    ),
+    ZTESensorEntityDescription(
+        key="sntp_server",
+        translation_key="system_sntp_server",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_str(data.get("sntp_server0")),
+    ),
 )
 
 
@@ -717,6 +745,12 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
                 "id": msg.get("id"),
                 "number": msg.get("number_decoded"),
                 "date": msg.get("date_decoded"),
+            }
+
+        if key == "sntp_server":
+            return {
+                "sntp_server1": data.get("sntp_server1"),
+                "sntp_dst_enable": data.get("sntp_dst_enable") == "1",
             }
 
         return {}
