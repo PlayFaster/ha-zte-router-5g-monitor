@@ -60,7 +60,9 @@ SWITCH_TYPES: tuple[ZTESwitchEntityDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
         group="data",
         entity_registry_enabled_default=False,
-        value_fn=lambda data: data.get("data_volume_limit_switch") == "1" if data else False,
+        value_fn=lambda data: (
+            data.get("data_volume_limit_switch") == "1" if data else False
+        ),
         setter_fn=lambda api, state: api.set_data_limit_switch("1" if state else "0"),
     ),
 )
@@ -77,12 +79,12 @@ async def async_setup_entry(
     # Read initial state from entry options (survives restarts)
     initial_state = entry.options.get(CONF_STOP_POLLING, False)
 
-    entities = [
+    entities: list[SwitchEntity] = [
         ZTEPausePollingSwitch(
             coordinator, entry, PAUSE_POLLING_DESCRIPTION, initial_state
         )
     ]
-    
+
     entities.extend(
         [
             ZTERouterSwitch(coordinator, entry, description)

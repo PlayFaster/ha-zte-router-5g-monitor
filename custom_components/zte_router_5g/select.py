@@ -35,7 +35,7 @@ class ZTESelectEntityDescription(SelectEntityDescription):
 
 def _get_apn_profiles(data: Any) -> list[tuple[int, str, str]]:
     """Return a list of (index, profile_name, pdp_type) from coordinator data."""
-    profiles = []
+    profiles: list[tuple[int, str, str]] = []
     if not data:
         return profiles
     for i in range(20):
@@ -65,7 +65,7 @@ def _get_current_apn_profile(data: Any) -> str | None:
     if val:
         parts = val.split("($)")
         if len(parts) > 0 and parts[0]:
-            return parts[0]
+            return str(parts[0])
     return None
 
 
@@ -75,7 +75,7 @@ async def _set_apn_profile_option(api: Any, option: str, data: Any) -> None:
     target = next((p for p in profiles if p[1] == option), None)
     if target is None:
         raise ValueError(f"APN profile name {option} not found in available list")
-    
+
     idx, _, pdp_type = target
     _LOGGER.info("Setting default APN to index %s (%s, PDP: %s)", idx, option, pdp_type)
     await api.set_apn(idx, pdp_type)
@@ -127,9 +127,7 @@ async def async_setup_entry(
     )
 
 
-class ZTERouterSelect(
-    CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectEntity
-):
+class ZTERouterSelect(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectEntity):
     """Representation of a ZTE Router select entity."""
 
     _attr_has_entity_name = True
