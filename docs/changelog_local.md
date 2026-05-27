@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.1-dev11] - 2026-05-27 - Unreleased
+
+### Added Tests
+
+- **57 new tests** across `test_select.py`, `test_switch.py`, `test_binary_sensor.py`, and `test_api.py`. Coverage: `select.py` (new) 0% → 100%, `switch.py` 80% → 100%, `binary_sensor.py` 89% → 100%, `api.py` 92% → 100%. Overall: 88% → 99%.
+
 ## [3.1.1-dev10] - 2026-05-27 - Unreleased
 
 ### Fixed
