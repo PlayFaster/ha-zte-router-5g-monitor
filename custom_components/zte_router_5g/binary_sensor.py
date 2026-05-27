@@ -48,7 +48,9 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
         entity_registry_enabled_default=False,
-        value_fn=lambda data: data.get("reboot_schedule_enable") == "1" if data else False,
+        value_fn=lambda data: (
+            data.get("reboot_schedule_enable") == "1" if data else False
+        ),
         extra_attrs_fn=lambda data: {
             "reboot_hour1": data.get("reboot_hour1") if data else None,
             "reboot_min1": data.get("reboot_min1") if data else None,
@@ -82,8 +84,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up the binary sensor platform."""
     coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
-    
-    entities = [
+
+    entities: list[BinarySensorEntity] = [
         ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION)
     ]
     entities.extend(
@@ -170,10 +172,7 @@ class ZTERouterBinarySensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
-        if (
-            not self.coordinator.data
-            or self.entity_description.extra_attrs_fn is None
-        ):
+        if not self.coordinator.data or self.entity_description.extra_attrs_fn is None:
             return {}
         return self.entity_description.extra_attrs_fn(self.coordinator.data)
 

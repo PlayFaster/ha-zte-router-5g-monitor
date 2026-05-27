@@ -702,7 +702,9 @@ class ZTERouterAPI:
     async def set_odu_led_switch(self, status: str) -> dict[str, Any]:
         """Set the ODU LED switch status (1 = On, 0 = Off)."""
         ad = await self.get_ad()
-        payload = f"isTest=false&goformId=ODU_LED_SWITCH_SET&ODU_led_switch={status}&AD={ad}"
+        payload = (
+            f"isTest=false&goformId=ODU_LED_SWITCH_SET&ODU_led_switch={status}&AD={ad}"
+        )
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
@@ -714,7 +716,10 @@ class ZTERouterAPI:
     async def set_data_limit_switch(self, status: str) -> dict[str, Any]:
         """Set the data volume limit switch (1 = On, 0 = Off)."""
         ad = await self.get_ad()
-        payload = f"isTest=false&goformId=DATA_LIMIT_SETTING&data_volume_limit_switch={status}&AD={ad}"
+        payload = (
+            f"isTest=false&goformId=DATA_LIMIT_SETTING"
+            f"&data_volume_limit_switch={status}&AD={ad}"
+        )
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
@@ -726,7 +731,10 @@ class ZTERouterAPI:
     async def set_bearer_preference(self, preference: str) -> dict[str, Any]:
         """Set the network bearer preference (e.g. 4G_AND_5G, Only_5G, Only_LTE)."""
         ad = await self.get_ad()
-        payload = f"isTest=false&goformId=SET_BEARER_PREFERENCE&BearerPreference={preference}&AD={ad}"
+        payload = (
+            f"isTest=false&goformId=SET_BEARER_PREFERENCE"
+            f"&BearerPreference={preference}&AD={ad}"
+        )
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
