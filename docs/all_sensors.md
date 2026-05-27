@@ -6,15 +6,15 @@ This document provides a comprehensive list of all 64 entities currently impleme
 
 | Sub-Device | Entity Count | Description |
 | :-- | :-- | :-- |
-| **System** | 15 | Core router info and global integration settings. |
-| **Signal** | 35 | Cellular connectivity, signal strength (LTE/5G), and network info. |
-| **Data** | 10 | Monthly and session traffic volume (Bytes and GB). |
+| **System** | 20 | Core router info and global integration settings. |
+| **Signal** | 39 | Cellular connectivity, signal strength (LTE/5G), and network info. |
+| **Data** | 12 | Monthly and session traffic volume (Bytes and GB). |
 | **SMS** | 4 | Message counts and recent message content. |
-| **Total** | **64** |  |
+| **Total** | **75** |  |
 
 ---
 
-## 1. System Sub-Device (15 Entities)
+## 1. System Sub-Device (20 Entities)
 
 _Group: `system`_
 
@@ -35,10 +35,15 @@ _Group: `system`_
 | Reboot | `reboot` | Button | API Call: `REBOOT_DEVICE` | - | Control |  |
 | Pause Polling | `pause_polling` | Switch | Options: `stop_polling` | - | Config | State persists in `ConfigEntry.options`. |
 | Polling Interval | `polling_interval` | Number | Options: `scan_interval` | s | Config | Range: 30s - 3600s. Persists in options. |
+| Reboot Schedule | `reboot_schedule` | Binary | `reboot_schedule_enable` | - | Diagnostic | **Disabled by default.** Scheduled reboot active status. Extra attributes: hour, minute. |
+| UPnP Enabled | `upnp_enabled` | Binary | `upnp_enable` | - | Diagnostic | **Disabled by default.** UPnP active status. |
+| SIP ALG Enabled | `sip_alg_enabled` | Binary | `alg_sip_enable` | - | Diagnostic | **Disabled by default.** SIP ALG active status. |
+| ODU LED Switch | `odu_led_switch` | Switch | `ODU_led_switch` | - | Config | **Disabled by default.** Toggle router outdoor unit LED light. |
+| Time Server (SNTP) | `sntp_server` | Sensor | `sntp_server` | - | Diagnostic | **Disabled by default.** Configuration time server. |
 
 ---
 
-## 2. Signal Sub-Device (35 Entities)
+## 2. Signal Sub-Device (39 Entities)
 
 _Group: `signal`_
 
@@ -79,10 +84,14 @@ _Group: `signal`_
 | Network Mode | `net_select` | Sensor | `net_select` | - | Diagnostic | Configured mode, e.g. `LTE_AND_5G`, `LTE_ONLY`. |
 | Bridge Mode | `ppp_status` | Sensor | `ppp_status` | - | Diagnostic | PPP layer state, e.g. `ppp_connected`. |
 | Best Connection | `best_connection` | Binary | Logic: `ENDC` + `ca_activated` | - | Sensor | ON if 5G and LTE-CA are both active. |
+| APN Profile | `apn_profile` | Select | `apn_index` + `APN_config0..19` | - | Config | Switch default/active APN profile index. |
+| APN Selection Mode | `apn_mode` | Select | `apn_mode` | - | Config | Switch between Automatic and Manual APN selection modes. |
+| Network Mode Selection | `net_select_mode` | Select | `BearerPreference` | - | Config | Choose network bearer preference (Auto, 5G NSA, 5G SA, 4G Only). |
+| LTE Band Lock Mask | `lte_band_lock` | Sensor | `lte_band_lock` | - | Diagnostic | **Disabled by default.** LTE band lock configuration mask. |
 
 ---
 
-## 3. Data Sub-Device (10 Entities)
+## 3. Data Sub-Device (12 Entities)
 
 _Group: `data`_
 
@@ -98,6 +107,8 @@ _Group: `data`_
 | Download Speed | `realtime_rx_thrpt` | Sensor | `realtime_rx_thrpt` | B/s | Sensor | Instantaneous RX throughput. |
 | Session Sent | `realtime_tx_bytes` | Sensor | `realtime_tx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. |
 | Session Received | `realtime_rx_bytes` | Sensor | `realtime_rx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. |
+| Data Limit Switch | `data_limit_switch` | Switch | `data_volume_limit_switch` | - | Config | **Disabled by default.** Control data volume limit switch. |
+| Data Volume Alert | `data_volume_alert_percent` | Sensor | `data_volume_alert_percent` | % | Sensor | **Disabled by default.** Alert threshold percentage of limit. |
 
 ---
 
@@ -198,3 +209,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.0.2-dev6** (2026-05-23) - Added documentation for the custom SMS services (`send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`).
 - **v3.0.2-dev7** (2026-05-23) - Documented custom SMS services and verified setup.
 - **v3.1.1-dev5** (2026-05-25) - Updated Session Sent/Received notes to reflect removal of state_class (no LTS).
+- **v3.2.0** (2026-05-27) — Added 11 new entities (APN Profile, APN Selection Mode, Network Mode Selection, ODU LED Switch, Data Limit Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, LTE Band Lock Mask, Data Volume Alert %, SNTP Time Server) raising total count from 64 to 75.

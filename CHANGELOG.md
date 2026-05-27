@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2026-05-27 - Unreleased
+
+### Added
+
+- **APN Profile Select**: Added select entity to switch between configured APN profiles on the router.
+- **APN Selection Mode**: Added select entity to switch between Automatic and Manual APN selection modes.
+- **Network Mode Selection**: Added select entity to choose cellular bearer preference (Auto, 5G NSA, 5G SA, 4G Only).
+- **ODU LED Control Switch**: Added switch to control the Outdoor Unit indicator LED status.
+- **Data Limit Control Switch**: Added switch to toggle the router's data limit enforcement.
+- **System Binary Sensors**: Added binary sensors to monitor Reboot Schedule, UPnP Enabled, and SIP ALG Enabled.
+- **Diagnostic/Config Sensors**: Added sensors for LTE Band Lock Mask, Data Volume Alert %, and SNTP Time Server.
+
+### Changed
+
+- **Non-LTS Sensors**: Removed state classes from 8 non-critical sensors (Device Uptime, Battery, RSSI, RSCP, Realtime TX/RX Bytes, Realtime TX/RX Throughput) to prevent unnecessary Long Term Statistics entries.
+- **Session Resilience**: Implemented central proactive inactivity-based session resets and initialization checks to prevent session tokens from expiring during operations.
+
 ## [3.1.0] - 2026-05-24
 
 ### Added
