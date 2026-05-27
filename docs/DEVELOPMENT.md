@@ -2,7 +2,7 @@
 
 ## 1. Project Objective
 
-To develop a high-performance Home Assistant custom component for monitoring and managing ZTE 5G Routers (MC801, MC888, MC7010, MC889 series). The integration leverages the router's internal `goform` API to extract signal metrics (RSRP, RSRQ, SNR), data usage, and SMS management features into the Home Assistant ecosystem.
+To develop a high-performance Home Assistant custom component for monitoring and managing ZTE 5G Routers (MC801, MC888, MC7010, MC889 series). The integration leverages the router's internal `goform` API to extract signal metrics (RSRP, RSRQ, SNR), data usage, and SMS management features into the Home Assistant ecosystem. The primary reference for discovering all available API data parameters and commands exposed by the router's firmware is the internal Web UI JavaScript source file `js/service.js`.
 
 ## 2. Architecture & File Structure
 
@@ -71,6 +71,7 @@ To reach its current "modern" state, the project underwent several major refacto
 - **Declarative Entities**: Using a `value_fn` lambda in `EntityDescription` allows for a completely generic entity class. This makes adding new sensors a "data entry" task rather than a coding task.
 - **Data Integrity (Guard Bands)**: Validating sensor values against realistic boundaries (e.g., -140 to -30 for RSRP) before committing them to the state machine. This ensures that transient API artifacts or hardware glitches don't trigger false automation states or corrupt historical graphs.
 - **Flat Identity Pattern**: By storing Model, Version, and IMEI in `entry.data` and loading them into the coordinator at `__init__`, the integration provides stable metadata to the UI instantly at boot, even if the hardware is offline.
+- **Setting Modification & immediate UI refresh (Select/Switch)**: When executing setting changes (such as default APN profile switching, network mode selections, or toggling ODU LED switches), the entity performs the async API request, and then immediately triggers `await self.coordinator.async_request_refresh()`. This forces a poll cycle instantly so the new setting values are fetched from the router and reflected in the Home Assistant UI without waiting for the next scheduled update.
 
 ## 5. Technical Pitfalls & Fixes
 
@@ -146,3 +147,5 @@ To reach its current "modern" state, the project underwent several major refacto
 - **v1.0.11** (2026-05-23) — Documented SMS received event firing mechanism and chronological baseline tracking.
 - **v1.0.12** (2026-05-23) — Replaced stale "Uptime Boot-Timestamp Jitter" pitfall entry with the current reboot-detection latch strategy. Documents root cause (two independent clocks), why truncation and tolerance-latch approaches fail, and the `UPTIME_REBOOT_MARGIN` / bad-reading guard fix.
 - **v1.0.13** (2026-05-25) — Documented the silent SMS empty list pitfall, the ZTE POST request login rejection constraint, and the inactivity-timer session reset pattern.
+- **v1.0.14** (2026-05-27) — Added setting modification and immediate coordinator refresh pattern for Select and Switch entities. Exceeded entity count to 75.
+- **v1.0.15** (2026-05-27) — Documented the router's `js/service.js` as the source of all available API data elements.

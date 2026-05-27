@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.1.1-dev10] - 2026-05-27 - Unreleased
+
+### Fixed
+
+- **Type Checking (mypy)** (`binary_sensor.py`): Fixed list comprehension type compatibility by explicitly annotating the entities list as `list[BinarySensorEntity]`.
+
+## [3.1.1-dev9] - 2026-05-27 - Unreleased
+
+### Added
+
+- **New Entities**: Added several new entities, most notably the ability change APN.
+- **APN Profile Select** (`select.py`): Added `signal_apn_profile` select entity allowing users to switch between configured APN profiles on the router.
+- **APN Mode Select** (`select.py`): Added `signal_apn_mode` select entity for switching between manual and automatic APN selection.
+- **Network Mode Select** (`select.py`): Added `signal_net_select_mode` select entity to set carrier network mode preferences (Auto, 5G NSA, 5G SA, 4G Only).
+- **ODU LED Control Switch** (`switch.py`): Added `system_odu_led_switch` to control the router's outdoor unit indicator LED.
+- **Data Limit Control Switch** (`switch.py`): Added `data_limit_switch` to toggle the router's cellular data volume limit enforcement.
+- **System Binary Sensors** (`binary_sensor.py`): Exposed Reboot Schedule (`system_reboot_schedule`), UPnP status (`system_upnp_enabled`), and SIP ALG (`system_sip_alg_enabled`) as binary sensors.
+- **Diagnostic/Config Sensors** (`sensor.py`): Exposed LTE Band Lock Mask (`signal_lte_band_lock`), Data Volume Alert % (`data_volume_alert_percent`), and SNTP Time Server (`system_sntp_server`).
+
+### Fixed
+
+- **Type Checking (mypy)** (`binary_sensor.py`): Fixed list comprehension type compatibility by explicitly annotating the entities list as `list[BinarySensorEntity]`.
+
+## [3.1.1-dev8] - 2026-05-25 - Unreleased
+
+### Fixed
+
+- **Exception Syntax** (`sensor.py`): Corrected legacy tuple format `except ValueError, TypeError:` to standard parenthesized format `except (ValueError, TypeError):`.
+
 ## [3.1.1-dev7] - 2026-05-25 - Unreleased
 
 ### Fixed
