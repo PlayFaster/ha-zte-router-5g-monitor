@@ -106,10 +106,10 @@ data:
 
 Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
 
-| Parameter  | Required | Description                                           |
-| :--------- | :------- | :---------------------------------------------------- |
-| `entry_id` | No       | The router to use. Optional if only one router is configured. |
-| `index`    | **Yes**  | Storage index of the message to delete (integer ≥ 0). |
+| Parameter | Required | Description |
+| :-- | :-- | :-- |
+| `entry_id` | No | The router to use. Optional if only one router is configured. |
+| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
 
 ```yaml
 action: zte_router_5g.delete_sms
@@ -138,12 +138,12 @@ data:
 
 Fetch a list of SMS messages. Supports **Action Responses** — use the output directly in automations and scripts.
 
-| Parameter  | Required | Default | Range     | Description                 |
-| :--------- | :------- | :------ | :-------- | :-------------------------- |
-| `entry_id` | No       | —       | —         | The router to use. Optional if only one router is configured. |
-| `page`     | No       | `1`     | 1–100     | Page number for pagination. |
-| `count`    | No       | `20`    | 1–50      | Messages per page.          |
-| `box_type` | No       | `1`     | See below | Mailbox to read from.       |
+| Parameter | Required | Default | Range | Description |
+| :-- | :-- | :-- | :-- | :-- |
+| `entry_id` | No | — | — | The router to use. Optional if only one router is configured. |
+| `page` | No | `1` | 1–100 | Page number for pagination. |
+| `count` | No | `20` | 1–50 | Messages per page. |
+| `box_type` | No | `1` | See below | Mailbox to read from. |
 
 **`box_type` values:** `1` Local Inbox · `2` Local Sent · `3` Local Draft · `4` Local Trash · `5` SIM Inbox · `6` SIM Sent · `7` SIM Draft · `8` Mix Inbox · `9` Mix Sent · `10` Mix Draft
 
@@ -516,20 +516,23 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 Rather than hiding settings in configuration menus, several configuration parameters are exposed directly as Home Assistant control entities, allowing you to monitor and control them from dashboards or automations:
 
 #### 📡 APN & Network Settings (Signal Device)
-* **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
-* **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
-* **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type: `4G_AND_5G` (Auto), `LTE_AND_5G` (5G NSA), `Only_5G` (5G SA), or `Only_LTE` (4G Only).
-* **LTE Band Lock Mask** (`sensor.zte_5g_signal_lte_band_lock_mask`): Displays the current hex mask configuration locking the active LTE bands.
+
+- **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
+- **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
+- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type: `4G_AND_5G` (Auto), `LTE_AND_5G` (5G NSA), `Only_5G` (5G SA), or `Only_LTE` (4G Only).
+- **LTE Band Lock Mask** (`sensor.zte_5g_signal_lte_band_lock_mask`): Displays the current hex mask configuration locking the active LTE bands.
 
 #### ⚙️ Router Administration & Security (System Device)
-* **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`): Turn the physical status LEDs of the outdoor unit on or off (disabled by default).
-* **Reboot Schedule** (`binary_sensor.zte_5g_system_reboot_schedule`): Indicates whether a scheduled reboot window is configured and active.
-* **UPnP Enabled** / **SIP ALG Enabled** (`binary_sensor.zte_5g_system_upnp_enabled` / `binary_sensor.zte_5g_system_sip_alg_enabled`): Monitor firewall settings status.
-* **Time Server (SNTP)** (`sensor.zte_5g_system_time_server_sntp`): Displays the active server used by the router for time synchronization.
+
+- **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`): Turn the physical status LEDs of the outdoor unit on or off (disabled by default).
+- **Reboot Schedule** (`binary_sensor.zte_5g_system_reboot_schedule`): Indicates whether a scheduled reboot window is configured and active.
+- **UPnP Enabled** / **SIP ALG Enabled** (`binary_sensor.zte_5g_system_upnp_enabled` / `binary_sensor.zte_5g_system_sip_alg_enabled`): Monitor firewall settings status.
+- **Time Server (SNTP)** (`sensor.zte_5g_system_time_server_sntp`): Displays the active server used by the router for time synchronization.
 
 #### 📈 Billing & Data Controls (Data Device)
-* **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`): Enable/disable the router's data limit settings.
-* **Data Volume Alert** (`sensor.zte_5g_data_data_volume_alert`): Displays the alarm warning percentage configured on the router (e.g., 90%).
+
+- **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`): Enable/disable the router's data limit settings.
+- **Data Volume Alert** (`sensor.zte_5g_data_data_volume_alert`): Displays the alarm warning percentage configured on the router (e.g., 90%).
 
 ## 🏗️ Under the Hood - Technical Architecture
 
