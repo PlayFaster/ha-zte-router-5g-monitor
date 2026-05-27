@@ -110,17 +110,30 @@
       "data_realtime_rx_bytes": { "name": "Session Received" },
       "sms_sms_unread_num": { "name": "Unread Msg" },
       "sms_msg_total": { "name": "Total Msg" },
-      "sms_msg_recent": { "name": "Recent Msg" }
+      "sms_msg_recent": { "name": "Recent Msg" },
+      "signal_lte_band_lock": { "name": "LTE Band Lock Mask" },
+      "data_volume_alert_percent": { "name": "Data Volume Alert" },
+      "system_sntp_server": { "name": "Time Server (SNTP)" }
     },
     "button": {
       "system_reboot": { "name": "Reboot" },
       "sms_delete_all": { "name": "Delete All" }
     },
     "binary_sensor": {
-      "signal_best_connection": { "name": "Best Connection" }
+      "signal_best_connection": { "name": "Best Connection" },
+      "system_reboot_schedule": { "name": "Reboot Schedule" },
+      "system_upnp_enabled": { "name": "UPnP Enabled" },
+      "system_sip_alg_enabled": { "name": "SIP ALG Enabled" }
     },
     "switch": {
-      "system_pause_polling": { "name": "Pause Polling" }
+      "system_pause_polling": { "name": "Pause Polling" },
+      "system_odu_led_switch": { "name": "ODU LED Switch" },
+      "data_limit_switch": { "name": "Data Limit Switch" }
+    },
+    "select": {
+      "signal_apn_profile": { "name": "APN Profile" },
+      "signal_apn_mode": { "name": "APN Selection Mode" },
+      "signal_net_select_mode": { "name": "Network Mode Selection" }
     },
     "number": {
       "system_polling_interval": { "name": "Polling Interval" }
