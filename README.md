@@ -16,6 +16,26 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > This project is optimized for the ZTE MC7010 5G Outdoor CPE but may work with other similar ZTE devices.
 
+## 📋 Table of Contents
+
+- [ZTE Router 5G Monitor for Home Assistant](#zte-router-5g-monitor-for-home-assistant)
+  - [📋 Table of Contents](#-table-of-contents)
+  - [🔧 Compatibility \& Tested Devices](#-compatibility--tested-devices)
+  - [🏠 Use Cases](#-use-cases)
+  - [✅ Features](#-features)
+  - [🔍 What You Get](#-what-you-get)
+  - [💡 Example Automations](#-example-automations)
+  - [📸 Screenshots](#-screenshots)
+  - [📥 Installation](#-installation)
+  - [⚙️ Configuration](#️-configuration)
+  - [🏗️ Under the Hood - Technical Architecture](#️-under-the-hood---technical-architecture)
+  - [❓ FAQ \& Troubleshooting](#-faq--troubleshooting)
+  - [🗑️ Removal](#️-removal)
+  - [⚠️ Known Limitations /❔ What's Missing?](#️-known-limitations--whats-missing)
+  - [📝 Maintenance Status](#-maintenance-status)
+  - [🤝 Contributors \& Acknowledgements](#-contributors--acknowledgements)
+  - [📄 License](#-license-)
+
 ## 🔧 Compatibility & Tested Devices
 
 **📟 Router Hardware:**
