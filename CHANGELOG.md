@@ -2,22 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.2.0] - 2026-05-27 - Unreleased
+## [3.2.0] - 2026-05-28
 
 ### Added
 
-- **APN Profile Select**: Added select entity to switch between configured APN profiles on the router.
-- **APN Selection Mode**: Added select entity to switch between Automatic and Manual APN selection modes.
-- **Network Mode Selection**: Added select entity to choose cellular bearer preference (Auto, 5G NSA, 5G SA, 4G Only).
-- **ODU LED Control Switch**: Added switch to control the Outdoor Unit indicator LED status.
-- **Data Limit Control Switch**: Added switch to toggle the router's data limit enforcement.
-- **System Binary Sensors**: Added binary sensors to monitor Reboot Schedule, UPnP Enabled, and SIP ALG Enabled.
-- **Diagnostic/Config Sensors**: Added sensors for LTE Band Lock Mask, Data Volume Alert %, and SNTP Time Server.
+- **New Sensors**: Added several new entities, the most useful of which is a select for **APN Profile**. Changing APN can be as or more effective than rebooting to restore 5G signal that has dropped to 4G only. New entities are:
+  - **APN Control Selects**: Added select entities for switching active APN profiles (`apn_profile`) and toggling between automatic/manual APN mode (`apn_mode`).
+  - **Network Mode Select**: Added carrier network preference selection (`net_select_mode`) to choose between Auto (4G/5G), 5G NSA, 5G SA, and 4G Only.
+  - **ODU LED Control Switch**: Added a switch (`odu_led_switch`) to toggle the physical outdoor unit status LEDs.
+  - **Data Limit Control Switch**: Added a switch (`data_limit_switch`) to toggle data limit enforcement on the router.
+  - **Reboot Schedule & Security Binary Sensors**: Added binary sensors to monitor Reboot Schedule, UPnP status, and SIP ALG status.
+  - **New Diagnostic Sensors**: Added sensors for LTE Band Lock Mask, Data Volume Alert %, and SNTP Time Server.
 
 ### Changed
 
-- **Non-LTS Sensors**: Removed state classes from 8 non-critical sensors (Device Uptime, Battery, RSSI, RSCP, Realtime TX/RX Bytes, Realtime TX/RX Throughput) to prevent unnecessary Long Term Statistics entries.
-- **Session Resilience**: Implemented central proactive inactivity-based session resets and initialization checks to prevent session tokens from expiring during operations.
+- **Database Cleanup (Reduced LTS)**: Removed long-term statistics tracking from 8 non-critical sensors (realtime throughput, uptime duration, etc.) to prevent database bloat.
+
+### Fixed
+
+- **Centralized Session Stability**: central request helper now resets expired tokens proactively, preventing transient authentication errors and empty sensor states.
 
 ## [3.1.0] - 2026-05-24
 
