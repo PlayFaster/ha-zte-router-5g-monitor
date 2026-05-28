@@ -4,11 +4,7 @@
 # Generated on 2026-05-13 v1.1.0
 rules:
   # Bronze
-  action-setup:
-    status: exempt
-    comment:
-      No service actions in this integration; reboot and SMS deletion use HA button
-      entities, not service calls.
+  action-setup: done
   appropriate-polling: done
   brands: done
   common-modules: done
@@ -23,11 +19,7 @@ rules:
       data_description entries added in strings.json for host and password in both
       config and options flow steps.
   dependency-transparency: done
-  docs-actions:
-    status: exempt
-    comment:
-      No service actions registered; buttons are HA button entities, not service calls.
-      Nothing to document.
+  docs-actions: done
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done

@@ -83,12 +83,14 @@ get_sms_list:
           mode: box
     box_type:
       description:
-        The inbox to read from (1=Local Inbox, 2=Local Sent, 3=Local Draft, 5=SIM
+        The inbox to read from (0=All, 1=Local Inbox, 2=Local Sent, 3=Local Draft, 5=SIM
         Inbox).
-      default: 1
+      default: 0
       selector:
         select:
           options:
+            - label: "All"
+              value: "0"
             - label: "Local Inbox"
               value: "1"
             - label: "Local Sent"

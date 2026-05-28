@@ -30,6 +30,7 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 |  | Download Speed | 0 | — | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
 |  | Session Sent | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
 |  | Session Received | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
+|  | Data Volume Alert | 0 | 100 | Percentage threshold. |
 | **Device** | Battery | 0 | 100 | Physical percentage bounds. |
 | **SMS** | Total Count | 0 | 1000 | Set to `Unavailable` |
 
@@ -63,3 +64,4 @@ except (ValueError, TypeError):
 ## Version Control
 
 - **v1.1.0** (2026-05-07) - Initial versioned snapshot. Added guard bands for Battery (0–100 %), Upload Speed (min 0 B/s), Download Speed (min 0 B/s), Session Sent (min 0 bytes), Session Received (min 0 bytes), and Device Battery category.
+- **v1.2.0** (2026-05-27) - Added guard band for Data Volume Alert percentage (0-100%).

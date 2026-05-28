@@ -45,6 +45,7 @@ class ZTERouterAPI:
         self.timeout = aiohttp.ClientTimeout(total=15)
         self.stok: str | None = None
         self.is_multi = True
+        self.last_activity = datetime.min
 
     def _hash(self, val: str | None) -> str:
         if val is None:
@@ -94,6 +95,16 @@ class ZTERouterAPI:
     ) -> Any:
         """Centralized request helper that handles session creation and auto-renewal."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
+
+        # Check if the session is likely expired due to inactivity (e.g. 150 seconds)
+        now = datetime.now()
+        if (
+            authenticated
+            and self.stok
+            and (now - self.last_activity).total_seconds() > 150
+        ):
+            _LOGGER.debug("Session likely expired due to inactivity; resetting stok")
+            self.stok = None
 
         if authenticated and not self.stok:
             self.stok = await self.login(timeout_sec=timeout_sec)
@@ -198,26 +209,29 @@ class ZTERouterAPI:
                         or resp_json.get("status") == "fail"
                     )
 
-                    if (
-                        (is_status_expired or is_auth_error)
-                        and authenticated
-                        and _retry
-                    ):
-                        _LOGGER.debug(
-                            "Session expired in JSON response; renewing session"
-                        )
-                        self.stok = await self.login(timeout_sec=timeout_sec)
-                        return await self._request(
-                            method,
-                            path,
-                            params,
-                            data,
-                            headers,
-                            timeout_sec,
-                            authenticated,
-                            _retry=False,
-                        )
+                    if (is_status_expired or is_auth_error) and authenticated:
+                        if _retry:
+                            _LOGGER.debug(
+                                "Session expired in JSON response; renewing session"
+                            )
+                            self.stok = await self.login(timeout_sec=timeout_sec)
+                            return await self._request(
+                                method,
+                                path,
+                                params,
+                                data,
+                                headers,
+                                timeout_sec,
+                                authenticated,
+                                _retry=False,
+                            )
+                        else:
+                            _LOGGER.warning(
+                                "Session expired/unauthorized and retry exhausted"
+                            )
+                            raise ZTEAuthError("Session expired/unauthorized")
 
+                self.last_activity = datetime.now()
                 return resp_json
 
         except Exception as e:
@@ -334,6 +348,28 @@ class ZTERouterAPI:
                     )
 
                 self.stok = f"stok={stok.value.strip('"')}"
+
+                # Initialize session with a GET request to satisfy POST
+                # restrictions on some ZTE routers
+                init_url = f"{self.referer}goform/goform_get_cmd_process"
+                init_params = {"isTest": "false", "cmd": "wa_inner_version"}
+                init_headers = {
+                    "Referer": f"{self.referer}index.html",
+                    "Cookie": self.stok,
+                }
+                try:
+                    async with self.session.get(
+                        init_url,
+                        params=init_params,
+                        headers=init_headers,
+                        timeout=aiohttp.ClientTimeout(total=tout),
+                        ssl=False,
+                    ) as init_r:
+                        await init_r.read()
+                except Exception as init_err:
+                    _LOGGER.debug("Session initialization GET failed: %s", init_err)
+
+                self.last_activity = datetime.now()
                 return self.stok
         except Exception as e:
             if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
@@ -405,6 +441,46 @@ class ZTERouterAPI:
             "sms_sim_draftbox_total",
             "sms_nv_total",
             "sms_sim_total",
+            "apn_index",
+            "apn_mode",
+            "apn_interface_version",
+            "ipv6_apn_index",
+            "APN_config0",
+            "APN_config1",
+            "APN_config2",
+            "APN_config3",
+            "APN_config4",
+            "APN_config5",
+            "APN_config6",
+            "APN_config7",
+            "APN_config8",
+            "APN_config9",
+            "APN_config10",
+            "APN_config11",
+            "APN_config12",
+            "APN_config13",
+            "APN_config14",
+            "APN_config15",
+            "APN_config16",
+            "APN_config17",
+            "APN_config18",
+            "APN_config19",
+            "ODU_led_switch",
+            "ODU_led_off_time",
+            "data_volume_limit_switch",
+            "data_volume_alert_percent",
+            "reboot_schedule_enable",
+            "reboot_hour1",
+            "reboot_min1",
+            "reboot_hour2",
+            "reboot_min2",
+            "lte_band_lock",
+            "net_select_mode",
+            "sntp_server0",
+            "sntp_server1",
+            "sntp_dst_enable",
+            "upnpEnabled",
+            "alg_sip_enable",
         ]
         cmd = ",".join(params)
         path = (
@@ -423,6 +499,8 @@ class ZTERouterAPI:
                 await self._request("GET", path, timeout_sec=timeout_sec),
             )
         except Exception as e:
+            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
+                raise
             _LOGGER.debug("Failed to get SMS capacity: %s", e)
             return {}
 
@@ -453,6 +531,8 @@ class ZTERouterAPI:
                 return cast(dict[str, Any], msg)
             return {}
         except Exception as e:
+            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
+                raise
             _LOGGER.debug("Failed to get last SMS content: %s", e)
             return {}
 
@@ -559,6 +639,8 @@ class ZTERouterAPI:
                 msg["date_decoded"] = self._parse_date(msg.get("date", ""))
             return cast(list[dict[str, Any]], messages)
         except Exception as e:
+            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
+                raise
             _LOGGER.debug("Failed to get SMS messages: %s", e)
             return []
 
@@ -584,5 +666,79 @@ class ZTERouterAPI:
             data = await self._request("GET", path, timeout_sec=timeout_sec)
             return cast(str, data.get("RD", ""))
         except Exception as e:
+            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
+                raise
             _LOGGER.debug("Failed to get RD: %s", e)
             return ""
+
+    async def set_apn(self, index: int, pdp_type: str) -> dict[str, Any]:
+        """Set the default APN profile index and PDP type."""
+        ad = await self.get_ad()
+        payload = (
+            f"isTest=false&goformId=APN_PROC_EX"
+            f"&apn_mode=manual&apn_action=set_default&set_default_flag=1"
+            f"&pdp_type={pdp_type}&index={index}&AD={ad}"
+        )
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)
+
+    async def set_apn_mode(self, mode: str) -> dict[str, Any]:
+        """Set the APN selection mode (auto or manual)."""
+        ad = await self.get_ad()
+        payload = f"isTest=false&goformId=APN_PROC_EX&apn_mode={mode}&AD={ad}"
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)
+
+    async def set_odu_led_switch(self, status: str) -> dict[str, Any]:
+        """Set the ODU LED switch status (1 = On, 0 = Off)."""
+        ad = await self.get_ad()
+        payload = (
+            f"isTest=false&goformId=ODU_LED_SWITCH_SET&ODU_led_switch={status}&AD={ad}"
+        )
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)
+
+    async def set_data_limit_switch(self, status: str) -> dict[str, Any]:
+        """Set the data volume limit switch (1 = On, 0 = Off)."""
+        ad = await self.get_ad()
+        payload = (
+            f"isTest=false&goformId=DATA_LIMIT_SETTING"
+            f"&data_volume_limit_switch={status}&AD={ad}"
+        )
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)
+
+    async def set_bearer_preference(self, preference: str) -> dict[str, Any]:
+        """Set the network bearer preference (e.g. 4G_AND_5G, Only_5G, Only_LTE)."""
+        ad = await self.get_ad()
+        payload = (
+            f"isTest=false&goformId=SET_BEARER_PREFERENCE"
+            f"&BearerPreference={preference}&AD={ad}"
+        )
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        res = await self._request(
+            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        )
+        return cast(dict[str, Any], res)

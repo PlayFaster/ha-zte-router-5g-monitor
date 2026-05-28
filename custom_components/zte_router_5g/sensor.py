@@ -52,7 +52,7 @@ def _get_bytes_to_gb(val: Any) -> float | None:
         return None
     try:
         return round(float(val) / _BYTES_PER_GB, 2)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -73,7 +73,7 @@ def _get_total_sms(data: Any) -> int | None:
     ]
     try:
         return sum(int(data.get(k, 0)) for k in keys)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -84,7 +84,7 @@ def _safe_float(val: Any) -> float | None:
         return None
     try:
         return float(val)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -95,7 +95,7 @@ def _safe_int(val: Any) -> int | None:
         return None
     try:
         return int(float(val))
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 
@@ -149,7 +149,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="realtime_time",
         translation_key="system_uptime_duration",
         device_class=SensorDeviceClass.DURATION,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="s",
         entity_registry_enabled_default=False,
         group="system",
@@ -181,7 +180,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="battery_value",
         translation_key="system_battery_value",
         device_class=SensorDeviceClass.BATTERY,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         entity_registry_enabled_default=False,
         min_limit=0,
@@ -445,7 +443,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="rssi",
         translation_key="signal_rssi",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         entity_registry_enabled_default=False,
         min_limit=-120,
@@ -457,7 +454,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="rscp",
         translation_key="signal_rscp",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
         entity_registry_enabled_default=False,
         min_limit=-120,
@@ -496,7 +492,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         entity_registry_enabled_default=False,
         group="data",
-        # Divided by 2^30 (1073741824) to match historical GB logic
+        # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
         value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_tx_bytes")),
     ),
     ZTESensorEntityDescription(
@@ -507,7 +503,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         entity_registry_enabled_default=False,
         group="data",
-        # Divided by 2^30 (1073741824) to match historical GB logic
+        # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
         value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_rx_bytes")),
     ),
     ZTESensorEntityDescription(
@@ -566,7 +562,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="realtime_tx_thrpt",
         translation_key="data_realtime_tx_thrpt",
         device_class=SensorDeviceClass.DATA_RATE,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
         min_limit=0,
         group="data",
@@ -576,7 +571,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="realtime_rx_thrpt",
         translation_key="data_realtime_rx_thrpt",
         device_class=SensorDeviceClass.DATA_RATE,
-        state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
         min_limit=0,
         group="data",
@@ -586,7 +580,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="realtime_tx_bytes",
         translation_key="data_realtime_tx_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfInformation.BYTES,
         min_limit=0,
         group="data",
@@ -596,7 +589,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="realtime_rx_bytes",
         translation_key="data_realtime_rx_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfInformation.BYTES,
         min_limit=0,
         group="data",
@@ -622,6 +614,34 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="sms_msg_recent",
         group="sms",
         value_fn=lambda data: data.get("last_sms", {}).get("content_decoded"),
+    ),
+    # --- Discovered Technical Settings & Info ---
+    ZTESensorEntityDescription(
+        key="lte_band_lock",
+        translation_key="signal_lte_band_lock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _safe_str(data.get("lte_band_lock")),
+    ),
+    ZTESensorEntityDescription(
+        key="data_volume_alert_percent",
+        translation_key="data_volume_alert_percent",
+        native_unit_of_measurement="%",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        min_limit=0,
+        max_limit=100,
+        group="data",
+        value_fn=lambda data: _safe_int(data.get("data_volume_alert_percent")),
+    ),
+    ZTESensorEntityDescription(
+        key="sntp_server",
+        translation_key="system_sntp_server",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_str(data.get("sntp_server0")),
     ),
 )
 
@@ -672,7 +692,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
 
         try:
             value = self.entity_description.value_fn(self.coordinator.data)
-        except KeyError, AttributeError, ValueError:
+        except (KeyError, AttributeError, ValueError):
             return None
 
         if value is None:
@@ -716,7 +736,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
                         data.get("sms_sim_draftbox_total", 0)
                     ),
                 }
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 return {}
 
         if key == "msg_recent":
@@ -725,6 +745,12 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
                 "id": msg.get("id"),
                 "number": msg.get("number_decoded"),
                 "date": msg.get("date_decoded"),
+            }
+
+        if key == "sntp_server":
+            return {
+                "sntp_server1": data.get("sntp_server1"),
+                "sntp_dst_enable": data.get("sntp_dst_enable") == "1",
             }
 
         return {}

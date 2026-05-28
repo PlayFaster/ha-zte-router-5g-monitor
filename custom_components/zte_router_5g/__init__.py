@@ -52,8 +52,8 @@ SERVICE_GET_SMS_LIST_SCHEMA = vol.Schema(
         vol.Optional("count", default=20): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=50)
         ),
-        vol.Optional("box_type", default=1): vol.All(
-            vol.Coerce(int), vol.In([1, 2, 3, 5, 6, 7, 8, 9, 10])
+        vol.Optional("box_type", default=0): vol.All(
+            vol.Coerce(int), vol.In([0, 1, 2, 3, 5, 6, 7, 8, 9, 10])
         ),
     }
 )
@@ -64,6 +64,7 @@ PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.NUMBER,
     Platform.SWITCH,
+    Platform.SELECT,
 ]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
@@ -144,6 +145,7 @@ async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str
     box_type = call.data["box_type"]
 
     box_mapping = {
+        0: (None, ["0", "1", "2", "3", "4"]),  # All Boxes
         1: ("1", ["0", "1"]),  # Local Inbox
         2: ("1", ["2", "3"]),  # Local Sent
         3: ("1", ["4"]),  # Local Draft
@@ -156,7 +158,9 @@ async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str
     }
 
     try:
-        mem_store, target_tags = box_mapping.get(box_type, ("1", ["0", "1"]))
+        mem_store, target_tags = box_mapping.get(
+            box_type, (None, ["0", "1", "2", "3", "4"])
+        )
 
         raw_msgs = []
         if mem_store is not None:

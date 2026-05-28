@@ -2,6 +2,139 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.0] - 2026-05-28
+
+### Added
+
+- **New Sensors**: Added several new entities, the most useful of which is a select for **APN Profile**. Changing APN can be as or more effective than rebooting to restore 5G signal that has dropped to 4G only. New entities are:
+  - **APN Control Selects**: Added select entities for switching active APN profiles (`apn_profile`) and toggling between automatic/manual APN mode (`apn_mode`).
+  - **Network Mode Select**: Added carrier network preference selection (`net_select_mode`) to choose between Auto (4G/5G), 5G NSA, 5G SA, and 4G Only.
+  - **ODU LED Control Switch**: Added a switch (`odu_led_switch`) to toggle the physical outdoor unit status LEDs.
+  - **Data Limit Control Switch**: Added a switch (`data_limit_switch`) to toggle data limit enforcement on the router.
+  - **Reboot Schedule & Security Binary Sensors**: Added binary sensors to monitor Reboot Schedule, UPnP status, and SIP ALG status.
+  - **New Diagnostic Sensors**: Added sensors for LTE Band Lock Mask, Data Volume Alert %, and SNTP Time Server.
+
+### Changed
+
+- **Database Cleanup (Reduced LTS)**: Removed long-term statistics tracking from 8 non-critical sensors (realtime throughput, uptime duration, etc.) to prevent database bloat.
+
+### Fixed
+
+- **Centralized Session Stability**: central request helper now resets expired tokens proactively, preventing transient authentication errors and empty sensor states.
+
+## [3.1.1-dev11] - 2026-05-27 - Unreleased
+
+### Added Tests
+
+- **57 new tests** across `test_select.py`, `test_switch.py`, `test_binary_sensor.py`, and `test_api.py`. Coverage: `select.py` (new) 0% → 100%, `switch.py` 80% → 100%, `binary_sensor.py` 89% → 100%, `api.py` 92% → 100%. Overall: 88% → 99%.
+
+## [3.1.1-dev10] - 2026-05-27 - Unreleased
+
+### Fixed
+
+- **Type Checking (mypy)** (`binary_sensor.py`): Fixed list comprehension type compatibility by explicitly annotating the entities list as `list[BinarySensorEntity]`.
+
+## [3.1.1-dev9] - 2026-05-27 - Unreleased
+
+### Added
+
+- **New Entities**: Added several new entities, most notably the ability change APN.
+- **APN Profile Select** (`select.py`): Added `signal_apn_profile` select entity allowing users to switch between configured APN profiles on the router.
+- **APN Mode Select** (`select.py`): Added `signal_apn_mode` select entity for switching between manual and automatic APN selection.
+- **Network Mode Select** (`select.py`): Added `signal_net_select_mode` select entity to set carrier network mode preferences (Auto, 5G NSA, 5G SA, 4G Only).
+- **ODU LED Control Switch** (`switch.py`): Added `system_odu_led_switch` to control the router's outdoor unit indicator LED.
+- **Data Limit Control Switch** (`switch.py`): Added `data_limit_switch` to toggle the router's cellular data volume limit enforcement.
+- **System Binary Sensors** (`binary_sensor.py`): Exposed Reboot Schedule (`system_reboot_schedule`), UPnP status (`system_upnp_enabled`), and SIP ALG (`system_sip_alg_enabled`) as binary sensors.
+- **Diagnostic/Config Sensors** (`sensor.py`): Exposed LTE Band Lock Mask (`signal_lte_band_lock`), Data Volume Alert % (`data_volume_alert_percent`), and SNTP Time Server (`system_sntp_server`).
+
+### Fixed
+
+- **Type Checking (mypy)** (`binary_sensor.py`): Fixed list comprehension type compatibility by explicitly annotating the entities list as `list[BinarySensorEntity]`.
+
+## [3.1.1-dev8] - 2026-05-25 - Unreleased
+
+### Fixed
+
+- **Exception Syntax** (`sensor.py`): Corrected legacy tuple format `except ValueError, TypeError:` to standard parenthesized format `except (ValueError, TypeError):`.
+
+## [3.1.1-dev7] - 2026-05-25 - Unreleased
+
+### Fixed
+
+- **Exception Syntax** (`sensor.py`, `coordinator.py`): Fixed 2 additional bare-tuple `except A, B:` expressions (`sensor.py:54`, `sensor.py:76`) to parenthesized `except (A, B):` form for Python 3.12+ compatibility (5 total across all sessions).
+- **E501 line-too-long** (`number.py`): Wrapped `self.hass.async_create_task(...)` call to comply with 88-char limit.
+- **Test failures** (`test_number.py`): Resolved 2 `TypeError: 'MagicMock' object can't be awaited` failures caused by migrating from `asyncio.create_task` to `self.hass.async_create_task` — added `_mock_hass_with_async_create_task` helper that returns a real `asyncio.Task`.
+
+### Changed
+
+- **HA lifecycle tracking** (`number.py`): Migrated from `asyncio.create_task(...)` to `self.hass.async_create_task(...)` so the debounced polling-interval task is tracked by HA's task registry.
+
+## [3.1.1-dev6] - 2026-05-25 - Unreleased
+
+### Fixed
+
+- **Exception Syntax** (`coordinator.py`, `sensor.py`): Fixed 3 bare-tuple `except A, B:` expressions to parenthesized `except (A, B):` form for Python 3.12+ compatibility (`coordinator.py:281`, `sensor.py:667`, `sensor.py:711`).
+
+### Added Tests
+
+- **17 new tests** across `test_init.py`, `test_sensor.py`, `test_binary_sensor.py`, and `test_api.py`. Coverage remains at 99% overall; the focus was on improving test depth with boundary value analysis, combinatorial path coverage, and error/negative-path engineering:
+  - Failure resilience edge cases (`data=None`, reset-after-success)
+  - Reboot detection at exact margin boundary (70/69/71 s)
+  - Bad/negative uptime value handling
+  - Sensor guard bands at exact limit boundaries
+  - API inactivity timer at strict `>` threshold
+  - Binary sensor ENDC+CA combinatorial states
+  - Same-timestamp SMS hash detection path
+  - Multiple new SMS chronological ordering
+  - Missing `date_decoded` filtering and early return
+  - Auth retry failure propagating to outer handler
+  - `delete_all_sms` `keep_last` ≥ `total_messages` boundary
+  - Bare-tuple bug proof tests for exception propagation
+  - Invalid calendar values in `_parse_date`
+  - SMS message missing `id` field
+
+## [3.1.1-dev5] - 2026-05-25 - Unreleased
+
+### Changed
+
+- **Sensors**: Removed `state_class` from 8 sensors (`realtime_time`, `battery_value`, `rssi`, `rscp`, `realtime_tx_bytes`, `realtime_rx_bytes`, `realtime_tx_thrpt`, `realtime_rx_thrpt`) to prevent non-critical sensors from generating Long Term Statistics entries.
+- **Documentation**: Add details on the non-LTS sensors to README
+
+## [3.1.1-dev4] - 2026-05-25 - Unreleased
+
+### Fixed
+
+- **Tests**: Resolved 8 test failures caused by the inactivity-based session reset (150-second threshold) — set `api.last_activity = datetime.now()` in test setup to prevent proactive stok clearing from interfering with test mocks.
+
+### Test Coverage
+
+- `api.py` 93% → 100%, `coordinator.py` 95% → 100%
+- **11 new tests**: session init GET success, non-auth exception handlers for `get_sms_capacity`/`get_last_sms_content`/`get_sms_messages`/`get_rd`, `boot_time` restore (valid + bad value), `last_uptime` restore (valid + bad value), SMS auth retry, `_check_new_sms` early-return, `_check_new_sms` same-timestamp hash dedup.
+
+## [3.1.1-dev3] - 2026-05-25 - Unreleased
+
+### Fixed
+
+- **Authentication**: Implemented proactive inactivity-based session resetting (150-second threshold) inside the centralized `_request()` wrapper to force a login/activation before session tokens expire.
+- **Authentication**: Added a session-initialization GET request inside `login()` immediately after authentication to allow subsequent POST requests to succeed.
+- **Error Handling**: Refined `_request()` to correctly propagate `ZTEAuthError` when retry attempts are exhausted on unauth/expired responses, preventing silent empty states.
+- **Error Handling**: Enabled auth and connection exception propagation in `get_rd()` and `get_last_sms_content()` to prevent silent setup/API failures.
+- **Tests**: Resolved 15 failing unit tests by adjusting mock awaitables, adapting error assertions to the new exception propagation design, and updating obsolete coordinator API method patches.
+
+## [3.1.1-dev2] - 2026-05-24 - Unreleased
+
+### Changed
+
+- **Documentation**: Additional updates to README, more automation examples, more icons.
+
+## [3.1.1-dev1] - 2026-05-24 - Unreleased
+
+### Changed
+
+- **Dependabot**: Bump PlayFaster/.github shared validation from v1.02 to v1.04
+- **Dependabot**: Bump [zizmor](https://github.com/zizmorcore/zizmor-pre-commit) from v1.24.1 to 1.25.2
+- **Dependabot**: Bump [python-typing](https://github.com/cdce8p/python-typing-update) from v0.6.0 to 0.8.1
+
 ## [3.1.0] - 2026-05-24
 
 ### Added

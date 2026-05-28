@@ -16,20 +16,40 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > This project is optimized for the ZTE MC7010 5G Outdoor CPE but may work with other similar ZTE devices.
 
+## 📋 Table of Contents
+
+- [ZTE Router 5G Monitor for Home Assistant](#zte-router-5g-monitor-for-home-assistant)
+  - [📋 Table of Contents](#-table-of-contents)
+  - [🔧 Compatibility \& Tested Devices](#-compatibility--tested-devices)
+  - [🏠 Use Cases](#-use-cases)
+  - [✅ Features](#-features)
+  - [🔍 What You Get](#-what-you-get)
+  - [💡 Example Automations](#-example-automations)
+  - [📸 Screenshots](#-screenshots)
+  - [📥 Installation](#-installation)
+  - [⚙️ Configuration](#️-configuration)
+  - [🏗️ Under the Hood - Technical Architecture](#️-under-the-hood---technical-architecture)
+  - [❓ FAQ \& Troubleshooting](#-faq--troubleshooting)
+  - [🗑️ Removal](#️-removal)
+  - [⚠️ Known Limitations /❔ What's Missing?](#️-known-limitations--whats-missing)
+  - [📝 Maintenance Status](#-maintenance-status)
+  - [🤝 Contributors \& Acknowledgements](#-contributors--acknowledgements)
+  - [📄 License](#-license-)
+
 ## 🔧 Compatibility & Tested Devices
 
-**Router Hardware:**
+**📟 Router Hardware:**
 
 - **Fully Tested**:
   - **ZTE MC7010** (5G Outdoor CPE) — tested firmware: `V1.0.0B01` and later
 - **Expected Compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
 - **Not Supported**: Non-ZTE hardware.
 
-**Network:**
+**🌐 Network:**
 
 - Local network access to the router is required.
 
-**Home Assistant Version:**
+**🏠 Home Assistant Version:**
 
 - Minimum: Home Assistant **2024.6.0**
 - Minimum Python: **3.12+** (this is built into and handled by HA, but relevant for non-standard installs).
@@ -76,7 +96,7 @@ This integration features **dynamic polling**, the ability to pause polling comp
 >
 > - Set it to 30 seconds during periods of heavy use, to examine connection quality or when you need to receive new SMS messages quickly, and set it higher afterwards, to avoid taxing the router and your Home Assistant database.
 
-### 📋 SMS Management Actions
+### ✉️ SMS Management Actions
 
 Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers, and four service actions for full programmatic control.
 
@@ -106,10 +126,10 @@ data:
 
 Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
 
-| Parameter  | Required | Description                                           |
-| :--------- | :------- | :---------------------------------------------------- |
-| `entry_id` | **Yes**  | The router to use.                                    |
-| `index`    | **Yes**  | Storage index of the message to delete (integer ≥ 0). |
+| Parameter | Required | Description |
+| :-- | :-- | :-- |
+| `entry_id` | No | The router to use. Optional if only one router is configured. |
+| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
 
 ```yaml
 action: zte_router_5g.delete_sms
@@ -124,7 +144,7 @@ Bulk delete SMS messages from the router inbox.
 
 | Parameter | Required | Default | Range | Description |
 | :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | **Yes** | — | — | The router to use. |
+| `entry_id` | No | — | — | The router to use. Optional if only one router is configured. |
 | `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
 
 ```yaml
@@ -138,12 +158,12 @@ data:
 
 Fetch a list of SMS messages. Supports **Action Responses** — use the output directly in automations and scripts.
 
-| Parameter  | Required | Default | Range     | Description                 |
-| :--------- | :------- | :------ | :-------- | :-------------------------- |
-| `entry_id` | **Yes**  | —       | —         | The router to use.          |
-| `page`     | No       | `1`     | 1–100     | Page number for pagination. |
-| `count`    | No       | `20`    | 1–50      | Messages per page.          |
-| `box_type` | No       | `1`     | See below | Mailbox to read from.       |
+| Parameter | Required | Default | Range | Description |
+| :-- | :-- | :-- | :-- | :-- |
+| `entry_id` | No | — | — | The router to use. Optional if only one router is configured. |
+| `page` | No | `1` | 1–100 | Page number for pagination. |
+| `count` | No | `20` | 1–50 | Messages per page. |
+| `box_type` | No | `1` | See below | Mailbox to read from. |
 
 **`box_type` values:** `1` Local Inbox · `2` Local Sent · `3` Local Draft · `4` Local Trash · `5` SIM Inbox · `6` SIM Sent · `7` SIM Draft · `8` Mix Inbox · `9` Mix Sent · `10` Mix Draft
 
@@ -180,7 +200,7 @@ Fires automatically when a new incoming SMS is detected. Use as an automation tr
 
 ## 🔍 What You Get
 
-This integration provides **52+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **79+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 > [!NOTE]
 >
@@ -188,17 +208,64 @@ This integration provides **52+ entities** (depending on your firmware) organize
 
 | Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
 | :-- | :-- | :-- | :-- |
-| **System** | 7 Sensors, 1 Switch, 1 Button, 1 Number (+5) | Firmware, IP Addresses, Uptime, Reboot, Polling Controls | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID |
-| **Signal** | 31 Sensors (+6) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy) |
-| **Data** | 7 Sensors (+3) | Monthly Usage, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors) |
-| **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Message Content, Delete All (one-click) | None |
-| **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
+| ⚙️ **System** | 9 Sensors, 3 Binary Sensors, 2 Switches, 1 Button, 1 Number (+5) | Firmware, IP Addresses, Uptime, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
+| 📶 **Signal** | 33 Sensors, 1 Binary Sensor, 3 Selects (+7) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
+| 📈 **Data** | 11 Sensors, 1 Switch (+4) | Monthly Usage, Near-real-time Speed, Session Data, Data Limit Switch, Data Volume Alert | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
+| ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
+| 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
+
+> [!TIP]
+>
+> **Clean up your UI: Disable Unnecessary Devices or Entities**
+>
+> - If you never use the Router's SMS, you may not need the SMS sub-device.
+> - Devices and their entities can be disabled from the main device page: (⋮ menu) > **Disable Device**.
+> - Individual entities can be disabled via their properties, or in bulk on the entities list page.
+
+### 📊 Long Term Statistics (LTS)
+
+Home Assistant stores Long Term Statistics for numeric sensors that have a `state_class` set. This integration enables LTS only for sensors where long-term trend data is genuinely useful:
+
+| Sensors with LTS enabled | Why |
+| :-- | :-- |
+| LTE & 5G signal metrics (RSRP, RSRQ, RSSI, SNR) | Track connection quality trends over time |
+| Monthly data usage (Sent, Received, Total) | Monitor data consumption month-over-month |
+| SMS counts (Unread, Total) | Track message volume over time |
+| Signal Bars | Coarse signal summary over time |
+
+The following sensors have **no LTS** to avoid unnecessary database growth:
+
+| Sensor | Reason |
+| :-- | :-- |
+| Upload / Download Speed | Instantaneous readings — history at poll intervals has limited analytical value |
+| Session Sent / Received | Resets on every reconnect — not meaningful for long-term trends |
+| Uptime Duration | Resets on reboot; predictable pattern adds no insight |
+| Battery | Always 100% when plugged in |
+| Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
+| Data Volume Alert % (disabled) | Configuration setting; historical trend holds no analytical value |
+| LTE Band Lock Mask (disabled) | Text string diagnostic sensor |
+| Time Server (SNTP) (disabled) | Text string configuration sensor |
+
+> [!TIP]
+>
+> **Want to add a sensor to Long Term Statistics?**
+>
+> Add a `state_class` override via [Manual Customization](https://www.home-assistant.io/integrations/homeassistant/#manual-customization) in your `configuration.yaml`. For example, to track Upload Speed in LTS:
+>
+> ```yaml
+> homeassistant:
+>   customize:
+>     sensor.zte_5g_data_upload_speed:
+>       state_class: measurement
+> ```
+>
+> Restart Home Assistant after saving. The sensor will begin accumulating LTS from that point forward.
 
 ## 💡 Example Automations
 
 Entity IDs below use the default prefix zte_5g. If you set a custom name during setup, or have renamed since, replace zte_5g with your configured prefix.
 
-### SMS Examples
+### ✉️ SMS Examples
 
 #### 📨 Forward Incoming SMS to Mobile
 
@@ -216,7 +283,7 @@ actions:
       message: "{{ trigger.event.data.content }}"
 ```
 
-#### Automated Inbox Maintenance
+#### 🧹 Automated Inbox Maintenance
 
 Keep your router's SMS storage clean by automatically deleting old messages while keeping the most recent ones for safety.
 
@@ -236,9 +303,9 @@ actions:
       keep_last: 5
 ```
 
-#### Fetch and Process Inbox via Script
+#### 📜 Fetch and Process Inbox via Automation
 
-Example of using the `get_sms_list` action response in a script to count messages from a specific sender.
+Example of using the `get_sms_list` action response in an automation to count messages from a specific sender.
 
 ```yaml
 alias: "SMS: Count OTP Messages"
@@ -260,6 +327,32 @@ actions:
       message: |
         You have {{ inbox.messages | selectattr('phone', 'search', 'MY_BANK') |
         list | count }} messages from your bank in the inbox.
+```
+
+### 📡 APN & Network Selection Examples
+
+#### 🔄 APN Failover
+
+Automatically switch to a backup APN profile if the primary connection goes offline.
+
+```yaml
+alias: "APN: Switch Profile on Network Failure"
+description: "Switch to a backup APN profile if the primary WAN connection drops."
+triggers:
+  - trigger: state
+    entity_id: sensor.zte_5g_signal_wan_connect_status
+    to: "disconnected"
+    for: "00:05:00"
+conditions:
+  - condition: state
+    entity_id: select.zte_5g_signal_apn_profile
+    state: "primary_apn"
+actions:
+  - action: select.select_option
+    target:
+      entity_id: select.zte_5g_signal_apn_profile
+    data:
+      option: "backup_apn"
 ```
 
 ### 🚨 Data Usage Alert
@@ -340,6 +433,26 @@ actions:
         - CA: {{ states('sensor.zte_5g_signal_carrier_aggregation') }}
 ```
 
+### 🩺 System Health Alerts
+
+#### 🚨 Router Reboot Alert
+
+Monitor for router reboots by watching the device boot timestamp sensor.
+
+```yaml
+alias: "ZTE: Router Reboot Alert"
+triggers:
+  - trigger: template
+    value_template: |
+      {% set uptime = states('sensor.zte_5g_system_device_uptime') | as_datetime %}
+      {{ uptime is not none and (now() - uptime).total_seconds() < 120 }}
+actions:
+  - action: notify.mobile_app_your_phone
+    data:
+      title: "ZTE Router Rebooted"
+      message: "The router has rebooted. Boot Time: {{ states('sensor.zte_5g_system_device_uptime') }}"
+```
+
 ### ⏯️ Auto-Resume Polling
 
 Ensure polling is turned back on automatically if someone forgets to resume it after managing the router.
@@ -418,11 +531,28 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 | Username | Router login username.                                     |
 | Password | Admin password (update if changed on the router).          |
 
-#### Polling Settings
+### 🎛️ Runtime Controls & Settings (Entities)
 
-| Option | Default | Range | Description |
-| --- | --- | --- | --- |
-| Polling Interval | 180 s | 30–3600 s (step: 30 s) | How often the integration fetches data from the router. Lower values give more responsive updates but increase router load. |
+Rather than hiding settings in configuration menus, several configuration parameters are exposed directly as Home Assistant control entities, allowing you to monitor and control them from dashboards or automations:
+
+#### 📡 APN & Network Settings (Signal Device)
+
+- **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
+- **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
+- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type: `4G_AND_5G` (Auto), `LTE_AND_5G` (5G NSA), `Only_5G` (5G SA), or `Only_LTE` (4G Only).
+- **LTE Band Lock Mask** (`sensor.zte_5g_signal_lte_band_lock_mask`): Displays the current hex mask configuration locking the active LTE bands.
+
+#### ⚙️ Router Administration & Security (System Device)
+
+- **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`): Turn the physical status LEDs of the outdoor unit on or off (disabled by default).
+- **Reboot Schedule** (`binary_sensor.zte_5g_system_reboot_schedule`): Indicates whether a scheduled reboot window is configured and active.
+- **UPnP Enabled** / **SIP ALG Enabled** (`binary_sensor.zte_5g_system_upnp_enabled` / `binary_sensor.zte_5g_system_sip_alg_enabled`): Monitor firewall settings status.
+- **Time Server (SNTP)** (`sensor.zte_5g_system_time_server_sntp`): Displays the active server used by the router for time synchronization.
+
+#### 📈 Billing & Data Controls (Data Device)
+
+- **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`): Enable/disable the router's data limit settings.
+- **Data Volume Alert** (`sensor.zte_5g_data_data_volume_alert`): Displays the alarm warning percentage configured on the router (e.g., 90%).
 
 ## 🏗️ Under the Hood - Technical Architecture
 
@@ -450,7 +580,9 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 
 ## ❓ FAQ & Troubleshooting
 
-### **"Failed to connect to router" Error**
+### 🔌 Connection & Authentication
+
+#### **"Failed to connect to router" Error**
 
 - Verify the IP address is correct.
 - Confirm the username and password are correct (ZTE default is usually `admin`).
@@ -458,14 +590,22 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
   - Username can be changed in the webUI, as well as password, so ensure you are using the current version of both.
 - Ensure the router is powered on and reachable from your Home Assistant instance.
 
-### **Some sensors showing "Unknown"**
+#### **Why can't I access the router web UI while this is connected?**
+
+- ZTE routers typically only allow **one simultaneous login session**.
+- Use the **Pause Polling** switch in Home Assistant to halt polling before you log into the web UI.
+- Resume polling when done!
+
+### 📊 Diagnostics & Entity Values
+
+#### **Some sensors showing "Unknown"**
 
 - Most sensors showing okay with some unknown **is expected behavior**.
   - The integration fetches everything it can from the router.
   - Not every metric is provided by every ISP or firmware version.
   - 5G NR sensors will show "Unknown" when the router is operating in LTE-only mode.
 
-### **All sensors showing "Unavailable" or "Unknown"**
+#### **All sensors showing "Unavailable" or "Unknown"**
 
 - This is normal during a router reboot or if the router is temporarily unreachable.
   - The integration will automatically recover once the connection is restored.
@@ -473,12 +613,6 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
   - Ensure you can log into the router's web UI (confirms it is up and the password is correct).
   - Check your Home Assistant logs for specific error messages.
   - Delete and re-add the integration.
-
-### **Why can't I access the router web UI while this is connected?**
-
-- ZTE routers typically only allow **one simultaneous login session**.
-- Use the **Pause Polling** switch in Home Assistant to halt polling before you log into the web UI.
-- Resume polling when done!
 
 ## 🗑️ Removal
 

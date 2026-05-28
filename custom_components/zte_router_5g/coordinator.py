@@ -82,11 +82,23 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             # Use standard timeout wrapper (HA Best Practice)
             async with asyncio.timeout(30):
-                # Fetch all primary data components
-                data = await self.api.get_all_data()
-                sms_cap = await self.api.get_sms_capacity()
-                # Fetch recent messages to detect events and populate last_sms
-                messages = await self.api.get_sms_messages(mem_store="1", tags="10")
+                try:
+                    # Fetch all primary data components
+                    data = await self.api.get_all_data()
+                    sms_cap = await self.api.get_sms_capacity()
+                    # Fetch recent messages to detect events and populate last_sms
+                    messages = await self.api.get_sms_messages(mem_store="1", tags="10")
+                except ZTEAuthError as auth_err:
+                    _LOGGER.info(
+                        "%s: Session expired during poll; "
+                        "renewing session and retrying: %s",
+                        self.entry.title,
+                        auth_err,
+                    )
+                    await self.api.login()
+                    data = await self.api.get_all_data()
+                    sms_cap = await self.api.get_sms_capacity()
+                    messages = await self.api.get_sms_messages(mem_store="1", tags="10")
 
                 data.update(sms_cap)
                 # Sort by ID descending to find the latest message
@@ -266,7 +278,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             nv_able = int(data.get("nv_sms_able") or 0)
             nv_total = int(data.get("sms_nv_total") or 0)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             return
         if nv_able > 0 and nv_total >= nv_able:
             ir.async_create_issue(

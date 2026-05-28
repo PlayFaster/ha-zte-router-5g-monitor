@@ -7,7 +7,10 @@
           "on": "mdi:signal",
           "off": "mdi:signal-cellular-1"
         }
-      }
+      },
+      "system_reboot_schedule": { "default": "mdi:clock-check-outline" },
+      "system_upnp_enabled": { "default": "mdi:router" },
+      "system_sip_alg_enabled": { "default": "mdi:phone-voip" }
     },
     "sensor": {
       "system_model_name": { "default": "mdi:router-wireless" },
@@ -67,14 +70,24 @@
       "data_realtime_rx_bytes": { "default": "mdi:download-network" },
       "sms_sms_unread_num": { "default": "mdi:email-mark-as-unread" },
       "sms_msg_total": { "default": "mdi:email-multiple" },
-      "sms_msg_recent": { "default": "mdi:email-outline" }
+      "sms_msg_recent": { "default": "mdi:email-outline" },
+      "signal_lte_band_lock": { "default": "mdi:lock-pattern" },
+      "data_volume_alert_percent": { "default": "mdi:alert-outline" },
+      "system_sntp_server": { "default": "mdi:web-clock" }
     },
     "button": {
       "system_reboot": { "default": "mdi:restart" },
       "sms_delete_all": { "default": "mdi:email-remove" }
     },
     "switch": {
-      "system_pause_polling": { "default": "mdi:pause-circle-outline" }
+      "system_pause_polling": { "default": "mdi:pause-circle-outline" },
+      "system_odu_led_switch": { "default": "mdi:led-on" },
+      "data_limit_switch": { "default": "mdi:data-matrix-minus" }
+    },
+    "select": {
+      "signal_apn_profile": { "default": "mdi:access-point-network" },
+      "signal_apn_mode": { "default": "mdi:cog-outline" },
+      "signal_net_select_mode": { "default": "mdi:signal-variant" }
     },
     "number": {
       "system_polling_interval": { "default": "mdi:timer-sync" }
