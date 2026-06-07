@@ -27,14 +27,14 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [💡 Example Automations](#-example-automations)
   - [📸 Screenshots](#-screenshots)
   - [📥 Installation](#-installation)
-  - [⚙️ Configuration](#️-configuration)
-  - [🏗️ Under the Hood - Technical Architecture](#️-under-the-hood---technical-architecture)
+  - [🔧 Configuration](#-configuration)
+  - [🔩 Under the Hood - Technical Architecture](#-under-the-hood---technical-architecture)
   - [❓ FAQ \& Troubleshooting](#-faq--troubleshooting)
-  - [🗑️ Removal](#️-removal)
-  - [⚠️ Known Limitations /❔ What's Missing?](#️-known-limitations--whats-missing)
+  - [❌ Removal](#-removal)
+  - [❗ Known Limitations /❔ What's Missing?](#-known-limitations--whats-missing)
   - [📝 Maintenance Status](#-maintenance-status)
   - [🤝 Contributors \& Acknowledgements](#-contributors--acknowledgements)
-  - [📄 License](#-license-)
+  - [📄 License](#-license)
 
 ## 🔧 Compatibility & Tested Devices
 
@@ -83,7 +83,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Router Management**: Reboot the device directly from the HA UI.
 - **100% Local**: No cloud account or internet access required.
 
-### ⏱️ Dynamic Polling
+### 🔄 Dynamic Polling
 
 This integration features **dynamic polling**, the ability to pause polling completely or to change the polling interval.
 
@@ -96,7 +96,7 @@ This integration features **dynamic polling**, the ability to pause polling comp
 >
 > - Set it to 30 seconds during periods of heavy use, to examine connection quality or when you need to receive new SMS messages quickly, and set it higher afterwards, to avoid taxing the router and your Home Assistant database.
 
-### ✉️ SMS Management Actions
+### 💬 SMS Management Actions
 
 Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers, and four service actions for full programmatic control.
 
@@ -265,7 +265,7 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 
 Entity IDs below use the default prefix zte_5g. If you set a custom name during setup, or have renamed since, replace zte_5g with your configured prefix.
 
-### ✉️ SMS Examples
+### 💬 SMS Examples
 
 #### 📨 Forward Incoming SMS to Mobile
 
@@ -453,7 +453,7 @@ actions:
       message: "The router has rebooted. Boot Time: {{ states('sensor.zte_5g_system_device_uptime') }}"
 ```
 
-### ⏯️ Auto-Resume Polling
+### 🔁 Auto-Resume Polling
 
 Ensure polling is turned back on automatically if someone forgets to resume it after managing the router.
 
@@ -508,7 +508,7 @@ actions:
 3. Restart Home Assistant
 4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
 
-## ⚙️ Configuration
+## 🔧 Configuration
 
 ### 🔧 Initial Setup
 
@@ -519,7 +519,7 @@ Setup is handled entirely via the UI. You will need the same details that you us
 - **Password** — Admin password for the router web interface
 - **Name** — Custom prefix for all devices and entities (default: `ZTE 5G`). This determines entity IDs — e.g. the default produces `sensor.zte_5g_data_monthly_total`. Change this if you have multiple routers or prefer a different naming scheme.
 
-### 🛠️ Runtime Options
+### 🔨 Runtime Options
 
 After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor > Configure** to adjust:
 
@@ -531,7 +531,7 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 | Username | Router login username.                                     |
 | Password | Admin password (update if changed on the router).          |
 
-### 🎛️ Runtime Controls & Settings (Entities)
+### 🔘 Runtime Controls & Settings (Entities)
 
 Rather than hiding settings in configuration menus, several configuration parameters are exposed directly as Home Assistant control entities, allowing you to monitor and control them from dashboards or automations:
 
@@ -542,7 +542,7 @@ Rather than hiding settings in configuration menus, several configuration parame
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type: `4G_AND_5G` (Auto), `LTE_AND_5G` (5G NSA), `Only_5G` (5G SA), or `Only_LTE` (4G Only).
 - **LTE Band Lock Mask** (`sensor.zte_5g_signal_lte_band_lock_mask`): Displays the current hex mask configuration locking the active LTE bands.
 
-#### ⚙️ Router Administration & Security (System Device)
+#### 🔧 Router Administration & Security (System Device)
 
 - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`): Turn the physical status LEDs of the outdoor unit on or off (disabled by default).
 - **Reboot Schedule** (`binary_sensor.zte_5g_system_reboot_schedule`): Indicates whether a scheduled reboot window is configured and active.
@@ -554,7 +554,7 @@ Rather than hiding settings in configuration menus, several configuration parame
 - **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`): Enable/disable the router's data limit settings.
 - **Data Volume Alert** (`sensor.zte_5g_data_data_volume_alert`): Displays the alarm warning percentage configured on the router (e.g., 90%).
 
-## 🏗️ Under the Hood - Technical Architecture
+## 🔩 Under the Hood - Technical Architecture
 
 ### 🔄 Data Polling & 3-Strike Resilience 🩹
 
@@ -574,7 +574,7 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 - **Reconfiguration**: If you change your router's IP or password, use the **Reconfigure** button on the integration card to update settings without losing any data.
 - **Data Validation**: Router values are checked for validity against defined guard limits. Out-of-range sensor values (e.g., impossible signal metrics) are ignored or marked as unknown to ensure data integrity.
 
-### ⏱️ Dynamic Polling & Standard System Options
+### 🔄 Dynamic Polling & Standard System Options
 
 - **Both Available**: The integration provides dynamic polling controls, to pause polling or change polling interval. It also functions normally with the standard Home Assistant **System options** > **Enable polling for changes** toggle.
 
@@ -614,7 +614,7 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
   - Check your Home Assistant logs for specific error messages.
   - Delete and re-add the integration.
 
-## 🗑️ Removal
+## ❌ Removal
 
 To remove the integration from Home Assistant:
 
@@ -631,7 +631,7 @@ To fully uninstall (HACS):
 4. Restart Home Assistant.
 5. Home Assistant automatically removes all associated entities and device entries from the registry when the integration is deleted.
 
-## ⚠️ Known Limitations /❔ What's Missing?
+## ❗ Known Limitations /❔ What's Missing?
 
 - **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
 - **Non Bridge Mode Features**: The integration was developed on and has only been tested with the MC7010 which is an outdoor bridge-mode only device without WiFi. This means the integration does not have:
@@ -648,7 +648,9 @@ This is a **personal project**. Support and updates are provided on a **"best-ef
 - 🙏 **[huawei_lte_extended](https://github.com/william-aqn/huawei_lte_extended)** (@william-aqn): The approach to expanded SMS functionality in this integration is based on this work.
 - This project was developed with the assistance of AI to ensure code quality and adherence to best practices.
 
-## 📄 License [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+## 📄 License
+
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 This project is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
 

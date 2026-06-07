@@ -96,7 +96,7 @@ class MockResponse:
 def mock_aiohttp_client():
     """Fixture to mock aiohttp ClientSession."""
     session = MagicMock()
-    session.get = MagicMock()
+    session.get = MagicMock(return_value=MockResponse())
     session.post = MagicMock()
 
     def _request_side_effect(method, *args, **kwargs):
