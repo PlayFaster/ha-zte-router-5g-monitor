@@ -115,6 +115,9 @@ To reach its current "modern" state, the project underwent several major refacto
 - **Silent SMS Emptiness on Session Timeout**: On ZTE routers, if a POST query to `sms_data_total` (for reading messages) is made with an expired or invalid session, the router does not return an error code or redirect. Instead, it silently returns a valid empty structure (e.g., `{"messages": []}`). Because the SMS response does not contain the standard status fields (`network_type`/`signalbar`), the client cannot detect session expiration from the JSON response structure alone. Thus, the client returns the empty list successfully, and the caller never realizes it was logged out, resulting in a silent failure returning no SMS messages.
   - _Fix_: Implemented an inactivity timer check inside the centralized `_request()` wrapper. If more than 150 seconds (2.5 minutes) elapse without authenticated request activity, the stored session token (`self.stok`) is proactively cleared. This forces a fresh login and session-activating GET request before sending the next API request.
 
+- **VS16 Compound Emoji in README Headings (2026-06-08)**: Using VS16 compound emoji (e.g., `⚙️`, `🏗️`, `⚠️`, `🗑️`) in README headings causes Table of Contents links to silently 404. GitHub's anchor generator strips VS16 bytes (U+FE0F) when computing heading slugs, but Markdown tooling includes them in `href` values. The mismatch is completely invisible in source editors — the heading renders fine and GitHub preview looks correct, but clicking a ToC link jumps nowhere.
+  - _Fix_: Replace all VS16 compound emoji in headings and their corresponding ToC `href` values with always-colour single-codepoint alternatives (e.g., 🔧 🔩 ❌ ❗ 🔄 💬). See root `CLAUDE.md` → "Shared Markdown Notes" for the full replacement table and detection script.
+
 ## 6. Environment Constraints
 
 - **Native Async API**: The integration uses `aiohttp` for all network communication, aligning with the Home Assistant event loop. This removes the need for `executor_job` threading and eliminates the maintenance burden of pinning external libraries like `requests`.
@@ -149,3 +152,4 @@ To reach its current "modern" state, the project underwent several major refacto
 - **v1.0.13** (2026-05-25) — Documented the silent SMS empty list pitfall, the ZTE POST request login rejection constraint, and the inactivity-timer session reset pattern.
 - **v1.0.14** (2026-05-27) — Added setting modification and immediate coordinator refresh pattern for Select and Switch entities. Exceeded entity count to 75.
 - **v1.0.15** (2026-05-27) — Documented the router's `js/service.js` as the source of all available API data elements.
+- **[2026-06-08]** — Added VS16 compound emoji in README headings pitfall entry.

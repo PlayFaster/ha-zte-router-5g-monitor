@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.1-dev1] - 2026-06-08 - Unreleased
+
+### Fixed
+
+- **2 `RuntimeWarning: coroutine was never awaited` + 2 test failures** (`test_api.py`, `test_coverage_ext.py`, `conftest.py`): Two tests (`test_api_get_sms_messages_error`, `test_api_get_last_sms_content_exception`) that set `mock_aiohttp_client.post.side_effect` triggered a re-login due to inactivity timeout (`last_activity = datetime.min`). The login path's GET request returned a bare `MagicMock` whose `headers.get("Content-Type", "")` resolved to an unawaited coroutine. Fixed by setting `session.get`'s default `return_value` to `MockResponse()` in the conftest fixture, and providing `{"LD": "test_ld"}` mock data to the failing tests so login succeeds and the expected `ZTEConnectionError` propagates correctly.
+
+### Changed
+
+- **README Emoji Consistency**: Replaced all VS16 compound emoji in headings and ToC links with always-colour single-codepoint alternatives (`⚙️`→`🔧`, `🗑️`→`❌`, `⚠️`→`❗`, `⏱️`→`🔁`, `✉️`→`💬`, `⏯️`→`🔁`, `🛠️`→`🔩`, `🎛️`→`🔘`); moved License badge out of heading; standardised Use Cases icon to `🎯`.
+
+- **`pyproject.toml` — mypy Configuration Realigned with HA's Internal `mypy.ini`**: The project's `[tool.mypy]` section has been restructured to closely match HA's auto-generated `mypy.ini` (produced by `script/hassfest -p mypy_config`). This ensures the pre-commit mypy hook, and the project's basic `mypy custom_components/` check, run under materially the same conditions as HA's own integration quality checks. The goal is for any type errors caught here to be errors HA itself would also catch — and vice versa.
+
 ## [3.2.0] - 2026-05-28
 
 ### Added
