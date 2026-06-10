@@ -25,7 +25,7 @@ jobs:
       contents: write # Required by test_val for coverage badge gist update
       pull-requests: write # Required by test_val for PR comments
     # Branch @main v1.0.7
-    uses: PlayFaster/.github/.github/workflows/validate.yaml@da39a3ee5e6b4b0d3255bfef95601890afd80709
+    uses: PlayFaster/.github/.github/workflows/validate.yaml@d8258749c50beac49eb3c6e461b098f2bc5f5868
     with:
       component_name: zte_router_5g
       gist_id: 0376d580e72d0abc493665a80396f701
