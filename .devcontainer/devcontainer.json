@@ -28,16 +28,8 @@
       }
     }
   },
-  "dockerComposeFile": [
-    "docker-compose.yml",
-    "docker-compose.override.yml"
-  ],
+  "dockerComposeFile": ["docker-compose.yml", "docker-compose.override.yml"],
   "mounts": [
-    {
-      "source": "${localEnv:USERPROFILE}/.gemini",
-      "target": "/root/.gemini",
-      "type": "bind"
-    },
     {
       "source": "${localEnv:USERPROFILE}/.gitconfig",
       "target": "/root/.gitconfig",
