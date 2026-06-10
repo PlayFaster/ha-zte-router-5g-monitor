@@ -373,6 +373,60 @@
         "panel": "dedicated",
         "close": false
       }
+    },
+    {
+      "label": "Sync: Refresh all shared files",
+      "type": "shell",
+      "command": "mkdir -p .reports && sh .shared/validate-configs/sync_shared_files.sh | tee .reports/sync_shared_files.txt",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Check: Tool Version Drift",
+      "type": "shell",
+      "command": "mkdir -p .reports && python3 .shared/validate-configs/check_tool_drift.py | tee .reports/tool_drift.txt",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "HA Core: Check Staleness",
+      "type": "shell",
+      "command": "mkdir -p .reports && (echo '=== Local HA Core Last Commit ===' && git -C /ha_core log -1 --format='%cd (%h) - %s' && echo '=== Remote HA Core Dev Branch Head ===' && git -C /ha_core ls-remote origin refs/heads/dev) | tee .reports/ha_core_staleness.txt",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "HA Core: Pull Latest",
+      "type": "shell",
+      "command": "git -C /ha_core pull",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Sync & Check",
+      "dependsOn": [
+        "Sync: Refresh all shared files",
+        "Check: Tool Version Drift",
+        "HA Core: Check Staleness"
+      ],
+      "dependsOrder": "sequence",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
     }
   ],
   "version": "2.0.0"

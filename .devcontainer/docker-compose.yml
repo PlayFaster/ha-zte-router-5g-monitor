@@ -1,27 +1,25 @@
 ---
 services:
   homeassistant:
-    container_name: zte-dev-ha
+    container_name: ${CONTAINER_NAME}
+    environment:
+      - TZ=Europe/London
     image: ha-dev-base:latest
+    ports:
+      - "8123:8123"
+    restart: unless-stopped
     volumes:
       # Mount the whole project so the DevContainer workspace works
-      - ..:/workspaces/ha-zte-router-5g-monitor
+      - ..:/workspaces/${PROJECT_NAME}
       # Mount your local dev config
       - ./.devconfig:/config
-      # IMPORTANT: Use a relative path from the
-      #  project root inside the container
-      # This ensures HA sees your code as an integration
-      - ../custom_components/zte_router_5g:/config/custom_components/zte_router_5g:ro
       # Project notes and shared files
-      - C:/Local/Code/github/PlayFaster/home-assistant/shared/ProjNotes/Notes-ha-zte-router-5g-monitor:/workspaces/ha-zte-router-5g-monitor/.notes
-      - C:/Local/Code/github/PlayFaster/home-assistant/shared/SharedNotes:/workspaces/ha-zte-router-5g-monitor/.shared
+      - C:/Local/Code/github/PlayFaster/home-assistant/shared/ProjNotes/Notes-${PROJECT_NAME}:/workspaces/${PROJECT_NAME}/.notes
+      - C:/Local/Code/github/PlayFaster/home-assistant/shared/SharedNotes:/workspaces/${PROJECT_NAME}/.shared
       # HA core source — read-only, used by mypy for type resolution
       - C:/Local/Code/ha_core/core:/ha_core:ro
       # Docker Outside Docker (DooD) — allows running docker commands from inside
       # the container by delegating to the host Docker daemon.
       - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "8123:8123"
-    restart: unless-stopped
-    environment:
-      - TZ=Europe/London
+      # Mount the root Dockerfile so the container can inspect it for version drift
+      - ../../../dev-environment/Dockerfile:/dev-environment/Dockerfile:ro
