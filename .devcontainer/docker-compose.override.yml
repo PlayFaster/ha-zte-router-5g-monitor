@@ -1,0 +1,5 @@
+version: '3.8'
+services:
+  homeassistant:
+    volumes:
+      - ../custom_components/zte_router_5g:/config/custom_components/zte_router_5g:ro
