@@ -1,0 +1,48 @@
+{
+  "tools": {
+    "ruff": {
+      "version": "0.15.15",
+      "pins": ["pre-commit", "dockerfile", "requirements_test"]
+    },
+    "codespell": {
+      "version": "2.4.2",
+      "pins": ["pre-commit", "dockerfile", "requirements_test"]
+    },
+    "zizmor": {
+      "version": "1.25.2",
+      "pins": ["pre-commit", "dockerfile"]
+    },
+    "prettier": {
+      "version": "3.6.2",
+      "pins": ["pre-commit", "dockerfile"]
+    },
+    "prettier-plugin-sort-json": {
+      "version": "4.2.0",
+      "pins": ["pre-commit", "dockerfile"]
+    },
+    "python-typing-update": {
+      "version": "0.8.1",
+      "pins": ["pre-commit", "dockerfile"]
+    },
+    "mypy": {
+      "version": "2.1.0",
+      "pins": ["dockerfile"]
+    },
+    "check-jsonschema": {
+      "version": "0.37.2",
+      "pins": ["dockerfile", "requirements_test"]
+    },
+    "pytest-homeassistant-custom-component": {
+      "version": "0.13.326",
+      "pins": ["dockerfile", "requirements_test"]
+    },
+    "pytest-cov": {
+      "version": "6.0.0",
+      "pins": ["dockerfile", "requirements_test"]
+    },
+    "yamllint": {
+      "version": "1.38.0",
+      "pins": ["pre-commit", "dockerfile", "requirements_test"]
+    }
+  }
+}
