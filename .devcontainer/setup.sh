@@ -8,10 +8,6 @@ LOG_FILE=".reports/devcontainer/post_setup.log"
 (
     echo "--- Starting Post-Create Setup ---"
     
-    echo "Configuring Git..."
-    git config --global core.fileMode false
-    git config --global core.autocrlf input
-
     echo "Environment: ha-dev-base:latest"
 
     echo "Refreshing shared config files..."
@@ -28,5 +24,15 @@ LOG_FILE=".reports/devcontainer/post_setup.log"
         echo "No .pre-commit-config.yaml found — skipping pre-commit pre-warm."
     fi
 
-    echo "--- Setup Complete ---"
+    # Highly visible success banner
+    GREEN='\033[1;32m'
+    NC='\033[0m' # No Color
+    echo ""
+    echo -e "${GREEN}######################################################${NC}"
+    echo -e "${GREEN}#                                                    #${NC}"
+    echo -e "${GREEN}#   THE DEVCONTAINER IS FULLY SET-UP AND RUNNING!    #${NC}"
+    echo -e "${GREEN}#                                                    #${NC}"
+    echo -e "${GREEN}######################################################${NC}"
+    echo ""
 ) 2>&1 | tee "$LOG_FILE"
+

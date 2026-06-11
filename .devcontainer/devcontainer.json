@@ -24,16 +24,17 @@
           "https://raw.githubusercontent.com/hacs/default/master/hacs.json": "hacs.json",
           "https://raw.githubusercontent.com/home-assistant/schemas/main/frontend/lovelace_config.json": "ui-lovelace.yaml"
         },
-        "yaml.validate": true
+        "yaml.validate": true,
+        "extensions.verifySignature": false
       }
     }
   },
   "dockerComposeFile": ["docker-compose.yml", "docker-compose.override.yml"],
   "mounts": [
     {
-      "source": "${localEnv:USERPROFILE}/.gitconfig",
-      "target": "/root/.gitconfig",
-      "type": "bind"
+      "source": "vscode-server-vol-${localWorkspaceFolderBasename}",
+      "target": "/root/.vscode-server",
+      "type": "volume"
     }
   ],
   "name": "${localWorkspaceFolderBasename}",
