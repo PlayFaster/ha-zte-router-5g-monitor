@@ -21,9 +21,21 @@ coverage.xml
 # Home Assistant
 .storage/
 testing_config/
+*.log
 *.db
 *.db-shm
 *.db-wal
+**/token.txt
+
+# HA Dev Specific
+errors/
+local_only/
+router_probe/
+**/restart_ha.ps1
+**/sensors_states/*.json
+**/sensors_states/*.txt
+**/sensors_states/older/*.json
+**/sensors_states/older/*.txt
 
 # OS
 .DS_Store
@@ -47,6 +59,7 @@ uv.lock
 .comp/
 .notes
 .shared
+.obsidian/
 .notes/
 .shared/
 loc_only/
@@ -57,3 +70,4 @@ loc_only/
 .aiexclude
 .aider*
 CLAUDE.md
+.claude/
