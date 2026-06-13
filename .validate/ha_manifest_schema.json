@@ -136,7 +136,16 @@
     },
     "quality_scale": {
       "description": "Integration code quality rating.",
-      "enum": ["bronze", "custom", "gold", "internal", "legacy", "no_score", "silver"],
+      "enum": [
+        "bronze",
+        "custom",
+        "gold",
+        "internal",
+        "legacy",
+        "no_score",
+        "platinum",
+        "silver"
+      ],
       "type": "string"
     },
     "requirements": {
