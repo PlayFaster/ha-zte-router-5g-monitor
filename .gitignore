@@ -4,9 +4,18 @@ __pycache__/
 *$py.class
 .venv/
 venv/
+env/
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 dist/
 build/
+out/
+target/
 *.egg-info/
+node_modules/
+.ipynb_checkpoints/
 
 # Test and coverage reports
 htmlcov/
@@ -21,7 +30,6 @@ coverage.xml
 # Home Assistant
 .storage/
 testing_config/
-*.log
 *.db
 *.db-shm
 *.db-wal
@@ -40,11 +48,20 @@ router_probe/
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+.AppleDouble
+.LSOverride
 
 # IDEs
 # .vscode/
 *.code-workspace
 .idea/
+.sublime-*
+.sublime-workspace
+*.sublime-project
+.vim/
+*.swp
+*.swo
 
 # Sync
 sync.ffs_*
@@ -54,6 +71,14 @@ sync.ffs_lock
 # Test Dev
 .devconfig/
 uv.lock
+
+# Temp Trash
+.Trash/
+.trash/
+.temp/
+.tmp/
+*.log
+
 
 # Note Scratch Compare Area
 .comp/
@@ -65,9 +90,17 @@ uv.lock
 loc_only/
 
 # AI
+.aider/
+.claude/
+.continue/
+.cursor/
+.windsurf/
 *.gptcache
 .geminignore
 .aiexclude
 .aider*
+.opencommit
+**/.ai-memory/
 CLAUDE.md
-.claude/
+CLAUDE.local.md
+agents.local.md

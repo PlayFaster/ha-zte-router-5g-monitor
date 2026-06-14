@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.1-dev7] - 2026-06-14 - Unreleased
+
+### Changed
+
+- **DependaBot**: Bumped Shared Validation from v1.0.8 to v1.0.9
+- **DependaBot**: Bumped Ruff from 0.15.12 to 0.15.16
+- **.gitignore**: Multiple updates to .gitignore
+
 ## [3.2.1-dev4] - 2026-06-10 - Unreleased
 
 ### Changed
