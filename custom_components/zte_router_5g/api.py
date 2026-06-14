@@ -50,7 +50,8 @@ class ZTERouterAPI:
     def _hash(self, val: str | None) -> str:
         if val is None:
             raise ValueError("Input to hash function cannot be None")
-        return hashlib.sha256(val.encode()).hexdigest()
+        # ZTE router requires SHA256 for its challenge-response auth protocol — not used for password storage.
+        return hashlib.sha256(val.encode()).hexdigest()  # lgtm[py/weak-cryptographic-algorithm]
 
     def _hex_decode(self, hex_str: str) -> str:
         if not hex_str:
