@@ -77,6 +77,7 @@ Hardware metadata (`model`, `sw_version`, `imei`) is read once and stored in `en
 ### Config Entry Data vs. Options
 
 This integration intentionally splits config entry storage:
+
 - **`entry.options`** holds the live, user-editable connection settings: `CONF_HOST`, `CONF_USERNAME`, `CONF_PASSWORD`, plus `scan_interval` / `stop_polling`.
 - **`entry.data`** holds discovered hardware metadata: `model`, `sw_version`, `imei`, `boot_time`, `last_uptime`.
 
@@ -108,14 +109,15 @@ When the devcontainer is running, the `ha-mcp-dev` MCP server automatically conn
 
 **After any modification, follow the post-modification process** — see [`.shared/prompts/post_mod_process.md`](.shared/prompts/post_mod_process.md). Specify a `SCOPE` when invoking it:
 
-| SCOPE | What runs |
-| :------- | :-------- |
-| `None` | Changes only — no validation |
-| `Basic` | HA restart + error check + lint/format fixes |
-| `Full` | Basic + mypy (standard) + pytest (fix failing tests only) |
-| `Complete` | Full + pre-commit --all-files + mypy --strict |
+| SCOPE      | What runs                                                 |
+| :--------- | :-------------------------------------------------------- |
+| `None`     | Changes only — no validation                              |
+| `Basic`    | HA restart + error check + lint/format fixes              |
+| `Full`     | Basic + mypy (standard) + pytest (fix failing tests only) |
+| `Complete` | Full + pre-commit --all-files + mypy --strict             |
 
 Additional tools useful during development:
+
 - `ha_get_state` / `ha_search_entities` — verify entity states and attributes after a reload
 - `ha_call_service` — trigger service calls (e.g. `homeassistant.update_entity`) to exercise platform callbacks directly
 
