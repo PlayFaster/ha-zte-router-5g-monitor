@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.1-dev8] - 2026-06-14 - Unreleased
+
+### Changed
+
+- **Validation Config**: Changed from .prettierrc.js to .prettierrc.json to allow GitHub.com CodeQL to run without errors
+
 ## [3.2.1-dev7] - 2026-06-14 - Unreleased
 
 ### Changed
