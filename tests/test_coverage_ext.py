@@ -116,6 +116,7 @@ async def test_api_get_last_sms_content_exception(mock_aiohttp_client):
     """Test get_last_sms_content exception handling."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"LD": "test_ld"})
     mock_aiohttp_client.post.side_effect = Exception("SMS Fail")
 
     with pytest.raises(ZTEConnectionError):

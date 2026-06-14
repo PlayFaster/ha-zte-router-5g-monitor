@@ -386,6 +386,7 @@ async def test_api_get_sms_messages_error(mock_aiohttp_client):
     """Test get_sms_messages error handling."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=fake"
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"LD": "test_ld"})
     mock_aiohttp_client.post.side_effect = Exception("Fetch Fail")
     with pytest.raises(ZTEConnectionError):
         await api.get_sms_messages(mem_store="1", tags="10")

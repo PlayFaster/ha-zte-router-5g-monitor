@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.1-dev9] - 2026-06-14 - Unreleased
+
+### Changed
+
+- **Validation Config**: Fixed use of .prettierrc.json
+
+## [3.2.1-dev8] - 2026-06-14 - Unreleased
+
+### Changed
+
+- **Link Check**: Updated markdown-link-check to ignore .notes/ and .shared/ links in projects as these are excluded.
+- **Validation Config**: Changed from .prettierrc.js to .prettierrc.json to allow GitHub.com CodeQL to run without errors
+
+## [3.2.1-dev7] - 2026-06-14 - Unreleased
+
+### Changed
+
+- **DependaBot**: Bumped Shared Validation from v1.0.8 to v1.0.9
+- **DependaBot**: Bumped Ruff from 0.15.12 to 0.15.16
+- **.gitignore**: Multiple updates to .gitignore
+- **AGENTS.md**: Added AGENTS.md to repo root
+
+## [3.2.1-dev4] - 2026-06-10 - Unreleased
+
+### Changed
+
+- **Validation Sync**: Moved to a better system and process to keep validation (lint/format/test) tools in sync, across PlayFaster projects and between the projects and what Home Assistant uses.
+  - .validate/version_matrix.json added as the definitive source of tool version use.
+  - Several Env: entries added to .vscode/tasks.json for tool sync and checking.
+  - .validate/requirements_test.txt pulled as generic, with all tools pinned to versions, and requirements_custom.txt used to add project specific items.
+  - As part of the sync, docker-compose.yml and devcontainer.json are now generic, with a .env file holding project specific info and a docker-compose.override.yml holding additional, project specific steps.
+  - HA Manifest and HACS schema files updated.
+  - Ruff updated from 0.15.12 to 0.15.15
+
+## [3.2.1-dev1] - 2026-06-08 - Unreleased
+
+### Fixed
+
+- **2 `RuntimeWarning: coroutine was never awaited` + 2 test failures** (`test_api.py`, `test_coverage_ext.py`, `conftest.py`): Two tests (`test_api_get_sms_messages_error`, `test_api_get_last_sms_content_exception`) that set `mock_aiohttp_client.post.side_effect` triggered a re-login due to inactivity timeout (`last_activity = datetime.min`). The login path's GET request returned a bare `MagicMock` whose `headers.get("Content-Type", "")` resolved to an unawaited coroutine. Fixed by setting `session.get`'s default `return_value` to `MockResponse()` in the conftest fixture, and providing `{"LD": "test_ld"}` mock data to the failing tests so login succeeds and the expected `ZTEConnectionError` propagates correctly.
+
+### Changed
+
+- **README Emoji Consistency**: Replaced all VS16 compound emoji in headings and ToC links with always-colour single-codepoint alternatives (`⚙️`→`🔧`, `🗑️`→`❌`, `⚠️`→`❗`, `⏱️`→`🔁`, `✉️`→`💬`, `⏯️`→`🔁`, `🛠️`→`🔩`, `🎛️`→`🔘`); moved License badge out of heading; standardised Use Cases icon to `🎯`.
+
+- **`pyproject.toml` — mypy Configuration Realigned with HA's Internal `mypy.ini`**: The project's `[tool.mypy]` section has been restructured to closely match HA's auto-generated `mypy.ini` (produced by `script/hassfest -p mypy_config`). This ensures the pre-commit mypy hook, and the project's basic `mypy custom_components/` check, run under materially the same conditions as HA's own integration quality checks. The goal is for any type errors caught here to be errors HA itself would also catch — and vice versa.
+
 ## [3.2.0] - 2026-05-28
 
 ### Added
