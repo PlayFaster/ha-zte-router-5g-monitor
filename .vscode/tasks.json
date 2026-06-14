@@ -155,7 +155,7 @@
       "type": "shell"
     },
     {
-      "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .shared/validate-configs/.prettierrc.js --check | tee .reports/prettier_check.txt",
+      "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .shared/validate-configs/.prettierrc.json --check | tee .reports/prettier_check.txt",
       "label": "Prettier: Check (View Only)",
       "presentation": {
         "panel": "dedicated",
@@ -165,7 +165,7 @@
       "type": "shell"
     },
     {
-      "command": "git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .shared/validate-configs/.prettierrc.js --write || true",
+      "command": "git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .shared/validate-configs/.prettierrc.json --write || true",
       "label": "Prettier: Format (Auto-Fix)",
       "presentation": {
         "panel": "dedicated",
@@ -175,7 +175,7 @@
       "type": "shell"
     },
     {
-      "command": "prettier --config .shared/validate-configs/.prettierrc.js --ignore-path /dev/null --write \".notes/**/*.{md,json,yaml,yml}\" || true",
+      "command": "prettier --config .shared/validate-configs/.prettierrc.json --ignore-path /dev/null --write \".notes/**/*.{md,json,yaml,yml}\" || true",
       "label": "Prettier: Fix Notes",
       "presentation": {
         "panel": "dedicated",
@@ -185,7 +185,7 @@
       "type": "shell"
     },
     {
-      "command": "prettier --config .shared/validate-configs/.prettierrc.js --ignore-path /dev/null --write \".shared/**/*.{md,json,yaml,yml}\" || true",
+      "command": "prettier --config .shared/validate-configs/.prettierrc.json --ignore-path /dev/null --write \".shared/**/*.{md,json,yaml,yml}\" || true",
       "label": "Prettier: Fix Shared",
       "presentation": {
         "panel": "dedicated",
