@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.3] - 2026-06-14
+
+### Summary
+
+- **CI Validation Only**: Changes to the CI Validation set-up require another release to test properly, but there are no user changes in this release, background/infrastructure only.
+
+### Changed
+
+- **CodeQL**: CodeQL shared config and local caller modified to detail permissions to that Zizmor will pass
+
 ## [3.2.2] - 2026-06-14
 
 ### Summary
