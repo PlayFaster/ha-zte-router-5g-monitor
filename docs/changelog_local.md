@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.2] - 2026-06-14
+
+### Summary
+
+- **CI Validation Only**: Changes to the CI Validation set-up require another release to test properly, but there are no user changes in this release, background/infrastructure only.
+
+### Changed
+
+- **CodeQL**: Added a shared CodeQL validation config to the shared validation repo, pulled into each project, incl this one.
+
+## [3.2.1] - 2026-06-14
+
+### Summary
+
+- **CI Validation Only**: Changes to the CI Validation set-up require a release to test properly, but there are no user changes in this release, background/infrastructure only.
+
 ## [3.2.1-dev9] - 2026-06-14 - Unreleased
 
 ### Changed
