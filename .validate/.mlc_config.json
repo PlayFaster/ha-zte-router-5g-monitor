@@ -1,6 +1,3 @@
 {
-  "ignorePatterns": [
-    { "pattern": "^\\.shared/" },
-    { "pattern": "^\\.notes/" }
-  ]
+  "ignorePatterns": [{ "pattern": "^\\.shared/" }, { "pattern": "^\\.notes/" }]
 }

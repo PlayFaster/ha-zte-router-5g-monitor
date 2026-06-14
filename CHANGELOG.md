@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.1] - 2026-06-14
+
+### Summary
+
+- **CI Validation Only**: Changes to the CI Validation set-up require a release to test properly, but there are no user changes in this release, background/infrastructure only
+
 ## [3.2.0] - 2026-05-28
 
 ### Added
