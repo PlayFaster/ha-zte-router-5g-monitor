@@ -21,11 +21,8 @@ permissions:
 
 jobs:
   validate:
-    permissions:
-      contents: write # Required by test_val for coverage badge gist update
-      pull-requests: write # Required by test_val for PR comments
-    # Branch @main v2.0.2 — update SHA after pushing .github changes
-    uses: PlayFaster/.github/.github/workflows/validate.yaml@38873e6d30a2e49269b626511fd2183082672bd7
+    # Branch @main v2.0.3 — update SHA after pushing .github changes
+    uses: PlayFaster/.github/.github/workflows/validate.yaml@450a90fd9ecb56485b90754f061ce4a4e4c0e7dc
     with:
       category: integration
       component_name: zte_router_5g

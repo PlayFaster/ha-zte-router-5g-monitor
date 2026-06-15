@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.4-dev3] - 2026-06-145 - Unreleased
+
+### Changed
+
+- **CI Validation Bump**: Shared CI validation bumped from v2.0.2 to v2.0.3
+- **CI Coverage Report**: Removed the pytest coverage report as it required extra permissions and is separate to the coverage badge, which is what is really required.
+
 ## [3.2.4-dev2] - 2026-06-145 - Unreleased
 
 ### Changed
