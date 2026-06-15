@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.4-dev2] - 2026-06-145 - Unreleased
+
+### Changed
+
+- **CI Validation Bump**: Shared CI validation bumped from v2.0.1 to v2.0.2
+
+## [3.2.4-dev1] - 2026-06-145 - Unreleased
+
+### Changed
+
+- **CI Validation Sync**: Updated the shared CI validation to include the Theme project, which required some all round changes.
+
 ## [3.2.3] - 2026-06-14
 
 ### Summary
