@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.4] - 2026-06-15 - Release
+
+### Changed
+
+- **CI Validation Bump**: Shared CI validation bumped to v2.0.3. No user changes in this release, background/infrastructure only.
+
 ## [3.2.3] - 2026-06-14
 
 ### Summary
