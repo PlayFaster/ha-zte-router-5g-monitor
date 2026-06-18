@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.5-dev3] - 2026-06-18 - Unreleased
+
+### Summary
+
+- **CI Validation Overhaul**: Major overhaul of the local (tasks.json) and online (github.com CI) Validation system
+
+### Changed
+
+- **dev-workbench**: Moved CI Validation and Sync to dev-workbench system, with major restructure of files and folders.
+- **CI Local Tasks**: Fixed an issue with tasks.json where it shows pass, after error messages, for three validation steps.
+- **.gitignore**: Further updates to .gitignore
+
 ## [3.2.5-dev1] - 2026-06-15 - Unreleased
 
 ### Changed
