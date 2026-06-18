@@ -385,7 +385,7 @@
       "problemMatcher": []
     },
     {
-      "command": "mkdir -p .reports && sh .shared/validate-configs/sync_shared_files.sh | tee .reports/sync_shared_files.txt",
+      "command": "mkdir -p .reports && sh .workbench/sync_shared_files.sh | tee .reports/sync_shared_files.txt",
       "label": "Env: Sync Shared Files",
       "presentation": {
         "panel": "dedicated",
@@ -395,7 +395,7 @@
       "type": "shell"
     },
     {
-      "command": "mkdir -p .reports && python3 .shared/validate-configs/check_tool_drift.py | tee .reports/tool_drift_raw.txt && sed -e 's/.*\\r//g' -e 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' .reports/tool_drift_raw.txt > .reports/tool_drift.txt && rm .reports/tool_drift_raw.txt",
+      "command": "mkdir -p .reports && python3 .workbench/check_tool_drift.py | tee .reports/tool_drift_raw.txt && sed -e 's/.*\\r//g' -e 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' .reports/tool_drift_raw.txt > .reports/tool_drift.txt && rm .reports/tool_drift_raw.txt",
       "label": "Env: Audit Version Drift",
       "presentation": {
         "panel": "dedicated",
@@ -405,7 +405,7 @@
       "type": "shell"
     },
     {
-      "command": "python3 .shared/validate-configs/check_tool_drift.py --apply",
+      "command": "python3 .workbench/check_tool_drift.py --apply",
       "label": "Env: Apply Version Matrix Targets",
       "presentation": {
         "panel": "dedicated",
@@ -415,7 +415,7 @@
       "type": "shell"
     },
     {
-      "command": "python3 .shared/validate-configs/check_tool_drift.py --absorb",
+      "command": "python3 .workbench/check_tool_drift.py --absorb",
       "label": "Env: Absorb Pre-commit Bumps",
       "presentation": {
         "panel": "dedicated",
