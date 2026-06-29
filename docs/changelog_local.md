@@ -2,7 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.2.5-dev4] - 2026-06-28 - Unreleased
+## [3.2.5-dev5] - 2026-06-29 - Unreleased
+
+### Changed
+
+- **Validate Bump**: Updated ruff from 0.15.17 to 0.15.18
+
+## [3.2.5-dev4] - 2026-06-29 - Unreleased
 
 ### Summary
 
