@@ -1,4 +1,3 @@
----
 send_sms:
   description: Send an SMS message via the router.
   fields:
