@@ -200,7 +200,7 @@ Fires automatically when a new incoming SMS is detected. Use as an automation tr
 
 ## 🔍 What You Get
 
-This integration provides **79+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **70+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 > [!NOTE]
 >
@@ -208,7 +208,7 @@ This integration provides **79+ entities** (depending on your firmware) organize
 
 | Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
 | :-- | :-- | :-- | :-- |
-| ⚙️ **System** | 9 Sensors, 3 Binary Sensors, 2 Switches, 1 Button, 1 Number (+5) | Firmware, IP Addresses, Uptime, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
+| ⚙️ **System** | 9 Sensors, 3 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+5) | Firmware, IP Addresses, Uptime, Refresh Now, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
 | 📶 **Signal** | 33 Sensors, 1 Binary Sensor, 3 Selects (+7) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
 | 📈 **Data** | 11 Sensors, 1 Switch (+4) | Monthly Usage, Near-real-time Speed, Session Data, Data Limit Switch, Data Volume Alert | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
 | ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |

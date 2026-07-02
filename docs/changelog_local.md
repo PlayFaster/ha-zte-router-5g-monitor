@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.5-dev7] - 2026-07-02 - Unreleased
+
+### Summary
+
+- **Config Flow Hardening & Refresh Button**: Normalised host input before storage, stopped exposing the stored password on edit screens, and added a "Refresh Now" button.
+
+### Added
+
+- **Refresh Now Button**: New System sub-device button that triggers an immediate coordinator refresh (`async_request_refresh`), complementing the existing Pause Polling switch and configurable polling interval.
+
+### Changed
+
+- **Host Normalisation in Config Flow**: Added `_clean_host()` and applied it to all four config-flow steps (user, reconfigure, reauth, options) so a full URL or trailing slash entered in the Host field is stripped before it is stored in `entry.options`. Prevents a doubled device `configuration_url` (e.g. `http://http://192.168.0.1`).
+- **Password No Longer Exposed on Edit Screens**: Split the config-flow schema into setup (`_user_schema`) and edit (`_edit_schema`). The password now uses a masked `TextSelector` and is left blank on Reconfigure/Options/Reauth — the stored value is never pre-filled or revealable via the UI eye icon. A blank submission keeps the stored password via `_merge_credentials()`; entering a value changes it.
+- **Field Helper Text**: Added `data_description` guidance under the password field on the Reconfigure/Options screens ("Leave blank to keep the current password, or enter a new one to change it.").
+
+### Tests
+
+- Added coverage for host cleaning, credential merge, URL-host stripping in the user/reconfigure flows, blank-password retention (reconfigure + options), and the new Refresh Now button.
+
 ## [3.2.5-dev6] - 2026-07-01 - Unreleased
 
 ### Changed

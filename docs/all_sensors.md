@@ -1,20 +1,20 @@
 # ZTE Router 5G Integration - Entity Manifest
 
-This document provides a comprehensive list of all 64 entities currently implemented in the ZTE Router 5G integration. It serves as a master reference for debugging, maintenance, and future development.
+This document provides a comprehensive list of all 76 entities currently implemented in the ZTE Router 5G integration. It serves as a master reference for debugging, maintenance, and future development.
 
 ## Summary
 
 | Sub-Device | Entity Count | Description |
 | :-- | :-- | :-- |
-| **System** | 20 | Core router info and global integration settings. |
+| **System** | 21 | Core router info and global integration settings. |
 | **Signal** | 39 | Cellular connectivity, signal strength (LTE/5G), and network info. |
 | **Data** | 12 | Monthly and session traffic volume (Bytes and GB). |
 | **SMS** | 4 | Message counts and recent message content. |
-| **Total** | **75** |  |
+| **Total** | **76** |  |
 
 ---
 
-## 1. System Sub-Device (20 Entities)
+## 1. System Sub-Device (21 Entities)
 
 _Group: `system`_
 
@@ -32,6 +32,7 @@ _Group: `system`_
 | Battery | `battery_value` | Sensor | `battery_value` | % | Sensor | **Disabled by default.** Full when plugged in. |
 | SIM IMSI | `sim_imsi` | Sensor | `sim_imsi` | - | Diagnostic | **Disabled by default (sensitive).** SIM network identity. |
 | SIM ICCID | `sim_iccid` | Sensor | `sim_iccid` | - | Diagnostic | **Disabled by default (sensitive).** SIM card serial number. |
+| Refresh Now | `refresh` | Button | `coordinator.async_request_refresh()` | - | Config | Forces an immediate poll cycle. Complements Pause Polling and the polling interval. |
 | Reboot | `reboot` | Button | API Call: `REBOOT_DEVICE` | - | Control |  |
 | Pause Polling | `pause_polling` | Switch | Options: `stop_polling` | - | Config | State persists in `ConfigEntry.options`. |
 | Polling Interval | `polling_interval` | Number | Options: `scan_interval` | s | Config | Range: 30s - 3600s. Persists in options. |
@@ -210,3 +211,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.0.2-dev7** (2026-05-23) - Documented custom SMS services and verified setup.
 - **v3.1.1-dev5** (2026-05-25) - Updated Session Sent/Received notes to reflect removal of state_class (no LTS).
 - **v3.2.0** (2026-05-27) — Added 11 new entities (APN Profile, APN Selection Mode, Network Mode Selection, ODU LED Switch, Data Limit Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, LTE Band Lock Mask, Data Volume Alert %, SNTP Time Server) raising total count from 64 to 75.
+- **v3.2.5-dev7** (2026-07-02) — Added the "Refresh Now" button (System sub-device) for on-demand coordinator refresh, raising total count from 75 to 76.
