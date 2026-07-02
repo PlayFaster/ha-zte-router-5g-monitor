@@ -8,11 +8,29 @@ from homeassistant.exceptions import HomeAssistantError
 from custom_components.zte_router_5g.button import (
     DELETE_SMS_DESCRIPTION,
     REBOOT_DESCRIPTION,
+    REFRESH_DESCRIPTION,
     ZTEDeleteAllSMSButton,
     ZTERebootButton,
+    ZTERefreshButton,
     async_setup_entry,
 )
 from custom_components.zte_router_5g.const import DOMAIN
+
+
+@pytest.mark.asyncio
+async def test_refresh_button_press(mock_coordinator, mock_config_entry):
+    """Test refresh button triggers an immediate coordinator refresh."""
+    button = ZTERefreshButton(mock_coordinator, mock_config_entry, REFRESH_DESCRIPTION)
+
+    await button.async_press()
+    mock_coordinator.async_request_refresh.assert_called_once()
+
+
+def test_refresh_button_device_info(mock_coordinator, mock_config_entry):
+    """Test refresh button is attached to the system sub-device."""
+    button = ZTERefreshButton(mock_coordinator, mock_config_entry, REFRESH_DESCRIPTION)
+
+    assert button.device_info["identifiers"] == {(DOMAIN, "864155042229309_system")}
 
 
 @pytest.mark.asyncio

@@ -10,9 +10,44 @@ from custom_components.zte_router_5g.api import ZTEAuthError, ZTEConnectionError
 from custom_components.zte_router_5g.config_flow import (
     ZTEConfigFlow,
     ZTEOptionsFlow,
+    _clean_host,
+    _merge_credentials,
     _validate_credentials,
 )
 from custom_components.zte_router_5g.const import DEFAULT_NAME
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("192.168.0.1", "192.168.0.1"),
+        ("  192.168.0.1  ", "192.168.0.1"),
+        ("http://192.168.0.1", "192.168.0.1"),
+        ("https://192.168.0.1/", "192.168.0.1"),
+        ("https://192.168.0.1///", "192.168.0.1"),
+    ],
+)
+def test_clean_host(raw, expected):
+    """Test that host entries are normalised to a bare host."""
+    assert _clean_host(raw) == expected
+
+
+def test_merge_credentials_blank_password_uses_stored():
+    """A blank password falls back to the stored value."""
+    merged = _merge_credentials(
+        {CONF_HOST: "1.1.1.1", CONF_PASSWORD: ""},
+        {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "stored"},
+    )
+    assert merged[CONF_PASSWORD] == "stored"
+
+
+def test_merge_credentials_new_password_overrides_stored():
+    """A supplied password replaces the stored value."""
+    merged = _merge_credentials(
+        {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "new"},
+        {CONF_HOST: "1.1.1.1", CONF_PASSWORD: "stored"},
+    )
+    assert merged[CONF_PASSWORD] == "new"
 
 
 @pytest.mark.asyncio
@@ -454,3 +489,77 @@ async def test_reconfigure_unknown_error():
         )
 
     assert result["errors"] == {"base": "unknown"}
+
+
+@pytest.mark.asyncio
+async def test_user_step_strips_url_host():
+    """Test that a URL entered as host is normalised before being stored."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {}
+    flow.hass.config_entries.async_entry_for_domain_unique_id.return_value = None
+
+    user_input = {
+        CONF_HOST: "https://192.168.0.1/",
+        CONF_USERNAME: "admin",
+        CONF_PASSWORD: "password",
+    }
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        return_value={"imei": "test_imei", "model": "test_model", "sw_version": "1.0"},
+    ):
+        result = await flow.async_step_user(user_input)
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["options"][CONF_HOST] == "192.168.0.1"
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_blank_password_keeps_stored():
+    """Test that a blank password on reconfigure retains the stored value."""
+    flow = ZTEConfigFlow()
+    flow.hass = MagicMock()
+    flow.context = {}
+    flow.async_update_reload_and_abort = MagicMock(
+        return_value={"type": FlowResultType.ABORT, "reason": "reconfigure_successful"}
+    )
+
+    mock_entry = MagicMock()
+    mock_entry.options = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "stored_password"}
+    flow._get_reconfigure_entry = MagicMock(return_value=mock_entry)
+
+    # User leaves the password field blank and only changes the host format
+    user_input = {CONF_HOST: "http://192.168.0.1", CONF_PASSWORD: ""}
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        return_value=None,
+    ):
+        result = await flow.async_step_reconfigure(user_input)
+
+    assert result["type"] == FlowResultType.ABORT
+    flow.async_update_reload_and_abort.assert_called_once_with(
+        mock_entry,
+        options={CONF_HOST: "192.168.0.1", CONF_PASSWORD: "stored_password"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_options_flow_blank_password_keeps_stored():
+    """Test that a blank password on the options flow retains the stored value."""
+    entry = MagicMock()
+    entry.options = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "stored_password"}
+    flow = ZTEOptionsFlow(entry)
+    flow.hass = MagicMock()
+
+    user_input = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: ""}
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        return_value=None,
+    ):
+        result = await flow.async_step_init(user_input)
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert result["data"][CONF_PASSWORD] == "stored_password"

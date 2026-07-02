@@ -11,6 +11,7 @@ from homeassistant.components.button import (
     ButtonEntityDescription,
 )
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -31,6 +32,14 @@ class ZTEButtonEntityDescription(ButtonEntityDescription):
 
     group: str = "system"
 
+
+# Define metadata for the Refresh Now button
+REFRESH_DESCRIPTION = ZTEButtonEntityDescription(
+    key="refresh",
+    translation_key="system_refresh",
+    entity_category=EntityCategory.CONFIG,
+    group="system",
+)
 
 # Define metadata for the Reboot button
 REBOOT_DESCRIPTION = ZTEButtonEntityDescription(
@@ -59,6 +68,7 @@ async def async_setup_entry(
     # Create the button entities using their respective descriptions
     async_add_entities(
         [
+            ZTERefreshButton(coordinator, entry, REFRESH_DESCRIPTION),
             ZTERebootButton(coordinator, entry, REBOOT_DESCRIPTION),
             ZTEDeleteAllSMSButton(coordinator, entry, DELETE_SMS_DESCRIPTION),
         ],
@@ -90,6 +100,14 @@ class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity)
         return build_device_info(
             self.coordinator, self._entry, self.entity_description.group
         )
+
+
+class ZTERefreshButton(ZTEButton):
+    """Button to trigger an immediate data refresh."""
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        await self.coordinator.async_request_refresh()
 
 
 class ZTERebootButton(ZTEButton):

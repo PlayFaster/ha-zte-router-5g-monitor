@@ -12,6 +12,11 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import AbortFlow
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
+)
 
 from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
 from .const import CONF_NAME, DEFAULT_NAME, DOMAIN
@@ -20,12 +25,22 @@ from .helpers import get_router_model
 _LOGGER = logging.getLogger(__name__)
 
 
+def _clean_host(host: str) -> str:
+    """Strip protocol prefix and trailing slashes from a host entry."""
+    clean = host.strip()
+    if "://" in clean:
+        clean = clean.split("://", 1)[1]
+    return clean.rstrip("/")
+
+
+def _password_selector() -> TextSelector:
+    """Return a masked password text selector."""
+    return TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
+
+
 def _user_schema(defaults: dict[str, Any] | None) -> vol.Schema:
-    """Return the user/options form schema, pre-filled with defaults."""
-    if defaults is None:
-        defaults_dict: dict[str, Any] = {}
-    else:
-        defaults_dict = defaults
+    """Return the initial setup schema. The password field is masked."""
+    defaults_dict = defaults or {}
     return vol.Schema(
         {
             vol.Optional(
@@ -35,11 +50,42 @@ def _user_schema(defaults: dict[str, Any] | None) -> vol.Schema:
             vol.Optional(
                 CONF_USERNAME, default=defaults_dict.get(CONF_USERNAME, "")
             ): str,
-            vol.Required(
-                CONF_PASSWORD, default=defaults_dict.get(CONF_PASSWORD, "")
-            ): str,
+            vol.Required(CONF_PASSWORD, default=""): _password_selector(),
         }
     )
+
+
+def _edit_schema(defaults: dict[str, Any] | None) -> vol.Schema:
+    """Return the reconfigure/reauth/options schema.
+
+    The password field is intentionally left blank so the stored value cannot
+    be retrieved via the UI eye-icon. Leave it blank to keep the existing
+    password, or enter a new value to change it. Non-sensitive fields (name,
+    host, username) are pre-filled for convenience.
+    """
+    defaults_dict = defaults or {}
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_NAME, default=defaults_dict.get(CONF_NAME, DEFAULT_NAME)
+            ): str,
+            vol.Required(CONF_HOST, default=defaults_dict.get(CONF_HOST, "")): str,
+            vol.Optional(
+                CONF_USERNAME, default=defaults_dict.get(CONF_USERNAME, "")
+            ): str,
+            vol.Optional(CONF_PASSWORD, default=""): _password_selector(),
+        }
+    )
+
+
+def _merge_credentials(
+    user_input: dict[str, Any], existing: dict[str, Any]
+) -> dict[str, Any]:
+    """Fill a blank password field from the existing stored value."""
+    merged = dict(user_input)
+    if not (merged.get(CONF_PASSWORD) or "").strip():
+        merged[CONF_PASSWORD] = existing.get(CONF_PASSWORD) or ""
+    return merged
 
 
 async def _validate_credentials(
@@ -77,6 +123,7 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            user_input[CONF_HOST] = _clean_host(user_input[CONF_HOST])
             try:
                 info = await _validate_credentials(self.hass, user_input)
 
@@ -116,12 +163,14 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         entry = self._get_reconfigure_entry()
 
         if user_input is not None:
+            user_input[CONF_HOST] = _clean_host(user_input[CONF_HOST])
+            merged = _merge_credentials(user_input, dict(entry.options))
             try:
-                await _validate_credentials(self.hass, user_input)
+                await _validate_credentials(self.hass, merged)
 
                 return self.async_update_reload_and_abort(
                     entry,
-                    options={**entry.options, **user_input},
+                    options={**entry.options, **merged},
                 )
 
             except ZTEAuthError:
@@ -136,7 +185,7 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=_user_schema(dict(entry.options)),
+            data_schema=_edit_schema(dict(entry.options)),
             errors=errors,
             description_placeholders={"host": entry.options.get(CONF_HOST, "")},
         )
@@ -159,15 +208,18 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         host = entry.options.get(CONF_HOST, "") if entry else ""
 
         if user_input is not None:
+            user_input[CONF_HOST] = _clean_host(user_input[CONF_HOST])
+            existing = dict(entry.options) if entry else {}
+            merged = _merge_credentials(user_input, existing)
             try:
-                await _validate_credentials(self.hass, user_input)
+                await _validate_credentials(self.hass, merged)
 
                 if entry is None:
                     return self.async_abort(reason="reauth_successful")
 
                 # Merge new credentials into existing entry options
                 updated_options = dict(entry.options)
-                updated_options.update(user_input)
+                updated_options.update(merged)
                 self.hass.config_entries.async_update_entry(
                     entry, options=updated_options
                 )
@@ -187,7 +239,7 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reauth_confirm",
-            data_schema=_user_schema({}),
+            data_schema=_edit_schema(dict(entry.options) if entry else {}),
             errors=errors,
             description_placeholders={"host": host},
         )
@@ -213,13 +265,15 @@ class ZTEOptionsFlow(config_entries.OptionsFlow):
         errors: dict[str, str] = {}
 
         if user_input is not None:
+            user_input[CONF_HOST] = _clean_host(user_input[CONF_HOST])
+            merged = _merge_credentials(user_input, dict(self._entry.options))
             try:
                 # We call validation but don't need to update 'data' here
                 # since it's already populated and will be updated by the coordinator
-                await _validate_credentials(self.hass, user_input)
+                await _validate_credentials(self.hass, merged)
 
                 # Synchronize the integration title if the name changed
-                new_name = user_input.get(CONF_NAME, DEFAULT_NAME)
+                new_name = merged.get(CONF_NAME, DEFAULT_NAME)
                 if new_name != self._entry.title:
                     self.hass.config_entries.async_update_entry(
                         self._entry, title=new_name
@@ -227,7 +281,7 @@ class ZTEOptionsFlow(config_entries.OptionsFlow):
 
                 # Preserve existing runtime options and merge in the updated credentials
                 updated_options = dict(self._entry.options)
-                updated_options.update(user_input)
+                updated_options.update(merged)
 
                 return self.async_create_entry(title="", data=updated_options)
 
@@ -242,6 +296,6 @@ class ZTEOptionsFlow(config_entries.OptionsFlow):
         # Pre-fill form with current values
         return self.async_show_form(
             step_id="init",
-            data_schema=_user_schema(dict(self._entry.options)),
+            data_schema=_edit_schema(dict(self._entry.options)),
             errors=errors,
         )

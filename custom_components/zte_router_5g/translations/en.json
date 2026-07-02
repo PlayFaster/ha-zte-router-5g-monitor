@@ -36,7 +36,7 @@
         },
         "data_description": {
           "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
-          "password": "Admin password for the router web interface"
+          "password": "Leave blank to keep the current password, or enter a new one to change it."
         }
       }
     },
@@ -116,6 +116,7 @@
       "system_sntp_server": { "name": "Time Server (SNTP)" }
     },
     "button": {
+      "system_refresh": { "name": "Refresh Now" },
       "system_reboot": { "name": "Reboot" },
       "sms_delete_all": { "name": "Delete All" }
     },
@@ -156,7 +157,7 @@
         },
         "data_description": {
           "host": "IP address of the ZTE router (e.g., 192.168.0.1)",
-          "password": "Admin password for the router web interface"
+          "password": "Leave blank to keep the current password, or enter a new one to change it."
         }
       }
     },
