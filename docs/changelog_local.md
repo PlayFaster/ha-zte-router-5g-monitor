@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.5-dev9] - 2026-07-02 - Unreleased
+
+### Summary
+
+- **Explicit `config_entry` on the Coordinator**: Pass the config entry explicitly to `DataUpdateCoordinator` so Home Assistant reliably honours the "Enable polling for changes" system option and to satisfy the upcoming HA requirement (implicit `ContextVar` detection is being removed in HA 2026.8).
+
+### Changed
+
+- **Coordinator `config_entry`**: `ZTERouterDataUpdateCoordinator` now passes `config_entry=entry` to `super().__init__()`. This makes `self.config_entry` explicit, which is what HA core's `_schedule_refresh()` checks (`config_entry.pref_disable_polling`) to stop scheduled polling when the user sets **Settings → Devices & Services → (⋮) → System options → "Enable polling for changes" = OFF**. Manual updates (`homeassistant.update_entity`, "Refresh Now", Pause-Polling off→on) still fetch. No behaviour change on current HA — it removes reliance on implicit context detection, which HA logs as an error from **2026.8**.
+- **Minimum HA Version**: Documented minimum raised to **2024.8.0** (the release that added the `config_entry` argument to `DataUpdateCoordinator`).
+
+### Tests
+
+- Added a coordinator test asserting `coordinator.config_entry is entry`.
+
+### Bumps
+
+- **Shared .github CI Validation**: Bump .github Shared CI Validation via SHA from vv2.0.4 to v2.0.5 (PR #31 #32)
+
 ## [3.2.5-dev8] - 2026-07-02 - Unreleased
 
 ### Summary
@@ -54,13 +73,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Validate Bump**: Updated `ruff` from 0.15.18 to 0.15.19
+- **Validate Bump**: Updated `ruff` from 0.15.18 to 0.15.19 (PR #33)
 
 ## [3.2.5-dev5] - 2026-06-29 - Unreleased
 
 ### Changed
 
-- **Validate Bump**: Updated ruff from 0.15.17 to 0.15.18
+- **Validate Bump**: Updated ruff from 0.15.17 to 0.15.18 (PR #33)
 
 ## [3.2.5-dev4] - 2026-06-29 - Unreleased
 

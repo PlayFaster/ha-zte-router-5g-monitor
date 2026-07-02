@@ -1145,3 +1145,19 @@ async def test_coordinator_check_new_sms_same_timestamp(
         data = await coordinator._async_update_data()
         assert data["network_type"] == "LTE"
         assert "1_2024-01-01T00:00:00" in coordinator.fired_sms_hashes
+
+
+@pytest.mark.asyncio
+async def test_coordinator_config_entry_associated(
+    hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
+):
+    """Coordinator passes config_entry to base so HA honours pref_disable_polling."""
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    mock_config_entry.add_to_hass(hass)
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+
+    assert coordinator.config_entry is mock_config_entry

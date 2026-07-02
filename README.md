@@ -51,7 +51,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 **🏠 Home Assistant Version:**
 
-- Minimum: Home Assistant **2024.6.0**
+- Minimum: Home Assistant **2024.8.0**
 - Minimum Python: **3.12+** (this is built into and handled by HA, but relevant for non-standard installs).
 
 ## 🏠 Use Cases
