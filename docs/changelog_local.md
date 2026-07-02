@@ -2,6 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.5-dev8] - 2026-07-02 - Unreleased
+
+### Summary
+
+- **Suggested Display Units & Precision**: Applied Home Assistant's `suggested_unit_of_measurement` / `suggested_display_precision` to 16 sensors so the UI shows friendly units and sensible decimal places while native values (used for long-term statistics) stay canonical.
+
+### Changed
+
+- **Data Size Sensors (Bytes → GB)**: `monthly_tx_bytes_raw`, `monthly_rx_bytes_raw`, `monthly_total_bytes_raw` suggest `GIGABYTES` at precision **1** (monthly); `realtime_tx_bytes`, `realtime_rx_bytes` (session) suggest `GIGABYTES` at precision **2**. Native unit stays `BYTES`.
+- **Data Rate Sensors (B/s → Mbit/s)**: `realtime_tx_thrpt`, `realtime_rx_thrpt` suggest `MEGABITS_PER_SECOND` at precision **2**. Native unit stays `BYTES_PER_SECOND`.
+- **Duration Sensor (s → h)**: `realtime_time` (Uptime Duration) suggests `HOURS` at precision **1**; its native unit was normalised from the `"s"` string to `UnitOfTime.SECONDS` (identical value).
+- **Bandwidth (MHz)**: `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth` now round to **0** decimal places; unit unchanged (`MHz`).
+- **Signal Strength (dBm)**: `lte_rsrp`, `lte_rssi`, `z5g_rsrp`, `z5g_rssi`, `rssi`, `rscp` round to **0** decimal places; unit unchanged. (RSRQ/SNR in dB left fractional.)
+
+### Notes
+
+- Native units are unchanged in every case — only the display hint is added, so long-term statistics and the guard-band limits (defined in native units) are unaffected.
+- The legacy GB sensors (`monthly_tx_bytes`, `monthly_rx_bytes`, `monthly_total_bytes`, already GB and disabled by default) were intentionally left as-is.
+
+### Tests
+
+- Added parametrized coverage asserting the suggested unit/precision on all 16 affected sensors (and that the uptime-duration native unit stays seconds).
+
+### Bumps
+
+- **Validate Bump**: Bumped `pytest-homeassistant-custom-component` from 0.13.340 to 0.13.344
+- **Validate Bump**: Bumped `check-jsonschema` from 0.37.2 to 0.37.4
+
 ## [3.2.5-dev7] - 2026-07-02 - Unreleased
 
 ### Summary
@@ -26,7 +54,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Validate Bump**: Updated ruff from 0.15.18 to 0.15.19
+- **Validate Bump**: Updated `ruff` from 0.15.18 to 0.15.19
 
 ## [3.2.5-dev5] - 2026-06-29 - Unreleased
 

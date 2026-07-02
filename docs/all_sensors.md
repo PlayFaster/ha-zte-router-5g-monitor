@@ -156,6 +156,21 @@ The `Recent Msg` sensor contains:
 - `number`: Hex-decoded sender number.
 - `date`: Formatted ISO timestamp from router's comma-separated format.
 
+### Suggested Display Units & Precision
+
+Sensors are stored in their canonical **native** unit (so long-term statistics and guard bands are stable) but carry a display hint via `suggested_unit_of_measurement` / `suggested_display_precision`. The value shown in the UI can still be overridden per-entity.
+
+| Sensors | Native | Suggested display | Precision |
+| :-- | :-- | :-- | :-- |
+| `monthly_tx_bytes_raw`, `monthly_rx_bytes_raw`, `monthly_total_bytes_raw` | Bytes | GB | 1 |
+| `realtime_tx_bytes`, `realtime_rx_bytes` (session) | Bytes | GB | 2 |
+| `realtime_tx_thrpt`, `realtime_rx_thrpt` | B/s | Mbit/s | 2 |
+| `realtime_time` (Uptime Duration) | s | h | 1 |
+| `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth` | MHz | MHz (unchanged) | 0 |
+| `lte_rsrp`, `lte_rssi`, `z5g_rsrp`, `z5g_rssi`, `rssi`, `rscp` | dBm | dBm (unchanged) | 0 |
+
+> The legacy GB sensors (`monthly_tx_bytes`, `monthly_rx_bytes`, `monthly_total_bytes`) already report GB (disabled by default) and are intentionally left unchanged.
+
 ---
 
 ## 6. Services
@@ -212,3 +227,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.1.1-dev5** (2026-05-25) - Updated Session Sent/Received notes to reflect removal of state_class (no LTS).
 - **v3.2.0** (2026-05-27) — Added 11 new entities (APN Profile, APN Selection Mode, Network Mode Selection, ODU LED Switch, Data Limit Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, LTE Band Lock Mask, Data Volume Alert %, SNTP Time Server) raising total count from 64 to 75.
 - **v3.2.5-dev7** (2026-07-02) — Added the "Refresh Now" button (System sub-device) for on-demand coordinator refresh, raising total count from 75 to 76.
+- **v3.2.5-dev8** (2026-07-02) — Added suggested display units/precision to 16 sensors (data size → GB, data rate → Mbit/s, uptime duration → hours, bandwidth and dBm → 0 dp). No entity count change. Added the "Suggested Display Units & Precision" reference table.

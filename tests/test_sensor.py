@@ -4,6 +4,7 @@ from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from homeassistant.const import UnitOfDataRate, UnitOfInformation, UnitOfTime
 from homeassistant.util import dt as dt_util
 
 from custom_components.zte_router_5g.const import DOMAIN
@@ -336,3 +337,57 @@ def test_sensor_extra_attributes_type_error_caught(mock_coordinator, mock_config
             f"extra_state_attributes raised TypeError (sensor.py:711 bug): {exc}"
         )
     assert attrs == {}
+
+
+# --- SUGGESTED DISPLAY UNIT / PRECISION ---
+
+
+@pytest.mark.parametrize(
+    ("key", "suggested_unit", "precision"),
+    [
+        # Data size (Bytes -> GB): monthly precision 1, session precision 2
+        ("monthly_tx_bytes_raw", UnitOfInformation.GIGABYTES, 1),
+        ("monthly_rx_bytes_raw", UnitOfInformation.GIGABYTES, 1),
+        ("monthly_total_bytes_raw", UnitOfInformation.GIGABYTES, 1),
+        ("realtime_tx_bytes", UnitOfInformation.GIGABYTES, 2),
+        ("realtime_rx_bytes", UnitOfInformation.GIGABYTES, 2),
+        # Data rate (B/s -> Mbit/s), precision 2
+        ("realtime_tx_thrpt", UnitOfDataRate.MEGABITS_PER_SECOND, 2),
+        ("realtime_rx_thrpt", UnitOfDataRate.MEGABITS_PER_SECOND, 2),
+        # Duration (s -> h), precision 1
+        ("realtime_time", UnitOfTime.HOURS, 1),
+    ],
+)
+def test_sensor_suggested_unit_and_precision(key, suggested_unit, precision):
+    """Sensors with a unit conversion carry the expected suggested unit/precision."""
+    desc = next(d for d in SENSOR_TYPES if d.key == key)
+    assert desc.suggested_unit_of_measurement == suggested_unit
+    assert desc.suggested_display_precision == precision
+
+
+def test_sensor_uptime_duration_native_is_seconds():
+    """The uptime duration sensor keeps seconds as its native (canonical) unit."""
+    desc = next(d for d in SENSOR_TYPES if d.key == "realtime_time")
+    assert desc.native_unit_of_measurement == UnitOfTime.SECONDS
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        # Bandwidth in MHz -> 0 decimals (no unit change)
+        "lte_ca_pcell_bandwidth",
+        "lte_ca_scell_bandwidth",
+        # Signal strength in dBm -> 0 decimals (no unit change)
+        "lte_rsrp",
+        "lte_rssi",
+        "z5g_rsrp",
+        "z5g_rssi",
+        "rssi",
+        "rscp",
+    ],
+)
+def test_sensor_zero_precision_no_unit_change(key):
+    """MHz bandwidth and dBm signal sensors round to 0 dp, unit unchanged."""
+    desc = next(d for d in SENSOR_TYPES if d.key == key)
+    assert desc.suggested_display_precision == 0
+    assert desc.suggested_unit_of_measurement is None
