@@ -19,7 +19,7 @@ All notable changes to this project will be documented in this file.
 
 ### Bumps
 
-- **Shared .github CI Validation**: Bump .github Shared CI Validation via SHA from vv2.0.4 to v2.0.5 (PR #31 #32)
+- **Shared .github CI Validation**: Bump .github Shared CI Validation via SHA from v2.0.4 to v2.0.5 (PR #31 #32)
 
 ## [3.2.5-dev8] - 2026-07-02 - Unreleased
 
