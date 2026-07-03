@@ -21,7 +21,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - [ZTE Router 5G Monitor for Home Assistant](#zte-router-5g-monitor-for-home-assistant)
   - [📋 Table of Contents](#-table-of-contents)
   - [🔧 Compatibility \& Tested Devices](#-compatibility--tested-devices)
-  - [🏠 Use Cases](#-use-cases)
+  - [🎯 Use Cases](#-use-cases)
   - [✅ Features](#-features)
   - [🔍 What You Get](#-what-you-get)
   - [💡 Example Automations](#-example-automations)
@@ -54,13 +54,13 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - Minimum: Home Assistant **2024.8.0**
 - Minimum Python: **3.12+** (this is built into and handled by HA, but relevant for non-standard installs).
 
-## 🏠 Use Cases
+## 🎯 Use Cases
 
 - **Signal Monitoring**: Near-real-time and historical 5G/LTE signal data enable the monitoring of router performance.
   - **Best Signal**: Use signal diagnostics (RSRP, SNR) to optimize the physical placement or orientation of your router.
   - **Performance Tracking**: Use signal history to check whether the performance from your 5G/LTE ISP is stable or changing.
   - **Connection Quality**: Know if your router has dropped to a lower-capability 4G/LTE only connection.
-- **Data Cap Management**: Create automations to get notified when you reach 80% or 90% of your monthly data limit to avoid unexpected overage charges on limited 5G plans.
+- **Data Cap Management**: Create automations to get notified when your usage crosses a threshold you set (for example, as you approach your monthly data limit) to avoid unexpected overage charges on limited 5G plans.
 - **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your phone via SMS if your primary internet connection goes down.
   - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
 
@@ -128,7 +128,7 @@ Delete a single SMS by its storage index. Use the `index` field from `get_sms_li
 
 | Parameter | Required | Description |
 | :-- | :-- | :-- |
-| `entry_id` | No | The router to use. Optional if only one router is configured. |
+| `entry_id` | **Yes** | The router to use. |
 | `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
 
 ```yaml
@@ -144,7 +144,7 @@ Bulk delete SMS messages from the router inbox.
 
 | Parameter | Required | Default | Range | Description |
 | :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | No | — | — | The router to use. Optional if only one router is configured. |
+| `entry_id` | **Yes** | — | — | The router to use. |
 | `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
 
 ```yaml
@@ -160,7 +160,7 @@ Fetch a list of SMS messages. Supports **Action Responses** — use the output d
 
 | Parameter | Required | Default | Range | Description |
 | :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | No | — | — | The router to use. Optional if only one router is configured. |
+| `entry_id` | **Yes** | — | — | The router to use. |
 | `page` | No | `1` | 1–100 | Page number for pagination. |
 | `count` | No | `20` | 1–50 | Messages per page. |
 | `box_type` | No | `1` | See below | Mailbox to read from. |
@@ -329,9 +329,7 @@ actions:
         list | count }} messages from your bank in the inbox.
 ```
 
-### 📡 APN & Network Selection Examples
-
-#### 🔄 APN Failover
+### 📡 APN Failover & Network Selection
 
 Automatically switch to a backup APN profile if the primary connection goes offline.
 
@@ -433,9 +431,7 @@ actions:
         - CA: {{ states('sensor.zte_5g_signal_carrier_aggregation') }}
 ```
 
-### 🩺 System Health Alerts
-
-#### 🚨 Router Reboot Alert
+### 🩺 System Health & Connectivity Alerts
 
 Monitor for router reboots by watching the device boot timestamp sensor.
 
@@ -596,7 +592,7 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
   - Username can be changed in the webUI, as well as password, so ensure you are using the current version of both.
 - Ensure the router is powered on and reachable from your Home Assistant instance.
 
-#### **Why can't I access the router web UI while this is connected?**
+#### 🔒 **Why can't I access the router web UI while this integration is running?**
 
 - ZTE routers typically only allow **one simultaneous login session**.
 - Use the **Pause Polling** switch in Home Assistant to halt polling before you log into the web UI.
@@ -604,14 +600,14 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 
 ### 📊 Diagnostics & Entity Values
 
-#### **Some sensors showing "Unknown"**
+#### ❔ **Some sensors showing "Unknown"**
 
 - Most sensors showing okay with some unknown **is expected behavior**.
   - The integration fetches everything it can from the router.
   - Not every metric is provided by every ISP or firmware version.
   - 5G NR sensors will show "Unknown" when the router is operating in LTE-only mode.
 
-#### **All sensors showing "Unavailable" or "Unknown"**
+#### 🛑 **All sensors showing "Unavailable" or "Unknown"**
 
 - This is normal during a router reboot or if the router is temporarily unreachable.
   - The integration will automatically recover once the connection is restored.
@@ -648,11 +644,15 @@ To fully uninstall (HACS):
 
 This is a **personal project**. Support and updates are provided on a **"best-effort"** basis only. While I use this integration daily and aim to keep it functional with the latest Home Assistant releases, I cannot guarantee immediate fixes for issues or compatibility with all router firmware versions.
 
+---
+
 ## 🤝 Contributors & Acknowledgements
 
 - 🙏 Special Thanks: This project is based on the original work done by @Kajkac on ZTE Routers. A big thanks for the heavy lifting!
 - 🙏 **[huawei_lte_extended](https://github.com/william-aqn/huawei_lte_extended)** (@william-aqn): The approach to expanded SMS functionality in this integration is based on this work.
 - This project was developed with the assistance of AI to ensure code quality and adherence to best practices.
+
+---
 
 ## 📄 License
 

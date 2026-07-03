@@ -391,3 +391,64 @@ def test_sensor_zero_precision_no_unit_change(key):
     desc = next(d for d in SENSOR_TYPES if d.key == key)
     assert desc.suggested_display_precision == 0
     assert desc.suggested_unit_of_measurement is None
+
+
+# ── Coverage gap: _safe_str normal path ──────────────────────────────────
+
+
+def test_sensor_safe_str_empty(mock_coordinator, mock_config_entry):
+    """Test that _safe_str returns None for None/empty values.
+
+    Covers sensor.py:107 (return None for empty values).
+    """
+    mock_coordinator.data = {"some": "data"}
+    description = next(d for d in SENSOR_TYPES if d.key == "wan_ipaddr")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    assert sensor.native_value is None
+
+
+def test_sensor_safe_str_normal_path(mock_coordinator, mock_config_entry):
+    """Test that _safe_str returns str(val) for non-empty values.
+
+    Covers sensor.py:108 (return str(val)).
+    """
+    mock_coordinator.data = {"wan_ipaddr": "192.168.1.1"}
+    description = next(d for d in SENSOR_TYPES if d.key == "wan_ipaddr")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    assert sensor.native_value == "192.168.1.1"
+
+
+# ── Coverage gap: sntp_server extra_state_attributes ─────────────────────
+
+
+def test_sensor_sntp_server_attributes(mock_coordinator, mock_config_entry):
+    """Test extra_state_attributes for sntp_server sensor.
+
+    Covers sensor.py:775-779.
+    """
+    mock_coordinator.data = {
+        "sntp_server0": "pool.ntp.org",
+        "sntp_server1": "time.google.com",
+        "sntp_dst_enable": "1",
+    }
+    description = next(d for d in SENSOR_TYPES if d.key == "sntp_server")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    assert sensor.native_value == "pool.ntp.org"
+    attrs = sensor.extra_state_attributes
+    assert attrs["sntp_server1"] == "time.google.com"
+    assert attrs["sntp_dst_enable"] is True
+
+
+def test_sensor_sntp_server_attributes_dst_disabled(
+    mock_coordinator, mock_config_entry
+):
+    """Test sntp_server attributes with DST disabled."""
+    mock_coordinator.data = {
+        "sntp_server0": "pool.ntp.org",
+        "sntp_server1": "time.google.com",
+        "sntp_dst_enable": "0",
+    }
+    description = next(d for d in SENSOR_TYPES if d.key == "sntp_server")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    attrs = sensor.extra_state_attributes
+    assert attrs["sntp_dst_enable"] is False

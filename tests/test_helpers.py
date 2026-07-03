@@ -18,6 +18,11 @@ def test_get_router_model_unknown():
     assert get_router_model({"wa_inner_version": "UNKNOWN_MODEL_123"}) == "ZTE Router"
 
 
+def test_get_router_model_direct_name():
+    """Test get_router_model with a direct model_name field (covers helpers.py:35)."""
+    assert get_router_model({"model_name": "MC7010"}) == "MC7010"
+
+
 def test_get_router_model_known():
     """Test get_router_model with known model strings."""
     assert (

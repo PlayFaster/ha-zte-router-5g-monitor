@@ -1,6 +1,7 @@
 """Tests for the ZTE Router number."""
 
 import asyncio
+from contextlib import suppress
 from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -91,6 +92,42 @@ async def test_polling_interval_cancel_previous_task(
         assert task1 is not None
         await asyncio.sleep(0)
         await number._refresh_task
+
+
+@pytest.mark.asyncio
+async def test_async_will_remove_from_hass_pending_task(
+    mock_coordinator, mock_config_entry
+):
+    """Test that async_will_remove_from_hass cancels a pending refresh task."""
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
+    number.hass = _mock_hass_with_async_create_task()
+    number.async_write_ha_state = MagicMock()
+
+    # Create a pending refresh task
+    async def never_completing():
+        await asyncio.Event().wait()
+
+    number._refresh_task = asyncio.ensure_future(never_completing())
+    assert not number._refresh_task.done()
+
+    await number.async_will_remove_from_hass()
+    # Await the task so the cancellation propagates fully
+    with suppress(asyncio.CancelledError):
+        await number._refresh_task
+    assert number._refresh_task.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_async_will_remove_from_hass_no_task(mock_coordinator, mock_config_entry):
+    """Test that async_will_remove_from_hass handles no refresh task."""
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
+    number.hass = MagicMock()
+    number._refresh_task = None
+    await number.async_will_remove_from_hass()
 
 
 @pytest.mark.asyncio

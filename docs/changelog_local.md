@@ -19,6 +19,12 @@ All notable changes to this project will be documented in this file.
 - **Password No Longer Pre-filled on Edit Screens**: On Reconfigure, Options, and Reauth, the password field is now masked and left blank — the stored value is never pre-filled or revealable. Leave it blank to keep the current password, or enter a new one to change it.
 - **Doubled Device URL**: A full URL or trailing slash entered in the Host field is now stripped before storage, preventing a malformed device link (e.g. `http://http://192.168.0.1`).
 
+## [3.2.5-dev-11] - 2026-07-03 - Unreleased
+
+### Changed
+
+- **PyTest Coverage**: Incrteaed coverage from 99% to 100% (seven uncovered statements addressed).
+
 ## [3.2.5-dev10] - 2026-07-03 - Unreleased
 
 ### Bumps
