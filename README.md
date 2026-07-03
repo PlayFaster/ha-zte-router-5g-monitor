@@ -208,9 +208,9 @@ This integration provides **70+ entities** (depending on your firmware) organize
 
 | Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
 | :-- | :-- | :-- | :-- |
-| ⚙️ **System** | 9 Sensors, 3 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+5) | Firmware, IP Addresses, Uptime, Refresh Now, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
-| 📶 **Signal** | 33 Sensors, 1 Binary Sensor, 3 Selects (+7) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
-| 📈 **Data** | 11 Sensors, 1 Switch (+4) | Monthly Usage, Near-real-time Speed, Session Data, Data Limit Switch, Data Volume Alert | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
+| ⚙️ **System** | 13 Sensors, 3 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+10) | Firmware, IP Addresses, Uptime, Refresh Now, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, Time Server (SNTP), ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
+| 📶 **Signal** | 35 Sensors, 1 Binary Sensor, 3 Selects (+7) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
+| 📈 **Data** | 11 Sensors, 1 Switch (+5) | Monthly Usage, Near-real-time Speed, Session Data, Data Limit Switch, Data Volume Alert | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
 | ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
 | 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
 
@@ -357,14 +357,14 @@ actions:
 
 ### 🚨 Data Usage Alert
 
-Monitor your data consumption and get notified when you approach your monthly limit. If you change the display unit of data sensors (e.g. from Bytes to GB), you must change the numbers below as well.
+Monitor your data consumption and get notified when you approach your monthly limit. The example below assumes the data sensors display in **GB**. If your sensors are not in GB, check their unit and adjust the thresholds and templates accordingly.
 
 ```yaml
 alias: "ZTE: High Data Usage Alert"
 triggers:
   - trigger: numeric_state
     entity_id: sensor.zte_5g_data_monthly_total
-    above: 500000000000 # 500 GB (in bytes)
+    above: 500 # 500 GB in Bytes - use 500000000000 if the sensor displays Bytes (B)
 actions:
   - action: notify.mobile_app_your_phone
     data:

@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.5] - 2026-07-03 - Release
+
+### Added
+
+- **Refresh Now Button**: New System button that triggers an immediate data refresh, complementing the existing Pause Polling switch and configurable polling interval.
+
+### Changed
+
+- **Display Units & Precision**: 16 sensors now display expected units and decimal places in the UI — data sizes in GB, throughput in Mbit/s, uptime duration in hours, and rounded signal-strength/bandwidth values. Underlying native values (used for long-term statistics) are unchanged.
+- **Polling Toggle Future Ready**: Turning off "Enable polling for changes" in the entry's system options now reliably stops scheduled polling and will satisfy the upcoming HA requirement (implicit `ContextVar` detection is being removed in HA 2026.8).
+- **Minimum Home Assistant Version**: Documented minimum raised to 2024.8.0 (driven my polling option change above, this was added to HA in 2024.8)
+
+### Fixed
+
+- **Password No Longer Pre-filled on Edit Screens**: On Reconfigure, Options, and Reauth, the password field is now masked and left blank — the stored value is never pre-filled or revealable. Leave it blank to keep the current password, or enter a new one to change it.
+- **Doubled Device URL**: A full URL or trailing slash entered in the Host field is now stripped before storage, preventing a malformed device link (e.g. `http://http://192.168.0.1`).
+
+## [3.2.5-dev10] - 2026-07-03 - Unreleased
+
+### Bumps
+
+- **Validate Bump**: Update Ruff from 0.15.19 to 0.15.20
+
+### Changed
+
+- **Documentation**: Updated the README screenshots to include Refresh Now button and with higher resolution. Updated all_sensors.md and README.md to correctly reflect sensor counts and groups.
+
 ## [3.2.5-dev9] - 2026-07-02 - Unreleased
 
 ### Summary

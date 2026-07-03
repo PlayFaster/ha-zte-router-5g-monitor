@@ -25,7 +25,7 @@ _Group: `system`_
 | WAN IP Address | `wan_ipaddr` | Sensor | `wan_ipaddr` | - | Diagnostic |  |
 | LAN IP Address | `lan_ipaddr` | Sensor | `lan_ipaddr` | - | Diagnostic |  |
 | Uptime | `device_uptime` | Sensor | `realtime_time` | Timestamp | Sensor | Calculated as `now() - uptime_seconds`. |
-| Uptime Duration | `realtime_time` | Sensor | `realtime_time` | s | Sensor | **Disabled by default.** Raw uptime duration in seconds. |
+| Uptime Duration | `realtime_time` | Sensor | `realtime_time` | h | Sensor | **Disabled by default.** Raw uptime duration. Other display units may be used (e.g. h). |
 | Last Updated | `last_updated` | Sensor | `coordinator.last_update_success_time` | Timestamp | Sensor | Internal tracking of last successful poll. |
 | IMEI | `imei` | Sensor | `imei` | - | Diagnostic | **Disabled by default (sensitive).** Hardware-bound modem identifier. |
 | Hardware Version | `hardware_version` | Sensor | `hardware_version` | - | Diagnostic | e.g. `MC7010-1`. |
@@ -98,16 +98,16 @@ _Group: `data`_
 
 | Name | Key | Type | Source (Raw Key) | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| Monthly Sent | `monthly_tx_bytes_raw` | Sensor | `monthly_tx_bytes` | Bytes | Sensor | Native Byte sensor for UI conversion. Other display units may be used (e.g. GiB). |
-| Monthly Received | `monthly_rx_bytes_raw` | Sensor | `monthly_rx_bytes` | Bytes | Sensor | Native Byte sensor for UI conversion. Other display units may be used (e.g. GiB). |
+| Monthly Sent | `monthly_tx_bytes_raw` | Sensor | `monthly_tx_bytes` | Bytes | Sensor | Native Byte sensor for UI conversion. Other display units may be used (e.g. GB). |
+| Monthly Received | `monthly_rx_bytes_raw` | Sensor | `monthly_rx_bytes` | Bytes | Sensor | Native Byte sensor for UI conversion. Other display units may be used (e.g. GB). |
 | Monthly Total | `monthly_total_bytes_raw` | Sensor | `TX + RX` | Bytes | Sensor | Native Byte sensor for UI conversion. Other display units may be used (e.g. GB). |
 | Monthly Sent GB | `monthly_tx_bytes` | Sensor | `monthly_tx_bytes / 10^9` | GB | Sensor | **Disabled by default (Legacy).** |
 | Monthly Received GB | `monthly_rx_bytes` | Sensor | `monthly_rx_bytes / 10^9` | GB | Sensor | **Disabled by default (Legacy).** |
 | Monthly Total GB | `monthly_total_bytes` | Sensor | `(TX+RX) / 10^9` | GB | Sensor | **Disabled by default (Legacy).** |
-| Upload Speed | `realtime_tx_thrpt` | Sensor | `realtime_tx_thrpt` | B/s | Sensor | Instantaneous TX throughput. |
-| Download Speed | `realtime_rx_thrpt` | Sensor | `realtime_rx_thrpt` | B/s | Sensor | Instantaneous RX throughput. |
-| Session Sent | `realtime_tx_bytes` | Sensor | `realtime_tx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. |
-| Session Received | `realtime_rx_bytes` | Sensor | `realtime_rx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. |
+| Upload Speed | `realtime_tx_thrpt` | Sensor | `realtime_tx_thrpt` | B/s | Sensor | Instantaneous TX throughput. Other display units may be used (e.g. Mbit/s). |
+| Download Speed | `realtime_rx_thrpt` | Sensor | `realtime_rx_thrpt` | B/s | Sensor | Instantaneous RX throughput. Other display units may be used (e.g. Mbit/s). |
+| Session Sent | `realtime_tx_bytes` | Sensor | `realtime_tx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. Other display units may be used (e.g. GB). |
+| Session Received | `realtime_rx_bytes` | Sensor | `realtime_rx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. Other display units may be used (e.g. GB). |
 | Data Limit Switch | `data_limit_switch` | Switch | `data_volume_limit_switch` | - | Config | **Disabled by default.** Control data volume limit switch. |
 | Data Volume Alert | `data_volume_alert_percent` | Sensor | `data_volume_alert_percent` | % | Sensor | **Disabled by default.** Alert threshold percentage of limit. |
 
@@ -123,6 +123,10 @@ _Group: `sms`_
 | Total Msg | `msg_total` | Sensor | Sum of all NV/SIM banks | - | Sensor | Includes attributes for each bank. |
 | Recent Msg | `msg_recent` | Sensor | `last_sms` content | - | Sensor | Content is hex-decoded from router. |
 | Delete All Msg | `delete_all` | Button | API Call: `DELETE_SMS` (batch) | - | Control |  |
+| Send Sms | `send_sms` | Service | — | — | — | Send an SMS message via the router. |
+| Delete Sms | `delete_sms` | Service | — | — | — | Delete an SMS message by its index. |
+| Delete All Sms | `delete_all_sms` | Service | — | — | — | Delete all SMS messages from the router inbox. |
+| Get Sms List | `get_sms_list` | Service | — | — | — | Fetch a list of SMS messages from the router. |
 
 ---
 
@@ -228,3 +232,5 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.2.0** (2026-05-27) — Added 11 new entities (APN Profile, APN Selection Mode, Network Mode Selection, ODU LED Switch, Data Limit Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, LTE Band Lock Mask, Data Volume Alert %, SNTP Time Server) raising total count from 64 to 75.
 - **v3.2.5-dev7** (2026-07-02) — Added the "Refresh Now" button (System sub-device) for on-demand coordinator refresh, raising total count from 75 to 76.
 - **v3.2.5-dev8** (2026-07-02) — Added suggested display units/precision to 16 sensors (data size → GB, data rate → Mbit/s, uptime duration → hours, bandwidth and dBm → 0 dp). No entity count change. Added the "Suggested Display Units & Precision" reference table.
+- **v3.2.5-dev9** (2026-07-03) — Documented unit displays for Data sub-device and System Uptime Duration; added SMS service definitions to the SMS sub-device table.
+
