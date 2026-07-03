@@ -59,7 +59,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Signal Monitoring**: Near-real-time and historical 5G/LTE signal data enable the monitoring of router performance.
   - **Best Signal**: Use signal diagnostics (RSRP, SNR) to optimize the physical placement or orientation of your router.
   - **Performance Tracking**: Use signal history to check whether the performance from your 5G/LTE ISP is stable or changing.
-  - **Connection Quality**: Know if your router has dropped to a lower capability 4G/LTE only connection.
+  - **Connection Quality**: Know if your router has dropped to a lower-capability 4G/LTE only connection.
 - **Data Cap Management**: Create automations to get notified when you reach 80% or 90% of your monthly data limit to avoid unexpected overage charges on limited 5G plans.
 - **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your phone via SMS if your primary internet connection goes down.
   - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
@@ -88,7 +88,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 This integration features **dynamic polling**, the ability to pause polling completely or to change the polling interval.
 
 - **Pause Polling**: Switch to halt polling when you need uninterrupted access to the router's web UI (ZTE only allows a single active login session).
-- **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour) via a number entity or automation.
+- **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour, default 180s) via a number entity or automation.
 
 > [!TIP]
 >
@@ -200,7 +200,7 @@ Fires automatically when a new incoming SMS is detected. Use as an automation tr
 
 ## 🔍 What You Get
 
-This integration provides **70+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **75+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 > [!NOTE]
 >
@@ -364,7 +364,7 @@ alias: "ZTE: High Data Usage Alert"
 triggers:
   - trigger: numeric_state
     entity_id: sensor.zte_5g_data_monthly_total
-    above: 500 # 500 GB in Bytes - use 500000000000 if the sensor displays Bytes (B)
+    above: 500 # 500 GB - use 500000000000 if the sensor displays Bytes (B)
 actions:
   - action: notify.mobile_app_your_phone
     data:
@@ -540,19 +540,25 @@ Rather than hiding settings in configuration menus, several configuration parame
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type: `4G_AND_5G` (Auto), `LTE_AND_5G` (5G NSA), `Only_5G` (5G SA), or `Only_LTE` (4G Only).
-- **LTE Band Lock Mask** (`sensor.zte_5g_signal_lte_band_lock_mask`): Displays the current hex mask configuration locking the active LTE bands.
+- **Disabled by Default**: These are disabled by default but can be enabled
+  - **LTE Band Lock Mask** (`sensor.zte_5g_signal_lte_band_lock_mask`): Displays the current hex mask configuration locking the active LTE bands.
 
-#### 🔧 Router Administration & Security (System Device)
+#### 🔧 Router Administration & Polling (System Device)
 
-- **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`): Turn the physical status LEDs of the outdoor unit on or off (disabled by default).
-- **Reboot Schedule** (`binary_sensor.zte_5g_system_reboot_schedule`): Indicates whether a scheduled reboot window is configured and active.
-- **UPnP Enabled** / **SIP ALG Enabled** (`binary_sensor.zte_5g_system_upnp_enabled` / `binary_sensor.zte_5g_system_sip_alg_enabled`): Monitor firewall settings status.
-- **Time Server (SNTP)** (`sensor.zte_5g_system_time_server_sntp`): Displays the active server used by the router for time synchronization.
+- **Pause Polling** (`switch.zte_5g_system_pause_polling`): Halt all polling when you need exclusive access to the router's web UI.
+- **Polling Interval** (`number.zte_5g_system_polling_interval`): Adjust the scan interval slider (30s to 1 hour, default `180` seconds).
+- **Refresh Now** (`button.zte_5g_system_refresh_now`): Trigger an immediate refresh (data fetch).
+- **Disabled by Default**: These are disabled by default but can be enabled
+  - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`): Turn the physical status LEDs of the outdoor unit on or off.
+  - **Reboot Schedule** (`binary_sensor.zte_5g_system_reboot_schedule`): Indicates whether a scheduled reboot window is configured and active.
+  - **UPnP Enabled** / **SIP ALG Enabled** (`binary_sensor.zte_5g_system_upnp_enabled` / `binary_sensor.zte_5g_system_sip_alg_enabled`): Monitor firewall settings status.
+  - **Time Server (SNTP)** (`sensor.zte_5g_system_time_server_sntp`): Displays the active server used by the router for time synchronization.
 
 #### 📈 Billing & Data Controls (Data Device)
 
-- **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`): Enable/disable the router's data limit settings.
-- **Data Volume Alert** (`sensor.zte_5g_data_data_volume_alert`): Displays the alarm warning percentage configured on the router (e.g., 90%).
+- **Disabled by Default**: These are disabled by default but can be enabled
+  - **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`): Enable/disable the router's data limit settings.
+  - **Data Volume Alert** (`sensor.zte_5g_data_data_volume_alert`): Displays the alarm warning percentage configured on the router (e.g., 90%).
 
 ## 🔩 Under the Hood - Technical Architecture
 
@@ -634,7 +640,7 @@ To fully uninstall (HACS):
 ## ❗ Known Limitations /❔ What's Missing?
 
 - **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
-- **Non Bridge Mode Features**: The integration was developed on and has only been tested with the MC7010 which is an outdoor bridge-mode only device without WiFi. This means the integration does not have:
+- **Non-Bridge-Mode Features**: The integration was developed on and has only been tested with the MC7010 which is an outdoor bridge-mode only device without WiFi. This means the integration does not have:
   - **Client Tracking**: No tracking of connected clients.
   - **WiFi Monitoring**: There are no WiFi features.
 
