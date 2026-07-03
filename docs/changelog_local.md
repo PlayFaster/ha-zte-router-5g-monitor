@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.6-dev1] - 2026-07-03 - Unreleased
+
+### Changed
+
+- **Documentation**: Minor doc updates and formatting.
+
 ## [3.2.5] - 2026-07-03 - Release
 
 ### Added
@@ -25,12 +31,13 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - **SMS Actions Default to the Sole Router**: The `delete_sms`, `delete_all_sms`, and `get_sms_list` actions no longer require `entry_id`. When exactly one router is configured it is selected automatically; with more than one configured, `entry_id` is required and omitting it now raises a clear "specify entry_id" error instead of silently acting on an arbitrary router (`send_sms` already behaved this way). Implemented by relaxing the three service schemas and `services.yaml` to optional, and tightening `_get_coordinator` to auto-select only when a single entry is loaded. Added tests for the single-entry fallback and the multiple-entry guard.
+- **Documentation**: Updated the README to align as closely as possible with the Huawei 5G Monitor README.
 
 ## [3.2.5-dev-11] - 2026-07-03 - Unreleased
 
 ### Changed
 
-- **PyTest Coverage**: Incrteaed coverage from 99% to 100% (seven uncovered statements addressed).
+- **PyTest Coverage**: Increased coverage from 99% to 100% (seven uncovered statements addressed).
 
 ## [3.2.5-dev10] - 2026-07-03 - Unreleased
 
