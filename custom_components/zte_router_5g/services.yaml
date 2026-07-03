@@ -24,8 +24,10 @@ delete_sms:
   description: Delete an SMS message by its index.
   fields:
     entry_id:
-      description: The router to use.
-      required: true
+      description:
+        The router to use. Defaults to your only router; required if more than one is
+        configured.
+      required: false
       selector:
         config_entry:
           integration: zte_router_5g
@@ -41,8 +43,10 @@ delete_all_sms:
   description: Delete all SMS messages from the router inbox.
   fields:
     entry_id:
-      description: The router to use.
-      required: true
+      description:
+        The router to use. Defaults to your only router; required if more than one is
+        configured.
+      required: false
       selector:
         config_entry:
           integration: zte_router_5g
@@ -59,8 +63,10 @@ get_sms_list:
   description: Fetch a list of SMS messages from the router.
   fields:
     entry_id:
-      description: The router to use.
-      required: true
+      description:
+        The router to use. Defaults to your only router; required if more than one is
+        configured.
+      required: false
       selector:
         config_entry:
           integration: zte_router_5g

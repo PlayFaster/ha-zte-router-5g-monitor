@@ -128,7 +128,7 @@ Delete a single SMS by its storage index. Use the `index` field from `get_sms_li
 
 | Parameter | Required | Description |
 | :-- | :-- | :-- |
-| `entry_id` | **Yes** | The router to use. |
+| `entry_id` | No | The router to use. Defaults to your only router; required if more than one is configured. |
 | `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
 
 ```yaml
@@ -144,7 +144,7 @@ Bulk delete SMS messages from the router inbox.
 
 | Parameter | Required | Default | Range | Description |
 | :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | **Yes** | — | — | The router to use. |
+| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
 | `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
 
 ```yaml
@@ -160,7 +160,7 @@ Fetch a list of SMS messages. Supports **Action Responses** — use the output d
 
 | Parameter | Required | Default | Range | Description |
 | :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | **Yes** | — | — | The router to use. |
+| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
 | `page` | No | `1` | 1–100 | Page number for pagination. |
 | `count` | No | `20` | 1–50 | Messages per page. |
 | `box_type` | No | `1` | See below | Mailbox to read from. |

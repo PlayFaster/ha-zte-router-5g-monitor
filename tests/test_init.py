@@ -447,6 +447,36 @@ async def test_get_coordinator_no_entries(mock_hass):
 
 
 @pytest.mark.asyncio
+async def test_get_coordinator_single_entry_fallback(mock_hass, mock_config_entry):
+    """Test _get_coordinator auto-selects the sole entry when no entry_id is given."""
+    from custom_components.zte_router_5g import _get_coordinator
+
+    mock_coordinator = MagicMock()
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    result = _get_coordinator(mock_hass, {})
+    assert result is mock_coordinator
+
+
+@pytest.mark.asyncio
+async def test_get_coordinator_multiple_entries(mock_hass):
+    """Test _get_coordinator requires entry_id when more than one router is loaded."""
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.zte_router_5g import _get_coordinator
+
+    entry_a = MagicMock()
+    entry_a.runtime_data = MagicMock()
+    entry_b = MagicMock()
+    entry_b.runtime_data = MagicMock()
+    mock_hass.config_entries.async_entries.return_value = [entry_a, entry_b]
+
+    with pytest.raises(HomeAssistantError, match="specify entry_id"):
+        _get_coordinator(mock_hass, {})
+
+
+@pytest.mark.asyncio
 async def test_service_send_sms_exception(mock_hass, mock_config_entry):
     """Test send_sms service exception handling (__init__.py:102-103)."""
     from homeassistant.exceptions import HomeAssistantError

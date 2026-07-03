@@ -29,14 +29,14 @@ SERVICE_SEND_SMS_SCHEMA = vol.Schema(
 
 SERVICE_DELETE_SMS_SCHEMA = vol.Schema(
     {
-        vol.Required("entry_id"): str,
+        vol.Optional("entry_id"): str,
         vol.Required("index"): vol.Coerce(int),
     }
 )
 
 SERVICE_DELETE_ALL_SMS_SCHEMA = vol.Schema(
     {
-        vol.Required("entry_id"): str,
+        vol.Optional("entry_id"): str,
         vol.Optional("keep_last", default=0): vol.All(
             vol.Coerce(int), vol.Range(min=0, max=50)
         ),
@@ -45,7 +45,7 @@ SERVICE_DELETE_ALL_SMS_SCHEMA = vol.Schema(
 
 SERVICE_GET_SMS_LIST_SCHEMA = vol.Schema(
     {
-        vol.Required("entry_id"): str,
+        vol.Optional("entry_id"): str,
         vol.Optional("page", default=1): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=100)
         ),
@@ -82,13 +82,19 @@ def _get_coordinator(
                 return cast(ZTERouterDataUpdateCoordinator, entry.runtime_data)
             raise HomeAssistantError(f"Router {entry.title} is not ready")
 
-    # Fallback to first available entry if no specific ID provided
-    entries = hass.config_entries.async_entries(DOMAIN)
-    for entry in entries:
-        if hasattr(entry, "runtime_data") and entry.runtime_data:
-            return cast(ZTERouterDataUpdateCoordinator, entry.runtime_data)
-
-    raise HomeAssistantError("No active ZTE Router 5G entries found")
+    # No entry_id given: auto-select only when exactly one router is loaded.
+    entries = [
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if getattr(entry, "runtime_data", None)
+    ]
+    if len(entries) == 1:
+        return cast(ZTERouterDataUpdateCoordinator, entries[0].runtime_data)
+    if not entries:
+        raise HomeAssistantError("No active ZTE Router 5G entries found")
+    raise HomeAssistantError(
+        "Multiple ZTE Router 5G routers are configured — specify entry_id"
+    )
 
 
 async def async_send_sms(hass: HomeAssistant, call: ServiceCall) -> None:
