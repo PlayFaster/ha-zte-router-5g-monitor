@@ -1,7 +1,7 @@
 """Additional tests to improve code coverage for ZTE Router 5G."""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -168,7 +168,7 @@ async def test_api_get_rd_success(mock_aiohttp_client):
     """Test get_rd success path."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=fake"
-    api.last_activity = datetime.now()
+    api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"RD": "test_rd"})
     assert await api.get_rd() == "test_rd"
 
@@ -710,10 +710,10 @@ async def test_api_request_reauth_error_in_outer_except(mock_aiohttp_client):
 
     with (
         patch.object(api, "session", create=True) as mock_session,
-        pytest.raises(ZTEAuthError, match="Test auth fail"),
     ):
         mock_session.request.side_effect = ZTEAuthError("Test auth fail")
-        await api._request("GET", "some/path", authenticated=True)
+        with pytest.raises(ZTEAuthError, match="Test auth fail"):
+            await api._request("GET", "some/path", authenticated=True)
 
 
 # ---------------------------------------------------------------------------
@@ -915,7 +915,7 @@ async def test_api_get_sms_capacity_other_exception(mock_aiohttp_client):
     """Test get_sms_capacity defensive handler for non-auth errors (api.py:464-465)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
-    api.last_activity = datetime.now()
+    api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
         result = await api.get_sms_capacity()
@@ -927,7 +927,7 @@ async def test_api_get_last_sms_content_other_exception(mock_aiohttp_client):
     """Test get_last_sms_content defensive handler (api.py:496-497)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
-    api.last_activity = datetime.now()
+    api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
         result = await api.get_last_sms_content()
@@ -939,7 +939,7 @@ async def test_api_get_sms_messages_other_exception(mock_aiohttp_client):
     """Test get_sms_messages defensive handler (api.py:604-605)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
-    api.last_activity = datetime.now()
+    api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
         result = await api.get_sms_messages()
@@ -951,7 +951,7 @@ async def test_api_get_rd_other_exception(mock_aiohttp_client):
     """Test get_rd defensive handler (api.py:631-632)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
-    api.last_activity = datetime.now()
+    api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
         result = await api.get_rd()

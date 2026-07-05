@@ -1,6 +1,6 @@
 """Tests for the ZTE Router init."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -800,7 +800,7 @@ async def test_reboot_detection_boundary(
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_config_entry.runtime_data
-        original_boot = datetime(2026, 1, 1, 0, 0, 0)
+        original_boot = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         coordinator._boot_time = original_boot
         coordinator._last_uptime = 100
 
@@ -830,7 +830,7 @@ async def test_boot_time_unchanged_on_bad_uptime(
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_config_entry.runtime_data
-        original_boot = datetime(2026, 1, 1, 0, 0, 0)
+        original_boot = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         coordinator._boot_time = original_boot
         coordinator._last_uptime = 3600
 
