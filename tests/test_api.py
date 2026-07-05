@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
+import aiohttp
 import pytest
 
 from custom_components.zte_router_5g.api import (
@@ -41,7 +42,7 @@ def test_api_hex_decode():
 def test_api_parse_date():
     """Test date parsing helper."""
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
-    assert api._parse_date("23,10,10,10,0,0,+1") == "2023-10-10T10:00:00"
+    assert api._parse_date("23,10,10,10,0,0,+1") == "2023-10-10T10:00:00+00:00"
     assert api._parse_date("") is None
     assert api._parse_date("invalid") == "invalid"
 
@@ -70,7 +71,7 @@ async def test_api_try_set_protocol_error(mock_aiohttp_client):
     """Test protocol detection with connection errors."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     # Fail both http and https
-    mock_aiohttp_client.get.side_effect = Exception("Connect Fail")
+    mock_aiohttp_client.get.side_effect = TimeoutError("Connect Fail")
     await api.try_set_protocol()
     assert api.protocol == "http"
 
@@ -89,7 +90,7 @@ async def test_api_get_version(mock_aiohttp_client):
 async def test_api_get_version_error(mock_aiohttp_client):
     """Test version fetching error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    mock_aiohttp_client.get.side_effect = Exception("Fail")
+    mock_aiohttp_client.get.side_effect = aiohttp.ClientError("Fail")
     assert await api.get_version() is None
 
 
@@ -98,9 +99,10 @@ async def test_api_login_success(mock_aiohttp_client):
     """Test successful login."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
 
-    # LD, Version, then Post for Login
+    # LD, Version, session init, then Post for Login
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
+        MockResponse(json_data={"wa_inner_version": "test_v"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
     ]
 
@@ -136,7 +138,7 @@ async def test_api_login_failure_no_stok(mock_aiohttp_client):
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "VER"}),
     ]
-    mock_aiohttp_client.post.return_value = MockResponse(cookies={})
+    mock_aiohttp_client.post.return_value = MockResponse(json_data={}, cookies={})
 
     with pytest.raises(ZTEConnectionError, match="Failed to obtain stok"):
         await api.login()
@@ -184,7 +186,7 @@ async def test_api_get_all_data_error(mock_aiohttp_client):
     """Test technical data fetch error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
-    mock_aiohttp_client.get.side_effect = Exception("Network Error")
+    mock_aiohttp_client.get.side_effect = aiohttp.ClientError("Network Error")
     with pytest.raises(ZTEConnectionError, match="Request failed: Network Error"):
         await api.get_all_data()
     assert api.stok is None
@@ -205,7 +207,7 @@ async def test_api_get_sms_capacity_error(mock_aiohttp_client):
     """Test SMS capacity fetch error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
-    mock_aiohttp_client.get.side_effect = Exception("Fail")
+    mock_aiohttp_client.get.side_effect = aiohttp.ClientError("Fail")
     with pytest.raises(ZTEConnectionError):
         await api.get_sms_capacity()
 
@@ -232,7 +234,7 @@ async def test_api_get_last_sms_content(mock_aiohttp_client):
     msg = await api.get_last_sms_content()
     assert msg["content_decoded"] == "Hello"
     assert msg["number_decoded"] == "123"
-    assert msg["date_decoded"] == "2023-10-10T10:00:00"
+    assert msg["date_decoded"] == "2023-10-10T10:00:00+00:00"
 
 
 @pytest.mark.asyncio
@@ -251,10 +253,12 @@ async def test_api_reboot_success(mock_aiohttp_client):
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
     with (
-        patch.object(api, "login"),
+        patch.object(api, "login", return_value="stok=test"),
         patch.object(api, "get_ad", return_value="test_ad"),
     ):
-        mock_aiohttp_client.post.return_value = MockResponse(status=200)
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "ok"}, status=200
+        )
         assert await api.reboot() == 200
 
 
@@ -267,7 +271,7 @@ async def test_api_reboot_error(mock_aiohttp_client):
         patch.object(api, "login"),
         patch.object(api, "get_ad", return_value="test_ad"),
     ):
-        mock_aiohttp_client.post.side_effect = RuntimeError("Fail")
+        mock_aiohttp_client.post.side_effect = aiohttp.ClientError("Fail")
         with pytest.raises(ZTEConnectionError, match="Request failed: Fail"):
             await api.reboot()
     assert api.stok is None
@@ -280,7 +284,9 @@ async def test_api_delete_sms(mock_aiohttp_client):
     api.stok = "stok=test"
     api.last_activity = datetime.now(UTC)
     with patch.object(api, "get_ad", return_value="test_ad"):
-        mock_aiohttp_client.post.return_value = MockResponse(status=200)
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "ok"}, status=200
+        )
         assert await api.delete_sms("1") == 200
 
 
@@ -291,7 +297,7 @@ async def test_api_delete_sms_exception(mock_aiohttp_client):
     api.stok = "stok=test"
     api.last_activity = datetime.now(UTC)
     with patch.object(api, "get_ad", return_value="test_ad"):
-        mock_aiohttp_client.post.side_effect = RuntimeError("Delete Fail")
+        mock_aiohttp_client.post.side_effect = aiohttp.ClientError("Delete Fail")
         with pytest.raises(ZTEConnectionError, match="Request failed: Delete Fail"):
             await api.delete_sms("1")
         assert api.stok is None
@@ -305,7 +311,7 @@ async def test_api_delete_all_success(mock_aiohttp_client):
 
     mock_aiohttp_client.post.side_effect = [
         MockResponse(json_data={"messages": [{"id": "1"}, {"id": "2"}]}),
-        MockResponse(status=200),
+        MockResponse(json_data={"result": "ok"}, status=200),
     ]
 
     with patch.object(api, "login"), patch.object(api, "get_ad", return_value="ad"):
@@ -339,7 +345,7 @@ async def test_api_get_rd_error(mock_aiohttp_client):
     """Test RD fetch error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=fake"
-    mock_aiohttp_client.get.side_effect = Exception("Fail")
+    mock_aiohttp_client.get.side_effect = aiohttp.ClientError("Fail")
     with pytest.raises(ZTEConnectionError):
         await api.get_rd()
 
@@ -351,7 +357,9 @@ async def test_api_send_sms_success(mock_aiohttp_client):
     api.stok = "stok=test"
     api.last_activity = datetime.now(UTC)
     with patch.object(api, "get_ad", return_value="test_ad"):
-        mock_aiohttp_client.post.return_value = MockResponse(status=200)
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "ok"}, status=200
+        )
         assert await api.send_sms("+123456", "Hello") == 200
 
 
@@ -378,7 +386,7 @@ async def test_api_get_sms_messages_success(mock_aiohttp_client):
     assert len(msgs) == 1
     assert msgs[0]["content_decoded"] == "Hello"
     assert msgs[0]["number_decoded"] == "123"
-    assert msgs[0]["date_decoded"] == "2023-10-10T10:00:00"
+    assert msgs[0]["date_decoded"] == "2023-10-10T10:00:00+00:00"
 
 
 @pytest.mark.asyncio
@@ -387,7 +395,7 @@ async def test_api_get_sms_messages_error(mock_aiohttp_client):
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=fake"
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"LD": "test_ld"})
-    mock_aiohttp_client.post.side_effect = Exception("Fetch Fail")
+    mock_aiohttp_client.post.side_effect = aiohttp.ClientError("Fetch Fail")
     with pytest.raises(ZTEConnectionError):
         await api.get_sms_messages(mem_store="1", tags="10")
 
@@ -492,7 +500,7 @@ async def test_api_set_apn_mode_error(mock_aiohttp_client):
         patch.object(api, "get_ad", return_value="test_ad"),
         patch.object(api, "login"),
     ):
-        mock_aiohttp_client.post.side_effect = RuntimeError("APN mode fail")
+        mock_aiohttp_client.post.side_effect = aiohttp.ClientError("APN mode fail")
         with pytest.raises(ZTEConnectionError, match="Request failed"):
             await api.set_apn_mode("auto")
 
@@ -615,7 +623,7 @@ async def test_api_set_bearer_preference_error(mock_aiohttp_client):
         patch.object(api, "get_ad", return_value="test_ad"),
         patch.object(api, "login"),
     ):
-        mock_aiohttp_client.post.side_effect = RuntimeError("Bearer pref fail")
+        mock_aiohttp_client.post.side_effect = aiohttp.ClientError("Bearer pref fail")
         with pytest.raises(ZTEConnectionError, match="Request failed"):
             await api.set_bearer_preference("Only_LTE")
 

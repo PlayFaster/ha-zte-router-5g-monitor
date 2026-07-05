@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.6-dev4] - 2026-07-05 - Unreleased
+
+### Changed
+
+- **PyTest Errors and Coverage**: The changes in dev3 below caused several of the exisiting PyTest to fail and also intriduced new uncoverered statements. Fixed and added tests to get to 100% coverage with all tests passing.
+  - **297 tests all pass** (was 32 failing + 1 error)
+  - **Coverage: 100%** across all files (was 98%)
+
+### Test Changes
+
+| Category | Count | Fix |
+| :--- | :--- | :--- |
+| **Python 3.14 tz-aware isoformat** | 4 tests | `+00:00` suffix now included — updated assertions |
+| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
+| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
+| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
+| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
+| **Indentation error** | 1 test | Fixed broken indent |
+| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+
+### Files modified
+
+- `tests/conftest.py` — added `read()` to MockResponse
+- `tests/test_api.py` — 19 test fixes
+- `tests/test_coverage_ext.py` — 12 test fixes + 3 new tests
+- `tests/test_init.py` — 1 test fix
+
+## [3.2.6-dev3] - 2026-07-05 - Unreleased
+
+### Changed
+
+- **Ruff Production Code Compliance**: Resolved 17 static analysis violations in the custom component source:
+  - **Exception Flow Control (`TRY301` / `TRY300`)**: Refactored HTTP request execution and authentication validation blocks in `api.py` and service callbacks in `__init__.py` to perform status code evaluations and raise custom errors (`ZTEAuthError`/`ZTEConnectionError`) outside of the primary `try-except` blocks.
+  - **Timezone Awareness (`DTZ`)**: Eliminated naive datetimes (`datetime.now()`, `datetime.min`) in session expiry and SMS timestamp calculations in `api.py`, converting them to timezone-aware UTC datetime structures using the Python-standard `UTC` alias.
+  - **Defensive Catching Hardening (`BLE001` / `S110` / `SIM105`)**: Replaced generic `except Exception` blocks with targeted catches (such as `TimeoutError` and `aiohttp.ClientError`) to avoid masking syntax/developer defects. Converted catch-all error handling on entities to use explicit stack trace logs (`_LOGGER.exception`), and refactored body JSON decoding fallbacks in `api.py` to use Pythonic `contextlib.suppress`.
+  - **MD5 Hashing Bypass (`S324`)**: Bypassed linter flag on legacy MD5 password hashing with `# noqa: S324` as required by the ZTE router's hardware API protocol.
+- **Ruff Test Parity Compliance**: Addressed 30 static analysis issues in the test suites:
+  - **Timezone-Aware Mocking (`DTZ005` / `DTZ001`)**: Made all mock activity timestamps in `test_api.py` and `test_coverage_ext.py` timezone-aware via `datetime.now(UTC)` and updated original boot anchors in `test_init.py` to use timezone-aware date objects (`tzinfo=UTC`).
+  - **Clean Test Scopes (`PT012`)**: Nested `pytest.raises` blocks cleanly inside mock patches to ensure each assertion context evaluates exactly one execution statement.
+
 ## [3.2.6-dev2] - 2026-07-05 - Unreleased
 
 ### Changed

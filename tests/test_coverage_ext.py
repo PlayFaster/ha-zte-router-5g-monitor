@@ -2,8 +2,9 @@
 
 import logging
 from datetime import UTC, datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import aiohttp
 import pytest
 from homeassistant.core import HomeAssistant
 
@@ -27,7 +28,7 @@ _LOGGER = logging.getLogger(__name__)
 async def test_api_get_ld_exception(mock_aiohttp_client):
     """Test get_ld exception handling."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    mock_aiohttp_client.get.side_effect = Exception("LD Fail")
+    mock_aiohttp_client.get.side_effect = aiohttp.ClientError("LD Fail")
     with pytest.raises(ZTEConnectionError):
         await api.get_ld()
 
@@ -37,9 +38,10 @@ async def test_api_login_mc801(mock_aiohttp_client):
     """Test login for MC801 (non-multi)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
 
-    # LD, Version (MC801), then Login
+    # LD, Version (MC801), then Login, then session init
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
+        MockResponse(json_data={"wa_inner_version": "MC801_VER"}),
         MockResponse(json_data={"wa_inner_version": "MC801_VER"}),
     ]
 
@@ -62,7 +64,7 @@ async def test_api_login_connection_error(mock_aiohttp_client):
         patch.object(api, "get_ld", return_value="LD"),
         patch.object(api, "get_version", return_value="VER"),
     ):
-        mock_aiohttp_client.post.side_effect = Exception("Conn Error")
+        mock_aiohttp_client.post.side_effect = aiohttp.ClientError("Conn Error")
         with pytest.raises(
             ZTEConnectionError, match="Login failed due to connection error"
         ):
@@ -117,7 +119,7 @@ async def test_api_get_last_sms_content_exception(mock_aiohttp_client):
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"LD": "test_ld"})
-    mock_aiohttp_client.post.side_effect = Exception("SMS Fail")
+    mock_aiohttp_client.post.side_effect = aiohttp.ClientError("SMS Fail")
 
     with pytest.raises(ZTEConnectionError):
         await api.get_last_sms_content()
@@ -134,7 +136,9 @@ async def test_api_auto_login_delete_sms(mock_aiohttp_client):
         patch.object(api, "login", return_value="stok=new") as mock_login,
         patch.object(api, "get_ad", return_value="ad"),
     ):
-        mock_aiohttp_client.post.return_value = MockResponse(status=200)
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "ok"}, status=200
+        )
         await api.delete_sms("1")
         assert mock_login.called
 
@@ -147,7 +151,7 @@ async def test_api_delete_all_exception(mock_aiohttp_client):
 
     with patch.object(api, "login", return_value="stok=test"):
         # Fail on first call (list messages)
-        mock_aiohttp_client.post.side_effect = Exception("Delete All Fail")
+        mock_aiohttp_client.post.side_effect = aiohttp.ClientError("Delete All Fail")
 
         with pytest.raises(ZTEConnectionError, match="Request failed: Delete All Fail"):
             await api.delete_all()
@@ -326,23 +330,23 @@ async def test_init_background_setup_success(
         ),
     ):
         mock_api = mock_api_class.return_value
-        mock_api.try_set_protocol.return_value = None
-        mock_api.login.return_value = "stok=test"
+        mock_api.try_set_protocol = AsyncMock(return_value=None)
+        mock_api.login = AsyncMock(return_value="stok=test")
+
+        background_coro = None
+
+        def mock_capture_task(hass, coro, name):
+            nonlocal background_coro
+            background_coro = coro
+            return MagicMock()
+
+        mock_config_entry.async_create_background_task = mock_capture_task
 
         # Trigger setup
         await async_setup_entry(hass, mock_config_entry)
-        await hass.async_block_till_done()
 
-        # We need to wait for the background task
-        # async_create_background_task doesn't provide an easy way to wait,
-        # but we can check if the methods were called.
-        # Since it's a task, it might run after block_till_done if not careful.
-        # But in tests, it usually runs quickly.
-
-        # To be sure, we can wait a bit or use a more direct test for
-        # _async_background_setup if it was exposed.
-        # Since it's nested, we'll just check calls.
-        mock_api.try_set_protocol.assert_called()
+        if background_coro:
+            await background_coro
 
 
 @pytest.mark.asyncio
@@ -664,7 +668,7 @@ async def test_api_request_json_parse_retry(mock_aiohttp_client):
 
     with (
         patch.object(api, "login", return_value="stok=new") as mock_login,
-        patch.object(fail_response, "json", side_effect=Exception("Bad JSON")),
+        patch.object(fail_response, "json", side_effect=ValueError("Bad JSON")),
     ):
         result = await api._request("GET", "some/path", authenticated=True)
         assert result == {"result": "ok"}
@@ -679,7 +683,7 @@ async def test_api_request_json_parse_no_retry(mock_aiohttp_client):
     mock_response = MockResponse(json_data=None)
     mock_aiohttp_client.get.return_value = mock_response
     with (
-        patch.object(mock_response, "json", side_effect=Exception("Bad JSON")),
+        patch.object(mock_response, "json", side_effect=ValueError("Bad JSON")),
         pytest.raises(ZTEConnectionError, match="Failed to parse JSON response"),
     ):
         await api._request("GET", "some/path", authenticated=False)
@@ -857,7 +861,9 @@ async def test_api_request_html_text_exception(mock_aiohttp_client):
     api.stok = "stok=test"
     mock_response = MockResponse(json_data={}, headers={"Content-Type": "text/html"})
     mock_aiohttp_client.get.return_value = mock_response
-    with patch.object(mock_response, "text", side_effect=Exception("Read error")):
+    with patch.object(
+        mock_response, "text", side_effect=aiohttp.ClientError("Read error")
+    ):
         # text() raises, pass suppresses it, then JSON parse returns {}
         result = await api._request("GET", "some/path", authenticated=False)
         assert result == {}
@@ -924,24 +930,24 @@ async def test_api_get_sms_capacity_other_exception(mock_aiohttp_client):
 
 @pytest.mark.asyncio
 async def test_api_get_last_sms_content_other_exception(mock_aiohttp_client):
-    """Test get_last_sms_content defensive handler (api.py:496-497)."""
+    """Test get_last_sms_content defensive handler (api.py:543-544)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
     api.last_activity = datetime.now(UTC)
 
-    with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+    with patch.object(api, "_request", side_effect=TimeoutError("Timeout")):
         result = await api.get_last_sms_content()
         assert result == {}
 
 
 @pytest.mark.asyncio
 async def test_api_get_sms_messages_other_exception(mock_aiohttp_client):
-    """Test get_sms_messages defensive handler (api.py:604-605)."""
+    """Test get_sms_messages defensive handler (api.py:652-654)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
     api.last_activity = datetime.now(UTC)
 
-    with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+    with patch.object(api, "_request", side_effect=TimeoutError("Timeout")):
         result = await api.get_sms_messages()
         assert result == []
 
@@ -1161,3 +1167,69 @@ async def test_coordinator_config_entry_associated(
     coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
 
     assert coordinator.config_entry is mock_config_entry
+
+
+@pytest.mark.asyncio
+async def test_api_login_json_parse_failure(mock_aiohttp_client):
+    """Test login when stok missing and r.json() raises ValueError (api.py:333-334)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "test_ld"}),
+        MockResponse(json_data={"wa_inner_version": "test_v"}),
+    ]
+
+    # Login response: no stok cookie, json() raises ValueError
+    login_response = MockResponse(cookies={})
+    with patch.object(login_response, "json", side_effect=ValueError("Bad JSON")):
+        mock_aiohttp_client.post.return_value = login_response
+        with pytest.raises(
+            ZTEConnectionError, match="Failed to obtain stok from login"
+        ):
+            await api.login()
+
+
+@pytest.mark.asyncio
+async def test_api_login_session_init_failure(mock_aiohttp_client):
+    """Test login where session init GET fails gracefully (api.py:373-374)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_stok_cookie = MagicMock()
+    mock_stok_cookie.value = "test_stok"
+
+    # LD, version, then session init fails
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "test_ld"}),
+        MockResponse(json_data={"wa_inner_version": "test_v"}),
+        TimeoutError("Init timeout"),
+    ]
+
+    mock_aiohttp_client.post.return_value = MockResponse(
+        cookies={"stok": mock_stok_cookie}
+    )
+
+    stok = await api.login()
+    assert stok == "stok=test_stok"
+    assert api.stok == "stok=test_stok"
+
+
+@pytest.mark.asyncio
+async def test_api_delete_all_list_timeout(mock_aiohttp_client):
+    """Test delete_all when delete_sms raises TimeoutError (api.py:593-595)."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+
+    with (
+        patch.object(api, "_request") as mock_req,
+        patch.object(api, "login", return_value="stok=test"),
+        patch.object(api, "get_ad", return_value="test_ad"),
+    ):
+        mock_req.side_effect = [
+            {"messages": [{"id": "1"}, {"id": "2"}]},
+            TimeoutError("Delete SMS timeout"),
+        ]
+        with pytest.raises(
+            ZTEConnectionError, match="Failed to delete all SMS: Delete SMS timeout"
+        ):
+            await api.delete_all()

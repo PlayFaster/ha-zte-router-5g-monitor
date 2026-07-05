@@ -83,6 +83,10 @@ class MockResponse:
             return str(self._json_data)
         return ""
 
+    async def read(self):
+        """Return the raw bytes."""
+        return b""
+
     async def __aenter__(self):
         """Enter the context manager."""
         return self

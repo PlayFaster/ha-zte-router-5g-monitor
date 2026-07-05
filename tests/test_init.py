@@ -176,7 +176,9 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
         patch("homeassistant.helpers.device_registry.async_get"),
     ):
         mock_api = mock_api_class.return_value
-        mock_api.try_set_protocol = AsyncMock(side_effect=Exception("Background Fail"))
+        mock_api.try_set_protocol = AsyncMock(
+            side_effect=TimeoutError("Background Fail")
+        )
 
         background_coro = None
 
