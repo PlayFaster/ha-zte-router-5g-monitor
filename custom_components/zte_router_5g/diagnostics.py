@@ -43,9 +43,7 @@ async def async_get_config_entry_diagnostics(
             ),
             "data_available": coordinator.data is not None,
         },
-        "data": async_redact_data(
-            coordinator.data if coordinator.data else {}, TO_REDACT
-        ),
+        "data": async_redact_data(coordinator.data or {}, TO_REDACT),
     }
 
     return diagnostics_data

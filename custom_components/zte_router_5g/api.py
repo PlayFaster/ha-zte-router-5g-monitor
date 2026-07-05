@@ -1,9 +1,10 @@
 """ZTE Router 5G API client."""
 
+import contextlib
 import hashlib
 import logging
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, cast
 
 import aiohttp
@@ -45,7 +46,7 @@ class ZTERouterAPI:
         self.timeout = aiohttp.ClientTimeout(total=15)
         self.stok: str | None = None
         self.is_multi = True
-        self.last_activity = datetime.min
+        self.last_activity = datetime.fromtimestamp(0, UTC)
 
     def _hash(self, val: str | None) -> str:
         if val is None:
@@ -61,10 +62,10 @@ class ZTERouterAPI:
         try:
             for i in range(0, len(hex_str), 4):
                 decoded += chr(int(hex_str[i : i + 4], 16))
-            return decoded
-        except Exception as e:
-            _LOGGER.debug("Failed to decode hex string '%s': %s", hex_str, e)
+        except (ValueError, IndexError):
+            _LOGGER.debug("Failed to decode hex string '%s'", hex_str)
             return "[Decoding Error]"
+        return decoded
 
     def _parse_date(self, date_str: str) -> str | None:
         if not date_str:
@@ -78,10 +79,18 @@ class ZTERouterAPI:
                 hour = int(parts[3])
                 minute = int(parts[4])
                 second = int(parts[5])
-                dt = datetime(year, month, day, hour, minute, second)
+                dt = datetime(
+                    year,
+                    month,
+                    day,
+                    hour,
+                    minute,
+                    second,
+                    tzinfo=UTC,
+                )
                 return dt.isoformat()
-        except Exception as e:
-            _LOGGER.debug("Failed to parse date string '%s': %s", date_str, e)
+        except (ValueError, IndexError):
+            _LOGGER.debug("Failed to parse date string '%s'", date_str)
         return date_str
 
     async def _request(
@@ -99,7 +108,7 @@ class ZTERouterAPI:
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
 
         # Check if the session is likely expired due to inactivity (e.g. 150 seconds)
-        now = datetime.now()
+        now = datetime.now(UTC)
         if (
             authenticated
             and self.stok
@@ -118,6 +127,13 @@ class ZTERouterAPI:
         if authenticated and self.stok:
             req_headers["Cookie"] = self.stok
 
+        is_html_page = False
+        status = 200
+        content_type = ""
+        url_str = ""
+        body_preview = ""
+        resp_json = None
+
         try:
             async with self.session.request(
                 method,
@@ -128,10 +144,12 @@ class ZTERouterAPI:
                 timeout=tout,
                 ssl=False,
             ) as r:
-                # 1. Check if redirect or HTML response indicates session expiration
+                status = r.status
                 content_type = r.headers.get("Content-Type", "")
-                is_html_page = False
-                if "index.html" in str(r.url):
+                url_str = str(r.url)
+
+                # Check if redirect or HTML response indicates session expiration
+                if "index.html" in url_str:
                     is_html_page = True
                 elif "text/html" in content_type:
                     try:
@@ -139,110 +157,94 @@ class ZTERouterAPI:
                         stripped_body = text_body.strip()
                         if stripped_body.startswith("<") or "index.html" in text_body:
                             is_html_page = True
-                    except Exception:
-                        pass
-
-                if is_html_page:
-                    if authenticated and _retry:
-                        _LOGGER.debug(
-                            "Detected HTML redirect/response; renewing session"
-                        )
-                        self.stok = await self.login(timeout_sec=timeout_sec)
-                        return await self._request(
-                            method,
-                            path,
-                            params,
-                            data,
-                            headers,
-                            timeout_sec,
-                            authenticated,
-                            _retry=False,
-                        )
-                    # Read the beginning of the text body for debugging
-                    try:
-                        text = await r.text()
-                        body_preview = text[:300].strip().replace("\n", " ")
-                    except Exception:
+                            body_preview = text_body[:300].strip().replace("\n", " ")
+                    except (TimeoutError, aiohttp.ClientError):
                         body_preview = "[Unable to read response body]"
 
-                    _LOGGER.error(
-                        "Unexpected HTML response from %s "
-                        "(Status: %s, Content-Type: %s): %s",
-                        r.url,
-                        r.status,
-                        content_type,
-                        body_preview,
-                    )
-                    raise ZTEConnectionError(
-                        f"Received unexpected HTML response (Status: {r.status})"
-                    )
-
-                # 2. Parse JSON response
-                try:
-                    resp_json = await r.json(content_type=None)
-                except Exception as err:
-                    if authenticated and _retry:
-                        _LOGGER.debug("JSON parse failed; renewing session")
-                        self.stok = await self.login(timeout_sec=timeout_sec)
-                        return await self._request(
-                            method,
-                            path,
-                            params,
-                            data,
-                            headers,
-                            timeout_sec,
-                            authenticated,
-                            _retry=False,
-                        )
-                    raise ZTEConnectionError(
-                        f"Failed to parse JSON response: {err}"
-                    ) from err
-
-                # 3. Check JSON structure for session expiry/invalid indicators
-                if isinstance(resp_json, dict):
-                    # Empty strings for status keys mean session expired
-                    is_status_expired = (
-                        resp_json.get("network_type") == ""
-                        and resp_json.get("signalbar") == ""
-                    )
-                    # Other endpoints might return explicit error indications
-                    is_auth_error = (
-                        resp_json.get("result") in ["session expired", "unauth", "fail"]
-                        or resp_json.get("status") == "fail"
-                    )
-
-                    if (is_status_expired or is_auth_error) and authenticated:
-                        if _retry:
-                            _LOGGER.debug(
-                                "Session expired in JSON response; renewing session"
-                            )
-                            self.stok = await self.login(timeout_sec=timeout_sec)
-                            return await self._request(
-                                method,
-                                path,
-                                params,
-                                data,
-                                headers,
-                                timeout_sec,
-                                authenticated,
-                                _retry=False,
-                            )
-                        else:
-                            _LOGGER.warning(
-                                "Session expired/unauthorized and retry exhausted"
-                            )
-                            raise ZTEAuthError("Session expired/unauthorized")
-
-                self.last_activity = datetime.now()
-                return resp_json
-
-        except Exception as e:
-            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
-                raise
-            # If the request fails with a connection/network issue, reset stok and raise
+                if not is_html_page:
+                    with contextlib.suppress(
+                        ValueError, TypeError, aiohttp.ContentTypeError
+                    ):
+                        resp_json = await r.json(content_type=None)
+        except (ZTEAuthError, ZTEConnectionError):
+            raise
+        except (TimeoutError, aiohttp.ClientError) as e:
             if authenticated:
                 self.stok = None
             raise ZTEConnectionError(f"Request failed: {e}") from e
+
+        # Validate parsed response and handle redirects/HTML
+        if is_html_page:
+            if authenticated and _retry:
+                _LOGGER.debug("Detected HTML redirect/response; renewing session")
+                self.stok = await self.login(timeout_sec=timeout_sec)
+                return await self._request(
+                    method,
+                    path,
+                    params,
+                    data,
+                    headers,
+                    timeout_sec,
+                    authenticated,
+                    _retry=False,
+                )
+            _LOGGER.error(
+                "Unexpected HTML response from %s (Status: %s, Content-Type: %s): %s",
+                url_str,
+                status,
+                content_type,
+                body_preview,
+            )
+            raise ZTEConnectionError(
+                f"Received unexpected HTML response (Status: {status})"
+            )
+
+        if resp_json is None:
+            if authenticated and _retry:
+                _LOGGER.debug("JSON parse failed; renewing session")
+                self.stok = await self.login(timeout_sec=timeout_sec)
+                return await self._request(
+                    method,
+                    path,
+                    params,
+                    data,
+                    headers,
+                    timeout_sec,
+                    authenticated,
+                    _retry=False,
+                )
+            raise ZTEConnectionError("Failed to parse JSON response from router")
+
+        # 3. Check JSON structure for session expiry/invalid indicators
+        if isinstance(resp_json, dict):
+            # Empty strings for status keys mean session expired
+            is_status_expired = (
+                resp_json.get("network_type") == "" and resp_json.get("signalbar") == ""
+            )
+            # Other endpoints might return explicit error indications
+            is_auth_error = (
+                resp_json.get("result") in ["session expired", "unauth", "fail"]
+                or resp_json.get("status") == "fail"
+            )
+
+            if (is_status_expired or is_auth_error) and authenticated:
+                if _retry:
+                    _LOGGER.debug("Session expired in JSON response; renewing session")
+                    self.stok = await self.login(timeout_sec=timeout_sec)
+                    return await self._request(
+                        method,
+                        path,
+                        params,
+                        data,
+                        headers,
+                        timeout_sec,
+                        authenticated,
+                        _retry=False,
+                    )
+                raise ZTEAuthError("Session expired/unauthorized")
+
+        self.last_activity = datetime.now(UTC)
+        return resp_json
 
     async def try_set_protocol(self, timeout_sec: int = 5) -> None:
         """Identify if router is on http or https with a short timeout."""
@@ -257,7 +259,7 @@ class ZTERouterAPI:
                         self.protocol = proto
                         self.referer = f"{self.protocol}://{self.ip}/"
                         return
-            except Exception as e:
+            except (TimeoutError, aiohttp.ClientError) as e:
                 _LOGGER.debug("Failed to connect via %s: %s", proto, e)
 
         _LOGGER.warning("Could not determine router protocol (http/https)")
@@ -270,7 +272,7 @@ class ZTERouterAPI:
                 "GET", path, timeout_sec=timeout_sec, authenticated=False
             )
             return cast("str | None", data.get("wa_inner_version", ""))
-        except Exception as e:
+        except (ZTEAuthError, ZTEConnectionError) as e:
             _LOGGER.debug("Failed to get version: %s", e)
             return None
 
@@ -311,6 +313,8 @@ class ZTERouterAPI:
             payload["username"] = self.username
 
         url = f"{self.referer}goform/goform_set_cmd_process"
+        login_error = None
+        conn_error = None
         try:
             async with self.session.post(
                 url,
@@ -326,7 +330,7 @@ class ZTERouterAPI:
                     try:
                         resp_json = await r.json(content_type=None)
                         result = resp_json.get("result")
-                    except Exception:
+                    except (ValueError, TypeError, aiohttp.ContentTypeError):
                         pass
 
                     if result in [
@@ -335,50 +339,52 @@ class ZTERouterAPI:
                         "write_error",
                         "unauth",
                     ]:
-                        raise ZTEAuthError(
+                        login_error = (
                             f"Login failed due to invalid credentials: {result}"
                         )
+                    else:
+                        _LOGGER.warning(
+                            "Login failed: missing stok (Status: %s, Result: %s). "
+                            "Treating as connection issue.",
+                            r.status,
+                            result,
+                        )
+                        conn_error = f"Failed to obtain stok from login: {result}"
+                else:
+                    self.stok = f"stok={stok.value.strip('"')}"
 
-                    _LOGGER.warning(
-                        "Login failed: missing stok (Status: %s, Result: %s). "
-                        "Treating as connection issue.",
-                        r.status,
-                        result,
-                    )
-                    raise ZTEConnectionError(
-                        f"Failed to obtain stok from login: {result}"
-                    )
+                    # Initialize session with a GET request to satisfy POST
+                    # restrictions on some ZTE routers
+                    init_url = f"{self.referer}goform/goform_get_cmd_process"
+                    init_params = {"isTest": "false", "cmd": "wa_inner_version"}
+                    init_headers = {
+                        "Referer": f"{self.referer}index.html",
+                        "Cookie": self.stok,
+                    }
+                    try:
+                        async with self.session.get(
+                            init_url,
+                            params=init_params,
+                            headers=init_headers,
+                            timeout=aiohttp.ClientTimeout(total=tout),
+                            ssl=False,
+                        ) as init_r:
+                            await init_r.read()
+                    except (TimeoutError, aiohttp.ClientError) as init_err:
+                        _LOGGER.debug("Session initialization GET failed: %s", init_err)
 
-                self.stok = f"stok={stok.value.strip('"')}"
-
-                # Initialize session with a GET request to satisfy POST
-                # restrictions on some ZTE routers
-                init_url = f"{self.referer}goform/goform_get_cmd_process"
-                init_params = {"isTest": "false", "cmd": "wa_inner_version"}
-                init_headers = {
-                    "Referer": f"{self.referer}index.html",
-                    "Cookie": self.stok,
-                }
-                try:
-                    async with self.session.get(
-                        init_url,
-                        params=init_params,
-                        headers=init_headers,
-                        timeout=aiohttp.ClientTimeout(total=tout),
-                        ssl=False,
-                    ) as init_r:
-                        await init_r.read()
-                except Exception as init_err:
-                    _LOGGER.debug("Session initialization GET failed: %s", init_err)
-
-                self.last_activity = datetime.now()
-                return self.stok
-        except Exception as e:
-            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
-                raise
+                    self.last_activity = datetime.now(UTC)
+        except (TimeoutError, aiohttp.ClientError) as e:
             raise ZTEConnectionError(
                 f"Login failed due to connection error: {e}"
             ) from e
+
+        if login_error:
+            raise ZTEAuthError(login_error)
+        if conn_error:
+            raise ZTEConnectionError(conn_error)
+
+        return self.stok
 
     async def get_all_data(self) -> dict[str, Any]:
         """Fetch primary technical data."""
@@ -520,6 +526,7 @@ class ZTERouterAPI:
             "tags": "10",
             "order_by": "order by id desc",
         }
+        msg_out = {}
         try:
             resp_json = await self._request(
                 "POST", path, data=payload, timeout_sec=timeout_sec
@@ -530,13 +537,12 @@ class ZTERouterAPI:
                 msg["content_decoded"] = self._hex_decode(msg.get("content", ""))
                 msg["number_decoded"] = self._hex_decode(msg.get("number", ""))
                 msg["date_decoded"] = self._parse_date(msg.get("date", ""))
-                return cast(dict[str, Any], msg)
-            return {}
-        except Exception as e:
-            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
-                raise
+                msg_out = cast(dict[str, Any], msg)
+        except (ZTEAuthError, ZTEConnectionError):
+            raise
+        except (TimeoutError, aiohttp.ClientError) as e:
             _LOGGER.debug("Failed to get last SMS content: %s", e)
-            return {}
+        return msg_out
 
     async def reboot(self) -> int:
         """Execute a device reboot."""
@@ -564,27 +570,30 @@ class ZTERouterAPI:
 
     async def delete_all(self) -> int:
         """Delete all SMS."""
+        payload = {
+            "isTest": "false",
+            "cmd": "sms_data_total",
+            "page": "0",
+            "data_per_page": "500",
+            "mem_store": "1",
+            "tags": "10",
+            "order_by": "order by id desc",
+        }
+        res_code = 200
         try:
-            payload = {
-                "isTest": "false",
-                "cmd": "sms_data_total",
-                "page": "0",
-                "data_per_page": "500",
-                "mem_store": "1",
-                "tags": "10",
-                "order_by": "order by id desc",
-            }
             resp_json = await self._request(
                 "POST", "goform/goform_get_cmd_process", data=payload
             )
             ids = [m["id"] for m in resp_json.get("messages", [])]
 
             if ids:
-                return await self.delete_sms(";".join(ids))
-            return 200
-        except Exception as e:
-            _LOGGER.error("Failed to delete all SMS: %s", e)
+                res_code = await self.delete_sms(";".join(ids))
+        except (ZTEAuthError, ZTEConnectionError):
             raise
+        except (TimeoutError, aiohttp.ClientError) as e:
+            _LOGGER.error("Failed to delete all SMS: %s", e)
+            raise ZTEConnectionError(f"Failed to delete all SMS: {e}") from e
+        return res_code
 
     async def send_sms(self, number: str, message: str) -> int:
         """Send an SMS message via the router."""
@@ -593,9 +602,7 @@ class ZTERouterAPI:
         hex_msg = message.encode("utf-16-be").hex()
 
         # Build sms_time: yy;mm;dd;HH;MM;SS;+0
-        from datetime import datetime
-
-        now = datetime.now()
+        now = datetime.now(UTC)
         sms_time = now.strftime("%y;%m;%d;%H;%M;%S;+0")
 
         # URL encode is handled by aiohttp when using dict data,
@@ -640,9 +647,9 @@ class ZTERouterAPI:
                 msg["number_decoded"] = self._hex_decode(msg.get("number", ""))
                 msg["date_decoded"] = self._parse_date(msg.get("date", ""))
             return cast(list[dict[str, Any]], messages)
-        except Exception as e:
-            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
-                raise
+        except (ZTEAuthError, ZTEConnectionError):
+            raise
+        except (TimeoutError, aiohttp.ClientError) as e:
             _LOGGER.debug("Failed to get SMS messages: %s", e)
             return []
 
@@ -655,7 +662,8 @@ class ZTERouterAPI:
         hash_func: Callable[[str], str] = (
             (lambda s: hashlib.sha256(s.encode()).hexdigest().upper())
             if is_new_gen
-            else (lambda s: hashlib.md5(s.encode()).hexdigest())
+            # MD5 hash is required by the legacy ZTE router API authentication protocol
+            else (lambda s: hashlib.md5(s.encode()).hexdigest())  # noqa: S324
         )
         a = hash_func(version)
         rd = await self.get_rd(timeout_sec=timeout_sec)

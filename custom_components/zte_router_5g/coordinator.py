@@ -163,8 +163,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     # Update device registry instead of writing entry.data on every poll
                     sub_id_prefix = (
                         self.imei
-                        if self.imei
-                        else f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
+                        or f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
                     )
                     dev_reg = dr.async_get(self.hass)
                     device = dev_reg.async_get_device(

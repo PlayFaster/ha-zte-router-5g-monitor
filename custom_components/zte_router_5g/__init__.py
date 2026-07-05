@@ -3,6 +3,7 @@
 import logging
 from typing import Any, cast
 
+import aiohttp
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, Platform
@@ -12,8 +13,9 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from .api import ZTERouterAPI
+from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 
@@ -163,11 +165,11 @@ async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str
         10: (None, ["4"]),  # Mix Draft
     }
 
-    try:
-        mem_store, target_tags = box_mapping.get(
-            box_type, (None, ["0", "1", "2", "3", "4"])
-        )
+    mem_store, target_tags = box_mapping.get(
+        box_type, (None, ["0", "1", "2", "3", "4"])
+    )
 
+    try:
         raw_msgs = []
         if mem_store is not None:
             raw_msgs = await coordinator.api.get_sms_messages(mem_store=mem_store)
@@ -176,27 +178,27 @@ async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str
             sim_msgs = await coordinator.api.get_sms_messages(mem_store="0")
             raw_msgs = nv_msgs + sim_msgs
             raw_msgs.sort(key=lambda x: x.get("date", ""), reverse=True)
-
-        filtered_msgs = [m for m in raw_msgs if str(m.get("tag")) in target_tags]
-
-        start_idx = (page - 1) * count
-        end_idx = start_idx + count
-        paginated_msgs = filtered_msgs[start_idx:end_idx]
-
-        formatted_messages = [
-            {
-                "index": int(msg.get("id", 0)),
-                "phone": msg.get("number_decoded", ""),
-                "content": msg.get("content_decoded", ""),
-                "date": msg.get("date_decoded", ""),
-                "read": str(msg.get("tag", "0")) == "0",
-            }
-            for msg in paginated_msgs
-        ]
-
-        return {"messages": formatted_messages}
     except Exception as err:
         raise HomeAssistantError(f"Failed to fetch SMS list: {err}") from err
+
+    filtered_msgs = [m for m in raw_msgs if str(m.get("tag")) in target_tags]
+
+    start_idx = (page - 1) * count
+    end_idx = start_idx + count
+    paginated_msgs = filtered_msgs[start_idx:end_idx]
+
+    formatted_messages = [
+        {
+            "index": int(msg.get("id", 0)),
+            "phone": msg.get("number_decoded", ""),
+            "content": msg.get("content_decoded", ""),
+            "date": msg.get("date_decoded", ""),
+            "read": str(msg.get("tag", "0")) == "0",
+        }
+        for msg in paginated_msgs
+    ]
+
+    return {"messages": formatted_messages}
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -266,7 +268,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     device_registry = dr.async_get(hass)
     host = entry.options[CONF_HOST]
     imei = entry.data.get("imei")
-    sub_id_prefix = imei if imei else f"host_{host}"
+    sub_id_prefix = imei or f"host_{host}"
 
     device_registry.async_get_or_create(
         config_entry_id=entry.entry_id,
@@ -289,7 +291,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await api.login(5)
             await coordinator.async_refresh()
             _LOGGER.info("%s: Background initialization complete.", entry.title)
-        except Exception as err:
+        except (
+            TimeoutError,
+            ZTEAuthError,
+            ZTEConnectionError,
+            UpdateFailed,
+            HomeAssistantError,
+            aiohttp.ClientError,
+        ) as err:
             _LOGGER.warning(
                 "%s: Background initialization failed (will retry): %s",
                 entry.title,

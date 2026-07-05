@@ -65,7 +65,7 @@ def build_device_info(
     display_group = GROUP_NAMES.get(group, group.capitalize())
     sub_name = f"{entry.title} {display_group}"
 
-    sub_id_prefix = coordinator.imei if coordinator.imei else f"host_{host}"
+    sub_id_prefix = coordinator.imei or f"host_{host}"
 
     protocol = coordinator.api.protocol
     info: DeviceInfo = {

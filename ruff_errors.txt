@@ -1,0 +1,761 @@
+TRY300 Consider moving this statement to an `else` block
+   --> custom_components\zte_router_5g\__init__.py:197:9
+    |
+195 |         ]
+196 |
+197 |         return {"messages": formatted_messages}
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+198 |     except Exception as err:
+199 |         raise HomeAssistantError(f"Failed to fetch SMS list: {err}") from err
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\__init__.py:292:16
+    |
+290 |             await coordinator.async_refresh()
+291 |             _LOGGER.info("%s: Background initialization complete.", entry.title)
+292 |         except Exception as err:
+    |                ^^^^^^^^^
+293 |             _LOGGER.warning(
+294 |                 "%s: Background initialization failed (will retry): %s",
+    |
+
+DTZ901 Use of `datetime.datetime.min` without timezone information
+  --> custom_components\zte_router_5g\api.py:48:30
+   |
+46 |         self.stok: str | None = None
+47 |         self.is_multi = True
+48 |         self.last_activity = datetime.min
+   |                              ^^^^^^^^^^^^
+49 |
+50 |     def _hash(self, val: str | None) -> str:
+   |
+help: Replace with `datetime.datetime.min.replace(tzinfo=...)`
+
+TRY300 Consider moving this statement to an `else` block
+  --> custom_components\zte_router_5g\api.py:64:13
+   |
+62 |             for i in range(0, len(hex_str), 4):
+63 |                 decoded += chr(int(hex_str[i : i + 4], 16))
+64 |             return decoded
+   |             ^^^^^^^^^^^^^^
+65 |         except Exception as e:
+66 |             _LOGGER.debug("Failed to decode hex string '%s': %s", hex_str, e)
+   |
+
+BLE001 Do not catch blind exception: `Exception`
+  --> custom_components\zte_router_5g\api.py:65:16
+   |
+63 |                 decoded += chr(int(hex_str[i : i + 4], 16))
+64 |             return decoded
+65 |         except Exception as e:
+   |                ^^^^^^^^^
+66 |             _LOGGER.debug("Failed to decode hex string '%s': %s", hex_str, e)
+67 |             return "[Decoding Error]"
+   |
+
+DTZ001 `datetime.datetime()` called without a `tzinfo` argument
+  --> custom_components\zte_router_5g\api.py:81:22
+   |
+79 |                 minute = int(parts[4])
+80 |                 second = int(parts[5])
+81 |                 dt = datetime(year, month, day, hour, minute, second)
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+82 |                 return dt.isoformat()
+83 |         except Exception as e:
+   |
+help: Pass a `datetime.timezone` object to the `tzinfo` parameter
+
+BLE001 Do not catch blind exception: `Exception`
+  --> custom_components\zte_router_5g\api.py:83:16
+   |
+81 |                 dt = datetime(year, month, day, hour, minute, second)
+82 |                 return dt.isoformat()
+83 |         except Exception as e:
+   |                ^^^^^^^^^
+84 |             _LOGGER.debug("Failed to parse date string '%s': %s", date_str, e)
+85 |         return date_str
+   |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> custom_components\zte_router_5g\api.py:102:15
+    |
+101 |         # Check if the session is likely expired due to inactivity (e.g. 150 seconds)
+102 |         now = datetime.now()
+    |               ^^^^^^^^^^^^^^
+103 |         if (
+104 |             authenticated
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> custom_components\zte_router_5g\api.py:142:21
+    |
+140 |                           if stripped_body.startswith("<") or "index.html" in text_body:
+141 |                               is_html_page = True
+142 | /                     except Exception:
+143 | |                         pass
+    | |____________________________^
+144 |
+145 |                   if is_html_page:
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\api.py:142:28
+    |
+140 |                         if stripped_body.startswith("<") or "index.html" in text_body:
+141 |                             is_html_page = True
+142 |                     except Exception:
+    |                            ^^^^^^^^^
+143 |                         pass
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\api.py:165:28
+    |
+163 |                         text = await r.text()
+164 |                         body_preview = text[:300].strip().replace("\n", " ")
+165 |                     except Exception:
+    |                            ^^^^^^^^^
+166 |                         body_preview = "[Unable to read response body]"
+    |
+
+TRY301 Abstract `raise` to an inner function
+   --> custom_components\zte_router_5g\api.py:176:21
+    |
+174 |                           body_preview,
+175 |                       )
+176 | /                     raise ZTEConnectionError(
+177 | |                         f"Received unexpected HTML response (Status: {r.status})"
+178 | |                     )
+    | |_____________________^
+179 |
+180 |                   # 2. Parse JSON response
+    |
+
+TRY301 Abstract `raise` to an inner function
+   --> custom_components\zte_router_5g\api.py:234:29
+    |
+232 |                                 "Session expired/unauthorized and retry exhausted"
+233 |                             )
+234 |                             raise ZTEAuthError("Session expired/unauthorized")
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+235 |
+236 |                 self.last_activity = datetime.now()
+    |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> custom_components\zte_router_5g\api.py:236:38
+    |
+234 |                             raise ZTEAuthError("Session expired/unauthorized")
+235 |
+236 |                 self.last_activity = datetime.now()
+    |                                      ^^^^^^^^^^^^^^
+237 |                 return resp_json
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\api.py:260:20
+    |
+258 |                         self.referer = f"{self.protocol}://{self.ip}/"
+259 |                         return
+260 |             except Exception as e:
+    |                    ^^^^^^^^^
+261 |                 _LOGGER.debug("Failed to connect via %s: %s", proto, e)
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\api.py:273:16
+    |
+271 |             )
+272 |             return cast("str | None", data.get("wa_inner_version", ""))
+273 |         except Exception as e:
+    |                ^^^^^^^^^
+274 |             _LOGGER.debug("Failed to get version: %s", e)
+275 |             return None
+    |
+
+S110 `try`-`except`-`pass` detected, consider logging the exception
+   --> custom_components\zte_router_5g\api.py:329:21
+    |
+327 |                           resp_json = await r.json(content_type=None)
+328 |                           result = resp_json.get("result")
+329 | /                     except Exception:
+330 | |                         pass
+    | |____________________________^
+331 |
+332 |                       if result in [
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\api.py:329:28
+    |
+327 |                         resp_json = await r.json(content_type=None)
+328 |                         result = resp_json.get("result")
+329 |                     except Exception:
+    |                            ^^^^^^^^^
+330 |                         pass
+    |
+
+TRY301 Abstract `raise` to an inner function
+   --> custom_components\zte_router_5g\api.py:338:25
+    |
+336 |                           "unauth",
+337 |                       ]:
+338 | /                         raise ZTEAuthError(
+339 | |                             f"Login failed due to invalid credentials: {result}"
+340 | |                         )
+    | |_________________________^
+341 |
+342 |                       _LOGGER.warning(
+    |
+
+TRY301 Abstract `raise` to an inner function
+   --> custom_components\zte_router_5g\api.py:348:21
+    |
+346 |                           result,
+347 |                       )
+348 | /                     raise ZTEConnectionError(
+349 | |                         f"Failed to obtain stok from login: {result}"
+350 | |                     )
+    | |_____________________^
+351 |
+352 |                   self.stok = f"stok={stok.value.strip('"')}"
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\api.py:371:24
+    |
+369 |                     ) as init_r:
+370 |                         await init_r.read()
+371 |                 except Exception as init_err:
+    |                        ^^^^^^^^^
+372 |                     _LOGGER.debug("Session initialization GET failed: %s", init_err)
+    |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> custom_components\zte_router_5g\api.py:374:38
+    |
+372 |                     _LOGGER.debug("Session initialization GET failed: %s", init_err)
+373 |
+374 |                 self.last_activity = datetime.now()
+    |                                      ^^^^^^^^^^^^^^
+375 |                 return self.stok
+376 |         except Exception as e:
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+TRY300 Consider moving this statement to an `else` block
+   --> custom_components\zte_router_5g\api.py:534:13
+    |
+532 |                 msg["date_decoded"] = self._parse_date(msg.get("date", ""))
+533 |                 return cast(dict[str, Any], msg)
+534 |             return {}
+    |             ^^^^^^^^^
+535 |         except Exception as e:
+536 |             if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
+    |
+
+TRY300 Consider moving this statement to an `else` block
+   --> custom_components\zte_router_5g\api.py:584:13
+    |
+582 |             if ids:
+583 |                 return await self.delete_sms(";".join(ids))
+584 |             return 200
+    |             ^^^^^^^^^^
+585 |         except Exception as e:
+586 |             _LOGGER.error("Failed to delete all SMS: %s", e)
+    |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> custom_components\zte_router_5g\api.py:598:15
+    |
+596 |         from datetime import datetime
+597 |
+598 |         now = datetime.now()
+    |               ^^^^^^^^^^^^^^
+599 |         sms_time = now.strftime("%y;%m;%d;%H;%M;%S;+0")
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+S324 Probable use of insecure hash functions in `hashlib`: `md5`
+   --> custom_components\zte_router_5g\api.py:658:29
+    |
+656 |             (lambda s: hashlib.sha256(s.encode()).hexdigest().upper())
+657 |             if is_new_gen
+658 |             else (lambda s: hashlib.md5(s.encode()).hexdigest())
+    |                             ^^^^^^^^^^^
+659 |         )
+660 |         a = hash_func(version)
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\number.py:146:16
+    |
+144 |             # Task was cancelled because the user moved the slider again
+145 |             pass
+146 |         except Exception as err:
+    |                ^^^^^^^^^
+147 |             _LOGGER.error("Failed to apply polling interval change: %s", err)
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\select.py:169:16
+    |
+167 |             )
+168 |             await self.coordinator.async_request_refresh()
+169 |         except Exception as err:
+    |                ^^^^^^^^^
+170 |             _LOGGER.error(
+171 |                 "%s: Failed to set %s to %s: %s",
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\switch.py:133:16
+    |
+131 |             await self.entity_description.setter_fn(self.coordinator.api, True)
+132 |             await self.coordinator.async_request_refresh()
+133 |         except Exception as err:
+    |                ^^^^^^^^^
+134 |             _LOGGER.error(
+135 |                 "%s: Failed to turn on %s: %s",
+    |
+
+BLE001 Do not catch blind exception: `Exception`
+   --> custom_components\zte_router_5g\switch.py:148:16
+    |
+146 |             await self.entity_description.setter_fn(self.coordinator.api, False)
+147 |             await self.coordinator.async_request_refresh()
+148 |         except Exception as err:
+    |                ^^^^^^^^^
+149 |             _LOGGER.error(
+150 |                 "%s: Failed to turn off %s: %s",
+    |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:198:25
+    |
+196 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+197 |     api.stok = "stok=test"
+198 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+199 |     mock_aiohttp_client.get.return_value = MockResponse(json_data={"cap": 100})
+200 |     assert await api.get_sms_capacity() == {"cap": 100}
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:218:25
+    |
+216 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+217 |     api.stok = "stok=test"
+218 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+219 |     mock_aiohttp_client.post.return_value = MockResponse(
+220 |         json_data={
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:243:25
+    |
+241 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+242 |     api.stok = "stok=test"
+243 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+244 |     mock_aiohttp_client.post.return_value = MockResponse(json_data={"messages": []})
+245 |     assert await api.get_last_sms_content() == {}
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+PT012 `pytest.raises()` block should contain a single simple statement
+   --> tests\test_api.py:266:5
+    |
+264 |       api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+265 |       api.stok = "stok=test"
+266 | /     with (
+267 | |         patch.object(api, "login"),
+268 | |         patch.object(api, "get_ad", return_value="test_ad"),
+269 | |         pytest.raises(ZTEConnectionError, match="Request failed: Fail"),
+270 | |     ):
+271 | |         mock_aiohttp_client.post.side_effect = RuntimeError("Fail")
+272 | |         await api.reboot()
+    | |__________________________^
+273 |       assert api.stok is None
+    |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:281:25
+    |
+279 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+280 |     api.stok = "stok=test"
+281 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+282 |     with patch.object(api, "get_ad", return_value="test_ad"):
+283 |         mock_aiohttp_client.post.return_value = MockResponse(status=200)
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:292:25
+    |
+290 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+291 |     api.stok = "stok=test"
+292 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+293 |     with patch.object(api, "get_ad", return_value="test_ad"):
+294 |         mock_aiohttp_client.post.side_effect = RuntimeError("Delete Fail")
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:352:25
+    |
+350 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+351 |     api.stok = "stok=test"
+352 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+353 |     with patch.object(api, "get_ad", return_value="test_ad"):
+354 |         mock_aiohttp_client.post.return_value = MockResponse(status=200)
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:363:25
+    |
+361 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+362 |     api.stok = "stok=test"
+363 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+364 |     mock_aiohttp_client.post.return_value = MockResponse(
+365 |         json_data={
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> tests\test_api.py:399:5
+    |
+398 | @pytest.mark.parametrize(
+399 |     "elapsed,stok_cleared",
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+400 |     [
+401 |         (149, False),
+    |
+help: Use a `tuple` for the first argument
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:410:25
+    |
+408 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+409 |     api.stok = "stok=existing"
+410 |     api.last_activity = datetime.now() - timedelta(seconds=elapsed)
+    |                         ^^^^^^^^^^^^^^
+411 |
+412 |     with patch.object(api, "login", return_value="stok=new") as mock_login:
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> tests\test_api.py:429:5
+    |
+428 | @pytest.mark.parametrize(
+429 |     "date_str,expected",
+    |     ^^^^^^^^^^^^^^^^^^^
+430 |     [
+431 |         ("23,13,01,10,0,0,+1", "23,13,01,10,0,0,+1"),
+    |
+help: Use a `tuple` for the first argument
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:450:25
+    |
+448 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+449 |     api.stok = "stok=test"
+450 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+451 |     with (
+452 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:472:25
+    |
+470 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+471 |     api.stok = "stok=test"
+472 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+473 |     with (
+474 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:490:25
+    |
+488 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+489 |     api.stok = "stok=test"
+490 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+491 |     with (
+492 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+PT012 `pytest.raises()` block should contain a single simple statement
+   --> tests\test_api.py:491:5
+    |
+489 |       api.stok = "stok=test"
+490 |       api.last_activity = datetime.now()
+491 | /     with (
+492 | |         patch.object(api, "get_ad", return_value="test_ad"),
+493 | |         patch.object(api, "login"),
+494 | |         pytest.raises(ZTEConnectionError, match="Request failed"),
+495 | |     ):
+496 | |         mock_aiohttp_client.post.side_effect = RuntimeError("APN mode fail")
+497 | |         await api.set_apn_mode("auto")
+    | |______________________________________^
+    |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:505:25
+    |
+503 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+504 |     api.stok = "stok=test"
+505 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+506 |     with (
+507 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:523:25
+    |
+521 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+522 |     api.stok = "stok=test"
+523 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+524 |     with (
+525 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:541:25
+    |
+539 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+540 |     api.stok = "stok=test"
+541 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+542 |     with (
+543 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:559:25
+    |
+557 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+558 |     api.stok = "stok=test"
+559 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+560 |     with (
+561 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:577:25
+    |
+575 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+576 |     api.stok = "stok=test"
+577 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+578 |     with (
+579 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:595:25
+    |
+593 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+594 |     api.stok = "stok=test"
+595 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+596 |     with (
+597 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:613:25
+    |
+611 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+612 |     api.stok = "stok=test"
+613 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+614 |     with (
+615 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+PT012 `pytest.raises()` block should contain a single simple statement
+   --> tests\test_api.py:614:5
+    |
+612 |       api.stok = "stok=test"
+613 |       api.last_activity = datetime.now()
+614 | /     with (
+615 | |         patch.object(api, "get_ad", return_value="test_ad"),
+616 | |         patch.object(api, "login"),
+617 | |         pytest.raises(ZTEConnectionError, match="Request failed"),
+618 | |     ):
+619 | |         mock_aiohttp_client.post.side_effect = RuntimeError("Bearer pref fail")
+620 | |         await api.set_bearer_preference("Only_LTE")
+    | |___________________________________________________^
+    |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_api.py:628:25
+    |
+626 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+627 |     api.stok = "stok=test"
+628 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+629 |     with (
+630 |         patch.object(api, "get_ad", return_value="test_ad"),
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_coverage_ext.py:171:25
+    |
+169 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+170 |     api.stok = "stok=fake"
+171 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+172 |     mock_aiohttp_client.get.return_value = MockResponse(json_data={"RD": "test_rd"})
+173 |     assert await api.get_rd() == "test_rd"
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+PT012 `pytest.raises()` block should contain a single simple statement
+   --> tests\test_coverage_ext.py:711:5
+    |
+709 |       api.stok = "stok=test"
+710 |
+711 | /     with (
+712 | |         patch.object(api, "session", create=True) as mock_session,
+713 | |         pytest.raises(ZTEAuthError, match="Test auth fail"),
+714 | |     ):
+715 | |         mock_session.request.side_effect = ZTEAuthError("Test auth fail")
+716 | |         await api._request("GET", "some/path", authenticated=True)
+    | |__________________________________________________________________^
+    |
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_coverage_ext.py:918:25
+    |
+916 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+917 |     api.stok = "stok=test"
+918 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+919 |
+920 |     with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_coverage_ext.py:930:25
+    |
+928 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+929 |     api.stok = "stok=test"
+930 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+931 |
+932 |     with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_coverage_ext.py:942:25
+    |
+940 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+941 |     api.stok = "stok=test"
+942 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+943 |
+944 |     with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+DTZ005 `datetime.datetime.now()` called without a `tz` argument
+   --> tests\test_coverage_ext.py:954:25
+    |
+952 |     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+953 |     api.stok = "stok=test"
+954 |     api.last_activity = datetime.now()
+    |                         ^^^^^^^^^^^^^^
+955 |
+956 |     with patch.object(api, "_request", side_effect=ValueError("Unexpected value")):
+    |
+help: Pass a `datetime.timezone` object to the `tz` parameter
+
+S105 Possible hardcoded password assigned to: "password"
+  --> tests\test_diagnostics.py:31:54
+   |
+29 |     assert result["entry"]["title"] == "My ZTE Router"
+30 |     assert result["entry"]["data"]["model"] == "MC7010"
+31 |     assert result["entry"]["options"]["password"] == "**REDACTED**"
+   |                                                      ^^^^^^^^^^^^^^
+32 |     assert result["entry"]["options"]["username"] == "**REDACTED**"
+   |
+
+S105 Possible hardcoded password assigned to: "password"
+  --> tests\test_diagnostics.py:43:42
+   |
+41 |     assert result["data"]["signal_strength"] == 75
+42 |     assert result["data"]["wan_ipaddr"] == "**REDACTED**"
+43 |     assert result["data"]["password"] == "**REDACTED**"
+   |                                          ^^^^^^^^^^^^^^
+   |
+
+PT006 Wrong type passed to first argument of `pytest.mark.parametrize`; expected `tuple`
+   --> tests\test_init.py:784:5
+    |
+783 | @pytest.mark.parametrize(
+784 |     "uptime,expect_reboot",
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+785 |     [
+786 |         (70, False),
+    |
+help: Use a `tuple` for the first argument
+
+DTZ001 `datetime.datetime()` called without a `tzinfo` argument
+   --> tests\test_init.py:803:25
+    |
+801 |         await async_setup_entry(mock_hass, mock_config_entry)
+802 |         coordinator = mock_config_entry.runtime_data
+803 |         original_boot = datetime(2026, 1, 1, 0, 0, 0)
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+804 |         coordinator._boot_time = original_boot
+805 |         coordinator._last_uptime = 100
+    |
+help: Pass a `datetime.timezone` object to the `tzinfo` parameter
+
+DTZ001 `datetime.datetime()` called without a `tzinfo` argument
+   --> tests\test_init.py:833:25
+    |
+831 |         await async_setup_entry(mock_hass, mock_config_entry)
+832 |         coordinator = mock_config_entry.runtime_data
+833 |         original_boot = datetime(2026, 1, 1, 0, 0, 0)
+    |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+834 |         coordinator._boot_time = original_boot
+835 |         coordinator._last_uptime = 3600
+    |
+help: Pass a `datetime.timezone` object to the `tzinfo` parameter
+
+Found 65 errors.
+No fixes available (3 hidden fixes can be enabled with the `--unsafe-fixes` option).

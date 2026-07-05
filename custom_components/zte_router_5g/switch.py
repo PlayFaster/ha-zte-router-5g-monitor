@@ -130,12 +130,11 @@ class ZTERouterSwitch(
         try:
             await self.entity_description.setter_fn(self.coordinator.api, True)
             await self.coordinator.async_request_refresh()
-        except Exception as err:
-            _LOGGER.error(
-                "%s: Failed to turn on %s: %s",
+        except Exception:
+            _LOGGER.exception(
+                "%s: Failed to turn on %s",
                 self._entry.title,
                 self.entity_description.key,
-                err,
             )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
@@ -145,12 +144,11 @@ class ZTERouterSwitch(
         try:
             await self.entity_description.setter_fn(self.coordinator.api, False)
             await self.coordinator.async_request_refresh()
-        except Exception as err:
-            _LOGGER.error(
-                "%s: Failed to turn off %s: %s",
+        except Exception:
+            _LOGGER.exception(
+                "%s: Failed to turn off %s",
                 self._entry.title,
                 self.entity_description.key,
-                err,
             )
 
     @property

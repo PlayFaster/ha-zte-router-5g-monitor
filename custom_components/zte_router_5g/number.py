@@ -143,8 +143,8 @@ class ZTEPollingInterval(
         except asyncio.CancelledError:
             # Task was cancelled because the user moved the slider again
             pass
-        except Exception as err:
-            _LOGGER.error("Failed to apply polling interval change: %s", err)
+        except Exception:
+            _LOGGER.exception("Failed to apply polling interval change")
 
     @property
     def device_info(self) -> DeviceInfo:

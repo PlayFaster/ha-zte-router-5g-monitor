@@ -166,13 +166,12 @@ class ZTERouterSelect(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectE
                 self.coordinator.api, option, self.coordinator.data
             )
             await self.coordinator.async_request_refresh()
-        except Exception as err:
-            _LOGGER.error(
-                "%s: Failed to set %s to %s: %s",
+        except Exception:
+            _LOGGER.exception(
+                "%s: Failed to set %s to %s",
                 self._entry.title,
                 self.entity_description.key,
                 option,
-                err,
             )
 
     @property
