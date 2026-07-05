@@ -24,14 +24,14 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [🎯 Use Cases](#-use-cases)
   - [✅ Features](#-features)
   - [🔍 What You Get](#-what-you-get)
+  - [� Screenshots](#-screenshots)
   - [💡 Example Automations](#-example-automations)
-  - [📸 Screenshots](#-screenshots)
   - [📥 Installation](#-installation)
   - [🔧 Configuration](#-configuration)
   - [🔩 Under the Hood - Technical Architecture](#-under-the-hood---technical-architecture)
   - [❓ FAQ \& Troubleshooting](#-faq--troubleshooting)
-  - [❌ Removal](#-removal)
   - [❗ Known Limitations /❔ What's Missing?](#-known-limitations--whats-missing)
+  - [❌ Removal](#-removal)
   - [📝 Maintenance Status](#-maintenance-status)
   - [🤝 Contributors \& Acknowledgements](#-contributors--acknowledgements)
   - [📄 License](#-license)
@@ -261,6 +261,24 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 >
 > Restart Home Assistant after saving. The sensor will begin accumulating LTS from that point forward.
 
+## 📸 Screenshots
+
+### Integration Overview
+
+![Integration](.github/images/zte_5g_integration_screen.png)
+
+| Signal | System |
+| :-: | :-: |
+| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_sensor_control_info_mini.png) |
+
+| Data | SMS |
+| :-: | :-: |
+| ![Data](.github/images/zte_5g_data_screen_mini.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
+
+### Setup
+
+![Setup](.github/images/zte_5g_setup_info.png)
+
 ## 💡 Example Automations
 
 Entity IDs below use the default prefix zte_5g. If you set a custom name during setup, or have renamed since, replace zte_5g with your configured prefix.
@@ -467,24 +485,6 @@ actions:
       entity_id: switch.zte_5g_system_pause_polling
 ```
 
-## 📸 Screenshots
-
-### Integration Overview
-
-![Integration](.github/images/zte_5g_integration_screen.png)
-
-| Signal | System |
-| :-: | :-: |
-| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_sensor_control_info_mini.png) |
-
-| Data | SMS |
-| :-: | :-: |
-| ![Data](.github/images/zte_5g_data_screen_mini.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
-
-### Setup
-
-![Setup](.github/images/zte_5g_setup_info.png)
-
 ## 📥 Installation
 
 ### ✨ HACS (Recommended)
@@ -616,6 +616,13 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
   - Check your Home Assistant logs for specific error messages.
   - Delete and re-add the integration.
 
+## ❗ Known Limitations /❔ What's Missing?
+
+- **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
+- **Non-Bridge-Mode Features**: The integration was developed on and has only been tested with the MC7010 which is an outdoor bridge-mode only device without WiFi. This means the integration does not have:
+  - **Client Tracking**: No tracking of connected clients.
+  - **WiFi Monitoring**: There are no WiFi features.
+
 ## ❌ Removal
 
 To remove the integration from Home Assistant:
@@ -632,13 +639,6 @@ To fully uninstall (HACS):
 3. Click the **three dots** (⋮) at the top right and select **Remove**.
 4. Restart Home Assistant.
 5. Home Assistant automatically removes all associated entities and device entries from the registry when the integration is deleted.
-
-## ❗ Known Limitations /❔ What's Missing?
-
-- **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
-- **Non-Bridge-Mode Features**: The integration was developed on and has only been tested with the MC7010 which is an outdoor bridge-mode only device without WiFi. This means the integration does not have:
-  - **Client Tracking**: No tracking of connected clients.
-  - **WiFi Monitoring**: There are no WiFi features.
 
 ## 📝 Maintenance Status
 

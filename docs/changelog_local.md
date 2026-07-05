@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.6-dev2] - 2026-07-05 - Unreleased
+
+### Changed
+
+- **IQS Validation**: `dev-workbench` script `iqs_static_check.py` added via `tasks.json` now checks for Home Assistant Integration Quality Scale ( IQS ) compliance to 7 basic IQS rules.
+- **IQS `test-before-setup`**: IQS rule `test-before-setup` had been marked as complete, but the new script, referenced above, highlighted that it was not complete. Addressed this via:
+  - Imported ConfigEntryAuthFailed from homeassistant.exceptions.
+  - Modified the exception handler for ZTEAuthError in _async_update_data() to raise ConfigEntryAuthFailed when a persistent/non-bypassed auth failure occurs.
+  - Removed the direct call to self.entry.async_start_reauth(self.hass) because raising ConfigEntryAuthFailed delegates this cleanly to Home Assistant Core.
+  - Updated `test_init.py` to check for this, maintained 100% coverage.
+  - The normal **3-strike resilience logic** applies, to avoid false flags. Only on the 4th consecutive failure (or on the very first fetch during setup when self.data is None) will ConfigEntryAuthFailed be raised.
+- **Documentation**: Updated README.md , re-ordered some sections for logical flow and readability.
+
+### Bumps
+
+- **Validate Bump**: Bumped `pytest-homeassistant-custom-component` from 0.13.344 to 0.13.345
+
 ## [3.2.6-dev1] - 2026-07-03 - Unreleased
 
 ### Changed

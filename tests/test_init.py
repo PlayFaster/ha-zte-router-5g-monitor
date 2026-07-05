@@ -223,11 +223,12 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
 @pytest.mark.asyncio
 async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
     """Test that ZTEAuthError triggers reauth after 3 consecutive failures."""
+    from homeassistant.exceptions import ConfigEntryAuthFailed
+
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI"),
         patch("custom_components.zte_router_5g.async_get_clientsession"),
         patch("homeassistant.helpers.device_registry.async_get"),
-        patch.object(mock_config_entry, "async_start_reauth") as mock_reauth,
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_config_entry.runtime_data
@@ -241,11 +242,9 @@ async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
             assert data == {"old": "data"}
             assert coordinator.consecutive_failures == i + 1
 
-        # 4th failure raises UpdateFailed and triggers reauth
-        with pytest.raises(UpdateFailed, match="Authentication failed"):
+        # 4th failure raises ConfigEntryAuthFailed
+        with pytest.raises(ConfigEntryAuthFailed, match="Authentication failed"):
             await coordinator._async_update_data()
-
-        mock_reauth.assert_called_once_with(mock_hass)
 
 
 @pytest.mark.asyncio

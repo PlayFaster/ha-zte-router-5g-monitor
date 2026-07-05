@@ -9,6 +9,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -226,20 +227,12 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                 return self.data
 
-            _LOGGER.warning(
+            _LOGGER.error(
                 "%s: Authentication failed: %s",
                 self.entry.title,
                 err,
             )
-            self._was_available = False
-            if self.consecutive_failures >= 3:
-                _LOGGER.error(
-                    "%s: Authentication failed 3 or more times consecutively. "
-                    "Triggering reauth.",
-                    self.entry.title,
-                )
-                self.entry.async_start_reauth(self.hass)
-            raise UpdateFailed(f"Authentication failed: {err}") from err
+            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
 
         except Exception as err:
             self.consecutive_failures += 1
