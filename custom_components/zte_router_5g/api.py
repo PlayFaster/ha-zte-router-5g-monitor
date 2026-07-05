@@ -384,6 +384,8 @@ class ZTERouterAPI:
         if conn_error:
             raise ZTEConnectionError(conn_error)
 
+        if self.stok is None:
+            raise ZTEConnectionError("Failed to obtain stok from login")
         return self.stok
 
     async def get_all_data(self) -> dict[str, Any]:

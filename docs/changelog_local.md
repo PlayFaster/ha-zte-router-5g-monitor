@@ -6,14 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **PyTest Errors and Coverage**: The changes in dev3 below caused several of the exisiting PyTest to fail and also intriduced new uncoverered statements. Fixed and added tests to get to 100% coverage with all tests passing.
+- **PyTest Errors and Coverage**: The changes in dev3 below caused several of the existing PyTests to fail and also introduced new uncovered statements. Fixed and added tests to get to 100% coverage with all tests passing.
   - **297 tests all pass** (was 32 failing + 1 error)
   - **Coverage: 100%** across all files (was 98%)
 
 ### Test Changes
 
 | Category | Count | Fix |
-| :--- | :--- | :--- |
+| :-- | :-- | :-- |
 | **Python 3.14 tz-aware isoformat** | 4 tests | `+00:00` suffix now included — updated assertions |
 | **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
 | **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
