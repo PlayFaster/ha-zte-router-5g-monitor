@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.2.6-dev5] - 2026-07-06 - Unreleased
+
+### Bumps
+
+- **Shared .github CI Validation**: Bump .github Shared CI Validation via SHA from v2.0.5 to v2.0.6
+
 ## [3.2.6-dev4] - 2026-07-05 - Unreleased
 
 ### Changed
@@ -34,6 +40,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **Ruff Checks Extended**: As of shared CI Dev-workbench v2.2.1, Ruff checks have been extended to align with Home Assistant. This involves INcluding a wide range of checks and then EXcluding several items because of the wider range. In this project, that lead to 17 issues to be addressed.
 - **Ruff Production Code Compliance**: Resolved 17 static analysis violations in the custom component source:
   - **Exception Flow Control (`TRY301` / `TRY300`)**: Refactored HTTP request execution and authentication validation blocks in `api.py` and service callbacks in `__init__.py` to perform status code evaluations and raise custom errors (`ZTEAuthError`/`ZTEConnectionError`) outside of the primary `try-except` blocks.
   - **Timezone Awareness (`DTZ`)**: Eliminated naive datetimes (`datetime.now()`, `datetime.min`) in session expiry and SMS timestamp calculations in `api.py`, converting them to timezone-aware UTC datetime structures using the Python-standard `UTC` alias.
