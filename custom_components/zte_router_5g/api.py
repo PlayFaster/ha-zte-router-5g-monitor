@@ -384,7 +384,7 @@ class ZTERouterAPI:
         if conn_error:
             raise ZTEConnectionError(conn_error)
 
-        if self.stok is None:
+        if self.stok is None:  # pragma: no cover - defensive; narrows type for mypy
             raise ZTEConnectionError("Failed to obtain stok from login")
         return self.stok
 
