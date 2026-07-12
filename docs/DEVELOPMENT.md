@@ -19,7 +19,7 @@ The integration follows the standard Home Assistant Custom Component pattern, op
 - **`switch.py`**: Implements "Pause Polling" to stop API calls without disabling the integration, allowing temporary exclusive access to the router WebUI.
 - **`button.py`**: Triggers stateless actions (Refresh Now, Reboot, Delete All SMS). "Refresh Now" forces an immediate coordinator poll via `async_request_refresh()`, complementing the Pause Polling switch and the configurable polling interval.
 - **`number.py`**: Provides UI control over the `DataUpdateCoordinator` refresh interval with persistent storage in `ConfigEntry` options.
-- **`config_flow.py`**: Manages initial setup and reconfiguration via `OptionsFlow`, storing credentials in `entry.options`. Normalises the host input (`_clean_host`) before storage, and on edit screens leaves credential fields blank (masked, never pre-filled) — restoring the stored password on a blank submit via `_merge_credentials`, so the password can be re-set without ever being displayed.
+- **`config_flow.py`**: Manages initial setup and reconfiguration via `OptionsFlow`, storing credentials in `entry.options`. Normalizes the host input (`_clean_host`) before storage, and on edit screens leaves credential fields blank (masked, never pre-filled) — restoring the stored password on a blank submit via `_merge_credentials`, so the password can be re-set without ever being displayed.
 
 ## 3. Historical Architectural Shifts
 
@@ -57,7 +57,7 @@ To reach its current "modern" state, the project underwent several major refacto
 
 - **Initial State**: All entities were grouped under a single monolithic "ZTE Router" device. Data volume was reported in GB (legacy), and signal units were inconsistent.
 - **Change**: Refactored the entity engine to support **Sub-Device Grouping** (System, Signal, Data, SMS). Aligned volume sensors with Home Assistant's `DATA_SIZE` standard (Bytes) and normalized signal metrics (RSRP/RSSI in dBm; RSRQ/SNR/SINR in dB).
-- **Result**: Improved UI organization in the Device Registry and full compatibility with Home Assistant's native unit conversion and dashboarding features. Enhanced `unique_id` stability by using lowercase internal keys (e.g., `z5g_rsrp`).
+- **Result**: Improved UI organization in the Device Registry and full compatibility with Home Assistant's native unit conversion and dashboard features. Enhanced `unique_id` stability by using lowercase internal keys (e.g., `z5g_rsrp`).
 
 ## 4. Success Patterns
 
@@ -84,7 +84,7 @@ To reach its current "modern" state, the project underwent several major refacto
 - **Background Task Mocking**: When `hass.async_create_task` is mocked, tasks created via `entry.async_create_background_task` may not execute, leading to `RuntimeWarning: coroutine was never awaited`.
   - _Fix_: In `conftest.py`, ensure the background task mock explicitly schedules the coroutine via `asyncio.create_task` and that the test awaits `hass.async_block_till_done()`.
 - **Manual Sleep in Coordinators**: Sleeping inside `_async_update_data` blocks the coordinator task and delays other integrations.
-  - _Fix_: Removed `asyncio.sleep` retries. Use `asyncio.timeout` and raise `UpdateFailed` to let HA handle backoffs.
+  - _Fix_: Removed `asyncio.sleep` retries. Use `asyncio.timeout` and raise `UpdateFailed` to let HA handle back-offs.
 - **Background Task Orphaning**: Standard `hass.async_create_task` is not tracked by the entry.
   - _Fix_: Migrated to `entry.async_create_background_task` for automatic cleanup on unload.
 - **MappingProxy TypeError**: In unit tests, `ZTEConfigFlow().context` is a read-only `mappingproxy`.
@@ -108,7 +108,7 @@ To reach its current "modern" state, the project underwent several major refacto
 - **Stored Password Exposed on Reconfigure**: Pre-filling the password field from `entry.options` on the Reconfigure/Options screens meant the stored secret was sent to the browser as a masked value — and could be revealed with the UI eye icon.
   - _Fix_: Split the config-flow schema into `_user_schema` (setup) and `_edit_schema` (edit). Edit screens use a masked `TextSelector` (`TextSelectorType.PASSWORD`) and leave the password blank; `_merge_credentials()` restores the stored value on a blank submit, so the field can re-set the password without ever displaying it. A `data_description` under the field tells the user "Leave blank to keep the current password." See `shared/SharedNotes/dev_std/dev_standards.md` Section 9.
 - **HA ConfigFlow Type Stub Incompatibility (mypy `--strict`)**: Home Assistant's type stubs define `ConfigFlow` step methods as returning `ConfigFlowResult`, but the `FlowResult` type (imported from `homeassistant.data_entry_flow`) is what the integration code uses and what older HA versions expose. Under mypy `--strict`, this produces `[override]` errors on every step method and `[return-value]` errors on every return statement. Naively adding `# type: ignore[return-value]` to each return triggers a cascade of `[unused-ignore]` errors because mypy resolves the conflict inconsistently depending on which HA stubs are active.
-  - _Fix_: Apply `# type: ignore[override]` to each async step method signature (not the class). For return statements that mypy still flags, move the comment to the end of the closing parenthesis line. Accept that a small number of residual errors may remain due to HA stub version drift — they do not affect runtime behaviour. `MappingProxyType` argument mismatches (e.g. passing `entry.options` to a `dict[str, Any]` parameter) are resolved by wrapping with `dict()` at the call site.
+  - _Fix_: Apply `# type: ignore[override]` to each async step method signature (not the class). For return statements that mypy still flags, move the comment to the end of the closing parenthesis line. Accept that a small number of residual errors may remain due to HA stub version drift — they do not affect runtime behavior. `MappingProxyType` argument mismatches (e.g. passing `entry.options` to a `dict[str, Any]` parameter) are resolved by wrapping with `dict()` at the call site.
 - **ZTE SMS API Requirements**: Interfacing with the ZTE router SMS API requires specific encoding and security handling:
   - _Message Encoding_: Messages must be hex-encoded using UTF-16BE format (`encode("utf-16-be").hex()`). If not encoded, characters will be garbled or rejected by the modem.
   - _Recipient Numbers_: Phone numbers must be URL-escaped.
@@ -122,7 +122,7 @@ To reach its current "modern" state, the project underwent several major refacto
   - _Fix_: Implemented an inactivity timer check inside the centralized `_request()` wrapper. If more than 150 seconds (2.5 minutes) elapse without authenticated request activity, the stored session token (`self.stok`) is proactively cleared. This forces a fresh login and session-activating GET request before sending the next API request.
 
 - **VS16 Compound Emoji in README Headings (2026-06-08)**: Using VS16 compound emoji (e.g., `⚙️`, `🏗️`, `⚠️`, `🗑️`) in README headings causes Table of Contents links to silently 404. GitHub's anchor generator strips VS16 bytes (U+FE0F) when computing heading slugs, but Markdown tooling includes them in `href` values. The mismatch is completely invisible in source editors — the heading renders fine and GitHub preview looks correct, but clicking a ToC link jumps nowhere.
-  - _Fix_: Replace all VS16 compound emoji in headings and their corresponding ToC `href` values with always-colour single-codepoint alternatives (e.g., 🔧 🔩 ❌ ❗ 🔄 💬). See root `CLAUDE.md` → "Shared Markdown Notes" for the full replacement table and detection script.
+  - _Fix_: Replace all VS16 compound emoji in headings and their corresponding ToC `href` values with always-color single-codepoint alternatives (e.g., 🔧 🔩 ❌ ❗ 🔄 💬). See root `CLAUDE.md` → "Shared Markdown Notes" for the full replacement table and detection script.
 
 ## 6. Environment Constraints
 
@@ -143,7 +143,7 @@ To reach its current "modern" state, the project underwent several major refacto
 
 ## Version Control
 
-- **v1.0.1** (2026-05-07) — Added diagnostics platform, reauthentication flow, runtime-data migration, parallel-updates, button exception handling, log-on-unavailability improvements, config-flow data descriptions, and expanded test coverage.
+- **v1.0.1** (2026-05-07) — Added diagnostics platform, re-authentication flow, runtime-data migration, parallel-updates, button exception handling, log-on-unavailability improvements, config-flow data descriptions, and expanded test coverage.
 - **v1.0.2** (2026-05-07) — Replaced host-IP unique_id with IMEI-based stable device identity. Added 12 new sensors (System: IMEI, Hardware Version, Battery, SIM IMSI, SIM ICCID; Signal: eNodeB ID, Network Mode, PPP Status; Data: Upload Speed, Download Speed, Session Sent, Session Received). Guard bands applied to Battery (0–100) and throughput/session-byte sensors (min 0). Added sensitive identifiers (imei, sim_imsi, sim_iccid) to diagnostics redaction.
 - **v1.0.3** (2026-05-07) — Code review bugfix pass (13 items). Extracted 5-way duplicated `device_info` into shared `build_device_info()` helper. Migrated `configuration_url` to dynamic protocol. Replaced mid-poll `async_update_entry` with device registry updates. Migrated 58 sensor descriptions to `translation_key=` naming. Added `async_will_remove_from_hass` for debounce task cleanup. Added recursion guard to `get_all_data`. Fixed null deref in reauth, Python 2 `except` syntax, `ValueError` escape, bare Exception, `delete_sms()` stok clearing, orphaned test body, and weak type annotation in diagnostics.
 - **v1.0.4** (2026-05-08) — Gold Standard README overhaul and Hassfest translation synchronization fix.
@@ -159,6 +159,6 @@ To reach its current "modern" state, the project underwent several major refacto
 - **v1.0.14** (2026-05-27) — Added setting modification and immediate coordinator refresh pattern for Select and Switch entities. Exceeded entity count to 75.
 - **v1.0.15** (2026-05-27) — Documented the router's `js/service.js` as the source of all available API data elements.
 - **[2026-06-08]** — Added VS16 compound emoji in README headings pitfall entry.
-- **v3.2.5-dev7** (2026-07-02) — Documented config-flow host normalisation (doubled `configuration_url` fix) and the blank/masked password-on-edit pattern (stored secret no longer exposed via the eye icon). Added the "Refresh Now" button (immediate coordinator refresh).
+- **v3.2.5-dev7** (2026-07-02) — Documented config-flow host normalization (doubled `configuration_url` fix) and the blank/masked password-on-edit pattern (stored secret no longer exposed via the eye icon). Added the "Refresh Now" button (immediate coordinator refresh).
 - **v3.2.5-dev8** (2026-07-02) — Added "Suggested Display Units & Precision" success pattern. Applied `suggested_unit_of_measurement` / `suggested_display_precision` to 16 sensors (data size → GB, data rate → Mbit/s, uptime duration → hours, bandwidth/dBm → 0 dp).
 - **v3.2.5-dev9** (2026-07-02) — Documented passing `config_entry=entry` to the coordinator (honours the "Enable polling for changes" system option via `pref_disable_polling`; required as HA removes implicit context detection in 2026.8). Minimum HA raised to 2024.8.0.

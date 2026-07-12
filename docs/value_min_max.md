@@ -38,7 +38,7 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 
 ## Implementation Details
 
-The `ZTESensorEntityDescription` dataclass includes:
+The `ZTESensorEntityDescription` data-class includes:
 
 - `min_limit`: The lowest physically possible value.
 - `max_limit`: The highest physically possible value.

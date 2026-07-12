@@ -24,7 +24,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [🎯 Use Cases](#-use-cases)
   - [✅ Features](#-features)
   - [🔍 What You Get](#-what-you-get)
-  - [� Screenshots](#-screenshots)
+  - [📸 Screenshots](#-screenshots)
   - [💡 Example Automations](#-example-automations)
   - [📥 Installation](#-installation)
   - [🔧 Configuration](#-configuration)
@@ -219,7 +219,7 @@ This integration provides **75+ entities** (depending on your firmware) organize
 > **Clean up your UI: Disable Unnecessary Devices or Entities**
 >
 > - If you never use the Router's SMS, you may not need the SMS sub-device.
-> - Devices and their entities can be disabled from the main device page: (⋮ menu) > **Disable Device**.
+> - Devices can be disabled from the main device page: (⋮ menu) > **Disable Device** which also disables all the device entities.
 > - Individual entities can be disabled via their properties, or in bulk on the entities list page.
 
 ### 📊 Long Term Statistics (LTS)

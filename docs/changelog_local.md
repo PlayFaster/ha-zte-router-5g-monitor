@@ -1,6 +1,19 @@
-# Changelog
+# Internal Detailed Changelog: ZTE Router 5G Monitor
 
 All notable changes to this project will be documented in this file.
+
+---
+
+## [3.2.6-dev6] - 2026-07-12 - Unreleased - Bumped pytest-homeassistant-custom-component from 0.13.345 to 0.13.346
+
+### Bumps
+
+- **Validate Bump**: Bumped pytest-homeassistant-custom-component from 0.13.345 to 0.13.346
+
+### Changed
+
+- **Docs**: Minor fixes to README for alignment with other project READMEs (clarification on disabling devices and/vs. entities)
+- **Formats**: Codespell alignment, words like behavior and color etc.
 
 ## [3.2.6-dev5] - 2026-07-06 - Unreleased
 
@@ -20,7 +33,7 @@ All notable changes to this project will be documented in this file.
 
 | Category | Count | Fix |
 | :-- | :-- | :-- |
-| **Python 3.14 tz-aware isoformat** | 4 tests | `+00:00` suffix now included — updated assertions |
+| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
 | **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
 | **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
 | **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
@@ -123,7 +136,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Coordinator `config_entry`**: `ZTERouterDataUpdateCoordinator` now passes `config_entry=entry` to `super().__init__()`. This makes `self.config_entry` explicit, which is what HA core's `_schedule_refresh()` checks (`config_entry.pref_disable_polling`) to stop scheduled polling when the user sets **Settings → Devices & Services → (⋮) → System options → "Enable polling for changes" = OFF**. Manual updates (`homeassistant.update_entity`, "Refresh Now", Pause-Polling off→on) still fetch. No behaviour change on current HA — it removes reliance on implicit context detection, which HA logs as an error from **2026.8**.
+- **Coordinator `config_entry`**: `ZTERouterDataUpdateCoordinator` now passes `config_entry=entry` to `super().__init__()`. This makes `self.config_entry` explicit, which is what HA core's `_schedule_refresh()` checks (`config_entry.pref_disable_polling`) to stop scheduled polling when the user sets **Settings → Devices & Services → (⋮) → System options → "Enable polling for changes" = OFF**. Manual updates (`homeassistant.update_entity`, "Refresh Now", Pause-Polling off→on) still fetch. No behavior change on current HA — it removes reliance on implicit context detection, which HA logs as an error from **2026.8**.
 - **Minimum HA Version**: Documented minimum raised to **2024.8.0** (the release that added the `config_entry` argument to `DataUpdateCoordinator`).
 
 ### Tests
@@ -144,7 +157,7 @@ All notable changes to this project will be documented in this file.
 
 - **Data Size Sensors (Bytes → GB)**: `monthly_tx_bytes_raw`, `monthly_rx_bytes_raw`, `monthly_total_bytes_raw` suggest `GIGABYTES` at precision **1** (monthly); `realtime_tx_bytes`, `realtime_rx_bytes` (session) suggest `GIGABYTES` at precision **2**. Native unit stays `BYTES`.
 - **Data Rate Sensors (B/s → Mbit/s)**: `realtime_tx_thrpt`, `realtime_rx_thrpt` suggest `MEGABITS_PER_SECOND` at precision **2**. Native unit stays `BYTES_PER_SECOND`.
-- **Duration Sensor (s → h)**: `realtime_time` (Uptime Duration) suggests `HOURS` at precision **1**; its native unit was normalised from the `"s"` string to `UnitOfTime.SECONDS` (identical value).
+- **Duration Sensor (s → h)**: `realtime_time` (Uptime Duration) suggests `HOURS` at precision **1**; its native unit was normalized from the `"s"` string to `UnitOfTime.SECONDS` (identical value).
 - **Bandwidth (MHz)**: `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth` now round to **0** decimal places; unit unchanged (`MHz`).
 - **Signal Strength (dBm)**: `lte_rsrp`, `lte_rssi`, `z5g_rsrp`, `z5g_rssi`, `rssi`, `rscp` round to **0** decimal places; unit unchanged. (RSRQ/SNR in dB left fractional.)
 
@@ -166,7 +179,7 @@ All notable changes to this project will be documented in this file.
 
 ### Summary
 
-- **Config Flow Hardening & Refresh Button**: Normalised host input before storage, stopped exposing the stored password on edit screens, and added a "Refresh Now" button.
+- **Config Flow Hardening & Refresh Button**: Normalized host input before storage, stopped exposing the stored password on edit screens, and added a "Refresh Now" button.
 
 ### Added
 
@@ -174,7 +187,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Host Normalisation in Config Flow**: Added `_clean_host()` and applied it to all four config-flow steps (user, reconfigure, reauth, options) so a full URL or trailing slash entered in the Host field is stripped before it is stored in `entry.options`. Prevents a doubled device `configuration_url` (e.g. `http://http://192.168.0.1`).
+- **Host Normalization in Config Flow**: Added `_clean_host()` and applied it to all four config-flow steps (user, reconfigure, reauth, options) so a full URL or trailing slash entered in the Host field is stripped before it is stored in `entry.options`. Prevents a doubled device `configuration_url` (e.g. `http://http://192.168.0.1`).
 - **Password No Longer Exposed on Edit Screens**: Split the config-flow schema into setup (`_user_schema`) and edit (`_edit_schema`). The password now uses a masked `TextSelector` and is left blank on Reconfigure/Options/Reauth — the stored value is never pre-filled or revealable via the UI eye icon. A blank submission keeps the stored password via `_merge_credentials()`; entering a value changes it.
 - **Field Helper Text**: Added `data_description` guidance under the password field on the Reconfigure/Options screens ("Leave blank to keep the current password, or enter a new one to change it.").
 
@@ -225,7 +238,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **CI Local Tasks**: Reordered local tasks.json, added colour for pass/fail.
+- **CI Local Tasks**: Reordered local tasks.json, added color for pass/fail.
 
 ## [3.2.4] - 2026-06-15 - Release
 
@@ -316,11 +329,11 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **2 `RuntimeWarning: coroutine was never awaited` + 2 test failures** (`test_api.py`, `test_coverage_ext.py`, `conftest.py`): Two tests (`test_api_get_sms_messages_error`, `test_api_get_last_sms_content_exception`) that set `mock_aiohttp_client.post.side_effect` triggered a re-login due to inactivity timeout (`last_activity = datetime.min`). The login path's GET request returned a bare `MagicMock` whose `headers.get("Content-Type", "")` resolved to an unawaited coroutine. Fixed by setting `session.get`'s default `return_value` to `MockResponse()` in the conftest fixture, and providing `{"LD": "test_ld"}` mock data to the failing tests so login succeeds and the expected `ZTEConnectionError` propagates correctly.
+- **2 `RuntimeWarning: coroutine was never awaited` + 2 test failures** (`test_api.py`, `test_coverage_ext.py`, `conftest.py`): Two tests (`test_api_get_sms_messages_error`, `test_api_get_last_sms_content_exception`) that set `mock_aiohttp_client.post.side_effect` triggered a re-login due to inactivity timeout (`last_activity = datetime.min`). The login path's GET request returned a bare `MagicMock` whose `headers.get("Content-Type", "")` resolved to an un-awaited coroutine. Fixed by setting `session.get`'s default `return_value` to `MockResponse()` in the conftest fixture, and providing `{"LD": "test_ld"}` mock data to the failing tests so login succeeds and the expected `ZTEConnectionError` propagates correctly.
 
 ### Changed
 
-- **README Emoji Consistency**: Replaced all VS16 compound emoji in headings and ToC links with always-colour single-codepoint alternatives (`⚙️`→`🔧`, `🗑️`→`❌`, `⚠️`→`❗`, `⏱️`→`🔁`, `✉️`→`💬`, `⏯️`→`🔁`, `🛠️`→`🔩`, `🎛️`→`🔘`); moved License badge out of heading; standardised Use Cases icon to `🎯`.
+- **README Emoji Consistency**: Replaced all VS16 compound emoji in headings and ToC links with always-color single-codepoint alternatives (`⚙️`→`🔧`, `🗑️`→`❌`, `⚠️`→`❗`, `⏱️`→`🔁`, `✉️`→`💬`, `⏯️`→`🔁`, `🛠️`→`🔩`, `🎛️`→`🔘`); moved License badge out of heading; standardized Use Cases icon to `🎯`.
 
 - **`pyproject.toml` — mypy Configuration Realigned with HA's Internal `mypy.ini`**: The project's `[tool.mypy]` section has been restructured to closely match HA's auto-generated `mypy.ini` (produced by `script/hassfest -p mypy_config`). This ensures the pre-commit mypy hook, and the project's basic `mypy custom_components/` check, run under materially the same conditions as HA's own integration quality checks. The goal is for any type errors caught here to be errors HA itself would also catch — and vice versa.
 
@@ -492,7 +505,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Uptime boot timestamp stabilisation** (`coordinator.py`): Replaced 30-second timestamp-delta tolerance latch with a reboot-detection latch. Boot time is now computed once and frozen; it re-derives only when the router's uptime counter drops by more than `UPTIME_REBOOT_MARGIN` (30 s) — the only clock-independent signal of a genuine reboot. Added bad-reading guard: missing or unparsable `realtime_time` readings leave the latched value untouched and do not advance the anchor. Added `last_uptime` as a persisted reboot-detection anchor in `entry.data` alongside `boot_time`. Eliminates drift caused by recomputing `now() − uptime` against two independently ticking clocks.
+- **Uptime boot timestamp stabilization** (`coordinator.py`): Replaced 30-second timestamp-delta tolerance latch with a reboot-detection latch. Boot time is now computed once and frozen; it re-derives only when the router's uptime counter drops by more than `UPTIME_REBOOT_MARGIN` (30 s) — the only clock-independent signal of a genuine reboot. Added bad-reading guard: missing or unparsable `realtime_time` readings leave the latched value untouched and do not advance the anchor. Added `last_uptime` as a persisted reboot-detection anchor in `entry.data` alongside `boot_time`. Eliminates drift caused by recomputing `now() − uptime` against two independently ticking clocks.
 
 ## [3.0.2-dev9] - 2026-05-23 - Unreleased
 
@@ -662,7 +675,7 @@ All notable changes to this project will be documented in this file.
 
 ### Dev Tooling
 
-- **Shared Reusable CI Workflow**: Created `PlayFaster/.github` organisation repo containing a parameterised reusable workflow (`validate.yaml`, named "Validate (Shared)"). All 8 validation jobs (`hassfest`, `hacs_val`, `py_val`, `test_val`, `file_val`, `codespell`, `zizmor`, `mypy_val`) now live in the shared repo and are called by each integration via a thin caller. Changes to validation logic propagate to all 4 projects on the next CI run without per-project edits.
+- **Shared Reusable CI Workflow**: Created `PlayFaster/.github` organization repo containing a parameterized reusable workflow (`validate.yaml`, named "Validate (Shared)"). All 8 validation jobs (`hassfest`, `hacs_val`, `py_val`, `test_val`, `file_val`, `codespell`, `zizmor`, `mypy_val`) now live in the shared repo and are called by each integration via a thin caller. Changes to validation logic propagate to all 4 projects on the next CI run without per-project edits.
 - **Thin Caller Workflow**: Replaced the 270-line inline `.github/workflows/validate.yaml` with a ~30-line caller that delegates to the shared workflow via `uses: PlayFaster/.github/.github/workflows/validate.yaml@main`. Permissions correctly scoped: `contents: read` at workflow level, `contents: write` and `pull-requests: write` at job level (required by `test_val` for coverage badge and PR comments).
 - **Shared Workflow Concurrency**: Reusable workflow uses `${{ github.workflow }}-${{ github.ref }}-${{ github.repository }}` as its concurrency group, preventing cross-repo cancellation when multiple integrations trigger simultaneously.
 - **Shared Workflow Dependabot**: Added `dependabot.yml` to `PlayFaster/.github` tracking the `github-actions` ecosystem weekly, keeping SHA pins in the shared workflow current.
@@ -805,7 +818,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **`diagnostics.py`**: New diagnostics platform. Exposes coordinator state, entry data, and live router data (with credential redaction) via Developer Tools → Download Diagnostics.
-- **Reauthentication Flow**: `async_step_reauth` and `async_step_reauth_confirm` in `config_flow.py`. `ZTEAuthError` in coordinator triggers `entry.async_start_reauth`. `strings.json` updated with reauth strings.
+- **Re-authentication Flow**: `async_step_reauth` and `async_step_reauth_confirm` in `config_flow.py`. `ZTEAuthError` in coordinator triggers `entry.async_start_reauth`. `strings.json` updated with reauth strings.
 - **Installation Parameters**: Documented minimum HA version (2024.6.0), Python (3.12+), and tested firmware in README.
 - **Configuration Parameters**: Documented polling interval range (30–3600s), defaults, and runtime options flow in README.
 - **Config Flow Test Coverage**: Added show-form paths (`user_input=None`) for both config and options steps. Added options flow `ZTEAuthError` branch test.
