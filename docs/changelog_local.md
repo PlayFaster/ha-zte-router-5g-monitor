@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.2.6-dev8] - 2026-07-26 - Unreleased - No Manifest Bump
+
+### Changed
+
+- **Icons & Branding**: Updated the icons and logos for the project.
+- **AGENTS**: Rewrite of AGENTS.md to move content shared across projects to a shared file, and to move sensor entity counts to using `docs/all_sensors.md`as the definitive source.
+
+### Bumps
+
+- **Shared CI**: Bump `.github` Shared CI Validation via SHA from v2.0.6 to v2.0.7
+- **Validate Bump**: Update `ruff` from 0.15.20 to 0.15.22
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.346 to 0.13.348
+- **Validate Bump**: Update `codespell` from 2.42 to 2.43
+
 ## [3.2.6-dev7] - 2026-07-12 - Unreleased
 
 ### Changed

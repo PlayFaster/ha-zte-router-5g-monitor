@@ -2,51 +2,17 @@
 
 This file provides guidance to AI coding agents when working with code in this repository.
 
+> **Read the shared conventions first:** [`.shared/dev_std/agent_conventions.md`](.shared/dev_std/agent_conventions.md) — commands (tests, lint, mypy, validation), the Windows-host `docker exec` workflow, devcontainer access, HAB/MCP for interrogating the running HA instance, the post-modification SCOPE table, code conventions, and the markdown/Python rules. That file is the single source of truth for everything shared across the integration projects; this file covers only what is specific to **ha-zte-router-5g-monitor**.
+
 ## What This Integration Does
 
 A Home Assistant custom integration (`zte_router_5g`) for ZTE 5G CPE routers (primarily the MC7010). It is a `local_polling` `hub` integration distributed via HACS. It talks to the router's undocumented `goform` HTTP API, exposing signal diagnostics, data usage, SMS, and reboot/polling controls. There are no external `requirements` — it relies only on `aiohttp` and Home Assistant core.
 
+> **Entity and service inventory lives in [`docs/all_sensors.md`](docs/all_sensors.md)** — it is authoritative and kept current against live HA by `sensor_review.md`. This file deliberately carries no entity counts or service descriptions.
+
 ## Commands
 
-### Tests
-
-```bash
-# Run the full test suite
-pytest
-
-# Run a single test file / test
-pytest tests/test_coordinator.py
-pytest tests/test_api.py::test_login -q
-```
-
-### Linting & Formatting
-
-```bash
-# Lint + autofix and format (config in pyproject.toml)
-ruff check --fix .
-ruff format .
-
-# Type check (only custom_components; needs /ha_core mounted)
-mypy custom_components/
-
-# Run all configured checks at once
-pre-commit run --all-files
-```
-
-### Running tools from a Windows host
-
-These commands only work **inside** the devcontainer — HA imports `fcntl`, so `pytest` (and the other tools) cannot run on a Windows host directly. From Windows, run everything through `docker exec` against the running container. See [`.shared/prompts/devcon_run_gen.md`](.shared/prompts/devcon_run_gen.md) for the full mini-skill. Quick reference:
-
-```bash
-# Confirm the container is up first
-docker ps --filter "name=<CONTAINER_NAME>" --format "{{.Names}}"
-
-# Run a tool inside the container (-w sets the in-container working dir)
-docker exec -w /workspaces/<PROJECT_DIR> <CONTAINER_NAME> bash -c "PYTHONPATH=. pytest tests/"
-docker exec -w /workspaces/<PROJECT_DIR> <CONTAINER_NAME> bash -c "ruff check ."
-```
-
-Do not install or run these tools on the host as a workaround.
+Standard for all integration projects — see [shared conventions §2](.shared/dev_std/agent_conventions.md). Nothing about this project's commands differs.
 
 ## Architecture
 
@@ -66,7 +32,7 @@ Data flows in one direction: **`api.py` → `coordinator.py` → platform entiti
   - Detects new SMS by timestamp + per-message hash and fires the `zte_router_5g_sms_received` bus event; raises a repair issue when SMS storage is full.
   - Persists a stable `boot_time` into `entry.data` so the uptime timestamp doesn't jitter. The boot instant is latched once and only re-derived when the router's uptime counter drops by more than `UPTIME_REBOOT_MARGIN` (a genuine reboot); missing/garbage uptime readings leave the latched value untouched. `last_uptime` is persisted alongside `boot_time` as the reboot-detection anchor.
 
-- **`__init__.py`** — entry setup forwards platforms **immediately**, then runs login + first refresh in a background task (`async_create_background_task`) so HA startup isn't blocked. Also registers the 4 SMS services (`send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`). The coordinator is stored on `entry.runtime_data`, not `hass.data`.
+- **`__init__.py`** — entry setup forwards platforms **immediately**, then runs login + first refresh in a background task (`async_create_background_task`) so HA startup isn't blocked. Also registers the SMS services at domain level. The coordinator is stored on `entry.runtime_data`, not `hass.data`.
 
 - **Platforms** (`sensor`, `binary_sensor`, `button`, `number`, `switch`, `select`) — read `coordinator.data` and attach to sub-devices via `helpers.build_device_info`.
 
@@ -85,54 +51,8 @@ Read credentials from `entry.options`, not `entry.data`. The config flow is `VER
 
 ## Key Patterns & Conventions
 
-- Ruff is strict: `D` (pydocstyle — every module/class/function needs a docstring), `N`, `ASYNC`, `T20` (no `print`), `SIM`, `UP` are all enabled. Target `py314`, line length 88.
-- mypy runs in strict mode (`disallow_untyped_defs`, `disallow_any_generics`, etc.) over `custom_components/` only.
-- `_LOGGER` messages are prefixed with `self.entry.title` (`"%s: ..."`) — match that style.
-- The `.notes` and `.shared` symlinks point outside the repo (project notes / shared validation configs) and are not part of the shipped integration.
-
-### Exception Tuple Syntax — Settled Decision
-
-Always use `except (A, B):` with explicit parentheses for multi-exception catches. Never use the bare-tuple form `except A, B:`.
-
-- **Do not flag or change this** — it has been researched and decided.
-- `except A, B:` silently catches only `A` on Python 3.12–3.13 (what HA runs on in production), making it a correctness issue, not just style.
-- `except (A, B):` is correct and unambiguous across Python 2.6 through 3.14+.
-- Full background: `shared/SharedNotes/info/py_exception_tuple_syntax/issue_summary.md`
+Shared conventions (ruff/mypy strictness, `_LOGGER` prefixing, `PARALLEL_UPDATES`, `translation_key`, icons, exception tuple syntax, markdown emoji rules) are in [shared conventions §4–5](.shared/dev_std/agent_conventions.md). Nothing in this project deviates.
 
 ## Development Environment
 
-The project uses a VS Code devcontainer (`.devcontainer/`, image `ha-dev-base:latest`; see `.devcontainer/docker-compose.yml`) running a Home Assistant instance for live testing. HA core source is mounted read-only at `/ha_core`; mypy resolves HA types against it via `mypy_path = "/ha_core"` and will not typecheck correctly outside an environment where that path exists.
-
-### MCP Access (ha-mcp-dev)
-
-When the devcontainer is running, the `ha-mcp-dev` MCP server automatically connects to the HA instance inside it (`http://localhost:8123`). Use it to verify integration changes without leaving the editor.
-
-**After any modification, follow the post-modification process** — see [`.shared/prompts/post_mod_process.md`](.shared/prompts/post_mod_process.md). Specify a `SCOPE` when invoking it:
-
-| SCOPE      | What runs                                                 |
-| :--------- | :-------------------------------------------------------- |
-| `None`     | Changes only — no validation                              |
-| `Basic`    | HA restart + error check + lint/format fixes              |
-| `Full`     | Basic + mypy (standard) + pytest (fix failing tests only) |
-| `Complete` | Full + pre-commit --all-files + mypy --strict             |
-
-Additional tools useful during development:
-
-- `ha_get_state` / `ha_search_entities` — verify entity states and attributes after a reload
-- `ha_call_service` — trigger service calls (e.g. `homeassistant.update_entity`) to exercise platform callbacks directly
-
-Live HA for manual testing runs at `http://localhost:8123`; the integration is mounted read-only into `/config/custom_components/`. Tests use `pytest-homeassistant-custom-component` with `asyncio_mode = "auto"` (no `@pytest.mark.asyncio` needed).
-
-Validation reports are written to the `.reports/` directory (gitignored outputs from lint/test runs).
-
-### Skill Prompts
-
-Three reusable prompts are available via `.shared/prompts/` for working within this devcontainer:
-
-| Prompt | Purpose |
-| :-- | :-- |
-| `devcon_run_gen.md` | Run any single command inside the container |
-| `devcon_run_and_fix.md` | Full test + lint cycle: pytest, ruff, prettier, validate — with auto-fix |
-| `devcon_coverage.md` | Coverage report, target file selection, and new test writing |
-
-Container identity values (`CONTAINER_NAME`, `PROJECT_DIR`) are in `.devcontainer/.env`.
+Standard for all integration projects — see [shared conventions §3](.shared/dev_std/agent_conventions.md). Nothing about this project's environment differs.
