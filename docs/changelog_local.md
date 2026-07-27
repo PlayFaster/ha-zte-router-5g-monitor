@@ -70,8 +70,7 @@ Documentation and agent-guidance only — no source or test files changed, so no
 
 ### Notes
 
-> [!IMPORTANT]
-> **An open §19 gap was found while writing this entry, and is not yet fixed.** `dev_standards.md` **1.11.0** (this session) made the Integration Health attribute set a normative table, and one row is a conditional: `drift` may be omitted **only where no drift check exists**. This integration runs one — `_check_contract_drift`, backing the `firmware_contract_drift` repair — but its health sensor does not publish a `drift` attribute (`binary_sensor.py:226`). `unifi_network_monitor` publishes it; `wifi_ssid_monitor` has the same gap.
+> [!IMPORTANT] **An open §19 gap was found while writing this entry, and is not yet fixed.** `dev_standards.md` **1.11.0** (this session) made the Integration Health attribute set a normative table, and one row is a conditional: `drift` may be omitted **only where no drift check exists**. This integration runs one — `_check_contract_drift`, backing the `firmware_contract_drift` repair — but its health sensor does not publish a `drift` attribute (`binary_sensor.py:226`). `unifi_network_monitor` publishes it; `wifi_ssid_monitor` has the same gap.
 >
 > This is not a regression from the `[3.3.0-dev4]` alignment. That pass compared the attribute names the three projects **had**, and could not ask which ones were **missing**, because no list of required names existed until 1.11.0. It is the first finding produced by the new table, which is a fair indication the table was worth writing.
 >
@@ -287,16 +286,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category                                   | Count       | Fix                                                                        |
-| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
-| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
-| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
-| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
-| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
-| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
-| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
-| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
+| Category | Count | Fix |
+| :-- | :-- | :-- |
+| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
+| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
+| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
+| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
+| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
+| **Indentation error** | 1 test | Fixed broken indent |
+| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
 
 ### Files modified
 

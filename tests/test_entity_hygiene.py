@@ -8,6 +8,7 @@ being recorded or a sensor starts storing twelve decimal places.
 import json
 import pathlib
 import re
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -17,11 +18,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.binary_sensor import ZTEIntegrationHealthSensor
 from custom_components.zte_router_5g.const import DOMAIN
-from custom_components.zte_router_5g.sensor import (
-    SENSOR_TYPES,
-    ZTERouterSensor,
-    _safe_float,
-)
+from custom_components.zte_router_5g.sensor import ZTERouterSensor, _safe_float
 
 COMPONENT = pathlib.Path("custom_components/zte_router_5g")
 
@@ -98,19 +95,6 @@ def test_health_detail_is_unrecorded() -> None:
 
 def _load(name: str) -> dict:
     return json.loads((COMPONENT / name).read_text(encoding="utf-8"))
-
-
-def test_every_entity_without_a_device_class_has_an_icon() -> None:
-    """An entity with no device_class falls back to a generic icon."""
-    icons = _load("icons.json")["entity"]
-    have = {key for platform in icons.values() for key in platform}
-
-    missing = [
-        d.translation_key
-        for d in SENSOR_TYPES
-        if d.device_class is None and d.translation_key not in have
-    ]
-    assert not missing, f"sensors with neither device_class nor icon: {missing}"
 
 
 def test_refresh_button_has_an_icon() -> None:
@@ -229,13 +213,14 @@ def _enable_custom_integrations(enable_custom_integrations):
     return
 
 
-async def test_no_entity_publishes_a_recorded_attribute(hass: HomeAssistant) -> None:
-    """Section 14: `_unrecorded_attributes` must cover every published key.
+@asynccontextmanager
+async def _live_entities(hass: HomeAssistant):
+    """Set the integration up and yield every live entity it created.
 
-    The failure this guards is silent — a new attribute is simply written to
-    the recorder on every state change, and nothing errors. It is also the
-    failure that actually occurred: three of four PlayFaster integrations had
-    `_unrecorded_attributes` lagging `extra_state_attributes`.
+    Shared by the Section 12 and Section 14 sweeps. Both need the same thing —
+    the real entity list — and both are worthless without the
+    `entity_registry_enabled_default` patch below, so the setup lives in one
+    place rather than being copied and drifting.
     """
     entry = MockConfigEntry(
         domain=DOMAIN,
@@ -251,12 +236,12 @@ async def test_no_entity_publishes_a_recorded_attribute(hass: HomeAssistant) -> 
     )
     entry.add_to_hass(hass)
 
-    # Force every disabled-by-default entity to be added. Without this the
-    # sweep silently skips them — they are never instantiated, so their
-    # attributes are never inspected, and the test passes while a whole class
-    # of entities goes unchecked. Verified by mutation: removing a key from
-    # `_unrecorded_attributes` on a disabled-by-default sensor did not fail
-    # this test until this patch was added.
+    # Force every disabled-by-default entity to be added. Without this both
+    # sweeps silently skip them — they are never instantiated, so they are
+    # never inspected, and the tests pass while a whole class of entities goes
+    # unchecked. Verified by mutation: removing a key from
+    # `_unrecorded_attributes` on a disabled-by-default sensor did not fail the
+    # Section 14 sweep until this patch was added.
     with (
         patch(
             "homeassistant.helpers.entity.Entity.entity_registry_enabled_default",
@@ -285,23 +270,74 @@ async def test_no_entity_publishes_a_recorded_attribute(hass: HomeAssistant) -> 
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
 
+        yield [
+            e
+            for component in hass.data["entity_components"].values()
+            for e in component.entities
+            if getattr(e, "platform", None) is not None
+            and e.platform.platform_name == DOMAIN
+        ]
+
+
+async def test_no_entity_publishes_a_recorded_attribute(hass: HomeAssistant) -> None:
+    """Section 14: `_unrecorded_attributes` must cover every published key.
+
+    The failure this guards is silent — a new attribute is simply written to
+    the recorder on every state change, and nothing errors. It is also the
+    failure that actually occurred: three of four PlayFaster integrations had
+    `_unrecorded_attributes` lagging `extra_state_attributes`.
+    """
+    async with _live_entities(hass) as entities:
         checked = 0
         offenders: list[str] = []
-        for component in hass.data["entity_components"].values():
-            for entity in component.entities:
-                if getattr(entity, "platform", None) is None:
-                    continue
-                if entity.platform.platform_name != DOMAIN:
-                    continue
-                published = set(entity.extra_state_attributes or {})
-                if not published:
-                    continue
-                checked += 1
-                leaked = published - entity._unrecorded_attributes - ALLOWED_RECORDED
-                if leaked:
-                    offenders.append(f"{entity.entity_id}: {sorted(leaked)}")
+        for entity in entities:
+            published = set(entity.extra_state_attributes or {})
+            if not published:
+                continue
+            checked += 1
+            leaked = published - entity._unrecorded_attributes - ALLOWED_RECORDED
+            if leaked:
+                offenders.append(f"{entity.entity_id}: {sorted(leaked)}")
 
     assert not offenders, "attributes published but recorded:\n" + "\n".join(offenders)
     # Guard the guard: if the fixture stops producing attributes, the sweep
     # would pass vacuously and go on passing after a real regression.
     assert checked >= 3, f"sweep only inspected {checked} entities — fixture is stale"
+
+
+async def test_every_live_entity_has_an_icon_or_a_device_class(
+    hass: HomeAssistant,
+) -> None:
+    """Section 12: `icons.json` must cover every entity, on every platform.
+
+    Supersedes the static `SENSOR_TYPES`-only check above, which was blind in
+    two directions at once: it iterated the sensor platform only, so 15
+    entities across binary_sensor/switch/select/number/button could lose their
+    icon with the suite green; and it flattened `icons.json` into one set of
+    keys, so an entry filed under the *wrong* platform still satisfied it.
+
+    Entity descriptions here live in a mix of tuples and module-level
+    singletons, so any static enumeration would drift the moment one is added.
+    Sweeping live entities is the only form that cannot.
+    """
+    icons = _load("icons.json")["entity"]
+
+    async with _live_entities(hass) as entities:
+        missing = []
+        checked = 0
+        for entity in entities:
+            if entity.device_class is not None:
+                continue
+            key = entity.translation_key
+            if key is None:
+                continue
+            checked += 1
+            # Look under this entity's OWN platform — a key filed under another
+            # platform is a miss, not a pass.
+            if key not in icons.get(entity.platform.domain, {}):
+                missing.append(f"{entity.entity_id} ({entity.platform.domain}/{key})")
+
+    assert not missing, "entities with neither device_class nor icon:\n" + "\n".join(
+        missing
+    )
+    assert checked >= 10, f"only {checked} entities swept — the fixture is stale"
