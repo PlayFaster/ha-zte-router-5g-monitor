@@ -27,6 +27,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [✅ Features](#-features)
   - [🔍 What You Get](#-what-you-get)
   - [📸 Screenshots](#-screenshots)
+  - [🔘 Controls \& Settings](#-controls--settings)
   - [💡 Example Automations](#-example-automations)
   - [📥 Installation](#-installation)
   - [🔧 Configuration](#-configuration)
@@ -284,6 +285,35 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 ### Setup
 
 ![Setup](.github/images/zte_5g_setup_info.png)
+
+## 🔘 Controls & Settings
+
+Rather than hiding settings in configuration menus, several configuration parameters are exposed directly as Home Assistant control entities, allowing you to monitor and control them from dashboards or automations:
+
+### 📡 APN & Network Settings (Signal Device)
+
+- **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
+- **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
+- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type: `4G_AND_5G` (Auto), `LTE_AND_5G` (5G NSA), `Only_5G` (5G SA), or `Only_LTE` (4G Only).
+- **Disabled by Default**: These are disabled by default but can be enabled
+  - **LTE Band Lock Mask** (`sensor.zte_5g_signal_lte_band_lock_mask`): Displays the current hex mask configuration locking the active LTE bands.
+
+### 🔧 Router Administration & Polling (System Device)
+
+- **Pause Polling** (`switch.zte_5g_system_pause_polling`): Halt all polling when you need exclusive access to the router's web UI.
+- **Polling Interval** (`number.zte_5g_system_polling_interval`): Adjust the scan interval slider (30s to 1 hour, default `180` seconds).
+- **Refresh Now** (`button.zte_5g_system_refresh_now`): Trigger an immediate refresh (data fetch).
+- **Disabled by Default**: These are disabled by default but can be enabled
+  - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`): Turn the physical status LEDs of the outdoor unit on or off.
+  - **Reboot Schedule** (`binary_sensor.zte_5g_system_reboot_schedule`): Indicates whether a scheduled reboot window is configured and active.
+  - **UPnP Enabled** / **SIP ALG Enabled** (`binary_sensor.zte_5g_system_upnp_enabled` / `binary_sensor.zte_5g_system_sip_alg_enabled`): Monitor firewall settings status.
+  - **Time Server (SNTP)** (`sensor.zte_5g_system_time_server_sntp`): Displays the active server used by the router for time synchronization.
+
+### 📈 Billing & Data Controls (Data Device)
+
+- **Disabled by Default**: These are disabled by default but can be enabled
+  - **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`): Enable/disable the router's data limit settings.
+  - **Data Volume Alert** (`sensor.zte_5g_data_data_volume_alert`): Displays the alarm warning percentage configured on the router (e.g., 90%).
 
 ## 💡 Example Automations
 
@@ -973,35 +1003,6 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 | Host     | Router IP address (change if the router's LAN IP changes). |
 | Username | Router login username.                                     |
 | Password | Admin password (update if changed on the router).          |
-
-### 🔘 Runtime Controls & Settings (Entities)
-
-Rather than hiding settings in configuration menus, several configuration parameters are exposed directly as Home Assistant control entities, allowing you to monitor and control them from dashboards or automations:
-
-#### 📡 APN & Network Settings (Signal Device)
-
-- **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
-- **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
-- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type: `4G_AND_5G` (Auto), `LTE_AND_5G` (5G NSA), `Only_5G` (5G SA), or `Only_LTE` (4G Only).
-- **Disabled by Default**: These are disabled by default but can be enabled
-  - **LTE Band Lock Mask** (`sensor.zte_5g_signal_lte_band_lock_mask`): Displays the current hex mask configuration locking the active LTE bands.
-
-#### 🔧 Router Administration & Polling (System Device)
-
-- **Pause Polling** (`switch.zte_5g_system_pause_polling`): Halt all polling when you need exclusive access to the router's web UI.
-- **Polling Interval** (`number.zte_5g_system_polling_interval`): Adjust the scan interval slider (30s to 1 hour, default `180` seconds).
-- **Refresh Now** (`button.zte_5g_system_refresh_now`): Trigger an immediate refresh (data fetch).
-- **Disabled by Default**: These are disabled by default but can be enabled
-  - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`): Turn the physical status LEDs of the outdoor unit on or off.
-  - **Reboot Schedule** (`binary_sensor.zte_5g_system_reboot_schedule`): Indicates whether a scheduled reboot window is configured and active.
-  - **UPnP Enabled** / **SIP ALG Enabled** (`binary_sensor.zte_5g_system_upnp_enabled` / `binary_sensor.zte_5g_system_sip_alg_enabled`): Monitor firewall settings status.
-  - **Time Server (SNTP)** (`sensor.zte_5g_system_time_server_sntp`): Displays the active server used by the router for time synchronization.
-
-#### 📈 Billing & Data Controls (Data Device)
-
-- **Disabled by Default**: These are disabled by default but can be enabled
-  - **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`): Enable/disable the router's data limit settings.
-  - **Data Volume Alert** (`sensor.zte_5g_data_data_volume_alert`): Displays the alarm warning percentage configured on the router (e.g., 90%).
 
 ## 🔩 Under the Hood - Technical Architecture
 
