@@ -1,6 +1,6 @@
 # ZTE Router Access Reference 🔗
 
-This document details how this integration navigates the ZTE `goform` interface to fetch data and issue commands — the endpoints, the authentication chain, the commands used (and deliberately not used), and the behaviours of this API that are not obvious from the traffic.
+This document details how this integration navigates the ZTE `goform` interface to fetch data and issue commands — the endpoints, the authentication chain, the commands used (and deliberately not used), and the behaviors of this API that are not obvious from the traffic.
 
 Everything below is drawn from `custom_components/zte_router_5g/api.py` and verified against live hardware. Where a claim was confirmed against a specific model or firmware, that is stated.
 
@@ -8,14 +8,14 @@ Everything below is drawn from `custom_components/zte_router_5g/api.py` and veri
 
 ## 📐 The shape of this API — read this first
 
-The UniFi companion document (`ha-unifi-network-monitor/docs/api_endpoints.md`) is organised by URL, because that API has a URL per resource. **ZTE does not.** The entire interface is two endpoints:
+The UniFi companion document (`ha-unifi-network-monitor/docs/api_endpoints.md`) is organized by URL, because that API has a URL per resource. **ZTE does not.** The entire interface is two endpoints:
 
 | Endpoint | Method | Role |
 | :-- | :-- | :-- |
 | `goform/goform_get_cmd_process` | GET (and POST for paged queries) | **Reads.** The resource is named in a `cmd=` parameter. |
 | `goform/goform_set_cmd_process` | POST | **Writes.** The action is named in a `goformId=` parameter. |
 
-So the unit that corresponds to "an endpoint" elsewhere is **a `cmd` name or a `goformId` name**, and this document is organised that way. Two practical consequences:
+So the unit that corresponds to "an endpoint" elsewhere is **a `cmd` name or a `goformId` name**, and this document is organized that way. Two practical consequences:
 
 - **You cannot tell from a URL what a request does.** All read traffic looks identical in a proxy log until you read the query string. When debugging, capture the full query string, not the path.
 - **Reads are batched, not enumerated.** One `cmd=` accepts a comma-separated list of up to ~100 names alongside `multi_data=1`, and the router answers with a single flat JSON object. There is no per-resource read to isolate — see [Read commands](#-read-commands-goform_get_cmd_process).
@@ -32,7 +32,7 @@ Every request carries `Referer: {base}index.html`. The router rejects requests w
 
 Login is a challenge-response over SHA-256, not a credential POST. Four steps, in order (`api.py:287`):
 
-1. **`GET goform_get_cmd_process?cmd=LD`** → returns `LD`, a per-session salt. Uppercased on receipt.
+1. **`GET goform_get_cmd_process?cmd=LD`** → returns `LD`, a per-session salt. Upper-cased on receipt.
 2. **`GET goform_get_cmd_process?cmd=wa_inner_version`** → the firmware version string. Fetched here because it determines _which login form to use_ (below), not for telemetry.
 3. **Hash twice.** `SHA256(password)` → uppercase → concatenate `LD` → `SHA256` again → uppercase. Both uppercase steps are required; the router rejects lowercase digests.
 4. **`POST goform_set_cmd_process`** with `goformId=LOGIN` or `LOGIN_MULTI_USER`, `password=<the double hash>`, and `username=` when a username is configured.
@@ -45,7 +45,7 @@ The session token arrives as a **`stok` cookie**, which is then sent as a litera
 
 This is the first of two places where model detection changes the protocol. It is string-matching on the firmware version, which is fragile by nature — a model outside the known set that expects the single-user form will fail login with no distinguishing error.
 
-### The post-login initialisation GET
+### The post-login initialization GET
 
 Immediately after a successful login the client issues a throwaway `GET goform_get_cmd_process?cmd=wa_inner_version` carrying the new cookie (`api.py:358`). This is not telemetry — **some ZTE firmware rejects the first POST of a session unless a GET has preceded it.** Its failure is caught and logged at debug only; the session is usable either way on firmware that does not need it.
 
@@ -265,7 +265,7 @@ Documented for reference — these exist on the interface but are deliberately n
 
 ## ⚠️ Gotchas
 
-Behaviours of this interface that have cost real debugging time.
+Behaviors of this interface that have cost real debugging time.
 
 **Everything fails soft.** An unknown `cmd`, a missing `AD`, an expired session — none of these produce an HTTP error. You get `200 OK` with an empty field, a `{"result":"failure"}`, or a body of blank strings. **Never treat a 200 as success on this API.** Check the body shape every time.
 
@@ -283,7 +283,7 @@ Behaviours of this interface that have cost real debugging time.
 
 ## 📚 Related documents
 
-- `ha-unifi-network-monitor/docs/api_endpoints.md` — the companion for UniFi, organised by URL because that API has one per resource.
+- `ha-unifi-network-monitor/docs/api_endpoints.md` — the companion for UniFi, organized by URL because that API has one per resource.
 - `docs/DEVELOPMENT.md` — setup, devcontainer, and the resilience/health architecture that sits above this client.
 - `docs/all_sensors.md` — which entity each field above ends up as.
 - `.shared/dev_std/dev_standards.md` §8 (per-endpoint strike budgets), §10 (session cleanup on unload), §19 (Integration Health), §20 (diagnostics sanitization).

@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 -->
+
 # ZTE Router 5G Monitor for Home Assistant
 
 [![HACS Integration](https://img.shields.io/badge/HACS-Integration-orange.svg)](https://hacs.xyz/) [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=homeassistant&logoColor=white)](https://hacs.xyz/docs/faq/custom_repositories) [![Latest Release](https://img.shields.io/github/v/release/PlayFaster/ha-zte-router-5g-monitor?label=Release&logo=github)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/releases) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![Validate](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml/badge.svg)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml) ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/PlayFaster/0376d580e72d0abc493665a80396f701/raw/coverage.json) [![Last Commit](https://img.shields.io/github/last-commit/PlayFaster/ha-zte-router-5g-monitor?label=Last%20commit)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/commits/main)
@@ -298,7 +300,7 @@ Entity IDs below use the default prefix zte_5g. If you set a custom name during 
 </summary><br>
 
 ```yaml
-alias: "SMS: Forward to Mobile"
+alias: "ZTE SMS: Forward to Mobile"
 description: "Forwards the content of any newly received SMS to a notification"
 mode: queued
 max: 10
@@ -334,7 +336,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "SMS: Weekly Inbox Cleanup"
+alias: "ZTE SMS: Weekly Inbox Cleanup"
 description: "Deletes stored SMS weekly, keeping the five most recent"
 mode: single
 triggers:
@@ -371,7 +373,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "SMS: Count OTP Messages"
+alias: "ZTE SMS: Count OTP Messages"
 description: "Queries the inbox on demand and counts messages from one sender"
 mode: single
 triggers:
@@ -416,7 +418,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "APN: Switch Profile on Network Failure"
+alias: "ZTE APN: Switch Profile on Network Failure"
 description: "Switch to a backup APN profile if the primary WAN connection drops."
 mode: single
 triggers:
@@ -460,7 +462,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE: High Data Usage Alert"
+alias: "ZTE Data: High Data Usage Alert"
 description: "Warns once when monthly data crosses a threshold"
 mode: single
 triggers:
@@ -498,7 +500,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "Signal: Poor Quality Connection Alert"
+alias: "ZTE Signal: Poor Quality Connection Alert"
 description: "Notifies when connection quality degrades on any of four measures"
 mode: single
 triggers:
@@ -590,7 +592,7 @@ actions:
 The **Integration Health** binary sensor turns on when the integration's self-checks find a problem — the router unreachable for several consecutive polls, an SMS endpoint that has stopped responding, or a poll that _succeeded_ but returned none of the fields the integration expects (typically a firmware update renaming them). It stays **available even when every other entity has gone unavailable**, so it can report the fault that made the others unreliable.
 
 ```yaml
-alias: "ZTE: Integration Health Problem"
+alias: "ZTE Health: Integration Health Problem"
 description: "Notifies when the integration's self-checks detect a problem"
 mode: single
 triggers:
@@ -632,7 +634,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE: Router Reboot Alert"
+alias: "ZTE Reboot: Router Reboot Alert"
 description: "Notifies when the router's boot timestamp moves, indicating a restart"
 mode: single
 triggers:
@@ -668,7 +670,7 @@ actions:
 > [!WARNING] This reboots your router unattended. Keep the trigger duration generous and `mode: single`, or a flapping connection can put the router into a reboot loop that stops it recovering on its own.
 
 ```yaml
-alias: "ZTE: Auto-Reboot on Prolonged Outage"
+alias: "ZTE Reboot: Auto-Reboot on Prolonged Outage"
 description: "Reboots the router after a sustained WAN outage"
 mode: single
 max_exceeded: silent
@@ -722,7 +724,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE: Serving Cell Changed"
+alias: "ZTE Tower: Serving Cell Changed"
 description: "Notifies when the router attaches to a different cell tower"
 mode: single
 triggers:
@@ -763,7 +765,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE: Firmware Version Changed"
+alias: "ZTE Firmware: Firmware Version Changed"
 description: "Notifies when the router reports a different firmware version"
 mode: single
 triggers:
@@ -806,7 +808,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE: Auto-Resume Polling"
+alias: "ZTE Polling: Auto-Resume Polling"
 description: "Turn polling back on after 1 hour if it was manually paused."
 mode: single
 triggers:
@@ -839,7 +841,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE: Set Polling Interval by Time of Day"
+alias: "ZTE Polling: Set Polling Interval by Time of Day"
 description: "Tightens the poll interval during the day and relaxes it overnight"
 mode: single
 triggers:
@@ -893,7 +895,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE: Morning Signal Report"
+alias: "ZTE Signal: Morning Signal Report"
 description: "Forces a fresh poll, then reports current signal quality"
 mode: single
 triggers:
