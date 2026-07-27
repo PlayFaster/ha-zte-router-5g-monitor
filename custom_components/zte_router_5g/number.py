@@ -138,7 +138,7 @@ class ZTEPollingInterval(
             )
 
             # 3. Trigger an immediate refresh using the new interval
-            await self.coordinator.async_request_refresh()
+            await self.coordinator.async_force_refresh()
 
         except asyncio.CancelledError:
             # Task was cancelled because the user moved the slider again

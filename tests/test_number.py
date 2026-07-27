@@ -57,7 +57,7 @@ async def test_polling_interval_change(mock_coordinator, mock_config_entry):
         assert kwargs["options"][CONF_SCAN_INTERVAL] == 300
 
         # 4. Check refresh request
-        mock_coordinator.async_request_refresh.assert_called_once()
+        mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -141,7 +141,7 @@ async def test_async_debounced_apply_cancelled(mock_coordinator, mock_config_ent
     with patch("asyncio.sleep", AsyncMock(side_effect=asyncio.CancelledError)):
         await number._async_debounced_apply(120)
 
-    mock_coordinator.async_request_refresh.assert_not_called()
+    mock_coordinator.async_force_refresh.assert_not_called()
 
 
 @pytest.mark.asyncio

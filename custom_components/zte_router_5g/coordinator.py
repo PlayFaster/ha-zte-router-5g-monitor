@@ -3,6 +3,7 @@
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable, Coroutine
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -26,6 +27,30 @@ _LOGGER = logging.getLogger(__name__)
 # to reject small downward blips from coarse resolution or stale readings.
 UPTIME_REBOOT_MARGIN = 30
 
+# Consecutive failures tolerated before entities are marked unavailable
+# (dev_standards Section 8 — the "3-strike" rule). Applied both globally and,
+# independently, to each optional endpoint.
+STRIKE_LIMIT = 3
+
+# Optional endpoints that hold their own last-good payload and strike count, so
+# one flaky endpoint degrades only its own entities (Section 8, per-endpoint
+# resilience). The mandatory `get_all_data` fetch is deliberately absent — its
+# failure is a whole-integration failure and belongs on the global path.
+ENDPOINT_SMS_CAPACITY = "sms_capacity"
+ENDPOINT_SMS_MESSAGES = "sms_messages"
+
+# Keys the router is expected to return on every successful poll. Used only for
+# the Section 19 contract-drift check: a non-empty response in which none of
+# these resolve means the upstream schema changed underneath a "successful"
+# fetch — the silent failure HA itself cannot detect.
+CORE_KEYS = (
+    "network_type",
+    "signalbar",
+    "wa_inner_version",
+    "realtime_time",
+    "wan_connect_status",
+)
+
 
 class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ZTE Router data with resilience and pausing."""
@@ -43,6 +68,36 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._last_uptime: int | None = None
         self.last_sms_timestamp: str | None = None
         self.fired_sms_hashes: set[str] = set()
+
+        # One-shot flag set by async_force_refresh so an explicit user action
+        # fetches even while polling is paused (Section 13).
+        self._force_refresh_once = False
+
+        # Per-endpoint resilience state (Section 8).
+        self._endpoint_failures: dict[str, int] = {}
+        self._endpoint_cache: dict[str, Any] = {}
+
+        # Section 19 health state. Deliberately NOT stored in `self.data`, which
+        # is None before the first success and frozen at last-good values during
+        # an outage — a verdict held there could never describe the failure that
+        # stopped it being updated.
+        self.health_snapshot: dict[str, Any] = {
+            "problem": False,
+            "issues": [],
+            "severity": "ok",
+            "degraded": [],
+            "repairs": [],
+            "last_good_update": None,
+            "consecutive_failures": 0,
+        }
+        self._drift_baseline: set[str] = set()
+        self._drift_strikes = 0
+        self._drift_repair_raised = False
+        self._sms_storage_full = False
+
+        # Snapshot of the non-live options this entry was set up with; the
+        # update listener diffs against it to decide reload vs live-apply.
+        self.reload_signature: dict[str, Any] = {}
         boot_time_str = entry.data.get("boot_time")
         if boot_time_str:
             with contextlib.suppress(Exception):
@@ -69,27 +124,154 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=scan_interval),
         )
 
+    def apply_live_options(self) -> None:
+        """Apply the options that change without a reload.
+
+        Only the two keys in LIVE_OPTION_KEYS reach here. `stop_polling` needs
+        no action — the coordinator re-reads it at the top of every cycle — so
+        this exists for the scan interval, which has to be pushed onto the
+        scheduler.
+        """
+        scan_interval = self.entry.options.get(CONF_SCAN_INTERVAL, 180)
+        new_interval = timedelta(seconds=int(scan_interval))
+        if new_interval != self.update_interval:
+            _LOGGER.debug(
+                "%s: Applying polling interval %ss without reload.",
+                self.entry.title,
+                scan_interval,
+            )
+            self.update_interval = new_interval
+
+    async def async_force_refresh(self) -> None:
+        """Force an immediate fetch, even while polling is paused.
+
+        Every explicit user action — Refresh Now, a control change, an SMS
+        service — must route through here rather than calling
+        ``async_request_refresh`` directly, or it is silently swallowed by the
+        pause short-circuit exactly when the user most wants a fetch
+        (dev_standards Section 13). Scheduled polls still respect the pause.
+        """
+        self._force_refresh_once = True
+        await self.async_request_refresh()
+
+    def endpoint_available(self, source: str) -> bool:
+        """Return whether an optional endpoint is still serving usable data.
+
+        Entities fed by an optional endpoint consult this in their ``available``
+        property, so an endpoint that has exhausted its own strike budget marks
+        only its own entities unavailable (Section 8).
+        """
+        return self._endpoint_failures.get(source, 0) <= STRIKE_LIMIT
+
+    async def _fetch_optional(
+        self,
+        source: str,
+        factory: Callable[[], Coroutine[Any, Any, Any]],
+        default: Any,
+    ) -> Any:
+        """Fetch one optional endpoint under its own strike budget.
+
+        Returns the endpoint's last-good payload while it has strikes left, and
+        ``default`` once exhausted. ``ZTEAuthError`` is deliberately not caught:
+        a rejected session is an integration-wide condition that must reach the
+        global handler to drive reauth, not be absorbed by one endpoint.
+        """
+        try:
+            result = await factory()
+        except ZTEAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 - containment is the point here
+            # Deliberately broad: Section 8 requires a *changed or unexpected*
+            # response to degrade this one endpoint rather than trip the global
+            # failure path. Narrowing this would let an unforeseen parse error
+            # blank every entity in the integration.
+            failures = self._endpoint_failures.get(source, 0) + 1
+            self._endpoint_failures[source] = failures
+            if failures == 1:
+                _LOGGER.warning(
+                    "%s: Endpoint '%s' failed, holding last known values: %s",
+                    self.entry.title,
+                    source,
+                    err,
+                )
+            elif failures == STRIKE_LIMIT + 1:
+                _LOGGER.error(
+                    "%s: Endpoint '%s' failed %d times; marking its entities "
+                    "unavailable: %s",
+                    self.entry.title,
+                    source,
+                    failures,
+                    err,
+                )
+            else:
+                _LOGGER.debug(
+                    "%s: Endpoint '%s' failed (%d/%d): %s",
+                    self.entry.title,
+                    source,
+                    failures,
+                    STRIKE_LIMIT,
+                    err,
+                )
+            if failures <= STRIKE_LIMIT and source in self._endpoint_cache:
+                return self._endpoint_cache[source]
+            return default
+
+        if self._endpoint_failures.get(source):
+            _LOGGER.info("%s: Endpoint '%s' recovered.", self.entry.title, source)
+        self._endpoint_failures[source] = 0
+        self._endpoint_cache[source] = result
+        return result
+
+    async def _fetch_all(self) -> tuple[dict[str, Any], dict[str, Any], list[Any]]:
+        """Fetch the mandatory payload plus both optional endpoints.
+
+        ``get_all_data`` is mandatory: its failure is a whole-integration
+        failure and falls through to the global strike handler. The two SMS
+        endpoints are optional and each carries its own last-good payload and
+        strike count, so one flaky endpoint degrades only the SMS entities
+        rather than blanking Signal and Data too (Section 8).
+
+        A ``ZTEAuthError`` from any of the three propagates, so the caller can
+        renew the session and retry the whole set once.
+        """
+        data = await self.api.get_all_data()
+        sms_cap = await self._fetch_optional(
+            ENDPOINT_SMS_CAPACITY, self.api.get_sms_capacity, {}
+        )
+        messages = await self._fetch_optional(
+            ENDPOINT_SMS_MESSAGES,
+            lambda: self.api.get_sms_messages(mem_store="1", tags="10"),
+            [],
+        )
+        return data, sms_cap, messages
+
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API with resilience and pausing."""
+        # Consume the one-shot force flag before anything can short-circuit.
+        forced = self._force_refresh_once
+        self._force_refresh_once = False
+
         is_paused = self.entry.options.get(CONF_STOP_POLLING, False)
         is_first_run = self.data is None
 
-        # 1. If paused and NOT the first run, return cached data immediately
-        if is_paused and not is_first_run:
+        # 1. If paused and NOT the first run, return cached data immediately —
+        #    unless this cycle was explicitly forced by a user action.
+        if is_paused and not is_first_run and not forced:
             _LOGGER.debug(
                 "%s: Polling is paused; returning cached data.", self.entry.title
             )
             return self.data
 
+        if forced and is_paused:
+            _LOGGER.debug(
+                "%s: Forced refresh overriding paused polling.", self.entry.title
+            )
+
         try:
             # Use standard timeout wrapper (HA Best Practice)
             async with asyncio.timeout(30):
                 try:
-                    # Fetch all primary data components
-                    data = await self.api.get_all_data()
-                    sms_cap = await self.api.get_sms_capacity()
-                    # Fetch recent messages to detect events and populate last_sms
-                    messages = await self.api.get_sms_messages(mem_store="1", tags="10")
+                    data, sms_cap, messages = await self._fetch_all()
                 except ZTEAuthError as auth_err:
                     _LOGGER.info(
                         "%s: Session expired during poll; "
@@ -98,9 +280,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                         auth_err,
                     )
                     await self.api.login()
-                    data = await self.api.get_all_data()
-                    sms_cap = await self.api.get_sms_capacity()
-                    messages = await self.api.get_sms_messages(mem_store="1", tags="10")
+                    data, sms_cap, messages = await self._fetch_all()
 
                 data.update(sms_cap)
                 # Sort by ID descending to find the latest message
@@ -183,13 +363,17 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                         "%s: Reconnected successfully.",
                         self.entry.title,
                     )
+                # Storage check first, so its repair state is current when the
+                # health snapshot reflects it rather than a cycle stale.
                 self._check_sms_storage(data)
+                self._record_health_success(data)
                 self._check_new_sms(messages)
                 return data
 
         except TimeoutError as err:
             self.consecutive_failures += 1
-            if self.data is not None and self.consecutive_failures <= 3:
+            self._record_health_failure(err)
+            if self.data is not None and self.consecutive_failures <= STRIKE_LIMIT:
                 if self.consecutive_failures == 1:
                     _LOGGER.warning(
                         "%s: Error fetching ZTE data, holding last known values: %s",
@@ -210,7 +394,8 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
         except ZTEAuthError as err:
             self.consecutive_failures += 1
-            if self.data is not None and self.consecutive_failures <= 3:
+            self._record_health_failure(err)
+            if self.data is not None and self.consecutive_failures <= STRIKE_LIMIT:
                 if self.consecutive_failures == 1:
                     _LOGGER.warning(
                         "%s: Authentication failed, holding last known values: %s",
@@ -235,8 +420,9 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
         except Exception as err:
             self.consecutive_failures += 1
+            self._record_health_failure(err)
             # Failure resilience — hold last known values for three cycles
-            if self.data is not None and self.consecutive_failures <= 3:
+            if self.data is not None and self.consecutive_failures <= STRIKE_LIMIT:
                 if self.consecutive_failures == 1:
                     _LOGGER.warning(
                         "%s: Error fetching ZTE data, holding last known values: %s",
@@ -266,6 +452,198 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             self._was_available = False
             raise UpdateFailed(f"Communication error: {err}") from err
 
+    def _degraded_endpoints(self) -> list[str]:
+        """Return the friendly names of endpoints that have exhausted strikes.
+
+        Only genuine failures count. An endpoint the user turned off, or one the
+        hardware does not support, is intentionally-off rather than degraded —
+        the distinction Section 19 names as the top false-alarm source. This
+        integration has no feature toggles, so every optional endpoint here is
+        expected to work and a failure is always real.
+        """
+        friendly = {
+            ENDPOINT_SMS_CAPACITY: "SMS storage capacity",
+            ENDPOINT_SMS_MESSAGES: "SMS messages",
+        }
+        return [
+            friendly.get(source, source)
+            for source, failures in self._endpoint_failures.items()
+            if failures > STRIKE_LIMIT
+        ]
+
+    def _active_repairs(self, drift: bool) -> list[str]:
+        """Return the repair issues currently raised for this entry."""
+        active = []
+        if self._sms_storage_full:
+            active.append("sms_storage_full")
+        if drift:
+            active.append("firmware_contract_drift")
+        return active
+
+    def _set_drift_repair(self, drift: bool) -> None:
+        """Raise or clear the contract-drift repair issue.
+
+        Section 19's second tier: a serious, named, actionable condition earns a
+        Repair alongside the sensor. Drift qualifies because the user can act —
+        report it so the integration can be updated — and it auto-clears on the
+        next clean cycle. Kept to this one condition so the Repairs panel does
+        not fill with noise; ordinary unreachability is already visible as
+        unavailable entities and needs no repair.
+        """
+        if drift == self._drift_repair_raised:
+            return
+        if drift:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                "firmware_contract_drift",
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="firmware_contract_drift",
+                translation_placeholders={"name": self.entry.title},
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, "firmware_contract_drift")
+        self._drift_repair_raised = drift
+
+    def _check_contract_drift(self, data: dict[str, Any]) -> bool:
+        """Detect a response that succeeded but parsed to nothing meaningful.
+
+        This is the highest-value Section 19 check and the direct catch for a
+        firmware change: the poll succeeds, the payload is non-empty, and every
+        field the integration reads has vanished or been renamed. Requires a
+        baseline from an earlier good poll (startup grace) and must persist for
+        the full strike budget before it counts, so a single odd response does
+        not raise an alarm.
+        """
+        present = {key for key in CORE_KEYS if data.get(key) not in (None, "")}
+
+        if not self._drift_baseline:
+            # Startup grace — no verdict until a good poll establishes what
+            # this router actually returns.
+            self._drift_baseline = present
+            return False
+
+        if present:
+            self._drift_strikes = 0
+            # Widen the baseline as the router reports more over time.
+            self._drift_baseline |= present
+            return False
+
+        self._drift_strikes += 1
+        return self._drift_strikes >= STRIKE_LIMIT
+
+    def _record_health_success(self, data: dict[str, Any]) -> None:
+        """Refresh the health snapshot after a successful cycle.
+
+        A success clears the outage verdict in the same cycle — never leaving
+        the sensor `on` until some later poll. Wrapped so a malformed payload
+        can never crash the very update this diagnoses.
+        """
+        try:
+            issues: list[str] = []
+            degraded = self._degraded_endpoints()
+            if degraded:
+                issues.append(f"Degraded: {', '.join(degraded)}")
+
+            drift = self._check_contract_drift(data)
+            if drift:
+                issues.append(
+                    "Router returned data but none of the expected fields were "
+                    "present — the firmware may have changed its API"
+                )
+            self._set_drift_repair(drift)
+
+            # Reflect an existing repair rather than double-raising it — the
+            # SMS-storage issue is owned by _check_sms_storage.
+            if self._sms_storage_full:
+                issues.append("SMS storage is full")
+
+            self.health_snapshot = {
+                "problem": bool(issues),
+                "issues": issues,
+                "severity": "warning" if drift else ("degraded" if degraded else "ok"),
+                "degraded": degraded,
+                "repairs": self._active_repairs(drift),
+                "last_good_update": (
+                    self.last_update_success_time.isoformat()
+                    if self.last_update_success_time
+                    else None
+                ),
+                "consecutive_failures": 0,
+            }
+        except Exception:  # noqa: BLE001 # pragma: no cover - defensive
+            # Section 19: the health computation must never crash the update it
+            # exists to diagnose. Any failure degrades to healthy/unknown and is
+            # logged at debug — a narrower catch would defeat the requirement.
+            _LOGGER.debug(
+                "%s: Health computation failed; reporting healthy.",
+                self.entry.title,
+                exc_info=True,
+            )
+            self.health_snapshot = {
+                "problem": False,
+                "issues": [],
+                "severity": "unknown",
+                "degraded": [],
+                "last_good_update": None,
+                "consecutive_failures": 0,
+            }
+
+    def _record_health_failure(self, err: Exception) -> None:
+        """Refresh the health snapshot after a failed cycle.
+
+        Two regimes, per Section 19. **Cold start** — nothing has ever been
+        fetched, so there are no held values and waiting out the strike budget
+        would leave the user with a wholly-unavailable integration and no
+        explanation; flag on the first failure. **Runtime** — last-known values
+        are being served, so a single blip should raise no alarm; flag on the
+        Nth consecutive failure, matching the Section 8 strike rule.
+        """
+        try:
+            cold_start = self.data is None
+            problem = cold_start or self.consecutive_failures >= STRIKE_LIMIT
+
+            issues: list[str] = []
+            if problem:
+                if cold_start:
+                    issues.append(
+                        f"Cannot reach the router — no data has been fetched "
+                        f"since startup ({err})"
+                    )
+                else:
+                    issues.append(
+                        f"Cannot reach the router — "
+                        f"{self.consecutive_failures} consecutive failures ({err})"
+                    )
+
+            degraded = self._degraded_endpoints()
+            if degraded:
+                issues.append(f"Degraded: {', '.join(degraded)}")
+
+            self.health_snapshot = {
+                "problem": problem or bool(degraded),
+                "issues": issues,
+                "severity": "error" if problem else ("degraded" if degraded else "ok"),
+                "degraded": degraded,
+                "repairs": self._active_repairs(False),
+                "last_good_update": (
+                    self.last_update_success_time.isoformat()
+                    if self.last_update_success_time
+                    else None
+                ),
+                "consecutive_failures": self.consecutive_failures,
+            }
+        except Exception:  # noqa: BLE001 # pragma: no cover - defensive
+            # Section 19: the health computation must never crash the update it
+            # exists to diagnose. Any failure degrades to healthy/unknown and is
+            # logged at debug — a narrower catch would defeat the requirement.
+            _LOGGER.debug(
+                "%s: Health computation failed; reporting healthy.",
+                self.entry.title,
+                exc_info=True,
+            )
+
     def _check_sms_storage(self, data: dict[str, Any]) -> None:
         """Create or clear the SMS storage full repair issue."""
         try:
@@ -273,6 +651,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             nv_total = int(data.get("sms_nv_total") or 0)
         except (ValueError, TypeError):
             return
+        self._sms_storage_full = nv_able > 0 and nv_total >= nv_able
         if nv_able > 0 and nv_total >= nv_able:
             ir.async_create_issue(
                 self.hass,

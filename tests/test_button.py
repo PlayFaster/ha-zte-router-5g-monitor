@@ -23,7 +23,7 @@ async def test_refresh_button_press(mock_coordinator, mock_config_entry):
     button = ZTERefreshButton(mock_coordinator, mock_config_entry, REFRESH_DESCRIPTION)
 
     await button.async_press()
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 def test_refresh_button_device_info(mock_coordinator, mock_config_entry):
@@ -57,7 +57,7 @@ async def test_delete_sms_button_press(mock_coordinator, mock_config_entry):
 
     await button.async_press()
     mock_api.delete_all.assert_called_once()
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 def test_button_device_info(mock_coordinator, mock_config_entry):

@@ -192,7 +192,7 @@ async def test_select_async_select_option_success(mock_coordinator, mock_config_
         return_value=[(0, "profile_a", "IPV4V6")],
     ):
         await select.async_select_option("profile_a")
-        mock_coordinator.async_request_refresh.assert_called_once()
+        mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio

@@ -27,7 +27,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .coordinator import ZTERouterDataUpdateCoordinator
+from .coordinator import ENDPOINT_SMS_MESSAGES, ZTERouterDataUpdateCoordinator
 from .helpers import build_device_info
 
 _LOGGER = logging.getLogger(__name__)
@@ -45,6 +45,10 @@ class ZTESensorEntityDescription(SensorEntityDescription):
     group: str = "system"
     min_limit: float | None = None
     max_limit: float | None = None
+    # Optional endpoint this sensor's value comes from. When set, the entity
+    # goes unavailable once that endpoint exhausts its own strike budget,
+    # instead of serving a stale value forever (dev_standards Section 8).
+    source: str | None = None
 
 
 def _get_bytes_to_gb(val: Any) -> float | None:
@@ -80,11 +84,18 @@ def _get_total_sms(data: Any) -> int | None:
 
 # Helper to safely convert router string values to float
 def _safe_float(val: Any) -> float | None:
-    """Safely convert value to float or return None."""
+    """Safely convert a value to float, rounded at parse time.
+
+    Rounding **once, here** curtails the dozen-decimal noise controllers emit
+    (e.g. 99.930600002408) so stored history and long-term statistics stay
+    clean. This is distinct from display: `suggested_display_precision`
+    controls how many decimals are *shown*, this controls how many are
+    *stored* (dev_standards Section 6).
+    """
     if val in [None, ""]:
         return None
     try:
-        return float(val)
+        return round(float(val), 3)
     except (ValueError, TypeError):
         return None
 
@@ -638,6 +649,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="msg_recent",
         translation_key="sms_msg_recent",
         group="sms",
+        # The only sensor fed by an optional endpoint — the other SMS sensors
+        # read counters returned by the mandatory get_all_data fetch.
+        source=ENDPOINT_SMS_MESSAGES,
         value_fn=lambda data: data.get("last_sms", {}).get("content_decoded"),
     ),
     # --- Discovered Technical Settings & Info ---
@@ -692,6 +706,34 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
     _attr_has_entity_name = True
     entity_description: ZTESensorEntityDescription
 
+    # Attributes excluded from the recorder (dev_standards Section 14). The
+    # entity's state is still recorded — only these named keys are dropped.
+    #
+    # `number` is the SMS *sender's* phone number: third-party personal data
+    # that would otherwise be written to the database on every poll. `id` and
+    # `date` change with each new message and have no historical value beside
+    # the state itself. The eight SMS counters are a breakdown of a state that
+    # is already recorded, so keeping them would store the same movement twice.
+    #
+    # Deliberately still recorded: `sntp_server1` and `sntp_dst_enable`. They
+    # are static configuration, cost effectively nothing, and a change to them
+    # is genuinely worth being able to see in history.
+    _unrecorded_attributes = frozenset(
+        {
+            "id",
+            "number",
+            "date",
+            "sms_nv_total",
+            "sms_sim_total",
+            "sms_nv_rev_total",
+            "sms_nv_send_total",
+            "sms_nv_draftbox_total",
+            "sms_sim_rev_total",
+            "sms_sim_send_total",
+            "sms_sim_draftbox_total",
+        }
+    )
+
     def __init__(
         self,
         coordinator: ZTERouterDataUpdateCoordinator,
@@ -703,6 +745,19 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
         self.entity_description = description
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
+
+    @property
+    def available(self) -> bool:
+        """Return whether this sensor has a working data source.
+
+        Sensors fed by an optional endpoint go unavailable when that endpoint
+        alone has exhausted its strike budget, while the rest of the
+        integration keeps serving data (Section 8).
+        """
+        if not super().available:
+            return False
+        source = self.entity_description.source
+        return source is None or self.coordinator.endpoint_available(source)
 
     @property
     def native_value(self) -> Any:

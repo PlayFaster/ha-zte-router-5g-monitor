@@ -165,7 +165,7 @@ class ZTERouterSelect(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectE
             await self.entity_description.setter_fn(
                 self.coordinator.api, option, self.coordinator.data
             )
-            await self.coordinator.async_request_refresh()
+            await self.coordinator.async_force_refresh()
         except Exception:
             _LOGGER.exception(
                 "%s: Failed to set %s to %s",

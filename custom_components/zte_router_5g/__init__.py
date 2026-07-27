@@ -1,6 +1,7 @@
 """The ZTE Router 5G integration."""
 
 import logging
+from collections.abc import Mapping
 from typing import Any, cast
 
 import aiohttp
@@ -16,7 +17,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
-from .const import DOMAIN
+from .const import DOMAIN, LIVE_OPTION_KEYS
 from .coordinator import ZTERouterDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -119,7 +120,7 @@ async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
 
     try:
         await coordinator.api.delete_sms(str(index))
-        await coordinator.async_request_refresh()
+        await coordinator.async_force_refresh()
     except Exception as err:
         raise HomeAssistantError(f"Failed to delete SMS: {err}") from err
 
@@ -140,7 +141,7 @@ async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
                 ids = [m["id"] for m in to_delete]
                 await coordinator.api.delete_sms(";".join(ids))
 
-        await coordinator.async_request_refresh()
+        await coordinator.async_force_refresh()
     except Exception as err:
         raise HomeAssistantError(f"Failed to delete all SMS: {err}") from err
 
@@ -248,6 +249,45 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+def _reload_signature(options: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the options that require a reload when they change.
+
+    Everything outside LIVE_OPTION_KEYS is structural or connection-affecting,
+    so a change to any of it must rebuild the entry rather than be applied to
+    the running one.
+    """
+    return {k: v for k, v in options.items() if k not in LIVE_OPTION_KEYS}
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the entry when a non-live option changes.
+
+    Reload-by-default (Section 9). The allow-list exists so that the two
+    frequently-tuned options — polling interval and pause — do not tear down
+    and rebuild every entity each time the user nudges a slider. A change to
+    the host or credentials falls outside it and reloads, which is the whole
+    point: without this the running API client keeps using the old host and
+    password until Home Assistant restarts.
+    """
+    coordinator: ZTERouterDataUpdateCoordinator | None = getattr(
+        entry, "runtime_data", None
+    )
+    if coordinator is None:
+        return
+
+    signature = _reload_signature(entry.options)
+    if signature == coordinator.reload_signature:
+        # Live-apply only — no reload.
+        coordinator.apply_live_options()
+        return
+
+    coordinator.reload_signature = signature
+    _LOGGER.debug(
+        "%s: Connection or structural option changed; reloading entry.", entry.title
+    )
+    hass.config_entries.async_schedule_reload(entry.entry_id)
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up ZTE Router 5G Monitor from a config entry with Background Safety."""
     session = async_get_clientsession(hass)
@@ -263,6 +303,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Store for platform access via runtime_data
     entry.runtime_data = coordinator
+
+    # Remember which non-live options this entry was set up with, so the update
+    # listener can tell a connection change (reload) from a tuning change
+    # (live-apply). Section 9.
+    coordinator.reload_signature = _reload_signature(entry.options)
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
     # Register the System root device early to prevent via_device warnings in platforms
     device_registry = dr.async_get(hass)
@@ -317,7 +363,14 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry and release resources."""
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
-        # runtime_data is cleaned up automatically by HA
-        # Note: No need to close api.session as it's managed by HA core
-        pass
+        # Release the router session. The device allows only one login at a
+        # time, so leaving it open locks the user out of its web UI until it
+        # times out (Section 10). logout() is best-effort and never raises.
+        # runtime_data is cleaned up automatically by HA, and api.session is
+        # owned by HA core, so neither needs manual teardown here.
+        coordinator: ZTERouterDataUpdateCoordinator | None = getattr(
+            entry, "runtime_data", None
+        )
+        if coordinator is not None:
+            await coordinator.api.logout()
     return unload_ok if isinstance(unload_ok, bool) else False

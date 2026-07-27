@@ -129,7 +129,7 @@ class ZTERouterSwitch(
             return
         try:
             await self.entity_description.setter_fn(self.coordinator.api, True)
-            await self.coordinator.async_request_refresh()
+            await self.coordinator.async_force_refresh()
         except Exception:
             _LOGGER.exception(
                 "%s: Failed to turn on %s",
@@ -143,7 +143,7 @@ class ZTERouterSwitch(
             return
         try:
             await self.entity_description.setter_fn(self.coordinator.api, False)
-            await self.coordinator.async_request_refresh()
+            await self.coordinator.async_force_refresh()
         except Exception:
             _LOGGER.exception(
                 "%s: Failed to turn off %s",
@@ -213,7 +213,7 @@ class ZTEPausePollingSwitch(
 
         # 2. If we just resumed, trigger an immediate coordinator refresh
         if not state:
-            await self.coordinator.async_request_refresh()
+            await self.coordinator.async_force_refresh()
 
     @property
     def device_info(self) -> DeviceInfo:

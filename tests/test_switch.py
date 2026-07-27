@@ -41,7 +41,7 @@ async def test_pause_polling_switch(mock_coordinator, mock_config_entry):
     await switch.async_turn_off()
     _args, kwargs = switch.hass.config_entries.async_update_entry.call_args
     assert kwargs["options"][CONF_STOP_POLLING] is False
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -136,7 +136,7 @@ async def test_router_switch_turn_on_success(mock_coordinator, mock_config_entry
     switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
     await switch.async_turn_on()
     setter_fn.assert_called_once_with(mock_coordinator.api, True)
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -153,7 +153,7 @@ async def test_router_switch_turn_off_success(mock_coordinator, mock_config_entr
     switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
     await switch.async_turn_off()
     setter_fn.assert_called_once_with(mock_coordinator.api, False)
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio

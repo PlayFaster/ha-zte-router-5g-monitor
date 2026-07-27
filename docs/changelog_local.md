@@ -4,6 +4,62 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.0-dev1] - 2026-07-27 - Unreleased - dev_standards Conformance Pass
+
+Brings the integration into full conformance with the PlayFaster `dev_standards.md`, following the first `dev_std_review` pass on this project. 18 of 21 sections now DONE, 2 N/A, 1 accepted deviation (§3). Test suite 297 → 381, coverage 99%, `mypy --strict` and all pre-commit hooks clean.
+
+### Added
+
+- **Integration Health Sensor** (§19): New diagnostic binary sensor `binary_sensor.zte_5g_system_integration_health` (`device_class: problem`) on the System sub-device, reporting the integration's own degradation state. It exists to catch the failure Home Assistant cannot see — a poll that **succeeds** while the parsed data is empty or wrong, because a firmware update renamed the fields underneath it.
+  - **Always available.** `available` is overridden to return `True` unconditionally. The inherited `CoordinatorEntity.available` tracks `last_update_success`, which would take the sensor down at precisely the moment it has something to report.
+  - **Total-outage reporting.** Flags on the **first** failure at cold start (nothing has ever been fetched, so waiting out the strike budget would leave the user with no explanation), and on the **3rd** consecutive failure at runtime. A success clears it in the same cycle.
+  - **Contract-drift detection.** If a non-empty response contains none of five core fields for 3 consecutive cycles, the sensor turns on and a `firmware_contract_drift` repair issue is raised (auto-clearing on recovery). Startup grace prevents a verdict before a baseline exists.
+  - **Verdict stored outside `coordinator.data`.** `data` is `None` before the first success and frozen at last-good values during an outage, so a verdict held there could never describe the failure that stopped it updating. It lives in `coordinator.health_snapshot`, written on both the success and failure paths.
+  - Detail is exposed as **unrecorded** attributes: `issues`, `severity`, `degraded`, `repairs`, `last_good_update`, `consecutive_failures`.
+- **Force Refresh** (§13): New `coordinator.async_force_refresh()` with a one-shot flag honoured before the pause check.
+- **Per-Endpoint Resilience** (§8): The two optional SMS endpoints now hold their own last-good payload and strike count via `_fetch_optional()`, plus a `coordinator.endpoint_available(source)` check entities consult.
+- **Options Update Listener** (§9): `entry.add_update_listener` with a `LIVE_OPTION_KEYS` allow-list.
+- **`ZTERouterAPI.logout()`** (§10): Ends the router session on unload.
+- **Service Icons** (§12): Added an `icons.json` `services` block covering all four SMS actions, and a `default` icon for the Refresh Now button (which has no `device_class` to derive one from).
+
+### Fixed
+
+- **Refresh Now Did Nothing While Polling Was Paused** (§13): `ZTERefreshButton` called the bare `async_request_refresh()`, which `_async_update_data` short-circuits to cached data whenever `stop_polling` is on — so the button was silently swallowed in the one situation it exists for. All **nine** explicit user actions now route through `async_force_refresh()`: Refresh Now, Delete All SMS, the polling-interval slider, both router switch setters, pause-resume, the APN/network select, and the `delete_sms` / `delete_all_sms` services. Scheduled polls still respect the pause. _Verified live: paused, pressed Refresh Now, data updated; then waited two full poll intervals paused with no update._
+- **Options Flow Changed Credentials Without Applying Them** (§9): `ZTEOptionsFlow` wrote a new host, username or password into `entry.options` and nothing reloaded, because no update listener was registered. The running `ZTERouterAPI` kept using the **old host and password until Home Assistant was restarted**. A listener now reloads on any non-live option change; `scan_interval` and `stop_polling` remain live-apply so the slider and pause switch do not tear down every entity.
+- **Diagnostics Leaked Personal and Third-Party Data** (§20): `coordinator.data` is the raw `goform` payload, and key-name redaction reached almost none of it. A real download contained the **body and sender number of the most recent SMS**, the serving `cell_id` / `enodeb_id` / `lte_pci`, `mdm_mcc` / `mdm_mnc` (which together locate the subscriber on a named carrier), `wan_apn`, and raw `APN_config*` profile strings. Replaced with a layered sanitizer:
+  - **Blanked** — credentials, IMEI/IMSI/ICCID/MSISDN, and carrier identity.
+  - **Pseudonymized** — IPs, cell identifiers and SMS senders become stable tokens (`ip-1`, `cell-2`, `phone-1`), preserving cross-reference within the file.
+  - **Summarized** — `APN_config*` reduces to `<apn profile: 13 fields, 7 set, pdp=IPv4v6>`, keeping the diagnostic shape while dropping any embedded APN credentials.
+  - **Swept** — anything IP- or MAC-shaped anywhere, for keys this module does not enumerate. Matched on shape only, never seeded with real values.
+  - SMS keeps its metadata and character counts (whether hex decoding worked is diagnostic); the text and sender do not survive.
+  - The coordinator payload is `deepcopy`'d first — diagnostics is a read path.
+  - Diagnostics now also includes the health snapshot, endpoint failure counts and update interval.
+- **SMS Sender's Phone Number Was Written to the Recorder** (§14): The `msg_recent` sensor published the sender's number as a recorded attribute, storing third-party personal data in the user's database on every poll. `_unrecorded_attributes` now covers `id`, `number`, `date` and the eight SMS counters. `sntp_server1` / `sntp_dst_enable` remain recorded deliberately — static configuration, cheap, and worth seeing in history.
+- **`logout()` Was Silently Ignored by the Router**: The first implementation omitted the `AD` token that every other `goform` setter requires. The router answered `{"result":"failure"}` and **left the session open** — the method looked like it worked while changing nothing. Now sends `AD`. _Verified against MC7010 firmware V1.0.0B03: with the token the router returns `{"result":"success"}` and replaying the old `stok` returns the session-expired shape; without it the `stok` stays live._ `LOGIN_OUT` and `USER_LOGOUT` were probed and are not valid commands on this firmware.
+- **Binary Sensors Claimed "Off" Before Any Data Arrived** (§18): `is_on` returned `False` when `coordinator.data` was absent, asserting "not on the best connection" about a router that had not yet been read. Both classes now return `None` (HA `unknown`) until data exists.
+- **Numeric Values Stored at Full Source Precision** (§6): `_safe_float` now rounds to 3 decimal places at parse time, so controller noise does not reach long-term statistics. This is distinct from `suggested_display_precision`, which governs what is _shown_ rather than what is _stored_.
+
+### Changed
+
+- **SMS storage check ordering**: `_check_sms_storage` now runs **before** the health snapshot is written, so the storage repair state it reports is from the current cycle rather than one cycle stale. The existing `sms_storage_full` repair is _reflected_ in the health sensor's attributes rather than double-raised.
+- **Auth-retry structure**: The mandatory and optional fetches were factored into `_fetch_all()`, preserving the existing "renew session and retry the whole set once" semantics exactly while adding per-endpoint containment for non-auth errors.
+- **Four `# noqa: BLE001` waivers** added where a standard requires a broad catch: the health computation must never crash the update it diagnoses (§19), endpoint containment must absorb an unexpected response (§8), and unload must never be blocked by an unreachable router (§10). Each carries a comment explaining why narrowing defeats the requirement.
+
+### Tests
+
+- **297 → 381 tests**, coverage 99%.
+- **New `tests/test_integration_setup.py`** (§11): Integration-level tests driven through a **real** `hass` with `await hass.async_block_till_done()` — previously used **zero** times in the suite despite setup creating a background task. The old setup test asserted only that `async_create_background_task` was _called_, against a `MagicMock` hass, so the coroutine inside it was never driven. Also covers entities existing at cold-start failure, which is the evidence §1's departure from `test-before-setup` actually rests on.
+- **New `tests/test_coordinator_resilience.py`**: Force-refresh-vs-pause in both directions, per-endpoint strike budgets, and every §19 failure regime including the combination of a degraded endpoint during a total outage.
+- **New `tests/test_binary_sensor_health.py`**: Forces `last_update_success = False` — the exact condition the inherited `available` keys off — so removing the override fails a test rather than silently reintroducing the defect.
+- **New `tests/test_options_lifecycle.py`**: Asserts host and password changes reload while slider and pause do not, and exercises the real `logout()` rather than a double.
+- **New `tests/test_entity_hygiene.py`**: Guards rounding, the unrecorded-attribute decisions, icon coverage, and that every `translation_key` and repair key resolves in **both** `strings.json` and `translations/en.json` — compared against the code, not file-to-file.
+- **New `tests/test_diagnostics_sanitization.py`**: 35 property tests over `json.dumps(result)` with wholly synthetic fixtures, asserting no identifier survives anywhere, tokens are stable across sections, and the non-identifying substance is still present. The old key-presence tests it replaces were the kind §20 identifies as inadequate.
+
+### Notes
+
+- **§3 (Early Root Registration) is an accepted deviation, recorded in `dev_standards.md` → Project Deviations.** The root stays keyed `{imei}_system` rather than a bare hardware identifier. The ladder exists to enable a merge with a core integration and to prevent IP-to-MAC identifier swaps; neither is reachable here — the `goform` API never exposes a MAC, there is no core `zte` integration, and the IMEI cannot swap.
+- **The `AD`-token logout finding is specific to MC7010 firmware V1.0.0B03**, the only hardware available to test. `get_ad()` already branches by model for the hash algorithm, but `LOGOUT` behaviour on MC888/MC889 is untested. If it differs, the failure mode is the pre-existing one: the session lingers until timeout, and `logout()` swallows the error rather than blocking unload.
+
 ## [3.2.6-dev8] - 2026-07-26 - Unreleased - No Manifest Bump
 
 ### Changed

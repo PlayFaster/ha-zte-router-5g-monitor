@@ -41,6 +41,14 @@ BEST_CONN_DESCRIPTION = ZTEBinarySensorEntityDescription(
     group="signal",
 )
 
+INTEGRATION_HEALTH_DESCRIPTION = ZTEBinarySensorEntityDescription(
+    key="integration_health",
+    translation_key="system_integration_health",
+    device_class=BinarySensorDeviceClass.PROBLEM,
+    entity_category=EntityCategory.DIAGNOSTIC,
+    group="system",
+)
+
 BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ZTEBinarySensorEntityDescription(
         key="reboot_schedule",
@@ -86,7 +94,8 @@ async def async_setup_entry(
     coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
     entities: list[BinarySensorEntity] = [
-        ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION)
+        ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION),
+        ZTEIntegrationHealthSensor(coordinator, entry, INTEGRATION_HEALTH_DESCRIPTION),
     ]
     entities.extend(
         [
@@ -122,16 +131,106 @@ class ZTEBestConnectionSensor(
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
     @property
-    def is_on(self) -> bool:
-        """Return true if both 5G and LTE CA are active."""
+    def is_on(self) -> bool | None:
+        """Return true if both 5G and LTE CA are active.
+
+        Returns None (HA `unknown`) before any data has arrived. Reporting
+        `off` there would assert "not on the best connection" about a router we
+        have not yet read — false certainty, where the honest answer is that we
+        do not know yet (dev_standards Section 18).
+        """
         data = self.coordinator.data
         if not data:
-            return False
+            return None
         # Optimal connection logic based on raw data keys
         return bool(
             data.get("network_type") == "ENDC"
             and data.get("wan_lte_ca") == "ca_activated"
         )
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information with sub-device support."""
+        return build_device_info(
+            self.coordinator, self._entry, self.entity_description.group
+        )
+
+
+class ZTEIntegrationHealthSensor(
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    BinarySensorEntity,
+):
+    """Reports the integration's own internal degradation state.
+
+    This is the Section 19 self-diagnosis sensor. Connection failures already
+    surface as unavailable entities; what this fills is the failure Home
+    Assistant cannot see — the poll *succeeds* while the parsed data is empty or
+    wrong, because a firmware update renamed the fields underneath it.
+
+    It reads ``coordinator.health_snapshot`` rather than ``coordinator.data``:
+    ``data`` is ``None`` before the first success and frozen at last-good values
+    during an outage, so a verdict stored there could never describe the failure
+    that stopped it being updated.
+    """
+
+    _attr_has_entity_name = True
+    entity_description: ZTEBinarySensorEntityDescription
+
+    # Detail belongs in attributes, but none of it belongs in the recorder:
+    # `issues` is prose that changes with the failure, and the rest churns on
+    # most polls (Section 14). The entity's on/off state is still recorded.
+    _unrecorded_attributes = frozenset(
+        {
+            "issues",
+            "severity",
+            "degraded",
+            "repairs",
+            "last_good_update",
+            "consecutive_failures",
+        }
+    )
+
+    def __init__(
+        self,
+        coordinator: ZTERouterDataUpdateCoordinator,
+        entry: ConfigEntry,
+        description: ZTEBinarySensorEntityDescription,
+    ) -> None:
+        """Initialize the health sensor."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.unique_id}_{description.key}"
+
+    @property
+    def available(self) -> bool:
+        """Always available — including when everything else is not.
+
+        The default ``CoordinatorEntity.available`` returns
+        ``last_update_success``, which would take this sensor down at precisely
+        the moment it has something to report. A health sensor that disappears
+        during an outage is worse than none at all, because its silence is
+        indistinguishable from health.
+        """
+        return True
+
+    @property
+    def is_on(self) -> bool:
+        """Return True when the integration has detected a problem."""
+        return bool(self.coordinator.health_snapshot.get("problem", False))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the detail behind the verdict."""
+        snapshot = self.coordinator.health_snapshot
+        return {
+            "issues": snapshot.get("issues", []),
+            "severity": snapshot.get("severity", "unknown"),
+            "degraded": snapshot.get("degraded", []),
+            "repairs": snapshot.get("repairs", []),
+            "last_good_update": snapshot.get("last_good_update"),
+            "consecutive_failures": snapshot.get("consecutive_failures", 0),
+        }
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -163,10 +262,14 @@ class ZTERouterBinarySensor(
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
     @property
-    def is_on(self) -> bool:
-        """Return true if the binary sensor is active."""
+    def is_on(self) -> bool | None:
+        """Return true if the binary sensor is active.
+
+        Returns None (HA `unknown`) until data is available — see the note on
+        ZTEBestConnectionSensor.is_on (dev_standards Section 18).
+        """
         if not self.coordinator.data or self.entity_description.value_fn is None:
-            return False
+            return None
         return self.entity_description.value_fn(self.coordinator.data)
 
     @property

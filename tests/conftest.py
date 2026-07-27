@@ -50,6 +50,10 @@ def mock_coordinator():
     coordinator.data = {}
     coordinator.last_update_success_time = None
     coordinator.async_request_refresh = AsyncMock()
+    # Explicit user actions route through async_force_refresh so they fetch
+    # even while polling is paused (dev_standards Section 13).
+    coordinator.async_force_refresh = AsyncMock()
+    coordinator.endpoint_available = MagicMock(return_value=True)
     # Add flat identity attributes for modern tests
     coordinator.model = "MC7010"
     coordinator.sw_version = "V1.0.0"

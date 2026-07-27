@@ -55,8 +55,13 @@ async def test_setup_entry_success(mock_hass, mock_config_entry):
 @pytest.mark.asyncio
 async def test_unload_entry_success(mock_hass, mock_config_entry):
     """Test successful unloading of the integration."""
-    mock_config_entry.runtime_data = MagicMock()
+    coordinator = MagicMock()
+    # Unload releases the router session (dev_standards Section 10).
+    coordinator.api.logout = AsyncMock()
+    mock_config_entry.runtime_data = coordinator
+
     assert await async_unload_entry(mock_hass, mock_config_entry) is True
+    coordinator.api.logout.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -272,6 +277,7 @@ async def test_service_send_sms(mock_hass, mock_config_entry):
 
     mock_api = AsyncMock()
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -290,8 +296,10 @@ async def test_service_delete_sms(mock_hass, mock_config_entry):
 
     mock_api = AsyncMock()
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -300,7 +308,7 @@ async def test_service_delete_sms(mock_hass, mock_config_entry):
 
     await async_delete_sms(mock_hass, call)
     mock_api.delete_sms.assert_called_once_with("5")
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -310,8 +318,10 @@ async def test_service_delete_all_sms_simple(mock_hass, mock_config_entry):
 
     mock_api = AsyncMock()
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -321,7 +331,7 @@ async def test_service_delete_all_sms_simple(mock_hass, mock_config_entry):
     await async_delete_all_sms(mock_hass, call)
     mock_api.delete_all.assert_called_once()
     mock_api.get_sms_messages.assert_not_called()
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -337,8 +347,10 @@ async def test_service_delete_all_sms_keep_last(mock_hass, mock_config_entry):
         {"id": "1"},
     ]
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -348,7 +360,7 @@ async def test_service_delete_all_sms_keep_last(mock_hass, mock_config_entry):
     await async_delete_all_sms(mock_hass, call)
     mock_api.get_sms_messages.assert_called_once_with(mem_store="1")
     mock_api.delete_sms.assert_called_once_with("2;1")
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -381,6 +393,7 @@ async def test_service_get_sms_list(mock_hass, mock_config_entry):
         },
     ]
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -413,6 +426,7 @@ async def test_get_coordinator_with_entry_id(mock_hass, mock_config_entry):
     from custom_components.zte_router_5g import _get_coordinator
 
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
 
@@ -453,6 +467,7 @@ async def test_get_coordinator_single_entry_fallback(mock_hass, mock_config_entr
     from custom_components.zte_router_5g import _get_coordinator
 
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -487,6 +502,7 @@ async def test_service_send_sms_exception(mock_hass, mock_config_entry):
     mock_api = AsyncMock()
     mock_api.send_sms.side_effect = RuntimeError("Send failed")
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -508,6 +524,7 @@ async def test_service_delete_sms_exception(mock_hass, mock_config_entry):
     mock_api = AsyncMock()
     mock_api.delete_sms.side_effect = RuntimeError("Delete failed")
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -529,6 +546,7 @@ async def test_service_delete_all_sms_exception(mock_hass, mock_config_entry):
     mock_api = AsyncMock()
     mock_api.delete_all.side_effect = RuntimeError("Delete all failed")
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -567,6 +585,7 @@ async def test_service_get_sms_list_mix_box_type(mock_hass, mock_config_entry):
         ],
     ]
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -590,6 +609,7 @@ async def test_service_get_sms_list_exception(mock_hass, mock_config_entry):
     mock_api = AsyncMock()
     mock_api.get_sms_messages.side_effect = RuntimeError("List failed")
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -621,8 +641,10 @@ async def test_async_setup_service_handlers(mock_hass, mock_config_entry):
     # Set up coordinator for handler calls
     mock_api = AsyncMock()
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
     mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
@@ -985,8 +1007,10 @@ async def test_delete_all_sms_keep_last_gte_total_deletes_nothing(
     mock_api = AsyncMock()
     mock_api.get_sms_messages.return_value = [{"id": "3"}, {"id": "2"}, {"id": "1"}]
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -997,7 +1021,7 @@ async def test_delete_all_sms_keep_last_gte_total_deletes_nothing(
         call.data = {"keep_last": n}
         await async_delete_all_sms(mock_hass, call)
         mock_api.delete_sms.assert_not_called()
-    mock_coordinator.async_request_refresh.assert_called()
+    mock_coordinator.async_force_refresh.assert_called()
 
 
 # ── Strategy 3: Error State & Negative Path Engineering ─────────────────────

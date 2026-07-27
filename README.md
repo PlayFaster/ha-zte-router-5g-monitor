@@ -208,7 +208,7 @@ This integration provides **75+ entities** (depending on your firmware) organize
 
 | Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
 | :-- | :-- | :-- | :-- |
-| ⚙️ **System** | 13 Sensors, 3 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+10) | Firmware, IP Addresses, Uptime, Refresh Now, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, Time Server (SNTP), ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
+| ⚙️ **System** | 13 Sensors, 4 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+10) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, Time Server (SNTP), ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
 | 📶 **Signal** | 35 Sensors, 1 Binary Sensor, 3 Selects (+7) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
 | 📈 **Data** | 11 Sensors, 1 Switch (+5) | Monthly Usage, Near-real-time Speed, Session Data, Data Limit Switch, Data Volume Alert | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
 | ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
@@ -451,6 +451,44 @@ actions:
 
 ### 🩺 System Health & Connectivity Alerts
 
+#### 🩺 Integration Health Problem Alert
+
+Be told when the integration detects a fault in its own data.
+
+The **Integration Health** binary sensor turns on when the integration's self-checks find a problem — the router unreachable for several consecutive polls, an SMS endpoint that has stopped responding, or a poll that _succeeded_ but returned none of the fields the integration expects (typically a firmware update renaming them). It stays **available even when every other entity has gone unavailable**, so it can report the fault that made the others unreliable.
+
+```yaml
+alias: "ZTE: Integration Health Problem"
+description: "Notifies when the integration's self-checks detect a problem"
+mode: single
+triggers:
+  - trigger: state
+    entity_id: binary_sensor.zte_5g_system_integration_health
+    to: "on"
+    for:
+      minutes: 10
+    note: |
+      The 10 minute duration is deliberate. A brief outage can set the sensor and clear
+      it on the next cycle; this reports only problems that persist. Shorten it if you
+      would rather hear about transient faults too.
+actions:
+  - action: persistent_notification.create
+    data:
+      title: ZTE Router 5G Monitor needs attention
+      message: |
+        {{ state_attr('binary_sensor.zte_5g_system_integration_health', 'issues')
+           | join(', ') }}
+        Last good update: {{ state_attr('binary_sensor.zte_5g_system_integration_health', 'last_good_update') }}
+    note: |
+      issues is a list of human-readable problem descriptions. The sensor also carries
+      severity (ok / degraded / warning / error), degraded (the names of any failed
+      endpoints), repairs (the repair issues currently raised), and consecutive_failures.
+```
+
+> [!TIP] To alert only on the serious cases and ignore ordinary connectivity blips, add a condition on the `severity` attribute: `{{ state_attr('binary_sensor.zte_5g_system_integration_health', 'severity') == 'warning' }}` fires only for a suspected firmware API change, which is the condition that also raises a Repair.
+
+#### 🔄 Router Reboot Alert
+
 Monitor for router reboots by watching the device boot timestamp sensor.
 
 ```yaml
@@ -568,7 +606,25 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
   1. **First Failure**: Logs a warning; retries immediately.
   2. **Second Failure**: Logs a warning; retries again.
   3. **Third Failure**: Marks all entities as `Unavailable` and logs an error.
+- **Per-Endpoint Resilience**: The SMS endpoints carry their **own** strike budget. If SMS stops responding while the main data fetch keeps working, only the SMS entities are affected — Signal and Data keep updating.
 - **Auto-Recovery**: Once the router is back online, the integration restores all entities automatically.
+- **Forced Refresh Always Fetches**: Every explicit action — **Refresh Now**, changing a setting, deleting an SMS — fetches immediately **even while Pause Polling is on**. Only scheduled polls respect the pause.
+
+### 🩺 Self-Diagnosis
+
+Connection failures are visible already: entities go `Unavailable`. The gap this fills is the failure Home Assistant **cannot** see — a poll that _succeeds_ while the data is wrong.
+
+The **Integration Health** binary sensor (System device) reports:
+
+- **Total outage** — the router unreachable. Flagged on the **first** failure at startup (there are no held values, so waiting would leave you with no explanation), or on the **third** consecutive failure at runtime. A success clears it in the same cycle.
+- **Degraded capability** — an optional endpoint that has exhausted its own strike budget.
+- **Contract drift** — a successful response containing none of the fields the integration expects, which usually means a firmware update renamed them. This also raises a **Repair** issue, since it needs reporting rather than waiting out.
+
+It is deliberately **available at all times**, including when every other entity has gone unavailable — a health sensor that disappears during an outage cannot explain the silence. See the [example automation](#-integration-health-problem-alert).
+
+### 🔐 Session Handling
+
+The router permits only **one login session at a time**. The integration releases its session when the config entry is unloaded, reloaded or removed, so the router's web UI is available again immediately rather than after the session times out.
 
 ### 🆔 Identity & Stable Entities
 
@@ -597,6 +653,8 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 - ZTE routers typically only allow **one simultaneous login session**.
 - Use the **Pause Polling** switch in Home Assistant to halt polling before you log into the web UI.
 - Resume polling when done!
+- **Note:** logging into the web UI evicts the integration's session. The integration re-authenticates on its next poll, so this is harmless — but it is also why pausing is the tidier approach.
+- Disabling or reloading the integration releases its session immediately, so you do not have to wait for it to time out.
 
 ### 📊 Diagnostics & Entity Values
 

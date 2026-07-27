@@ -388,6 +388,41 @@ class ZTERouterAPI:
             raise ZTEConnectionError("Failed to obtain stok from login")
         return self.stok
 
+    async def logout(self) -> None:
+        """End the router session and drop local session state.
+
+        Best effort by design: this runs on unload, and an unreachable router
+        must never block Home Assistant from tearing the entry down. Local
+        state is cleared regardless of whether the router acknowledged.
+
+        It matters more here than on most hardware — a ZTE CPE permits only one
+        login session at a time, so an abandoned session locks the user out of
+        the router's own web UI until it times out (dev_standards Section 10).
+        """
+        if not self.stok:
+            return
+
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        try:
+            # LOGOUT is a command like any other on this API and needs an AD
+            # token. Without it the router answers `{"result":"failure"}` and
+            # leaves the session open — verified against MC7010 firmware
+            # V1.0.0B03 on 2026-07-27: with AD it returns success and the stok
+            # is genuinely invalidated; without it, the stok stays live.
+            ad = await self.get_ad()
+            await self._request(
+                "POST",
+                "goform/goform_set_cmd_process",
+                data=f"isTest=false&goformId=LOGOUT&AD={ad}",
+                headers=headers,
+                _retry=False,
+            )
+        except Exception as err:  # noqa: BLE001 - unload must never fail
+            _LOGGER.debug("Logout request failed (session dropped anyway): %s", err)
+        finally:
+            self.stok = None
+            self.session.cookie_jar.clear(predicate=lambda m: m.key == "stok")
+
     async def get_all_data(self) -> dict[str, Any]:
         """Fetch primary technical data."""
         params = [

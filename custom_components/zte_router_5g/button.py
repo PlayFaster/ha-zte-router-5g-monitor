@@ -107,7 +107,7 @@ class ZTERefreshButton(ZTEButton):
 
     async def async_press(self) -> None:
         """Handle the button press."""
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_force_refresh()
 
 
 class ZTERebootButton(ZTEButton):
@@ -129,7 +129,7 @@ class ZTEDeleteAllSMSButton(ZTEButton):
         """Handle the button press."""
         try:
             await self.coordinator.api.delete_all()
-            await self.coordinator.async_request_refresh()
+            await self.coordinator.async_force_refresh()
         except Exception as err:
             _LOGGER.error("%s: Delete SMS failed: %s", self._entry.title, err)
             raise HomeAssistantError(f"Delete SMS failed: {err}") from err

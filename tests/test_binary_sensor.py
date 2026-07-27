@@ -28,9 +28,11 @@ def test_binary_sensor_is_on(mock_coordinator, mock_config_entry):
     mock_coordinator.data = {"network_type": "LTE", "wan_lte_ca": "ca_activated"}
     assert sensor.is_on is False
 
-    # 3. None active
+    # 3. No data yet — unknown, not "off". Asserting off here would claim the
+    #    router is not on its best connection before we have read it at all
+    #    (dev_standards Section 18).
     mock_coordinator.data = {}
-    assert sensor.is_on is False
+    assert sensor.is_on is None
 
 
 def test_binary_sensor_device_info(mock_coordinator, mock_config_entry):
@@ -79,7 +81,7 @@ def test_binary_sensor_endc_without_ca_activated(mock_coordinator, mock_config_e
 
 
 def test_router_binary_sensor_is_on_no_data(mock_coordinator, mock_config_entry):
-    """Test ZTERouterBinarySensor.is_on returns False when no data."""
+    """Test ZTERouterBinarySensor.is_on returns None (unknown) when no data."""
     mock_coordinator.data = None
     desc = ZTEBinarySensorEntityDescription(
         key="reboot_schedule",
@@ -89,11 +91,11 @@ def test_router_binary_sensor_is_on_no_data(mock_coordinator, mock_config_entry)
         ),
     )
     sensor = ZTERouterBinarySensor(mock_coordinator, mock_config_entry, desc)
-    assert sensor.is_on is False
+    assert sensor.is_on is None
 
 
 def test_router_binary_sensor_is_on_no_value_fn(mock_coordinator, mock_config_entry):
-    """Test ZTERouterBinarySensor.is_on returns False when value_fn is None."""
+    """Test ZTERouterBinarySensor.is_on returns None when value_fn is None."""
     mock_coordinator.data = {"some": "data"}
     desc = ZTEBinarySensorEntityDescription(
         key="test_sensor",
@@ -101,7 +103,7 @@ def test_router_binary_sensor_is_on_no_value_fn(mock_coordinator, mock_config_en
         value_fn=None,
     )
     sensor = ZTERouterBinarySensor(mock_coordinator, mock_config_entry, desc)
-    assert sensor.is_on is False
+    assert sensor.is_on is None
 
 
 def test_router_binary_sensor_is_on_true(mock_coordinator, mock_config_entry):
@@ -214,12 +216,12 @@ def test_router_binary_sensor_device_info_signal_group(
 
 
 def test_best_connection_sensor_is_on_no_data(mock_coordinator, mock_config_entry):
-    """Test ZTEBestConnectionSensor.is_on returns False when no data."""
+    """Test ZTEBestConnectionSensor.is_on returns None (unknown) when no data."""
     mock_coordinator.data = None
     sensor = ZTEBestConnectionSensor(
         mock_coordinator, mock_config_entry, BEST_CONN_DESCRIPTION
     )
-    assert sensor.is_on is False
+    assert sensor.is_on is None
 
 
 def test_best_connection_sensor_device_info(mock_coordinator, mock_config_entry):
