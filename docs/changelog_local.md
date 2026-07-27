@@ -4,6 +4,176 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.0-dev7] - 2026-07-27 - Unreleased - No Manifest Bump - §14 Attributes Are Unrecorded by Default
+
+Implements `dev_standards` §14 as revised at **Standard Version 1.12.0**: `_unrecorded_attributes` must cover every key an entity can publish, with no per-attribute judgement and no undocumented exceptions. **394 tests passing, 100% coverage, ruff clean.**
+
+### Fixed
+
+- **The reboot-schedule binary sensor recorded four attributes** — `reboot_hour1`, `reboot_min1`, `reboot_hour2`, `reboot_min2`. `ZTERouterBinarySensor` declared no `_unrecorded_attributes` at all, so every attribute its descriptions produce was written to the recorder on each state change.
+
+  **Nothing had found this before, including the static sweep run earlier in this session.** The attributes come from an `extra_attrs_fn` lambda on the entity description, so there is no dict literal in the class for a source-reading check to see; and the entity is disabled by default, so it is never instantiated in an ordinary test run. It took the runtime sweep below, with disabled-by-default entities forced on, to surface it.
+
+### Changed
+
+- **`sntp_server1` and `sntp_dst_enable` are now unrecorded.** They were the one documented exception in this project, justified as "static configuration, cheap to store, worth seeing in history". §14 1.12.0 withdraws that reasoning: attributes carry detail about something that does not merit its own entity, but they are not a history mechanism — retrieving historical attribute values is advanced HA work, and a value whose history is genuinely wanted should be an entity or a user template sensor. `test_every_attribute_the_sensor_emits_was_evaluated` is renamed to `..._is_unrecorded` and no longer carries an exception set.
+
+### Added
+
+- **`test_no_entity_publishes_a_recorded_attribute`** — a runtime sweep that sets up the integration against a real `hass`, iterates every live entity, and asserts each published attribute key appears in that entity's `_unrecorded_attributes`. `ALLOWED_RECORDED` is an explicit, currently-empty allow-list, so granting an exception is a visible act while forgetting one is not.
+
+  **Two details that decide whether this test is worth anything:**
+  - It patches `Entity.entity_registry_enabled_default` to `True` so disabled-by-default entities are added. **Verified by mutation:** with a key removed from a disabled-by-default sensor's set, the sweep passed until this patch was added — the test was silently skipping a whole class of entities. Adding it immediately failed, and surfaced the reboot-schedule defect above.
+  - It asserts `checked >= 3`. A sweep whose fixture stops producing attributes passes vacuously and keeps passing after a real regression; the floor makes that failure loud.
+
+  Re-verified by mutation after both fixes: removing a single key from `_unrecorded_attributes` fails the sweep.
+
+## [3.3.0-dev6] - 2026-07-27 - Unreleased - No Manifest Bump - §19 `drift` Attribute
+
+Closes the gap flagged in `[3.3.0-dev5]`. **393 tests passing, 100% coverage, ruff clean, mypy strict clean.**
+
+### Added
+
+- **The health sensor now publishes a `drift` attribute** (`dev_standards` §19, normative attribute table added at Standard Version 1.11.0). That table makes `drift` conditional — omit it only where no drift check exists. This integration runs one, `_check_contract_drift`, and it already backed the `firmware_contract_drift` repair and wrote a line into `issues`; the finding simply had nowhere of its own to be read from. A template could see that _something_ was wrong, and could see the repair key, but could not distinguish "the firmware changed shape" from "an endpoint is down" without string-matching the `issues` prose.
+
+  `drift` is a list, empty when healthy, carrying the finding on the success path. On the **failure** path it is reported empty rather than held from the last cycle: no payload arrived, so no drift verdict is possible, which matches the existing `_active_repairs(False)` call beside it. Both defensive fallback snapshots carry the key too, so the attribute can never be absent — an attribute that vanishes under load is a contract violation exactly when a user is looking at it.
+
+- **`DRIFT_CONTRACT` constant** in `coordinator.py`. The message is published in two places — `drift` and `issues` — and a literal repeated at two sites is one edit away from disagreeing with itself.
+
+- **`test_publishes_the_section_19_attribute_contract`** — asserts the §19 names are present, with the reasoning in the docstring for why `auth_mode` is legitimately absent here (single auth mode) and `drift` is not. The existing drift test now also asserts the attribute is set when the repair raises and cleared on recovery. Without a test naming the contract, the next rename is silent again — which is how this gap arose.
+
+### Changed
+
+- **`drift` added to `_unrecorded_attributes`.** Caught by the existing `test_attributes_are_unrecorded`, which walks the published attributes and asserts each is excluded from the recorder — the test did its job on the first run.
+
+## [3.3.0-dev5] - 2026-07-27 - Unreleased - No Manifest Bump - Interface Documentation
+
+Documentation and agent-guidance only — no source or test files changed, so no re-validation of the suite was required. Markdown checks (prettier, codespell) clean.
+
+### Added
+
+- **`docs/zte_how_to_access.md` — a full reference for navigating the ZTE `goform` interface.** Written against `api.py` and the behaviours verified on live hardware during this week's work, using `unifi_network_monitor`'s `docs/api_endpoints.md` as the template.
+
+  **The structure had to diverge from that template, and the reason is the most useful thing in the document.** UniFi's reference is organised by URL because that API has a URL per resource. ZTE has exactly **two** endpoints — `goform_get_cmd_process` for reads and `goform_set_cmd_process` for writes — and the actual resource is named in a `cmd=` or `goformId=` parameter. So the document is organised by command, and says so at the top: all read traffic is indistinguishable in a proxy log until you read the query string, which is a real obstacle when debugging and is not apparent from the code.
+
+  Covers: the four-step SHA-256 login chain and why `LD` and `wa_inner_version` are fetched unauthenticated; the `LOGIN` vs `LOGIN_MULTI_USER` model split; the post-login initialisation GET that some firmware requires before it will accept a POST; the single-session constraint and why it makes a logout unverifiable through the web UI; the three distinct session-expiry signatures; the `AD` token derivation with its second model-dependent branch (MD5 vs SHA-256); all 100 batch-poll parameters grouped by the entities they feed, in collapsible `<details>` sections; every `goformId`; and what is deliberately not called, with rationale.
+
+  **The section that earns its place is "Gotchas."** This API fails soft everywhere — an unknown `cmd`, a missing `AD` and an expired session all return `200 OK` with an empty field or `{"result":"failure"}`. The `AD` behaviour is recorded with the evidence: confirmed on MC7010 firmware `V1.0.0B03` using `LOGOUT`, where the call without `AD` returned failure and left the `stok` live, and with `AD` returned success and genuinely invalidated it.
+
+### Fixed
+
+- **`AGENTS.md` referenced `STRIKE_LIMIT`, which no longer exists.** The `[3.3.0-dev4]` rename to `FETCH_STRIKE_LIMIT` (and the move to `const.py`) did not update this file, so the one document an agent reads first named a constant that would fail to import. Now names the constant and its module. Found while adding the cross-link below — the kind of stale reference a rename leaves behind precisely because the file is prose rather than code and nothing type-checks it.
+
+### Changed
+
+- **`AGENTS.md` links to the new interface reference** from the `api.py` section, matching how `unifi_network_monitor` surfaces `docs/api_endpoints.md`.
+
+### Notes
+
+> [!IMPORTANT]
+> **An open §19 gap was found while writing this entry, and is not yet fixed.** `dev_standards.md` **1.11.0** (this session) made the Integration Health attribute set a normative table, and one row is a conditional: `drift` may be omitted **only where no drift check exists**. This integration runs one — `_check_contract_drift`, backing the `firmware_contract_drift` repair — but its health sensor does not publish a `drift` attribute (`binary_sensor.py:226`). `unifi_network_monitor` publishes it; `wifi_ssid_monitor` has the same gap.
+>
+> This is not a regression from the `[3.3.0-dev4]` alignment. That pass compared the attribute names the three projects **had**, and could not ask which ones were **missing**, because no list of required names existed until 1.11.0. It is the first finding produced by the new table, which is a fair indication the table was worth writing.
+>
+> Deliberately left open rather than fixed inside a documentation-only entry: it changes a published contract and needs a test.
+
+## [3.3.0-dev4] - 2026-07-27 - Unreleased - Cross-Project Alignment
+
+Follows a three-way review of `zte_router_5g`, `unifi_network_monitor` and `wifi_ssid_monitor`, checking that the three meet the shared standards the **same way** rather than merely meeting them. The functionality differs by design; the approaches should not. Seventeen of the 21 `dev_standards` sections were already identically DONE — these are the divergences that were not deliberate.
+
+### Changed
+
+- **Health-sensor attribute renamed `degraded` → `degraded_capabilities`** (dev_standards §19). The standard names the attribute "degraded capabilities", and `unifi_network_monitor` already used the full name. Three projects had drifted to three vocabularies for the same concept, which meant an automation written against one did not transfer to another. All three now publish the identical six-key contract: `problem`, `issues`, `severity`, `degraded_capabilities`, `last_good_update`, plus per-project extras. Not a breaking change here — the ZTE health sensor has not shipped.
+- **Strike-limit constants moved to `const.py` and renamed `STRIKE_LIMIT` → `FETCH_STRIKE_LIMIT`**, matching `unifi_network_monitor`, which already had the constant under that name and in that file. `UNREACHABLE_STRIKE_LIMIT` moved alongside it. Tests import both from `const` rather than from `coordinator`. No behaviour change — the values are unchanged at 3 and 10.
+- **`tests/test_binary_sensor_health.py` renamed to `tests/test_integration_health.py`.** New convention across all three projects: name the test file after the **standard** it covers, not the platform or the symptom. The same rename landed in the other two.
+
+### Added
+
+- **`_compat.py` — device-registry compatibility shims**, ported from `unifi_network_monitor`, which implemented and validated the pattern first. HA 2026.8 deprecates the `DeviceInfo.via_device` identifier tuple and the ambiguous `async_get_device(identifiers=…)`; both are **removed in 2027.8**. This integration used the deprecated forms in `helpers.build_device_info` and in the coordinator's hardware-metadata refresh, so it would have warned from 2026.8 and broken at 2027.8.
+  - `via_device_link()` and `device_by_identifier()` feature-detect the HA **class** (not an instance, so a `MagicMock` registry in tests cannot fool them) and use the new API where present, the old one otherwise. **No version floor** is introduced.
+  - UniFi's third shim, `owning_entry_ids()`, is deliberately **not** carried over — this integration never inspects a device's owning entries, and an unused shim is dead code against a 100%-coverage bar.
+  - Registry and entry id are resolved from the coordinator inside `build_device_info`, so no new argument had to be threaded through the entity call sites.
+  - `tests/test_compat.py` forces **both** branches by patching the detection flag, so the path the installed HA does not take is still exercised — the point of a floor-free shim being that it must be correct on ≤2026.7 and post-2027.8 alike.
+
+### Documentation
+
+- README updated for the `degraded_capabilities` rename.
+
+### Tests
+
+- **386 → 392**, coverage **100%** maintained.
+
+### Notes
+
+- **`_compat.py` deliberately omits the `owning_entry_ids` shim** — see above. If a future feature inspects device ownership (a cleanup path, for instance), port it then rather than preemptively.
+- Two further alignment items were identified and are **not** in this release: §15 SMS feature-group toggle (recorded PENDING, a Guideline rather than a Gap) and the deferred custom-trigger work.
+
+## [3.3.0-dev3] - 2026-07-27 - Unreleased - Unreachable Repair & Record Corrections
+
+Follows a consolidated review of everything not marked DONE across both standards. One real gap was found and closed; two records were corrected.
+
+### Added
+
+- **`router_unreachable` Repair Issue**: raised after **10 consecutive failed fetches**, with `IssueSeverity.ERROR`, and cleared by the next successful poll.
+  - **Why this was a gap.** Because of the Section 1 non-blocking-startup departure, `async_setup_entry` always returns `True` — so a router that has become permanently unreachable presents as _"integration loaded, every entity unavailable"_ with no prompt anywhere. The Integration Health sensor turns on, but only a user who knows to look at a diagnostic binary sensor would see it. Nothing told them to act.
+  - **Why 10 and not 3.** The 3-strike threshold governs entity _unavailability_ and is reached in a few minutes — a Repair there would fire on every router reboot, which is exactly the Repairs-panel noise Section 19 warns against. Ten consecutive failures is the point at which the condition has demonstrably stopped resolving itself, which is what makes it _serious, named and actionable_ under Section 19's second tier.
+  - **The text is deliberately cause-agnostic.** Ten failures does not mean "the IP changed" — it means the router is not answering. The Repair says so, then lists what to check in rough likelihood order: power-cycle the router; check whether its IP has changed (the configured host is named in the text so it can be compared directly, with a DHCP reservation suggested as the permanent fix); check whether the password changed; check the network path. **Reconfigure** is offered for the two cases where it is the answer, rather than presented as the answer.
+
+### Changed
+
+- **`stale-devices` recorded as N/A rather than REJECT** (compliance matrix; `quality_scale.yaml` stays `exempt`, which is the only value HA's vocabulary provides). REJECT is a family-level _policy_ — "devices persist intentionally; user controls removal" — and it had been copied down verbatim. It does not describe this integration: the four sub-devices come from a fixed group list, the integration never enumerates clients behind the router, and replacing the router mints a new IMEI and therefore a new config entry whose removal takes its devices with it. **Nothing can become stale, so there is no removal policy to decline.** The comment now says that, and flags that it stops being true if Section 15 feature-group toggles are implemented — disabling a group would orphan its sub-device.
+
+### Records
+
+- **`dev_standards.md` §15 Feature-Group Toggles: N/A → PENDING.** The original N/A claimed _"no optional functional groups exist"_, which is false. **SMS is exactly the group §15 describes**: 4 entities and 4 actions, **two of the three polled endpoints exist solely to serve it**, and the README already tells users to disable the SMS sub-device by hand if they do not use it — which hides the entities without stopping the polling, the precise outcome §15 exists to replace. §15 is a **Guideline**, so this is an Observation rather than a Gap and no code is required; but the N/A asserted something untrue about the codebase. Recorded in Project Deviations with the reasoning.
+- **`manifest.json` `quality_scale` key observation withdrawn** from the IQS report (and removed from `[3.3.0-dev2]`). It was an unsourced assertion: no guidance in any input mentions the key, and none of the four sibling projects sets it either — so this integration was consistent with the family, not an outlier.
+
+### Tests
+
+- **382 → 385.** Three tests for the new Repair: that it stays quiet through nine consecutive failures (a router reboot must not raise it), that it fires on the tenth with the configured host present in the translation placeholders, and that a single successful poll clears it however long it was raised. The loops suppress `UpdateFailed`, which the coordinator raises from the fourth failure onward — the Repair logic runs before that raise, and the tests have to drive past it.
+
+### Notes
+
+- **Custom triggers investigated and deferred — no code written.** HA's trigger platform (`trigger.py` + `async_get_triggers`, `triggers.yaml`, a `triggers` block in `strings.json`) is real and mature — 45 of 58 core integrations use it, and platform discovery resolves custom components identically to core ones. Two candidates were assessed: `sms_received` (turning the existing raw bus event into a GUI-discoverable, filterable trigger — genuinely valuable) and `router_rebooted` (dropped; a plain state trigger on the uptime sensor already works). **Blocked on a product decision, not a technical one:** the API is a 2026.x construct, while this integration declares a minimum of HA **2024.8.0** and ships to users via HACS — adopting it means roughly a two-year floor raise. There is also **no developer documentation** for the API (the docs site has no page and the blog has no post), so it can still shift without a migration note. Full analysis written up at `ha-wifi-ssid-monitor/.notes/issues/custom_trigger_condition/wifi_trigger_options.md`, since the same decision applies there.
+
+## [3.3.0-dev2] - 2026-07-27 - Unreleased - IQS Compliance Pass
+
+Full `SCAN=Full` IQS pass (`iqs_next_steps`), run immediately after the `dev_standards` work in `3.3.0-dev1` because several rules were last assessed against code that no longer looked the same. 51 of 54 rules validated DONE or exempt against source on the first pass; the three gaps found are all closed here. **`zte_router_5g` is now 48 `done` / 6 `exempt` / 0 outstanding across the canonical 54 rules.**
+
+### Fixed
+
+- **User-Facing Exceptions Were Not Translatable** (IQS Gold `exception-translations` — was a **false DONE**): nine `HomeAssistantError` raises carried plain f-string messages with no `translation_domain` or `translation_key`, and `strings.json` had **no `exceptions` block at all**. Every one of them reached the user as untranslated English in a failed action dialog or button-press error. Seven were in `__init__.py` (the four SMS action handlers plus three coordinator target-resolution failures) and two in `button.py` (Reboot, Delete All SMS).
+  - All nine now use `translation_domain=DOMAIN` + `translation_key`, with interpolated values moved to `translation_placeholders`.
+  - A 9-key `exceptions` block was added to **both** `strings.json` and `translations/en.json`.
+  - The rule had been marked `done` since v1.4.3 on the strength of a `quality_scale.yaml` comment asserting _"No custom service exceptions required"_ — which was simply untrue, and is why it survived every prior pass. The comment has been replaced.
+
+### Changed
+
+- **Target-Resolution Failures Reclassified to `ServiceValidationError`**: "no active entries found" and "multiple routers configured — specify entry_id" are faults in how the action was **called**, which the user can correct, rather than failures of the integration. `ServiceValidationError` is the correct type and Home Assistant presents it differently. `HomeAssistantError` is retained for "router is not ready" and for the six genuine operation failures.
+- **`quality_scale.yaml` — five stale comments refreshed.** Each described an implementation that had since moved on, and collectively they are the same record decay that let the `exception-translations` false DONE stand:
+  - `diagnostics` still said "redacts sensitive fields (password, username, IPs)" — it is now a four-layer sanitizer, and the SMS body and sender no longer survive at all.
+  - `repair-issues` listed only `sms_storage_full`; `firmware_contract_drift` was added in `3.3.0-dev1`.
+  - `parallel-updates` and `entity-translations` both said five platform files; there are six — `select` was missing from both lists, and the entity count was 51 against an actual 77 keys.
+  - `icon-translations` predated the `services` block added in `3.3.0-dev1`.
+
+### Added
+
+- **`docs-conditions` and `docs-triggers` recorded as `exempt`**: both rules were missing entirely from `quality_scale.yaml` (52 of the canonical 54) and unassessed in the compliance matrix. The integration provides no `condition.py`, `trigger.py`, `conditions.yaml` or `triggers.yaml`, and no corresponding `strings.json` blocks. Note the `zte_router_5g_sms_received` bus **event** is not a trigger platform and does not change this. The file now matches the canonical rule set exactly, in canonical order.
+- **`test_every_raised_exception_has_translated_text`**: walks every `HomeAssistantError` / `ServiceValidationError` raise in the component, asserts each carries a `translation_key`, and asserts every key resolves in **both** translation files. An untranslated raise added later fails the suite rather than quietly reintroducing this defect.
+
+### Tests
+
+- **381 → 382 tests.** Twelve existing tests needed updating for an instructive reason: a translated exception resolves its message through `hass` at `str()` time, so `pytest.raises(..., match="Failed to send SMS")` now raises `async_get_hass called from the wrong thread` under a mocked hass. Assertions were moved to `err.value.translation_key`, which is both the fix and the better assertion — it survives any future wording or translation change.
+
+### Records
+
+- **`ha_quality_standard.md`**: `exception-translations` DONE→PARTIAL→DONE, `docs-conditions` and `docs-triggers` `-`→N/A in the `zte_router_5g` column. Version entries **v1.15.0** (the scan) and **v1.15.1** (the implementation) appended.
+- **Verification checks** all passed on coverage, before and after: cross-table verdict diff 54/54 compared with no mismatches; code-to-artefact reconciliation clean across all six platforms; `quality_scale.yaml`-vs-matrix 54/54 compared with no conflicts (up from 52, now that the two missing rules exist).
+
+### Notes
+
+- **The one Check B finding is benign and deliberately not "fixed".** `system_uptime_duration` has no `icons.json` entry, but carries `SensorDeviceClass.DURATION` and so renders a device-class default. `dev_standards.md` §12 explicitly exempts device-class-derived icons; adding an entry would be harmless but is not required.
+
 ## [3.3.0-dev1] - 2026-07-27 - Unreleased - dev_standards Conformance Pass
 
 Brings the integration into full conformance with the PlayFaster `dev_standards.md`, following the first `dev_std_review` pass on this project. 18 of 21 sections now DONE, 2 N/A, 1 accepted deviation (§3). Test suite 297 → 381, coverage 99%, `mypy --strict` and all pre-commit hooks clean.
@@ -54,6 +224,15 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **New `tests/test_options_lifecycle.py`**: Asserts host and password changes reload while slider and pause do not, and exercises the real `logout()` rather than a double.
 - **New `tests/test_entity_hygiene.py`**: Guards rounding, the unrecorded-attribute decisions, icon coverage, and that every `translation_key` and repair key resolves in **both** `strings.json` and `translations/en.json` — compared against the code, not file-to-file.
 - **New `tests/test_diagnostics_sanitization.py`**: 35 property tests over `json.dumps(result)` with wholly synthetic fixtures, asserting no identifier survives anywhere, tokens are stable across sections, and the non-identifying substance is still present. The old key-presence tests it replaces were the kind §20 identifies as inadequate.
+
+### Documentation
+
+- **README — Example Automations reworked**: Every automation now carries inline `note:` annotations on its triggers, conditions and actions, matching the style used in `unifi_network_monitor` and `wifi_ssid_monitor`. The notes explain _why_ a value was chosen (why the APN failover waits five minutes, why SMS forwarding needs `mode: queued`, why the auto-reboot duration is deliberately long) rather than restating what the YAML already says. All examples gained an explicit `description:` and `mode:`.
+- **README — five new automation examples**: **Auto-Reboot on a Prolonged Outage** (cross-checks Integration Health before acting, so it does not reboot on the strength of a stale held value), **Cell Tower Change Alert**, **Firmware Change Notification** (paired with the contract-drift detection added this release), **Dynamic Polling Interval**, and **Force a Fresh Reading Before Reporting** (demonstrates that explicit actions now fetch while paused). Polling examples were grouped under a new **Polling Control Automations** heading.
+- **README — cross-linking**: Use Cases, Features and the SMS section now link directly to the relevant worked example, following the pattern in `wifi_ssid_monitor`. Two new Use Cases added: _Unattended Recovery_ and _Knowing When the Integration Itself Is Wrong_. All 31 internal anchors verified to resolve.
+- **README — new content for this release's behaviour**: Integration Health added to the entity table; new **Self-Diagnosis** and **Session Handling** subsections under Technical Architecture; per-endpoint resilience and forced-refresh documented alongside the 3-strike explanation; the "why can't I access the web UI" FAQ extended to cover session release on unload.
+- **`docs/DEVELOPMENT.md`**: Eight new success patterns and four new pitfalls, including the `goformId=LOGOUT` `AD`-token trap **and why the obvious verification cannot detect it** (the ZTE web UI always accepts a login and evicts the existing session, so it reports success whether logout worked or not). Recorded the §3 deviation and the config-entry migration constraint under Technical Debt.
+- **`AGENTS.md`**: Coordinator, API, `__init__`, platform and diagnostics descriptions brought current with the force-refresh, per-endpoint, health-snapshot, options-listener and sanitizer behaviour.
 
 ### Notes
 
@@ -108,16 +287,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 

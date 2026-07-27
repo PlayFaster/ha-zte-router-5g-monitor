@@ -6,11 +6,13 @@ once a strike budget is exhausted, and whether a success clears the verdict in
 the same cycle. The success path says nothing about any of it.
 """
 
+from contextlib import suppress
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -18,10 +20,11 @@ from custom_components.zte_router_5g.api import ZTEConnectionError, ZTERouterAPI
 from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
     DOMAIN,
+    FETCH_STRIKE_LIMIT,
+    UNREACHABLE_STRIKE_LIMIT,
 )
 from custom_components.zte_router_5g.coordinator import (
     ENDPOINT_SMS_MESSAGES,
-    STRIKE_LIMIT,
     ZTERouterDataUpdateCoordinator,
 )
 
@@ -132,7 +135,7 @@ async def test_failing_sms_endpoint_does_not_blank_the_integration(
         side_effect=ZTEConnectionError("sms endpoint down")
     )
 
-    for _ in range(STRIKE_LIMIT + 1):
+    for _ in range(FETCH_STRIKE_LIMIT + 1):
         data = await coordinator._async_update_data()
         # The mandatory fetch keeps working throughout.
         assert data["network_type"] == "ENDC"
@@ -157,7 +160,7 @@ async def test_endpoint_holds_last_good_within_budget(coordinator) -> None:
 async def test_endpoint_recovers(coordinator) -> None:
     """A success resets the endpoint's strike count."""
     coordinator.api.get_sms_messages = AsyncMock(side_effect=ZTEConnectionError("down"))
-    for _ in range(STRIKE_LIMIT + 1):
+    for _ in range(FETCH_STRIKE_LIMIT + 1):
         await coordinator._async_update_data()
     assert coordinator.endpoint_available(ENDPOINT_SMS_MESSAGES) is False
 
@@ -206,11 +209,11 @@ async def test_health_flags_at_runtime_strike_limit(coordinator) -> None:
     coordinator.data = dict(GOOD_DATA)
     coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("down"))
 
-    for _ in range(STRIKE_LIMIT):
+    for _ in range(FETCH_STRIKE_LIMIT):
         await coordinator._async_update_data()
 
     assert coordinator.health_snapshot["problem"] is True
-    assert coordinator.health_snapshot["consecutive_failures"] == STRIKE_LIMIT
+    assert coordinator.health_snapshot["consecutive_failures"] == FETCH_STRIKE_LIMIT
 
 
 async def test_health_clears_in_the_same_cycle_as_a_success(coordinator) -> None:
@@ -218,7 +221,7 @@ async def test_health_clears_in_the_same_cycle_as_a_success(coordinator) -> None
     await coordinator._async_update_data()
     coordinator.data = dict(GOOD_DATA)
     coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("down"))
-    for _ in range(STRIKE_LIMIT):
+    for _ in range(FETCH_STRIKE_LIMIT):
         await coordinator._async_update_data()
     assert coordinator.health_snapshot["problem"] is True
 
@@ -242,7 +245,7 @@ async def test_health_detects_contract_drift(coordinator) -> None:
     coordinator.api.get_all_data = AsyncMock(
         return_value={"totally_different_key": "1", "another_new_one": "2"}
     )
-    for _ in range(STRIKE_LIMIT):
+    for _ in range(FETCH_STRIKE_LIMIT):
         await coordinator._async_update_data()
 
     assert coordinator.health_snapshot["problem"] is True
@@ -261,11 +264,11 @@ async def test_drift_needs_no_verdict_before_a_baseline(coordinator) -> None:
 async def test_health_reports_degraded_endpoint_on_success(coordinator) -> None:
     """A dead optional endpoint shows up even while the poll succeeds."""
     coordinator.api.get_sms_messages = AsyncMock(side_effect=ZTEConnectionError("down"))
-    for _ in range(STRIKE_LIMIT + 1):
+    for _ in range(FETCH_STRIKE_LIMIT + 1):
         await coordinator._async_update_data()
 
     assert coordinator.health_snapshot["problem"] is True
-    assert coordinator.health_snapshot["degraded"] == ["SMS messages"]
+    assert coordinator.health_snapshot["degraded_capabilities"] == ["SMS messages"]
 
 
 async def test_health_reports_degraded_endpoint_during_a_total_outage(
@@ -278,19 +281,79 @@ async def test_health_reports_degraded_endpoint_during_a_total_outage(
     one combination neither single-failure test covers.
     """
     coordinator.api.get_sms_messages = AsyncMock(side_effect=ZTEConnectionError("down"))
-    for _ in range(STRIKE_LIMIT + 1):
+    for _ in range(FETCH_STRIKE_LIMIT + 1):
         await coordinator._async_update_data()
     coordinator.data = dict(GOOD_DATA)
 
     coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("down"))
-    for _ in range(STRIKE_LIMIT):
+    for _ in range(FETCH_STRIKE_LIMIT):
         await coordinator._async_update_data()
 
     snapshot = coordinator.health_snapshot
     assert snapshot["problem"] is True
-    assert snapshot["degraded"] == ["SMS messages"]
+    assert snapshot["degraded_capabilities"] == ["SMS messages"]
     assert any("consecutive failures" in issue for issue in snapshot["issues"])
     assert any("Degraded" in issue for issue in snapshot["issues"])
+
+
+async def test_unreachable_repair_waits_out_a_reboot(coordinator, hass) -> None:
+    """Three strikes is a router reboot, not a fault worth a Repair.
+
+    Raising at FETCH_STRIKE_LIMIT would put a Repair on screen every time the user
+    restarts their router, which is the Repairs-panel noise Section 19 warns
+    against.
+    """
+    registry = ir.async_get(hass)
+    await coordinator._async_update_data()
+    coordinator.data = dict(GOOD_DATA)
+    coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("down"))
+
+    for _ in range(UNREACHABLE_STRIKE_LIMIT - 1):
+        with suppress(UpdateFailed):
+            await coordinator._async_update_data()
+
+    assert coordinator.health_snapshot["problem"] is True
+    assert registry.async_get_issue(DOMAIN, "router_unreachable") is None
+
+
+async def test_unreachable_repair_raised_after_sustained_failure(
+    coordinator, hass
+) -> None:
+    """A condition that has stopped resolving itself earns a Repair."""
+    registry = ir.async_get(hass)
+    await coordinator._async_update_data()
+    coordinator.data = dict(GOOD_DATA)
+    coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("down"))
+
+    for _ in range(UNREACHABLE_STRIKE_LIMIT):
+        with suppress(UpdateFailed):
+            await coordinator._async_update_data()
+
+    issue = registry.async_get_issue(DOMAIN, "router_unreachable")
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.ERROR
+    # The text names the host so the user can compare it against the router's
+    # actual address — the single most useful fact when an IP has changed.
+    assert issue.translation_placeholders["host"] == "192.168.0.1"
+    assert "router_unreachable" in coordinator.health_snapshot["repairs"]
+
+
+async def test_unreachable_repair_clears_on_recovery(coordinator, hass) -> None:
+    """One successful poll clears it, however long it was raised."""
+    registry = ir.async_get(hass)
+    await coordinator._async_update_data()
+    coordinator.data = dict(GOOD_DATA)
+    coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("down"))
+    for _ in range(UNREACHABLE_STRIKE_LIMIT):
+        with suppress(UpdateFailed):
+            await coordinator._async_update_data()
+    assert registry.async_get_issue(DOMAIN, "router_unreachable") is not None
+
+    coordinator.api.get_all_data = AsyncMock(return_value=dict(GOOD_DATA))
+    await coordinator._async_update_data()
+
+    assert registry.async_get_issue(DOMAIN, "router_unreachable") is None
+    assert coordinator.health_snapshot["repairs"] == []
 
 
 async def test_health_computation_never_crashes_the_update(coordinator) -> None:

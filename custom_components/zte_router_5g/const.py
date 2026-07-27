@@ -27,3 +27,16 @@ CONF_STOP_POLLING = "stop_polling"
 # and password: live-applying a connection change would leave the running API
 # client pointed at the old device with the old credentials.
 LIVE_OPTION_KEYS = frozenset({CONF_SCAN_INTERVAL, CONF_STOP_POLLING})
+
+# Consecutive failures tolerated before entities are marked unavailable
+# (dev_standards Section 8 — the "3-strike" rule). Applied both globally and,
+# independently, to each optional endpoint. Named to match
+# `unifi_network_monitor`, which uses the same constant for the same purpose.
+FETCH_STRIKE_LIMIT = 3
+
+# Consecutive failures before a Repair is raised for a router that is simply not
+# answering. Deliberately far above FETCH_STRIKE_LIMIT: three strikes is a few
+# minutes and would fire on every router reboot. Ten consecutive failures means
+# the condition has stopped resolving itself, which is what makes it worth a
+# Repair rather than just an unavailable entity (Section 19, second tier).
+UNREACHABLE_STRIKE_LIMIT = 10

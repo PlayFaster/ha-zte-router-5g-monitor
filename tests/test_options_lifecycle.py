@@ -11,6 +11,7 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.zte_router_5g import _async_options_updated
 from custom_components.zte_router_5g.api import ZTEConnectionError, ZTERouterAPI
 from custom_components.zte_router_5g.const import (
     CONF_SCAN_INTERVAL,
@@ -142,6 +143,26 @@ async def test_pausing_does_not_reload(hass: HomeAssistant, entry, mock_api) -> 
             entry, options={**entry.options, CONF_STOP_POLLING: True}
         )
         await hass.async_block_till_done()
+
+    schedule_reload.assert_not_called()
+
+
+async def test_options_listener_is_a_noop_without_a_coordinator(
+    hass: HomeAssistant, entry
+) -> None:
+    """The listener must tolerate firing with no runtime_data.
+
+    `runtime_data` is set during setup and torn down by Home Assistant on
+    unload, so there is a window in which the listener can be invoked with
+    nothing to act on. Reloading — or dereferencing the coordinator — would
+    raise, and an exception here surfaces as an unhandled error in the config
+    entry pipeline rather than anywhere useful.
+    """
+    entry.add_to_hass(hass)
+    assert getattr(entry, "runtime_data", None) is None
+
+    with patch.object(hass.config_entries, "async_schedule_reload") as schedule_reload:
+        await _async_options_updated(hass, entry)
 
     schedule_reload.assert_not_called()
 

@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -83,7 +83,11 @@ def _get_coordinator(
         if entry and entry.domain == DOMAIN:
             if hasattr(entry, "runtime_data") and entry.runtime_data:
                 return cast(ZTERouterDataUpdateCoordinator, entry.runtime_data)
-            raise HomeAssistantError(f"Router {entry.title} is not ready")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="entry_not_ready",
+                translation_placeholders={"title": entry.title},
+            )
 
     # No entry_id given: auto-select only when exactly one router is loaded.
     entries = [
@@ -93,10 +97,18 @@ def _get_coordinator(
     ]
     if len(entries) == 1:
         return cast(ZTERouterDataUpdateCoordinator, entries[0].runtime_data)
+
+    # ServiceValidationError rather than HomeAssistantError: both of these are
+    # faults in how the action was called, which the user can correct, not
+    # failures of the integration itself.
     if not entries:
-        raise HomeAssistantError("No active ZTE Router 5G entries found")
-    raise HomeAssistantError(
-        "Multiple ZTE Router 5G routers are configured — specify entry_id"
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="no_entries_found",
+        )
+    raise ServiceValidationError(
+        translation_domain=DOMAIN,
+        translation_key="multiple_entries",
     )
 
 
@@ -110,7 +122,11 @@ async def async_send_sms(hass: HomeAssistant, call: ServiceCall) -> None:
         for num in target:
             await coordinator.api.send_sms(num, message)
     except Exception as err:
-        raise HomeAssistantError(f"Failed to send SMS: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="send_sms_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
 
 
 async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -122,7 +138,11 @@ async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
         await coordinator.api.delete_sms(str(index))
         await coordinator.async_force_refresh()
     except Exception as err:
-        raise HomeAssistantError(f"Failed to delete SMS: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="delete_sms_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
 
 
 async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -143,7 +163,11 @@ async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
 
         await coordinator.async_force_refresh()
     except Exception as err:
-        raise HomeAssistantError(f"Failed to delete all SMS: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="delete_all_sms_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
 
 
 async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str, Any]:
@@ -180,7 +204,11 @@ async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str
             raw_msgs = nv_msgs + sim_msgs
             raw_msgs.sort(key=lambda x: x.get("date", ""), reverse=True)
     except Exception as err:
-        raise HomeAssistantError(f"Failed to fetch SMS list: {err}") from err
+        raise HomeAssistantError(
+            translation_domain=DOMAIN,
+            translation_key="get_sms_list_failed",
+            translation_placeholders={"error": str(err)},
+        ) from err
 
     filtered_msgs = [m for m in raw_msgs if str(m.get("tag")) in target_tags]
 

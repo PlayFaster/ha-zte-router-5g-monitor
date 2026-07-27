@@ -16,8 +16,15 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from ._compat import device_by_identifier
 from .api import ZTEAuthError, ZTERouterAPI
-from .const import CONF_SCAN_INTERVAL, CONF_STOP_POLLING, DOMAIN
+from .const import (
+    CONF_SCAN_INTERVAL,
+    CONF_STOP_POLLING,
+    DOMAIN,
+    FETCH_STRIKE_LIMIT,
+    UNREACHABLE_STRIKE_LIMIT,
+)
 from .helpers import get_router_model
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,10 +34,6 @@ _LOGGER = logging.getLogger(__name__)
 # to reject small downward blips from coarse resolution or stale readings.
 UPTIME_REBOOT_MARGIN = 30
 
-# Consecutive failures tolerated before entities are marked unavailable
-# (dev_standards Section 8 — the "3-strike" rule). Applied both globally and,
-# independently, to each optional endpoint.
-STRIKE_LIMIT = 3
 
 # Optional endpoints that hold their own last-good payload and strike count, so
 # one flaky endpoint degrades only its own entities (Section 8, per-endpoint
@@ -49,6 +52,15 @@ CORE_KEYS = (
     "wa_inner_version",
     "realtime_time",
     "wan_connect_status",
+)
+
+# The single drift finding this integration can report. Section 19 requires the
+# `drift` attribute to be a list of findings, so the message lives here rather
+# than inline: the health sensor publishes it and the `issues` list repeats it,
+# and the two must not be able to drift apart from each other.
+DRIFT_CONTRACT = (
+    "Router returned data but none of the expected fields were present — "
+    "the firmware may have changed its API"
 )
 
 
@@ -85,7 +97,8 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             "problem": False,
             "issues": [],
             "severity": "ok",
-            "degraded": [],
+            "degraded_capabilities": [],
+            "drift": [],
             "repairs": [],
             "last_good_update": None,
             "consecutive_failures": 0,
@@ -93,6 +106,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._drift_baseline: set[str] = set()
         self._drift_strikes = 0
         self._drift_repair_raised = False
+        self._unreachable_repair_raised = False
         self._sms_storage_full = False
 
         # Snapshot of the non-live options this entry was set up with; the
@@ -161,7 +175,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         property, so an endpoint that has exhausted its own strike budget marks
         only its own entities unavailable (Section 8).
         """
-        return self._endpoint_failures.get(source, 0) <= STRIKE_LIMIT
+        return self._endpoint_failures.get(source, 0) <= FETCH_STRIKE_LIMIT
 
     async def _fetch_optional(
         self,
@@ -194,7 +208,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     source,
                     err,
                 )
-            elif failures == STRIKE_LIMIT + 1:
+            elif failures == FETCH_STRIKE_LIMIT + 1:
                 _LOGGER.error(
                     "%s: Endpoint '%s' failed %d times; marking its entities "
                     "unavailable: %s",
@@ -209,10 +223,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     self.entry.title,
                     source,
                     failures,
-                    STRIKE_LIMIT,
+                    FETCH_STRIKE_LIMIT,
                     err,
                 )
-            if failures <= STRIKE_LIMIT and source in self._endpoint_cache:
+            if failures <= FETCH_STRIKE_LIMIT and source in self._endpoint_cache:
                 return self._endpoint_cache[source]
             return default
 
@@ -346,8 +360,14 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                         or f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
                     )
                     dev_reg = dr.async_get(self.hass)
-                    device = dev_reg.async_get_device(
-                        identifiers={(DOMAIN, f"{sub_id_prefix}_system")}
+                    # async_get_device(identifiers=…) is deprecated in HA 2026.8
+                    # and removed in 2027.8; the shim feature-detects the scoped
+                    # replacement.
+                    device = device_by_identifier(
+                        dev_reg,
+                        DOMAIN,
+                        f"{sub_id_prefix}_system",
+                        self.entry.entry_id,
                     )
                     if device:
                         dev_reg.async_update_device(
@@ -373,7 +393,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         except TimeoutError as err:
             self.consecutive_failures += 1
             self._record_health_failure(err)
-            if self.data is not None and self.consecutive_failures <= STRIKE_LIMIT:
+            if (
+                self.data is not None
+                and self.consecutive_failures <= FETCH_STRIKE_LIMIT
+            ):
                 if self.consecutive_failures == 1:
                     _LOGGER.warning(
                         "%s: Error fetching ZTE data, holding last known values: %s",
@@ -395,7 +418,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         except ZTEAuthError as err:
             self.consecutive_failures += 1
             self._record_health_failure(err)
-            if self.data is not None and self.consecutive_failures <= STRIKE_LIMIT:
+            if (
+                self.data is not None
+                and self.consecutive_failures <= FETCH_STRIKE_LIMIT
+            ):
                 if self.consecutive_failures == 1:
                     _LOGGER.warning(
                         "%s: Authentication failed, holding last known values: %s",
@@ -422,7 +448,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             self.consecutive_failures += 1
             self._record_health_failure(err)
             # Failure resilience — hold last known values for three cycles
-            if self.data is not None and self.consecutive_failures <= STRIKE_LIMIT:
+            if (
+                self.data is not None
+                and self.consecutive_failures <= FETCH_STRIKE_LIMIT
+            ):
                 if self.consecutive_failures == 1:
                     _LOGGER.warning(
                         "%s: Error fetching ZTE data, holding last known values: %s",
@@ -468,7 +497,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         return [
             friendly.get(source, source)
             for source, failures in self._endpoint_failures.items()
-            if failures > STRIKE_LIMIT
+            if failures > FETCH_STRIKE_LIMIT
         ]
 
     def _active_repairs(self, drift: bool) -> list[str]:
@@ -478,7 +507,39 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             active.append("sms_storage_full")
         if drift:
             active.append("firmware_contract_drift")
+        if self._unreachable_repair_raised:
+            active.append("router_unreachable")
         return active
+
+    def _set_unreachable_repair(self, unreachable: bool) -> None:
+        """Raise or clear the router-unreachable repair issue.
+
+        Raised only after UNREACHABLE_STRIKE_LIMIT consecutive failures, so a
+        reboot or a passing network blip never reaches it. Deliberately does not
+        diagnose a cause: ten failed fetches means the router is not answering,
+        which could be power, cabling, a changed IP, changed credentials or the
+        device itself. The repair text lists what to check rather than asserting
+        which one it is. Cleared by the next successful poll.
+        """
+        if unreachable == self._unreachable_repair_raised:
+            return
+        if unreachable:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                "router_unreachable",
+                is_fixable=False,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key="router_unreachable",
+                translation_placeholders={
+                    "name": self.entry.title,
+                    "host": str(self.entry.options.get(CONF_HOST, "unknown")),
+                    "count": str(self.consecutive_failures),
+                },
+            )
+        else:
+            ir.async_delete_issue(self.hass, DOMAIN, "router_unreachable")
+        self._unreachable_repair_raised = unreachable
 
     def _set_drift_repair(self, drift: bool) -> None:
         """Raise or clear the contract-drift repair issue.
@@ -531,7 +592,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             return False
 
         self._drift_strikes += 1
-        return self._drift_strikes >= STRIKE_LIMIT
+        return self._drift_strikes >= FETCH_STRIKE_LIMIT
 
     def _record_health_success(self, data: dict[str, Any]) -> None:
         """Refresh the health snapshot after a successful cycle.
@@ -546,12 +607,13 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             if degraded:
                 issues.append(f"Degraded: {', '.join(degraded)}")
 
+            # A success means the router answered, so the unreachable repair is
+            # cleared in the same cycle regardless of how long it was raised.
+            self._set_unreachable_repair(False)
+
             drift = self._check_contract_drift(data)
-            if drift:
-                issues.append(
-                    "Router returned data but none of the expected fields were "
-                    "present — the firmware may have changed its API"
-                )
+            drift_findings = [DRIFT_CONTRACT] if drift else []
+            issues.extend(drift_findings)
             self._set_drift_repair(drift)
 
             # Reflect an existing repair rather than double-raising it — the
@@ -563,7 +625,8 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 "problem": bool(issues),
                 "issues": issues,
                 "severity": "warning" if drift else ("degraded" if degraded else "ok"),
-                "degraded": degraded,
+                "degraded_capabilities": degraded,
+                "drift": drift_findings,
                 "repairs": self._active_repairs(drift),
                 "last_good_update": (
                     self.last_update_success_time.isoformat()
@@ -585,7 +648,8 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 "problem": False,
                 "issues": [],
                 "severity": "unknown",
-                "degraded": [],
+                "degraded_capabilities": [],
+                "drift": [],
                 "last_good_update": None,
                 "consecutive_failures": 0,
             }
@@ -602,7 +666,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         """
         try:
             cold_start = self.data is None
-            problem = cold_start or self.consecutive_failures >= STRIKE_LIMIT
+            problem = cold_start or self.consecutive_failures >= FETCH_STRIKE_LIMIT
 
             issues: list[str] = []
             if problem:
@@ -621,11 +685,19 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             if degraded:
                 issues.append(f"Degraded: {', '.join(degraded)}")
 
+            self._set_unreachable_repair(
+                self.consecutive_failures >= UNREACHABLE_STRIKE_LIMIT
+            )
+
             self.health_snapshot = {
                 "problem": problem or bool(degraded),
                 "issues": issues,
                 "severity": "error" if problem else ("degraded" if degraded else "ok"),
-                "degraded": degraded,
+                "degraded_capabilities": degraded,
+                # No payload arrived, so no drift verdict is possible. Reported
+                # empty rather than held from the last cycle, matching the
+                # `_active_repairs(False)` call above.
+                "drift": [],
                 "repairs": self._active_repairs(False),
                 "last_good_update": (
                     self.last_update_success_time.isoformat()

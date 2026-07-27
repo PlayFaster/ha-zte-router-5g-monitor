@@ -295,14 +295,47 @@
       }
     }
   },
-  "issues": {
-    "sms_storage_full": {
-      "title": "SMS Storage Full",
-      "description": "The router's NV SMS storage is full ({nv_total}/{nv_able} messages). Use the Delete All button to clear messages and restore normal SMS reception."
+  "exceptions": {
+    "entry_not_ready": {
+      "message": "The router {title} is not ready. It may still be starting up, or Home Assistant may not have reached it yet."
     },
+    "no_entries_found": {
+      "message": "No active ZTE Router 5G integration was found. Check that the integration is set up and loaded."
+    },
+    "multiple_entries": {
+      "message": "More than one ZTE router is configured. Specify which one to use with the entry_id field."
+    },
+    "send_sms_failed": {
+      "message": "Failed to send the SMS: {error}"
+    },
+    "delete_sms_failed": {
+      "message": "Failed to delete the SMS: {error}"
+    },
+    "delete_all_sms_failed": {
+      "message": "Failed to delete the SMS messages: {error}"
+    },
+    "get_sms_list_failed": {
+      "message": "Failed to fetch the SMS list from the router: {error}"
+    },
+    "reboot_failed": {
+      "message": "Failed to reboot the router: {error}"
+    },
+    "delete_all_button_failed": {
+      "message": "Failed to delete all SMS messages: {error}"
+    }
+  },
+  "issues": {
     "firmware_contract_drift": {
       "title": "ZTE router firmware may have changed its API",
       "description": "{name} is polling successfully, but none of the data fields the integration expects are present in the response. This usually means a router firmware update renamed or removed them, which would leave many sensors blank without any obvious error.\n\nPlease report this, including your router model and firmware version, so the integration can be updated. This message clears automatically once recognisable data is received again."
+    },
+    "router_unreachable": {
+      "title": "ZTE router is not responding",
+      "description": "{name} has failed to reach the router at {host} on {count} consecutive attempts, so its entities are unavailable.\n\nTen failures in a row means the problem is not clearing on its own. Common causes, roughly in order of likelihood:\n\n- **The router is powered off, or has locked up.** Power it off, wait a few seconds, and power it back on.\n- **Its IP address has changed.** Many routers get a new address after a power cut or a DHCP lease change. Check the router's current address and, if it differs from `{host}`, use **Reconfigure** on the integration to update it. A static DHCP reservation prevents this recurring.\n- **The login details have changed.** If the router's password was changed, use **Reconfigure** to enter the new one.\n- **The network path is broken** — a cable, switch, VLAN or firewall rule between Home Assistant and the router.\n\nThis message clears automatically as soon as the router answers again."
+    },
+    "sms_storage_full": {
+      "title": "SMS Storage Full",
+      "description": "The router's NV SMS storage is full ({nv_total}/{nv_able} messages). Use the Delete All button to clear messages and restore normal SMS reception."
     }
   },
   "options": {

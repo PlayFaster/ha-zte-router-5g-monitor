@@ -715,11 +715,16 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
     # the state itself. The eight SMS counters are a breakdown of a state that
     # is already recorded, so keeping them would store the same movement twice.
     #
-    # Deliberately still recorded: `sntp_server1` and `sntp_dst_enable`. They
-    # are static configuration, cost effectively nothing, and a change to them
-    # is genuinely worth being able to see in history.
+    # Section 14: every attribute this entity can publish is listed here. The
+    # default is total — attributes carry detail that does not merit its own
+    # entity, not history. `sntp_server1` and `sntp_dst_enable` were previously
+    # exempted as "static config worth seeing in history"; that justification
+    # does not survive the rule, since anyone who needs their history should
+    # have them as an entity or a template sensor.
     _unrecorded_attributes = frozenset(
         {
+            "sntp_server1",
+            "sntp_dst_enable",
             "id",
             "number",
             "date",

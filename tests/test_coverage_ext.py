@@ -361,8 +361,9 @@ async def test_button_reboot_exception(
     mock_coordinator.api.reboot.side_effect = Exception("Reboot Fail")
     button = ZTERebootButton(mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION)
 
-    with pytest.raises(HomeAssistantError, match="Reboot failed"):
+    with pytest.raises(HomeAssistantError) as err:
         await button.async_press()
+    assert err.value.translation_key == "reboot_failed"
     mock_coordinator.api.reboot.assert_called_once()
 
 
@@ -380,8 +381,9 @@ async def test_button_delete_sms_exception(
         mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
     )
 
-    with pytest.raises(HomeAssistantError, match="Delete SMS failed"):
+    with pytest.raises(HomeAssistantError) as err:
         await button.async_press()
+    assert err.value.translation_key == "delete_all_button_failed"
     mock_coordinator.api.delete_all.assert_called_once()
 
 

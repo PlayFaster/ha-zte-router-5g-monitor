@@ -57,38 +57,42 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 ## 🎯 Use Cases
 
 - **Signal Monitoring**: Near-real-time and historical 5G/LTE signal data enable the monitoring of router performance.
-  - **Best Signal**: Use signal diagnostics (RSRP, SNR) to optimize the physical placement or orientation of your router.
-  - **Performance Tracking**: Use signal history to check whether the performance from your 5G/LTE ISP is stable or changing.
-  - **Connection Quality**: Know if your router has dropped to a lower-capability 4G/LTE only connection.
-- **Data Cap Management**: Create automations to get notified when your usage crosses a threshold you set (for example, as you approach your monthly data limit) to avoid unexpected overage charges on limited 5G plans.
-- **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your phone via SMS if your primary internet connection goes down.
+  - **Best Signal**: Use signal diagnostics (RSRP, SNR) to optimize the physical placement or orientation of your router. → [Morning Signal Report](#-force-a-fresh-reading-before-reporting) example.
+  - **Performance Tracking**: Use signal history to check whether the performance from your 5G/LTE ISP is stable or changing. → [Cell Tower Change Alert](#-cell-tower-change-alert) example.
+  - **Connection Quality**: Know if your router has dropped to a lower-capability 4G/LTE only connection. → [Signal Quality Alert](#-signal-quality-alert) example.
+- **Data Cap Management**: Create automations to get notified when your usage crosses a threshold you set (for example, as you approach your monthly data limit) to avoid unexpected overage charges on limited 5G plans. → [Data Usage Alert](#-data-usage-alert) example.
+- **Unattended Recovery**: Fail over to a backup APN, or restart the router, when the connection stops recovering on its own. → [APN Failover](#-apn-failover--network-selection) and [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) examples.
+- **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your phone via SMS if your primary internet connection goes down. → [Forward Incoming SMS](#-forward-incoming-sms-to-mobile) example.
   - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
+- **Knowing When the Integration Itself Is Wrong**: A firmware update can rename the fields this integration reads, leaving sensors blank with no obvious error. The Integration Health sensor reports that case directly. → [Integration Health Problem Alert](#-integration-health-problem-alert) and [Firmware Change Notification](#-firmware-change-notification) examples.
 
 ## ✅ Features
 
 ### 📡 Advanced 5G/LTE Diagnostics
 
 - **Detailed Signal Metrics**: RSRP, RSRQ, RSSI, and SNR for both the 5G NR and the LTE anchor cell.
-- **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active frequency bands/channels.
-- **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use.
+- **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active frequency bands/channels. See the [Cell Tower Change Alert](#-cell-tower-change-alert) example.
+- **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use. See the [Signal Quality Alert](#-signal-quality-alert) example.
 
 ### 📉 Data Usage Tracking
 
-- **Monthly Data Usage**: Track your monthly download, upload and total data usage.
+- **Monthly Data Usage**: Track your monthly download, upload and total data usage. See the [Data Usage Alert](#-data-usage-alert) example.
 - **Session Usage**: Track your download and upload for this session (i.e. since last router restart).
 - **Download & Upload Speed**: Track your upload and download speeds. Note: This is valid, but only at the instant data was fetched from the router.
 
 ### 📋 Essential Router Management
 
-- **Router Management**: Reboot the device directly from the HA UI.
+- **Router Management**: Reboot the device directly from the HA UI, by hand or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
+- **Self-Diagnosis**: An **Integration Health** binary sensor reports the integration's own degradation — including a poll that _succeeded_ but returned nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
 - **100% Local**: No cloud account or internet access required.
 
 ### 🔄 Dynamic Polling
 
 This integration features **dynamic polling**, the ability to pause polling completely or to change the polling interval.
 
-- **Pause Polling**: Switch to halt polling when you need uninterrupted access to the router's web UI (ZTE only allows a single active login session).
-- **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour, default 180s) via a number entity or automation.
+- **Pause Polling**: Switch to halt polling when you need uninterrupted access to the router's web UI (ZTE only allows a single active login session). See the [Auto-Resume Polling](#-auto-resume-polling) example.
+- **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour, default 180s) via a number entity or automation. See the [Dynamic Polling Interval](#-dynamic-polling-interval) example.
+- **Explicit Actions Always Fetch**: **Refresh Now**, a settings change or an SMS action fetches immediately **even while paused** — only scheduled polls are suppressed. See the [Force a Fresh Reading](#-force-a-fresh-reading-before-reporting) example.
 
 > [!TIP]
 >
@@ -98,7 +102,7 @@ This integration features **dynamic polling**, the ability to pause polling comp
 
 ### 💬 SMS Management Actions
 
-Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers, and four service actions for full programmatic control.
+Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers ([example](#-forward-incoming-sms-to-mobile)), and four service actions for full programmatic control ([inbox cleanup](#-automated-inbox-maintenance) and [on-demand query](#-fetch-and-process-inbox-via-automation) examples).
 
 - The `Recent Msg` sensor displays the most recent message received **OR** _sent_.
 - In the examples below, the `entry_id:` of your router, where required, is drop-down menu selectable from the editor GUI.
@@ -287,46 +291,89 @@ Entity IDs below use the default prefix zte_5g. If you set a custom name during 
 
 #### 📨 Forward Incoming SMS to Mobile
 
-This automation fires when a new SMS is detected and forwards the content to your mobile phone.
+<details>
+
+<summary> &nbsp; &nbsp; This automation fires when a new SMS is detected and forwards the content to your mobile phone.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
 
 ```yaml
 alias: "SMS: Forward to Mobile"
+description: "Forwards the content of any newly received SMS to a notification"
+mode: queued
+max: 10
 triggers:
   - trigger: event
     event_type: zte_router_5g_sms_received
+    note: |
+      Fires once per genuinely new message. Messages already on the router when Home
+      Assistant starts are recorded silently as a baseline, so a restart never replays
+      your whole inbox into this automation.
 actions:
-  - action: notify.mobile_app_your_phone
+  - action: persistent_notification.create
     data:
       title: "New SMS from {{ trigger.event.data.phone }}"
       message: "{{ trigger.event.data.content }}"
+    note: |
+      The event payload carries phone, content, date and index. Use index with the
+      delete_sms action if you want to remove the message after handling it.
 ```
+
+> [!NOTE] `mode: queued` matters here — several messages can arrive in one poll cycle, and the default `single` mode would silently drop all but the first.
+
+---
+
+</details>
 
 #### 🧹 Automated Inbox Maintenance
 
-Keep your router's SMS storage clean by automatically deleting old messages while keeping the most recent ones for safety.
+<details>
+
+<summary> &nbsp; &nbsp; Keep your router's SMS storage clean by automatically deleting old messages while keeping the most recent ones for safety.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
 
 ```yaml
 alias: "SMS: Weekly Inbox Cleanup"
+description: "Deletes stored SMS weekly, keeping the five most recent"
+mode: single
 triggers:
   - trigger: time
     at: "03:00:00"
+    note: Overnight, so the deletion never competes with a poll you are watching.
 conditions:
   - condition: time
     weekday:
       - sun
+    note: Weekly is usually enough; raise the frequency if your router fills up faster.
 actions:
   - action: zte_router_5g.delete_all_sms
     data:
       entry_id: <your_config_entry_id> # This is GUI selectable in the Automation Editor.
       keep_last: 5
+    note: |
+      keep_last preserves the newest N messages. Set it to 0 to clear the inbox
+      entirely. The action refreshes the coordinator afterwards, so the SMS counters
+      update immediately rather than at the next scheduled poll - and it does so even
+      if Pause Polling is on.
 ```
+
+---
+
+</details>
 
 #### 📜 Fetch and Process Inbox via Automation
 
-Example of using the `get_sms_list` action response in an automation to count messages from a specific sender.
+<details>
+
+<summary> &nbsp; &nbsp; Example of using the `get_sms_list` action response in an automation to count messages from a specific sender.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
 
 ```yaml
 alias: "SMS: Count OTP Messages"
+description: "Queries the inbox on demand and counts messages from one sender"
+mode: single
 triggers:
   - trigger: time
     at: "09:00:00"
@@ -340,81 +387,151 @@ actions:
       entry_id: <your_config_entry_id> # This is GUI selectable in the Automation Editor.
       count: 50
     response_variable: inbox
+    note: |
+      This action performs its own fetch rather than reading the Recent Msg sensor, so
+      it keeps working even if the SMS entities are disabled - and it returns the full
+      message list, which is far too bulky to hold as a sensor attribute.
   - action: notify.persistent_notification
     data:
       message: |
         You have {{ inbox.messages | selectattr('phone', 'search', 'MY_BANK') |
         list | count }} messages from your bank in the inbox.
+    note: |
+      Each entry in inbox.messages has index, phone, content, date and read. Filter on
+      any of them; use index to feed the delete_sms action.
 ```
 
-### 📡 APN Failover & Network Selection
+---
 
-Automatically switch to a backup APN profile if the primary connection goes offline.
+</details>
+
+### 📡 Connection, Data & Signal Automations
+
+#### 📡 APN Failover & Network Selection
+
+<details>
+
+<summary> &nbsp; &nbsp; Automatically switch to a backup APN profile if the primary connection goes offline.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
 
 ```yaml
 alias: "APN: Switch Profile on Network Failure"
 description: "Switch to a backup APN profile if the primary WAN connection drops."
+mode: single
 triggers:
   - trigger: state
     entity_id: sensor.zte_5g_signal_wan_connect_status
     to: "disconnected"
     for: "00:05:00"
+    note: |
+      The 5 minute hold matters. The integration already holds last-known values for
+      three consecutive failed polls before reporting anything, so a value that has
+      stayed "disconnected" for five minutes is a real outage rather than a blip.
 conditions:
   - condition: state
     entity_id: select.zte_5g_signal_apn_profile
     state: "primary_apn"
+    note: |
+      Only fail over from the primary. Without this the automation would flap back and
+      forth every time the backup APN also dropped.
 actions:
   - action: select.select_option
     target:
       entity_id: select.zte_5g_signal_apn_profile
     data:
       option: "backup_apn"
+    note: |
+      Replace both profile names with values from your own router - the options come
+      from the APN profiles it actually has configured. Selecting an option forces an
+      immediate poll, so the change is reflected in Home Assistant right away.
 ```
 
-### 🚨 Data Usage Alert
+---
 
-Monitor your data consumption and get notified when you approach your monthly limit. The example below assumes the data sensors display in **GB**. If your sensors are not in GB, check their unit and adjust the thresholds and templates accordingly.
+</details>
+
+#### 🚨 Data Usage Alert
+
+<details>
+
+<summary> &nbsp; &nbsp; Monitor your data consumption and get notified when you approach your monthly limit. The example below assumes the data sensors display in **GB**. If your sensors are not in GB, check their unit and adjust the thresholds and templates accordingly.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
 
 ```yaml
 alias: "ZTE: High Data Usage Alert"
+description: "Warns once when monthly data crosses a threshold"
+mode: single
 triggers:
   - trigger: numeric_state
     entity_id: sensor.zte_5g_data_monthly_total
     above: 500 # 500 GB - use 500000000000 if the sensor displays Bytes (B)
+    note: |
+      The sensor stores bytes and displays gigabytes. A numeric_state trigger compares
+      against the DISPLAYED value, so 500 means 500 GB here. Check the unit shown on
+      the entity before setting the number - see the note under this example.
 actions:
-  - action: notify.mobile_app_your_phone
+  - action: persistent_notification.create
     data:
       title: "ZTE Data Alert"
-      message: "Monthly data usage has exceeded 500GB."
+      message: |
+        Monthly data usage has reached
+        {{ states('sensor.zte_5g_data_monthly_total') }}
+        {{ state_attr('sensor.zte_5g_data_monthly_total', 'unit_of_measurement') }}.
+    note: |
+      Reading the unit from the entity keeps the message correct whether you are
+      displaying GB, MB or bytes. A numeric_state trigger fires only on the crossing,
+      so this notifies once rather than on every poll above the threshold.
 ```
 
-### 📶 Signal Quality Alert
+---
 
-Monitor for poor connection quality based on 5G status and signal metrics.
+</details>
+
+#### 📶 Signal Quality Alert
+
+<details>
+
+<summary> &nbsp; &nbsp; Monitor for poor connection quality based on 5G status and signal metrics.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
 
 ```yaml
 alias: "Signal: Poor Quality Connection Alert"
+description: "Notifies when connection quality degrades on any of four measures"
+mode: single
 triggers:
   - trigger: state
     entity_id:
       - binary_sensor.zte_5g_signal_best_connection
     to: "off"
     for: "00:05:00"
+    note: |
+      Best Connection is on only when the router has BOTH 5G ENDC and LTE carrier
+      aggregation active. It reports unknown rather than off before the first poll
+      completes, so a restart does not fire this.
   - trigger: state
     entity_id:
       - sensor.zte_5g_signal_network_type
     not_to: "ENDC"
     for: "00:05:00"
+    note: Dropped off 5G NSA entirely - usually the most noticeable of the four.
   - trigger: state
     entity_id:
       - sensor.zte_5g_signal_carrier_aggregation
     not_to: "ca_activated"
     for: "00:05:00"
+    note: Lost LTE carrier aggregation, which usually shows up as reduced throughput.
   - trigger: numeric_state
     entity_id:
       - sensor.zte_5g_signal_signal_bars
     below: 4
     for: "00:05:00"
+    note: |
+      Signal bars is the router's own 0-5 summary. Prefer RSRP or SINR if you want a
+      physically meaningful threshold; bars is coarse but matches what the router's
+      own UI shows.
 conditions:
   - condition: or
     conditions:
@@ -437,8 +554,12 @@ conditions:
             entity_id: sensor.zte_5g_signal_network_type
             state:
               - ENDC
+    note: |
+      Re-checking the same four measures as conditions means the notification only
+      fires if the degradation is still true when the action runs, not merely when
+      one of them briefly flickered.
 actions:
-  - action: notify.mobile_app_your_phone
+  - action: persistent_notification.create
     data:
       title: "Poor Signal Quality Detected"
       message: |
@@ -447,13 +568,24 @@ actions:
         - Best Connection: {{ states('binary_sensor.zte_5g_signal_best_connection') }}
         - Signal Bars: {{ states('sensor.zte_5g_signal_signal_bars') }}
         - CA: {{ states('sensor.zte_5g_signal_carrier_aggregation') }}
+    note: |
+      Reporting all four values together tells you which one actually degraded, which
+      is what you need to decide whether to reposition the router or just wait it out.
 ```
+
+---
+
+</details>
 
 ### 🩺 System Health & Connectivity Alerts
 
 #### 🩺 Integration Health Problem Alert
 
-Be told when the integration detects a fault in its own data.
+<details>
+
+<summary> &nbsp; &nbsp; Be told when the integration detects a fault in its own data.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
 
 The **Integration Health** binary sensor turns on when the integration's self-checks find a problem — the router unreachable for several consecutive polls, an SMS endpoint that has stopped responding, or a poll that _succeeded_ but returned none of the fields the integration expects (typically a firmware update renaming them). It stays **available even when every other entity has gone unavailable**, so it can report the fault that made the others unreliable.
 
@@ -481,47 +613,322 @@ actions:
         Last good update: {{ state_attr('binary_sensor.zte_5g_system_integration_health', 'last_good_update') }}
     note: |
       issues is a list of human-readable problem descriptions. The sensor also carries
-      severity (ok / degraded / warning / error), degraded (the names of any failed
+      severity (ok / degraded / warning / error), degraded_capabilities (names of failed
       endpoints), repairs (the repair issues currently raised), and consecutive_failures.
 ```
 
 > [!TIP] To alert only on the serious cases and ignore ordinary connectivity blips, add a condition on the `severity` attribute: `{{ state_attr('binary_sensor.zte_5g_system_integration_health', 'severity') == 'warning' }}` fires only for a suspected firmware API change, which is the condition that also raises a Repair.
 
+---
+
+</details>
+
 #### 🔄 Router Reboot Alert
 
-Monitor for router reboots by watching the device boot timestamp sensor.
+<details>
+
+<summary> &nbsp; &nbsp; Monitor for router reboots by watching the device boot timestamp sensor.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
 
 ```yaml
 alias: "ZTE: Router Reboot Alert"
+description: "Notifies when the router's boot timestamp moves, indicating a restart"
+mode: single
 triggers:
   - trigger: template
     value_template: |
       {% set uptime = states('sensor.zte_5g_system_device_uptime') | as_datetime %}
       {{ uptime is not none and (now() - uptime).total_seconds() < 120 }}
+    note: |
+      Device Uptime is a timestamp of when the router booted, not a counter. The
+      integration latches that instant and only re-derives it when the router's uptime
+      counter genuinely drops, so it does not drift between reboots - which is what
+      makes this template reliable rather than noisy.
 actions:
-  - action: notify.mobile_app_your_phone
+  - action: persistent_notification.create
     data:
       title: "ZTE Router Rebooted"
       message: "The router has rebooted. Boot Time: {{ states('sensor.zte_5g_system_device_uptime') }}"
+    note: Swap in notify.mobile_app_your_phone to get this on your phone instead.
 ```
 
-### 🔁 Auto-Resume Polling
+---
 
-Ensure polling is turned back on automatically if someone forgets to resume it after managing the router.
+</details>
+
+#### 🔁 Auto-Reboot on a Prolonged Outage
+
+<details>
+
+<summary> &nbsp; &nbsp; Recover automatically from a wedged connection by restarting the router.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
+
+> [!WARNING] This reboots your router unattended. Keep the trigger duration generous and `mode: single`, or a flapping connection can put the router into a reboot loop that stops it recovering on its own.
+
+```yaml
+alias: "ZTE: Auto-Reboot on Prolonged Outage"
+description: "Reboots the router after a sustained WAN outage"
+mode: single
+max_exceeded: silent
+triggers:
+  - trigger: state
+    entity_id: sensor.zte_5g_signal_wan_connect_status
+    to: "disconnected"
+    for:
+      minutes: 30
+    note: |
+      Deliberately long. Mobile networks drop and re-establish routinely, and a reboot
+      costs several minutes of downtime - so this should only fire for an outage that
+      has clearly stopped resolving itself.
+conditions:
+  - condition: state
+    entity_id: binary_sensor.zte_5g_system_integration_health
+    state: "off"
+    note: |
+      Cross-check against the integration's own health verdict. Health being off means
+      polling is succeeding, so "disconnected" is trustworthy live data rather than a
+      stale value being held while fetches fail - in which case rebooting would be
+      treating the wrong problem.
+actions:
+  - action: button.press
+    target:
+      entity_id: button.zte_5g_system_reboot
+    note: The router drops off the network for a few minutes; entities go unavailable.
+  - delay:
+      minutes: 10
+    note: |
+      Holding the automation open for 10 minutes with mode:single means it cannot
+      re-trigger while the router is still coming back up.
+  - action: persistent_notification.create
+    data:
+      title: "ZTE Router Rebooted Automatically"
+      message: |
+        The WAN was disconnected for 30 minutes, so the router was rebooted.
+        Status is now: {{ states('sensor.zte_5g_signal_wan_connect_status') }}
+```
+
+---
+
+</details>
+
+#### 📻 Cell Tower Change Alert
+
+<details>
+
+<summary> &nbsp; &nbsp; Be told when the router re-homes to a different cell, which often explains a sudden change in speed or signal.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
+
+```yaml
+alias: "ZTE: Serving Cell Changed"
+description: "Notifies when the router attaches to a different cell tower"
+mode: single
+triggers:
+  - trigger: state
+    entity_id: sensor.zte_5g_signal_cell_id
+    note: |
+      No to: or from: - any change fires this, and Cell ID only changes when the
+      serving cell actually changes.
+conditions:
+  - condition: template
+    value_template: "{{ trigger.from_state.state not in ['unknown', 'unavailable', none] }}"
+    note: |
+      Suppresses the first reading after a restart, which would otherwise look like a
+      tower change every time Home Assistant boots.
+actions:
+  - action: persistent_notification.create
+    data:
+      title: "ZTE: Serving Cell Changed"
+      message: |
+        Cell ID {{ trigger.from_state.state }} → {{ trigger.to_state.state }}
+        Band: {{ states('sensor.zte_5g_signal_lte_active_band') }}
+        RSRP: {{ states('sensor.zte_5g_signal_lte_rsrp') }} dBm
+    note: |
+      Reporting the new band and signal alongside the change is what makes this useful
+      - a tower change with worse RSRP is the usual explanation for a sudden slowdown.
+```
+
+---
+
+</details>
+
+#### 🧩 Firmware Change Notification
+
+<details>
+
+<summary> &nbsp; &nbsp; Know when the router updates itself. A firmware change is the most likely cause of the integration's data shape shifting underneath it.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
+
+```yaml
+alias: "ZTE: Firmware Version Changed"
+description: "Notifies when the router reports a different firmware version"
+mode: single
+triggers:
+  - trigger: state
+    entity_id: sensor.zte_5g_system_firmware_version
+    note: |
+      ZTE CPEs can update firmware without warning. Worth knowing about, because a
+      firmware change can rename the API fields the integration reads - exactly the
+      condition the Integration Health sensor watches for.
+conditions:
+  - condition: template
+    value_template: "{{ trigger.from_state.state not in ['unknown', 'unavailable', none] }}"
+    note: Ignores the first reading after a restart.
+actions:
+  - action: persistent_notification.create
+    data:
+      title: "ZTE Router Firmware Changed"
+      message: |
+        {{ trigger.from_state.state }} → {{ trigger.to_state.state }}
+
+        If sensors start showing Unknown after this, check Integration Health and open
+        an issue quoting both version numbers.
+    note: |
+      If the update did break the API, Integration Health turns on and raises a Repair
+      within a few poll cycles.
+```
+
+---
+
+</details>
+
+### 🔄 Polling Control Automations
+
+#### 🔁 Auto-Resume Polling
+
+<details>
+
+<summary> &nbsp; &nbsp; Ensure polling is turned back on automatically if someone forgets to resume it after managing the router.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
 
 ```yaml
 alias: "ZTE: Auto-Resume Polling"
 description: "Turn polling back on after 1 hour if it was manually paused."
+mode: single
 triggers:
   - trigger: state
     entity_id: switch.zte_5g_system_pause_polling
     to: "on"
     for: "01:00:00"
+    note: |
+      Pausing frees the router's single login session so you can use its web UI. This
+      is the safety net for forgetting to switch it back.
 actions:
   - action: switch.turn_off
     target:
       entity_id: switch.zte_5g_system_pause_polling
+    note: |
+      Resuming triggers an immediate fetch, so the entities catch up straight away
+      rather than waiting for the next scheduled poll.
 ```
+
+---
+
+</details>
+
+#### 🔄 Dynamic Polling Interval
+
+<details>
+
+<summary> &nbsp; &nbsp; Poll frequently when you are watching, and back off overnight to reduce load on the router and the recorder database.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
+
+```yaml
+alias: "ZTE: Set Polling Interval by Time of Day"
+description: "Tightens the poll interval during the day and relaxes it overnight"
+mode: single
+triggers:
+  - trigger: time
+    at: "07:00:00"
+    id: "day"
+    note: Switch to the responsive daytime cadence.
+  - trigger: time
+    at: "23:00:00"
+    id: "night"
+    note: Back off overnight.
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: "day"
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: number.zte_5g_system_polling_interval
+            data:
+              value: 60
+            note: |
+              Poll every 60 seconds. Changing the interval applies immediately without
+              reloading the integration, so no entity becomes briefly unavailable - and
+              it also forces one fetch straight away.
+      - conditions:
+          - condition: trigger
+            id: "night"
+        sequence:
+          - action: number.set_value
+            target:
+              entity_id: number.zte_5g_system_polling_interval
+            data:
+              value: 900
+            note: |
+              Poll every 15 minutes. Use the Pause Polling switch instead if you want
+              no polling at all rather than less of it.
+```
+
+---
+
+</details>
+
+#### 🔍 Force a Fresh Reading Before Reporting
+
+<details>
+
+<summary> &nbsp; &nbsp; Read genuinely current values in a report or dashboard refresh, rather than whatever the last scheduled poll happened to leave behind.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
+
+```yaml
+alias: "ZTE: Morning Signal Report"
+description: "Forces a fresh poll, then reports current signal quality"
+mode: single
+triggers:
+  - trigger: time
+    at: "08:00:00"
+actions:
+  - action: button.press
+    target:
+      entity_id: button.zte_5g_system_refresh_now
+    note: |
+      Refresh Now fetches immediately even if Pause Polling is on - explicit user
+      actions always reach the router, only scheduled polls respect the pause.
+  - delay:
+      seconds: 15
+    note: |
+      Give the fetch time to complete and the entities time to update before reading
+      them. 15s is comfortable; the coordinator's own timeout is 30s.
+  - action: persistent_notification.create
+    data:
+      title: "ZTE Morning Signal Report"
+      message: |
+        Network: {{ states('sensor.zte_5g_signal_network_type') }}
+        Bars: {{ states('sensor.zte_5g_signal_signal_bars') }}/5
+        LTE RSRP: {{ states('sensor.zte_5g_signal_lte_rsrp') }} dBm
+        5G RSRP: {{ states('sensor.zte_5g_signal_5g_rsrp') }} dBm
+        Monthly data: {{ states('sensor.zte_5g_data_monthly_total') }}
+        Reading taken: {{ states('sensor.zte_5g_system_last_updated') }}
+    note: |
+      Including Last Updated proves the report is fresh - if it does not move, the
+      forced fetch did not land and the numbers above are stale.
+```
+
+---
+
+</details>
 
 ## 📥 Installation
 
@@ -618,9 +1025,21 @@ The **Integration Health** binary sensor (System device) reports:
 
 - **Total outage** — the router unreachable. Flagged on the **first** failure at startup (there are no held values, so waiting would leave you with no explanation), or on the **third** consecutive failure at runtime. A success clears it in the same cycle.
 - **Degraded capability** — an optional endpoint that has exhausted its own strike budget.
-- **Contract drift** — a successful response containing none of the fields the integration expects, which usually means a firmware update renamed them. This also raises a **Repair** issue, since it needs reporting rather than waiting out.
+- **Contract drift** — a successful response containing none of the fields the integration expects, which usually means a firmware update renamed them.
 
 It is deliberately **available at all times**, including when every other entity has gone unavailable — a health sensor that disappears during an outage cannot explain the silence. See the [example automation](#-integration-health-problem-alert).
+
+#### 🔨 Repairs
+
+Some problems need you to do something, so they are also raised in Home Assistant's **Repairs** panel rather than only on a sensor. All three clear themselves automatically once the condition passes.
+
+| Repair | Raised when | Why it is a Repair |
+| :-- | :-- | :-- |
+| **Router is not responding** | 10 consecutive failed fetches | Ten failures in a row means the problem is not clearing on its own. The text lists what to check — power-cycle, whether the IP changed, whether the password changed, the network path. |
+| **Firmware may have changed its API** | 3 consecutive polls succeed but contain none of the expected fields | Nothing looks broken from the outside, but sensors will be blank. Needs reporting so the integration can be updated. |
+| **SMS storage is full** | The router's message store is at capacity | New messages will be rejected until some are deleted. |
+
+> [!NOTE] A brief outage — a router reboot, a passing network glitch — deliberately does **not** raise a Repair. Entities go unavailable after three failed polls, and Integration Health turns on, but the Repairs panel stays quiet until a problem has clearly stopped fixing itself.
 
 ### 🔐 Session Handling
 
@@ -642,13 +1061,29 @@ The router permits only **one login session at a time**. The integration release
 
 #### **"Failed to connect to router" Error**
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 - Verify the IP address is correct.
 - Confirm the username and password are correct (ZTE default is usually `admin`).
   - The username and password are the same as you use to login to the router via its webUI.
   - Username can be changed in the webUI, as well as password, so ensure you are using the current version of both.
 - Ensure the router is powered on and reachable from your Home Assistant instance.
 
+---
+
+</details>
+
 #### 🔒 **Why can't I access the router web UI while this integration is running?**
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 - ZTE routers typically only allow **one simultaneous login session**.
 - Use the **Pause Polling** switch in Home Assistant to halt polling before you log into the web UI.
@@ -656,16 +1091,53 @@ The router permits only **one login session at a time**. The integration release
 - **Note:** logging into the web UI evicts the integration's session. The integration re-authenticates on its next poll, so this is harmless — but it is also why pausing is the tidier approach.
 - Disabling or reloading the integration releases its session immediately, so you do not have to wait for it to time out.
 
+---
+
+</details>
+
 ### 📊 Diagnostics & Entity Values
 
 #### ❔ **Some sensors showing "Unknown"**
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 - Most sensors showing okay with some unknown **is expected behavior**.
   - The integration fetches everything it can from the router.
   - Not every metric is provided by every ISP or firmware version.
   - 5G NR sensors will show "Unknown" when the router is operating in LTE-only mode.
 
+---
+
+</details>
+
+#### 🔨 **A "Router is not responding" Repair has appeared**
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+- This means the integration failed to reach the router **10 times in a row**, so the problem is not resolving on its own. A reboot or a brief glitch will never raise it.
+- Work through the checks in the Repair itself, in order: power-cycle the router; check whether its IP address has changed (the Repair names the address currently configured, so you can compare); check whether the router's password was changed; check the network path between Home Assistant and the router.
+- If the address or the password has changed, use **Reconfigure** on the integration to update it. A static DHCP reservation for the router prevents the address changing again.
+- The Repair clears itself as soon as the router answers.
+
+---
+
+</details>
+
 #### 🛑 **All sensors showing "Unavailable" or "Unknown"**
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 - This is normal during a router reboot or if the router is temporarily unreachable.
   - The integration will automatically recover once the connection is restored.
@@ -673,6 +1145,10 @@ The router permits only **one login session at a time**. The integration release
   - Ensure you can log into the router's web UI (confirms it is up and the password is correct).
   - Check your Home Assistant logs for specific error messages.
   - Delete and re-add the integration.
+
+---
+
+</details>
 
 ## ❗ Known Limitations /❔ What's Missing?
 
@@ -685,18 +1161,46 @@ The router permits only **one login session at a time**. The integration release
 
 To remove the integration from Home Assistant:
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 1. Go to **Settings > Devices & Services**.
 2. Find the **ZTE Router 5G Monitor** card and click into it.
 3. Click the **three dots** (⋮) next to the gear icon and select **Delete**.
 4. Confirm deletion.
 
+> [!NOTE]
+>
+> This integration writes **no files** of its own to `config/.storage` — the only things it stores are the config entry itself (host, credentials, and the discovered model / firmware / IMEI) and its entities and devices, all of which Home Assistant removes for you when the entry is deleted.
+>
+> Home Assistant keeps recorded history and entity customizations independently of the integration, so re-adding later picks up much where it left off.
+
+---
+
+</details>
+
+<br>
+
 To fully uninstall (HACS):
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 1. Go to **HACS**.
 2. Find **ZTE Router 5G Monitor** and click into it.
 3. Click the **three dots** (⋮) at the top right and select **Remove**.
 4. Restart Home Assistant.
 5. Home Assistant automatically removes all associated entities and device entries from the registry when the integration is deleted.
+
+---
+
+</details>
 
 ## 📝 Maintenance Status
 

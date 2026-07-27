@@ -183,7 +183,8 @@ class ZTEIntegrationHealthSensor(
         {
             "issues",
             "severity",
-            "degraded",
+            "degraded_capabilities",
+            "drift",
             "repairs",
             "last_good_update",
             "consecutive_failures",
@@ -226,7 +227,8 @@ class ZTEIntegrationHealthSensor(
         return {
             "issues": snapshot.get("issues", []),
             "severity": snapshot.get("severity", "unknown"),
-            "degraded": snapshot.get("degraded", []),
+            "degraded_capabilities": snapshot.get("degraded_capabilities", []),
+            "drift": snapshot.get("drift", []),
             "repairs": snapshot.get("repairs", []),
             "last_good_update": snapshot.get("last_good_update"),
             "consecutive_failures": snapshot.get("consecutive_failures", 0),
@@ -248,6 +250,15 @@ class ZTERouterBinarySensor(
 
     _attr_has_entity_name = True
     entity_description: ZTEBinarySensorEntityDescription
+
+    # Section 14: every key any description's `extra_attrs_fn` can return. The
+    # attributes are built by a lambda on the description, so this set cannot be
+    # derived automatically — `test_no_entity_publishes_a_recorded_attribute`
+    # is the guard, and it sweeps live entities precisely because a static
+    # check cannot see through the lambda.
+    _unrecorded_attributes = frozenset(
+        {"reboot_hour1", "reboot_min1", "reboot_hour2", "reboot_min2"}
+    )
 
     def __init__(
         self,

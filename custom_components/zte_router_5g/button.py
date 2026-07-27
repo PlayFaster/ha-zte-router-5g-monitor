@@ -18,6 +18,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .helpers import build_device_info
 
@@ -119,7 +120,11 @@ class ZTERebootButton(ZTEButton):
             await self.coordinator.api.reboot()
         except Exception as err:
             _LOGGER.error("%s: Reboot failed: %s", self._entry.title, err)
-            raise HomeAssistantError(f"Reboot failed: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="reboot_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
 
 class ZTEDeleteAllSMSButton(ZTEButton):
@@ -132,4 +137,8 @@ class ZTEDeleteAllSMSButton(ZTEButton):
             await self.coordinator.async_force_refresh()
         except Exception as err:
             _LOGGER.error("%s: Delete SMS failed: %s", self._entry.title, err)
-            raise HomeAssistantError(f"Delete SMS failed: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="delete_all_button_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err

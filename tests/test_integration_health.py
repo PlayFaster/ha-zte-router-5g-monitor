@@ -20,9 +20,9 @@ from custom_components.zte_router_5g.binary_sensor import (
     INTEGRATION_HEALTH_DESCRIPTION,
     ZTEIntegrationHealthSensor,
 )
-from custom_components.zte_router_5g.const import DOMAIN
+from custom_components.zte_router_5g.const import DOMAIN, FETCH_STRIKE_LIMIT
 from custom_components.zte_router_5g.coordinator import (
-    STRIKE_LIMIT,
+    DRIFT_CONTRACT,
     ZTERouterDataUpdateCoordinator,
 )
 
@@ -132,7 +132,7 @@ async def test_clears_on_recovery_in_the_same_cycle(health, coordinator) -> None
     await coordinator._async_update_data()
     coordinator.data = dict(GOOD_DATA)
     coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("down"))
-    for _ in range(STRIKE_LIMIT):
+    for _ in range(FETCH_STRIKE_LIMIT):
         await coordinator._async_update_data()
     assert health.is_on is True
 
@@ -157,18 +157,38 @@ async def test_drift_raises_and_clears_a_repair_issue(
     await coordinator._async_update_data()
 
     coordinator.api.get_all_data = AsyncMock(return_value={"renamed_everything": "1"})
-    for _ in range(STRIKE_LIMIT):
+    for _ in range(FETCH_STRIKE_LIMIT):
         await coordinator._async_update_data()
 
     assert health.is_on is True
     assert "firmware_contract_drift" in health.extra_state_attributes["repairs"]
     assert registry.async_get_issue(DOMAIN, "firmware_contract_drift") is not None
 
+    # The repair is the actionable signal; `drift` is the published detail a
+    # template can read. Both must be set, or the sensor raises an alarm it
+    # cannot explain.
+    assert health.extra_state_attributes["drift"] == [DRIFT_CONTRACT]
+
     coordinator.api.get_all_data = AsyncMock(return_value=dict(GOOD_DATA))
     await coordinator._async_update_data()
 
     assert registry.async_get_issue(DOMAIN, "firmware_contract_drift") is None
     assert health.extra_state_attributes["repairs"] == []
+    assert health.extra_state_attributes["drift"] == []
+
+
+async def test_publishes_the_section_19_attribute_contract(health) -> None:
+    """The Section 19 attribute names are a published contract, not internal.
+
+    Users write templates against these, so a rename is a breaking change and a
+    missing one silently yields an empty template value. `auth_mode` is
+    legitimately absent — this integration has a single auth mode — but `drift`
+    is not, because a contract-drift check exists (`_check_contract_drift`).
+    """
+    attrs = health.extra_state_attributes
+    for name in ("severity", "issues", "degraded_capabilities", "drift"):
+        assert name in attrs, f"dev_standards Section 19 requires '{name}'"
+    assert "last_good_update" in attrs
 
 
 async def test_existing_repair_is_reflected_not_double_raised(

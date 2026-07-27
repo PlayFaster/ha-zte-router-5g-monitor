@@ -25,15 +25,17 @@ Data flows in one direction: **`api.py` → `coordinator.py` → platform entiti
   - A GET request to `wa_inner_version` is executed inside `login()` immediately after obtaining a new `stok` to fully initialize/activate the session on the router, enabling subsequent POST commands.
   - Two exception types drive everything downstream: `ZTEAuthError` (bad credentials → reauth) vs `ZTEConnectionError` (network/transient). Raise the right one.
   - SMS content/numbers are hex-encoded on the wire; `_hex_decode` / `_parse_date` produce the `*_decoded` fields entities and services consume.
+  - Full interface reference — every `cmd` and `goformId`, the auth and `AD` chains, and the failure modes of this API: [`docs/zte_how_to_access.md`](docs/zte_how_to_access.md).
   - `logout()` ends the router session on unload. It **must** send an `AD` token like every other state-changing command — without one the router answers `{"result":"failure"}` and leaves the session live. It is best-effort: it swallows its own errors and always clears local state, because an unreachable router must never block unload.
 
 - **`coordinator.py` (`ZTERouterDataUpdateCoordinator`)** — polling + resilience layer.
-  - **Failure resilience**: on timeout/auth/generic errors it holds the last known values for up to `STRIKE_LIMIT` (3) consecutive failures before marking entities unavailable (`UpdateFailed`). After 3 auth failures it triggers reauth via `ConfigEntryAuthFailed`.
+  - **Failure resilience**: on timeout/auth/generic errors it holds the last known values for up to `FETCH_STRIKE_LIMIT` (3, in `const.py`) consecutive failures before marking entities unavailable (`UpdateFailed`). After 3 auth failures it triggers reauth via `ConfigEntryAuthFailed`.
   - **Per-endpoint resilience**: `_fetch_optional()` gives each optional endpoint (the two SMS calls) its own last-good payload and strike count; entities fed by one consult `endpoint_available(source)` in their `available` property. `get_all_data` is mandatory and stays on the global path. `ZTEAuthError` is re-raised rather than absorbed so reauth still fires.
   - **Dynamic polling**: `CONF_STOP_POLLING` returns cached data without hitting the router (the router allows only one login session, so pausing frees the web UI); `CONF_SCAN_INTERVAL` sets the interval.
   - **Force refresh**: `async_force_refresh()` sets a one-shot flag consumed **before** the pause check, so explicit user actions fetch even while paused. Every write action and the Refresh Now button route through it — never `async_request_refresh()` directly, which the pause short-circuit swallows.
   - **Self-diagnosis**: `health_snapshot` is a coordinator attribute (deliberately **not** in `coordinator.data`, which is `None` before first success and frozen during an outage) written on both the success and failure paths. It reports total outage (first failure at cold start, 3rd at runtime), degraded endpoints, and contract drift — a successful response containing none of `CORE_KEYS`, which also raises the `firmware_contract_drift` repair.
-  - Detects new SMS by timestamp + per-message hash and fires the `zte_router_5g_sms_received` bus event; raises a repair issue when SMS storage is full. `_check_sms_storage` runs **before** the health snapshot so the repair state it reflects is current.
+  - Detects new SMS by timestamp + per-message hash and fires the `zte_router_5g_sms_received` bus event. `_check_sms_storage` runs **before** the health snapshot so the repair state it reflects is current.
+  - **Three repair issues**, all auto-clearing: `sms_storage_full` (store at capacity), `firmware_contract_drift` (3 successful polls returning none of `CORE_KEYS`), and `router_unreachable` (`UNREACHABLE_STRIKE_LIMIT` = **10** consecutive failures — deliberately far above the 3-strike unavailability threshold, so a router reboot never raises it). A Repair requires **persistence plus agency**: the condition must have stopped resolving itself _and_ there must be something the user can do. Adding a fourth needs that test applied, not just a `translation_key`.
   - Persists a stable `boot_time` into `entry.data` so the uptime timestamp doesn't jitter. The boot instant is latched once and only re-derived when the router's uptime counter drops by more than `UPTIME_REBOOT_MARGIN` (a genuine reboot); missing/garbage uptime readings leave the latched value untouched. `last_uptime` is persisted alongside `boot_time` as the reboot-detection anchor.
 
 - **`__init__.py`** — entry setup forwards platforms **immediately**, then runs login + first refresh in a background task (`async_create_background_task`) so HA startup isn't blocked. Also registers the SMS services at domain level. The coordinator is stored on `entry.runtime_data`, not `hass.data`. `async_unload_entry` calls `api.logout()` after unloading platforms.
@@ -61,6 +63,27 @@ There is **no** `async_migrate_entry`, which is safe only because the first publ
 ## Key Patterns & Conventions
 
 Shared conventions (ruff/mypy strictness, `_LOGGER` prefixing, `PARALLEL_UPDATES`, `translation_key`, icons, exception tuple syntax, markdown emoji rules) are in [shared conventions §4–5](.shared/dev_std/agent_conventions.md). Nothing in this project deviates.
+
+### Raising user-facing exceptions
+
+Every raise that can reach a user must be translated — no f-string messages:
+
+```python
+raise HomeAssistantError(
+    translation_domain=DOMAIN,
+    translation_key="send_sms_failed",
+    translation_placeholders={"error": str(err)},
+) from err
+```
+
+- Add a matching entry to the `exceptions` block in **both** `strings.json` and `translations/en.json`.
+- Pick the type deliberately: **`ServiceValidationError`** when the caller got the call wrong and can fix it (no `entry_id` given when several routers exist); **`HomeAssistantError`** when the operation failed (the router rejected a reboot).
+- `test_every_raised_exception_has_translated_text` walks every raise in the component and fails on an untranslated one or a key missing from either file.
+- **Testing gotcha:** a translated exception resolves its message through `hass` at `str()` time, so `pytest.raises(..., match="some text")` fails under this suite's mocked hass with `async_get_hass called from the wrong thread`. Assert on `err.value.translation_key` instead.
+
+### Editing `quality_scale.yaml`
+
+Comments are plain multi-line block scalars, so a `": "` sequence in prose is parsed as a mapping and breaks the file. Write `X — because Y`, not `X: because Y`. Check with `grep -nE '^      .*: ' custom_components/zte_router_5g/quality_scale.yaml` before committing.
 
 ## Development Environment
 

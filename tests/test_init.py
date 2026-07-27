@@ -444,8 +444,10 @@ async def test_get_coordinator_with_entry_id_not_ready(mock_hass, mock_config_en
     mock_config_entry.runtime_data = None
     mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
 
-    with pytest.raises(HomeAssistantError, match="is not ready"):
+    with pytest.raises(HomeAssistantError) as err:
         _get_coordinator(mock_hass, {"entry_id": "test_entry"})
+
+    assert err.value.translation_key == "entry_not_ready"
 
 
 @pytest.mark.asyncio
@@ -457,8 +459,10 @@ async def test_get_coordinator_no_entries(mock_hass):
 
     mock_hass.config_entries.async_entries.return_value = []
 
-    with pytest.raises(HomeAssistantError, match="No active ZTE Router"):
+    with pytest.raises(HomeAssistantError) as err:
         _get_coordinator(mock_hass, {})
+
+    assert err.value.translation_key == "no_entries_found"
 
 
 @pytest.mark.asyncio
@@ -478,7 +482,7 @@ async def test_get_coordinator_single_entry_fallback(mock_hass, mock_config_entr
 @pytest.mark.asyncio
 async def test_get_coordinator_multiple_entries(mock_hass):
     """Test _get_coordinator requires entry_id when more than one router is loaded."""
-    from homeassistant.exceptions import HomeAssistantError
+    from homeassistant.exceptions import ServiceValidationError
 
     from custom_components.zte_router_5g import _get_coordinator
 
@@ -488,8 +492,13 @@ async def test_get_coordinator_multiple_entries(mock_hass):
     entry_b.runtime_data = MagicMock()
     mock_hass.config_entries.async_entries.return_value = [entry_a, entry_b]
 
-    with pytest.raises(HomeAssistantError, match="specify entry_id"):
+    # ServiceValidationError (a HomeAssistantError subclass) — the caller can fix
+    # this by naming an entry_id, so it is a validation fault, not an integration
+    # failure. The message is resolved through hass at render time, so the stable
+    # thing to assert on is the translation key.
+    with pytest.raises(ServiceValidationError) as err:
         _get_coordinator(mock_hass, {})
+    assert err.value.translation_key == "multiple_entries"
 
 
 @pytest.mark.asyncio
@@ -510,8 +519,10 @@ async def test_service_send_sms_exception(mock_hass, mock_config_entry):
     call = MagicMock(spec=ServiceCall)
     call.data = {"target": ["+123456"], "message": "test msg"}
 
-    with pytest.raises(HomeAssistantError, match="Failed to send SMS"):
+    with pytest.raises(HomeAssistantError) as err:
         await async_send_sms(mock_hass, call)
+
+    assert err.value.translation_key == "send_sms_failed"
 
 
 @pytest.mark.asyncio
@@ -532,8 +543,10 @@ async def test_service_delete_sms_exception(mock_hass, mock_config_entry):
     call = MagicMock(spec=ServiceCall)
     call.data = {"index": 5}
 
-    with pytest.raises(HomeAssistantError, match="Failed to delete SMS"):
+    with pytest.raises(HomeAssistantError) as err:
         await async_delete_sms(mock_hass, call)
+
+    assert err.value.translation_key == "delete_sms_failed"
 
 
 @pytest.mark.asyncio
@@ -554,8 +567,10 @@ async def test_service_delete_all_sms_exception(mock_hass, mock_config_entry):
     call = MagicMock(spec=ServiceCall)
     call.data = {"keep_last": 0}
 
-    with pytest.raises(HomeAssistantError, match="Failed to delete all SMS"):
+    with pytest.raises(HomeAssistantError) as err:
         await async_delete_all_sms(mock_hass, call)
+
+    assert err.value.translation_key == "delete_all_sms_failed"
 
 
 @pytest.mark.asyncio
@@ -617,8 +632,10 @@ async def test_service_get_sms_list_exception(mock_hass, mock_config_entry):
     call = MagicMock(spec=ServiceCall)
     call.data = {"page": 1, "count": 10, "box_type": 1}
 
-    with pytest.raises(HomeAssistantError, match="Failed to fetch SMS list"):
+    with pytest.raises(HomeAssistantError) as err:
         await async_get_sms_list(mock_hass, call)
+
+    assert err.value.translation_key == "get_sms_list_failed"
 
 
 @pytest.mark.asyncio

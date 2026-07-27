@@ -8,8 +8,15 @@ being recorded or a sensor starts storing twelve decimal places.
 import json
 import pathlib
 import re
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.binary_sensor import ZTEIntegrationHealthSensor
+from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import (
     SENSOR_TYPES,
     ZTERouterSensor,
@@ -52,11 +59,14 @@ def test_sms_sender_number_is_never_recorded() -> None:
     assert "number" in ZTERouterSensor._unrecorded_attributes
 
 
-def test_every_attribute_the_sensor_emits_was_evaluated() -> None:
-    """No attribute may be added without a recorded/unrecorded decision.
+def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
+    """Section 14: the default is total — no attribute is recorded.
 
-    `sntp_server1` and `sntp_dst_enable` are the deliberate exceptions: static
-    configuration, cheap to store, and worth seeing in history.
+    `sntp_server1` and `sntp_dst_enable` were previously exempted here as
+    "static configuration worth seeing in history". Section 14 (Standard
+    Version 1.12.0) withdrew that reasoning: attributes are not a history
+    mechanism, and a value whose history is genuinely wanted should be an
+    entity or a user template sensor.
     """
     emitted = {
         "id",
@@ -73,10 +83,7 @@ def test_every_attribute_the_sensor_emits_was_evaluated() -> None:
         "sntp_server1",
         "sntp_dst_enable",
     }
-    deliberately_recorded = {"sntp_server1", "sntp_dst_enable"}
-    assert emitted - deliberately_recorded == set(
-        ZTERouterSensor._unrecorded_attributes
-    )
+    assert emitted == set(ZTERouterSensor._unrecorded_attributes)
 
 
 def test_health_detail_is_unrecorded() -> None:
@@ -140,7 +147,33 @@ def test_translation_keys_resolve_in_both_files() -> None:
         data = _load(name)
         resolved = {k for platform in data["entity"].values() for k in platform}
         resolved |= set(data.get("issues", {}))
+        resolved |= set(data.get("exceptions", {}))
         assert not keys - resolved, f"{name} missing: {sorted(keys - resolved)}"
+
+
+def test_every_raised_exception_has_translated_text() -> None:
+    """A user-facing exception with no `exceptions` entry shows a raw key.
+
+    Every HomeAssistantError / ServiceValidationError reaching the user must
+    carry translation metadata and resolve in both files.
+    """
+    keys = set()
+    for path in COMPONENT.glob("*.py"):
+        source = path.read_text(encoding="utf-8")
+        for match in re.finditer(
+            r"raise (?:HomeAssistantError|ServiceValidationError)"
+            r"\((.*?)\)\s*(?:from|\n)",
+            source,
+            re.DOTALL,
+        ):
+            found = re.search(r'translation_key="(\w+)"', match.group(1))
+            assert found, f"untranslated raise in {path.name}: {match.group(1)[:60]}"
+            keys.add(found.group(1))
+
+    assert keys, "no exception raises found — the pattern has drifted"
+    for name in ("strings.json", "translations/en.json"):
+        defined = set(_load(name).get("exceptions", {}))
+        assert not keys - defined, f"{name} missing: {sorted(keys - defined)}"
 
 
 def test_every_repair_issue_has_translated_text() -> None:
@@ -151,3 +184,124 @@ def test_every_repair_issue_has_translated_text() -> None:
     for name in ("strings.json", "translations/en.json"):
         issues = set(_load(name).get("issues", {}))
         assert raised <= issues, f"{name} missing issue text for {raised - issues}"
+
+
+# --------------------------------------------------------------- Section 14
+# Runtime sweep: every attribute every live entity publishes must be excluded
+# from the recorder. This has to run against a real hass rather than by reading
+# source, because description-driven entities build their attributes from a
+# function on the entity description — no static check can see those keys.
+
+
+# Attributes deliberately left recorded, with the justification required by
+# Section 14. Empty by design: attributes carry detail that does not merit its
+# own entity, not history. Anything needing history should be an entity or a
+# user template sensor. Adding an entry here is a reviewable act; forgetting to
+# add a key to `_unrecorded_attributes` is not, which is the whole point.
+ALLOWED_RECORDED: frozenset[str] = frozenset()
+
+SWEEP_DATA = {
+    "network_type": "ENDC",
+    "signalbar": "4",
+    "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B01",
+    "model_name": "MC7010",
+    "realtime_time": "3600",
+    "wan_connect_status": "ppp_connected",
+    # Populate every branch of the description-driven attribute functions, or
+    # the sweep passes by finding nothing to check.
+    "sntp_server0": "0.pool.ntp.org",
+    "sntp_server1": "1.pool.ntp.org",
+    "sntp_dst_enable": "1",
+    "sms_nv_total": "10",
+    "sms_sim_total": "5",
+    "sms_nv_rev_total": "4",
+    "sms_nv_send_total": "3",
+    "sms_nv_draftbox_total": "1",
+    "sms_sim_rev_total": "2",
+    "sms_sim_send_total": "1",
+    "sms_sim_draftbox_total": "0",
+}
+
+
+@pytest.fixture(autouse=True)
+def _enable_custom_integrations(enable_custom_integrations):
+    """Make the custom component importable by the real hass fixture."""
+    return
+
+
+async def test_no_entity_publishes_a_recorded_attribute(hass: HomeAssistant) -> None:
+    """Section 14: `_unrecorded_attributes` must cover every published key.
+
+    The failure this guards is silent — a new attribute is simply written to
+    the recorder on every state change, and nothing errors. It is also the
+    failure that actually occurred: three of four PlayFaster integrations had
+    `_unrecorded_attributes` lagging `extra_state_attributes`.
+    """
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        unique_id="864155042229309",
+        title="ZTE 5G",
+        data={"model": "MC7010", "sw_version": "V1.0.0", "imei": "864155042229309"},
+        options={
+            CONF_HOST: "192.168.0.1",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "password",
+        },
+    )
+    entry.add_to_hass(hass)
+
+    # Force every disabled-by-default entity to be added. Without this the
+    # sweep silently skips them — they are never instantiated, so their
+    # attributes are never inspected, and the test passes while a whole class
+    # of entities goes unchecked. Verified by mutation: removing a key from
+    # `_unrecorded_attributes` on a disabled-by-default sensor did not fail
+    # this test until this patch was added.
+    with (
+        patch(
+            "homeassistant.helpers.entity.Entity.entity_registry_enabled_default",
+            property(lambda self: True),
+        ),
+        patch("custom_components.zte_router_5g.ZTERouterAPI") as api_class,
+    ):
+        api = api_class.return_value
+        api.protocol = "http"
+        api.try_set_protocol = AsyncMock(return_value=None)
+        api.login = AsyncMock(return_value="stok=test")
+        api.logout = AsyncMock(return_value=None)
+        api.get_all_data = AsyncMock(return_value=dict(SWEEP_DATA))
+        api.get_sms_capacity = AsyncMock(return_value={})
+        api.get_sms_messages = AsyncMock(
+            return_value=[
+                {
+                    "id": "1",
+                    "number_decoded": "+353871234567",
+                    "content_decoded": "hello",
+                    "date_decoded": "2026-07-27T10:00:00+00:00",
+                }
+            ]
+        )
+
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        checked = 0
+        offenders: list[str] = []
+        for component in hass.data["entity_components"].values():
+            for entity in component.entities:
+                if getattr(entity, "platform", None) is None:
+                    continue
+                if entity.platform.platform_name != DOMAIN:
+                    continue
+                published = set(entity.extra_state_attributes or {})
+                if not published:
+                    continue
+                checked += 1
+                leaked = published - entity._unrecorded_attributes - ALLOWED_RECORDED
+                if leaked:
+                    offenders.append(f"{entity.entity_id}: {sorted(leaked)}")
+
+    assert not offenders, "attributes published but recorded:\n" + "\n".join(offenders)
+    # Guard the guard: if the fixture stops producing attributes, the sweep
+    # would pass vacuously and go on passing after a real regression.
+    assert checked >= 3, f"sweep only inspected {checked} entities — fixture is stale"
