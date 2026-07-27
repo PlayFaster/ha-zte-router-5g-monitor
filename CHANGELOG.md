@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.0] - 2026-07-27 - Release
+
+### Summary
+
+- New **Integration Health** sensor: tells you when the integration is running fine but the data coming back from the router is not.
+- SMS actions no longer report an empty inbox when the router has quietly ended the integration's session.
+- New repair alert when the router has been unreachable for a long stretch.
+- Ready for Home Assistant 2026.8.
+
+### ⚠️ Action Required
+
+- **If an automation calls `get_sms_list`**: it now raises an error when the router cannot be reached, instead of returning an empty list. This is deliberate — it lets you tell "no messages" from "couldn't ask" — but an automation with no error handling will now stop rather than continue silently. Add `continue_on_error: true` to that step if you would rather it carried on.
+
+### Added
+
+- **Integration Health sensor**: a new diagnostic binary sensor on the System device that turns on when the integration detects a problem — including the case where a fetch _succeeds_ but returns nothing usable, which nothing else catches. Attributes carry the detail: `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, `last_good_update` and `consecutive_failures`. Raises a repair when the router's firmware appears to have renamed the fields the integration reads.
+- **Router Unreachable repair**: after 10 consecutive failed fetches, a repair appears in the Repairs panel. Set deliberately well above the 3 failures that mark entities unavailable, so an ordinary router reboot never triggers it.
+
+### Changed
+
+- **Diagnostic attributes are no longer written to history**: attributes on the SMS totals and SNTP sensors, and on the new health sensor, are excluded from the recorder database. They are still visible in Developer Tools and usable in templates — they are simply no longer stored, which keeps the database smaller. If you were graphing one of these attributes, it will stop accumulating history.
+- **Ready for Home Assistant 2026.8**: adapted to the device-registry changes in that release. No minimum-version change — the integration still supports 2024.8.0 and works on both old and new.
+- **Icons and branding** refreshed.
+
+### Fixed
+
+- **SMS actions could wrongly report an empty inbox**: this router allows only one login session, so logging into its web page ends the integration's. When that happened the router answered normally but with empty values, which the integration read as "no messages" rather than "no session" — so `get_sms_list` returned nothing while messages were sitting on the router. It now detects this, logs back in and retries.
+
+_Full technical detail for every change in this release is in [`docs/changelog_local.md`](docs/changelog_local.md)._
+
 ## [3.2.5] - 2026-07-03 - Release
 
 ### Added
