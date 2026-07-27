@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.0-dev9] - 2026-07-27 - Unreleased - No Manifest Bump - §9 Secret Pre-fill Guard
+
+Closes the last outstanding `**Test:**` tag for this project. **398 tests passing, 100% coverage, ruff clean, mypy strict clean.** This is now the first project covering **every tagged section that applies to it** — §6, §9, §10, §12, §14 `DONE`, §21 `N/A`.
+
+### Added
+
+- **`test_stored_secrets_are_never_pre_filled`** — feeds both `_user_schema` and `_edit_schema` an entry containing a sentinel password and asserts no secret-typed field carries it, either as a voluptuous `default` or as `description={"suggested_value": ...}`.
+
+  **The behaviour was already correct** — `_edit_schema` declares `CONF_PASSWORD` with `default=""` and documents why in its docstring, and `_merge_credentials` fills a blank field from the stored value. Nothing was broken. What did not exist was a guard, and this is a change someone makes in good faith: pre-filling the field looks like a convenience improvement, the screen looks right afterwards, and the stored password is exposed only when a user clicks the eye icon. `dev_standards` §9 records two projects having shipped exactly that.
+
+- **`test_no_field_leaks_the_stored_secret`** — asserts the sentinel appears nowhere in the rendered schema at all. The first test only inspects fields already known to be secret; this one catches the other shape, a stored password copied into a **non-secret** field, where the eye icon is not even needed to read it.
+
+  Both schemas are checked, including `_user_schema`. It takes a defaults dict today but is only called with `None` on the initial-setup path — covering it means a future change that starts seeding it from a stored entry is caught immediately rather than becoming a new hole.
+
+### Notes
+
+- **Mutation-proved against three separate regressions** before being recorded `DONE`, per the §11 bar:
+  - `default=defaults_dict.get(CONF_PASSWORD, "")` — the classic "helpful" pre-fill → **red**
+  - `description={"suggested_value": defaults_dict.get(CONF_PASSWORD)}` — the subtler form → **red**
+  - the stored password copied into the **username** field's default → **red**, caught only by the second test, which is why both exist
+
+  `config_flow.py` restored and verified byte-identical afterwards.
+
+- **Deliberately narrow.** §9's host-normalization bullet is **not** covered here and is not tagged in the standard — a doubled `configuration_url` is visible, so it fails the "silent" half of the tagging rule. `test_clean_host` already covers it anyway.
+
+- **Reference implementation for the other two projects**, both of which are `PENDING` on §9. Neither has the defect today — UniFi's three `suggested_value` uses are rogue-AP ignore lists, and WiFi uses `suggested_value` nowhere — so this is a guard against a plausible future change, not a fix.
+
+## [3.3.0-dev8] - 2026-07-27 - Unreleased - No Manifest Bump - §12 Icon Sweep Made Real
+
+Accompanies `dev_standards` **1.13.0 / 1.14.0**, which introduce the `**Test:**` tag — a per-section statement of the automated check that section requires — and name this project as the reference implementation for §12 and §14. **394 tests passing, 100% coverage, ruff clean, mypy strict clean.**
+
+### Fixed
+
+- **The §12 icon test was blind on five of six platforms.** `test_every_entity_without_a_device_class_has_an_icon` iterated `SENSOR_TYPES` — the sensor platform only — so the icons for **15 entities** across `binary_sensor`, `switch`, `select`, `number` and `button` could be deleted with the suite still green.
+
+  It was also blind in a second direction: it flattened `icons.json` into a single set of keys across all platforms, so an entry filed under the **wrong** platform satisfied the check.
+
+  Found by a validation agent reviewing the standards change, then confirmed by mutation. This is the same defect class the new §11 rule was written for — a test that looks like coverage and is not — and it mattered more than usual because the standard was about to cite this test as the thing for other projects to copy.
+
+- **Replaced with `test_every_live_entity_has_an_icon_or_a_device_class`**, a runtime sweep over live entities checking each entity's own platform. Entity descriptions here live in a mix of tuples (`SENSOR_TYPES`, `BINARY_SENSORS`, `SWITCH_TYPES`, `SELECT_TYPES`) and module-level singletons (`POLLING_INTERVAL_DESCRIPTION`, `REBOOT_DESCRIPTION`, …), so any static enumeration drifts the moment one is added. Sweeping live entities is the only form that cannot.
+
+  **Mutation-verified across every platform:** deleting the `icons.json` entry for `binary_sensor`, `switch`, `select`, `number` and `sensor` each turns the test red. `button/system_reboot` is correctly _not_ caught — it carries `ButtonDeviceClass.RESTART` and so derives its icon from the device class, which is the standard's own exemption. Its `icons.json` entry is therefore redundant but harmless.
+
+- **The superseded static test was deleted**, not left alongside. A weak test kept for reassurance is exactly the failure mode being fixed.
+
+### Changed
+
+- **`_live_entities` extracted** as a shared async context manager, now used by both the §12 and §14 sweeps. Both need the same live entity list and both are worthless without the `entity_registry_enabled_default` patch, so the setup lives in one place rather than being copied and drifting apart.
+
+### Notes
+
+- **This project is `DONE` on four of the six tagged sections, and both new `DONE` cells were mutation-proved before being recorded** — §6 (deleting the rounding in `_safe_float` turns `test_safe_float_rounds_at_parse_time` red) and §10 (replacing `await coordinator.api.logout()` on unload turns `test_init` and `test_options_lifecycle` red). Files restored and verified byte-identical afterwards.
+- **§9 is `PENDING` here**, as it is everywhere: no project asserts that stored secrets are absent from a rebuilt options/reauth schema. This project uses `suggested_value` nowhere, so there is no defect today — only no guard against one.
+
 ## [3.3.0-dev7] - 2026-07-27 - Unreleased - No Manifest Bump - §14 Attributes Are Unrecorded by Default
 
 Implements `dev_standards` §14 as revised at **Standard Version 1.12.0**: `_unrecorded_attributes` must cover every key an entity can publish, with no per-attribute judgement and no undocumented exceptions. **394 tests passing, 100% coverage, ruff clean.**
@@ -286,16 +340,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 

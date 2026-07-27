@@ -34,6 +34,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [🔍 What You Get](#-what-you-get)
   - [📸 Screenshots](#-screenshots)
   - [🔘 Controls \& Settings](#-controls--settings)
+  - [💬 SMS Actions](#-sms-actions)
   - [💡 Example Automations](#-example-automations)
   - [📥 Installation](#-installation)
   - [🔧 Configuration](#-configuration)
@@ -97,6 +98,12 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 This integration features **dynamic polling**, the ability to pause polling completely or to change the polling interval.
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 - **Pause Polling**: Switch to halt polling when you need uninterrupted access to the router's web UI (ZTE only allows a single active login session). See the [Auto-Resume Polling](#-auto-resume-polling) example.
 - **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour, default 180s) via a number entity or automation. See the [Dynamic Polling Interval](#-dynamic-polling-interval) example.
 - **Explicit Actions Always Fetch**: **Refresh Now**, a settings change or an SMS action fetches immediately **even while paused** — only scheduled polls are suppressed. See the [Force a Fresh Reading](#-force-a-fresh-reading-before-reporting) example.
@@ -108,107 +115,17 @@ This integration features **dynamic polling**, the ability to pause polling comp
 >
 > - Set it to 30 seconds during periods of heavy use, to examine connection quality or when you need to receive new SMS messages quickly, and set it higher afterwards, to avoid taxing the router and your Home Assistant database.
 
+---
+
+</details>
+
+<br>
+
 ### 💬 SMS Management Actions
 
 Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers ([example](#-forward-incoming-sms-to-mobile)), and four service actions for full programmatic control ([inbox cleanup](#-automated-inbox-maintenance) and [on-demand query](#-fetch-and-process-inbox-via-automation) examples).
 
-- The `Recent Msg` sensor displays the most recent message received **OR** _sent_.
-- In the examples below, the `entry_id:` of your router, where required, is drop-down menu selectable from the editor GUI.
-
-> The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
-
-#### `zte_router_5g.send_sms`
-
-Send an SMS message via the router.
-
-| Parameter | Required | Description |
-| :-- | :-- | :-- |
-| `entry_id` | No | The router to use. Optional if only one router is configured. |
-| `target` | **Yes** | Recipient phone number(s) (e.g. `+353871234567`). |
-| `message` | **Yes** | Message content. |
-
-```yaml
-action: zte_router_5g.send_sms
-data:
-  target: "+1234567891011"
-  message: "Hello from Home Assistant!"
-```
-
-#### `zte_router_5g.delete_sms`
-
-Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
-
-| Parameter | Required | Description |
-| :-- | :-- | :-- |
-| `entry_id` | No | The router to use. Defaults to your only router; required if more than one is configured. |
-| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
-
-```yaml
-action: zte_router_5g.delete_sms
-data:
-  entry_id: <your_config_entry_id>
-  index: 3
-```
-
-#### `zte_router_5g.delete_all_sms`
-
-Bulk delete SMS messages from the router inbox.
-
-| Parameter | Required | Default | Range | Description |
-| :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
-| `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
-
-```yaml
-action: zte_router_5g.delete_all_sms
-data:
-  entry_id: <your_config_entry_id>
-  keep_last: 5
-```
-
-#### `zte_router_5g.get_sms_list`
-
-Fetch a list of SMS messages. Supports **Action Responses** — use the output directly in automations and scripts.
-
-| Parameter | Required | Default | Range | Description |
-| :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
-| `page` | No | `1` | 1–100 | Page number for pagination. |
-| `count` | No | `20` | 1–50 | Messages per page. |
-| `box_type` | No | `1` | See below | Mailbox to read from. |
-
-**`box_type` values:** `1` Local Inbox · `2` Local Sent · `3` Local Draft · `4` Local Trash · `5` SIM Inbox · `6` SIM Sent · `7` SIM Draft · `8` Mix Inbox · `9` Mix Sent · `10` Mix Draft
-
-**Response — each message in `messages`:**
-
-| Field     | Type    | Description                                                  |
-| :-------- | :------ | :----------------------------------------------------------- |
-| `index`   | Integer | Storage index — pass to `delete_sms` to delete this message. |
-| `phone`   | Text    | Sender's phone number.                                       |
-| `content` | Text    | Message body.                                                |
-| `date`    | Text    | Date/time string.                                            |
-| `read`    | Boolean | `true` if read, `false` if unread.                           |
-
-```yaml
-action: zte_router_5g.get_sms_list
-data:
-  entry_id: <your_config_entry_id>
-  count: 50
-  box_type: 1
-response_variable: inbox
-```
-
-#### `zte_router_5g_sms_received` Event
-
-Fires automatically when a new incoming SMS is detected. Use as an automation trigger.
-
-| Field | Type | Description |
-| :-- | :-- | :-- |
-| `entry_id` | Text | Config entry ID of the router that received the message. |
-| `phone` | Text | Sender's phone number. |
-| `content` | Text | Message body. |
-| `date` | Text | Date/time of the message. |
-| `index` | Integer | Storage index — pass directly to `delete_sms` to delete after processing. |
+See [SMS Actions](#-sms-actions) below for more detail, and [SMS Examples](#-sms-examples) for some potential automation options.
 
 ## 🔍 What You Get
 
@@ -327,6 +244,12 @@ Screenshots are embedded throughout the document near relevant sections. This is
 
 Rather than settings in configuration menus, several configuration parameters are exposed directly as Home Assistant control entities, allowing you to monitor and control them from dashboards or automations:
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 ### 📡 APN & Network Settings (Signal Device)
 
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
@@ -351,6 +274,114 @@ Rather than settings in configuration menus, several configuration parameters ar
 - **Disabled by Default**: These are disabled by default but can be enabled
   - **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`): Enable/disable the router's data limit settings.
   - **Data Volume Alert** (`sensor.zte_5g_data_data_volume_alert`): Displays the alarm warning percentage configured on the router (e.g., 90%).
+
+---
+
+</details>
+
+<br>
+
+## 💬 SMS Actions
+
+Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers ([example](#-forward-incoming-sms-to-mobile)), and four service actions for full programmatic control ([inbox cleanup](#-automated-inbox-maintenance) and [on-demand query](#-fetch-and-process-inbox-via-automation) examples).
+
+- The `Recent Msg` sensor displays the most recent message received **OR** _sent_.
+- In the examples below, the `entry_id:` of your router, where required, is drop-down menu selectable from the editor GUI.
+
+> The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
+
+### `zte_router_5g.send_sms`
+
+Send an SMS message via the router.
+
+| Parameter | Required | Description |
+| :-- | :-- | :-- |
+| `entry_id` | No | The router to use. Optional if only one router is configured. |
+| `target` | **Yes** | Recipient phone number(s) (e.g. `+353871234567`). |
+| `message` | **Yes** | Message content. |
+
+```yaml
+action: zte_router_5g.send_sms
+data:
+  target: "+1234567891011"
+  message: "Hello from Home Assistant!"
+```
+
+### `zte_router_5g.delete_sms`
+
+Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
+
+| Parameter | Required | Description |
+| :-- | :-- | :-- |
+| `entry_id` | No | The router to use. Defaults to your only router; required if more than one is configured. |
+| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
+
+```yaml
+action: zte_router_5g.delete_sms
+data:
+  entry_id: <your_config_entry_id>
+  index: 3
+```
+
+### `zte_router_5g.delete_all_sms`
+
+Bulk delete SMS messages from the router inbox.
+
+| Parameter | Required | Default | Range | Description |
+| :-- | :-- | :-- | :-- | :-- |
+| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
+| `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
+
+```yaml
+action: zte_router_5g.delete_all_sms
+data:
+  entry_id: <your_config_entry_id>
+  keep_last: 5
+```
+
+### `zte_router_5g.get_sms_list`
+
+Fetch a list of SMS messages. Supports **Action Responses** — use the output directly in automations and scripts.
+
+| Parameter | Required | Default | Range | Description |
+| :-- | :-- | :-- | :-- | :-- |
+| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
+| `page` | No | `1` | 1–100 | Page number for pagination. |
+| `count` | No | `20` | 1–50 | Messages per page. |
+| `box_type` | No | `1` | See below | Mailbox to read from. |
+
+**`box_type` values:** `1` Local Inbox · `2` Local Sent · `3` Local Draft · `4` Local Trash · `5` SIM Inbox · `6` SIM Sent · `7` SIM Draft · `8` Mix Inbox · `9` Mix Sent · `10` Mix Draft
+
+**Response — each message in `messages`:**
+
+| Field     | Type    | Description                                                  |
+| :-------- | :------ | :----------------------------------------------------------- |
+| `index`   | Integer | Storage index — pass to `delete_sms` to delete this message. |
+| `phone`   | Text    | Sender's phone number.                                       |
+| `content` | Text    | Message body.                                                |
+| `date`    | Text    | Date/time string.                                            |
+| `read`    | Boolean | `true` if read, `false` if unread.                           |
+
+```yaml
+action: zte_router_5g.get_sms_list
+data:
+  entry_id: <your_config_entry_id>
+  count: 50
+  box_type: 1
+response_variable: inbox
+```
+
+### `zte_router_5g_sms_received` Event
+
+Fires automatically when a new incoming SMS is detected. Use as an automation trigger.
+
+| Field | Type | Description |
+| :-- | :-- | :-- |
+| `entry_id` | Text | Config entry ID of the router that received the message. |
+| `phone` | Text | Sender's phone number. |
+| `content` | Text | Message body. |
+| `date` | Text | Date/time of the message. |
+| `index` | Integer | Storage index — pass directly to `delete_sms` to delete after processing. |
 
 ## 💡 Example Automations
 
