@@ -93,7 +93,11 @@ async def test_api_auto_login_get_sms_capacity(mock_aiohttp_client):
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = None
 
-    mock_aiohttp_client.get.return_value = MockResponse(json_data={"cap": 100})
+    # Real capacity shape — the endpoint now asserts its contract key, so a
+    # fabricated payload would fail here for the wrong reason.
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"sms_nv_total": "100", "sms_sim_total": "20"}
+    )
 
     with patch.object(api, "login", return_value="stok=new") as mock_login:
         await api.get_sms_capacity()

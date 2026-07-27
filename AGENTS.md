@@ -47,7 +47,11 @@ Data flows in one direction: **`api.py` → `coordinator.py` → platform entiti
 
 ### Device Identity Model ("Flat Identity")
 
-Hardware metadata (`model`, `sw_version`, `imei`) is read once and stored in `entry.data`, so device info is stable from boot before the first poll completes. Entities are grouped into sub-devices (System / Signal / Data / SMS) all linked `via_device` to a `{prefix}_system` root, where `prefix` is the IMEI (or `host_{host}` fallback). The System device is registered early in `async_setup_entry` to avoid `via_device` warnings.
+Hardware metadata (`model`, `sw_version`, `imei`) is read once and stored in `entry.data`, so device info is stable from boot before the first poll completes. Entities are grouped into sub-devices (System / Signal / Data / SMS) all linked to a `{prefix}_system` root, where `prefix` is the IMEI (or `host_{host}` fallback). The System device is registered early in `async_setup_entry` to avoid parent-link warnings.
+
+This is the **System-as-root** topology, and it is conformant — `dev_standards` §3 (Standard Version 1.15.0) ranks a stable non-MAC hardware identifier such as IMEI **equal** to a MAC, and names both System-as-root and hardware-as-root as valid. The `goform` API never exposes a MAC. Do not "fix" this to an IP-keyed root; the earlier ladder implied that and was wrong.
+
+**Version compatibility (`_compat.py`).** Parent links and registry lookups go through feature-detected shims — `via_device_link` and `device_by_identifier` — emitting `via_device_id` on HA 2026.8+ and the legacy `via_device` tuple on ≤2026.7, with **no version floor**. `owning_entry_ids` is deliberately absent: this integration never reads `device.config_entries`, and an unused shim is dead code against a 100% coverage bar. Family-wide analysis and the 2026.8.0 re-verification checklist: `.shared/issues/x_project/device_registry_2026_08.md`.
 
 ### Config Entry Data vs. Options
 

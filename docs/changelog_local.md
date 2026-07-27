@@ -4,6 +4,81 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.0-dev12] - 2026-07-27 - Unreleased - No Manifest Bump - Expired Session Returned "No SMS"
+
+**User-reported and reproduced.** `get_sms_list` returned an empty list while messages were present on the router; pressing **Refresh Now** and retrying then worked. **407 tests passing, 100% coverage, ruff clean, mypy strict clean.**
+
+### Fixed
+
+- **An expired session made SMS actions report "no messages" instead of failing.** The session-expiry detector in `_request` tested two **named** keys — `network_type` and `signalbar` — which only exist in the batch-poll response. An SMS response has neither, so `.get()` returned `None`, `None == ""` was `False`, and the detector could never fire on that endpoint. The dead-session body was returned intact, `.get("messages", [])` yielded `[]`, and the action reported an empty inbox.
+
+  **Why Refresh Now was a workaround, and why that proves the diagnosis:** Refresh Now runs the batch poll, whose keys the detector _did_ recognise — so it re-logged in and repaired the session, after which SMS worked. Detection existed on one endpoint and not the other; that asymmetry is exactly what was observed.
+
+  Two aggravating factors: `_request` then set `last_activity = now`, so the client **recorded a dead session as healthy** and pushed the 150s inactivity guard forward, masking it further. And the 150s guard only fires when >150s have passed since the last _successful_ request — this router permits **one session**, so opening its web UI kills the integration's session instantly, and acting within 150s of a poll leaves the guard quiet.
+
+- **Detector generalised to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
+
+  | Request                     | Live session       | Dead session                                         |
+  | :-------------------------- | :----------------- | :--------------------------------------------------- |
+  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
+  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
+  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
+
+  The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
+
+- **Endpoint contract assertions — a second, independent defence.** `_require_contract()` makes each SMS call assert the key it must receive (`messages`, `sms_nv_total`) and raise `ZTEConnectionError` if absent. `get_sms_messages`, `get_last_sms_content`, `delete_all` and `get_sms_capacity` no longer fall back to an empty default on a failure path — the `masked_errors_check` Class A rule. This holds even if the router's dead-session shape changes and slips past detection.
+
+  Consequence worth noting: a persistent failure now raises into `_fetch_optional`, so the SMS endpoint burns its own strike budget and its entities go **unavailable** (§8) rather than displaying an empty inbox — and the Integration Health sensor reports it.
+
+### Changed
+
+- **Two existing tests asserted against payload shapes the router never returns** — `{"cap": 100}` for SMS capacity, in `test_api.py` and `test_coverage_ext.py`. Both now use the real captured shape. A fabricated fixture is how an unasserted contract stays unasserted: the test passed, and told you nothing about the endpoint.
+
+### Added
+
+- **Six regression tests** built from the **real captured payloads**, with a comment forbidding anyone from "tidying" them into something more plausible-looking — their exact shape is the point. They cover: every dead shape satisfying the rule; an empty inbox and a populated inbox **not** satisfying it (over-correction guard); the reported bug end to end (dead → re-login → real messages); a persistently dead session raising rather than returning `[]`; and a missing contract key raising even when expiry goes undetected.
+
+### Notes
+
+- **Mutation-proved, three ways** (§11 bar): reverting the detector to the named-key form → **red**; removing the contract assertion → **red**; reverting both, i.e. the exact pre-fix code → **red**. Each defence fails the suite independently, so neither is load-bearing alone.
+- **Live-verified against the router**: session deliberately killed from a second client with `last_activity` kept fresh — the precise reported condition — then `get_sms_messages()` logged _"Session expired in JSON response; renewing session"_ and returned both real messages.
+- **You remembered this correctly: it was fixed on `huawei_router_5g`**, which wraps every action in `_execute_with_retry` (re-login, retry once). That could not be ported — Huawei's library **raises** `ResponseErrorLoginRequiredException`, so there is something to catch. ZTE's `goform` API returns `200` with a benign body, so the fix had to be **detection**, not retry.
+- **Not a cross-project item, checked rather than assumed.** `unifi_network_monitor` raises on a real `401`; `wifi_ssid_monitor` already flags a missing `accesspoints` key into its health checks (`payload_no_ap_list`) rather than swallowing it; `huawei_router_5g` uses a library that raises. ZTE's goform API is the only one in the family that answers an auth failure with `200 OK` and a plausible body. Deliberately **not** added to the `x_project` queue — it fails the entry criteria.
+
+## [3.3.0-dev11] - 2026-07-27 - Unreleased - No Manifest Bump - Device-Registry Record Cross-Referenced
+
+**No code changed.** Documentation only — the HA 2026.8 device-registry analysis has been split out of `unifi_network_monitor`'s notes into `.shared/issues/device_registry_2026_08.md`, and this project's `AGENTS.md` now points at it.
+
+### Changed
+
+- **`AGENTS.md` — Device Identity Model section rewritten.** It had **no mention of `_compat.py` at all**, despite this integration having shipped the shims in `[3.3.0-dev4]`. An agent reading it would not have known the parent link goes through a version shim, and could reasonably have "simplified" `via_device_link(...)` back to a raw `via_device` tuple — which warns from HA 2026.8 and breaks at 2027.8.
+
+  Now records: the two shims (`via_device_link`, `device_by_identifier`); that `owning_entry_ids` is **deliberately absent** because this integration never reads `device.config_entries` and an unused shim is dead code against a 100% coverage bar; and a pointer to the shared record for the family analysis and the 2026.8.0 re-verification checklist.
+
+- **The System-as-root topology is now stated as conformant**, with an explicit instruction not to "fix" it to an IP-keyed root. `dev_standards` §3 at Standard Version 1.15.0 ranks a stable non-MAC hardware identifier such as IMEI equal to a MAC; the earlier ladder implied the IP fallback, which would have been strictly worse. Written into `AGENTS.md` because that is the file an agent reads before touching device identity.
+
+### Notes
+
+- This project's status in the shared record is **DONE** — two of three shims, the third correctly not applicable. Nothing outstanding here.
+- The shared record carries an **open family action**: re-verify the shims natively once HA 2026.8.0 is available in a devcontainer. The current implementation is verified against the HA `dev` branch and mock-patched flags, not a real 2026.8 build.
+
+## [3.3.0-dev10] - 2026-07-27 - Unreleased - No Manifest Bump - §3 Deviation Retired
+
+**No code changed.** `dev_standards` **1.15.0** amends §3's root-identity ladder; this integration's `PARTIAL` and its Project Deviation are withdrawn as a result. **The deviation described a gap in the standard, not in this project.**
+
+### Notes
+
+- **§3 moves `PARTIAL` → `DONE`, and the Project Deviation entry is retired.** The root stays exactly as it is: a single device named `"<title> System"`, keyed `{imei}_system` (`__init__.py:349`), with Signal/Data/SMS as sub-devices. Nothing about this integration changed.
+
+- **What was wrong was the ladder.** It offered two rungs — MAC, else host/IP "when the MAC cannot be obtained". The `goform` API never exposes a MAC, so a literal reading routed this integration to an **IP-keyed root**. That is strictly worse than the IMEI it uses today, contradicts §3's own opening line ("the strongest available hardware identity"), and is precisely the failure §2 exists to prevent. The ladder now has a rung for a stable non-MAC hardware identifier, ranked **equal** to MAC rather than beneath it.
+
+- **On multi-interface hardware, IMEI is arguably the better key anyway.** A router has separate LAN / WAN / WiFi MACs and "the" MAC is ambiguous; an IMEI is singular and permanent.
+
+- **The second objection had already expired.** §3 said a `{id}_system` root "can never merge" with a core integration. HA **2026.8 stops merging on `connections`**, and this family removed `CONNECTION_NETWORK_MAC` from every project ahead of that change — it appears in zero source files across all three. So that argument no longer distinguishes the options for anyone. §3 now names both **hardware-as-root** (UniFi, Gateway at the top) and **System-as-root** (this project, Huawei) as valid, with the real requirement stated plainly: the identifier before any suffix must be a stable hardware ID, and a synthetic root must never displace an unrepresented physical device.
+
+- **Section Conformance is now 19 `DONE`, 1 `N/A` (§21), 1 `PENDING` (§15).** §15 Feature-Group Toggles is the only outstanding item and is **parked by decision** — a large piece of work for a group most users are unlikely to disable. It remains the single Project Deviation on record for this integration.
+
 ## [3.3.0-dev9] - 2026-07-27 - Unreleased - No Manifest Bump - §9 Secret Pre-fill Guard
 
 Closes the last outstanding `**Test:**` tag for this project. **398 tests passing, 100% coverage, ruff clean, mypy strict clean.** This is now the first project covering **every tagged section that applies to it** — §6, §9, §10, §12, §14 `DONE`, §21 `N/A`.

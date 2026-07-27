@@ -67,6 +67,25 @@ class ZTERouterAPI:
             return "[Decoding Error]"
         return decoded
 
+    def _require_contract(self, data: Any, key: str, cmd: str) -> None:
+        """Fail loudly when a response is missing the key it must carry.
+
+        Second line of defence behind the expiry detection in ``_request``.
+        That detection recognises the router's dead-session shape as observed
+        today; this asserts the shape each endpoint actually needs, so a
+        response that slips past detection can never be mistaken for "no data".
+
+        Returning ``[]`` here instead would be indistinguishable from an empty
+        inbox — which is precisely how an expired session surfaced to users as
+        "no SMS" rather than as an error (masked_errors_check Class A/B).
+        """
+        if not isinstance(data, dict) or key not in data:
+            raise ZTEConnectionError(
+                f"Response to {cmd} is missing '{key}' — the session is probably "
+                f"expired or the firmware changed its API. Got: "
+                f"{list(data)[:6] if isinstance(data, dict) else type(data).__name__}"
+            )
+
     def _parse_date(self, date_str: str) -> str | None:
         if not date_str:
             return None
@@ -217,9 +236,24 @@ class ZTERouterAPI:
 
         # 3. Check JSON structure for session expiry/invalid indicators
         if isinstance(resp_json, dict):
-            # Empty strings for status keys mean session expired
-            is_status_expired = (
-                resp_json.get("network_type") == "" and resp_json.get("signalbar") == ""
+            # A dead session answers HTTP 200 with the *requested keys echoed
+            # back empty* — never an error, never a redirect. Captured from an
+            # MC7010 on firmware V1.0.0B03 (2026-07-27) by replaying an
+            # invalidated stok:
+            #
+            #   batch poll  -> {"network_type":"","signalbar":"","wan_ipaddr":""}
+            #   SMS list    -> {"sms_data_total":""}
+            #   SMS capacity-> {"sms_capacity_info":""}
+            #
+            # The rule is "every value is an empty string", not "these two named
+            # keys are empty". The old form only knew the batch-poll keys, so it
+            # could never fire on an SMS response: `.get("network_type")` is
+            # None there, and `None == ""` is False. The SMS action therefore
+            # returned an empty list on an expired session while Refresh Now
+            # (which runs the batch poll) recovered it — the exact asymmetry
+            # reported. Do not narrow this back to named keys.
+            is_status_expired = bool(resp_json) and all(
+                value == "" for value in resp_json.values()
             )
             # Other endpoints might return explicit error indications
             is_auth_error = (
@@ -539,10 +573,9 @@ class ZTERouterAPI:
         """Get SMS capacity information."""
         path = "goform/goform_get_cmd_process?isTest=false&cmd=sms_capacity_info"
         try:
-            return cast(
-                dict[str, Any],
-                await self._request("GET", path, timeout_sec=timeout_sec),
-            )
+            data = await self._request("GET", path, timeout_sec=timeout_sec)
+            self._require_contract(data, "sms_nv_total", "sms_capacity_info")
+            return cast(dict[str, Any], data)
         except Exception as e:
             if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
                 raise
@@ -568,7 +601,8 @@ class ZTERouterAPI:
             resp_json = await self._request(
                 "POST", path, data=payload, timeout_sec=timeout_sec
             )
-            messages = resp_json.get("messages", [])
+            self._require_contract(resp_json, "messages", "sms_data_total")
+            messages = resp_json["messages"]
             if messages:
                 msg = messages[0]
                 msg["content_decoded"] = self._hex_decode(msg.get("content", ""))
@@ -621,7 +655,8 @@ class ZTERouterAPI:
             resp_json = await self._request(
                 "POST", "goform/goform_get_cmd_process", data=payload
             )
-            ids = [m["id"] for m in resp_json.get("messages", [])]
+            self._require_contract(resp_json, "messages", "sms_data_total")
+            ids = [m["id"] for m in resp_json["messages"]]
 
             if ids:
                 res_code = await self.delete_sms(";".join(ids))
@@ -678,7 +713,8 @@ class ZTERouterAPI:
             resp_json = await self._request(
                 "POST", path, data=payload, timeout_sec=timeout_sec
             )
-            messages = resp_json.get("messages", [])
+            self._require_contract(resp_json, "messages", "sms_data_total")
+            messages = resp_json["messages"]
             for msg in messages:
                 msg["content_decoded"] = self._hex_decode(msg.get("content", ""))
                 msg["number_decoded"] = self._hex_decode(msg.get("number", ""))

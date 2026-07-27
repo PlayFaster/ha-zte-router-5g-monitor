@@ -198,8 +198,16 @@ async def test_api_get_sms_capacity(mock_aiohttp_client):
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
     api.last_activity = datetime.now(UTC)
-    mock_aiohttp_client.get.return_value = MockResponse(json_data={"cap": 100})
-    assert await api.get_sms_capacity() == {"cap": 100}
+    # Real capacity shape, captured from an MC7010 on 2026-07-27. The previous
+    # fixture was `{"cap": 100}` — a shape this router never returns, which let
+    # the endpoint's contract go unasserted.
+    capacity = {
+        "sms_nv_total": "100",
+        "sms_sim_total": "20",
+        "sms_nv_rev_total": "2",
+    }
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=capacity)
+    assert await api.get_sms_capacity() == capacity
 
 
 @pytest.mark.asyncio
@@ -644,3 +652,157 @@ async def test_api_set_apn_mode_manual(mock_aiohttp_client):
         _args, kwargs = mock_aiohttp_client.post.call_args
         data = kwargs["data"]
         assert "apn_mode=manual" in data
+
+
+# --------------------------------------------------------------------------
+# Expired-session detection — regression guard
+#
+# Payloads below are REAL, captured from an MC7010 on firmware V1.0.0B03 on
+# 2026-07-27 by replaying an invalidated stok. Do not "tidy" them into
+# something more plausible-looking; their exact shape is the whole point.
+# --------------------------------------------------------------------------
+
+# What the router returns to an authenticated request on a DEAD session:
+# HTTP 200, Content-Type text/html, requested keys echoed back empty.
+DEAD_SMS_LIST = {"sms_data_total": ""}
+DEAD_SMS_CAPACITY = {"sms_capacity_info": ""}
+DEAD_BATCH_POLL = {"network_type": "", "signalbar": "", "wan_ipaddr": ""}
+
+# What it returns on a LIVE session — note the empty inbox, which must never
+# be confused with the dead-session shape above.
+LIVE_SMS_EMPTY_INBOX = {"messages": []}
+LIVE_SMS_WITH_MESSAGE = {
+    "messages": [
+        {
+            "id": "2",
+            "number": "002B00330035",
+            "content": "0054006500730074",
+            "tag": "0",
+            "date": "26,07,26,23,52,23,+4",
+        }
+    ]
+}
+
+
+@pytest.mark.parametrize(
+    "dead_payload",
+    [DEAD_SMS_LIST, DEAD_SMS_CAPACITY, DEAD_BATCH_POLL],
+    ids=["sms_list", "sms_capacity", "batch_poll"],
+)
+def test_dead_session_payloads_are_all_detected(dead_payload):
+    """Every dead-session shape must satisfy the expiry rule in `_request`.
+
+    The rule is "every value is an empty string". The previous rule named the
+    batch-poll keys explicitly, so it could not fire on an SMS response —
+    `.get("network_type")` is None there and `None == ""` is False. That gap
+    is why an expired session surfaced as "no SMS" rather than an error.
+    """
+    assert bool(dead_payload) and all(v == "" for v in dead_payload.values())
+
+
+@pytest.mark.parametrize(
+    "live_payload",
+    [LIVE_SMS_EMPTY_INBOX, LIVE_SMS_WITH_MESSAGE],
+    ids=["empty_inbox", "has_message"],
+)
+def test_live_session_payloads_are_not_mistaken_for_expiry(live_payload):
+    """An empty inbox is a valid answer and must not trigger a re-login."""
+    assert not (bool(live_payload) and all(v == "" for v in live_payload.values()))
+
+
+@pytest.mark.asyncio
+async def test_expired_session_on_sms_relogs_in_and_returns_messages(
+    mock_aiohttp_client,
+):
+    """The reported bug, end to end: dead session -> re-login -> real messages.
+
+    Before the fix this returned `[]` with no error and no re-login attempt,
+    which is indistinguishable from an empty inbox. Pressing Refresh Now
+    recovered it only because the batch poll's keys *were* recognised.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=dead"
+    api.last_activity = datetime.now(UTC)  # inside the 150s guard, so it stays quiet
+
+    responses = [
+        MockResponse(json_data=DEAD_SMS_LIST, headers={"Content-Type": "text/html"}),
+        MockResponse(
+            json_data=LIVE_SMS_WITH_MESSAGE, headers={"Content-Type": "text/html"}
+        ),
+    ]
+    mock_aiohttp_client.post = MagicMock(side_effect=responses)
+
+    with patch.object(ZTERouterAPI, "login", return_value="stok=fresh") as mock_login:
+        messages = await api.get_sms_messages()
+
+    mock_login.assert_awaited_once()
+    assert len(messages) == 1
+    assert messages[0]["content_decoded"] == "Test"
+
+
+@pytest.mark.asyncio
+async def test_persistently_dead_session_raises_instead_of_returning_empty(
+    mock_aiohttp_client,
+):
+    """A session still dead after re-login must raise, never return `[]`.
+
+    This is the masked-errors rule: an empty default on a failure path is
+    indistinguishable from a legitimately empty result, so the user is told
+    "no SMS" when the truth is "we could not talk to the router".
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=dead"
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.post = MagicMock(
+        side_effect=[
+            MockResponse(json_data=DEAD_SMS_LIST, headers={"Content-Type": "text/html"})
+            for _ in range(4)
+        ]
+    )
+
+    with (
+        patch.object(ZTERouterAPI, "login", return_value="stok=fresh"),
+        pytest.raises(ZTEAuthError),
+    ):
+        await api.get_sms_messages()
+
+
+@pytest.mark.asyncio
+async def test_missing_contract_key_raises_even_if_expiry_undetected(
+    mock_aiohttp_client,
+):
+    """Second line of defence, independent of the expiry detector.
+
+    If the router ever answers with a shape the detector does not recognise,
+    the endpoint contract must still refuse to report it as "no messages".
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=live"
+    api.last_activity = datetime.now(UTC)
+
+    # Non-empty values, so the expiry rule does NOT fire — but no `messages`.
+    mock_aiohttp_client.post = MagicMock(
+        return_value=MockResponse(
+            json_data={"unexpected": "shape"}, headers={"Content-Type": "text/html"}
+        )
+    )
+
+    with pytest.raises(ZTEConnectionError, match="missing 'messages'"):
+        await api.get_sms_messages()
+
+
+@pytest.mark.asyncio
+async def test_empty_inbox_still_returns_empty_list(mock_aiohttp_client):
+    """Guard against over-correction: a real empty inbox must not raise."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=live"
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.post = MagicMock(
+        return_value=MockResponse(
+            json_data=LIVE_SMS_EMPTY_INBOX, headers={"Content-Type": "text/html"}
+        )
+    )
+
+    assert await api.get_sms_messages() == []
