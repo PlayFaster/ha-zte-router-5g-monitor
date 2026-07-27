@@ -362,6 +362,8 @@ Fetch a list of SMS messages. Supports **Action Responses** — use the output d
 | `date`    | Text    | Date/time string.                                            |
 | `read`    | Boolean | `true` if read, `false` if unread.                           |
 
+> [!NOTE] **An empty `messages` list means the box really is empty.** If the router cannot be reached, or its session has expired, this action **raises an error** rather than returning an empty list — so an automation can tell "no messages" apart from "could not ask". Guard the call with `continue_on_error: true` if you would rather the automation carry on regardless.
+
 ```yaml
 action: zte_router_5g.get_sms_list
 data:
@@ -751,7 +753,9 @@ actions:
     note: |
       issues is a list of human-readable problem descriptions. The sensor also carries
       severity (ok / degraded / warning / error), degraded_capabilities (names of failed
-      endpoints), repairs (the repair issues currently raised), and consecutive_failures.
+      endpoints), drift (contract-drift findings, empty unless the firmware appears to
+      have changed its API), repairs (the repair issues currently raised), and
+      consecutive_failures.
 ```
 
 > [!TIP] To alert only on the serious cases and ignore ordinary connectivity blips, add a condition on the `severity` attribute: `{{ state_attr('binary_sensor.zte_5g_system_integration_health', 'severity') == 'warning' }}` fires only for a suspected firmware API change, which is the condition that also raises a Repair.
@@ -1180,6 +1184,8 @@ Some problems need you to do something, so they are also raised in Home Assistan
 ### 🔐 Session Handling
 
 The router permits only **one login session at a time**. The integration releases its session when the config entry is unloaded, reloaded or removed, so the router's web UI is available again immediately rather than after the session times out.
+
+**It also recovers its session automatically.** Because only one session can exist, logging into the router's web UI ends the integration's — and the router signals this by answering normally (`HTTP 200`) with empty values rather than by returning an error. The integration detects that, logs back in and retries the request once, so an action you trigger straight after using the web UI still works. If a request genuinely cannot be completed it **raises an error** rather than returning empty data, so an automation can tell "nothing to report" apart from "could not ask".
 
 ### 🆔 Identity & Stable Entities
 

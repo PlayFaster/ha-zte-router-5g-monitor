@@ -4,6 +4,52 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.0-dev14] - 2026-07-27 - Unreleased - No Manifest Bump - doc_update Reconciliation Pass
+
+Produced by a `doc_update` run over the whole `[3.3.0-dev1]`–`[3.3.0-dev13]` cycle. Documentation only; **407 tests passing, 100% coverage.** Both findings are statements that were true when written and had since become false — the class a purely additive documentation pass cannot find.
+
+### Fixed
+
+- **`AGENTS.md` described the pre-`[3.3.0-dev12]` session-expiry rule.** It said `_request` detects expiry via "HTML redirect, unparsable JSON, or empty/`fail` status fields" — the **named-key** form, which is exactly the wording whose logic could never fire on an SMS response. `_require_contract()` was not mentioned at all.
+
+  This is the file an agent reads before touching `api.py`, so the stale description actively invited re-narrowing the detector — the single thing dev12 warns against. Now states the rule as **"every value is an empty string"**, gives both dead-session shapes, explains why the named-key form was blind, documents the contract assertion as the second defence, and says plainly: never reintroduce a `.get(key, [])` fallback on those paths.
+
+- **README's Integration Health note omitted the `drift` attribute**, published since `[3.3.0-dev6]`. The `note:` listed `severity`, `degraded_capabilities`, `repairs` and `consecutive_failures` — so a user reading it had no way to know `drift` existed.
+
+  **Same defect class that started this week's cross-project work, in mirror image.** `unifi_network_monitor`'s README named attributes its coordinator never wrote; this named fewer than the coordinator publishes. Both come from a README drifting from the code it documents, which is why `dev_standards` §19 now requires documented examples to be diffed against the implementation.
+
+### Changed
+
+- **README § Session Handling now covers automatic session recovery.** It described only logout-on-unload. Because the router permits one session, using its web UI ends the integration's — and the router signals that by answering `200 OK` with empty values rather than erroring. The section now explains that the integration detects this, re-logs in and retries once, and that a request which genuinely cannot be completed **raises** rather than returning empty data.
+
+### Notes
+
+- **A `doc_update` blind spot worth knowing:** `.notes/` is gitignored (`.gitignore:88`), so changes to `proj_structure.md` are **invisible to `git status`**. Anyone using git as their only change signal would conclude that file was untouched. The prompt's other three signals cover it, which is why it requires all four.
+- No new-entry duplication: dev1–dev13 already recorded the session's work, so this entry covers only the two corrections and the README addition. `all_sensors.md`, `value_min_max.md`, `DEVELOPMENT.md`, `proj_structure.md` and `zte_how_to_access.md` were assessed and correctly skipped — no entity, guard-band or structural change since each was last updated.
+- Neither `README.md` nor `AGENTS.md` carries a `## Version Control` section, so neither received a version entry.
+
+## [3.3.0-dev13] - 2026-07-27 - Unreleased - No Manifest Bump - Records Caught Up After a Long Session
+
+Documentation only, closing the loose ends left by twelve dev entries in one day. **407 tests passing, 100% coverage.**
+
+### Fixed
+
+- **`DEVELOPMENT.md` §7 stated a deviation that had been retired hours earlier.** The "§3 Root Identity Deviation" entry described the `{imei}_system` root as an accepted deviation from `dev_standards` §3 — but §3 was amended at **Standard Version 1.15.0** the same day and the cell moved to `DONE`. Rewritten as "resolved, no longer a deviation", with the reasoning (the ladder had no rung for a non-MAC hardware identifier and would have routed this integration to a **worse**, IP-keyed root) and an explicit **"do not 'fix' this to an IP-keyed root."**
+
+- **`DEVELOPMENT.md` §7 pointed at a file that no longer exists** — the custom-trigger analysis, which moved twice today: out of `.notes/issues/` to `.shared/issues/`, then into the new `x_project/` queue. Now `.shared/issues/x_project/custom_trigger_options.md`.
+
+- **`.notes/proj_structure.md` was stale within hours of being updated.** Its own `v1.1.1` entry was written this morning and recorded `test_binary_sensor_health.py` — a file renamed to `test_integration_health.py` later the same day — so the table listed something that does not exist. Also missing: **`_compat.py`**, a _source_ file absent since it landed; `docs/zte_how_to_access.md`; and `tests/test_compat.py`. All added, rename corrected, `v1.1.2` entry appended.
+
+### Changed
+
+- **`DEVELOPMENT.md` §5 gained the expired-session pitfall** — the `[3.3.0-dev12]` defect written up as a pitfall rather than only as a changelog entry, because §5 is where someone looks when the same class of thing happens again. Carries the rule that matters: **never narrow the expiry detector back to named keys**, and the reason an empty inbox (`{"messages":[]}`) stays distinguishable from a dead session.
+
+- **README documents the behaviour change in `get_sms_list`.** It now **raises** when the router cannot be reached or the session has expired, instead of returning an empty list. That is the point of the fix — an automation can tell "no messages" from "could not ask" — but it is user-visible, so the response table now says so and points at `continue_on_error: true` for anyone who would rather the automation carry on.
+
+### Notes
+
+- Final sweep for stale references across ZTE markdown found nothing further; the remaining `STRIKE_LIMIT` matches are the legitimate `FETCH_STRIKE_LIMIT` / `UNREACHABLE_STRIKE_LIMIT` constants. Changelog entries were left pointing at old paths deliberately — they are historical records.
+
 ## [3.3.0-dev12] - 2026-07-27 - Unreleased - No Manifest Bump - Expired Session Returned "No SMS"
 
 **User-reported and reproduced.** `get_sms_list` returned an empty list while messages were present on the router; pressing **Refresh Now** and retrying then worked. **407 tests passing, 100% coverage, ruff clean, mypy strict clean.**
@@ -18,12 +64,12 @@ All notable changes to this project will be documented in this file.
 
 - **Detector generalised to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request                     | Live session       | Dead session                                         |
-  | :-------------------------- | :----------------- | :--------------------------------------------------- |
-  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
-  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
-  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
+  | Request | Live session | Dead session |
+  | :-- | :-- | :-- |
+  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
+  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
+  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -415,16 +461,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category                                   | Count       | Fix                                                                        |
-| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
-| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
-| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
-| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
-| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
-| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
-| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
-| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
+| Category | Count | Fix |
+| :-- | :-- | :-- |
+| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
+| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
+| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
+| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
+| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
+| **Indentation error** | 1 test | Fixed broken indent |
+| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
 
 ### Files modified
 
