@@ -4,6 +4,12 @@
 
 [![HACS Integration](https://img.shields.io/badge/HACS-Integration-orange.svg)](https://hacs.xyz/) [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?logo=homeassistant&logoColor=white)](https://hacs.xyz/docs/faq/custom_repositories) [![Latest Release](https://img.shields.io/github/v/release/PlayFaster/ha-zte-router-5g-monitor?label=Release&logo=github)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/releases) [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0) [![Validate](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml/badge.svg)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/actions/workflows/validate.yaml) ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/PlayFaster/0376d580e72d0abc493665a80396f701/raw/coverage.json) [![Last Commit](https://img.shields.io/github/last-commit/PlayFaster/ha-zte-router-5g-monitor?label=Last%20commit)](https://github.com/PlayFaster/ha-zte-router-5g-monitor/commits/main)
 
+---
+
+![UNM Logo](custom_components/zte_router_5g/brand/dark_logo.png)
+
+---
+
 A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, Data Usage & SMS Management.
 
 > [!NOTE]
@@ -14,7 +20,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 > - **This integration is for you if** you want:
 >   - **Advanced Signal Diagnostics** — Near-real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
->   - **SMS Management** — View the most recently received message content and attributes directly in HA.
+>   - **SMS Management** — View and the most recently received message content and send SMS messages directly in HA.
 >
 > This project is optimized for the ZTE MC7010 5G Outdoor CPE but may work with other similar ZTE devices.
 
@@ -50,7 +56,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 **🌐 Network:**
 
-- Local network access to the router is required.
+- Local network access to the router is required. No cloud account or internet access is needed.
 
 **🏠 Home Assistant Version:**
 
@@ -67,7 +73,6 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Unattended Recovery**: Fail over to a backup APN, or restart the router, when the connection stops recovering on its own. → [APN Failover](#-apn-failover--network-selection) and [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) examples.
 - **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your phone via SMS if your primary internet connection goes down. → [Forward Incoming SMS](#-forward-incoming-sms-to-mobile) example.
   - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
-- **Knowing When the Integration Itself Is Wrong**: A firmware update can rename the fields this integration reads, leaving sensors blank with no obvious error. The Integration Health sensor reports that case directly. → [Integration Health Problem Alert](#-integration-health-problem-alert) and [Firmware Change Notification](#-firmware-change-notification) examples.
 
 ## ✅ Features
 
@@ -85,9 +90,8 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 ### 📋 Essential Router Management
 
-- **Router Management**: Reboot the device directly from the HA UI, by hand or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
-- **Self-Diagnosis**: An **Integration Health** binary sensor reports the integration's own degradation — including a poll that _succeeded_ but returned nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
-- **100% Local**: No cloud account or internet access required.
+- **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
+- **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
 
 ### 🔄 Dynamic Polling
 
@@ -96,6 +100,7 @@ This integration features **dynamic polling**, the ability to pause polling comp
 - **Pause Polling**: Switch to halt polling when you need uninterrupted access to the router's web UI (ZTE only allows a single active login session). See the [Auto-Resume Polling](#-auto-resume-polling) example.
 - **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour, default 180s) via a number entity or automation. See the [Dynamic Polling Interval](#-dynamic-polling-interval) example.
 - **Explicit Actions Always Fetch**: **Refresh Now**, a settings change or an SMS action fetches immediately **even while paused** — only scheduled polls are suppressed. See the [Force a Fresh Reading](#-force-a-fresh-reading-before-reporting) example.
+- **Standard System Option**: Also honours Home Assistant's **System options > Enable polling for changes** toggle.
 
 > [!TIP]
 >
@@ -209,6 +214,12 @@ Fires automatically when a new incoming SMS is detected. Use as an automation tr
 
 This integration provides **75+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 > [!NOTE]
 >
 > Entity Visibility: To keep your Home Assistant UI clean, some entities are disabled by default. You can enable them via the Entities tab in the device settings.
@@ -229,9 +240,21 @@ This integration provides **75+ entities** (depending on your firmware) organize
 > - Devices can be disabled from the main device page: (⋮ menu) > **Disable Device** which also disables all the device entities.
 > - Individual entities can be disabled via their properties, or in bulk on the entities list page.
 
+---
+
+</details>
+
+<br>
+
 ### 📊 Long Term Statistics (LTS)
 
-Home Assistant stores Long Term Statistics for numeric sensors that have a `state_class` set. This integration enables LTS only for sensors where long-term trend data is genuinely useful:
+Home Assistant records Long Term Statistics for numeric sensors that have a `state_class` set. This integration enables LTS only for sensors where long-term trend data is genuinely useful:
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 | Sensors with LTS enabled | Why |
 | :-- | :-- |
@@ -267,8 +290,22 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 > ```
 >
 > Restart Home Assistant after saving. The sensor will begin accumulating LTS from that point forward.
+>
+> The inverse is also true, setting `state_class: none` will remove a sensor from LTS. This is a legitimate tactic, if you want to see a sensors value for this week (default retention), but not for this year.
+>
+> If you want to see the current value, but have no interest in short or long term history, you can [exclude a value from the Recorder](https://www.home-assistant.io/integrations/recorder/#configure-filter).
+>
+> And of course, if a particular sensor, or group of sensors is of no interest to you, you can very easily disable it. See [What You Get](#-what-you-get) above. Remember you don't **need** to do **any** of this. These are _extra_ options for the Home Assistant user who wants _extra_ control.
+
+---
+
+</details>
+
+<br>
 
 ## 📸 Screenshots
+
+Screenshots are embedded throughout the document near relevant sections. This is the Integration Overview screen, highlighting the division into seven sub-devices.
 
 ### Integration Overview
 
@@ -288,7 +325,7 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 
 ## 🔘 Controls & Settings
 
-Rather than hiding settings in configuration menus, several configuration parameters are exposed directly as Home Assistant control entities, allowing you to monitor and control them from dashboards or automations:
+Rather than settings in configuration menus, several configuration parameters are exposed directly as Home Assistant control entities, allowing you to monitor and control them from dashboards or automations:
 
 ### 📡 APN & Network Settings (Signal Device)
 
@@ -317,7 +354,44 @@ Rather than hiding settings in configuration menus, several configuration parame
 
 ## 💡 Example Automations
 
-Entity IDs below use the default prefix zte_5g. If you set a custom name during setup, or have renamed since, replace zte_5g with your configured prefix.
+> [!NOTE]
+>
+> Entity IDs are derived from your gateway/sub-device names (e.g. `sensor.zte_5g_...`) and **may differ between installs**, or if you have renamed entities or devices. Use the entity picker in the Automation editor rather than copying the IDs below verbatim. The examples are illustrative.
+
+---
+
+> [!NOTE]
+>
+> The Automation examples below use the `note:` functionality introduced in Home Assistant 2026.6 as a way to document/comment Automations that is permanent and **not** stripped out by the editor. If using an older version of Home Assistant you may need to remove the `note:` sections
+
+---
+
+> [!NOTE]
+>
+> Use your own preferred Automation notifier
+
+<details>
+
+<summary>&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Notification Options:
+</summary><br>
+
+Replace
+
+```yaml
+action: persistent_notification.create
+```
+
+with
+
+```yaml
+action: notify.send_message
+target:
+  entity_id: notify.your_specific_phone
+```
+
+---
+
+</details>
 
 ### 💬 SMS Examples
 
@@ -966,13 +1040,19 @@ actions:
 
 ### ✨ HACS (Recommended)
 
-1. Add this [repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor) as a **Custom Repository** in HACS:
-   - Open HACS in Home Assistant
-   - Click **Custom repositories** (⋮ menu)
-   - Add repository URL and Type: `Integration`
-2. Search for "ZTE Router 5G Monitor" and click **Download**
-3. Restart Home Assistant
-4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=PlayFaster&repository=ha-zte-router-5g-monitor&category=integration)
+
+Use the **shortcut badge** above , and then proceed to Step #3 or just ...
+
+1 Add this [repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor) as a **Custom Repository** in HACS:
+
+- Open HACS in Home Assistant
+- Click **Custom repositories** (⋮ menu)
+- Add repository URL and Type: `Integration`
+
+1. Search for "ZTE Router 5G Monitor" and click **Download**
+2. Restart Home Assistant
+3. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
 
 ### 💾 Manual Installation
 
@@ -981,18 +1061,40 @@ actions:
 3. Restart Home Assistant
 4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
 
+### 🔄 Updating
+
+Standard HACS custom-repository integration update behavior:
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+- New releases show up in **HACS** as normal. Update there, then restart Home Assistant.
+- For Manual installs: replace the `custom_components/zte_router_5g` folder and restart.
+- Your settings and entity customizations carry over - Configure options, connection details, renamed entities, enabled/disabled choices, dashboards.
+- New sensors in a release (if any), appear on the first restart after updating.
+
+---
+
+</details>
+<br>
+
 ## 🔧 Configuration
 
 ### 🔧 Initial Setup
 
-Setup is handled entirely via the UI. You will need the same details that you use for the router's web UI:
+Setup is handled entirely via the UI under **Settings > Devices & Services > Add Integration**.
+
+You will need the same details that you use for the router's web UI:
 
 - **Host** — Router IP Address (e.g., 192.168.0.1)
 - **Username** — Router login username (default: admin)
 - **Password** — Admin password for the router web interface
 - **Name** — Custom prefix for all devices and entities (default: `ZTE 5G`). This determines entity IDs — e.g. the default produces `sensor.zte_5g_data_monthly_total`. Change this if you have multiple routers or prefer a different naming scheme.
 
-### 🔨 Runtime Options
+### 🔨 Runtime Options (Configure / Reconfigure)
 
 After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor > Configure** to adjust:
 
@@ -1006,7 +1108,7 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 
 ## 🔩 Under the Hood - Technical Architecture
 
-### 🔄 Data Polling & 3-Strike Resilience 🩹
+### 🔄 Data Polling & 3-Strike Resilience
 
 The integration uses a custom `DataUpdateCoordinator` designed for high stability:
 
@@ -1153,6 +1255,44 @@ The router permits only **one login session at a time**. The integration release
 
 </details>
 
+#### 🔄 **I deleted and re-added the integration for a fresh start - why did my settings and history come back?**
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+Because Home Assistant keeps most of it on purpose. This is **Home Assistant behavior, not something this integration controls**, and for most people it's the desirable outcome: re-add the same router and things carry on where they left off, rather than starting from nothing.
+
+| What | How long Home Assistant keeps it | On re-add |
+| :-- | :-- | :-- |
+| **Long-term statistics** (long-range graphs, Energy dashboard) | Indefinitely - these are never deleted | Continue unbroken |
+| **Recent detailed history** | Your recorder retention (10 days by default) | Continues |
+| **Entity IDs** (`sensor.…`) | Reused as long as nothing else has taken the name | Dashboards and automations keep working |
+| Renames, icons, areas, labels, enabled/disabled state | **30 days**, in Home Assistant's entity registry | Restored |
+
+The **30 days** applies only to that fourth row - the entity-registry customizations. Statistics aren't on a timer at all, and your entity IDs come back either way. So re-adding after a year still reconnects your graphs; you would just need to redo any renames. Restarting Home Assistant in between makes no difference to any of this.
+
+**If you actually wanted a clean slate**, Home Assistant doesn't really offer one - and in practice you rarely need it. Two supported options exist:
+
+- **Developer Tools > Statistics** lists statistics whose entity no longer exists as _"There is no state available for this entity"_, and lets you delete them individually. Supported, immediate, no restart required.
+- The **`recorder.purge_entities`** action drops recent history for entities you name. (It does not touch long-term statistics - use the screen above for those.)
+
+Clearing the retained _entity-registry_ customizations is a different matter: it means hand-editing `.storage/core.entity_registry` with Home Assistant stopped. **Don't.** That single file holds the settings for every entity from every integration you run, and the risk of unintended damage far outweighs re-doing a few renames. Nothing about this integration needs it.
+
+> [!TIP]
+>
+> If you're re-adding to fix a problem rather than to reset data, try **⋮ > Reload** on the integration first. It re-reads everything and re-applies your settings without removing anything.
+
+One footnote for completeness: an entity ID is reused unless a **different, still-existing** entity has since taken that name, in which case the new one is created as `…_2` and the old statistics stay attached to the original ID. That's uncommon and generally the result of manual renaming elsewhere - it isn't something a normal remove-and-re-add causes.
+
+---
+
+</details>
+
+<br>
+
 ## ❗ Known Limitations /❔ What's Missing?
 
 - **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
@@ -1177,9 +1317,9 @@ To remove the integration from Home Assistant:
 
 > [!NOTE]
 >
-> This integration writes **no files** of its own to `config/.storage` — the only things it stores are the config entry itself (host, credentials, and the discovered model / firmware / IMEI) and its entities and devices, all of which Home Assistant removes for you when the entry is deleted.
+> This integration's entities and devices are removed when the entry is deleted.
 >
-> Home Assistant keeps recorded history and entity customizations independently of the integration, so re-adding later picks up much where it left off.
+> Home Assistant keeps your recorded history and entity customizations independently, so re-adding later picks up much where it left off. If that matters to you, see [why settings and history come back](#-i-deleted-and-re-added-the-integration-for-a-fresh-start---why-did-my-settings-and-history-come-back).
 
 ---
 
@@ -1198,12 +1338,13 @@ To fully uninstall (HACS):
 1. Go to **HACS**.
 2. Find **ZTE Router 5G Monitor** and click into it.
 3. Click the **three dots** (⋮) at the top right and select **Remove**.
-4. Restart Home Assistant.
-5. Home Assistant automatically removes all associated entities and device entries from the registry when the integration is deleted.
+4. **Restart** Home Assistant.
 
 ---
 
 </details>
+
+<br>
 
 ## 📝 Maintenance Status
 
