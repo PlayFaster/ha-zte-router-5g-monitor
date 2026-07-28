@@ -93,5 +93,3 @@ ZRM will **NOT** work with the following router families because they use fundam
 - [`zte_how_to_access.md`](zte_how_to_access.md) — Technical reference for the ZTE `goform` HTTP API, login challenge, and `AD` tokens.
 - [`all_sensors.md`](all_sensors.md) — Complete inventory of the 76 entities provided by ZRM.
 - [`DEVELOPMENT.md`](DEVELOPMENT.md) — Architecture, devcontainer setup, and DataUpdateCoordinator resilience rules.
-- [`.notes/info/other_zte_projects/analysis_and_learnings.md`](../.notes/info/other_zte_projects/analysis_and_learnings.md) — In-depth comparative research across open-source ZTE Home Assistant projects.
-- [`.notes/info/other_zte_projects/additional_zte_resources.md`](../.notes/info/other_zte_projects/additional_zte_resources.md) — Ecosystem map of additional ZTE custom components, Python CLI tools, and reverse-engineering resources.
