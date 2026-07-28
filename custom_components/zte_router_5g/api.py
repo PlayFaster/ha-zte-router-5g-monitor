@@ -10,6 +10,7 @@ from typing import Any, cast
 import aiohttp
 
 from .const import SESSION_IDLE_RESET_SECONDS
+from .helpers import is_gsm7
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -338,11 +339,67 @@ class ZTERouterAPI:
         if version and any(m in version for m in ["MC801", "MC7010"]):
             self.is_multi = False
 
+        primary = (
+            "LOGIN" if (self.username and not self.is_multi) else "LOGIN_MULTI_USER"
+        )
+        login_error, conn_error = await self._attempt_login(primary, zte_pass, tout)
+
+        # Best-effort form fallback for models this integration has never seen.
+        # Which form a goform router accepts is a per-model quirk and the model
+        # list above only covers the ones that have been tested, so an unlisted
+        # router can be rejected purely for using the wrong goformId. Only the
+        # unclassified failure is worth retrying: a credentials rejection means
+        # the password is wrong whichever form carries it, and retrying would
+        # just burn a second attempt against routers that lock out.
+        if self.stok is None and login_error is None and conn_error is not None:
+            fallback = "LOGIN_MULTI_USER" if primary == "LOGIN" else "LOGIN"
+            _LOGGER.debug(
+                "Login form %s did not yield a session; retrying once with %s",
+                primary,
+                fallback,
+            )
+            fb_login_error, fb_conn_error = await self._attempt_login(
+                fallback, zte_pass, tout
+            )
+            if self.stok is not None:
+                _LOGGER.info(
+                    "Login succeeded with fallback form %s (this router does not "
+                    "accept %s)",
+                    fallback,
+                    primary,
+                )
+                login_error = conn_error = None
+            elif fb_login_error is not None:
+                # The alternate form got far enough to reject the credentials,
+                # which is the more informative answer of the two.
+                login_error = fb_login_error
+                conn_error = None
+            else:
+                conn_error = fb_conn_error
+
+        if login_error:
+            raise ZTEAuthError(login_error)
+        if conn_error:
+            raise ZTEConnectionError(conn_error)
+
+        if self.stok is None:  # pragma: no cover - defensive; narrows type for mypy
+            raise ZTEConnectionError("Failed to obtain stok from login")
+        return self.stok
+
+    async def _attempt_login(
+        self, goform_id: str, zte_pass: str, tout: int
+    ) -> tuple[str | None, str | None]:
+        """Post one login form, setting `self.stok` on success.
+
+        Returns `(login_error, conn_error)` — at most one is set, and both are
+        None when a session was obtained. Genuine transport failures raise
+        `ZTEConnectionError` directly rather than being reported, because
+        there is no point retrying a different form against a router that is
+        not answering at all.
+        """
         payload = {
             "isTest": "false",
-            "goformId": "LOGIN"
-            if (self.username and not self.is_multi)
-            else "LOGIN_MULTI_USER",
+            "goformId": goform_id,
             "password": zte_pass,
         }
         if self.username:
@@ -415,14 +472,7 @@ class ZTERouterAPI:
                 f"Login failed due to connection error: {e}"
             ) from e
 
-        if login_error:
-            raise ZTEAuthError(login_error)
-        if conn_error:
-            raise ZTEConnectionError(conn_error)
-
-        if self.stok is None:  # pragma: no cover - defensive; narrows type for mypy
-            raise ZTEConnectionError("Failed to obtain stok from login")
-        return self.stok
+        return login_error, conn_error
 
     async def logout(self) -> None:
         """End the router session and drop local session state.
@@ -562,6 +612,25 @@ class ZTERouterAPI:
             "sntp_dst_enable",
             "upnpEnabled",
             "alg_sip_enable",
+            # Cross-model keys. Every one of these is an alternative spelling
+            # used by some other member of the goform family, or optional
+            # telemetry the MC7010 does not populate. Requesting a key the
+            # router does not know is safe: it is simply absent from the
+            # response rather than an error, and an absent key cannot trip the
+            # "every value is an empty string" expired-session rule in
+            # `_request`. Keep this block in step with the alias tuples in
+            # `sensor.py` — an alias naming a key that is never requested can
+            # never fire.
+            "5g_rsrp",
+            "nr5g_rsrp",
+            "5g_sinr",
+            "nr5g_sinr",
+            "Z5g_snr",
+            "Z5g_CELL_ID",
+            "flux_monthly_tx_bytes",
+            "flux_monthly_rx_bytes",
+            "pm_sensor_pa1",
+            "pm_sensor_ambient",
         ]
         cmd = ",".join(params)
         path = (
@@ -672,8 +741,16 @@ class ZTERouterAPI:
     async def send_sms(self, number: str, message: str) -> int:
         """Send an SMS message via the router."""
         ad = await self.get_ad()
-        # Convert message to hex utf-16-be
+        # Convert message to hex utf-16-be. This stays UTF-16BE for both
+        # encodings — `encode_type` tells the router which DCS to put on the
+        # wire and how to count segments, it does not change the format of
+        # `MessageBody`, which this API always takes as UTF-16BE hex.
         hex_msg = message.encode("utf-16-be").hex()
+
+        # A message drawn entirely from the GSM 03.38 alphabet fits 160
+        # characters per segment; declaring UNICODE unconditionally capped it
+        # at 70 and split plain-text messages needlessly.
+        encode_type = "GSM7_default" if is_gsm7(message) else "UNICODE"
 
         # Build sms_time: yy;mm;dd;HH;MM;SS;+0
         now = datetime.now(UTC)
@@ -687,7 +764,8 @@ class ZTERouterAPI:
 
         payload = (
             f"isTest=false&goformId=SEND_SMS&notCallback=true&Number={escaped_number}"
-            f"&MessageBody={hex_msg}&encode_type=UNICODE&ID=-1&sms_time={sms_time}&AD={ad}"
+            f"&MessageBody={hex_msg}&encode_type={encode_type}"
+            f"&ID=-1&sms_time={sms_time}&AD={ad}"
         )
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",

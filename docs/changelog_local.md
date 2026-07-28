@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.1-dev2] - 2026-07-28 - Unreleased - No Manifest Bump - API Params & Login Fallback
+
+Phase 2 of the cross-model compatibility expansion. Behaviour on the MC7010 is unchanged except for SMS encoding, which now stops wasting more than half of every plain-text message.
+
+### Added
+
+- **`api.py` cross-model batch-poll keys**: Added ten keys to `get_all_data()` — `5g_rsrp`, `nr5g_rsrp`, `5g_sinr`, `nr5g_sinr`, `Z5g_snr`, `Z5g_CELL_ID`, `flux_monthly_tx_bytes`, `flux_monthly_rx_bytes`, `pm_sensor_pa1`, `pm_sensor_ambient`. These are the alternative spellings other `goform` models use, plus optional thermal telemetry. Requesting a key the router does not know is safe: it is simply absent from the response rather than an error, and an absent key cannot trip the "every value is an empty string" expired-session rule.
+- **`api.py` best-effort login form fallback**: The login POST is now `_attempt_login()`, and `login()` retries once with the alternate `goformId` when the first form yields no session. Which form a router accepts is a per-model quirk and the tested-model list covers only MC801 and MC7010, so an unlisted router could previously be rejected purely for using the wrong form. A credentials rejection is **not** retried — the password is wrong whichever form carries it, and a second attempt only counts against routers that lock out.
+- **`tests/test_api.py`**: Fallback fires in both directions, does not fire on a credentials rejection, does not fire when the primary form already worked, reports an auth error the fallback uncovers, and keeps a double unclassified failure as a connection error rather than an auth one. Plus SMS encoding selection, and a guard asserting every aliased key is actually requested and that no key is requested twice.
+
+### Changed
+
+- **`api.py:send_sms()` encoding selection**: `encode_type` is now chosen per message — `GSM7_default` when the text is entirely within the GSM 03.38 alphabet, `UNICODE` otherwise. It was previously hardcoded to `UNICODE`, which capped every message at 70 characters and needlessly split plain-text notifications that would have fitted in 160. `MessageBody` remains UTF-16BE hex for both encodings; `encode_type` selects the DCS and segment accounting, not the body format.
+
 ## [3.3.1-dev1] - 2026-07-28 - Unreleased - No Manifest Bump - Helpers & GSM-7 Inspector
 
 Phase 1 of the cross-model compatibility expansion. Pure additions to `helpers.py` with no call sites yet — nothing in the integration's behaviour changes until Phases 2 and 3 wire these in.

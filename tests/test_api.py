@@ -806,3 +806,228 @@ async def test_empty_inbox_still_returns_empty_list(mock_aiohttp_client):
     )
 
     assert await api.get_sms_messages() == []
+
+
+def _stok_cookie(value="test_stok"):
+    """Build a mock stok cookie as aiohttp would expose it."""
+    cookie = MagicMock()
+    cookie.value = value
+    return cookie
+
+
+def _login_forms(mock_client):
+    """Extract the goformId of each login POST, in order."""
+    return [
+        call.kwargs["data"]["goformId"]
+        for call in mock_client.post.mock_calls
+        if "data" in call.kwargs and isinstance(call.kwargs["data"], dict)
+    ]
+
+
+@pytest.mark.asyncio
+async def test_login_falls_back_to_the_alternate_form(mock_aiohttp_client):
+    """An unlisted model rejecting the primary form is retried once."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "LD"}),
+        # An unlisted model: neither MC801 nor MC7010, so is_multi stays True.
+        MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+        MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+    ]
+    mock_aiohttp_client.post.side_effect = [
+        MockResponse(json_data={"result": "failure"}, cookies={}),
+        MockResponse(cookies={"stok": _stok_cookie()}),
+    ]
+
+    assert await api.login() == "stok=test_stok"
+    assert _login_forms(mock_aiohttp_client) == ["LOGIN_MULTI_USER", "LOGIN"]
+
+
+@pytest.mark.asyncio
+async def test_login_fallback_is_the_other_form_either_way_round(mock_aiohttp_client):
+    """Whichever form is primary, the fallback is its opposite."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "LD"}),
+        # MC7010 with a username selects LOGIN as primary.
+        MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+    ]
+    mock_aiohttp_client.post.side_effect = [
+        MockResponse(json_data={"result": "failure"}, cookies={}),
+        MockResponse(cookies={"stok": _stok_cookie("fb")}),
+    ]
+
+    assert await api.login() == "stok=fb"
+    assert _login_forms(mock_aiohttp_client) == ["LOGIN", "LOGIN_MULTI_USER"]
+
+
+@pytest.mark.asyncio
+async def test_login_does_not_fall_back_on_a_credentials_rejection(
+    mock_aiohttp_client,
+):
+    """A wrong password is wrong on either form; retrying only burns an attempt."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "LD"}),
+        MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+    ]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "password_error"}, cookies={}
+    )
+
+    with pytest.raises(ZTEAuthError):
+        await api.login()
+
+    assert mock_aiohttp_client.post.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_login_fallback_reports_the_credentials_error_it_uncovers(
+    mock_aiohttp_client,
+):
+    """If only the fallback form gets far enough to be rejected, report that."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "LD"}),
+        MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+    ]
+    mock_aiohttp_client.post.side_effect = [
+        MockResponse(json_data={"result": "failure"}, cookies={}),
+        MockResponse(json_data={"result": "password_error"}, cookies={}),
+    ]
+
+    with pytest.raises(ZTEAuthError, match="invalid credentials"):
+        await api.login()
+
+    assert mock_aiohttp_client.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_login_fallback_failure_stays_a_connection_error(mock_aiohttp_client):
+    """Both forms failing unclassified must not be reported as bad credentials."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "LD"}),
+        MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+    ]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "failure"}, cookies={}
+    )
+
+    with pytest.raises(ZTEConnectionError):
+        await api.login()
+
+    assert mock_aiohttp_client.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_login_success_on_the_primary_form_makes_no_second_attempt(
+    mock_aiohttp_client,
+):
+    """The fallback must not fire for the hardware that already works."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "LD"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+    ]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        cookies={"stok": _stok_cookie()}
+    )
+
+    assert await api.login() == "stok=test_stok"
+    assert mock_aiohttp_client.post.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_send_sms_declares_gsm7_for_plain_text(mock_aiohttp_client):
+    """Plain text gets 160 characters per segment instead of 70."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+
+    with patch.object(api, "get_ad", return_value="test_ad"):
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "ok"}, status=200
+        )
+        await api.send_sms("+123456", "Router rebooted")
+
+    payload = mock_aiohttp_client.post.call_args.kwargs["data"]
+    assert "encode_type=GSM7_default" in payload
+    # The body format does not change with the encoding: always UTF-16BE hex.
+    expected_body = "Router rebooted".encode("utf-16-be").hex()
+    assert f"MessageBody={expected_body}" in payload
+
+
+@pytest.mark.asyncio
+async def test_send_sms_declares_unicode_when_the_text_needs_it(mock_aiohttp_client):
+    """One character outside GSM 03.38 forces UNICODE for the whole message."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+
+    with patch.object(api, "get_ad", return_value="test_ad"):
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "ok"}, status=200
+        )
+        await api.send_sms("+123456", "Signal restored \U0001f4f6")
+
+    assert "encode_type=UNICODE" in mock_aiohttp_client.post.call_args.kwargs["data"]
+
+
+def _requested_params(mock_client):
+    """Split the batch-poll URL back into the list of requested cmd keys."""
+    return mock_client.get.call_args.args[0].split("cmd=")[1].split(",")
+
+
+@pytest.mark.asyncio
+async def test_get_all_data_requests_every_aliased_key(mock_aiohttp_client):
+    """An alias in sensor.py can never fire if the key is not asked for here."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"cell_id": "1"})
+
+    await api.get_all_data()
+
+    requested = set(_requested_params(mock_aiohttp_client))
+    for key in (
+        "Z5g_rsrp",
+        "5g_rsrp",
+        "nr5g_rsrp",
+        "Z5g_SINR",
+        "Z5g_snr",
+        "5g_sinr",
+        "nr5g_sinr",
+        "nr5g_pci",
+        "Z5g_CELL_ID",
+        "monthly_tx_bytes",
+        "monthly_rx_bytes",
+        "flux_monthly_tx_bytes",
+        "flux_monthly_rx_bytes",
+        "pm_sensor_pa1",
+        "pm_sensor_ambient",
+    ):
+        assert key in requested, f"{key} is aliased but never requested"
+
+
+@pytest.mark.asyncio
+async def test_get_all_data_params_have_no_duplicates(mock_aiohttp_client):
+    """A duplicated key lengthens every poll URL and buys nothing."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"cell_id": "1"})
+
+    await api.get_all_data()
+
+    requested = _requested_params(mock_aiohttp_client)
+    duplicates = {key for key in requested if requested.count(key) > 1}
+    assert not duplicates, f"duplicated batch-poll keys: {sorted(duplicates)}"
