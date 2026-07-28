@@ -128,7 +128,7 @@ class ZTERouterAPI:
         """Centralized request helper that handles session creation and auto-renewal."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
 
-        # Pre-empt an idle-expired session rather than discovering it on failure.
+        # Preempt an idle-expired session rather than discovering it on failure.
         now = datetime.now(UTC)
         if (
             authenticated

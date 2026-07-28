@@ -51,6 +51,50 @@ GROUP_NAMES = {
 }
 
 
+class ZTEAboutEntity:
+    """Mixin exposing a static, human-facing ``about`` note as an attribute.
+
+    Ported from ``unifi_network_monitor`` / ``wifi_ssid_monitor``; keep the three
+    implementations interchangeable. Set the text via ``_attr_about`` (class-level,
+    for single-instance entities) or an ``about`` field on the entity description
+    (for description-driven ones). The note shows in Developer Tools and the More
+    Info dialog but is listed in ``_unrecorded_attributes``, so the recorder never
+    writes it to history — zero storage cost however often the state changes
+    (dev_standards Section 14).
+
+    List this mixin FIRST in an entity's bases so its ``extra_state_attributes``
+    wins over the platform default. An entity that defines its own
+    ``extra_state_attributes`` must route the result through ``_with_about``, or
+    the note silently disappears for that entity only.
+
+    The text is hardcoded rather than translated — it is a pragmatic use of the
+    attribute channel, and there is no HA-native "entity description" field.
+    """
+
+    _unrecorded_attributes = frozenset({"about"})
+    _attr_about: str | None = None
+
+    @property
+    def _about_text(self) -> str | None:
+        """Resolve the note from ``_attr_about`` or the entity description."""
+        if self._attr_about is not None:
+            return self._attr_about
+        description = getattr(self, "entity_description", None)
+        return getattr(description, "about", None) if description is not None else None
+
+    def _with_about(self, attrs: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Merge the ``about`` note into an entity's own attribute dict."""
+        about = self._about_text
+        if about is None:
+            return attrs
+        return {"about": about, **(attrs or {})}
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Default: expose only the ``about`` note when one is set."""
+        return self._with_about(None)
+
+
 def build_device_info(
     coordinator: ZTERouterDataUpdateCoordinator,
     entry: ConfigEntry,

@@ -19,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import build_device_info
+from .helpers import ZTEAboutEntity, build_device_info
 
 PARALLEL_UPDATES = 0
 
@@ -107,10 +107,17 @@ async def async_setup_entry(
 
 
 class ZTEBestConnectionSensor(
+    ZTEAboutEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
     """Binary sensor to check for optimal 5G/LTE CA connection."""
+
+    _attr_about = (
+        "On when the router has the best connection type it can get - a 5G "
+        "carrier aggregated with the 4G anchor. Off does not mean a fault; it "
+        "usually means 5G coverage is unavailable where the router is sited."
+    )
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -157,6 +164,7 @@ class ZTEBestConnectionSensor(
 
 
 class ZTEIntegrationHealthSensor(
+    ZTEAboutEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -173,6 +181,14 @@ class ZTEIntegrationHealthSensor(
     that stopped it being updated.
     """
 
+    _attr_about = (
+        "On when the integration detects a problem with itself, including the "
+        "case where a fetch succeeds but returns nothing usable - which nothing "
+        "else catches. The attributes carry the detail. It stays available even "
+        "when every other entity has gone unavailable, because that is exactly "
+        "when it has something to say."
+    )
+
     _attr_has_entity_name = True
     entity_description: ZTEBinarySensorEntityDescription
 
@@ -181,6 +197,7 @@ class ZTEIntegrationHealthSensor(
     # most polls (Section 14). The entity's on/off state is still recorded.
     _unrecorded_attributes = frozenset(
         {
+            "about",
             "issues",
             "severity",
             "degraded_capabilities",
@@ -224,15 +241,20 @@ class ZTEIntegrationHealthSensor(
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the detail behind the verdict."""
         snapshot = self.coordinator.health_snapshot
-        return {
-            "issues": snapshot.get("issues", []),
-            "severity": snapshot.get("severity", "unknown"),
-            "degraded_capabilities": snapshot.get("degraded_capabilities", []),
-            "drift": snapshot.get("drift", []),
-            "repairs": snapshot.get("repairs", []),
-            "last_good_update": snapshot.get("last_good_update"),
-            "consecutive_failures": snapshot.get("consecutive_failures", 0),
-        }
+        return (
+            self._with_about(
+                {
+                    "issues": snapshot.get("issues", []),
+                    "severity": snapshot.get("severity", "unknown"),
+                    "degraded_capabilities": snapshot.get("degraded_capabilities", []),
+                    "drift": snapshot.get("drift", []),
+                    "repairs": snapshot.get("repairs", []),
+                    "last_good_update": snapshot.get("last_good_update"),
+                    "consecutive_failures": snapshot.get("consecutive_failures", 0),
+                }
+            )
+            or {}
+        )
 
     @property
     def device_info(self) -> DeviceInfo:
@@ -243,6 +265,7 @@ class ZTEIntegrationHealthSensor(
 
 
 class ZTERouterBinarySensor(
+    ZTEAboutEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -257,7 +280,7 @@ class ZTERouterBinarySensor(
     # is the guard, and it sweeps live entities precisely because a static
     # check cannot see through the lambda.
     _unrecorded_attributes = frozenset(
-        {"reboot_hour1", "reboot_min1", "reboot_hour2", "reboot_min2"}
+        {"about", "reboot_hour1", "reboot_min1", "reboot_hour2", "reboot_min2"}
     )
 
     def __init__(
@@ -287,8 +310,13 @@ class ZTERouterBinarySensor(
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return extra state attributes."""
         if not self.coordinator.data or self.entity_description.extra_attrs_fn is None:
-            return {}
-        return self.entity_description.extra_attrs_fn(self.coordinator.data)
+            return self._with_about({}) or {}
+        return (
+            self._with_about(
+                self.entity_description.extra_attrs_fn(self.coordinator.data)
+            )
+            or {}
+        )
 
     @property
     def device_info(self) -> DeviceInfo:

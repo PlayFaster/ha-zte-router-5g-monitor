@@ -66,6 +66,7 @@ def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
     entity or a user template sensor.
     """
     emitted = {
+        "about",
         "id",
         "number",
         "date",

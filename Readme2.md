@@ -183,13 +183,7 @@ This integration provides **75+ entities** (depending on your firmware) organize
 >
 > Entity Visibility: To keep your Home Assistant UI clean, some entities are disabled by default. You can enable them via the Entities tab in the device settings.
 
-| Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
-| :-- | :-- | :-- | :-- |
-| ⚙️ **System** | 13 Sensors, 4 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+10) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, Time Server (SNTP), ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
-| 📶 **Signal** | 35 Sensors, 1 Binary Sensor, 3 Selects (+7) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
-| 📈 **Data** | 11 Sensors, 1 Switch (+5) | Monthly Usage, Near-real-time Speed, Session Data, Data Limit Switch, Data Volume Alert | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
-| ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
-| 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
+---
 
 > [!TIP]
 >

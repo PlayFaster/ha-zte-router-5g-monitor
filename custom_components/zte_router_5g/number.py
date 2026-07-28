@@ -21,7 +21,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_SCAN_INTERVAL
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import build_device_info
+from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,10 +69,17 @@ async def async_setup_entry(
 
 
 class ZTEPollingInterval(
+    ZTEAboutEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     NumberEntity,
 ):
     """Number entity to control the polling interval with persistence."""
+
+    _attr_about = (
+        "How often the integration fetches from the router, from 30 seconds to "
+        "1 hour. The router permits only one login session at a time, so "
+        "polling less often leaves its web page free for longer."
+    )
 
     _attr_has_entity_name = True
     _attr_should_poll = False

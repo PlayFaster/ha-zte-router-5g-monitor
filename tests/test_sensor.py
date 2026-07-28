@@ -257,12 +257,28 @@ def test_sensor_guard_band_max(mock_coordinator, mock_config_entry):
 
 
 def test_sensor_extra_attributes_other_key(mock_coordinator, mock_config_entry):
-    """Test extra_state_attributes returns {} for a non-sms sensor.
+    """A sensor with no detail attributes still publishes its `about` note.
 
-    Covers sensor.py line 768.
+    `lte_rsrp` carries no per-sensor detail, so before the `about` suite it
+    returned `{}`. It now returns the note alone — which is the point of the
+    mixin: every entity that has something to explain explains it.
     """
     mock_coordinator.data = {"some": "data"}
     description = next(d for d in SENSOR_TYPES if d.key == "lte_rsrp")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    assert set(sensor.extra_state_attributes) == {"about"}
+    assert "Reference Signal Received Power" in sensor.extra_state_attributes["about"]
+
+
+def test_sensor_without_an_about_publishes_nothing(mock_coordinator, mock_config_entry):
+    """Not every sensor gets a note, and those must stay attribute-free.
+
+    Guards the other half of the mixin: `_with_about` must return the entity's
+    own attributes untouched when no note is set, rather than inventing an
+    empty `about` key.
+    """
+    mock_coordinator.data = {"some": "data"}
+    description = next(d for d in SENSOR_TYPES if d.about is None)
     sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
     assert sensor.extra_state_attributes == {}
 
@@ -336,7 +352,9 @@ def test_sensor_extra_attributes_type_error_caught(mock_coordinator, mock_config
         pytest.fail(
             f"extra_state_attributes raised TypeError (sensor.py:711 bug): {exc}"
         )
-    assert attrs == {}
+    # The detail dict degrades to empty on bad input; the `about` note is
+    # static and must survive that — it does not depend on coordinator data.
+    assert set(attrs) == {"about"}
 
 
 # --- SUGGESTED DISPLAY UNIT / PRECISION ---

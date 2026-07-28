@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import build_device_info
+from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,7 +77,9 @@ async def async_setup_entry(
     )
 
 
-class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity):
+class ZTEButton(
+    ZTEAboutEntity, CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity
+):
     """Base class for ZTE Router buttons."""
 
     _attr_has_entity_name = True
@@ -106,6 +108,12 @@ class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity)
 class ZTERefreshButton(ZTEButton):
     """Button to trigger an immediate data refresh."""
 
+    _attr_about = (
+        "Fetches from the router immediately, without waiting for the next "
+        "scheduled poll. It works even while polling is paused - explicit "
+        "actions always fetch."
+    )
+
     async def async_press(self) -> None:
         """Handle the button press."""
         await self.coordinator.async_force_refresh()
@@ -113,6 +121,11 @@ class ZTERefreshButton(ZTEButton):
 
 class ZTERebootButton(ZTEButton):
     """Button to reboot the ZTE router."""
+
+    _attr_about = (
+        "Restarts the router. The connection drops for a minute or two, and "
+        "session data counters reset to zero. Monthly counters are unaffected."
+    )
 
     async def async_press(self) -> None:
         """Handle the button press."""

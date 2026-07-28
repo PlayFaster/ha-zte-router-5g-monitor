@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_STOP_POLLING
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import build_device_info
+from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,6 +96,7 @@ async def async_setup_entry(
 
 
 class ZTERouterSwitch(
+    ZTEAboutEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     SwitchEntity,
 ):
@@ -160,10 +161,18 @@ class ZTERouterSwitch(
 
 
 class ZTEPausePollingSwitch(
+    ZTEAboutEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     SwitchEntity,
 ):
     """Switch to pause/resume polling with persistence."""
+
+    _attr_about = (
+        "Stops scheduled polling without removing the integration. Useful when "
+        "you need the router's own web page, since it allows only one login "
+        "session at a time. Entities hold their last known values, and explicit "
+        "actions such as Refresh Now still fetch."
+    )
 
     _attr_has_entity_name = True
     _attr_should_poll = False  # State is managed by user interaction and memory

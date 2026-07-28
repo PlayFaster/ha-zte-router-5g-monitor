@@ -10,10 +10,10 @@ Everything below is drawn from `custom_components/zte_router_5g/api.py` and veri
 
 The UniFi companion document (`ha-unifi-network-monitor/docs/api_endpoints.md`) is organized by URL, because that API has a URL per resource. **ZTE does not.** The entire interface is two endpoints:
 
-| Endpoint                        | Method                           | Role                                                        |
-| :------------------------------ | :------------------------------- | :---------------------------------------------------------- |
-| `goform/goform_get_cmd_process` | GET (and POST for paged queries) | **Reads.** The resource is named in a `cmd=` parameter.     |
-| `goform/goform_set_cmd_process` | POST                             | **Writes.** The action is named in a `goformId=` parameter. |
+| Endpoint | Method | Role |
+| :-- | :-- | :-- |
+| `goform/goform_get_cmd_process` | GET (and POST for paged queries) | **Reads.** The resource is named in a `cmd=` parameter. |
+| `goform/goform_set_cmd_process` | POST | **Writes.** The action is named in a `goformId=` parameter. |
 
 So the unit that corresponds to "an endpoint" elsewhere is **a `cmd` name or a `goformId` name**, and this document is organized that way. Two practical consequences:
 
@@ -64,11 +64,11 @@ It is also why you cannot verify a logout by checking whether the web UI is reac
 
 The router does not return `401`. Expiry is detected by pattern, and all three are handled in `_request` (`api.py:96`):
 
-| Signature           | What it looks like                                                                                                                                     | Where        |
-| :------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :----------- |
-| **HTML redirect**   | Response URL contains `index.html`, or `Content-Type: text/html` with a body starting `<`                                                              | `api.py:152` |
-| **Unparsable JSON** | Body is not JSON at all                                                                                                                                | `api.py:202` |
-| **Hollow JSON**     | Valid JSON, HTTP 200, in which **every value is an empty string** — or `result` is one of `session expired` / `unauth` / `fail`, or `status` is `fail` | `api.py:219` |
+| Signature | What it looks like | Where |
+| :-- | :-- | :-- |
+| **HTML redirect** | Response URL contains `index.html`, or `Content-Type: text/html` with a body starting `<` | `api.py:152` |
+| **Unparsable JSON** | Body is not JSON at all | `api.py:202` |
+| **Hollow JSON** | Valid JSON, HTTP 200, in which **every value is an empty string** — or `result` is one of `session expired` / `unauth` / `fail`, or `status` is `fail` | `api.py:219` |
 
 The third is the dangerous one: a successful-looking 200 with a well-formed body whose fields are blank. Any client that checks only the status code will silently record a router full of empty values. This is precisely the "silent failure" class that `dev_standards.md` §19 Integration Health exists to catch.
 
@@ -222,17 +222,17 @@ Used, but as protocol machinery rather than telemetry — see [Authentication](#
 
 All are `POST`, all carry `Content-Type: application/x-www-form-urlencoded`, all require `AD`, and all are sent as a **pre-built form string** rather than a dict — the parameter order matters to some firmware.
 
-| `goformId`                   | Purpose                                        | Extra parameters                                                                                       | Implementation             |
-| :--------------------------- | :--------------------------------------------- | :----------------------------------------------------------------------------------------------------- | :------------------------- |
-| `LOGIN` / `LOGIN_MULTI_USER` | Authenticate                                   | `password`, optional `username`                                                                        | `api.py:287`               |
-| `LOGOUT`                     | End the session                                | — (but **`AD` is required**)                                                                           | `api.py:391`               |
-| `REBOOT_DEVICE`              | Reboot the router                              | —                                                                                                      | `api.py:584`               |
-| `SEND_SMS`                   | Send a message                                 | `Number`, `MessageBody` (UTF-16BE hex), `encode_type=UNICODE`, `ID=-1`, `sms_time`, `notCallback=true` | `api.py:635`               |
-| `DELETE_SMS`                 | Delete one or more messages                    | `msg_id` — semicolon-separated for a batch                                                             | `api.py:596`               |
-| `APN_PROC_EX`                | Set default APN profile, or switch auto/manual | `apn_mode`, `apn_action`, `set_default_flag`, `pdp_type`, `index`                                      | `api.py:721`, `api.py:737` |
-| `ODU_LED_SWITCH_SET`         | Outdoor-unit LED on/off                        | `ODU_led_switch` (`1`/`0`)                                                                             | `api.py:749`               |
-| `DATA_LIMIT_SETTING`         | Data-volume limit on/off                       | `data_volume_limit_switch` (`1`/`0`)                                                                   | `api.py:763`               |
-| `SET_BEARER_PREFERENCE`      | Network mode                                   | `BearerPreference` (`4G_AND_5G`, `Only_5G`, `Only_LTE`)                                                | `api.py:778`               |
+| `goformId` | Purpose | Extra parameters | Implementation |
+| :-- | :-- | :-- | :-- |
+| `LOGIN` / `LOGIN_MULTI_USER` | Authenticate | `password`, optional `username` | `api.py:287` |
+| `LOGOUT` | End the session | — (but **`AD` is required**) | `api.py:391` |
+| `REBOOT_DEVICE` | Reboot the router | — | `api.py:584` |
+| `SEND_SMS` | Send a message | `Number`, `MessageBody` (UTF-16BE hex), `encode_type=UNICODE`, `ID=-1`, `sms_time`, `notCallback=true` | `api.py:635` |
+| `DELETE_SMS` | Delete one or more messages | `msg_id` — semicolon-separated for a batch | `api.py:596` |
+| `APN_PROC_EX` | Set default APN profile, or switch auto/manual | `apn_mode`, `apn_action`, `set_default_flag`, `pdp_type`, `index` | `api.py:721`, `api.py:737` |
+| `ODU_LED_SWITCH_SET` | Outdoor-unit LED on/off | `ODU_led_switch` (`1`/`0`) | `api.py:749` |
+| `DATA_LIMIT_SETTING` | Data-volume limit on/off | `data_volume_limit_switch` (`1`/`0`) | `api.py:763` |
+| `SET_BEARER_PREFERENCE` | Network mode | `BearerPreference` (`4G_AND_5G`, `Only_5G`, `Only_LTE`) | `api.py:778` |
 
 **`sms_time` format**: `yy;mm;dd;HH;MM;SS;+0` — semicolon-delimited, unlike the comma-delimited format the router _returns_ on received messages. The two are not interchangeable.
 
@@ -275,13 +275,13 @@ Behaviors of this interface that have cost real debugging time.
 
 **The dead-session signature, precisely.** An expired session does not redirect and does not error. It answers **HTTP 200** with the **requested keys echoed back empty** — verified on MC7010 firmware `V1.0.0B03` (2026-07-27) by replaying an invalidated `stok`:
 
-| Request                         | Live session       | Dead session                            |
-| :------------------------------ | :----------------- | :-------------------------------------- |
-| `cmd=sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                 |
-| `cmd=sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                 |
-| batch poll                      | real values        | `{"network_type":"","signalbar":"", …}` |
-| `cmd=sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`              |
-| `cmd=wa_inner_version`          | real value         | **real value** — unauthenticated        |
+| Request | Live session | Dead session |
+| :-- | :-- | :-- |
+| `cmd=sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
+| `cmd=sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
+| batch poll | real values | `{"network_type":"","signalbar":"", …}` |
+| `cmd=sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+| `cmd=wa_inner_version` | real value | **real value** — unauthenticated |
 
 So the test is **"every value is an empty string"**, not "these named keys are empty". Detecting on named keys works for the batch poll and silently fails everywhere else: an SMS response has no `network_type`, so a check for `network_type == ""` can never fire, and the caller sees an empty inbox rather than an error. That was a real defect, fixed 2026-07-27.
 

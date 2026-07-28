@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.0-rc3] - 2026-07-28 - Unreleased - No Manifest Bump - `about` Notes on 63 Entities
+
+Brings the `about` attribute suite to parity with `unifi_network_monitor` and `wifi_ssid_monitor`. **408 tests passing, 100% coverage, ruff clean, mypy strict clean.**
+
+### Added
+
+- **`ZTEAboutEntity` mixin** in `helpers.py`, ported from the two sibling projects — keep the three interchangeable. It resolves the note from `_attr_about` (single-instance entities) or an `about` field on the entity description (description-driven ones), and carries `_unrecorded_attributes = frozenset({"about"})` so the recorder never stores it.
+
+- **57 description-level notes across the sensor platform**, concentrated where the entity name alone does not say what the value is:
+  - **31 signal sensors** — every acronym decoded in place: RSRP, RSRQ, RSSI, SNR, SINR, PCI, CA/SCell, eNodeB, ENDC, MCC/MNC, APN, RSCP, NR-ARFCN.
+  - **The signal metrics also carry typical ranges** — "better than -80 excellent, -80 to -90 good, -90 to -100 fair, below -100 poor". For siting a router that is the question actually being asked, and expanding the acronym alone does not answer it.
+  - **11 data sensors** — chiefly the distinctions users get wrong: monthly versus session counters, the router's own count versus the ISP's billing, and why the raw byte sensors exist alongside the GB ones.
+  - **9 system, 2 SMS, and the remainder of the signal group.**
+
+- **6 control-entity notes via `_attr_about`** — Integration Health, Best Connection, Refresh Now, Reboot, Polling Interval, Pause Polling. These are the single-instance entities that half of the mixin exists for.
+
+- **`about` field on `ZTESensorEntityDescription`**, and the mixin wired into the sensor, binary-sensor, button, number and switch entity classes.
+
+### Changed
+
+- **README documents the notes** under What You Get: where to find them (⋮ → Details), that the signal ones carry good/fair/poor ranges, and that they are unrecorded so they cost nothing to carry.
+
+- **Every `extra_state_attributes` path now routes through `_with_about`.** A bare `return {}` on any branch would drop the note for that entity alone — the kind of gap that surfaces much later as "some entities have an about and some do not".
+
+### Notes
+
+- **Not every entity got one — 63 of 77.** Self-explanatory entities (Model Name, Hardware Version, LAN IP, Last Updated, unread-SMS count) were deliberately left without. A note on everything trains users to ignore notes.
+
+- **Coverage regression caught and closed.** Adding only description-level notes left two statements in the mixin unreachable — the `_attr_about` branch and the mixin's default `extra_state_attributes`, neither of which any entity used. Rather than write tests for dead branches, the control entities above were given notes via `_attr_about`, which exercises both paths and matches how the siblings use the mixin (8 and 4 such uses respectively). Back to 100%.
+
+- **Mutation-proved, and the first attempt was misleading.** Removing `about` from the mixin's `_unrecorded_attributes` alone did **not** fail the recorder sweep — because each entity class also lists `"about"` in its own set, matching UniFi's belt-and-braces pattern. Removing it from the mixin **and** every class set turns the sweep red, which is what confirms the guard is real rather than incidental.
+
+- Two existing tests asserted `extra_state_attributes == {}` for sensors that now carry a note; both updated, and a new test added asserting that a sensor with **no** `about` still publishes nothing — guarding the other half of `_with_about`.
+
 ## [3.3.0-rc2] - 2026-07-28 - Unreleased - No Manifest Bump - External Code Review Triage
 
 Triage of `.notes/code_review/code_review_20260728_0019.md` (external agent, 0 findings + 3 architectural observations). **407 tests passing, 100% coverage, ruff clean, mypy strict clean.** Two of the three observations were declined with reasons; the review's most useful effect was prompting a measurement that settled one of them, and a re-read that found a defect the review missed.
@@ -90,12 +124,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalised to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request                     | Live session       | Dead session                                         |
-  | :-------------------------- | :----------------- | :--------------------------------------------------- |
-  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
-  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
-  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
+  | Request | Live session | Dead session |
+  | :-- | :-- | :-- |
+  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
+  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
+  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -487,16 +521,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category                                   | Count       | Fix                                                                        |
-| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
-| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
-| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
-| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
-| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
-| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
-| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
-| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
+| Category | Count | Fix |
+| :-- | :-- | :-- |
+| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
+| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
+| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
+| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
+| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
+| **Indentation error** | 1 test | Fixed broken indent |
+| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
 
 ### Files modified
 

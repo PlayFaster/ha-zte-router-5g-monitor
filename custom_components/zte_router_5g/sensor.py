@@ -28,7 +28,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import ENDPOINT_SMS_MESSAGES, ZTERouterDataUpdateCoordinator
-from .helpers import build_device_info
+from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +49,11 @@ class ZTESensorEntityDescription(SensorEntityDescription):
     # goes unavailable once that endpoint exhausts its own strike budget,
     # instead of serving a stale value forever (dev_standards Section 8).
     source: str | None = None
+    # Optional plain-language note surfaced as an unrecorded `about` attribute
+    # (dev_standards Section 14). Use it where the entity name alone does not
+    # say what the value is or what a good value looks like — chiefly the
+    # signal metrics, whose names are acronyms.
+    about: str | None = None
 
 
 def _get_bytes_to_gb(val: Any) -> float | None:
@@ -131,6 +136,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wa_inner_version",
+        about=(
+            "The router's firmware build string. Worth noting before and after a "
+            "firmware update: a new build can rename the fields this integration "
+            "reads, which the Integration Health sensor reports as contract drift."
+        ),
         translation_key="system_wa_inner_version",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
@@ -138,6 +148,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wan_ipaddr",
+        about=(
+            "The address your ISP has given the router on the mobile network - what "
+            "the internet sees. Often a shared carrier-grade NAT address, which is "
+            "why inbound connections and port forwarding usually do not work on "
+            "mobile broadband."
+        ),
         translation_key="system_wan_ipaddr",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
@@ -152,6 +168,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="device_uptime",
+        about=(
+            "The moment the router last booted, held steady between reboots rather "
+            "than recalculated each poll. It only moves when the router's own uptime "
+            "counter drops, so a genuine restart is easy to trigger automations on."
+        ),
         translation_key="system_device_uptime",
         device_class=SensorDeviceClass.TIMESTAMP,
         group="system",
@@ -159,6 +180,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="realtime_time",
+        about=(
+            "How long the router has been running since its last boot. The Device "
+            "Uptime sensor expresses the same fact as a timestamp, which is usually "
+            "the easier one to automate against."
+        ),
         translation_key="system_uptime_duration",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
@@ -177,6 +203,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="imei",
+        about=(
+            "International Mobile Equipment Identity - the modem's unique 15-digit "
+            "hardware serial, used by networks to identify the device itself rather "
+            "than the SIM. This integration also uses it as the stable identity for "
+            "your router, so entity history survives an IP change."
+        ),
         translation_key="system_imei",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -192,6 +224,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="battery_value",
+        about=(
+            "Battery charge, on ZTE models that have one. Outdoor CPE units such as "
+            "the MC7010 are mains-powered and will normally report nothing here."
+        ),
         translation_key="system_battery_value",
         device_class=SensorDeviceClass.BATTERY,
         native_unit_of_measurement=PERCENTAGE,
@@ -203,6 +239,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="sim_imsi",
+        about=(
+            "International Mobile Subscriber Identity - the unique number identifying "
+            "your SIM's subscription on the network, as distinct from the IMEI which "
+            "identifies the hardware."
+        ),
         translation_key="system_sim_imsi",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -211,6 +252,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="sim_iccid",
+        about=(
+            "Integrated Circuit Card ID - the SIM card's own serial number, printed "
+            "on the card itself. Useful for identifying which SIM is in the router "
+            "without opening it."
+        ),
         translation_key="system_sim_iccid",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -220,6 +266,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # --- Signal Sub-device ---
     ZTESensorEntityDescription(
         key="wan_connect_status",
+        about=(
+            "Whether the router currently has a data connection to the mobile "
+            "network. This covers the mobile side only - it can report connected "
+            "while the wider internet is unreachable."
+        ),
         translation_key="signal_wan_connect_status",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -227,6 +278,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wan_apn",
+        about=(
+            "Access Point Name - the gateway profile the router uses to reach your "
+            "ISP's network. A wrong APN is a common cause of a router that has good "
+            "signal but no working data."
+        ),
         translation_key="signal_wan_apn",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -234,12 +290,22 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="network_type",
+        about=(
+            "The connection technology in use. ENDC means 5G NSA, where a 4G anchor "
+            "and a 5G carrier are used together; LTE means 4G only. Dropping from "
+            "ENDC to LTE is the usual sign that 5G coverage has been lost."
+        ),
         translation_key="signal_network_type",
         group="signal",
         value_fn=lambda data: _safe_str(data.get("network_type")),
     ),
     ZTESensorEntityDescription(
         key="signalbar",
+        about=(
+            "The router's own signal rating, 0 to 5, the same one shown on its web "
+            "page. It is a coarse summary - for anything precise use RSRP or SINR, "
+            "which is what the bars are derived from."
+        ),
         translation_key="signal_signalbar",
         state_class=SensorStateClass.MEASUREMENT,
         group="signal",
@@ -247,6 +313,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="network_provider",
+        about=(
+            "The mobile network the router is registered to. This can differ from the "
+            "SIM's home network while roaming."
+        ),
         translation_key="signal_network_provider",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -254,6 +324,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="mdm_mcc",
+        about=(
+            "Mobile Country Code - a three-digit code identifying the country of the "
+            "network the modem is attached to (for example 272 = Ireland)."
+        ),
         translation_key="signal_mdm_mcc",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -261,6 +335,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="mdm_mnc",
+        about=(
+            "Mobile Network Code - identifies the individual operator within that "
+            "country. Together with the MCC it uniquely names the network you are on."
+        ),
         translation_key="signal_mdm_mnc",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -268,6 +346,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="rmcc",
+        about=(
+            "Mobile Country Code of the network the router is registered to, as "
+            "opposed to the modem's own view. It differs from the modem MCC while "
+            "roaming."
+        ),
         translation_key="signal_rmcc",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -276,6 +359,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="rmnc",
+        about=(
+            "Mobile Network Code of the registered network. Compare with the modem "
+            "MNC to tell whether the router is roaming."
+        ),
         translation_key="signal_rmnc",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -284,6 +371,13 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_rsrp",
+        about=(
+            "Reference Signal Received Power - the strength of the 4G signal, in dBm. "
+            "This is the single most useful number for aiming or siting the router. "
+            "Typically: better than -80 is excellent, -80 to -90 good, -90 to -100 "
+            "fair, below -100 poor. Values are negative, so closer to zero is "
+            "stronger."
+        ),
         translation_key="signal_lte_rsrp",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -296,6 +390,13 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_rsrq",
+        about=(
+            "Reference Signal Received Quality - 4G signal quality rather than raw "
+            "strength, in dB. It reflects how much interference and load the cell is "
+            "carrying. Typically: better than -10 is excellent, -10 to -15 good, -15 "
+            "to -20 fair, below -20 poor. Strong RSRP with poor RSRQ usually means a "
+            "busy cell."
+        ),
         translation_key="signal_lte_rsrq",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
@@ -306,6 +407,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_rssi",
+        about=(
+            "Received Signal Strength Indicator - total received power across the 4G "
+            "channel, including noise and interference, in dBm. Less diagnostic than "
+            "RSRP, because it cannot separate your cell's signal from everything else "
+            "on the frequency."
+        ),
         translation_key="signal_lte_rssi",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -318,6 +425,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_snr",
+        about=(
+            "Signal-to-Noise Ratio for 4G, in dB - how far the wanted signal rises "
+            "above the background noise. This is the best predictor of achievable "
+            "speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, "
+            "below 0 poor."
+        ),
         translation_key="signal_lte_snr",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
@@ -328,6 +441,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_pci",
+        about=(
+            "Physical Cell Identity - a number from 0 to 503 identifying the specific "
+            "4G cell sector serving the router. Neighbouring sectors reuse the range, "
+            "so a change means you have moved to a different sector or mast."
+        ),
         translation_key="signal_lte_pci",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -335,6 +453,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="cell_id",
+        about=(
+            "The identifier of the 4G cell currently serving the router. A change "
+            "means you have been handed to a different cell, which often explains a "
+            "sudden change in speed or signal."
+        ),
         translation_key="signal_cell_id",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -342,12 +465,22 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wan_lte_ca",
+        about=(
+            "Whether Carrier Aggregation is active - the modem combining two or more "
+            "frequency bands at once for extra bandwidth. When active, the secondary "
+            "band appears in the SCell sensors."
+        ),
         translation_key="signal_wan_lte_ca",
         group="signal",
         value_fn=lambda data: data.get("wan_lte_ca"),
     ),
     ZTESensorEntityDescription(
         key="lte_ca_pcell_band",
+        about=(
+            "The primary 4G band carrying your connection. Lower-numbered bands "
+            "generally travel further and penetrate buildings better; higher bands "
+            "usually carry more capacity over shorter distances."
+        ),
         translation_key="signal_lte_ca_pcell_band",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -355,6 +488,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_ca_pcell_bandwidth",
+        about=(
+            "The channel width of the primary 4G band, in MHz. Wider is faster: 20 "
+            "MHz carries roughly four times the data of 5 MHz, all else being equal."
+        ),
         translation_key="signal_lte_ca_pcell_bandwidth",
         native_unit_of_measurement="MHz",
         suggested_display_precision=0,
@@ -364,6 +501,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_ca_scell_band",
+        about=(
+            "The secondary 4G band added by Carrier Aggregation. Only present while "
+            "aggregation is active."
+        ),
         translation_key="signal_lte_ca_scell_band",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -372,6 +513,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="lte_ca_scell_bandwidth",
+        about=(
+            "Channel width of the aggregated secondary 4G band, in MHz. It adds to "
+            "the primary band's capacity rather than replacing it."
+        ),
         translation_key="signal_lte_ca_scell_bandwidth",
         native_unit_of_measurement="MHz",
         suggested_display_precision=0,
@@ -382,6 +527,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wan_active_band",
+        about=(
+            "The frequency band currently carrying your connection. Which band you "
+            "land on is decided by the network, and it affects both range and speed."
+        ),
         translation_key="signal_wan_active_band",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -389,6 +538,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="wan_active_channel",
+        about=(
+            "The specific radio channel number in use within the active band. Mainly "
+            "of interest when comparing against neighbouring cells or diagnosing "
+            "interference."
+        ),
         translation_key="signal_wan_active_channel",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -396,6 +550,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrp",
+        about=(
+            "Reference Signal Received Power for the 5G carrier, in dBm - the 5G "
+            "equivalent of LTE RSRP, and the number to watch when siting the router "
+            "for 5G. Typically: better than -80 is excellent, -80 to -90 good, -90 to "
+            "-100 fair, below -100 poor."
+        ),
         translation_key="signal_z5g_rsrp",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -408,6 +568,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrq",
+        about=(
+            "Reference Signal Received Quality for 5G, in dB - quality rather than "
+            "strength, reflecting interference and cell load. Typically: better than "
+            "-10 is excellent, -10 to -15 good, -15 to -20 fair, below -20 poor."
+        ),
         translation_key="signal_z5g_rsrq",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
@@ -418,6 +583,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="z5g_rssi",
+        about=(
+            "Total received power across the 5G channel, in dBm, including noise and "
+            "interference. Use 5G RSRP for a cleaner measure of your own cell's "
+            "strength."
+        ),
         translation_key="signal_z5g_rssi",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         state_class=SensorStateClass.MEASUREMENT,
@@ -430,6 +600,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="z5g_sinr",
+        about=(
+            "Signal-to-Interference-plus-Noise Ratio for 5G, in dB - the clearest "
+            "predictor of 5G speed, because it accounts for interference as well as "
+            "noise. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, "
+            "below 0 poor."
+        ),
         translation_key="signal_z5g_sinr",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement="dB",
@@ -440,6 +616,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="nr5g_pci",
+        about=(
+            "Physical Cell Identity for the 5G cell, from 0 to 1007. A change means "
+            "the router has been handed to a different 5G sector or mast."
+        ),
         translation_key="signal_nr5g_pci",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -447,6 +627,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="nr5g_action_band",
+        about=(
+            "The active 5G NR band. Bands below 1 GHz reach furthest, mid-band "
+            "(around 3.5 GHz) is the usual balance of speed and coverage, and high "
+            "bands are fastest over the shortest distance."
+        ),
         translation_key="signal_nr5g_action_band",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -454,6 +639,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="nr5g_action_channel",
+        about=(
+            "The 5G channel number in use within the active band, expressed as an NR- "
+            "ARFCN. Useful when comparing your connection against neighbouring cells."
+        ),
         translation_key="signal_nr5g_action_channel",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -461,6 +650,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="rssi",
+        about=(
+            "Overall received signal strength reported by the modem, in dBm. Kept for "
+            "completeness - the per-technology LTE and 5G metrics are more "
+            "diagnostic."
+        ),
         translation_key="signal_rssi",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
@@ -473,6 +667,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="rscp",
+        about=(
+            "Received Signal Code Power, in dBm - a 3G/UMTS measurement. Only "
+            "meaningful if the router has fallen back to 3G, which on a 5G CPE "
+            "usually signals a coverage problem."
+        ),
         translation_key="signal_rscp",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
         native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
@@ -485,6 +684,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="enodeb_id",
+        about=(
+            "The identifier of the 4G base station (eNodeB) serving you - the mast "
+            "itself, rather than the individual sector, which is the Cell ID. A "
+            "change here means you have moved to a different mast."
+        ),
         translation_key="signal_enodeb_id",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -492,6 +696,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="net_select",
+        about=(
+            "The network technology the router is currently allowed to use, as chosen "
+            "by the Network Mode control. Restricting it can stabilise a connection "
+            "that keeps switching between 4G and 5G."
+        ),
         translation_key="signal_net_select",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -499,6 +708,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="ppp_status",
+        about=(
+            "The state of the data session with your ISP. It can show disconnected "
+            "while the radio signal is still strong, which points at an APN or "
+            "account problem rather than coverage."
+        ),
         translation_key="signal_ppp_status",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -508,6 +722,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # Legacy GB Sensors (Disabled by default, preserved for history)
     ZTESensorEntityDescription(
         key="monthly_tx_bytes",
+        about=(
+            "Data uploaded this billing month, as counted by the router. This is the "
+            "router's own counter, not your ISP's - it resets when the router says so "
+            "and may not match your operator's billing exactly."
+        ),
         translation_key="data_monthly_tx_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -519,6 +738,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="monthly_rx_bytes",
+        about=(
+            "Data downloaded this billing month, as counted by the router. Treat it "
+            "as a close guide rather than an exact match for your ISP's billing."
+        ),
         translation_key="data_monthly_rx_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -530,6 +753,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="monthly_total_bytes",
+        about=(
+            "Combined upload and download for the billing month - the figure to "
+            "compare against a data cap."
+        ),
         translation_key="data_monthly_total_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -548,6 +775,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # Standard Byte Sensors (Enabled by default, supports UI conversion)
     ZTESensorEntityDescription(
         key="monthly_tx_bytes_raw",
+        about=(
+            "The same monthly upload total in bytes, unconverted. Provided for "
+            "automations that need the exact number; the GB version is the friendlier "
+            "one to display."
+        ),
         translation_key="data_monthly_tx_bytes_raw",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -559,6 +791,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="monthly_rx_bytes_raw",
+        about=(
+            "The same monthly download total in bytes, unconverted. Use the GB "
+            "version for display and this one for precise arithmetic."
+        ),
         translation_key="data_monthly_rx_bytes_raw",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -570,6 +806,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="monthly_total_bytes_raw",
+        about=(
+            "Combined monthly upload and download in bytes. The GB sensor is easier "
+            "to read; this one avoids rounding in automations."
+        ),
         translation_key="data_monthly_total_bytes_raw",
         device_class=SensorDeviceClass.DATA_SIZE,
         state_class=SensorStateClass.TOTAL,
@@ -588,6 +828,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="realtime_tx_thrpt",
+        about=(
+            "Current upload rate. This is a snapshot taken at the moment the router "
+            "was last polled, not an average - brief peaks between polls are not "
+            "captured."
+        ),
         translation_key="data_realtime_tx_thrpt",
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
@@ -599,6 +844,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="realtime_rx_thrpt",
+        about=(
+            "Current download rate at the instant of the last poll. Because it is "
+            "sampled rather than averaged, it will not reflect a short burst that "
+            "happened between polls."
+        ),
         translation_key="data_realtime_rx_thrpt",
         device_class=SensorDeviceClass.DATA_RATE,
         native_unit_of_measurement=UnitOfDataRate.BYTES_PER_SECOND,
@@ -610,6 +860,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="realtime_tx_bytes",
+        about=(
+            "Data uploaded during the current session - since the router last "
+            "restarted, not since the start of the month. It resets to zero on every "
+            "reboot."
+        ),
         translation_key="data_realtime_tx_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
@@ -621,6 +876,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="realtime_rx_bytes",
+        about=(
+            "Data downloaded during the current session, reset on every router "
+            "reboot. For billing, use the monthly sensors instead."
+        ),
         translation_key="data_realtime_rx_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
         native_unit_of_measurement=UnitOfInformation.BYTES,
@@ -640,6 +899,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="msg_total",
+        about=(
+            "Total messages held across every storage area - router memory and SIM, "
+            "inbox, sent and drafts. The breakdown per area is in this sensor's "
+            "attributes. Storage filling up stops new messages arriving, which the "
+            "Integration Health sensor flags."
+        ),
         translation_key="sms_msg_total",
         state_class=SensorStateClass.MEASUREMENT,
         group="sms",
@@ -647,6 +912,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="msg_recent",
+        about=(
+            "The most recently received message. Sender, date and storage index are "
+            "in the attributes; the index is what the delete action needs to remove "
+            "this specific message."
+        ),
         translation_key="sms_msg_recent",
         group="sms",
         # The only sensor fed by an optional endpoint — the other SMS sensors
@@ -657,6 +927,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     # --- Discovered Technical Settings & Info ---
     ZTESensorEntityDescription(
         key="lte_band_lock",
+        about=(
+            "Which 4G bands the modem is permitted to use, as a bitmask. Locking to a "
+            "band can help a marginal connection, but locking to one that is "
+            "unavailable will leave the router with no service."
+        ),
         translation_key="signal_lte_band_lock",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -665,6 +940,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="data_volume_alert_percent",
+        about=(
+            "The percentage of your configured data allowance at which the router "
+            "raises its own alert. This is the router's internal warning threshold, "
+            "separate from any automation you build in Home Assistant."
+        ),
         translation_key="data_volume_alert_percent",
         native_unit_of_measurement="%",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -676,6 +956,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="sntp_server",
+        about=(
+            "The time server the router synchronises its clock from. An unreachable "
+            "time server can make the timestamps on SMS messages and logs wrong, so "
+            "it is worth checking if dates look implausible."
+        ),
         translation_key="system_sntp_server",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -700,7 +985,9 @@ async def async_setup_entry(
     )
 
 
-class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity):
+class ZTERouterSensor(
+    ZTEAboutEntity, CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity
+):
     """Representation of a ZTE Router sensor."""
 
     _attr_has_entity_name = True
@@ -723,6 +1010,7 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
     # have them as an entity or a template sensor.
     _unrecorded_attributes = frozenset(
         {
+            "about",
             "sntp_server1",
             "sntp_dst_enable",
             "id",
@@ -800,45 +1088,49 @@ class ZTERouterSensor(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorE
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return detailed attributes for specific sensors."""
+        """Return the `about` note, plus detailed attributes for some sensors.
+
+        Every return path goes through `_with_about` — a bare `return {}` here
+        would drop the note for that sensor only, which is the kind of gap that
+        shows up as "some entities have an about and some don't" much later.
+        """
         data = self.coordinator.data
-        if not data:
-            return {}
-
         key = self.entity_description.key
+        detail: dict[str, Any] = {}
 
-        if key == "msg_total":
-            try:
-                return {
-                    "sms_nv_total": int(data.get("sms_nv_total", 0)),
-                    "sms_sim_total": int(data.get("sms_sim_total", 0)),
-                    "sms_nv_rev_total": int(data.get("sms_nv_rev_total", 0)),
-                    "sms_nv_send_total": int(data.get("sms_nv_send_total", 0)),
-                    "sms_nv_draftbox_total": int(data.get("sms_nv_draftbox_total", 0)),
-                    "sms_sim_rev_total": int(data.get("sms_sim_rev_total", 0)),
-                    "sms_sim_send_total": int(data.get("sms_sim_send_total", 0)),
-                    "sms_sim_draftbox_total": int(
-                        data.get("sms_sim_draftbox_total", 0)
-                    ),
+        if data:
+            if key == "msg_total":
+                try:
+                    detail = {
+                        "sms_nv_total": int(data.get("sms_nv_total", 0)),
+                        "sms_sim_total": int(data.get("sms_sim_total", 0)),
+                        "sms_nv_rev_total": int(data.get("sms_nv_rev_total", 0)),
+                        "sms_nv_send_total": int(data.get("sms_nv_send_total", 0)),
+                        "sms_nv_draftbox_total": int(
+                            data.get("sms_nv_draftbox_total", 0)
+                        ),
+                        "sms_sim_rev_total": int(data.get("sms_sim_rev_total", 0)),
+                        "sms_sim_send_total": int(data.get("sms_sim_send_total", 0)),
+                        "sms_sim_draftbox_total": int(
+                            data.get("sms_sim_draftbox_total", 0)
+                        ),
+                    }
+                except (ValueError, TypeError):
+                    detail = {}
+            elif key == "msg_recent":
+                msg = data.get("last_sms", {})
+                detail = {
+                    "id": msg.get("id"),
+                    "number": msg.get("number_decoded"),
+                    "date": msg.get("date_decoded"),
                 }
-            except (ValueError, TypeError):
-                return {}
+            elif key == "sntp_server":
+                detail = {
+                    "sntp_server1": data.get("sntp_server1"),
+                    "sntp_dst_enable": data.get("sntp_dst_enable") == "1",
+                }
 
-        if key == "msg_recent":
-            msg = data.get("last_sms", {})
-            return {
-                "id": msg.get("id"),
-                "number": msg.get("number_decoded"),
-                "date": msg.get("date_decoded"),
-            }
-
-        if key == "sntp_server":
-            return {
-                "sntp_server1": data.get("sntp_server1"),
-                "sntp_dst_enable": data.get("sntp_dst_enable") == "1",
-            }
-
-        return {}
+        return self._with_about(detail) or {}
 
     @property
     def device_info(self) -> DeviceInfo:
