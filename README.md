@@ -648,11 +648,15 @@ triggers:
   - trigger: state
     entity_id: sensor.zte_5g_signal_wan_connect_status
     to: "disconnected"
+    not_from:
+      - "unknown"
+      - "unavailable"
     for: "00:05:00"
     note: |
       The 5 minute hold matters. The integration already holds last-known values for
       three consecutive failed polls before reporting anything, so a value that has
       stayed "disconnected" for five minutes is a real outage rather than a blip.
+      not_from suppresses transitions coming directly out of unknown or unavailable states.
 conditions:
   - condition: state
     entity_id: select.zte_5g_signal_apn_profile
@@ -702,7 +706,7 @@ actions:
       title: "ZTE Data Alert"
       message: |
         Monthly data usage has reached
-        {{ states('sensor.zte_5g_data_monthly_total') }}
+        {{ states('sensor.zte_5g_data_monthly_total') | float(0) | round(0) }}
         {{ state_attr('sensor.zte_5g_data_monthly_total', 'unit_of_measurement') }}.
     note: |
       Reading the unit from the entity keeps the message correct whether you are
@@ -739,15 +743,25 @@ triggers:
   - trigger: state
     entity_id:
       - sensor.zte_5g_signal_network_type
-    not_to: "ENDC"
+    not_to:
+      - "ENDC"
+      - "unknown"
+      - "unavailable"
     for: "00:05:00"
-    note: Dropped off 5G NSA entirely - usually the most noticeable of the four.
+    note: |
+      Dropped off 5G NSA entirely. Ignores unknown and unavailable states so reboots
+      or transient polling failures do not trigger false alerts.
   - trigger: state
     entity_id:
       - sensor.zte_5g_signal_carrier_aggregation
-    not_to: "ca_activated"
+    not_to:
+      - "ca_activated"
+      - "unknown"
+      - "unavailable"
     for: "00:05:00"
-    note: Lost LTE carrier aggregation, which usually shows up as reduced throughput.
+    note: |
+      Lost LTE carrier aggregation. Ignores unknown and unavailable states so reboots
+      or transient polling failures do not trigger false alerts.
   - trigger: numeric_state
     entity_id:
       - sensor.zte_5g_signal_signal_bars
@@ -758,6 +772,11 @@ triggers:
       physically meaningful threshold; bars is coarse but matches what the router's
       own UI shows.
 conditions:
+  - condition: template
+    value_template: "{{ states('sensor.zte_5g_signal_network_type') not in ['unknown', 'unavailable'] }}"
+    note: |
+      Ensures the network state is valid before checking degradation conditions, preventing
+      false evaluation when entities are temporarily unavailable.
   - condition: or
     conditions:
       - condition: numeric_state
@@ -903,12 +922,15 @@ triggers:
   - trigger: state
     entity_id: sensor.zte_5g_signal_wan_connect_status
     to: "disconnected"
+    not_from:
+      - "unknown"
+      - "unavailable"
     for:
       minutes: 30
     note: |
       Deliberately long. Mobile networks drop and re-establish routinely, and a reboot
       costs several minutes of downtime - so this should only fire for an outage that
-      has clearly stopped resolving itself.
+      has clearly stopped resolving itself. not_from suppresses transitions from unknown or unavailable.
 conditions:
   - condition: state
     entity_id: binary_sensor.zte_5g_system_integration_health
@@ -955,15 +977,15 @@ mode: single
 triggers:
   - trigger: state
     entity_id: sensor.zte_5g_signal_cell_id
+    not_from:
+      - "unknown"
+      - "unavailable"
+    not_to:
+      - "unknown"
+      - "unavailable"
     note: |
-      No to: or from: - any change fires this, and Cell ID only changes when the
-      serving cell actually changes.
-conditions:
-  - condition: template
-    value_template: "{{ trigger.from_state.state not in ['unknown', 'unavailable', none] }}"
-    note: |
-      Suppresses the first reading after a restart, which would otherwise look like a
-      tower change every time Home Assistant boots.
+      Fires only when the serving cell ID changes to another valid cell ID, ignoring
+      unknown or unavailable transitions during restarts or connection blips.
 actions:
   - action: persistent_notification.create
     data:
@@ -996,14 +1018,17 @@ mode: single
 triggers:
   - trigger: state
     entity_id: sensor.zte_5g_system_firmware_version
+    not_from:
+      - "unknown"
+      - "unavailable"
+    not_to:
+      - "unknown"
+      - "unavailable"
     note: |
       ZTE CPEs can update firmware without warning. Worth knowing about, because a
       firmware change can rename the API fields the integration reads - exactly the
-      condition the Integration Health sensor watches for.
-conditions:
-  - condition: template
-    value_template: "{{ trigger.from_state.state not in ['unknown', 'unavailable', none] }}"
-    note: Ignores the first reading after a restart.
+      condition the Integration Health sensor watches for. Ignores unknown or unavailable
+      transitions.
 actions:
   - action: persistent_notification.create
     data:
@@ -1146,7 +1171,7 @@ actions:
         Bars: {{ states('sensor.zte_5g_signal_signal_bars') }}/5
         LTE RSRP: {{ states('sensor.zte_5g_signal_lte_rsrp') }} dBm
         5G RSRP: {{ states('sensor.zte_5g_signal_5g_rsrp') }} dBm
-        Monthly data: {{ states('sensor.zte_5g_data_monthly_total') }}
+        Monthly data: {{ states('sensor.zte_5g_data_monthly_total') | float(0) | round(0) }} {{ state_attr('sensor.zte_5g_data_monthly_total', 'unit_of_measurement') }}
         Reading taken: {{ states('sensor.zte_5g_system_last_updated') }}
     note: |
       Including Last Updated proves the report is fresh - if it does not move, the
