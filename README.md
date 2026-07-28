@@ -79,20 +79,62 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 ### 📡 Advanced 5G/LTE Diagnostics
 
+Track signal strength metrics (RSRP, RSRQ, RSSI, SNR), serving cell tower details, and active carrier bands in near-real-time.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 - **Detailed Signal Metrics**: RSRP, RSRQ, RSSI, and SNR for both the 5G NR and the LTE anchor cell.
 - **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active frequency bands/channels. See the [Cell Tower Change Alert](#-cell-tower-change-alert) example.
 - **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use. See the [Signal Quality Alert](#-signal-quality-alert) example.
 
+---
+
+</details>
+
+<br>
+
 ### 📉 Data Usage Tracking
+
+Monitor monthly data consumption, active session totals, and real-time upload/download speeds.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 - **Monthly Data Usage**: Track your monthly download, upload and total data usage. See the [Data Usage Alert](#-data-usage-alert) example.
 - **Session Usage**: Track your download and upload for this session (i.e. since last router restart).
 - **Download & Upload Speed**: Track your upload and download speeds. Note: This is valid, but only at the instant data was fetched from the router.
 
+---
+
+</details>
+
+<br>
+
 ### 📋 Essential Router Management
+
+Reboot router hardware directly from Home Assistant and monitor data integrity with automated self-diagnostics.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
 - **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
+
+---
+
+</details>
+
+<br>
 
 ### 🔄 Dynamic Polling
 
@@ -372,7 +414,11 @@ Provides unread SMS count and latest message content sensors, a one-click **Dele
 
 ### `zte_router_5g.send_sms`
 
-Send an SMS message via the router.
+<details>
+
+<summary> &nbsp; &nbsp; Send an SMS message via the router.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
+</summary><br>
 
 | Parameter | Required | Description |
 | :-- | :-- | :-- |
@@ -387,7 +433,19 @@ data:
   message: "Hello from Home Assistant!"
 ```
 
+---
+
+</details>
+
+<br>
+
 ### `zte_router_5g.delete_sms`
+
+<details>
+
+<summary> &nbsp; &nbsp; Delete a single SMS by its storage index.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
+</summary><br>
 
 Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
 
@@ -403,9 +461,19 @@ data:
   index: 3
 ```
 
+---
+
+</details>
+
+<br>
+
 ### `zte_router_5g.delete_all_sms`
 
-Bulk delete SMS messages from the router inbox.
+<details>
+
+<summary> &nbsp; &nbsp; Bulk delete SMS messages from the router inbox.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
+</summary><br>
 
 | Parameter | Required | Default | Range | Description |
 | :-- | :-- | :-- | :-- | :-- |
@@ -419,7 +487,19 @@ data:
   keep_last: 5
 ```
 
+---
+
+</details>
+
+<br>
+
 ### `zte_router_5g.get_sms_list`
+
+<details>
+
+<summary> &nbsp; &nbsp; Fetch a list of SMS messages with action response support.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
+</summary><br>
 
 Fetch a list of SMS messages. Supports **Action Responses** — use the output directly in automations and scripts.
 
@@ -453,7 +533,19 @@ data:
 response_variable: inbox
 ```
 
+---
+
+</details>
+
+<br>
+
 ### `zte_router_5g_sms_received` Event
+
+<details>
+
+<summary> &nbsp; &nbsp; Event payload fields fired when a new incoming SMS is received.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Detail:
+</summary><br>
 
 Fires automatically when a new incoming SMS is detected. Use as an automation trigger.
 
@@ -464,6 +556,10 @@ Fires automatically when a new incoming SMS is detected. Use as an automation tr
 | `content` | Text | Message body. |
 | `date` | Text | Date/time of the message. |
 | `index` | Integer | Storage index — pass directly to `delete_sms` to delete after processing. |
+
+---
+
+</details>
 
 ## 💡 Example Automations
 
@@ -1194,10 +1290,22 @@ Use the **shortcut badge** above, and then proceed to Step #3 or just ...
 
 ### 💾 Manual Installation
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 1. Download the [latest release](https://github.com/PlayFaster/ha-zte-router-5g-monitor/releases).
 2. Copy the `custom_components/zte_router_5g` folder to your Home Assistant `custom_components` directory
 3. Restart Home Assistant
 4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
+
+---
+
+</details>
+
+<br>
 
 ### 🔄 Updating
 
@@ -1234,6 +1342,12 @@ You will need the same details that you use for the router's web UI:
 
 ### 🔨 Runtime Options (Configure / Reconfigure)
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor > Configure** to adjust:
 
 #### Connection Settings
@@ -1243,6 +1357,12 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 | Host     | Router IP address (change if the router's LAN IP changes). |
 | Username | Router login username.                                     |
 | Password | Admin password (update if changed on the router).          |
+
+---
+
+</details>
+
+<br>
 
 ## 🔩 Under the Hood - Technical Architecture
 

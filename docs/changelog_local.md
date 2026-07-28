@@ -8,6 +8,9 @@ Reinforced example automations in `README.md` to prevent false triggers during r
 
 ### Changed
 
+- **`README.md` Layout & Collapsible Structure**:
+  - Added `<details>` and `<summary>` tags to feature group subsections (`Advanced 5G/LTE Diagnostics`, `Data Usage Tracking`, `Essential Router Management`), individual SMS service actions (`send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`) and event payloads, `Manual Installation`, and `Runtime Options` to shorten document length and improve reading flow.
+  - Added always-visible summary text paragraphs above `<details>` tags for `Advanced 5G/LTE Diagnostics`, `Data Usage Tracking`, and `Essential Router Management` to provide immediate context when sections are collapsed.
 - **`README.md` Example Automations Glitch Protection**:
   - **`Serving Cell Changed` & `Firmware Version Changed`**: Added `not_from` and `not_to` state trigger filters (`unknown` / `unavailable`) to ensure state transitions during reboots or network glitches do not fire false alerts.
   - **`Signal Quality Alert`**: Added `not_to` filters (`unknown` / `unavailable`) on state triggers and an overarching template condition verifying live network state data is valid before evaluating multi-entity degradation logic.
