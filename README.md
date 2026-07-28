@@ -236,7 +236,7 @@ The same screen also sets the **UniFi device (AP & Switch) sensors** scope (none
 
 > [!IMPORTANT]
 >
-> Turning a group off with _Configure_ **stops creating** its sensors, but Home Assistant never auto-deletes - the old entities linger as `unavailable` orphans. Remove them with the **Clean Up Unused Entities** button or the `unifi_network_monitor.cleanup_unused_entities` action → see [Actions](#-actions-services).
+> Turning a group off with _Configure_ **stops creating** its sensors, but Home Assistant never auto-deletes - the old entities linger as `unavailable` orphans. Remove them with the **Clean Up Unused Entities** button or the `unifi_network_monitor.cleanup_unused_entities` action → see [Actions](#-sms-actions).
 
 ---
 

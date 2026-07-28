@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.0-rc4] - 2026-07-28 - Unreleased - No Manifest Bump - Automation Example Glitch Guards & Float Rounding in README
+
+Reinforced example automations in `README.md` to prevent false triggers during router reboots, network glitches, or entity unavailability, and rounded numeric outputs.
+
+### Changed
+
+- **`README.md` Example Automations Glitch Protection**:
+  - **`Serving Cell Changed` & `Firmware Version Changed`**: Added `not_from` and `not_to` state trigger filters (`unknown` / `unavailable`) to ensure state transitions during reboots or network glitches do not fire false alerts.
+  - **`Signal Quality Alert`**: Added `not_to` filters (`unknown` / `unavailable`) on state triggers and an overarching template condition verifying live network state data is valid before evaluating multi-entity degradation logic.
+  - **`APN Failover` & `Auto-Reboot on Prolonged Outage`**: Added `not_from` filters for `unknown` and `unavailable` on `sensor.zte_5g_signal_wan_connect_status`.
+  - **`Data Usage Alert` & `Morning Signal Report`**: Applied `| float(0) | round(0)` formatting to `sensor.zte_5g_data_monthly_total` so notification messages render clean whole-number data values instead of raw 8+ decimal place floats.
+
 ---
 
 ## [3.3.0-rc3] - 2026-07-28 - Unreleased - No Manifest Bump - `about` Notes on 63 Entities

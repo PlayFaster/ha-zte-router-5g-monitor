@@ -72,7 +72,7 @@ The router does not return `401`. Expiry is detected by pattern, and all three a
 
 The third is the dangerous one: a successful-looking 200 with a well-formed body whose fields are blank. Any client that checks only the status code will silently record a router full of empty values. This is precisely the "silent failure" class that `dev_standards.md` §19 Integration Health exists to catch.
 
-**The rule is "every value", not "these named keys".** It previously named `network_type` and `signalbar` — which exist only in the batch-poll response — so it could never fire on an SMS or capacity response, and those endpoints silently returned "no data" on a dead session. Full signature table under [Gotchas](#-gotchas). Never narrow it back.
+**The rule is "every value", not "these named keys".** It previously named `network_type` and `signalbar` — which exist only in the batch-poll response — so it could never fire on an SMS or capacity response, and those endpoints silently returned "no data" on a dead session. Full signature table under [Gotchas](#️-gotchas). Never narrow it back.
 
 On any of the three, the client re-logs in and retries **once** (`_retry=False` on the retry, so a genuinely rejected credential surfaces as `ZTEAuthError` rather than looping).
 
