@@ -16,15 +16,15 @@ from homeassistant.util import dt as dt_util
 
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import (
-    SENSOR_TYPES,
     _ALIAS_5G_PCI,
     _ALIAS_5G_RSRP,
     _ALIAS_5G_SINR,
     _ALIAS_MONTHLY_RX,
     _ALIAS_MONTHLY_TX,
-    _get_first,
+    SENSOR_TYPES,
     ZTERouterSensor,
     ZTESensorEntityDescription,
+    _get_first,
     async_setup_entry,
 )
 
@@ -500,7 +500,7 @@ def test_get_first_prefers_the_earliest_populated_key():
 
 
 def test_get_first_skips_keys_that_are_present_but_empty():
-    """This API answers '' for fields the hardware does not support."""
+    """A present-but-empty value means unsupported, not zero."""
     assert _get_first({"a": "", "b": "2"}, ("a", "b")) == "2"
     assert _get_first({"a": None, "b": "2"}, ("a", "b")) == "2"
 
@@ -519,8 +519,8 @@ def test_get_first_keeps_a_genuine_zero():
 @pytest.mark.parametrize(
     ("key", "primary", "alternates"),
     [
-        ("Z5g_rsrp", "Z5g_rsrp", ["5g_rsrp", "nr5g_rsrp"]),
-        ("Z5g_SINR", "Z5g_SINR", ["Z5g_snr", "5g_sinr", "nr5g_sinr"]),
+        ("z5g_rsrp", "Z5g_rsrp", ["5g_rsrp", "nr5g_rsrp"]),
+        ("z5g_sinr", "Z5g_SINR", ["Z5g_snr", "5g_sinr", "nr5g_sinr"]),
     ],
 )
 def test_signal_sensors_read_every_alias(key, primary, alternates):
@@ -538,7 +538,7 @@ def test_5g_pci_reads_the_alternate_spelling():
 
 def test_the_primary_spelling_wins_when_both_are_present():
     """Behaviour on the MC7010 must not change because an alias exists."""
-    assert _value_for("Z5g_rsrp", {"Z5g_rsrp": "-90", "nr5g_rsrp": "-70"}) == -90.0
+    assert _value_for("z5g_rsrp", {"Z5g_rsrp": "-90", "nr5g_rsrp": "-70"}) == -90.0
 
 
 @pytest.mark.parametrize(
@@ -603,7 +603,9 @@ def test_band_sensors_derive_the_name_from_the_channel_when_absent():
     """Some models report the channel but leave the band name empty."""
     assert _value_for("wan_active_band", {"wan_active_channel": "9360"}) == "B28"
     assert (
-        _value_for("wan_active_band", {"wan_active_band": "", "wan_active_channel": "9360"})
+        _value_for(
+            "wan_active_band", {"wan_active_band": "", "wan_active_channel": "9360"}
+        )
         == "B28"
     )
     assert _value_for("nr5g_action_band", {"nr5g_action_channel": "630000"}) == "n78"

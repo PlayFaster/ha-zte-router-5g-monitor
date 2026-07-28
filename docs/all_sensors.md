@@ -235,3 +235,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.2.5-dev7** (2026-07-02) — Added the "Refresh Now" button (System sub-device) for on-demand coordinator refresh, raising total count from 75 to 76.
 - **v3.2.5-dev8** (2026-07-02) — Added suggested display units/precision to 16 sensors (data size → GB, data rate → Mbit/s, uptime duration → hours, bandwidth and dBm → 0 dp). No entity count change. Added the "Suggested Display Units & Precision" reference table.
 - **v3.2.5-dev9** (2026-07-03) — Documented unit displays for Data sub-device and System Uptime Duration; added SMS service definitions to the SMS sub-device table.
+- **v3.3.1** (2026-07-28) — Added two thermal diagnostic sensors (Power Amplifier Temperature, Ambient Modem Temperature), both disabled by default because the MC7010 does not populate them. System count 21 to 23, total 76 to 78.

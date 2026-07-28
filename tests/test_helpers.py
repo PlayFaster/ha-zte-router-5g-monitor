@@ -47,7 +47,17 @@ def test_is_gsm7_plain_ascii():
 
 def test_is_gsm7_accepts_the_accented_and_greek_members():
     """The default alphabet is wider than ASCII; these must not force UCS-2."""
-    assert is_gsm7("Ça coûte £5 à Ωmega") is True
+    assert is_gsm7("Ç£5 à Ωmega éöñ") is True
+
+
+def test_is_gsm7_rejects_near_misses_in_the_accented_range():
+    """The alphabet is a specific list, not "anything Latin-1 looking".
+
+    Lowercase c-cedilla and u-circumflex are absent from GSM 03.38 even
+    though their uppercase or unaccented forms are present.
+    """
+    assert is_gsm7("ç") is False
+    assert is_gsm7("û") is False
 
 
 def test_is_gsm7_accepts_the_extension_table():

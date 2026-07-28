@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.1-dev4] - 2026-07-28 - Unreleased - Manifest Bump 3.3.0 → 3.3.1 - Release Preparation
+
+Release preparation for 3.3.1. This is the first entry in this line to carry a manifest bump.
+
+### Changed
+
+- **`manifest.json`**: Version bumped `3.3.0` → `3.3.1`.
+- **`api.py` login result type**: `_attempt_login()` now returns a `_LoginAttempt` named tuple carrying the session token alongside the two error classifications, instead of the caller re-reading `self.stok`. Behaviour is unchanged; the previous shape made mypy narrow `self.stok` to `None` across the retry and report the fallback's success branch as unreachable, which was a fair complaint about readability as much as types — which attempt produced the session is now explicit.
+- **`sensor.py` band resolver typing**: `_band_or_channel_fallback()` takes a typed `Callable` rather than `Any`, so the return type is checked rather than inferred.
+- **`docs/all_sensors.md`**: Added a `v3.3.1` version-history entry recording the two thermal entities and the count change.
+- **`docs/value_min_max.md`**: Added a `v1.3.0` version-history entry recording the two temperature guard bands.
+
+### Verified
+
+- **Full validation suite green**: 488 tests passing, **100% coverage** (1643 statements, 0 missed), `ruff check`, `ruff format --check`, `mypy --strict`, `codespell`, `prettier --check`, and hassfest (`Invalid integrations: 0`).
+- **Mutation-checked (dev_standards §11)**: three of the new guards were confirmed to fail when the thing they guard breaks — removing `Z5g_snr` from the batch-poll params fails both "every aliased key is requested" tests; reverting `_monthly_total_bytes()` to the un-aliased form fails the totals-agree-with-components test and two of the six-call-site cases; and reordering `_ARFCN_BANDS` so n77 precedes n78 fails four band-resolution cases. All mutations reverted.
+
+### Deferred
+
+- **`CHANGELOG.md`**: The public `## [3.3.1]` entry is deliberately **not** written yet, by instruction. Until it is, `manifest.json` reports 3.3.1 while the public changelog's newest entry is 3.3.0 — an intentional, temporary mismatch to be closed before release.
+- **`docs/about_attribute_list.md`**: Still two entities behind (`pm_sensor_pa1`, `pm_sensor_ambient`), per the deferral recorded in `[3.3.1-dev1]`.
+
 ## [3.3.1-dev3] - 2026-07-28 - Unreleased - No Manifest Bump - Sensor Aliasing & Thermal Entities
 
 Phase 3 of the cross-model compatibility expansion. On an MC7010 every existing sensor reads exactly as before — the primary key is always tried first — and the two new entities are off by default.

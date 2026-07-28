@@ -67,3 +67,4 @@ except (ValueError, TypeError):
 
 - **v1.1.0** (2026-05-07) - Initial versioned snapshot. Added guard bands for Battery (0–100 %), Upload Speed (min 0 B/s), Download Speed (min 0 B/s), Session Sent (min 0 bytes), Session Received (min 0 bytes), and Device Battery category.
 - **v1.2.0** (2026-05-27) - Added guard band for Data Volume Alert percentage (0-100%).
+- **v1.3.0** (2026-07-28) - Added guard bands for Power Amplifier Temperature and Ambient Modem Temperature (-40 to 125 degrees C), covering the silicon operating range and rejecting the sentinel values some firmware emits when the sensor is absent.

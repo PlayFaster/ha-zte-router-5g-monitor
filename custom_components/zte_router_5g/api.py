@@ -5,7 +5,7 @@ import hashlib
 import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 import aiohttp
 
@@ -21,6 +21,19 @@ class ZTEConnectionError(Exception):
 
 class ZTEAuthError(Exception):
     """Raised when login credentials are rejected."""
+
+
+class _LoginAttempt(NamedTuple):
+    """Outcome of posting one login form.
+
+    Exactly one of the three is set. `stok` carries the session rather than
+    the caller re-reading `self.stok`, so which attempt produced it stays
+    explicit when two forms are tried.
+    """
+
+    stok: str | None
+    auth_error: str | None
+    conn_error: str | None
 
 
 class ZTERouterAPI:
@@ -342,7 +355,7 @@ class ZTERouterAPI:
         primary = (
             "LOGIN" if (self.username and not self.is_multi) else "LOGIN_MULTI_USER"
         )
-        login_error, conn_error = await self._attempt_login(primary, zte_pass, tout)
+        attempt = await self._attempt_login(primary, zte_pass, tout)
 
         # Best-effort form fallback for models this integration has never seen.
         # Which form a goform router accepts is a per-model quirk and the model
@@ -351,51 +364,43 @@ class ZTERouterAPI:
         # unclassified failure is worth retrying: a credentials rejection means
         # the password is wrong whichever form carries it, and retrying would
         # just burn a second attempt against routers that lock out.
-        if self.stok is None and login_error is None and conn_error is not None:
+        if attempt.stok is None and attempt.auth_error is None:
             fallback = "LOGIN_MULTI_USER" if primary == "LOGIN" else "LOGIN"
             _LOGGER.debug(
                 "Login form %s did not yield a session; retrying once with %s",
                 primary,
                 fallback,
             )
-            fb_login_error, fb_conn_error = await self._attempt_login(
-                fallback, zte_pass, tout
-            )
-            if self.stok is not None:
+            retry = await self._attempt_login(fallback, zte_pass, tout)
+            if retry.stok is not None:
                 _LOGGER.info(
                     "Login succeeded with fallback form %s (this router does not "
                     "accept %s)",
                     fallback,
                     primary,
                 )
-                login_error = conn_error = None
-            elif fb_login_error is not None:
-                # The alternate form got far enough to reject the credentials,
-                # which is the more informative answer of the two.
-                login_error = fb_login_error
-                conn_error = None
-            else:
-                conn_error = fb_conn_error
+            # The alternate form reaching a credentials rejection is the more
+            # informative of the two answers, so the retry's verdict replaces
+            # the primary's either way.
+            attempt = retry
 
-        if login_error:
-            raise ZTEAuthError(login_error)
-        if conn_error:
-            raise ZTEConnectionError(conn_error)
+        if attempt.auth_error:
+            raise ZTEAuthError(attempt.auth_error)
+        if attempt.conn_error:
+            raise ZTEConnectionError(attempt.conn_error)
 
-        if self.stok is None:  # pragma: no cover - defensive; narrows type for mypy
+        if attempt.stok is None:  # pragma: no cover - defensive, narrows for mypy
             raise ZTEConnectionError("Failed to obtain stok from login")
-        return self.stok
+        return attempt.stok
 
     async def _attempt_login(
         self, goform_id: str, zte_pass: str, tout: int
-    ) -> tuple[str | None, str | None]:
+    ) -> _LoginAttempt:
         """Post one login form, setting `self.stok` on success.
 
-        Returns `(login_error, conn_error)` — at most one is set, and both are
-        None when a session was obtained. Genuine transport failures raise
-        `ZTEConnectionError` directly rather than being reported, because
-        there is no point retrying a different form against a router that is
-        not answering at all.
+        Genuine transport failures raise `ZTEConnectionError` directly rather
+        than being reported in the result, because there is no point retrying
+        a different form against a router that is not answering at all.
         """
         payload = {
             "isTest": "false",
@@ -472,7 +477,7 @@ class ZTERouterAPI:
                 f"Login failed due to connection error: {e}"
             ) from e
 
-        return login_error, conn_error
+        return _LoginAttempt(self.stok, login_error, conn_error)
 
     async def logout(self) -> None:
         """End the router session and drop local session state.

@@ -173,7 +173,10 @@ def _monthly_total_bytes(data: dict[str, Any]) -> int | None:
 
 
 def _band_or_channel_fallback(
-    data: dict[str, Any], band_key: str, channel_key: str, resolver: Any
+    data: dict[str, Any],
+    band_key: str,
+    channel_key: str,
+    resolver: Callable[[int | str | None], str | None],
 ) -> str | None:
     """Prefer the band name the router reports; derive it only if absent.
 
