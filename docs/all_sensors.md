@@ -6,11 +6,11 @@ This document provides a comprehensive list of all 76 entities currently impleme
 
 | Sub-Device | Entity Count | Description |
 | :-- | :-- | :-- |
-| **System** | 21 | Core router info and global integration settings. |
+| **System** | 23 | Core router info and global integration settings. |
 | **Signal** | 39 | Cellular connectivity, signal strength (LTE/5G), and network info. |
 | **Data** | 12 | Monthly and session traffic volume (Bytes and GB). |
 | **SMS** | 4 | Message counts and recent message content. |
-| **Total** | **76** |  |
+| **Total** | **78** |  |
 
 ---
 
@@ -30,6 +30,8 @@ _Group: `system`_
 | IMEI | `imei` | Sensor | `imei` | - | Diagnostic | **Disabled by default (sensitive).** Hardware-bound modem identifier. |
 | Hardware Version | `hardware_version` | Sensor | `hardware_version` | - | Diagnostic | e.g. `MC7010-1`. |
 | Battery | `battery_value` | Sensor | `battery_value` | % | Sensor | **Disabled by default.** Full when plugged in. |
+| Power Amplifier Temperature | `pm_sensor_pa1` | Sensor | `pm_sensor_pa1` | °C | Diagnostic | **Disabled by default.** Not populated by the MC7010, which returns an empty value. |
+| Ambient Modem Temperature | `pm_sensor_ambient` | Sensor | `pm_sensor_ambient` | °C | Diagnostic | **Disabled by default.** Not populated by the MC7010, which returns an empty value. |
 | SIM IMSI | `sim_imsi` | Sensor | `sim_imsi` | - | Diagnostic | **Disabled by default (sensitive).** SIM network identity. |
 | SIM ICCID | `sim_iccid` | Sensor | `sim_iccid` | - | Diagnostic | **Disabled by default (sensitive).** SIM card serial number. |
 | Refresh Now | `refresh` | Button | `coordinator.async_request_refresh()` | - | Config | Forces an immediate poll cycle. Complements Pause Polling and the polling interval. |

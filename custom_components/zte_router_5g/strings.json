@@ -82,6 +82,12 @@
       "system_battery_value": {
         "name": "Battery"
       },
+      "system_pm_sensor_pa1": {
+        "name": "Power Amplifier Temperature"
+      },
+      "system_pm_sensor_ambient": {
+        "name": "Ambient Modem Temperature"
+      },
       "system_sim_imsi": {
         "name": "SIM IMSI"
       },

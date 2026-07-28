@@ -1,15 +1,28 @@
 """Tests for the ZTE Router sensor."""
 
+import pathlib
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-from homeassistant.const import UnitOfDataRate, UnitOfInformation, UnitOfTime
+from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfDataRate,
+    UnitOfInformation,
+    UnitOfTime,
+)
 from homeassistant.util import dt as dt_util
 
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import (
     SENSOR_TYPES,
+    _ALIAS_5G_PCI,
+    _ALIAS_5G_RSRP,
+    _ALIAS_5G_SINR,
+    _ALIAS_MONTHLY_RX,
+    _ALIAS_MONTHLY_TX,
+    _get_first,
     ZTERouterSensor,
     ZTESensorEntityDescription,
     async_setup_entry,
@@ -470,3 +483,180 @@ def test_sensor_sntp_server_attributes_dst_disabled(
     sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
     attrs = sensor.extra_state_attributes
     assert attrs["sntp_dst_enable"] is False
+
+
+# --- Phase 3: cross-model key aliasing -------------------------------------
+
+
+def _value_for(key, data):
+    """Run one sensor description's value_fn against a payload."""
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+    return description.value_fn(data)
+
+
+def test_get_first_prefers_the_earliest_populated_key():
+    """The MC7010 spelling is first, so its path is unchanged."""
+    assert _get_first({"a": "1", "b": "2"}, ("a", "b")) == "1"
+
+
+def test_get_first_skips_keys_that_are_present_but_empty():
+    """This API answers '' for fields the hardware does not support."""
+    assert _get_first({"a": "", "b": "2"}, ("a", "b")) == "2"
+    assert _get_first({"a": None, "b": "2"}, ("a", "b")) == "2"
+
+
+def test_get_first_returns_none_when_nothing_is_populated():
+    """No spelling present means unknown, not zero."""
+    assert _get_first({"a": ""}, ("a", "b")) is None
+    assert _get_first({}, ("a", "b")) is None
+
+
+def test_get_first_keeps_a_genuine_zero():
+    """Zero is a real reading; only '' and None mean absent."""
+    assert _get_first({"a": 0}, ("a", "b")) == 0
+
+
+@pytest.mark.parametrize(
+    ("key", "primary", "alternates"),
+    [
+        ("Z5g_rsrp", "Z5g_rsrp", ["5g_rsrp", "nr5g_rsrp"]),
+        ("Z5g_SINR", "Z5g_SINR", ["Z5g_snr", "5g_sinr", "nr5g_sinr"]),
+    ],
+)
+def test_signal_sensors_read_every_alias(key, primary, alternates):
+    """Each alternate spelling must produce the same reading as the primary."""
+    assert _value_for(key, {primary: "-95.5"}) == -95.5
+    for alternate in alternates:
+        assert _value_for(key, {alternate: "-95.5"}) == -95.5, alternate
+
+
+def test_5g_pci_reads_the_alternate_spelling():
+    """nr5g_pci is the MC7010 key; Z5g_CELL_ID is the fallback."""
+    assert _value_for("nr5g_pci", {"nr5g_pci": "301"}) == "301"
+    assert _value_for("nr5g_pci", {"Z5g_CELL_ID": "301"}) == "301"
+
+
+def test_the_primary_spelling_wins_when_both_are_present():
+    """Behaviour on the MC7010 must not change because an alias exists."""
+    assert _value_for("Z5g_rsrp", {"Z5g_rsrp": "-90", "nr5g_rsrp": "-70"}) == -90.0
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("monthly_tx_bytes", 2.0),
+        ("monthly_rx_bytes", 3.0),
+        ("monthly_tx_bytes_raw", 2000000000),
+        ("monthly_rx_bytes_raw", 3000000000),
+        ("monthly_total_bytes", 5.0),
+        ("monthly_total_bytes_raw", 5000000000),
+    ],
+)
+def test_all_six_monthly_call_sites_honour_the_flux_aliases(key, expected):
+    """Aliasing only some call sites would leave the totals silently zeroed."""
+    flux_only = {
+        "flux_monthly_tx_bytes": "2000000000",
+        "flux_monthly_rx_bytes": "3000000000",
+    }
+    assert _value_for(key, flux_only) == expected
+
+
+def test_monthly_totals_agree_with_their_components_on_either_spelling():
+    """The divergence this guards against would look like real data."""
+    for tx_key, rx_key in (
+        ("monthly_tx_bytes", "monthly_rx_bytes"),
+        ("flux_monthly_tx_bytes", "flux_monthly_rx_bytes"),
+    ):
+        data = {tx_key: "1000000000", rx_key: "4000000000"}
+        components = _value_for("monthly_tx_bytes_raw", data) + _value_for(
+            "monthly_rx_bytes_raw", data
+        )
+        assert _value_for("monthly_total_bytes_raw", data) == components
+
+
+def test_monthly_total_is_unknown_when_either_side_is_missing():
+    """A half-known total is worse than no total."""
+    assert _value_for("monthly_total_bytes_raw", {"monthly_tx_bytes": "5"}) is None
+    assert _value_for("monthly_total_bytes_raw", {"monthly_tx_bytes": ""}) is None
+    assert _value_for("monthly_total_bytes", {}) is None
+
+
+def test_monthly_total_handles_a_genuine_zero_counter():
+    """A freshly reset counter reads 0, not unknown."""
+    data = {"monthly_tx_bytes": "0", "monthly_rx_bytes": "0"}
+    assert _value_for("monthly_total_bytes_raw", data) == 0
+
+
+# --- Phase 3: band name fallback -------------------------------------------
+
+
+def test_band_sensors_prefer_the_name_the_router_reports():
+    """The resolver is a fallback; a reported name always wins."""
+    data = {"wan_active_band": "B3", "wan_active_channel": "9360"}
+    assert _value_for("wan_active_band", data) == "B3"
+
+    data = {"nr5g_action_band": "n1", "nr5g_action_channel": "630000"}
+    assert _value_for("nr5g_action_band", data) == "n1"
+
+
+def test_band_sensors_derive_the_name_from_the_channel_when_absent():
+    """Some models report the channel but leave the band name empty."""
+    assert _value_for("wan_active_band", {"wan_active_channel": "9360"}) == "B28"
+    assert (
+        _value_for("wan_active_band", {"wan_active_band": "", "wan_active_channel": "9360"})
+        == "B28"
+    )
+    assert _value_for("nr5g_action_band", {"nr5g_action_channel": "630000"}) == "n78"
+
+
+def test_band_sensors_report_unknown_rather_than_guessing():
+    """Neither a name nor a resolvable channel means unknown."""
+    assert _value_for("wan_active_band", {}) is None
+    assert _value_for("wan_active_band", {"wan_active_channel": "999999"}) is None
+    assert _value_for("nr5g_action_band", {"nr5g_action_channel": ""}) is None
+
+
+# --- Phase 3: thermal diagnostics ------------------------------------------
+
+
+@pytest.mark.parametrize("key", ["pm_sensor_pa1", "pm_sensor_ambient"])
+def test_thermal_sensors_read_their_key(key):
+    """Straight read with float coercion."""
+    assert _value_for(key, {key: "42.5"}) == 42.5
+
+
+@pytest.mark.parametrize("key", ["pm_sensor_pa1", "pm_sensor_ambient"])
+def test_thermal_sensors_map_the_mc7010_empty_string_to_unknown(key):
+    """The MC7010 answers '' for both; that must not reach a numeric sensor."""
+    assert _value_for(key, {key: ""}) is None
+    assert _value_for(key, {}) is None
+
+
+@pytest.mark.parametrize("key", ["pm_sensor_pa1", "pm_sensor_ambient"])
+def test_thermal_sensors_are_disabled_by_default_with_guard_bands(key):
+    """Off by default on hardware that never populates them, and bounded."""
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+    assert description.entity_registry_enabled_default is False
+    assert description.entity_category is EntityCategory.DIAGNOSTIC
+    assert description.device_class is SensorDeviceClass.TEMPERATURE
+    assert description.group == "system"
+    assert (description.min_limit, description.max_limit) == (-40, 125)
+    assert description.about
+
+
+def test_every_aliased_key_is_requested_by_the_batch_poll():
+    """An alias naming a key api.py never asks for can never fire."""
+    source = (
+        pathlib.Path(__file__).parent.parent
+        / "custom_components"
+        / "zte_router_5g"
+        / "api.py"
+    ).read_text(encoding="utf-8")
+    for alias in (
+        _ALIAS_5G_RSRP
+        + _ALIAS_5G_SINR
+        + _ALIAS_5G_PCI
+        + _ALIAS_MONTHLY_TX
+        + _ALIAS_MONTHLY_RX
+    ):
+        assert f'"{alias}"' in source, f"{alias} is aliased but never requested"

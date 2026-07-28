@@ -32,6 +32,8 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 |  | Session Received | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
 |  | Data Volume Alert | 0 | 100 | Percentage threshold. |
 | **Device** | Battery | 0 | 100 | Physical percentage bounds. |
+|  | Power Amplifier Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
+|  | Ambient Modem Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
 | **SMS** | Total Count | 0 | 1000 | Set to `Unavailable` |
 
 ---

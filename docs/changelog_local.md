@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.1-dev3] - 2026-07-28 - Unreleased - No Manifest Bump - Sensor Aliasing & Thermal Entities
+
+Phase 3 of the cross-model compatibility expansion. On an MC7010 every existing sensor reads exactly as before — the primary key is always tried first — and the two new entities are off by default.
+
+### Added
+
+- **`sensor.py` cross-model key aliasing**: New `_get_first()` selects the first spelling the router actually populated, treating a present-but-empty value as absent (this API answers `""` for unsupported fields, so `in data` alone cannot distinguish "supported" from "reported"). Alias tuples are named constants so the set can be checked against `api.py` rather than being scattered through lambdas. Applied to 5G RSRP, 5G SINR, 5G PCI and **all six** monthly TX/RX call sites.
+- **`sensor.py` band name fallback**: `wan_active_band` and `nr5g_action_band` fall back to `earfcn_to_band()` / `arfcn_to_band()` when the router reports a channel number but no band name. A name reported by the router always wins.
+- **Two thermal diagnostic sensors**: `pm_sensor_pa1` (Power Amplifier Temperature) and `pm_sensor_ambient` (Ambient Modem Temperature), both `DIAGNOSTIC`, `MEASUREMENT`, °C, guard-banded to -40…125 °C, with `about` notes. **Disabled by default** — an MC7010 answers `""` for both, so on the primary target hardware they would only add two permanently-unknown entities to the UI.
+- **`strings.json` / `translations/en.json`**: Names for both new sensors, added to both files.
+- **`tests/test_sensor.py`**: Every alias reads through to its sensor; the primary spelling wins when both are present; all six monthly call sites honour the `flux_` spelling; the totals are proved to agree with their own components on either spelling; band fallback prefers the reported name, derives from the channel when absent, and reports unknown rather than guessing; the thermal sensors coerce `""` to unknown and carry their guard bands. Plus a check that every aliased key appears in `api.py`.
+
+### Changed
+
+- **`sensor.py` monthly totals**: The two total sensors previously inlined `int(data.get(...))` and are now shared via `_monthly_total_bytes()`. Behaviour is unchanged, but aliasing only the individual TX/RX sensors would have left the totals silently zeroed on `flux_`-spelling hardware — a divergence that would have looked like real data rather than a bug.
+- **`docs/all_sensors.md`**: Added both thermal entities; System count 21 → 23, total 76 → 78.
+- **`docs/value_min_max.md`**: Added guard band entries for both thermal sensors (-40 to 125 °C).
+
 ## [3.3.1-dev2] - 2026-07-28 - Unreleased - No Manifest Bump - API Params & Login Fallback
 
 Phase 2 of the cross-model compatibility expansion. Behaviour on the MC7010 is unchanged except for SMS encoding, which now stops wasting more than half of every plain-text message.

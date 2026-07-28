@@ -276,24 +276,6 @@ Use Home Assistant's built-in visibility controls - nothing specific to this int
 
 Disabled entities stay in the registry (greyed out) and can be re-enabled any time. This hides them from your UI; the integration still polls as normal.
 
-### 3. Turn off whole feature groups (also stops polling)
-
-Open **Settings → Devices & Services → UniFi Network Monitor → Configure** (⚙️ gear). Here you can enable/disable whole **feature groups**. Unlike option 2, turning a group off both **removes its sensors _and_ skips its API calls**. All default to **on**:
-
-| Feature group | What it removes |
-| :-- | :-- |
-| **Alerts monitoring** | The **Alerts** sub-device (system-log High/Very High) |
-| **Dual-WAN monitoring** | The **WAN2** + load-balance entities (turn off for single-WAN) |
-| **Security monitoring** | The **Security** sub-device (rogue APs, VPN, firewall, threat management) |
-| **Speedtest monitoring** | The **Speedtest** sub-device + run buttons |
-| **WAN data-usage statistics** | The daily/monthly data-usage sensors |
-
-The same screen also sets the **UniFi device (AP & Switch) sensors** scope (none / satisfaction-only / all). Full detail in [Configuration](#-configuration).
-
-> [!IMPORTANT]
->
-> Turning a group off with _Configure_ **stops creating** its sensors, but Home Assistant never auto-deletes - the old entities linger as `unavailable` orphans. Remove them with the **Clean Up Unused Entities** button or the `unifi_network_monitor.cleanup_unused_entities` action → see [Actions](#-sms-actions).
-
 ---
 
 </details>

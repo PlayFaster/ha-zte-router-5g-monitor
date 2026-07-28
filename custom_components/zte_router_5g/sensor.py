@@ -20,6 +20,7 @@ from homeassistant.const import (
     EntityCategory,
     UnitOfDataRate,
     UnitOfInformation,
+    UnitOfTemperature,
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
@@ -28,7 +29,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import ENDPOINT_SMS_MESSAGES, ZTERouterDataUpdateCoordinator
-from .helpers import ZTEAboutEntity, build_device_info
+from .helpers import (
+    ZTEAboutEntity,
+    arfcn_to_band,
+    build_device_info,
+    earfcn_to_band,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -122,6 +128,63 @@ def _safe_str(val: Any) -> str | None:
     if val in [None, ""]:
         return None
     return str(val)
+
+
+def _get_first(data: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    """Return the first key in `keys` that the router actually populated.
+
+    Members of the `goform` family spell the same measurement differently, so
+    a sensor names every spelling it knows and takes whichever one arrives.
+    A key that is present but empty counts as absent — this API answers with
+    `""` for fields the hardware does not support, so `in data` alone is not
+    enough to tell "supported" from "reported".
+
+    Every key named here must also be requested in `api.py:get_all_data()`;
+    an alias for a key that is never asked for can never fire.
+    """
+    return next(
+        (data[key] for key in keys if key in data and data[key] not in ("", None)),
+        None,
+    )
+
+
+# Cross-model key aliases. The first entry is the spelling the MC7010 uses, so
+# its execution path is unchanged; later entries only come into play on
+# hardware that does not populate the first.
+_ALIAS_5G_RSRP: Final = ("Z5g_rsrp", "5g_rsrp", "nr5g_rsrp")
+_ALIAS_5G_SINR: Final = ("Z5g_SINR", "Z5g_snr", "5g_sinr", "nr5g_sinr")
+_ALIAS_5G_PCI: Final = ("nr5g_pci", "Z5g_CELL_ID")
+_ALIAS_MONTHLY_TX: Final = ("monthly_tx_bytes", "flux_monthly_tx_bytes")
+_ALIAS_MONTHLY_RX: Final = ("monthly_rx_bytes", "flux_monthly_rx_bytes")
+
+
+def _monthly_total_bytes(data: dict[str, Any]) -> int | None:
+    """Sum the monthly TX and RX counters, honouring the key aliases.
+
+    Shared by the GB and raw-bytes totals so they cannot disagree with the
+    individual TX/RX sensors on hardware that uses the `flux_` spelling —
+    a divergence that would look like real data rather than a bug.
+    """
+    tx = _safe_int(_get_first(data, _ALIAS_MONTHLY_TX))
+    rx = _safe_int(_get_first(data, _ALIAS_MONTHLY_RX))
+    if tx is None or rx is None:
+        return None
+    return tx + rx
+
+
+def _band_or_channel_fallback(
+    data: dict[str, Any], band_key: str, channel_key: str, resolver: Any
+) -> str | None:
+    """Prefer the band name the router reports; derive it only if absent.
+
+    Some models report the channel number but leave the band name empty. The
+    reported name always wins — the resolver is a fallback, and for NR it is
+    an inherently ambiguous one.
+    """
+    reported = _safe_str(data.get(band_key))
+    if reported is not None:
+        return reported
+    return resolver(data.get(channel_key))
 
 
 # Technical Router Sensors
@@ -236,6 +299,46 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         max_limit=100,
         group="system",
         value_fn=lambda data: _safe_int(data.get("battery_value")),
+    ),
+    # Thermal telemetry. Probed on an MC7010, which answers `""` for both, so
+    # these are disabled by default: on the primary target hardware they would
+    # only ever add two permanently-unknown entities to the UI. They are here
+    # for the models that do populate them.
+    ZTESensorEntityDescription(
+        key="pm_sensor_pa1",
+        about=(
+            "Temperature of the power amplifier - the part of the radio that drives "
+            "the transmit signal, and normally the hottest thing in the unit. Many "
+            "ZTE models do not report it, in which case this stays unknown."
+        ),
+        translation_key="system_pm_sensor_pa1",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        min_limit=-40,
+        max_limit=125,
+        group="system",
+        value_fn=lambda data: _safe_float(data.get("pm_sensor_pa1")),
+    ),
+    ZTESensorEntityDescription(
+        key="pm_sensor_ambient",
+        about=(
+            "Internal air temperature inside the modem, away from the radio itself. "
+            "Read alongside the power amplifier temperature it indicates whether the "
+            "unit as a whole is running hot or just the transmitter."
+        ),
+        translation_key="system_pm_sensor_ambient",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        min_limit=-40,
+        max_limit=125,
+        group="system",
+        value_fn=lambda data: _safe_float(data.get("pm_sensor_ambient")),
     ),
     ZTESensorEntityDescription(
         key="sim_imsi",
@@ -534,7 +637,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_wan_active_band",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("wan_active_band")),
+        value_fn=lambda data: _band_or_channel_fallback(
+            data, "wan_active_band", "wan_active_channel", earfcn_to_band
+        ),
     ),
     ZTESensorEntityDescription(
         key="wan_active_channel",
@@ -564,7 +669,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-140,
         max_limit=-30,
         group="signal",
-        value_fn=lambda data: _safe_float(data.get("Z5g_rsrp")),
+        value_fn=lambda data: _safe_float(_get_first(data, _ALIAS_5G_RSRP)),
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrq",
@@ -612,7 +717,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-20,
         max_limit=50,
         group="signal",
-        value_fn=lambda data: _safe_float(data.get("Z5g_SINR")),
+        value_fn=lambda data: _safe_float(_get_first(data, _ALIAS_5G_SINR)),
     ),
     ZTESensorEntityDescription(
         key="nr5g_pci",
@@ -623,7 +728,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_nr5g_pci",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("nr5g_pci")),
+        value_fn=lambda data: _safe_str(_get_first(data, _ALIAS_5G_PCI)),
     ),
     ZTESensorEntityDescription(
         key="nr5g_action_band",
@@ -635,7 +740,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_nr5g_action_band",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("nr5g_action_band")),
+        value_fn=lambda data: _band_or_channel_fallback(
+            data, "nr5g_action_band", "nr5g_action_channel", arfcn_to_band
+        ),
     ),
     ZTESensorEntityDescription(
         key="nr5g_action_channel",
@@ -735,7 +842,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="data",
         # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
-        value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_tx_bytes")),
+        value_fn=lambda data: _get_bytes_to_gb(_get_first(data, _ALIAS_MONTHLY_TX)),
     ),
     ZTESensorEntityDescription(
         key="monthly_rx_bytes",
@@ -750,7 +857,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="data",
         # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
-        value_fn=lambda data: _get_bytes_to_gb(data.get("monthly_rx_bytes")),
+        value_fn=lambda data: _get_bytes_to_gb(_get_first(data, _ALIAS_MONTHLY_RX)),
     ),
     ZTESensorEntityDescription(
         key="monthly_total_bytes",
@@ -764,14 +871,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         entity_registry_enabled_default=False,
         group="data",
-        value_fn=lambda data: _get_bytes_to_gb(
-            (
-                int(data.get("monthly_tx_bytes", 0))
-                + int(data.get("monthly_rx_bytes", 0))
-            )
-            if data.get("monthly_tx_bytes") and data.get("monthly_rx_bytes")
-            else None
-        ),
+        value_fn=lambda data: _get_bytes_to_gb(_monthly_total_bytes(data)),
     ),
     # Standard Byte Sensors (Enabled by default, supports UI conversion)
     ZTESensorEntityDescription(
@@ -788,7 +888,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
         group="data",
-        value_fn=lambda data: _safe_int(data.get("monthly_tx_bytes")),
+        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_MONTHLY_TX)),
     ),
     ZTESensorEntityDescription(
         key="monthly_rx_bytes_raw",
@@ -803,7 +903,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
         group="data",
-        value_fn=lambda data: _safe_int(data.get("monthly_rx_bytes")),
+        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_MONTHLY_RX)),
     ),
     ZTESensorEntityDescription(
         key="monthly_total_bytes_raw",
@@ -818,14 +918,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
         group="data",
-        value_fn=lambda data: (
-            (
-                int(data.get("monthly_tx_bytes", 0))
-                + int(data.get("monthly_rx_bytes", 0))
-            )
-            if data.get("monthly_tx_bytes") and data.get("monthly_rx_bytes")
-            else None
-        ),
+        value_fn=_monthly_total_bytes,
     ),
     ZTESensorEntityDescription(
         key="realtime_tx_thrpt",
