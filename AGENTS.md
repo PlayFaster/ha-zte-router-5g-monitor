@@ -8,6 +8,10 @@ This file provides guidance to AI coding agents when working with code in this r
 
 A Home Assistant custom integration (`zte_router_5g`) for ZTE 5G CPE routers (primarily the MC7010). It is a `local_polling` `hub` integration distributed via HACS. It talks to the router's undocumented `goform` HTTP API, exposing signal diagnostics, data usage, SMS, and reboot/polling controls. There are no external `requirements` — it relies only on `aiohttp` and Home Assistant core.
 
+> **Entity `about` notes are listed in [`docs/about_attribute_list.md`](docs/about_attribute_list.md), which is generated from source** - edit the note in the entity description or `_attr_about`, then regenerate; never edit that file by hand.
+
+---
+
 > **Entity and service inventory lives in [`docs/all_sensors.md`](docs/all_sensors.md)** — it is authoritative and kept current against live HA by `sensor_review.md`. This file deliberately carries no entity counts or service descriptions.
 
 ## Commands

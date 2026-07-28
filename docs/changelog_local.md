@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.0-rc5] - 2026-07-28 - Unreleased - No Manifest Bump - AGENTS README About List and Expected Compatibility
+
+### Changed
+
+- **`README.md`**: Updated Acknowledgements and added a list of other ZTE Router integrations (these overlap) if this does not work for the user.
+- **Compatibility**: Updated `README.md` expected compatibility list to clarify that a ZTE MC or MF in the `goform` API Family should work (although untested beyond the MC7010).
+
+### Added
+
+- **`about_attribute_list.md`**: Added a document to list all of the `about:` attributes.
+- **`expected_zte_compatibility.md`**: Added a document to detail what additional ZTE Routers _should_ be compatible.
+
 ## [3.3.0-rc4] - 2026-07-28 - Unreleased - No Manifest Bump - Automation Example Glitch Guards & Float Rounding in README
 
 Reinforced example automations in `README.md` to prevent false triggers during router reboots, network glitches, or entity unavailability, and rounded numeric outputs.
@@ -59,7 +71,7 @@ Triage of `.notes/code_review/code_review_20260728_0019.md` (external agent, 0 f
 
 ### Fixed
 
-- **`docs/zte_how_to_access.md` contradicted itself about session expiry.** Its "Session expiry — three different signatures" table still described the **named-key** rule (`network_type` and `signalbar` both empty) while the Gotchas section added in `[3.3.0-dev12]` correctly described the generalised "every value is an empty string" rule. Introduced by me in dev12: the new section was added without updating the table above it.
+- **`docs/zte_how_to_access.md` contradicted itself about session expiry.** Its "Session expiry — three different signatures" table still described the **named-key** rule (`network_type` and `signalbar` both empty) while the Gotchas section added in `[3.3.0-dev12]` correctly described the generalized "every value is an empty string" rule. Introduced by me in dev12: the new section was added without updating the table above it.
 
   This matters more than a normal doc slip — `AGENTS.md` points at this file as the authority on the API's failure modes, so the stale table was the one an implementer would find first. Corrected, with an explicit note on why the named-key form was blind and an instruction not to narrow it back.
 
@@ -69,13 +81,13 @@ Triage of `.notes/code_review/code_review_20260728_0019.md` (external agent, 0 f
 
 - **The value is now documented as measured rather than assumed.** A session left idle for **200 seconds** was already dead on MC7010 firmware `V1.0.0B03` (2026-07-28) — the router answered `200 OK` with every value blank. The real boundary is therefore at or below 200s, so 150s sits safely under it and under the 180s default scan interval.
 
-- **`async_get_sms_list` now records why it fetches in full.** Tag filtering happens client-side, so server-side pagination would return fewer than `count` messages once filtered; a combined box must also merge both stores before it can sort by date. The behaviour is necessary, not an oversight, and now says so.
+- **`async_get_sms_list` now records why it fetches in full.** Tag filtering happens client-side, so server-side pagination would return fewer than `count` messages once filtered; a combined box must also merge both stores before it can sort by date. The behavior is necessary, not an oversight, and now says so.
 
 ### Notes
 
-- **Observation 1 (remove the idle timer) — declined, and the measurement shows it would be a regression.** The review proposed dropping the proactive reset and relying solely on the reactive expiry detection in `_request`. That is **more** traffic, not less: reacting costs a failed request, a login, then a retry — three round trips, where preempting costs a login and a request. It also removes the second line of defence on a router whose expired-session response is indistinguishable from success at the HTTP layer, which is precisely the failure `[3.3.0-dev12]` fixed. The review's premise — "firmware keeps sessions valid for 180 seconds" — was unsourced; the measured result is that 200s is already dead. A warning against this change is now in `const.py` beside the value.
+- **Observation 1 (remove the idle timer) — declined, and the measurement shows it would be a regression.** The review proposed dropping the proactive reset and relying solely on the reactive expiry detection in `_request`. That is **more** traffic, not less: reacting costs a failed request, a login, then a retry — three round trips, where preempting costs a login and a request. It also removes the second line of defense on a router whose expired-session response is indistinguishable from success at the HTTP layer, which is precisely the failure `[3.3.0-dev12]` fixed. The review's premise — "firmware keeps sessions valid for 180 seconds" — was unsourced; the measured result is that 200s is already dead. A warning against this change is now in `const.py` beside the value.
 
-- **Observation 2 (SMS full fetch) — declined, no code change.** The concern is directionally fair but the review missed the constraint that makes the behaviour necessary: client-side tag filtering. Recorded as a comment rather than changed.
+- **Observation 2 (SMS full fetch) — declined, no code change.** The concern is directionally fair but the review missed the constraint that makes the behavior necessary: client-side tag filtering. Recorded as a comment rather than changed.
 
 - **Observation 3 (adopt `via_device_link` for sub-devices) — factually wrong; already done.** The review states `helpers.py` line 45 builds `DeviceInfo` with `via_device=(DOMAIN, entry.unique_id)`. It does not: `helpers.py:10` imports `via_device_link` from `._compat` and line 87 calls it, with a comment naming the 2026.8 deprecation and the 2027.8 removal. That work landed in `[3.3.0-dev4]`, and the review is dated after it. Line 45 is inside `get_router_model`'s model-matching loop. **No change made — the recommendation was to do something already done.**
 
@@ -87,7 +99,7 @@ Produced by a `doc_update` run over the whole `[3.3.0-dev1]`–`[3.3.0-dev13]` c
 
 - **`AGENTS.md` described the pre-`[3.3.0-dev12]` session-expiry rule.** It said `_request` detects expiry via "HTML redirect, unparsable JSON, or empty/`fail` status fields" — the **named-key** form, which is exactly the wording whose logic could never fire on an SMS response. `_require_contract()` was not mentioned at all.
 
-  This is the file an agent reads before touching `api.py`, so the stale description actively invited re-narrowing the detector — the single thing dev12 warns against. Now states the rule as **"every value is an empty string"**, gives both dead-session shapes, explains why the named-key form was blind, documents the contract assertion as the second defence, and says plainly: never reintroduce a `.get(key, [])` fallback on those paths.
+  This is the file an agent reads before touching `api.py`, so the stale description actively invited re-narrowing the detector — the single thing dev12 warns against. Now states the rule as **"every value is an empty string"**, gives both dead-session shapes, explains why the named-key form was blind, documents the contract assertion as the second defense, and says plainly: never reintroduce a `.get(key, [])` fallback on those paths.
 
 - **README's Integration Health note omitted the `drift` attribute**, published since `[3.3.0-dev6]`. The `note:` listed `severity`, `degraded_capabilities`, `repairs` and `consecutive_failures` — so a user reading it had no way to know `drift` existed.
 
@@ -119,7 +131,7 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **`DEVELOPMENT.md` §5 gained the expired-session pitfall** — the `[3.3.0-dev12]` defect written up as a pitfall rather than only as a changelog entry, because §5 is where someone looks when the same class of thing happens again. Carries the rule that matters: **never narrow the expiry detector back to named keys**, and the reason an empty inbox (`{"messages":[]}`) stays distinguishable from a dead session.
 
-- **README documents the behaviour change in `get_sms_list`.** It now **raises** when the router cannot be reached or the session has expired, instead of returning an empty list. That is the point of the fix — an automation can tell "no messages" from "could not ask" — but it is user-visible, so the response table now says so and points at `continue_on_error: true` for anyone who would rather the automation carry on.
+- **README documents the behavior change in `get_sms_list`.** It now **raises** when the router cannot be reached or the session has expired, instead of returning an empty list. That is the point of the fix — an automation can tell "no messages" from "could not ask" — but it is user-visible, so the response table now says so and points at `continue_on_error: true` for anyone who would rather the automation carry on.
 
 ### Notes
 
@@ -133,11 +145,11 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **An expired session made SMS actions report "no messages" instead of failing.** The session-expiry detector in `_request` tested two **named** keys — `network_type` and `signalbar` — which only exist in the batch-poll response. An SMS response has neither, so `.get()` returned `None`, `None == ""` was `False`, and the detector could never fire on that endpoint. The dead-session body was returned intact, `.get("messages", [])` yielded `[]`, and the action reported an empty inbox.
 
-  **Why Refresh Now was a workaround, and why that proves the diagnosis:** Refresh Now runs the batch poll, whose keys the detector _did_ recognise — so it re-logged in and repaired the session, after which SMS worked. Detection existed on one endpoint and not the other; that asymmetry is exactly what was observed.
+  **Why Refresh Now was a workaround, and why that proves the diagnosis:** Refresh Now runs the batch poll, whose keys the detector _did_ recognize — so it re-logged in and repaired the session, after which SMS worked. Detection existed on one endpoint and not the other; that asymmetry is exactly what was observed.
 
   Two aggravating factors: `_request` then set `last_activity = now`, so the client **recorded a dead session as healthy** and pushed the 150s inactivity guard forward, masking it further. And the 150s guard only fires when >150s have passed since the last _successful_ request — this router permits **one session**, so opening its web UI kills the integration's session instantly, and acting within 150s of a poll leaves the guard quiet.
 
-- **Detector generalised to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
+- **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
   | Request | Live session | Dead session |
   | :-- | :-- | :-- |
@@ -148,7 +160,7 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
-- **Endpoint contract assertions — a second, independent defence.** `_require_contract()` makes each SMS call assert the key it must receive (`messages`, `sms_nv_total`) and raise `ZTEConnectionError` if absent. `get_sms_messages`, `get_last_sms_content`, `delete_all` and `get_sms_capacity` no longer fall back to an empty default on a failure path — the `masked_errors_check` Class A rule. This holds even if the router's dead-session shape changes and slips past detection.
+- **Endpoint contract assertions — a second, independent defense.** `_require_contract()` makes each SMS call assert the key it must receive (`messages`, `sms_nv_total`) and raise `ZTEConnectionError` if absent. `get_sms_messages`, `get_last_sms_content`, `delete_all` and `get_sms_capacity` no longer fall back to an empty default on a failure path — the `masked_errors_check` Class A rule. This holds even if the router's dead-session shape changes and slips past detection.
 
   Consequence worth noting: a persistent failure now raises into `_fetch_optional`, so the SMS endpoint burns its own strike budget and its entities go **unavailable** (§8) rather than displaying an empty inbox — and the Integration Health sensor reports it.
 
@@ -162,7 +174,7 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 ### Notes
 
-- **Mutation-proved, three ways** (§11 bar): reverting the detector to the named-key form → **red**; removing the contract assertion → **red**; reverting both, i.e. the exact pre-fix code → **red**. Each defence fails the suite independently, so neither is load-bearing alone.
+- **Mutation-proved, three ways** (§11 bar): reverting the detector to the named-key form → **red**; removing the contract assertion → **red**; reverting both, i.e. the exact pre-fix code → **red**. Each defense fails the suite independently, so neither is load-bearing alone.
 - **Live-verified against the router**: session deliberately killed from a second client with `last_activity` kept fresh — the precise reported condition — then `get_sms_messages()` logged _"Session expired in JSON response; renewing session"_ and returned both real messages.
 - **You remembered this correctly: it was fixed on `huawei_router_5g`**, which wraps every action in `_execute_with_retry` (re-login, retry once). That could not be ported — Huawei's library **raises** `ResponseErrorLoginRequiredException`, so there is something to catch. ZTE's `goform` API returns `200` with a benign body, so the fix had to be **detection**, not retry.
 - **Not a cross-project item, checked rather than assumed.** `unifi_network_monitor` raises on a real `401`; `wifi_ssid_monitor` already flags a missing `accesspoints` key into its health checks (`payload_no_ap_list`) rather than swallowing it; `huawei_router_5g` uses a library that raises. ZTE's goform API is the only one in the family that answers an auth failure with `200 OK` and a plausible body. Deliberately **not** added to the `x_project` queue — it fails the entry criteria.
@@ -208,7 +220,7 @@ Closes the last outstanding `**Test:**` tag for this project. **398 tests passin
 
 - **`test_stored_secrets_are_never_pre_filled`** — feeds both `_user_schema` and `_edit_schema` an entry containing a sentinel password and asserts no secret-typed field carries it, either as a voluptuous `default` or as `description={"suggested_value": ...}`.
 
-  **The behaviour was already correct** — `_edit_schema` declares `CONF_PASSWORD` with `default=""` and documents why in its docstring, and `_merge_credentials` fills a blank field from the stored value. Nothing was broken. What did not exist was a guard, and this is a change someone makes in good faith: pre-filling the field looks like a convenience improvement, the screen looks right afterwards, and the stored password is exposed only when a user clicks the eye icon. `dev_standards` §9 records two projects having shipped exactly that.
+  **The behavior was already correct** — `_edit_schema` declares `CONF_PASSWORD` with `default=""` and documents why in its docstring, and `_merge_credentials` fills a blank field from the stored value. Nothing was broken. What did not exist was a guard, and this is a change someone makes in good faith: pre-filling the field looks like a convenience improvement, the screen looks right afterwards, and the stored password is exposed only when a user clicks the eye icon. `dev_standards` §9 records two projects having shipped exactly that.
 
 - **`test_no_field_leaks_the_stored_secret`** — asserts the sentinel appears nowhere in the rendered schema at all. The first test only inspects fields already known to be secret; this one catches the other shape, a stored password copied into a **non-secret** field, where the eye icon is not even needed to read it.
 

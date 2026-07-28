@@ -640,8 +640,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="nr5g_action_channel",
         about=(
-            "The 5G channel number in use within the active band, expressed as an NR- "
-            "ARFCN. Useful when comparing your connection against neighbouring cells."
+            "The 5G channel number in use within the active band, expressed as "
+            "an NR-ARFCN. Useful when comparing your connection against "
+            "neighbouring cells."
         ),
         translation_key="signal_nr5g_action_channel",
         entity_category=EntityCategory.DIAGNOSTIC,

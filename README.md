@@ -44,6 +44,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [❌ Removal](#-removal)
   - [📝 Maintenance Status](#-maintenance-status)
   - [🤝 Contributors \& Acknowledgements](#-contributors--acknowledgements)
+  - [🔀 Other Options](#-other-options)
   - [📄 License](#-license)
 
 ## 🔧 Compatibility & Tested Devices
@@ -54,6 +55,25 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - **ZTE MC7010** (5G Outdoor CPE) — tested firmware: `V1.0.0B01` and later
 - **Expected Compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
 - **Not Supported**: Non-ZTE hardware.
+
+> [!NOTE] ZRM is a **cellular WAN & signal monitor** (designed for 5G/4G CPEs, particularly in bridge mode). It does not provide LAN/Wi-Fi client device tracking.
+
+**📟 Router Hardware:**
+
+- **Fully Tested**:
+  - **ZTE MC7010** (5G Outdoor CPE) — tested on firmware `V1.0.0B01` and later. _This is currently the ONLY model verified on live hardware._
+
+- **Expected Compatible (`goform` API Family)**:
+  - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
+    - **ZTE MC801 / MC801A** (Indoor 5G CPE)
+    - **ZTE MC888 / MC888A / MC888 Ultra** (Indoor 5G Wi-Fi 6 CPE)
+    - **ZTE MC889 / MC889A** (Outdoor 5G CPE)
+    - **ZTE MF266 / MF286 / MF289** (LTE/4G Outdoor & Indoor CPEs) _(Note: While protocol support for these model families is built into ZRM's API client, they remain unverified on live equipment)._
+
+- **Not Compatible (Incompatible Router Families)**:
+  - ❌ **ZTE G5-Series Next-Gen Routers (G5TC, G5TS, G5C, G5 Max)** — These use ZTE's OpenWrt-based `/ubus/` JSON-RPC API instead of `goform`. Use **[`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router)** instead.
+  - ❌ **ZTE Landline Fiber ONTs / DSL Routers (F6640, F680, H288A, H388X, FIBRA6S/Livebox 6s, etc.)** — These use ZTE's `_type=` Lua/XML web interface and focus on LAN tracking rather than cellular metrics. Use **[`zte_tracker`](https://github.com/juacas/zte_tracker)** or **[`ha-zte-fibra`](https://github.com/AldenDana/ha-zte-fibra)** instead.
+  - ❌ **Non-ZTE hardware.**
 
 **🌐 Network:**
 
@@ -1664,9 +1684,35 @@ This is a **personal project**. Support and updates are provided on a **"best-ef
 
 ## 🤝 Contributors & Acknowledgements
 
-- 🙏 Special Thanks: This project is based on the original work done by @Kajkac on ZTE Routers. A big thanks for the heavy lifting!
-- 🙏 **[huawei_lte_extended](https://github.com/william-aqn/huawei_lte_extended)** (@william-aqn): The approach to expanded SMS functionality in this integration is based on this work.
-- This project was developed with the assistance of AI to ensure code quality and adherence to best practices.
+- 🙏 **[@Kajkac](https://github.com/Kajkac)** ([`ZTE-MC-Home-assistant-repo`](https://github.com/Kajkac/ZTE-MC-Home-assistant-repo)): Special thanks for pioneering the early Home Assistant integration for ZTE MC-series routers, which provided the foundational basis for this project.
+
+- 🙏 **[@william-aqn](https://github.com/william-aqn)** ([`huawei_lte_extended`](https://github.com/william-aqn/huawei_lte_extended)): The approach to expanded SMS service functionality, bus events, and inbox management is based on this work.
+
+- 🙏 **[Miononno](https://miononno.it/)**: Foundational community reverse-engineer whose inspector scripts and parameter mappings (`goformId`, `Z5g_rsrp`, `SET_BEARER_PREFERENCE`, `AD` token calculation) unlocked the ZTE `goform` interface across MC7010, MC801A, MC888, and MC889 hardware.
+
+- 🙏 **[@rosenrot00](https://github.com/rosenrot00)** ([`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router)) & **[@juacas](https://github.com/juacas)** ([`zte_tracker`](https://github.com/juacas/zte_tracker)): For insights into ZTE's `ubus` JSON-RPC and Lua/XML API architectures across broader ZTE router families.
+
+- 🤖 This project was developed with the assistance of AI to ensure code quality and adherence to best practices.
+
+---
+
+## 🔀 Other Options
+
+This integration (**ZRM**) is specifically optimized as a high-performance, async-native monitor for ZTE 5G CPEs (primarily the **MC7010** in bridge mode, as well as the **MC801A**, **MC888**, and **MC889** series).
+
+If ZRM does not work for your specific router model or deployment setup, several excellent alternative Home Assistant integrations exist depending on your hardware type:
+
+- 📶 **[`Kajkac/ZTE-MC-Home-assistant-repo`](https://github.com/Kajkac/ZTE-MC-Home-assistant-repo)** by @Kajkac  
+  _Best for:_ ZTE MC801A, MC888, MC889, and G5 Ultra routers. Provides broad signal telemetry, data usage, SMS, and Wi-Fi/LAN device tracking.
+
+- ⚡ **[`rosenrot00/ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router)** by @rosenrot00  
+  _Best for:_ ZTE Next-Gen (NG) 5G CPEs (G5TC, G5TS, G5C, G5 Max). Connects via ZTE's OpenWrt-derived `/ubus/` JSON-RPC API backend.
+
+- 🏠 **[`juacas/zte_tracker`](https://github.com/juacas/zte_tracker)** by @juacas  
+  _Best for:_ ZTE Landline Broadband / Fiber ONTs and Mesh Routers (F6640, F6645P, F680, F6600P, H288A, H388X, E2631, etc.). Specialized in Wi-Fi/LAN device tracking and mesh node topology discovery (`topo_lua.lua`).
+
+- 🌐 **[`AldenDana/ha-zte-fibra`](https://github.com/AldenDana/ha-zte-fibra)** by @AldenDana  
+  _Best for:_ ISP-provided ZTE Fiber ONTs such as the ZTE FIBRA6S (Orange Spain Livebox 6s). Focuses on device tracking via ZTE's `hiddenData` Lua API.
 
 ---
 
