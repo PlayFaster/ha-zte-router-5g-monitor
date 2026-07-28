@@ -6,7 +6,7 @@
 
 ---
 
-![UNM Logo](custom_components/zte_router_5g/brand/dark_logo.png)
+![ZRM Logo](custom_components/zte_router_5g/brand/dark_logo.png)
 
 ---
 
@@ -20,7 +20,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 > - **This integration is for you if** you want:
 >   - **Advanced Signal Diagnostics** — Near-real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
->   - **SMS Management** — View and the most recently received message content and send SMS messages directly in HA.
+>   - **SMS Management** — View the most recently received message content and send SMS messages directly in HA.
 >
 > This project is optimized for the ZTE MC7010 5G Outdoor CPE but may work with other similar ZTE devices.
 
@@ -255,6 +255,8 @@ Several settings are exposed as control entities so you can drive them from dash
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type: `4G_AND_5G` (Auto), `LTE_AND_5G` (5G NSA), `Only_5G` (5G SA), or `Only_LTE` (4G Only).
+- **Disabled by Default**: These are disabled by default but can be enabled
+  - **LTE Band Lock Mask** (`sensor.zte_5g_signal_lte_band_lock_mask`): Displays the current hex mask configuration locking the active LTE bands.
 
 ### 🔧 Router Administration & Polling (System Device)
 
@@ -264,6 +266,8 @@ Several settings are exposed as control entities so you can drive them from dash
 - **Disabled by Default**: These are disabled by default but can be enabled
   - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`): Turn the physical status LEDs of the outdoor unit on or off.
   - **Reboot Schedule** (`binary_sensor.zte_5g_system_reboot_schedule`): Indicates whether a scheduled reboot window is configured and active.
+  - **UPnP Enabled** / **SIP ALG Enabled** (`binary_sensor.zte_5g_system_upnp_enabled` / `binary_sensor.zte_5g_system_sip_alg_enabled`): Monitor firewall settings status.
+  - **Time Server (SNTP)** (`sensor.zte_5g_system_time_server_sntp`): Displays the active server used by the router for time synchronization.
 
 ### 📈 Billing & Data Controls (Data Device)
 
@@ -399,7 +403,7 @@ Fires automatically when a new incoming SMS is detected. Use as an automation tr
 
 > [!NOTE]
 >
-> The Automation examples below use the `note:` functionality introduced in Home Assistant 2026.6 as a way to document/comment Automations that is permanent and **not** stripped out by the editor. If using an older version of Home Assistant you may need to remove the `note:` sections
+> The Automation examples below use the `note:` functionality introduced in Home Assistant 2026.6 as a way to document/comment Automations that is permanent and **not** stripped out by the editor. If using an older version of Home Assistant you may need to remove the `note:` sections.
 
 ---
 
@@ -1081,17 +1085,15 @@ actions:
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=PlayFaster&repository=ha-zte-router-5g-monitor&category=integration)
 
-Use the **shortcut badge** above , and then proceed to Step #3 or just ...
+Use the **shortcut badge** above, and then proceed to Step #3 or just ...
 
-1 Add this [repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor) as a **Custom Repository** in HACS:
-
-- Open HACS in Home Assistant
-- Click **Custom repositories** (⋮ menu)
-- Add repository URL and Type: `Integration`
-
-1. Search for "ZTE Router 5G Monitor" and click **Download**
-2. Restart Home Assistant
-3. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
+1. Add this [repository](https://github.com/PlayFaster/ha-zte-router-5g-monitor) as a **Custom Repository** in HACS:
+   - Open HACS in Home Assistant
+   - Click **Custom repositories** (⋮ menu)
+   - Add repository URL and Type: `Integration`
+2. Search for "ZTE Router 5G Monitor" and click **Download**
+3. Restart Home Assistant
+4. Go to **Settings > Devices & Services > Add Integration** and search for "ZTE Router 5G Monitor"
 
 ### 💾 Manual Installation
 
@@ -1205,7 +1207,7 @@ The router permits only **one login session at a time**. The integration release
 
 ### 🔌 Connection & Authentication
 
-#### **"Failed to connect to router" Error**
+#### 🔌 **"Failed to connect to router" Error**
 
 <details>
 

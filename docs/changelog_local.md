@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.0-rc2] - 2026-07-28 - Unreleased - No Manifest Bump - External Code Review Triage
+
+Triage of `.notes/code_review/code_review_20260728_0019.md` (external agent, 0 findings + 3 architectural observations). **407 tests passing, 100% coverage, ruff clean, mypy strict clean.** Two of the three observations were declined with reasons; the review's most useful effect was prompting a measurement that settled one of them, and a re-read that found a defect the review missed.
+
+### Fixed
+
+- **`docs/zte_how_to_access.md` contradicted itself about session expiry.** Its "Session expiry — three different signatures" table still described the **named-key** rule (`network_type` and `signalbar` both empty) while the Gotchas section added in `[3.3.0-dev12]` correctly described the generalised "every value is an empty string" rule. Introduced by me in dev12: the new section was added without updating the table above it.
+
+  This matters more than a normal doc slip — `AGENTS.md` points at this file as the authority on the API's failure modes, so the stale table was the one an implementer would find first. Corrected, with an explicit note on why the named-key form was blind and an instruction not to narrow it back.
+
+### Changed
+
+- **The 150-second idle reset is now `SESSION_IDLE_RESET_SECONDS` in `const.py`**, not a bare literal in `api.py`. The project's other thresholds (`FETCH_STRIKE_LIMIT`, `UNREACHABLE_STRIKE_LIMIT`) already live there, and `code_review.md`'s own category 4 flags inline timeouts — a finding the external review did not make while recommending a change to that very line.
+
+- **The value is now documented as measured rather than assumed.** A session left idle for **200 seconds** was already dead on MC7010 firmware `V1.0.0B03` (2026-07-28) — the router answered `200 OK` with every value blank. The real boundary is therefore at or below 200s, so 150s sits safely under it and under the 180s default scan interval.
+
+- **`async_get_sms_list` now records why it fetches in full.** Tag filtering happens client-side, so server-side pagination would return fewer than `count` messages once filtered; a combined box must also merge both stores before it can sort by date. The behaviour is necessary, not an oversight, and now says so.
+
+### Notes
+
+- **Observation 1 (remove the idle timer) — declined, and the measurement shows it would be a regression.** The review proposed dropping the proactive reset and relying solely on the reactive expiry detection in `_request`. That is **more** traffic, not less: reacting costs a failed request, a login, then a retry — three round trips, where preempting costs a login and a request. It also removes the second line of defence on a router whose expired-session response is indistinguishable from success at the HTTP layer, which is precisely the failure `[3.3.0-dev12]` fixed. The review's premise — "firmware keeps sessions valid for 180 seconds" — was unsourced; the measured result is that 200s is already dead. A warning against this change is now in `const.py` beside the value.
+
+- **Observation 2 (SMS full fetch) — declined, no code change.** The concern is directionally fair but the review missed the constraint that makes the behaviour necessary: client-side tag filtering. Recorded as a comment rather than changed.
+
+- **Observation 3 (adopt `via_device_link` for sub-devices) — factually wrong; already done.** The review states `helpers.py` line 45 builds `DeviceInfo` with `via_device=(DOMAIN, entry.unique_id)`. It does not: `helpers.py:10` imports `via_device_link` from `._compat` and line 87 calls it, with a comment naming the 2026.8 deprecation and the 2027.8 removal. That work landed in `[3.3.0-dev4]`, and the review is dated after it. Line 45 is inside `get_router_model`'s model-matching loop. **No change made — the recommendation was to do something already done.**
+
 ## [3.3.0-dev14] - 2026-07-27 - Unreleased - No Manifest Bump - doc_update Reconciliation Pass
 
 Produced by a `doc_update` run over the whole `[3.3.0-dev1]`–`[3.3.0-dev13]` cycle. Documentation only; **407 tests passing, 100% coverage.** Both findings are statements that were true when written and had since become false — the class a purely additive documentation pass cannot find.
@@ -64,12 +90,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalised to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request | Live session | Dead session |
-  | :-- | :-- | :-- |
-  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
-  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
-  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+  | Request                     | Live session       | Dead session                                         |
+  | :-------------------------- | :----------------- | :--------------------------------------------------- |
+  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
+  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
+  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -461,16 +487,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 

@@ -28,6 +28,21 @@ CONF_STOP_POLLING = "stop_polling"
 # client pointed at the old device with the old credentials.
 LIVE_OPTION_KEYS = frozenset({CONF_SCAN_INTERVAL, CONF_STOP_POLLING})
 
+# Idle gap after which the client discards `stok` and re-logs in before sending,
+# rather than waiting to be told the session is dead.
+#
+# Measured, not guessed: on an MC7010 (firmware V1.0.0B03, 2026-07-27) a session
+# idle for 200s was already dead — the router answered 200 OK with every value
+# blank. 150s therefore sits safely below the real boundary, and below the 180s
+# default scan interval.
+#
+# Do not remove this in favour of relying on the reactive expiry detection in
+# `_request`. Reacting costs *more*, not less: a failed request, then a login,
+# then a retry — three round trips where preempting costs two. It is also the
+# second line of defence on a router whose expired-session response is
+# indistinguishable from success at the HTTP layer.
+SESSION_IDLE_RESET_SECONDS = 150
+
 # Consecutive failures tolerated before entities are marked unavailable
 # (dev_standards Section 8 — the "3-strike" rule). Applied both globally and,
 # independently, to each optional endpoint. Named to match

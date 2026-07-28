@@ -194,6 +194,11 @@ async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str
         box_type, (None, ["0", "1", "2", "3", "4"])
     )
 
+    # Both stores are fetched in full for a combined box, and each store is
+    # fetched in full even when `count` is small. That is not an oversight:
+    # tag filtering happens below, client-side, so server-side pagination would
+    # return fewer than `count` messages once filtered — and a combined box has
+    # to merge two stores before it can sort by date at all.
     try:
         raw_msgs = []
         if mem_store is not None:

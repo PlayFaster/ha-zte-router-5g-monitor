@@ -9,6 +9,8 @@ from typing import Any, cast
 
 import aiohttp
 
+from .const import SESSION_IDLE_RESET_SECONDS
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -126,12 +128,12 @@ class ZTERouterAPI:
         """Centralized request helper that handles session creation and auto-renewal."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
 
-        # Check if the session is likely expired due to inactivity (e.g. 150 seconds)
+        # Pre-empt an idle-expired session rather than discovering it on failure.
         now = datetime.now(UTC)
         if (
             authenticated
             and self.stok
-            and (now - self.last_activity).total_seconds() > 150
+            and (now - self.last_activity).total_seconds() > SESSION_IDLE_RESET_SECONDS
         ):
             _LOGGER.debug("Session likely expired due to inactivity; resetting stok")
             self.stok = None
