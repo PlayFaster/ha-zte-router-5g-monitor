@@ -1670,7 +1670,7 @@ This is a **personal project**. Support and updates are provided on a **"best-ef
 
 - 🙏 **[@william-aqn](https://github.com/william-aqn)** ([`huawei_lte_extended`](https://github.com/william-aqn/huawei_lte_extended)): The approach to expanded SMS service functionality, bus events, and inbox management is based on this work.
 
-- 🙏 **[Miononno](https://miononno.it/)**: Foundational community reverse-engineer whose inspector scripts and parameter mappings (`goformId`, `Z5g_rsrp`, `SET_BEARER_PREFERENCE`, `AD` token calculation) unlocked the ZTE `goform` interface across MC7010, MC801A, MC888, and MC889 hardware.
+- 🙏 **[Miononno](https://miononno.it/)**: Foundational community reverse-engineer whose browser inspector scripts and parameter mappings (`goformId` values, Z5g_rsrp and related signal keys, and the AD token derivation md5(md5(wa_inner_version + cr_version) + RD)) opened up the ZTE `goformId` interface for the MC-series 5G CPEs.
 
 - 🙏 **[@rosenrot00](https://github.com/rosenrot00)** ([`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router)) & **[@juacas](https://github.com/juacas)** ([`zte_tracker`](https://github.com/juacas/zte_tracker)): For insights into ZTE's `ubus` JSON-RPC and Lua/XML API architectures across broader ZTE router families.
 

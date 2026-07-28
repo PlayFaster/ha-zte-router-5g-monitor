@@ -1014,6 +1014,9 @@ async def test_get_all_data_requests_every_aliased_key(mock_aiohttp_client):
         "flux_monthly_rx_bytes",
         "pm_sensor_pa1",
         "pm_sensor_ambient",
+        "pm_sensor_mdm",
+        "pm_modem_5g",
+        "pm_sensor_5g",
     ):
         assert key in requested, f"{key} is aliased but never requested"
 

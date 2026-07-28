@@ -620,21 +620,41 @@ def test_band_sensors_report_unknown_rather_than_guessing():
 
 # --- Phase 3: thermal diagnostics ------------------------------------------
 
+# The full set of thermal keys the sibling project Kajkac polls with °C units,
+# verified against its const.py and live batch cmd strings. Kept as one tuple so
+# a sensor added without a test, or a test without a sensor, shows up as a
+# mismatch in test_thermal_sensor_set_matches_the_descriptions.
+_THERMAL_KEYS = (
+    "pm_sensor_pa1",
+    "pm_sensor_ambient",
+    "pm_sensor_mdm",
+    "pm_modem_5g",
+    "pm_sensor_5g",
+)
 
-@pytest.mark.parametrize("key", ["pm_sensor_pa1", "pm_sensor_ambient"])
+
+def test_thermal_sensor_set_matches_the_descriptions():
+    """Guards against the set drifting back to an arbitrary subset."""
+    declared = {
+        d.key for d in SENSOR_TYPES if d.key.startswith(("pm_sensor", "pm_modem"))
+    }
+    assert declared == set(_THERMAL_KEYS)
+
+
+@pytest.mark.parametrize("key", _THERMAL_KEYS)
 def test_thermal_sensors_read_their_key(key):
     """Straight read with float coercion."""
     assert _value_for(key, {key: "42.5"}) == 42.5
 
 
-@pytest.mark.parametrize("key", ["pm_sensor_pa1", "pm_sensor_ambient"])
+@pytest.mark.parametrize("key", _THERMAL_KEYS)
 def test_thermal_sensors_map_the_mc7010_empty_string_to_unknown(key):
     """The MC7010 answers '' for both; that must not reach a numeric sensor."""
     assert _value_for(key, {key: ""}) is None
     assert _value_for(key, {}) is None
 
 
-@pytest.mark.parametrize("key", ["pm_sensor_pa1", "pm_sensor_ambient"])
+@pytest.mark.parametrize("key", _THERMAL_KEYS)
 def test_thermal_sensors_are_disabled_by_default_with_guard_bands(key):
     """Off by default on hardware that never populates them, and bounded."""
     description = next(d for d in SENSOR_TYPES if d.key == key)

@@ -303,10 +303,15 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="system",
         value_fn=lambda data: _safe_int(data.get("battery_value")),
     ),
-    # Thermal telemetry. Probed on an MC7010, which answers `""` for both, so
-    # these are disabled by default: on the primary target hardware they would
-    # only ever add two permanently-unknown entities to the UI. They are here
-    # for the models that do populate them.
+    # Thermal telemetry. This is the set of thermal keys the sibling project
+    # `Kajkac/ZTE-MC-Home-assistant-repo` polls with °C units, verified against
+    # its `const.py` and live batch `cmd=` strings — not a hand-picked subset.
+    #
+    # Probed on an MC7010, which answers `""` for every one of them, so all
+    # five are disabled by default: on the primary target hardware they would
+    # otherwise add five permanently-unknown entities to the UI. No model is
+    # yet confirmed to populate any of them; they are here for the hardware
+    # that does.
     ZTESensorEntityDescription(
         key="pm_sensor_pa1",
         about=(
@@ -342,6 +347,60 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         max_limit=125,
         group="system",
         value_fn=lambda data: _safe_float(data.get("pm_sensor_ambient")),
+    ),
+    ZTESensorEntityDescription(
+        key="pm_sensor_mdm",
+        about=(
+            "Temperature of the modem module - the cellular baseband, as distinct "
+            "from the power amplifier that drives the transmit signal. Many ZTE "
+            "models do not report it, in which case this stays unknown."
+        ),
+        translation_key="system_pm_sensor_mdm",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        min_limit=-40,
+        max_limit=125,
+        group="system",
+        value_fn=lambda data: _safe_float(data.get("pm_sensor_mdm")),
+    ),
+    ZTESensorEntityDescription(
+        key="pm_modem_5g",
+        about=(
+            "Temperature reported by the 5G modem section. The vendor does not "
+            "document how this differs from the 5G radio temperature; on hardware "
+            "that populates both, compare them before relying on either."
+        ),
+        translation_key="system_pm_modem_5g",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        min_limit=-40,
+        max_limit=125,
+        group="system",
+        value_fn=lambda data: _safe_float(data.get("pm_modem_5g")),
+    ),
+    ZTESensorEntityDescription(
+        key="pm_sensor_5g",
+        about=(
+            "Temperature of the 5G radio. See the note on the 5G modem "
+            "temperature - the vendor does not clearly distinguish the two, so "
+            "treat either as indicative rather than exact."
+        ),
+        translation_key="system_pm_sensor_5g",
+        device_class=SensorDeviceClass.TEMPERATURE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTemperature.CELSIUS,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        min_limit=-40,
+        max_limit=125,
+        group="system",
+        value_fn=lambda data: _safe_float(data.get("pm_sensor_5g")),
     ),
     ZTESensorEntityDescription(
         key="sim_imsi",

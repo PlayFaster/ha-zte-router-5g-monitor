@@ -88,6 +88,15 @@
       "system_pm_sensor_ambient": {
         "name": "Ambient Modem Temperature"
       },
+      "system_pm_sensor_mdm": {
+        "name": "Modem Temperature"
+      },
+      "system_pm_modem_5g": {
+        "name": "5G Modem Temperature"
+      },
+      "system_pm_sensor_5g": {
+        "name": "5G Radio Temperature"
+      },
       "system_sim_imsi": {
         "name": "SIM IMSI"
       },

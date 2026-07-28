@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.1-dev5] - 2026-07-29 - Unreleased - No Manifest Bump - Thermal Set Completed to Five
+
+Completes the thermal telemetry set following independent verification of the source research. The set is now defined by a statable rule rather than by which keys the research document happened to name.
+
+### Added
+
+- **Three further thermal diagnostic sensors**: `pm_sensor_mdm` (Modem Temperature), `pm_modem_5g` (5G Modem Temperature) and `pm_sensor_5g` (5G Radio Temperature), joining `pm_sensor_pa1` and `pm_sensor_ambient`. All five carry `DIAGNOSTIC`, `MEASUREMENT`, °C, guard bands of -40…125 °C, `about` notes, and **`entity_registry_enabled_default = False`**.
+- **`api.py`**: The three new keys added to the `get_all_data()` batch poll.
+- **`strings.json` / `translations/en.json`**: Names for all three, in both files.
+- **`tests/test_sensor.py`**: The thermal tests now run over a single `_THERMAL_KEYS` tuple, plus `test_thermal_sensor_set_matches_the_descriptions`, which fails if a `pm_*` sensor is added without a test or a test without a sensor.
+
+### Why five
+
+Verified directly against `Kajkac/ZTE-MC-Home-assistant-repo`: its `const.py` names and gives °C units to exactly these five, and its live batch `cmd=` strings (`mc.py:560`, `mc.py:638-639`) request them. The rule is therefore "the thermal keys a sibling `goform` project polls with °C units", not a hand-picked subset. Note that `pm_sensor_pa2` and `pm_mdm` appear in local probe lists but are **not** Kajkac keys and are deliberately excluded.
+
+**Caveat, recorded deliberately:** no model is yet confirmed to populate _any_ of these. A live MC7010 probe returns `""` for all of them, and the sibling project is only evidence that it _asks_, not that a router answers. All five are disabled by default precisely for that reason — the cost on the primary target hardware is zero.
+
+### Verified
+
+- 498 tests passing, **100% coverage**, `ruff`, `mypy --strict`, `codespell`, `prettier`, hassfest (`Invalid integrations: 0`).
+- **Mutation-checked (dev_standards §11)**: deleting the `pm_sensor_5g` description fails the drift guard plus its three parametrised cases. Reverted.
+
+### Changed
+
+- **`docs/all_sensors.md`**: Three rows added; System count 23 → 26, total 78 → 81.
+- **`docs/value_min_max.md`**: Three guard-band rows added.
+
 ## [3.3.1-dev4] - 2026-07-28 - Unreleased - Manifest Bump 3.3.0 → 3.3.1 - Release Preparation
 
 Release preparation for 3.3.1. This is the first entry in this line to carry a manifest bump.

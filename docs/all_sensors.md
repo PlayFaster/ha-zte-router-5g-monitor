@@ -6,11 +6,11 @@ This document provides a comprehensive list of all 76 entities currently impleme
 
 | Sub-Device | Entity Count | Description |
 | :-- | :-- | :-- |
-| **System** | 23 | Core router info and global integration settings. |
+| **System** | 26 | Core router info and global integration settings. |
 | **Signal** | 39 | Cellular connectivity, signal strength (LTE/5G), and network info. |
 | **Data** | 12 | Monthly and session traffic volume (Bytes and GB). |
 | **SMS** | 4 | Message counts and recent message content. |
-| **Total** | **78** |  |
+| **Total** | **81** |  |
 
 ---
 
@@ -32,6 +32,9 @@ _Group: `system`_
 | Battery | `battery_value` | Sensor | `battery_value` | % | Sensor | **Disabled by default.** Full when plugged in. |
 | Power Amplifier Temperature | `pm_sensor_pa1` | Sensor | `pm_sensor_pa1` | °C | Diagnostic | **Disabled by default.** Not populated by the MC7010, which returns an empty value. |
 | Ambient Modem Temperature | `pm_sensor_ambient` | Sensor | `pm_sensor_ambient` | °C | Diagnostic | **Disabled by default.** Not populated by the MC7010, which returns an empty value. |
+| Modem Temperature | `pm_sensor_mdm` | Sensor | `pm_sensor_mdm` | °C | Diagnostic | **Disabled by default.** Not populated by the MC7010, which returns an empty value. |
+| 5G Modem Temperature | `pm_modem_5g` | Sensor | `pm_modem_5g` | °C | Diagnostic | **Disabled by default.** Not populated by the MC7010, which returns an empty value. |
+| 5G Radio Temperature | `pm_sensor_5g` | Sensor | `pm_sensor_5g` | °C | Diagnostic | **Disabled by default.** Not populated by the MC7010, which returns an empty value. |
 | SIM IMSI | `sim_imsi` | Sensor | `sim_imsi` | - | Diagnostic | **Disabled by default (sensitive).** SIM network identity. |
 | SIM ICCID | `sim_iccid` | Sensor | `sim_iccid` | - | Diagnostic | **Disabled by default (sensitive).** SIM card serial number. |
 | Refresh Now | `refresh` | Button | `coordinator.async_request_refresh()` | - | Config | Forces an immediate poll cycle. Complements Pause Polling and the polling interval. |
@@ -235,4 +238,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.2.5-dev7** (2026-07-02) — Added the "Refresh Now" button (System sub-device) for on-demand coordinator refresh, raising total count from 75 to 76.
 - **v3.2.5-dev8** (2026-07-02) — Added suggested display units/precision to 16 sensors (data size → GB, data rate → Mbit/s, uptime duration → hours, bandwidth and dBm → 0 dp). No entity count change. Added the "Suggested Display Units & Precision" reference table.
 - **v3.2.5-dev9** (2026-07-03) — Documented unit displays for Data sub-device and System Uptime Duration; added SMS service definitions to the SMS sub-device table.
-- **v3.3.1** (2026-07-28) — Added two thermal diagnostic sensors (Power Amplifier Temperature, Ambient Modem Temperature), both disabled by default because the MC7010 does not populate them. System count 21 to 23, total 76 to 78.
+- **v3.3.1** (2026-07-29) — Added five thermal diagnostic sensors (Power Amplifier, Ambient Modem, Modem, 5G Modem, 5G Radio temperatures), all disabled by default because the MC7010 does not populate any of them. System count 21 to 26, total 76 to 81.

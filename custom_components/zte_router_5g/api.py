@@ -636,6 +636,9 @@ class ZTERouterAPI:
             "flux_monthly_rx_bytes",
             "pm_sensor_pa1",
             "pm_sensor_ambient",
+            "pm_sensor_mdm",
+            "pm_modem_5g",
+            "pm_sensor_5g",
         ]
         cmd = ",".join(params)
         path = (
