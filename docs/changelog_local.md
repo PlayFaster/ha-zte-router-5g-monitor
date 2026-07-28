@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [3.3.1-dev1] - 2026-07-28 - Unreleased - No Manifest Bump - Helpers & GSM-7 Inspector
+
+Phase 1 of the cross-model compatibility expansion. Pure additions to `helpers.py` with no call sites yet — nothing in the integration's behaviour changes until Phases 2 and 3 wire these in.
+
+### Added
+
+- **`helpers.py` GSM 03.38 inspector**: `is_gsm7()` and the `GSM7_CHARS` alphabet (basic plus extension table). Phase 2 uses this to choose `encode_type` for outgoing SMS, so a plain-text message gets its full 160 characters instead of being sent as UCS-2 at 70.
+- **`helpers.py` channel-to-band resolvers**: `earfcn_to_band()` (3GPP TS 36.101 Table 5.7.3-1) and `arfcn_to_band()` (TS 38.104 Table 5.4.2.3-1), for routers that report a channel number but no band name. Both return `None` for missing, unparsable or out-of-range input rather than guessing, so the sensor reports unknown instead of a wrong band. NR ranges genuinely overlap (n78 sits inside n77), so `arfcn_to_band()` is explicitly best-effort and resolves ties by a documented order; a band name reported by the router always takes precedence.
+- **`tests/test_helpers.py`**: Coverage for all three functions, including range edges, the n77/n78 overlap ordering, string and float-shaped inputs from the `goform` API, and the None-not-a-guess contract.
+
+### Deferred
+
+- **`docs/about_attribute_list.md`** is deliberately not updated in this release line, per project directive; it will be regenerated from `sensor.py` in a later release.
+
 ## [3.3.0-rc5] - 2026-07-28 - Unreleased - No Manifest Bump - AGENTS README About List and Expected Compatibility
 
 ### Changed

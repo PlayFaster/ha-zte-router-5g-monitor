@@ -43,6 +43,177 @@ def get_router_model(coordinator_data: dict[str, Any] | None) -> str:
     return "ZTE Router"
 
 
+# GSM 03.38 (3GPP TS 23.038) default alphabet. A message drawn entirely from
+# this set fits 160 characters per SMS; anything outside it forces UCS-2 and
+# drops the limit to 70. The router will not work this out for us — `send_sms`
+# has to name the encoding, and naming the wrong one either mangles the text or
+# wastes more than half the payload.
+_GSM7_BASIC = (
+    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
+    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
+)
+# The extension table. These are still GSM-7, but each costs two septets
+# because it is sent as ESC + character, so they are counted separately by
+# anything that cares about segment boundaries.
+_GSM7_EXTENDED = "\f^{}\\[~]|€"
+
+GSM7_CHARS = frozenset(_GSM7_BASIC + _GSM7_EXTENDED)
+
+
+def is_gsm7(text: str) -> bool:
+    """Return True when every character is in the GSM 03.38 alphabet.
+
+    Used to pick `encode_type` for outgoing SMS. False means at least one
+    character needs UCS-2 — a single emoji or curly quote is enough.
+    """
+    return all(char in GSM7_CHARS for char in text)
+
+
+# E-UTRA downlink EARFCN ranges, 3GPP TS 36.101 Table 5.7.3-1. Ranges do not
+# overlap, so the lookup is exact.
+_EARFCN_BANDS: tuple[tuple[int, int, str], ...] = (
+    (0, 599, "B1"),
+    (600, 1199, "B2"),
+    (1200, 1949, "B3"),
+    (1950, 2399, "B4"),
+    (2400, 2649, "B5"),
+    (2650, 2749, "B6"),
+    (2750, 3449, "B7"),
+    (3450, 3799, "B8"),
+    (3800, 4149, "B9"),
+    (4150, 4749, "B10"),
+    (4750, 4949, "B11"),
+    (5010, 5179, "B12"),
+    (5180, 5279, "B13"),
+    (5280, 5379, "B14"),
+    (5730, 5849, "B17"),
+    (5850, 5999, "B18"),
+    (6000, 6149, "B19"),
+    (6150, 6449, "B20"),
+    (6450, 6599, "B21"),
+    (6600, 7399, "B22"),
+    (7500, 7699, "B23"),
+    (7700, 8039, "B24"),
+    (8040, 8689, "B25"),
+    (8690, 9039, "B26"),
+    (9040, 9209, "B27"),
+    (9210, 9659, "B28"),
+    (9660, 9769, "B29"),
+    (9770, 9869, "B30"),
+    (9870, 9919, "B31"),
+    (9920, 10359, "B32"),
+    (36000, 36199, "B33"),
+    (36200, 36349, "B34"),
+    (36350, 36949, "B35"),
+    (36950, 37549, "B36"),
+    (37550, 37749, "B37"),
+    (37750, 38249, "B38"),
+    (38250, 38649, "B39"),
+    (38650, 39649, "B40"),
+    (39650, 41589, "B41"),
+    (41590, 43589, "B42"),
+    (43590, 45589, "B43"),
+    (45590, 46589, "B44"),
+    (46590, 46789, "B45"),
+    (46790, 54539, "B46"),
+    (54540, 55239, "B47"),
+    (55240, 56739, "B48"),
+    (56740, 58239, "B49"),
+    (58240, 59089, "B50"),
+    (59090, 59139, "B51"),
+    (59140, 60139, "B52"),
+    (60140, 60254, "B53"),
+    (65536, 66435, "B65"),
+    (66436, 67335, "B66"),
+    (67336, 67535, "B67"),
+    (67536, 67835, "B68"),
+    (67836, 68335, "B69"),
+    (68336, 68585, "B70"),
+    (68586, 68935, "B71"),
+    (68936, 68985, "B72"),
+    (68986, 69035, "B73"),
+    (69036, 69465, "B74"),
+    (69466, 70315, "B75"),
+    (70316, 70365, "B76"),
+    (70366, 70545, "B85"),
+    (70546, 70595, "B87"),
+    (70596, 70645, "B88"),
+)
+
+# NR downlink ARFCN ranges, 3GPP TS 38.104 Table 5.4.2.3-1.
+#
+# Unlike E-UTRA these ranges genuinely overlap — n78 sits wholly inside n77,
+# and n41 straddles n38 and n7 — so a channel number alone cannot identify the
+# band. The list is ordered by what a ZTE CPE is actually likely to be camped
+# on, first match wins, and the result is a best guess used only when the
+# router declines to name the band itself. Where the router does report a name,
+# that always takes precedence.
+_ARFCN_BANDS: tuple[tuple[int, int, str], ...] = (
+    (620000, 653333, "n78"),
+    (693334, 733333, "n79"),
+    (499200, 537999, "n41"),
+    (422000, 434000, "n1"),
+    (361000, 376000, "n3"),
+    (185000, 192000, "n8"),
+    (158200, 164200, "n20"),
+    (151600, 160600, "n28"),
+    (524000, 538000, "n7"),
+    (460000, 480000, "n40"),
+    (514000, 524000, "n38"),
+    (173800, 178800, "n5"),
+    (145800, 149200, "n12"),
+    (123400, 130400, "n71"),
+    (386000, 398000, "n2"),
+    (386000, 399000, "n25"),
+    (434001, 440000, "n66"),
+    (399000, 404000, "n70"),
+    (402000, 405000, "n34"),
+    (636667, 646666, "n48"),
+    (286400, 303400, "n50"),
+    (285400, 286400, "n51"),
+    (653334, 680000, "n77"),
+    (2016667, 2070832, "n258"),
+    (2054166, 2104165, "n257"),
+    (2070833, 2084999, "n261"),
+    (2229166, 2279165, "n260"),
+)
+
+
+def _channel_to_band(
+    channel: int | str | None, table: tuple[tuple[int, int, str], ...]
+) -> str | None:
+    """Resolve a channel number against a range table, or None."""
+    if channel in (None, ""):
+        return None
+    try:
+        value = int(float(cast(Any, channel)))
+    except (TypeError, ValueError):
+        return None
+    return next(
+        (name for low, high, name in table if low <= value <= high),
+        None,
+    )
+
+
+def earfcn_to_band(channel: int | str | None) -> str | None:
+    """Map a 4G LTE EARFCN to its band name, e.g. 9360 -> 'B28'.
+
+    Returns None for missing, unparsable or out-of-range channel numbers so
+    the sensor reports unknown rather than a wrong band.
+    """
+    return _channel_to_band(channel, _EARFCN_BANDS)
+
+
+def arfcn_to_band(channel: int | str | None) -> str | None:
+    """Map a 5G NR ARFCN to its band name, e.g. 630000 -> 'n78'.
+
+    Best-effort only — NR band ranges overlap, so see `_ARFCN_BANDS` for how
+    ties are broken. Returns None when the channel is missing, unparsable or
+    outside every known range.
+    """
+    return _channel_to_band(channel, _ARFCN_BANDS)
+
+
 GROUP_NAMES = {
     "system": "System",
     "signal": "Signal",
