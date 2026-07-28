@@ -131,14 +131,6 @@ See [SMS Actions](#-sms-actions) below for more detail, and [SMS Examples](#-sms
 
 This integration provides **75+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
-> [!TIP]
->
-> **Not sure what a sensor does, or what a good value looks like?** Most entities carry a short built-in **About** note. Click the entity to open it, use the **⋮ (three-dots) menu → Details**, and look for the **`about`** attribute — a plain-language explanation of that sensor, and for the signal metrics, the typical ranges that count as good, fair or poor.
->
-> That is where the acronyms are decoded: **RSRP**, **RSRQ**, **SINR**, **PCI**, **eNodeB**, **ENDC**, **APN** and the rest each explain themselves in place, so you do not have to look them up to read your own dashboard.
->
-> These **About** notes — and every other entity attribute this integration publishes — are **unrecorded**. Home Assistant still shows them live in the entity's details, but never writes them to the history database, so they cost nothing to carry.
-
 <details>
 
 <summary>
@@ -159,9 +151,11 @@ This integration provides **75+ entities** (depending on your firmware) organize
 >
 > **Not sure what a sensor does?** Many entities carry a short built-in **About** note. Click the sensor to open it, use the **⋮ (three-dots) menu → Details**, and look for the **`about`** attribute - a one-line explanation of that sensor.
 >
-> ![About Attribute Example](.github/images/unifi_mon_about_attrib_example.png)
+> ![About Attribute Example](.github/images/zte_5g_about_attribute.png)
 >
-> These **About** notes - and all other attributes are set **unrecorded**. Home Assistant still shows them live in the entity's details, but **never writes them to the history/recorder database**. That keeps bulky or purely-informational values from bloating your database, with no downside to what you see day-to-day.
+> That is where the acronyms are decoded: **RSRP**, **RSRQ**, **SINR**, **PCI**, **eNodeB**, **ENDC**, **APN** and the rest each explain themselves in place, so you do not have to look them up to read your own dashboard.
+>
+> These **About** notes - and all other attributes this integration publishes are set **unrecorded**. Home Assistant still shows them live in the entity's details, but **never writes them to the history/recorder database**. That keeps bulky or purely-informational values from bloating your database, with no downside to what you see day-to-day.
 
 ---
 
@@ -1256,6 +1250,12 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 
 The integration uses a custom `DataUpdateCoordinator` designed for high stability:
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 - **Polling Loop**: Fetches all diagnostic and SMS data in a single optimized request.
 - **Triggered Refresh**: Actions like **Reboot**, **Delete SMS**, or **Change Config** trigger an immediate API refresh to provide instant feedback.
 - **3-Strike Logic**: To avoid "Unavailable" flickers during momentary router congestion or signal loss:
@@ -1266,11 +1266,21 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 - **Auto-Recovery**: Once the router is back online, the integration restores all entities automatically.
 - **Forced Refresh Always Fetches**: Every explicit action — **Refresh Now**, changing a setting, deleting an SMS — fetches immediately **even while Pause Polling is on**. Only scheduled polls respect the pause.
 
+---
+
+</details>
+
 ### 🩺 Self-Diagnosis
 
 Connection failures are visible already: entities go `Unavailable`. The gap this fills is the failure Home Assistant **cannot** see — a poll that _succeeds_ while the data is wrong.
 
 The **Integration Health** binary sensor (System device) reports:
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 - **Total outage** — the router unreachable. Flagged on the **first** failure at startup (there are no held values, so waiting would leave you with no explanation), or on the **third** consecutive failure at runtime. A success clears it in the same cycle.
 - **Degraded capability** — an optional endpoint that has exhausted its own strike budget.
@@ -1278,9 +1288,19 @@ The **Integration Health** binary sensor (System device) reports:
 
 It is deliberately **available at all times**, including when every other entity has gone unavailable — a health sensor that disappears during an outage cannot explain the silence. See the [example automation](#-integration-health-problem-alert).
 
+---
+
+</details>
+
 #### 🔨 Repairs
 
 Some problems need you to do something, so they are also raised in Home Assistant's **Repairs** panel rather than only on a sensor. All three clear themselves automatically once the condition passes.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 | Repair | Raised when | Why it is a Repair |
 | :-- | :-- | :-- |
@@ -1290,17 +1310,41 @@ Some problems need you to do something, so they are also raised in Home Assistan
 
 > [!NOTE] A brief outage — a router reboot, a passing network glitch — deliberately does **not** raise a Repair. Entities go unavailable after three failed polls, and Integration Health turns on, but the Repairs panel stays quiet until a problem has clearly stopped fixing itself.
 
+---
+
+</details>
+
 ### 🔐 Session Handling
 
 The router permits only **one login session at a time**. The integration releases its session when the config entry is unloaded, reloaded or removed, so the router's web UI is available again immediately rather than after the session times out.
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 **It also recovers its session automatically.** Because only one session can exist, logging into the router's web UI ends the integration's — and the router signals this by answering normally (`HTTP 200`) with empty values rather than by returning an error. The integration detects that, logs back in and retries the request once, so an action you trigger straight after using the web UI still works. If a request genuinely cannot be completed it **raises an error** rather than returning empty data, so an automation can tell "nothing to report" apart from "could not ask".
 
+---
+
+</details>
+
 ### 🆔 Identity & Stable Entities
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 - **IMEI-Based Identity**: The integration uses the router's unique hardware IMEI as the primary key. This ensures that even if your router's IP address changes (DHCP), Home Assistant will track the same device and preserve your history and automations.
 - **Reconfiguration**: If you change your router's IP or password, use the **Reconfigure** button on the integration card to update settings without losing any data.
 - **Data Validation**: Router values are checked for validity against defined guard limits. Out-of-range sensor values (e.g., impossible signal metrics) are ignored or marked as unknown to ensure data integrity.
+
+---
+
+</details>
 
 ### 🔄 Dynamic Polling & Standard System Options
 
