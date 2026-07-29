@@ -252,6 +252,24 @@
       },
       "system_sntp_server": {
         "name": "Time Server (SNTP)"
+      },
+      "data_clear_day": {
+        "name": "Data Reset Day"
+      },
+      "signal_lte_multi_ca_scell_info": {
+        "name": "Carrier Aggregation Secondary Cells"
+      },
+      "system_opms_wan_mode": {
+        "name": "WAN Operating Mode"
+      },
+      "system_opms_wan_auto_mode": {
+        "name": "WAN Fallback Mode"
+      },
+      "system_sntp_timezone": {
+        "name": "Router Timezone"
+      },
+      "system_apn_interface_version": {
+        "name": "APN Interface Version"
       }
     },
     "button": {
@@ -280,6 +298,12 @@
       },
       "system_integration_health": {
         "name": "Integration Health"
+      },
+      "system_web_sleep": {
+        "name": "Web Page Sleep"
+      },
+      "system_web_wake": {
+        "name": "Web Page Auto-Wake"
       }
     },
     "switch": {

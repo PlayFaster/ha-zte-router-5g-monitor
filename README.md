@@ -32,6 +32,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [🎯 Use Cases](#-use-cases)
   - [✅ Features](#-features)
   - [🔍 What You Get](#-what-you-get)
+  - [📶 Reading Your Signal Data](#-reading-your-signal-data)
   - [📸 Screenshots](#-screenshots)
   - [🔘 Controls \& Settings](#-controls--settings)
   - [💬 SMS Actions](#-sms-actions)
@@ -316,6 +317,96 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 > If you want to see the current value, but have no interest in short or long term history, you can [exclude a value from the Recorder](https://www.home-assistant.io/integrations/recorder/#configure-filter).
 >
 > And of course, if a particular sensor, or group of sensors is of no interest to you, you can very easily disable it. See [What You Get](#-what-you-get) above. Remember you don't **need** to do **any** of this. These are _extra_ options for the Home Assistant user who wants _extra_ control.
+
+---
+
+</details>
+
+<br>
+
+## 📶 Reading Your Signal Data
+
+This integration reports a lot of signal numbers. This section explains which ones matter, what to expect, and how to compare one antenna position against another.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+### Start with two numbers
+
+| Look at | To answer | Entity |
+| :-- | :-- | :-- |
+| **SINR** (or **SNR**) | _How fast will this actually go?_ | `5G SNR`, `LTE SNR` |
+| **RSRP** | _Do I have coverage at all?_ | `5G RSRP`, `LTE RSRP` |
+
+**SINR is the single most useful number.** It measures your signal against everything competing with it, and it tracks achievable throughput more closely than anything else the router reports.
+
+**RSRP is raw received power.** It tells you whether the tower is reaching you, not how well the connection will perform.
+
+They move independently, and that is the point:
+
+- **Strong RSRP, poor SINR** — you are close to a busy tower. Plenty of signal, but lots of interference. Speeds disappoint despite "full bars".
+- **Weak RSRP, good SINR** — you are far out but the sector is quiet. Often perfectly usable, sometimes better than the first case.
+
+### What the numbers mean
+
+| Metric | Excellent | Good | Fair | Poor |
+| :-- | :-- | :-- | :-- | :-- |
+| **RSRP** (dBm) | > −80 | −80 to −90 | −90 to −100 | < −100 |
+| **RSRQ** (dB) | > −10 | −10 to −15 | −15 to −20 | < −20 |
+| **SINR / SNR** (dB) | > 20 | 13 to 20 | 0 to 13 | < 0 |
+| **RSSI** (dBm) | > −65 | −65 to −75 | −75 to −85 | < −85 |
+
+RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
+
+> [!TIP]
+>
+> Every signal entity carries this guidance in its own **`about`** note. Click the entity → **⋮ menu → Details**. The table above simply gathers them in one place.
+
+### Treat these as a starting point, not a verdict
+
+The bands above are conventional and worth knowing, but **what counts as "good enough" is specific to you**. A reading that would be poor for someone 500 m from a tower can be entirely fine at 4 km on a quiet sector, because the two of you are limited by different things — interference in the first case, noise in the second.
+
+So the more useful question is almost never _"is −95 dBm good?"_. It is:
+
+- **Is this position better than that position?**
+- **Is today worse than last week?**
+
+Both are comparisons, and both need readings over time rather than the number on screen right now.
+
+### Establish your own baseline
+
+When the connection is working well, note your RSRP, RSRQ and SINR. **That is your reference.** A later drop from 18 dB SINR to 6 dB tells you far more than any general table, because it is measured against your own site, your own antenna and your own cell.
+
+### Comparing over time (no code needed)
+
+Individual readings jump around constantly, so a snapshot is a poor basis for a decision. Home Assistant can average for you:
+
+1. **Settings → Devices & Services → Helpers → Create Helper**
+2. Choose **Combine the state of several sensors** → **Statistics**
+3. Pick an entity — `sensor.zte_5g_signal_5g_snr` is the one to start with
+4. Set the characteristic to **Arithmetic mean** and the max age to **15 minutes**
+
+You now have a smoothed value that is stable enough to compare. Create a second one for RSRP if you are aligning an antenna.
+
+**To compare two antenna positions:** leave the router in position A for a few minutes, note the averaged value, move to position B, wait again, and compare. The averaging is what makes the comparison meaningful — raw readings vary enough to point at the wrong answer.
+
+**To watch for degradation over time:** add the signal entities to a History card. Long-term statistics keep hourly min/max/mean for a year, so a slow decline is visible in a way it never is from the current reading.
+
+### Is there one number for overall quality?
+
+**No, and that is a real answer rather than a missing feature.**
+
+There is no standard formula for combining RSRP, RSRQ and SINR into a single score, because which of them limits _your_ connection depends on where you are. Any weighted average would score an interference-limited site and a noise-limited site as if they were the same problem, and get at least one of them wrong.
+
+The two closest things already exist:
+
+- **SINR** — the best single indicator of usable throughput.
+- **`Signal Bars`** (0–5) — the router's own composite. Coarse and vendor-defined, but it is the manufacturer's own summary.
+
+If you want one number on a dashboard, use SINR.
 
 ---
 

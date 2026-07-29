@@ -652,6 +652,34 @@ class ZTERouterAPI:
             "sntp_dst_enable",
             "upnpEnabled",
             "alg_sip_enable",
+            # Billing-cycle keys. `traffic_clear_date` is the spelling a live
+            # MC7010 probe answered on (see
+            # `.notes/info/zte_element_discovery_report.md`); the two
+            # `data_volume_*` spellings come from a separate analysis and are
+            # carried as aliases for other goform models. See `_ALIAS_CLEAR_DAY`
+            # in `sensor.py`. `wan_auto_clear_flow_data_switch` is the master
+            # switch for the monthly reset — with it off the counters never
+            # roll over, so anything reasoning about a cycle must consult it.
+            "traffic_clear_date",
+            "data_volume_clear_date",
+            "data_volume_clear_day",
+            "wan_auto_clear_flow_data_switch",
+            # Web UI power management.
+            "web_sleep_switch",
+            "web_wake_switch",
+            # Reboot schedule detail. `reboot_schedule_enable` and the hour /
+            # minute pair are requested above; these three say which day the
+            # schedule fires on and how to read it.
+            "reboot_schedule_mode",
+            "reboot_dow",
+            "reboot_dod",
+            # Time configuration beyond the two servers requested above.
+            "sntp_server2",
+            "sntp_timezone",
+            # Raw secondary-cell aggregation descriptor and operational mode.
+            "lte_multi_ca_scell_info",
+            "opms_wan_mode",
+            "opms_wan_auto_mode",
             # Cross-model keys. Every one of these is an alternative spelling
             # used by some other member of the goform family, or optional
             # telemetry the MC7010 does not populate. Requesting a key the

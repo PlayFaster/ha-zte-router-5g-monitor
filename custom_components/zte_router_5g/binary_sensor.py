@@ -55,6 +55,12 @@ INTEGRATION_HEALTH_DESCRIPTION = ZTEBinarySensorEntityDescription(
 BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ZTEBinarySensorEntityDescription(
         key="reboot_schedule",
+        about=(
+            "Whether the router reboots itself on its own schedule. The time it "
+            "runs, and which day, are in the attributes exactly as the router "
+            "reports them. This is the router's internal schedule and is "
+            "separate from any reboot automation built in Home Assistant."
+        ),
         translation_key="system_reboot_schedule",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
@@ -62,12 +68,45 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
         value_fn=lambda data: (
             data.get("reboot_schedule_enable") == "1" if data else False
         ),
+        # `reboot_schedule_mode` selects whether the weekly day (`reboot_dow`)
+        # or the monthly one (`reboot_dod`) applies. Which mode value means
+        # which is not confirmed on any firmware, so all three are published
+        # raw rather than resolved into a guess.
         extra_attrs_fn=lambda data: {
             "reboot_hour1": data.get("reboot_hour1") if data else None,
             "reboot_min1": data.get("reboot_min1") if data else None,
             "reboot_hour2": data.get("reboot_hour2") if data else None,
             "reboot_min2": data.get("reboot_min2") if data else None,
+            "schedule_mode": data.get("reboot_schedule_mode") if data else None,
+            "day_of_week": data.get("reboot_dow") if data else None,
+            "day_of_month": data.get("reboot_dod") if data else None,
         },
+    ),
+    ZTEBinarySensorEntityDescription(
+        key="web_sleep",
+        about=(
+            "Whether the router puts its own web page to sleep after a period "
+            "of inactivity. It does not affect this integration, which logs in "
+            "afresh as needed. Changing it is not offered here because the "
+            "router exposes no command for it."
+        ),
+        translation_key="system_web_sleep",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        entity_registry_enabled_default=False,
+        value_fn=lambda data: data.get("web_sleep_switch") == "1" if data else False,
+    ),
+    ZTEBinarySensorEntityDescription(
+        key="web_wake",
+        about=(
+            "Whether the router's web page wakes itself again after sleeping. "
+            "Read-only for the same reason as the sleep setting."
+        ),
+        translation_key="system_web_wake",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        entity_registry_enabled_default=False,
+        value_fn=lambda data: data.get("web_wake_switch") == "1" if data else False,
     ),
     ZTEBinarySensorEntityDescription(
         key="upnp_enabled",
@@ -295,7 +334,16 @@ class ZTERouterBinarySensor(
     # is the guard, and it sweeps live entities precisely because a static
     # check cannot see through the lambda.
     _unrecorded_attributes = frozenset(
-        {"about", "reboot_hour1", "reboot_min1", "reboot_hour2", "reboot_min2"}
+        {
+            "about",
+            "reboot_hour1",
+            "reboot_min1",
+            "reboot_hour2",
+            "reboot_min2",
+            "schedule_mode",
+            "day_of_week",
+            "day_of_month",
+        }
     )
 
     def __init__(

@@ -157,6 +157,42 @@ _ALIAS_5G_PCI: Final = ("nr5g_pci", "Z5g_CELL_ID")
 _ALIAS_MONTHLY_TX: Final = ("monthly_tx_bytes", "flux_monthly_tx_bytes")
 _ALIAS_MONTHLY_RX: Final = ("monthly_rx_bytes", "flux_monthly_rx_bytes")
 
+# Day of the month on which the router zeroes its monthly counters. Three
+# spellings are in circulation across the goform family; `traffic_clear_date` is
+# the one a live MC7010 probe answered on, so it leads. Order is the tie-break —
+# see `_get_first`.
+_ALIAS_CLEAR_DAY: Final = (
+    "traffic_clear_date",
+    "data_volume_clear_date",
+    "data_volume_clear_day",
+)
+
+
+def _clear_day(data: dict[str, Any]) -> int | None:
+    """Return the monthly counter reset day, 1-31, or None.
+
+    Warns when more than one spelling is populated with *different* values.
+    `_get_first` would silently take the leader, and a silent disagreement
+    between two firmware spellings of the same setting is precisely the kind of
+    thing that surfaces months later as "the projection is a week out".
+    """
+    values = {
+        key: parsed
+        for key in _ALIAS_CLEAR_DAY
+        if (parsed := _safe_int(data.get(key))) is not None
+    }
+    if not values:
+        return None
+    if len(set(values.values())) > 1:
+        _LOGGER.warning(
+            "Router reports disagreeing monthly reset days: %s. Using %s. "
+            "Please open an issue with a diagnostics download",
+            values,
+            next(iter(values.values())),
+        )
+    day = next(iter(values.values()))
+    return day if 1 <= day <= 31 else None
+
 
 def _monthly_total_bytes(data: dict[str, Any]) -> int | None:
     """Sum the monthly TX and RX counters, honouring the key aliases.
@@ -1127,6 +1163,89 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="system",
         value_fn=lambda data: _safe_str(data.get("sntp_server0")),
     ),
+    ZTESensorEntityDescription(
+        key="data_clear_day",
+        about=(
+            "The day of the month on which the router zeroes its monthly data "
+            "counters. This is the router's own billing cycle, which need not "
+            "start on the 1st - check it against your provider's bill. If your "
+            "month is shorter than this day, the reset happens on the last day "
+            "instead."
+        ),
+        translation_key="data_clear_day",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        min_limit=1,
+        max_limit=31,
+        group="data",
+        value_fn=_clear_day,
+    ),
+    ZTESensorEntityDescription(
+        key="lte_multi_ca_scell_info",
+        about=(
+            "Raw description of the additional 4G carriers in use, as the router "
+            "reports it - one group of comma-separated figures per secondary "
+            "cell. The named Carrier Aggregation sensors are easier to read; "
+            "this one is for when they do not cover what you need."
+        ),
+        translation_key="signal_lte_multi_ca_scell_info",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _safe_str(data.get("lte_multi_ca_scell_info")),
+    ),
+    ZTESensorEntityDescription(
+        key="opms_wan_mode",
+        about=(
+            "Whether the router is passing traffic as a gateway of its own or "
+            "bridging it straight through to equipment behind it. Changing this "
+            "is deliberately not offered here: it alters the path this "
+            "integration reaches the router over, so use the router's own web "
+            "page where a mistake can still be undone."
+        ),
+        translation_key="system_opms_wan_mode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_str(data.get("opms_wan_mode")),
+    ),
+    ZTESensorEntityDescription(
+        key="opms_wan_auto_mode",
+        about=(
+            "The mode the router falls back to on its own. It differing from the "
+            "active mode is normal and not a fault."
+        ),
+        translation_key="system_opms_wan_auto_mode",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_str(data.get("opms_wan_auto_mode")),
+    ),
+    ZTESensorEntityDescription(
+        key="sntp_timezone",
+        about=(
+            "The timezone the router keeps its own clock in, shown exactly as "
+            "the router reports it. The format is the vendor's own and is not "
+            "translated here, because guessing at it would risk stating the "
+            "wrong offset."
+        ),
+        translation_key="system_sntp_timezone",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_str(data.get("sntp_timezone")),
+    ),
+    ZTESensorEntityDescription(
+        key="apn_interface_version",
+        about=(
+            "Which version of the router's own APN configuration format is in "
+            "use. Only of interest when an APN change is not taking effect."
+        ),
+        translation_key="system_apn_interface_version",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_str(data.get("apn_interface_version")),
+    ),
 )
 
 
@@ -1172,6 +1291,7 @@ class ZTERouterSensor(
         {
             "about",
             "sntp_server1",
+            "sntp_server2",
             "sntp_dst_enable",
             "id",
             "number",
@@ -1287,6 +1407,7 @@ class ZTERouterSensor(
             elif key == "sntp_server":
                 detail = {
                     "sntp_server1": data.get("sntp_server1"),
+                    "sntp_server2": data.get("sntp_server2"),
                     "sntp_dst_enable": data.get("sntp_dst_enable") == "1",
                 }
 

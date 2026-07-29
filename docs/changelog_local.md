@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 > **Note on the `3.3.0` version tags.** The `3.3.0-dev*` and `3.3.0-rc*` entries below are kept as written, but **`3.3.0` was never released**. Its content shipped as part of `3.3.1`, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.1` and contains no `3.3.0` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
 
+## [3.3.1-dev10] - 2026-07-29 - Unreleased - No Manifest Bump - `Future.md` Roadmap Rewritten
+
+`docs/Future.md` dated from 2026-05 and had not been revisited. Reviewed every item against the running instance and the current source, then rewrote it. Documentation only — no code touched.
+
+### Changed
+
+- **Three of the four original priorities are delivered**, now recorded as such: the `send_sms` service (then called "the single largest feature gap"), the Carrier Aggregation metrics, and the write-action fast path.
+- **Two implementation deviations recorded rather than quietly ticked off.**
+  - The fast path was specified as `async_request_refresh()`. That call is **silently swallowed while Pause Polling is on**, so following the roadmap literally would have produced the bug. It shipped as `async_force_refresh()`, which consumes a one-shot flag before the pause check. Worth keeping because the roadmap named a specific API and the specific API was wrong.
+  - `wan_lte_ca` was proposed as a binary sensor ("CA Active") and shipped as a **sensor** — the router reports the aggregation configuration, not an on/off, and a binary sensor would have discarded the detail.
+- **Token persistence closed as declined**, with reasoning, instead of left open indefinitely. The router permits one session at a time and a persisted `stok` is indistinguishable from a live one after exactly the event most likely to have invalidated it. Presenting a possibly-dead token to an API whose dead-session reply is `200 OK` with blank values is the same class as `[3.3.0-dev12]` and `[3.3.1-dev6]`. The saving is one login per HA restart.
+- **Band and cell locking re-scoped.** The read side (`lte_band_lock`) and the adjacent bearer control (`Network Mode Selection`) already ship; only the write side is missing. The original "Reset to Auto" safeguard is necessary but **not sufficient**: lock to a band the router cannot see and the control that undoes it sits on the far side of the connection the lock just broke. On a headless outdoor unit that means physical access. Recorded that only a router-side self-clearing lock is a safe shape.
+- **Corrected a stale conformance claim** — the footer asserted compliance with "PlayFaster v1.2 standards"; that is now 21 numbered `dev_standards` sections.
+
+### Added
+
+- **Five candidates**, each with what would justify it. Highest is **cross-model verification**: 3.3.1 shipped key aliases, a login-form fallback and channel-to-band resolution with none of it exercised on hardware, including three alias spellings found in no source project. One diagnostics download from an MC888 or MC889 user confirms or deletes the lot.
+- **Open items folded in from `DEVELOPMENT.md`** (§15 SMS toggle, custom triggers, the thermal keep-or-remove question, the migration handler) so `Future.md` is a complete forward view rather than a partial one that silently omits known work.
+- **Version Control** section — the document had none, which is why a two-month-old roadmap gave no signal that it was stale.
+
 ## [3.3.1-dev9] - 2026-07-29 - Unreleased - No Manifest Bump - `about` Notes: Six Added, Three Corrected, One Cross-Reference Removed
 
 Reconciled the `about` note suite against the running instance with `sensor_review` (`SCOPE=About`), then acted on what it found plus three inaccuracies reported from live use. **74 of 82 entities now carry a note, up from 68.**

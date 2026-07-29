@@ -23,6 +23,12 @@
           "on": "mdi:heart-broken",
           "off": "mdi:heart-pulse"
         }
+      },
+      "system_web_sleep": {
+        "default": "mdi:sleep"
+      },
+      "system_web_wake": {
+        "default": "mdi:sleep-off"
       }
     },
     "sensor": {
@@ -208,6 +214,24 @@
       },
       "system_sntp_server": {
         "default": "mdi:web-clock"
+      },
+      "data_clear_day": {
+        "default": "mdi:calendar-refresh"
+      },
+      "signal_lte_multi_ca_scell_info": {
+        "default": "mdi:signal-cellular-3"
+      },
+      "system_opms_wan_mode": {
+        "default": "mdi:transit-connection-variant"
+      },
+      "system_opms_wan_auto_mode": {
+        "default": "mdi:transit-connection-horizontal"
+      },
+      "system_sntp_timezone": {
+        "default": "mdi:map-clock-outline"
+      },
+      "system_apn_interface_version": {
+        "default": "mdi:file-code-outline"
       }
     },
     "button": {
