@@ -34,6 +34,9 @@ class ZTESwitchEntityDescription(SwitchEntityDescription):
     group: str = "system"
     value_fn: Callable[[Any], bool] | None = None
     setter_fn: Callable[[Any, bool], Coroutine[Any, Any, None]] | None = None
+    # Optional plain-language note surfaced as an unrecorded `about` attribute
+    # (dev_standards Section 14). Resolved by the ZTEAboutEntity mixin.
+    about: str | None = None
 
 
 # Define the entity description for static metadata
@@ -56,6 +59,12 @@ SWITCH_TYPES: tuple[ZTESwitchEntityDescription, ...] = (
     ),
     ZTESwitchEntityDescription(
         key="data_limit_switch",
+        about=(
+            "Turns on the router's own monthly data cap. When the limit is "
+            "reached the router stops passing traffic - it does not merely warn - "
+            "so leave this off unless you have set the limit deliberately. The "
+            "alert percentage governs when it warns you on the way there."
+        ),
         translation_key="data_limit_switch",
         entity_category=EntityCategory.CONFIG,
         group="data",

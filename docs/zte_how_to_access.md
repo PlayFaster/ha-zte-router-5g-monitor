@@ -103,7 +103,9 @@ This is the second model-dependent branch in the protocol. MD5 here is a vendor 
 
 **A write sent without `AD`, or with a stale one, does not error.** The router answers `{"result":"failure"}` with HTTP 200 and does nothing. This was confirmed on MC7010 firmware `V1.0.0B03` (2026-07-27) using `LOGOUT`: without `AD` the call returned failure and the `stok` remained live; with `AD` it returned success and the `stok` was genuinely invalidated. Assume the same of any `goformId` — a silent no-op is the default failure mode of this API.
 
-`RD` is fetched fresh for every write, so `AD` is single-use in practice.
+**Client-side enforcement**: `api.py:_require_success()` is called on the result of every write command and raises `ZTEConnectionError` on an explicit non-success `result`. Before it existed, a refused write was reported to the user as a successful action — a user watched an SMS action succeed with no message sent. It raises only on an explicit non-success value; a response carrying no `result` key is left alone, because not every `goformId` returns one.
+
+**`RD` is a static per-device seed, so `AD` is _not_ single-use.** Measured on MC7010 firmware `V1.0.0B03` (2026-07-29): `cmd=RD` returned the identical value across logins and across a deliberately invalidated session. Since `AD = H(H(version + cr_version) + RD)` and both inputs are fixed for a given device, **the token is constant per router** — which is why `_request` can replay a write payload verbatim after a re-login without the embedded `AD` going stale. An earlier revision of this document claimed the opposite ("fetched fresh for every write, so `AD` is single-use"); that was an assumption, and the measurement contradicts it. Do not build a retry or caching decision on the single-use reading.
 
 ---
 
@@ -289,6 +291,16 @@ Pick the type from the message content: if every character is in the GSM 03.38 a
 Confirmed on hardware (2026-07-29): a 159-character plain message and an 80-character message with three emoji both arrived as **one** message on the handset, so the router segments and the phone reassembles. Nothing is truncated.
 
 **Everything fails soft.** An unknown `cmd`, a missing `AD`, an expired session — none of these produce an HTTP error. You get `200 OK` with an empty field, a `{"result":"failure"}`, or a body of blank strings. **Never treat a 200 as success on this API.** Check the body shape every time.
+
+The client enforces this in three layers, each covering a shape the others miss:
+
+| Guard | Catches | Where |
+| :-- | :-- | :-- |
+| Expiry detection in `_request` | A body whose values are **all** empty strings — the dead-session shape | `api.py:_request` |
+| `_require_contract(data, key, cmd)` | A populated body missing the key the caller needs — firmware drift, or a partial session | reads (`get_sms_messages`, `get_sms_capacity`, …) |
+| `_require_success(data, cmd)` | An explicit `{"result":"failure"}` on an otherwise healthy session | all eight write commands |
+
+They are deliberately separate: the first raises before the others are reached, so a single guard cannot stand in for the rest. `tests/test_dead_session_sweep.py` drives every public API method against all three fault shapes and asserts that each either succeeds or raises — never returns a success-shaped result having done nothing.
 
 **The dead-session signature, precisely.** An expired session does not redirect and does not error. It answers **HTTP 200** with the **requested keys echoed back empty** — verified on MC7010 firmware `V1.0.0B03` (2026-07-27) by replaying an invalidated `stok`:
 

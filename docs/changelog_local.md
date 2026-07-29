@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 > **Note on the `3.3.0` version tags.** The `3.3.0-dev*` and `3.3.0-rc*` entries below are kept as written, but **`3.3.0` was never released**. Its content shipped as part of `3.3.1`, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.1` and contains no `3.3.0` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
 
+## [3.3.1-dev9] - 2026-07-29 - Unreleased - No Manifest Bump - `about` Notes: Six Added, Three Corrected, One Cross-Reference Removed
+
+Reconciled the `about` note suite against the running instance with `sensor_review` (`SCOPE=About`), then acted on what it found plus three inaccuracies reported from live use. **74 of 82 entities now carry a note, up from 68.**
+
+### Added
+
+- **`about` support on three more platforms.** `select.py` had none at all — it now carries the `ZTEAboutEntity` mixin and `_unrecorded_attributes`; `binary_sensor.py` and `switch.py` gained an `about` field on their entity-description classes. The mixin already resolved `getattr(description, "about", None)`, so no change was needed there.
+- **Six notes on control entities**, chosen on one test — _does the name leave a consequential question unanswered?_
+  - **SIP ALG Enabled** — an obscure acronym that silently breaks VoIP; one-way audio and calls dropping on a timer are the classic symptoms.
+  - **UPnP Enabled** — the security trade-off is not in the name, and it is a no-op in bridge mode.
+  - **APN Profile** — the wrong profile means _no data_, not slow data.
+  - **APN Selection Mode** — auto versus manual is not self-evident, and it gates the profile above.
+  - **Network Mode Selection** — locking to `Only_5G` can drop the connection where 5G coverage is marginal.
+  - **Data Limit Switch** — at the limit the router **stops passing traffic** rather than warning, which is worth knowing before enabling it.
+- **`docs/about_attribute_list.md`**: an **Entities without a note** section covering all remaining 8, each with its group and a one-line reason. An omission a reader cannot see is indistinguishable from a gap.
+
+### Fixed
+
+- **`Battery` claimed the MC7010 reports nothing. It reports 100%.** Verified live. A mains-powered unit with no battery still publishes a full charge, so the old note actively misled anyone checking whether the reading meant something. Now states that outright.
+- **`Network Type` did not mention the value the router is actually reporting.** Live state is `LTE-NSA`; the note covered only `ENDC` and `LTE`. Corrected to cover all three: ENDC (5G carrier in use), LTE-NSA (attached for 5G but running on the 4G anchor alone — what weak 5G coverage looks like), plain LTE (no 5G).
+- **`5G Radio Temperature` told the reader to go and read another note.** Reaching an `about` note takes three clicks; sending the reader back out to reach a second one is not a design, it is a dead end. Rewritten to be self-contained and symmetric with the 5G Modem Temperature note. A note may mention a sibling entity; it may not require reading one.
+
+### Changed
+
+- **`Firmware Version` simplified.** It explained field renaming and contract drift — accurate, but far more machinery than a firmware string warrants in a tooltip. Cut to one sentence; the contract-drift explanation belongs to the README and the Integration Health sensor, which both already carry it.
+- **`docs/all_sensors.md`**: `About` column refreshed, 68 → 74 ticks.
+- **`docs/about_attribute_list.md`**: regenerated from live — System 21, Signal 39, Data 12, SMS 2. The `ᴰ` legend moved from the foot to the top, where a reader meets the marker. Removed a footer claim that a test enforced the file: that test had been deleted, and a guarantee that is not real is worse than none because it stops people checking.
+
+### Verified
+
+- 639 tests passing, **100% coverage**, `ruff`, `mypy --strict`, `codespell`, `prettier`.
+- All 74 notes confirmed **published live**, not merely declared — 74 in source, 74 arriving as entity attributes, so no `extra_state_attributes` override is dropping one. That check is the reason the inventory is read from the running instance rather than parsed from source.
+- Report: `.notes/sensors_states/ha_sensor_review_20260729_0406.md`.
+
+### Notes
+
+- **A config-entry reload does not pick up changed Python.** HA keeps the modules imported, so the first two post-edit fetches returned the pre-change state with no error and no clue — the note count simply did not move. A full restart (~150 s) is required, and the re-enable must follow it, because a restart reinstates disabled entities. Recorded in `sensor_review.md` v2.9.3 so the next run does not lose the same time.
+
 ## [3.3.1-dev8] - 2026-07-29 - Unreleased - No Manifest Bump - Encoding-Aware SMS Length Limit
 
 The `send_sms` limit was a flat **160** in the service schema — an integration invention the router never saw, and wrong in both directions.

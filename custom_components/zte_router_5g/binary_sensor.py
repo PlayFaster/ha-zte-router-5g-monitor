@@ -31,6 +31,9 @@ class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
     group: str = "signal"
     value_fn: Callable[[Any], bool] | None = None
     extra_attrs_fn: Callable[[Any], dict[str, Any]] | None = None
+    # Optional plain-language note surfaced as an unrecorded `about` attribute
+    # (dev_standards Section 14). Resolved by the ZTEAboutEntity mixin.
+    about: str | None = None
 
 
 # Define the entity description for static metadata
@@ -68,6 +71,12 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="upnp_enabled",
+        about=(
+            "Whether the router lets devices open their own inbound ports. "
+            "Convenient for games and consoles, but it means any device on the "
+            "network can expose itself without being asked. On a router in bridge "
+            "mode this usually has no effect - your main firewall handles it."
+        ),
         translation_key="system_upnp_enabled",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
@@ -76,6 +85,12 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="sip_alg_enabled",
+        about=(
+            "SIP ALG rewrites internet-telephony traffic as it passes through. It "
+            "is meant to help, and frequently does the opposite: one-way audio and "
+            "calls that drop after a set time are the classic symptoms. If VoIP "
+            "misbehaves, this is the first thing to turn off."
+        ),
         translation_key="system_sip_alg_enabled",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",

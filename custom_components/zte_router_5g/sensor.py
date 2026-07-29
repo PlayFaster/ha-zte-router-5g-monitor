@@ -203,9 +203,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="wa_inner_version",
         about=(
-            "The router's firmware build string. Worth noting before and after a "
-            "firmware update: a new build can rename the fields this integration "
-            "reads, which the Integration Health sensor reports as contract drift."
+            "The router's firmware build string. Worth recording before a firmware "
+            "update, so you can tell what changed if the router starts behaving "
+            "differently afterwards."
         ),
         translation_key="system_wa_inner_version",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -291,8 +291,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="battery_value",
         about=(
-            "Battery charge, on ZTE models that have one. Outdoor CPE units such as "
-            "the MC7010 are mains-powered and will normally report nothing here."
+            "Battery charge, on ZTE models that have one. A mains-powered unit such "
+            "as the MC7010 has no battery yet still reports 100%, so the value means "
+            "nothing unless your model actually has one. Disabled by default for "
+            "that reason."
         ),
         translation_key="system_battery_value",
         device_class=SensorDeviceClass.BATTERY,
@@ -387,9 +389,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="pm_sensor_5g",
         about=(
-            "Temperature of the 5G radio. See the note on the 5G modem "
-            "temperature - the vendor does not clearly distinguish the two, so "
-            "treat either as indicative rather than exact."
+            "Temperature of the 5G radio. The vendor does not document how this "
+            "differs from the 5G modem temperature; on hardware that populates "
+            "both, compare them before relying on either."
         ),
         translation_key="system_pm_sensor_5g",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -456,9 +458,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="network_type",
         about=(
-            "The connection technology in use. ENDC means 5G NSA, where a 4G anchor "
-            "and a 5G carrier are used together; LTE means 4G only. Dropping from "
-            "ENDC to LTE is the usual sign that 5G coverage has been lost."
+            "The connection technology in use. ENDC and LTE-NSA are both 5G "
+            "non-standalone, where a 4G anchor carries the connection alongside a 5G "
+            "carrier: ENDC means the 5G carrier is actually in use, LTE-NSA means the "
+            "router is attached for 5G but is running on the 4G anchor alone, which "
+            "is what weak 5G coverage looks like. Plain LTE means no 5G at all."
         ),
         translation_key="signal_network_type",
         group="signal",

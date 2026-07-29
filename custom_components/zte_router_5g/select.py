@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import build_device_info
+from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,6 +31,9 @@ class ZTESelectEntityDescription(SelectEntityDescription):
     options_fn: Callable[[Any], list[str]]
     setter_fn: Callable[[Any, str, Any], Coroutine[Any, Any, None]]
     group: str = "system"
+    # Optional plain-language note surfaced as an unrecorded `about` attribute
+    # (dev_standards Section 14). Resolved by the ZTEAboutEntity mixin.
+    about: str | None = None
 
 
 def _get_apn_profiles(data: Any) -> list[tuple[int, str, str]]:
@@ -84,6 +87,12 @@ async def _set_apn_profile_option(api: Any, option: str, data: Any) -> None:
 SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
     ZTESelectEntityDescription(
         key="apn_profile",
+        about=(
+            "Which stored APN profile the router uses to connect. The APN is the "
+            "gateway your SIM's network expects; the wrong one usually means no "
+            "data at all rather than slow data. Only takes effect when APN "
+            "Selection Mode is set to manual."
+        ),
         translation_key="signal_apn_profile",
         entity_category=EntityCategory.CONFIG,
         group="signal",
@@ -93,6 +102,11 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
     ),
     ZTESelectEntityDescription(
         key="apn_mode",
+        about=(
+            "Whether the router picks the APN itself from the SIM (auto) or uses "
+            "the profile you chose (manual). Auto is right for almost everyone; "
+            "manual is for a carrier whose APN the router guesses wrongly."
+        ),
         translation_key="signal_apn_mode",
         entity_category=EntityCategory.CONFIG,
         group="signal",
@@ -102,6 +116,12 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
     ),
     ZTESelectEntityDescription(
         key="net_select",
+        about=(
+            "Which mobile technologies the router may use. The combined options "
+            "let it fall back when a signal weakens; the Only options lock it. "
+            "Locking to 5G can drop the connection entirely where 5G coverage is "
+            "marginal, so prefer a combined setting unless you are testing."
+        ),
         translation_key="signal_net_select_mode",
         entity_category=EntityCategory.CONFIG,
         group="signal",
@@ -127,10 +147,13 @@ async def async_setup_entry(
     )
 
 
-class ZTERouterSelect(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectEntity):
+class ZTERouterSelect(
+    ZTEAboutEntity, CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectEntity
+):
     """Representation of a ZTE Router select entity."""
 
     _attr_has_entity_name = True
+    _unrecorded_attributes = frozenset({"about"})
     entity_description: ZTESelectEntityDescription
 
     def __init__(
