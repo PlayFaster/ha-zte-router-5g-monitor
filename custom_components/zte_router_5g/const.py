@@ -56,6 +56,18 @@ FETCH_STRIKE_LIMIT = 3
 # Repair rather than just an unavailable entity (Section 19, second tier).
 UNREACHABLE_STRIKE_LIMIT = 10
 
+# Number of APN profile slots requested and offered in the APN Profile select.
+#
+# The firmware exposes 20 (`APN_config0`..`APN_config19`) and an MC7010 in normal
+# use populates two. Twenty slots cost 250 characters of the batch poll's
+# ~2048-character URL budget — a fifth of the whole request — to carry eighteen
+# empty strings.
+#
+# Ten is the compromise: still far more profiles than a CPE is configured with in
+# practice, at half the cost. Raising it costs URL budget; see
+# `test_batch_poll_url_stays_within_the_router_budget`.
+APN_PROFILE_SLOTS = 10
+
 # SMS length ceilings, by the encoding the message forces.
 #
 # A single SMS carries 160 GSM 03.38 septets, or 70 UCS-2 characters. Longer
@@ -67,6 +79,27 @@ UNREACHABLE_STRIKE_LIMIT = 10
 # Enforced in `async_send_sms` rather than the service schema, because which
 # limit applies depends on the message content. Behaviour past five segments is
 # untested on hardware; these ceilings keep callers out of that zone.
+# Data-usage projection tuning.
+#
+# PROJECTION_CREDIBILITY_DAYS is the point at which this cycle's own usage rate
+# and the previous cycle's are weighted equally. Three days is deliberate:
+# usage is bursty, and a heavy weekend is not a new baseline, but waiting a
+# fortnight would leave the projection lagging exactly when a user most wants
+# warning that they are on course to exceed their allowance.
+#
+# It matters less than it looks. The blend applies only to the *unobserved*
+# remainder of the cycle (see `helpers.project_cycle_usage`), so the prior's
+# influence decays with the days left rather than with this constant.
+PROJECTION_CREDIBILITY_DAYS = 3.0
+
+# Confidence bands published as an attribute on the projection, expressed as
+# thresholds on the credibility weight. The projection is always shown — an
+# `unknown` on day one reads as a broken sensor, whereas a number carrying
+# "confidence: low" is understood. The caveat belongs in the attributes, not in
+# the state.
+PROJECTION_CONFIDENCE_LOW = 0.4
+PROJECTION_CONFIDENCE_MEDIUM = 0.75
+
 SMS_SEGMENTS_MAX = 5
 SMS_MAX_CHARS_GSM7 = 765
 SMS_MAX_CHARS_UNICODE = 335

@@ -6,7 +6,10 @@ from unittest.mock import MagicMock, patch
 import aiohttp
 import pytest
 
+from custom_components.zte_router_5g import sensor
 from custom_components.zte_router_5g.api import (
+    _CORE_PARAMS,
+    _EXTENDED_PARAMS,
     ZTEAuthError,
     ZTEConnectionError,
     ZTERouterAPI,
@@ -560,11 +563,17 @@ async def test_api_set_data_limit_switch_on(mock_aiohttp_client):
         patch.object(api, "login"),
     ):
         mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
-        result = await api.set_data_limit_switch("1")
+        result = await api.set_data_limit_switch("1", _DATA_VOLUME_STATE)
         assert result == {"result": "ok"}
         _args, kwargs = mock_aiohttp_client.post.call_args
         data = kwargs["data"]
         assert "data_volume_limit_switch=1" in data
+        # The whole form, not just the field being changed — the router
+        # refuses a partial payload.
+        assert "data_volume_limit_size=2_1048576" in data
+        assert "data_volume_alert_percent=80" in data
+        assert "traffic_clear_date=1" in data
+        assert "wan_auto_clear_flow_data_switch=on" in data
 
 
 @pytest.mark.asyncio
@@ -578,7 +587,7 @@ async def test_api_set_data_limit_switch_off(mock_aiohttp_client):
         patch.object(api, "login"),
     ):
         mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
-        result = await api.set_data_limit_switch("0")
+        result = await api.set_data_limit_switch("0", _DATA_VOLUME_STATE)
         assert result == {"result": "ok"}
         _args, kwargs = mock_aiohttp_client.post.call_args
         data = kwargs["data"]
@@ -997,27 +1006,34 @@ async def test_get_all_data_requests_every_aliased_key(mock_aiohttp_client):
 
     await api.get_all_data()
 
+    await api.get_extended_data()
     requested = set(_requested_params(mock_aiohttp_client))
-    for key in (
-        "Z5g_rsrp",
-        "5g_rsrp",
-        "nr5g_rsrp",
-        "Z5g_SINR",
-        "Z5g_snr",
-        "5g_sinr",
-        "nr5g_sinr",
-        "nr5g_pci",
-        "Z5g_CELL_ID",
-        "monthly_tx_bytes",
-        "monthly_rx_bytes",
-        "flux_monthly_tx_bytes",
-        "flux_monthly_rx_bytes",
+    # Both halves of the split poll count — an alias satisfied by either is
+    # reachable, and which batch a key sits in is a separate decision.
+    requested |= set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+
+    # Derived from the alias tuples themselves rather than restated here, so a
+    # new `_ALIAS_*` constant is covered the moment it is added. The previous
+    # hand-maintained list could only catch aliases someone remembered to copy.
+    aliased = {
+        key
+        for name in dir(sensor)
+        if name.startswith("_ALIAS_")
+        for key in getattr(sensor, name)
+    }
+    assert aliased, "no alias tuples found — has the naming convention changed?"
+
+    # Thermal keys are a fixed set rather than aliases of one another, so they
+    # are named explicitly. See `test_thermal_sensor_set_matches_the_descriptions`.
+    thermal = {
         "pm_sensor_pa1",
         "pm_sensor_ambient",
         "pm_sensor_mdm",
         "pm_modem_5g",
         "pm_sensor_5g",
-    ):
+    }
+
+    for key in sorted(aliased | thermal):
         assert key in requested, f"{key} is aliased but never requested"
 
 
@@ -1103,6 +1119,18 @@ async def test_idle_session_is_reset_before_a_write_after_a_long_pause(
     assert mock_login.called, "a write after a long pause must re-authenticate"
 
 
+# A complete data-volume form, as the last successful poll would supply it.
+# `DATA_LIMIT_SETTING` replaces the whole form, so a write needs all six.
+_DATA_VOLUME_STATE = {
+    "data_volume_limit_switch": "0",
+    "data_volume_limit_unit": "data",
+    "data_volume_limit_size": "2_1048576",
+    "data_volume_alert_percent": "80",
+    "wan_auto_clear_flow_data_switch": "on",
+    "traffic_clear_date": "1",
+}
+
+
 # --- Write commands must not report a refused command as success ------------
 
 _WRITE_CALLS = [
@@ -1111,7 +1139,7 @@ _WRITE_CALLS = [
     ("set_apn", (1, "IP")),
     ("set_apn_mode", ("auto",)),
     ("set_odu_led_switch", ("1",)),
-    ("set_data_limit_switch", ("1",)),
+    ("set_data_limit_switch", ("1", _DATA_VOLUME_STATE)),
     ("set_bearer_preference", ("Only_5G",)),
 ]
 
@@ -1192,3 +1220,156 @@ async def test_reboot_still_raises_on_an_explicit_refusal(mock_aiohttp_client):
         )
         with pytest.raises(ZTEConnectionError, match="rejected"):
             await api.reboot()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "params"),
+    [("get_all_data", _CORE_PARAMS), ("get_extended_data", _EXTENDED_PARAMS)],
+)
+async def test_batch_poll_urls_stay_within_the_router_budget(
+    mock_aiohttp_client, method, params
+):
+    """The batch limit is the URL length, not the number of names.
+
+    The router accepts a GET of roughly 2,048 characters and truncates past
+    it — which presents as missing fields and is indistinguishable from
+    firmware contract drift. A single list had reached ~1,890 characters,
+    which is why the poll is split in two; this keeps both halves honest.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"cell_id": "1"})
+
+    await getattr(api, method)()
+
+    path = mock_aiohttp_client.get.call_args[0][0]
+    # A hostname is longer than the dotted-quad used here, so leave room for one.
+    url_length = len(path) + len("http://a-long-router-hostname.local/")
+
+    assert url_length < 2048, (
+        f"{method} URL is {url_length} characters, over the router's ~2048 "
+        "limit. Remove a key before adding one."
+    )
+    assert url_length < 1700, (
+        f"{method} URL is {url_length} characters, leaving under 350 for "
+        "growth. Move a key to the other batch rather than raising this "
+        f"number — {len(params)} names are currently requested."
+    )
+
+
+# --- The data-volume form is all-or-nothing ---------------------------------
+
+
+@pytest.mark.asyncio
+async def test_data_volume_write_sends_every_field(mock_aiohttp_client):
+    """A partial payload is refused by the router, so all six must be sent."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+    ):
+        mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
+        await api.set_data_volume_settings(_DATA_VOLUME_STATE, traffic_clear_date="15")
+
+    body = mock_aiohttp_client.post.call_args[1]["data"]
+    for field in (
+        "data_volume_limit_switch=0",
+        "data_volume_limit_unit=data",
+        "data_volume_limit_size=2_1048576",
+        "data_volume_alert_percent=80",
+        "wan_auto_clear_flow_data_switch=on",
+        "traffic_clear_date=15",
+    ):
+        assert field in body, f"{field} missing from the payload"
+
+
+@pytest.mark.asyncio
+async def test_data_volume_write_reads_the_clear_day_aliases(mock_aiohttp_client):
+    """Hardware spelling the reset day differently must still be writable."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    current = {
+        **{k: v for k, v in _DATA_VOLUME_STATE.items() if k != "traffic_clear_date"},
+        "data_volume_clear_date": "9",
+    }
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+    ):
+        mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
+        await api.set_data_volume_settings(current)
+
+    # Read under an alias, written back under the name the router expects.
+    assert "traffic_clear_date=9" in mock_aiohttp_client.post.call_args[1]["data"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dropped", list(_DATA_VOLUME_STATE))
+async def test_data_volume_write_refuses_to_guess_a_missing_field(
+    mock_aiohttp_client, dropped
+):
+    """Better to raise than send a form the router will reject anyway.
+
+    A user's data cap is not something to invent a value for, and every field
+    is load-bearing — so each one missing must block the write, not just the
+    obvious ones.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    current = {k: v for k, v in _DATA_VOLUME_STATE.items() if k != dropped}
+
+    with pytest.raises(ZTEConnectionError, match=dropped):
+        await api.set_data_volume_settings(current)
+
+    mock_aiohttp_client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_data_volume_write_treats_empty_as_missing(mock_aiohttp_client):
+    """A present-but-empty field is not a usable value to echo back.
+
+    The router answers `""` for names it knows but does not populate, so
+    `in current` alone is not a test that a field can be preserved.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    current = {**_DATA_VOLUME_STATE, "data_volume_limit_size": ""}
+
+    with pytest.raises(ZTEConnectionError, match="data_volume_limit_size"):
+        await api.set_data_volume_settings(current)
+
+
+@pytest.mark.asyncio
+async def test_data_limit_switch_routes_through_the_form(mock_aiohttp_client):
+    """One write path for this form, so the two cannot drift apart."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+        patch.object(api, "set_data_volume_settings") as mock_form,
+    ):
+        await api.set_data_limit_switch("1", _DATA_VOLUME_STATE)
+
+    mock_form.assert_awaited_once_with(_DATA_VOLUME_STATE, data_volume_limit_switch="1")
+
+
+def test_every_data_volume_field_is_polled():
+    """A field neither batch fetches can never be echoed back.
+
+    Without this, adding a field to the form silently produces a write that
+    always raises "the last poll did not supply it".
+    """
+    polled = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+    for aliases in ZTERouterAPI._DATA_VOLUME_FIELDS.values():
+        assert polled.intersection(aliases), (
+            f"none of {aliases} is requested by either batch"
+        )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from calendar import monthrange
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from homeassistant.const import CONF_HOST
@@ -305,3 +307,94 @@ def build_device_info(
         )
 
     return info
+
+
+def cycle_bounds(clear_day: int, now: datetime) -> tuple[datetime, datetime, int]:
+    """Return (start, end, length_in_days) of the billing cycle containing `now`.
+
+    `clear_day` is the day of the month the router zeroes its counters on. It
+    is clamped to the length of each month it is applied to, so a clear day of
+    31 lands on the 28th in February rather than being skipped — the router
+    cannot reset on a date that does not exist, and skipping would silently
+    merge two cycles into one.
+
+    `now` must be timezone-aware and in the user's local zone. Cycle boundaries
+    are local midnight: computing them in UTC would shift the reset day by up to
+    a day for anyone not on UTC.
+
+    The length is measured in **calendar days** rather than by dividing seconds,
+    so a cycle spanning a DST transition is still 30 or 31 days rather than
+    30.04.
+    """
+
+    def _at(year: int, month: int) -> datetime:
+        """Return local midnight on the clear day of the given month."""
+        last = monthrange(year, month)[1]
+        return now.replace(
+            year=year,
+            month=month,
+            day=min(clear_day, last),
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+    start = _at(now.year, now.month)
+    if start > now:
+        # The clear day has not arrived yet this month, so the cycle in flight
+        # began last month.
+        prev_year, prev_month = (
+            (now.year - 1, 12) if now.month == 1 else (now.year, now.month - 1)
+        )
+        start = _at(prev_year, prev_month)
+
+    next_year, next_month = (
+        (start.year + 1, 1) if start.month == 12 else (start.year, start.month + 1)
+    )
+    end = _at(next_year, next_month)
+
+    return start, end, (end.date() - start.date()).days
+
+
+def project_cycle_usage(
+    used: float,
+    elapsed_days: float,
+    cycle_length_days: int,
+    prior_rate: float | None,
+    credibility_days: float,
+) -> float:
+    """Project end-of-cycle usage from usage so far.
+
+    The naive form — `used / elapsed * length` — divides by a number
+    approaching zero, so its error early in a cycle is unbounded: half a
+    gigabyte one second after a reset projects to over a million. Two things
+    tame it.
+
+    First, the denominator is floored at one day. That alone bounds the result
+    without inventing a cap.
+
+    Second, when a previous cycle is known, its daily rate is blended in — but
+    **only into the unobserved remainder**. Blending the whole projection would
+    be wrong: by day 20 most of the figure is a meter reading rather than a
+    forecast, and shrinking observed bytes toward last cycle is meaningless.
+    Applying it to the remainder alone makes the prior's influence decay
+    structurally, because it is multiplied by a shrinking number of days. No
+    clamp and no cliff: at day 20 of 30 the prior moves the answer by around one
+    percent, and by day 28 it is noise.
+
+    `credibility_days` sets how quickly this cycle's own rate displaces the
+    prior — the weight reaches one half at that many days elapsed.
+    """
+    elapsed = max(elapsed_days, 0.0)
+    remaining = max(cycle_length_days - elapsed, 0.0)
+
+    current_rate = used / max(elapsed, 1.0)
+
+    if prior_rate is None:
+        rate = current_rate
+    else:
+        weight = elapsed / (elapsed + credibility_days)
+        rate = weight * current_rate + (1.0 - weight) * prior_rate
+
+    return used + remaining * rate

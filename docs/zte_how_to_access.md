@@ -18,7 +18,7 @@ The UniFi companion document (`ha-unifi-network-monitor/docs/api_endpoints.md`) 
 So the unit that corresponds to "an endpoint" elsewhere is **a `cmd` name or a `goformId` name**, and this document is organized that way. Two practical consequences:
 
 - **You cannot tell from a URL what a request does.** All read traffic looks identical in a proxy log until you read the query string. When debugging, capture the full query string, not the path.
-- **Reads are batched, not enumerated.** One `cmd=` accepts a comma-separated list of up to ~100 names alongside `multi_data=1`, and the router answers with a single flat JSON object. There is no per-resource read to isolate — see [Read commands](#-read-commands-goform_get_cmd_process).
+- **Reads are batched, not enumerated.** One `cmd=` accepts a comma-separated list of names alongside `multi_data=1`, and the router answers with a single flat JSON object. There is no per-resource read to isolate — see [Read commands](#-read-commands-goform_get_cmd_process). **The limit is the URL, not the name count** — see [the batch ceiling](#the-batch-ceiling-is-a-url-length-budget).
 
 Base URL is `{protocol}://{ip}/`, where protocol is probed at setup (`try_set_protocol`, `api.py:249`): `http` is tried first, then `https`, taking the first that answers with status < 400. TLS verification is disabled throughout (`ssl=False`) because these CPEs ship self-signed certificates.
 
@@ -115,22 +115,65 @@ This is the second model-dependent branch in the protocol. MD5 here is a vendor 
 
 - **Used**: Yes — this is the main polling call, once per scan interval.
 - **Request**: `GET goform/goform_get_cmd_process?multi_data=1&isTest=false&sms_received_flag_flag=0&cmd=<100 comma-separated names>`
-- **Response**: one flat JSON object, one key per requested name. Missing or unsupported names are simply absent — **the router does not error on an unknown `cmd` name**, which means a firmware update that drops a field is invisible unless the parse layer checks for it.
+- **Response**: one flat JSON object. **The router does not error on an unknown `cmd` name**, which means a firmware update that drops a field is invisible unless the parse layer checks for it.
 - **Implementation**: `get_all_data`, `api.py:426`.
 
-The 100 names, grouped by what they feed:
+#### A requested name comes back in one of three states
+
+This is not a binary, and treating it as one has caused defects here before:
+
+| State | Response | Meaning |
+| :-- | :-- | :-- |
+| **Populated** | `"key": "value"` | Supported and in use. |
+| **Present but empty** | `"key": ""` | The firmware **knows the name** but this model or configuration does not populate it. |
+| **Absent** | key not in the object at all | The name is not in the firmware's dictionary. |
+
+The middle state is the one that surprises. On the MC7010, `data_volume_clear_date`, `data_volume_clear_day`, all five `pm_*` thermal keys and `night_mode_switch` all answer `""` — the names are real, the hardware simply has nothing to report. By contrast `SET_DATA_VOLUME_LIMIT`, `clear_data_day`, `clean_date`, `reset_date` and `cycle_start_date` are genuinely absent: invented names that no firmware knows.
+
+**Any consumer must therefore treat present-but-empty as absent**, which is what `_get_first()` and `_safe_int()` / `_safe_float()` / `_safe_str()` do. `in data` alone is not a support test.
+
+It also interacts with expiry detection: the dead-session signature is _every_ value being an empty string, so knowing which keys are structurally empty on healthy hardware is what keeps that rule sound. A hypothetical batch of only-unpopulated keys would be indistinguishable from a dead session — in practice the poll always includes keys that populate.
+
+#### The batch ceiling is a URL-length budget
+
+Not a name count. The router accepts a GET up to roughly **2,048 characters**; a 183-name batch succeeded when the URL stayed under that, and truncation is what happens past it.
+
+**This is why the poll is split in two.** A single list had reached 127 names and 1,889 characters — within ~160 of the ceiling, where the next addition would have truncated the response. Rather than keep trading one key away for another, the request became two:
+
+| Request | Names | URL | Headroom | Failure mode |
+| :-- | --: | --: | --: | :-- |
+| `get_all_data` | 75 | ~1,167 | ~880 | Mandatory — a whole-integration failure |
+| `get_extended_data` | 41 | ~735 | ~1,310 | Optional — three strikes, then its own entities only |
+
+The split is **by criticality, not alphabetically**, and that is the part worth preserving. The core request carries everything feeding an enabled-by-default entity, the contract keys, and the device identity latched into `entry.data`. The extended request carries diagnostics, disabled-by-default entities, router settings and the thermal keys — so a failure there degrades diagnostics while Signal and Data keep serving real values.
+
+Cross-model aliases stay in the **core** request even though the MC7010 answers `""` for all of them: they feed enabled-by-default sensors on other `goform` models, and a Signal sensor on an MC888 must not depend on an endpoint that is allowed to degrade.
+
+This changes the standing advice in two ways.
+
+**It is no longer free.** Past the budget the response truncates, which presents as missing fields and looks exactly like firmware contract drift. Budget before adding, and put a new key in whichever batch matches how badly it is needed — `test_batch_poll_urls_stay_within_the_router_budget` covers both halves and fails well before the hard ceiling.
+
+**It is not unconditionally safe either.** The rule that an unknown `cmd` is simply absent holds for names **in the firmware's dictionary**, and the integration's current 127 all are — verified 2026-07-29, where every requested name came back, 46 of them empty and **none absent**. A name that is _not_ in the dictionary is a different matter: a discovery probe mixing fictional candidates into a batch saw **the whole chunk time out and fall back to empty defaults**, taking a genuinely populated key down with it. So a speculative spelling copied from another project should be probed on its own before it joins the poll, not dropped straight into the batch.
+
+The names, grouped by what they feed:
 
 <details>
 <summary><b>Signal and radio</b> (LTE / 5G NR measurements)</summary>
 
 `lte_rsrp`, `lte_rsrq`, `lte_rssi`, `lte_snr`, `lte_pci`, `rssi`, `rscp`, `signalbar`, `Z5g_rsrp`, `Z5g_rsrq`, `Z5g_rssi`, `Z5g_SINR`
 
+**Cross-model aliases**: `5g_rsrp`, `nr5g_rsrp`, `5g_sinr`, `nr5g_sinr`, `Z5g_snr`, `Z5g_CELL_ID`
+
+These are alternative spellings other members of the `goform` family use for the same measurements. The MC7010 does not populate them; they are requested so the integration works on an MC888 or MC889 without a code change, and resolved by `_get_first()` in `sensor.py`, which takes the first spelling that arrives non-empty. Each one costs URL budget, so the set is deliberately small.
+
 </details>
 
 <details>
 <summary><b>Carrier aggregation and bands</b></summary>
 
-`lte_ca_pcell_band`, `lte_ca_pcell_bandwidth`, `lte_ca_scell_band`, `lte_ca_scell_bandwidth`, `wan_lte_ca`, `wan_active_band`, `wan_active_channel`, `nr5g_action_band`, `nr5g_action_channel`, `nr5g_pci`, `lte_band_lock`
+`lte_ca_pcell_band`, `lte_ca_pcell_bandwidth`, `lte_ca_scell_band`, `lte_ca_scell_bandwidth`, `wan_lte_ca`, `wan_active_band`, `wan_active_channel`, `nr5g_action_band`, `nr5g_action_channel`, `nr5g_pci`, `lte_band_lock`, `lte_multi_ca_scell_info`
+
+`lte_multi_ca_scell_info` is a raw descriptor string, one semicolon-terminated group per secondary cell — see [Field formats](#-field-formats).
 
 </details>
 
@@ -146,7 +189,9 @@ The 100 names, grouped by what they feed:
 <details>
 <summary><b>Connection and addressing</b></summary>
 
-`wan_connect_status`, `wan_ipaddr`, `lan_ipaddr`, `ppp_status`, `wan_apn`
+`wan_connect_status`, `wan_ipaddr`, `lan_ipaddr`, `ppp_status`, `wan_apn`, `opms_wan_mode`, `opms_wan_auto_mode`
+
+`opms_wan_mode` is the active operational mode — `LTE_BRIDGE` or `AUTO_LTE_GATEWAY`. `opms_wan_auto_mode` is the mode the router falls back to on its own; the two differing is normal. Both are read-only here by deliberate choice — see [Not used](#-not-used).
 
 </details>
 
@@ -155,7 +200,15 @@ The 100 names, grouped by what they feed:
 
 `realtime_tx_thrpt`, `realtime_rx_thrpt`, `realtime_tx_bytes`, `realtime_rx_bytes`, `realtime_time`, `monthly_tx_bytes`, `monthly_rx_bytes`, `data_volume_limit_switch`, `data_volume_alert_percent`
 
+**Cross-model aliases**: `flux_monthly_tx_bytes`, `flux_monthly_rx_bytes`
+
+**Billing cycle**: `traffic_clear_date`, `wan_auto_clear_flow_data_switch`, and the aliases `data_volume_clear_date`, `data_volume_clear_day`
+
 `realtime_time` is the router's uptime counter, and is the input to reboot detection — see [Gotchas](#️-gotchas).
+
+`traffic_clear_date` (1–31) is the day of the month the router zeroes its monthly counters — **the billing cycle need not start on the 1st**, so anything reasoning about a month must read it rather than assume. Confirmed on hardware 2026-07-29 as the spelling that carries the value; the two `data_volume_*` spellings answer `""` on the MC7010 and are retained only as cross-model aliases.
+
+`wan_auto_clear_flow_data_switch` (`on`/`off`) is the **master** for the automatic monthly reset. With it off the counters never roll over and there is no cycle at all, which is why the projection sensor suppresses itself rather than projecting against a number that only ever climbs.
 
 </details>
 
@@ -163,6 +216,14 @@ The 100 names, grouped by what they feed:
 <summary><b>Device identity and hardware</b></summary>
 
 `model_name`, `wa_inner_version`, `hardware_version`, `imei`, `sim_imsi`, `sim_iccid`, `battery_value`
+
+**Thermal**: `pm_sensor_pa1`, `pm_sensor_ambient`, `pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`
+
+The five thermal keys are the set a sibling `goform` project polls with °C units. **The MC7010 answers `""` for every one** — present-but-empty, so the names are real but this hardware reports nothing. All five ship disabled by default for that reason, and no model is yet confirmed to populate any of them.
+
+**`battery_value` is different, and instructive.** It answers **`100`** on this mains-powered unit — along with `battery_vol_percent` `100`, `battery_pers` `4` and `battery_charging` `0`. The firmware hardcodes `100` as a dummy sentinel on CPE models with no physical battery (MC7010, MC801A, MC888). So the value is not merely uninformative, it is **actively misleading**: it looks like a healthy full battery and is a constant. That is why the sensor ships disabled by default with an `about` note saying so.
+
+It is also a caution about batch probing. An earlier probe reported `battery_value` as empty; it had been grouped into a chunk alongside fictional candidate names, and **that chunk timed out and fell back to empty defaults**. Queried individually it returns `100`. An empty result from a batch containing unknown names is not evidence that the key is unpopulated — re-probe it alone before concluding anything.
 
 `imei`, `sim_imsi` and `sim_iccid` are subscriber identifiers and are sanitized out of diagnostics — see `dev_standards.md` §20.
 
@@ -189,11 +250,28 @@ Each `APN_config<n>` is a **single delimited string** holding a whole profile, n
 <details>
 <summary><b>Device settings</b> (the writable ones)</summary>
 
-`ODU_led_switch`, `ODU_led_off_time`, `reboot_schedule_enable`, `reboot_hour1`, `reboot_min1`, `reboot_hour2`, `reboot_min2`, `sntp_server0`, `sntp_server1`, `sntp_dst_enable`, `upnpEnabled`, `alg_sip_enable`
+`ODU_led_switch`, `ODU_led_off_time`, `upnpEnabled`, `alg_sip_enable`
+
+**Reboot schedule**: `reboot_schedule_enable`, `reboot_schedule_mode`, `reboot_dow`, `reboot_dod`, `reboot_hour1`, `reboot_min1`, `reboot_hour2`, `reboot_min2`
+
+**Time**: `sntp_server0`, `sntp_server1`, `sntp_server2`, `sntp_dst_enable`, `sntp_timezone`
+
+**Web UI power**: `web_sleep_switch`, `web_wake_switch`
+
+Encodings for the reboot-schedule and timezone fields are under [Field formats](#-field-formats).
 
 </details>
 
 **Why one batch rather than targeted reads.** Each request costs a round trip on hardware that is slow and single-session. Splitting this into per-topic reads would multiply the polling cost with no benefit, and would widen the window in which a user's web-UI login can collide with a poll.
+
+### The extended batch — `get_extended_data`
+
+- **Used**: Yes — optional endpoint, polled with its own strike budget on every cycle.
+- **Request**: identical in shape to the core batch, with `_EXTENDED_PARAMS` in the `cmd=` list.
+- **Merged** under the core payload, so entities read one flat dictionary and do not know which request a value arrived in. Core wins any key collision — a stale cached diagnostic must never mask a fresh core value.
+- **Implementation**: `get_extended_data`, sharing `_batch_get` with the mandatory fetch.
+
+Entities fed from here carry `source=ENDPOINT_EXTENDED` on their description and gate `available` on it, so once the endpoint exhausts its three strikes they go unavailable rather than showing a value frozen at whatever it was hours ago.
 
 ### `cmd=sms_capacity_info`
 
@@ -233,12 +311,70 @@ All are `POST`, all carry `Content-Type: application/x-www-form-urlencoded`, all
 | `DELETE_SMS` | Delete one or more messages | `msg_id` — semicolon-separated for a batch | `api.py:596` |
 | `APN_PROC_EX` | Set default APN profile, or switch auto/manual | `apn_mode`, `apn_action`, `set_default_flag`, `pdp_type`, `index` | `api.py:721`, `api.py:737` |
 | `ODU_LED_SWITCH_SET` | Outdoor-unit LED on/off | `ODU_led_switch` (`1`/`0`) | `api.py:749` |
-| `DATA_LIMIT_SETTING` | Data-volume limit on/off | `data_volume_limit_switch` (`1`/`0`) | `api.py:763` |
+| `DATA_LIMIT_SETTING` | **The entire data-volume form** — see below | `data_volume_limit_switch`, `data_volume_limit_unit`, `data_volume_limit_size`, `data_volume_alert_percent`, `wan_auto_clear_flow_data_switch`, `traffic_clear_date` | `api.py:763` |
 | `SET_BEARER_PREFERENCE` | Network mode | `BearerPreference` (`4G_AND_5G`, `Only_5G`, `Only_LTE`) | `api.py:778` |
 
 **`sms_time` format**: `yy;mm;dd;HH;MM;SS;+0` — semicolon-delimited, unlike the comma-delimited format the router _returns_ on received messages. The two are not interchangeable.
 
-**Delete-all is a client-side loop**, not a router command (`delete_all`, `api.py:608`): query the message list, collect the IDs, and issue one `DELETE_SMS` with them joined by `;`. There is no bulk-delete `goformId`.
+### `DATA_LIMIT_SETTING` is all-or-nothing
+
+This command is **not** a data-limit toggle despite its use here. It writes the complete data-volume configuration, and **the router refuses a partial payload**:
+
+| Field                             | Values                                          |
+| :-------------------------------- | :---------------------------------------------- |
+| `data_volume_limit_switch`        | `1` / `0`                                       |
+| `data_volume_limit_unit`          | `data` (byte cap) or `time` (hours/minutes cap) |
+| `data_volume_limit_size`          | cap size, e.g. `2_1048576` for 2 GB             |
+| `data_volume_alert_percent`       | e.g. `80`                                       |
+| `wan_auto_clear_flow_data_switch` | `on` / `off`                                    |
+| `traffic_clear_date`              | `1` … `31`                                      |
+
+**Verified on hardware 2026-07-29** (MC7010 `V1.0.0B03`): a POST carrying only `data_volume_limit_switch=1` returned `{"result":"failure"}`. The omitted fields were re-read afterwards and were **100% intact** — the router rejects the write rather than blanking what is missing.
+
+That is the better of the two possible failure modes, and worth being precise about: the earlier concern was that a partial form would silently clear the user's data cap. It does not. It refuses.
+
+Two consequences:
+
+- **Any write to this form must send all six fields**, sourced from the last successful poll — a read-modify-write, with the field being changed substituted in.
+- `traffic_clear_date` and `wan_auto_clear_flow_data_switch` have **no separate `goformId`**. They are written through this form or not at all. `SET_DATA_VOLUME_LIMIT`, proposed by an earlier internal analysis, does not exist in the firmware.
+
+**Delete-all is currently a client-side loop** (`delete_all`, `api.py:608`): query the message list, collect the IDs, and issue one `DELETE_SMS` with them joined by `;`.
+
+A native **`ALL_DELETE_SMS`** does exist — it takes `which_cgi` and clears router (`nv`) storage in bulk. An earlier revision of this document asserted that no bulk-delete command existed; that was wrong. The loop is kept because it is proven and because it is explicit about which messages it removes, but the native command is the simpler path if this is ever revisited.
+
+---
+
+## 🗂️ The full `goformId` inventory
+
+Twenty-six write actions were recovered from the router's own `js/service.js` bundle. Nine are used. The rest are listed so the same discovery is not repeated, and so a decision not to use one is visible rather than implied by absence.
+
+| `goformId` | Status | Note |
+| :-- | :-- | :-- |
+| `LOGIN` | **Used** | Also `LOGIN_MULTI_USER`, which the mining did not surface separately. |
+| `SEND_SMS` | **Used** |  |
+| `DELETE_SMS` | **Used** |  |
+| `APN_PROC_EX` | **Used** | `APN_PROC` also exists — presumably the older form. |
+| `DATA_LIMIT_SETTING` | **Used** | See above; the current single-field call is wrong. |
+| `SET_DEVICE_LED` | Not used | **Not** the LED toggle. It configures _night mode_: `night_mode_switch`, `night_mode_start_time`, `night_mode_end_time`, `night_mode_close_all_led`. A scheduled LED shutoff, distinct from `ODU_LED_SWITCH_SET`. |
+| `ALL_DELETE_SMS` | Not used | Bulk SMS delete, `which_cgi`. See above. |
+| `SAVE_SMS` | Not used | Save a draft. No use case here. |
+| `SET_MSG_READ` | Not used | Marks a message read. **The most interesting unused command** — the integration exposes an unread count it cannot currently clear. |
+| `SAVE_TSW` | Not used | Writes `web_sleep_switch`, `web_wake_switch`, `web_wake_time`, `web_sleep_time`. This is the write path for the two web-power sensors, which currently ship read-only. |
+| `FLOW_CALIBRATION_MANUAL` | **Declined** | Calibrates the monthly counter baseline against an ISP billing figure. Adjusting a usage counter to match an external number is a manual reconciliation, not an automation. |
+| `RESET_DATA_COUNTER` | **Declined** | Zeroes `monthly_rx_bytes`, `monthly_tx_bytes` and `monthly_time`. Session counters unaffected. **No undo.** One accidental press destroys the month's record and the projection sensor's input. |
+| `OPERATION_MODE` | **Declined** | Bridge ↔ gateway. |
+| `LTE_LOCK_CELL_SET` | **Declined** | Lock to a PCI / cell ID. |
+| `ROUTER_DNS_SETTING` | **Declined** | Custom LAN/WAN DNS. |
+| `SET_BIND_STATIC_ADDRESS` | **Declined** | DHCP static reservations. |
+| `DHCP_RESERVATION_TO_STATIC` | **Declined** | As above. |
+| `SET_NETWORK` / `UNLOCK_NETWORK` | **Declined** | Network selection and unlock. |
+| `SET_WIFI_BAND` | Not used | Out of scope — this integration monitors the CPE, not its WLAN. |
+| `QUICK_SETUP` / `QUICK_SETUP_EX` | Not used | First-run wizard. |
+| `SET_NV` | Not used | Raw NV-item write. Unbounded and undocumented; nothing good comes of calling it blind. |
+| `SET_UPGRADE_NOTICE` | Not used | Firmware-update prompt suppression. |
+| `REDIRECT_REDIRECT_OFF` | Not used | Web UI redirect behaviour. |
+
+The five **declined** rows share one objection: each changes how the router routes traffic — including the traffic Home Assistant reaches it over — so the control that undoes a mistake becomes unreachable at the moment it is needed. `RESET_DATA_COUNTER` is declined on different grounds: irreversible data loss from a single press.
 
 ---
 
@@ -258,14 +394,76 @@ Documented for reference — these exist on the interface but are deliberately n
 
 ### Write commands for settings this integration does not expose
 
-`sntp_*`, `upnpEnabled`, `alg_sip_enable`, `reboot_schedule_*` and `lte_band_lock` are **read** in the batch poll but have no corresponding write path here.
+`sntp_*`, `upnpEnabled`, `alg_sip_enable`, `reboot_schedule_*`, `web_sleep_switch` / `web_wake_switch` and `lte_band_lock` are **read** in the batch poll but have no write path here.
 
 - **Rationale**: these are configuration a user sets once in the router's own UI. Exposing writes for them would mean owning validation for settings that can render the router unreachable — band locking in particular. Reading them is useful; writing them is a support burden with no automation use case.
+- For the two web-power switches this was originally because no write command was known. One now is (`SAVE_TSW`), so the position is a choice rather than a gap: a setting that governs the router's own web page has no bearing on Home Assistant, which logs in afresh regardless.
 
 ### Traffic statistics history
 
 - **Used**: **No**.
 - **Rationale**: the router exposes only current counters (`monthly_*`, `realtime_*`), not a queryable history. Long-term statistics are produced by Home Assistant's recorder from the counter sensors instead — see `dev_standards.md` §14.
+
+---
+
+## 🔤 Field formats
+
+Values this API returns as opaque strings, and what is known about their encoding. Everything here is from the vendor's own JavaScript or from hardware, not inferred from a single sample unless stated.
+
+### `traffic_clear_date`
+
+Day of the month, `1`–`31`. **If the value exceeds the length of the current month the firmware clamps to the last calendar day** — a clear date of 31 fires on 30 April and on 28 or 29 February. It does not skip the month. Any client-side cycle arithmetic must clamp the same way or it will compute the wrong cycle boundary in short months.
+
+### `reboot_schedule_mode`, `reboot_dow`, `reboot_dod`
+
+| Field | Encoding |
+| :-- | :-- |
+| `reboot_schedule_mode` | `1` = weekly, `2` = monthly |
+| `reboot_dow` | Day of week, **1-indexed from Sunday** — `1` = Sunday, `2` = Monday |
+| `reboot_dod` | Day of month, `1`–`31` |
+
+Both day fields are populated regardless of mode, so the mode is what selects which one applies. Reading `reboot_dow` without checking `reboot_schedule_mode` will report a weekday for a router that reboots monthly.
+
+### `sntp_timezone`
+
+Format is `<utc_offset><dst_offset>`. The observed `0-1` is UTC+0 with a DST adjustment of −1.
+
+**Treated with caution.** Only one sample exists, from a UTC+0 unit, and the sign convention is not obvious — a DST-active router would conventionally be _ahead_ of its base offset, not behind it. The integration exposes the raw string rather than a decoded offset, because publishing a wrong timezone is worse than publishing an opaque one. A second sample from a non-UTC router would settle it.
+
+### `lte_multi_ca_scell_info`
+
+Comma-separated fields, one semicolon-terminated group per secondary cell. Observed: `2,352,2,20,6300,10;`
+
+Reported field order is `[scell_index],[pci],[dl_bandwidth_code],[earfcn],[band_number],[ul_bandwidth_code]`.
+
+**Positions 4 and 5 look transposed.** In the observed sample those fields are `20` and `6300`. EARFCN 6300 sits inside the range allocated to **LTE band 20** (6150–6449), and `20` is not a valid EARFCN. So the sample reads much more naturally as `…,[band]=20,[earfcn]=6300,…`. This is inference from one sample against the 3GPP allocation, not a vendor statement — which is why the integration publishes the string raw and does not parse it.
+
+### `data_volume_limit_size`
+
+Cap size as `<value>_<multiplier>`, e.g. `2_1048576` for 2 GB. Paired with `data_volume_limit_unit`, which is `data` for a byte cap or `time` for an hours/minutes cap.
+
+### SMS date fields
+
+`date` on a received message is `yy,mm,dd,HH,MM,SS` — **comma**-delimited. `sms_time` on an outgoing message is `yy;mm;dd;HH;MM;SS;+0` — **semicolon**-delimited, with a trailing offset field. The two are not interchangeable.
+
+---
+
+## 🔬 Discovering new fields
+
+Both times this interface has been extended, the same two-step method found things that guesswork did not. Recorded so it can be repeated rather than reinvented.
+
+**Step 1 — mine the web UI's JavaScript.** The router serves its own admin UI, and that UI is a client of this same API. Crawl and parse the bundles — `js/service.js` is the main one, alongside `statusBar.js`, `home.js` and the RequireJS modules — and extract every `cmd=` name and every `goformId` literal. This is the **only** reliable source for write commands: a `goformId` cannot be discovered by probing, because an unknown one fails the same way a refused one does. It is also the only source for a command's full **field set**, which is what the `DATA_LIMIT_SETTING` case turned on.
+
+A 2026-07-29 pass produced 175 GET commands, 26 `goformId` write actions and 63 parameter keys.
+
+**Step 2 — batch-probe the candidates against live hardware.** Take the mined names plus any spellings from sibling projects, and request them in batches within the URL budget. Sort the results three ways — populated, present-but-empty, absent — because that distinction is the actual finding. Present-but-empty means the name is real and this model does not populate it; absent means the name is fiction.
+
+The same pass probed 183 candidates and found 66 populated.
+
+**Two cautions.**
+
+- **Mined ≠ verified.** Step 1 tells you a name exists in a bundle. It does not tell you the firmware on the unit in front of you accepts it, and bundles are shared across models. Every write recovered this way needs a live round-trip before it is trusted — the mining reported `SET_DEVICE_LED` as the LED toggle, and it is in fact an unrelated night-mode scheduler.
+- **A refused write and an unknown write look identical**: `200 OK`, `{"result":"failure"}`. Distinguishing them means reading the JavaScript, not probing harder.
 
 ---
 
@@ -333,4 +531,5 @@ Note that an **empty inbox** returns `{"messages":[]}` — the contract key is p
 - `ha-unifi-network-monitor/docs/api_endpoints.md` — the companion for UniFi, organized by URL because that API has one per resource.
 - `docs/DEVELOPMENT.md` — setup, devcontainer, and the resilience/health architecture that sits above this client.
 - `docs/all_sensors.md` — which entity each field above ends up as.
+- `.notes/info/zte_element_discovery_report.md` — the 2026-07-29 discovery run this document's inventory and field formats are drawn from, including the raw probe results and the router-facing agent's answers.
 - `.shared/dev_std/dev_standards.md` §8 (per-endpoint strike budgets), §10 (session cleanup on unload), §19 (Integration Health), §20 (diagnostics sanitization).

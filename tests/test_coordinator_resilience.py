@@ -16,7 +16,11 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.zte_router_5g.api import ZTEConnectionError, ZTERouterAPI
+from custom_components.zte_router_5g.api import (
+    ZTEAuthError,
+    ZTEConnectionError,
+    ZTERouterAPI,
+)
 from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
     DOMAIN,
@@ -24,6 +28,7 @@ from custom_components.zte_router_5g.const import (
     UNREACHABLE_STRIKE_LIMIT,
 )
 from custom_components.zte_router_5g.coordinator import (
+    ENDPOINT_EXTENDED,
     ENDPOINT_SMS_MESSAGES,
     ZTERouterDataUpdateCoordinator,
 )
@@ -60,6 +65,7 @@ def coordinator(hass: HomeAssistant, entry):
     entry.add_to_hass(hass)
     api = MagicMock(spec=ZTERouterAPI)
     api.get_all_data = AsyncMock(return_value=dict(GOOD_DATA))
+    api.get_extended_data = AsyncMock(return_value={})
     api.get_sms_capacity = AsyncMock(return_value={})
     api.get_sms_messages = AsyncMock(return_value=[])
     api.login = AsyncMock(return_value="stok=test")
@@ -365,3 +371,114 @@ async def test_health_computation_never_crashes_the_update(coordinator) -> None:
 
     assert data["network_type"] == "ENDC"
     assert coordinator.health_snapshot["severity"] == "unknown"
+
+
+# --------------------------------------------------------------------------
+# The split batch poll — a failing second half must not blank the first
+# --------------------------------------------------------------------------
+
+
+async def test_extended_fetch_failure_leaves_core_data_intact(coordinator) -> None:
+    """The whole point of splitting by criticality.
+
+    Signal and Data come from the mandatory fetch. A diagnostics fetch that
+    fails must not take them with it.
+    """
+    coordinator.api.get_extended_data = AsyncMock(
+        side_effect=ZTEConnectionError("second batch down")
+    )
+
+    data = await coordinator._async_update_data()
+
+    assert data["network_type"] == GOOD_DATA["network_type"]
+    assert data["signalbar"] == GOOD_DATA["signalbar"]
+
+
+async def test_extended_fetch_holds_last_good_within_budget(coordinator) -> None:
+    """A glitch must not blank diagnostics on the first failed cycle."""
+    coordinator.api.get_extended_data = AsyncMock(
+        return_value={"sntp_timezone": "0-1", "battery_value": "100"}
+    )
+    await coordinator._async_update_data()
+
+    coordinator.api.get_extended_data = AsyncMock(
+        side_effect=ZTEConnectionError("blip")
+    )
+    for _ in range(FETCH_STRIKE_LIMIT):
+        data = await coordinator._async_update_data()
+        assert data["sntp_timezone"] == "0-1"
+        assert coordinator.endpoint_available(ENDPOINT_EXTENDED)
+
+
+async def test_extended_fetch_degrades_only_itself_past_the_budget(
+    coordinator,
+) -> None:
+    """Past three strikes its entities go unavailable — and only its."""
+    coordinator.api.get_extended_data = AsyncMock(
+        side_effect=ZTEConnectionError("down")
+    )
+    for _ in range(FETCH_STRIKE_LIMIT + 1):
+        data = await coordinator._async_update_data()
+
+    assert not coordinator.endpoint_available(ENDPOINT_EXTENDED)
+    # The mandatory half is untouched, so the integration is not "unavailable".
+    assert coordinator.last_update_success
+    assert data["network_type"] == GOOD_DATA["network_type"]
+    assert "sntp_timezone" not in data
+
+
+async def test_extended_fetch_recovers(coordinator) -> None:
+    """One success clears the strike count and the entities come back."""
+    coordinator.api.get_extended_data = AsyncMock(
+        side_effect=ZTEConnectionError("down")
+    )
+    for _ in range(FETCH_STRIKE_LIMIT + 1):
+        await coordinator._async_update_data()
+    assert not coordinator.endpoint_available(ENDPOINT_EXTENDED)
+
+    coordinator.api.get_extended_data = AsyncMock(return_value={"rscp": "-70"})
+    data = await coordinator._async_update_data()
+
+    assert coordinator.endpoint_available(ENDPOINT_EXTENDED)
+    assert data["rscp"] == "-70"
+
+
+async def test_extended_fetch_auth_error_still_drives_reauth(coordinator) -> None:
+    """A rejected session is integration-wide and must not be absorbed here."""
+    # Fails once, then succeeds — `_fetch_all` is retried whole after the
+    # re-login, so the second call must be able to answer.
+    coordinator.api.get_extended_data = AsyncMock(
+        side_effect=[ZTEAuthError("expired"), {"rscp": "-70"}]
+    )
+
+    data = await coordinator._async_update_data()
+
+    # Not swallowed into this one endpoint's strike count: it reached the
+    # global handler, which renewed the session and retried.
+    coordinator.api.login.assert_awaited()
+    assert coordinator.endpoint_available(ENDPOINT_EXTENDED)
+    assert data["rscp"] == "-70"
+
+
+async def test_core_data_wins_over_a_stale_extended_value(coordinator) -> None:
+    """Merge order matters if the two batches ever come to share a key."""
+    coordinator.api.get_extended_data = AsyncMock(
+        return_value={"network_type": "STALE"}
+    )
+
+    data = await coordinator._async_update_data()
+
+    assert data["network_type"] == GOOD_DATA["network_type"]
+
+
+async def test_degraded_extended_fetch_is_named_in_health(coordinator) -> None:
+    """Section 19: a degraded capability must be reported, not just silent."""
+    coordinator.api.get_extended_data = AsyncMock(
+        side_effect=ZTEConnectionError("down")
+    )
+    for _ in range(FETCH_STRIKE_LIMIT + 1):
+        await coordinator._async_update_data()
+
+    assert (
+        "Extended diagnostics" in coordinator.health_snapshot["degraded_capabilities"]
+    )

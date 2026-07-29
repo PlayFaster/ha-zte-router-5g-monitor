@@ -12,6 +12,7 @@ Strategic opportunities for `ha-zte-router-5g-monitor`. The original roadmap (20
 | :-- | :-- | :-- |
 | **`send_sms` service** _(then the single largest gap)_ | **Done** | Four SMS actions ship: `send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`. Encoding is now chosen per message — GSM-7 up to 765 characters, Unicode to 335 — which the roadmap did not anticipate. |
 | **Carrier Aggregation & MIMO metrics** | **Done** | `wan_lte_ca`, `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth`, `nr5g_action_channel` all exposed. |
+| **Data-usage projection** _(added as candidate 2 on 2026-07-29)_ | **Done** | `Projected Cycle Usage` ships on the Data sub-device, along with `Reset Day`. It is cycle-relative rather than calendar-relative — the router's counters reset on its own billing day, which the integration now reads. |
 | **Coordinator "fast-path" after writes** | **Done, and better than specified** | The roadmap proposed `async_request_refresh()`. That would have been **wrong**: it is silently swallowed while Pause Polling is on. Every write action routes through `async_force_refresh()`, which consumes a one-shot flag _before_ the pause check. |
 
 **One deviation worth recording.** The roadmap proposed `wan_lte_ca` as a **binary sensor** ("CA Active"). It shipped as a **sensor**, because the router reports the aggregation _configuration_ rather than a simple on/off. A binary sensor would have thrown away the detail. No change proposed.
@@ -63,19 +64,23 @@ Proposed 2026-07-29. None is committed; each states what would justify it.
 
 Release 3.3.1 added alternative key spellings, a login-form fallback and channel-to-band resolution for other `goform` routers — **none of it exercised on hardware.** Three alias spellings (`5g_rsrp`, `5g_sinr`, `nr5g_sinr`) were not found in any source project and are speculative. The realistic path is a diagnostics download from an MC888 or MC889 user, which would confirm or delete them in one pass. **The single highest-value item on this list, and it costs nothing but a request in the issue tracker.**
 
-### 2. Data-usage projection ⭐⭐
-
-Monthly counters exist; the question users ask is _"will I exceed my cap?"_ A projected end-of-period figure from elapsed time and current usage is arithmetic, and it pairs with the existing data-limit and alert controls.
-
-### 3. Reboot-on-degradation automation blueprint ⭐⭐
+### 2. Reboot-on-degradation automation blueprint ⭐⭐
 
 The README carries an auto-reboot example with the necessary glitch guards. A shipped blueprint would make it usable without copying YAML, and would put the guards beyond reach of a copy-paste error. Blueprints are supported well below the current HA floor.
 
-### 4. Diagnostics-driven compatibility reporting ⭐
+### 3. Diagnostics-driven compatibility reporting ⭐
 
 `diagnostics.py` already sanitizes the vendor payload. A short documented procedure asking users on other models to attach one would feed item 1 directly. Documentation, not code.
 
 ---
+
+### 4. Billing-cycle write controls ⭐⭐⭐
+
+The reset day is now readable but not writable, and the router's automatic-reset master switch is polled without an entity. Both are wanted; neither is hard. The blocker is that `DATA_LIMIT_SETTING` is a multi-field form covering the data cap, its unit and the alert percentage, so a POST carrying only the reset day may zero the other two — which a user would discover when the router stopped passing traffic. Needs a read-modify-write path that echoes every field, plus a hardware round-trip test proving the untouched fields survive. Plan in `.notes/issues/data_cycle_and_projection_plan.md` §2.2.
+
+### 5. Projection accuracy from cycle history ⭐⭐
+
+`Projected Cycle Usage` currently extrapolates from the cycle in flight alone, which is why it is volatile in the first few days. Storing the previous two or three cycle totals would let the estimate lean on them early and shed them as real usage accumulates — blended into the **unobserved remainder** only, so the prior's influence decays with the days left rather than needing a tuned constant. The groundwork is in place: `helpers.project_cycle_usage()` already takes a `prior_rate` argument. What is missing is the store. §2.4 of the same plan.
 
 ## Roadmap Summary
 
@@ -83,17 +88,19 @@ The README carries an auto-reboot example with the necessary glitch guards. A sh
 | :-- | :-- | :-- | :-- |
 | **Short term** | Cross-model verification via user diagnostics | Low | ⭐⭐⭐⭐ |
 | **Short term** | SMS feature-group toggle (§15) | Medium | ⭐⭐⭐ |
-| **Medium term** | Data-usage projection | Low | ⭐⭐ |
+| **Short term** | Billing-cycle write controls (needs a hardware round-trip test) | Medium | ⭐⭐⭐ |
+| **Medium term** | Projection accuracy from cycle history | Medium | ⭐⭐ |
 | **Long term** | Band locking write side — **only** with a self-clearing lock | High | ⭐⭐⭐ |
 | **Declined** | Token persistence | — | — |
 | **Blocked** | Custom triggers (HA version floor) | Low | ⭐⭐ |
 
-**Current status.** 82 entities across four sub-devices, 74 carrying `about` notes. 639 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
+**Current status.** 91 entities across four sub-devices, 84 carrying `about` notes. 694 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
 ---
 
 ## Version Control
 
-- **v2.1.0** (2026-07-29) — Removed the proposed *signal-quality history sensor*. Home Assistant's built-in **Statistics** helper already produces a rolling mean over any signal entity with no code, and there is no sound formula for a single combined quality score: which metric limits a connection depends on whether the site is interference-limited or noise-limited, so a weighted average would score one of those two cases wrong. SINR is the honest single number. Replaced by a **Reading Your Signal Data** section in `README.md` covering which metric answers which question, the threshold tables gathered in one place, establishing a personal baseline, and building the Statistics helper to compare antenna positions. Also removed the *config-entry migration handler* row — it is a tripwire documented in `DEVELOPMENT.md`, not roadmap work, and there is no VERSION 3 planned. Removed the thermal-sensor row: that decision is closed.
+- **v2.2.0** (2026-07-29) — **Data-usage projection delivered** and moved to the delivered table. `Projected Cycle Usage` and `Reset Day` ship on the Data sub-device, cycle-relative rather than calendar-relative, after a live probe confirmed the router exposes `traffic_clear_date`. Two candidates added in its place, both carved out of the same work and both deliberately not shipped: the **billing-cycle write controls**, blocked on `DATA_LIMIT_SETTING` being a multi-field form that a partial POST could clear; and **projection accuracy from cycle history**, which needs a store the integration does not yet have. Also recorded that `OPERATION_MODE`, `LTE_LOCK_CELL_SET`, `ROUTER_DNS_SETTING` and `SET_BIND_STATIC_ADDRESS` were found by the same discovery run and declined under the objection this document already applies to band and cell locking — the control that undoes a bad change sits on the far side of the connection it breaks.
+- **v2.1.0** (2026-07-29) — Removed the proposed _signal-quality history sensor_. Home Assistant's built-in **Statistics** helper already produces a rolling mean over any signal entity with no code, and there is no sound formula for a single combined quality score: which metric limits a connection depends on whether the site is interference-limited or noise-limited, so a weighted average would score one of those two cases wrong. SINR is the honest single number. Replaced by a **Reading Your Signal Data** section in `README.md` covering which metric answers which question, the threshold tables gathered in one place, establishing a personal baseline, and building the Statistics helper to compare antenna positions. Also removed the _config-entry migration handler_ row — it is a tripwire documented in `DEVELOPMENT.md`, not roadmap work, and there is no VERSION 3 planned. Removed the thermal-sensor row: that decision is closed.
 - **v2.0.0** (2026-07-29) — Rewritten after review against the live instance. Three of the four original priorities are delivered (`send_sms`, CA metrics, write-action fast path); recorded that the fast path shipped as `async_force_refresh()` rather than the proposed `async_request_refresh()`, which would have been swallowed while polling was paused. Token persistence **declined** with reasoning rather than left open. Band and cell locking re-scoped around the observation that the control which undoes a bad lock is unreachable over the connection the lock breaks. Added five new candidates and folded in the open items from `DEVELOPMENT.md`. Corrected a stale claim of compliance with "PlayFaster v1.2 standards".
 - **v1.0.0** (2026-05) — Original roadmap.

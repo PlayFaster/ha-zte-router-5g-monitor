@@ -9,10 +9,181 @@ from typing import Any, NamedTuple, cast
 
 import aiohttp
 
-from .const import SESSION_IDLE_RESET_SECONDS
+from .const import APN_PROFILE_SLOTS, SESSION_IDLE_RESET_SECONDS
 from .helpers import is_gsm7
 
 _LOGGER = logging.getLogger(__name__)
+
+
+# The batch poll is split in two because the router's GET is bounded by a URL
+# length of roughly 2,048 characters, not by a number of names. A single list
+# had grown to within ~160 characters of that ceiling, where the next addition
+# would have truncated the response — which presents as missing fields and is
+# indistinguishable from firmware contract drift.
+#
+# The split is by criticality, not alphabetically:
+#
+#   _CORE_PARAMS      mandatory. Everything feeding an enabled-by-default
+#                     entity, the contract keys, and device identity. Its
+#                     failure is a whole-integration failure.
+#   _EXTENDED_PARAMS  optional. Diagnostics, disabled-by-default entities,
+#                     router settings and the thermal keys. Fetched under its
+#                     own strike budget, so a failure here degrades those
+#                     entities alone and leaves Signal and Data serving real
+#                     values.
+#
+# Keep each comfortably under budget — `test_batch_poll_urls_stay_within_the
+# _router_budget` covers both.
+_CORE_PARAMS: list[str] = [
+    # --- Contract keys (coordinator drift check) ---
+    "network_type",
+    "signalbar",
+    "wa_inner_version",
+    "realtime_time",
+    "wan_connect_status",
+    # --- Signal and radio ---
+    "lte_rsrp",
+    "lte_rsrq",
+    "lte_rssi",
+    "lte_snr",
+    "lte_pci",
+    "Z5g_rsrp",
+    "Z5g_rsrq",
+    "Z5g_rssi",
+    "Z5g_SINR",
+    # --- Carrier aggregation and bands ---
+    "lte_ca_pcell_band",
+    "lte_ca_pcell_bandwidth",
+    "wan_lte_ca",
+    "wan_active_band",
+    "wan_active_channel",
+    "nr5g_action_band",
+    "nr5g_action_channel",
+    "nr5g_pci",
+    # --- Cell and network identity ---
+    "cell_id",
+    "enodeb_id",
+    "network_provider",
+    "mdm_mcc",
+    "mdm_mnc",
+    "net_select",
+    "net_select_mode",
+    # --- Connection and addressing ---
+    "wan_ipaddr",
+    "lan_ipaddr",
+    "ppp_status",
+    "wan_apn",
+    # --- Throughput and data volume ---
+    "realtime_tx_thrpt",
+    "realtime_rx_thrpt",
+    "realtime_tx_bytes",
+    "realtime_rx_bytes",
+    "monthly_tx_bytes",
+    "monthly_rx_bytes",
+    # Billing cycle. Both feed the projection sensor, which is enabled
+    # by default, so they belong in the mandatory fetch.
+    "traffic_clear_date",
+    "wan_auto_clear_flow_data_switch",
+    # --- Device identity ---
+    #
+    # `imei` stays here despite feeding only a disabled sensor: it is
+    # the device-registry identifier prefix, latched into `entry.data`
+    # at setup. Sourcing identity from a fetch that is allowed to fail
+    # would let a transient error rename every device.
+    "model_name",
+    "hardware_version",
+    "imei",
+    # --- SMS counters ---
+    "sms_unread_num",
+    "sms_nv_rev_total",
+    "sms_nv_send_total",
+    "sms_nv_draftbox_total",
+    "sms_sim_rev_total",
+    "sms_sim_send_total",
+    "sms_sim_draftbox_total",
+    "sms_nv_total",
+    "sms_sim_total",
+    # --- APN selection ---
+    "apn_index",
+    "apn_mode",
+    # Generated so the request and the APN select cannot disagree
+    # about how many slots exist.
+    *[f"APN_config{i}" for i in range(APN_PROFILE_SLOTS)],
+    # --- Cross-model aliases for the above ---
+    #
+    # These feed enabled-by-default entities on other members of the
+    # goform family, so they ride the mandatory fetch: a Signal sensor
+    # on an MC888 must not depend on an endpoint that is allowed to
+    # degrade. The MC7010 answers "" for every one.
+    "5g_rsrp",
+    "nr5g_rsrp",
+    "5g_sinr",
+    "nr5g_sinr",
+    "Z5g_snr",
+    "Z5g_CELL_ID",
+    "flux_monthly_tx_bytes",
+    "flux_monthly_rx_bytes",
+    "data_volume_clear_date",
+    "data_volume_clear_day",
+]
+
+_EXTENDED_PARAMS: list[str] = [
+    # --- Subscriber identifiers (disabled sensors) ---
+    "sim_imsi",
+    "sim_iccid",
+    # --- Diagnostics ---
+    "battery_value",
+    "rssi",
+    "rscp",
+    "rmcc",
+    "rmnc",
+    "lte_band_lock",
+    "lte_ca_scell_band",
+    "lte_ca_scell_bandwidth",
+    "lte_multi_ca_scell_info",
+    "opms_wan_mode",
+    "opms_wan_auto_mode",
+    "apn_interface_version",
+    # --- Router settings ---
+    "ODU_led_switch",
+    "upnpEnabled",
+    "alg_sip_enable",
+    "web_sleep_switch",
+    "web_wake_switch",
+    # --- Data-volume form ---
+    #
+    # Read back by `set_data_volume_settings()`. If this fetch is
+    # degraded the write refuses rather than sending a partial form,
+    # which is the correct outcome — see that method.
+    "data_volume_limit_switch",
+    "data_volume_alert_percent",
+    "data_volume_limit_unit",
+    "data_volume_limit_size",
+    # --- Reboot schedule ---
+    "reboot_schedule_enable",
+    "reboot_schedule_mode",
+    "reboot_dow",
+    "reboot_dod",
+    "reboot_hour1",
+    "reboot_min1",
+    "reboot_hour2",
+    "reboot_min2",
+    # --- Time configuration ---
+    "sntp_server0",
+    "sntp_server1",
+    "sntp_server2",
+    "sntp_dst_enable",
+    "sntp_timezone",
+    # --- Thermal ---
+    #
+    # No model is confirmed to populate any of these; the MC7010
+    # answers "" for all five.
+    "pm_sensor_pa1",
+    "pm_sensor_ambient",
+    "pm_sensor_mdm",
+    "pm_modem_5g",
+    "pm_sensor_5g",
+]
 
 
 class ZTEConnectionError(Exception):
@@ -549,160 +720,8 @@ class ZTERouterAPI:
             self.stok = None
             self.session.cookie_jar.clear(predicate=lambda m: m.key == "stok")
 
-    async def get_all_data(self) -> dict[str, Any]:
-        """Fetch primary technical data."""
-        params = [
-            "cell_id",
-            "lan_ipaddr",
-            "lte_ca_pcell_band",
-            "lte_ca_pcell_bandwidth",
-            "lte_ca_scell_band",
-            "lte_ca_scell_bandwidth",
-            "lte_pci",
-            "lte_rsrp",
-            "lte_rsrq",
-            "lte_rssi",
-            "lte_snr",
-            "mdm_mcc",
-            "mdm_mnc",
-            "monthly_rx_bytes",
-            "monthly_tx_bytes",
-            "network_provider",
-            "network_type",
-            "nr5g_action_band",
-            "nr5g_action_channel",
-            "nr5g_pci",
-            "realtime_time",
-            "rmcc",
-            "rmnc",
-            "signalbar",
-            "wan_active_band",
-            "wan_active_channel",
-            "wan_apn",
-            "wan_connect_status",
-            "wan_ipaddr",
-            "wan_lte_ca",
-            "wa_inner_version",
-            "Z5g_rsrp",
-            "Z5g_SINR",
-            "Z5g_rsrq",
-            "Z5g_rssi",
-            "model_name",
-            "rssi",
-            "rscp",
-            "imei",
-            "hardware_version",
-            "battery_value",
-            "sim_imsi",
-            "sim_iccid",
-            "enodeb_id",
-            "net_select",
-            "ppp_status",
-            "realtime_tx_thrpt",
-            "realtime_rx_thrpt",
-            "realtime_tx_bytes",
-            "realtime_rx_bytes",
-            "sms_unread_num",
-            "sms_received_flag",
-            "sms_nv_rev_total",
-            "sms_nv_send_total",
-            "sms_nv_draftbox_total",
-            "sms_sim_rev_total",
-            "sms_sim_send_total",
-            "sms_sim_draftbox_total",
-            "sms_nv_total",
-            "sms_sim_total",
-            "apn_index",
-            "apn_mode",
-            "apn_interface_version",
-            "ipv6_apn_index",
-            "APN_config0",
-            "APN_config1",
-            "APN_config2",
-            "APN_config3",
-            "APN_config4",
-            "APN_config5",
-            "APN_config6",
-            "APN_config7",
-            "APN_config8",
-            "APN_config9",
-            "APN_config10",
-            "APN_config11",
-            "APN_config12",
-            "APN_config13",
-            "APN_config14",
-            "APN_config15",
-            "APN_config16",
-            "APN_config17",
-            "APN_config18",
-            "APN_config19",
-            "ODU_led_switch",
-            "ODU_led_off_time",
-            "data_volume_limit_switch",
-            "data_volume_alert_percent",
-            "reboot_schedule_enable",
-            "reboot_hour1",
-            "reboot_min1",
-            "reboot_hour2",
-            "reboot_min2",
-            "lte_band_lock",
-            "net_select_mode",
-            "sntp_server0",
-            "sntp_server1",
-            "sntp_dst_enable",
-            "upnpEnabled",
-            "alg_sip_enable",
-            # Billing-cycle keys. `traffic_clear_date` is the spelling a live
-            # MC7010 probe answered on (see
-            # `.notes/info/zte_element_discovery_report.md`); the two
-            # `data_volume_*` spellings come from a separate analysis and are
-            # carried as aliases for other goform models. See `_ALIAS_CLEAR_DAY`
-            # in `sensor.py`. `wan_auto_clear_flow_data_switch` is the master
-            # switch for the monthly reset — with it off the counters never
-            # roll over, so anything reasoning about a cycle must consult it.
-            "traffic_clear_date",
-            "data_volume_clear_date",
-            "data_volume_clear_day",
-            "wan_auto_clear_flow_data_switch",
-            # Web UI power management.
-            "web_sleep_switch",
-            "web_wake_switch",
-            # Reboot schedule detail. `reboot_schedule_enable` and the hour /
-            # minute pair are requested above; these three say which day the
-            # schedule fires on and how to read it.
-            "reboot_schedule_mode",
-            "reboot_dow",
-            "reboot_dod",
-            # Time configuration beyond the two servers requested above.
-            "sntp_server2",
-            "sntp_timezone",
-            # Raw secondary-cell aggregation descriptor and operational mode.
-            "lte_multi_ca_scell_info",
-            "opms_wan_mode",
-            "opms_wan_auto_mode",
-            # Cross-model keys. Every one of these is an alternative spelling
-            # used by some other member of the goform family, or optional
-            # telemetry the MC7010 does not populate. Requesting a key the
-            # router does not know is safe: it is simply absent from the
-            # response rather than an error, and an absent key cannot trip the
-            # "every value is an empty string" expired-session rule in
-            # `_request`. Keep this block in step with the alias tuples in
-            # `sensor.py` — an alias naming a key that is never requested can
-            # never fire.
-            "5g_rsrp",
-            "nr5g_rsrp",
-            "5g_sinr",
-            "nr5g_sinr",
-            "Z5g_snr",
-            "Z5g_CELL_ID",
-            "flux_monthly_tx_bytes",
-            "flux_monthly_rx_bytes",
-            "pm_sensor_pa1",
-            "pm_sensor_ambient",
-            "pm_sensor_mdm",
-            "pm_modem_5g",
-            "pm_sensor_5g",
-        ]
+    async def _batch_get(self, params: list[str]) -> dict[str, Any]:
+        """Issue one `multi_data` batch read for the given `cmd` names."""
         cmd = ",".join(params)
         path = (
             "goform/goform_get_cmd_process?multi_data=1&isTest=false"
@@ -710,6 +729,29 @@ class ZTERouterAPI:
         )
         data = await self._request("GET", path)
         return cast(dict[str, Any], data)
+
+    async def get_all_data(self) -> dict[str, Any]:
+        """Fetch the mandatory core payload.
+
+        Failure here is a whole-integration failure and belongs on the global
+        strike path — everything an enabled-by-default entity needs is in this
+        request, as is the device identity latched into `entry.data`.
+        """
+        return await self._batch_get(_CORE_PARAMS)
+
+    async def get_extended_data(self) -> dict[str, Any]:
+        """Fetch the optional diagnostic payload.
+
+        A second request rather than a longer first one: the router bounds a
+        GET at roughly 2,048 characters, and one list carrying everything had
+        no room left to grow.
+
+        Called through the coordinator's `_fetch_optional`, so a failure holds
+        the last known values for three cycles and then marks only the entities
+        fed from here unavailable. It must therefore stay free of anything an
+        enabled-by-default entity needs.
+        """
+        return await self._batch_get(_EXTENDED_PARAMS)
 
     async def get_sms_capacity(self, timeout_sec: int | None = None) -> dict[str, Any]:
         """Get SMS capacity information."""
@@ -962,13 +1004,78 @@ class ZTERouterAPI:
         self._require_success(res, "ODU_LED_SWITCH_SET")
         return cast(dict[str, Any], res)
 
-    async def set_data_limit_switch(self, status: str) -> dict[str, Any]:
-        """Set the data volume limit switch (1 = On, 0 = Off)."""
+    # Every field `DATA_LIMIT_SETTING` expects, and the response key each is
+    # read back from. The router refuses a payload missing any of them.
+    _DATA_VOLUME_FIELDS: dict[str, tuple[str, ...]] = {
+        "data_volume_limit_switch": ("data_volume_limit_switch",),
+        "data_volume_limit_unit": ("data_volume_limit_unit",),
+        "data_volume_limit_size": ("data_volume_limit_size",),
+        "data_volume_alert_percent": ("data_volume_alert_percent",),
+        "wan_auto_clear_flow_data_switch": ("wan_auto_clear_flow_data_switch",),
+        "traffic_clear_date": (
+            "traffic_clear_date",
+            "data_volume_clear_date",
+            "data_volume_clear_day",
+        ),
+    }
+
+    async def set_data_volume_settings(
+        self,
+        current: dict[str, Any],
+        **changes: str,
+    ) -> dict[str, Any]:
+        """Write the data-volume form, preserving every field not being changed.
+
+        `DATA_LIMIT_SETTING` is **all-or-nothing**. It carries the limit
+        switch, the cap and its unit, the alert percentage, the monthly
+        auto-reset switch and the billing reset day, and the router answers
+        `{"result":"failure"}` for a payload missing any of them — verified on
+        MC7010 firmware `V1.0.0B03` (2026-07-29), which also confirmed that the
+        omitted fields are left intact rather than blanked.
+
+        So every write is a read-modify-write: `current` supplies the fields
+        that are not changing, normally `coordinator.data` from the last
+        successful poll.
+
+        Raises rather than guessing when `current` is missing a field. A data
+        cap is not something to invent a value for, and sending a partial form
+        would simply be refused.
+        """
+        payload_fields: dict[str, str] = {}
+        missing: list[str] = []
+
+        for field, aliases in self._DATA_VOLUME_FIELDS.items():
+            if field in changes:
+                payload_fields[field] = str(changes[field])
+                continue
+            value = next(
+                (
+                    current[key]
+                    for key in aliases
+                    if key in current and current[key] not in ("", None)
+                ),
+                None,
+            )
+            if value is None:
+                missing.append(field)
+            else:
+                payload_fields[field] = str(value)
+
+        if missing:
+            raise ZTEConnectionError(
+                "Cannot write the data-volume settings: the last poll did not "
+                f"supply {', '.join(missing)}. This command replaces the whole "
+                "form, so sending it without those fields would be refused by "
+                "the router. Refresh and retry."
+            )
+
+        unknown = set(changes) - set(self._DATA_VOLUME_FIELDS)
+        if unknown:  # pragma: no cover - guards a programming error, not input
+            raise ValueError(f"Unknown data-volume field(s): {sorted(unknown)}")
+
         ad = await self.get_ad()
-        payload = (
-            f"isTest=false&goformId=DATA_LIMIT_SETTING"
-            f"&data_volume_limit_switch={status}&AD={ad}"
-        )
+        body = "&".join(f"{k}={v}" for k, v in payload_fields.items())
+        payload = f"isTest=false&goformId=DATA_LIMIT_SETTING&{body}&AD={ad}"
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
@@ -977,6 +1084,18 @@ class ZTERouterAPI:
         )
         self._require_success(res, "DATA_LIMIT_SETTING")
         return cast(dict[str, Any], res)
+
+    async def set_data_limit_switch(
+        self, status: str, current: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Set the data volume limit switch (1 = On, 0 = Off).
+
+        Routes through `set_data_volume_settings` so there is one write path
+        for this form rather than two that can drift apart.
+        """
+        return await self.set_data_volume_settings(
+            current, data_volume_limit_switch=status
+        )
 
     async def set_bearer_preference(self, preference: str) -> dict[str, Any]:
         """Set the network bearer preference (e.g. 4G_AND_5G, Only_5G, Only_LTE)."""

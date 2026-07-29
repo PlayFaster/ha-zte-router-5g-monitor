@@ -1,11 +1,11 @@
 """Tests for the ZTE Router sensor."""
 
 import pathlib
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
-from homeassistant.components.sensor import SensorDeviceClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 from homeassistant.const import (
     EntityCategory,
     UnitOfDataRate,
@@ -19,12 +19,16 @@ from custom_components.zte_router_5g.sensor import (
     _ALIAS_5G_PCI,
     _ALIAS_5G_RSRP,
     _ALIAS_5G_SINR,
+    _ALIAS_CLEAR_DAY,
     _ALIAS_MONTHLY_RX,
     _ALIAS_MONTHLY_TX,
     SENSOR_TYPES,
     ZTERouterSensor,
     ZTESensorEntityDescription,
+    _clear_day,
     _get_first,
+    _projected_bytes,
+    _projection,
     async_setup_entry,
 )
 
@@ -680,5 +684,216 @@ def test_every_aliased_key_is_requested_by_the_batch_poll():
         + _ALIAS_5G_PCI
         + _ALIAS_MONTHLY_TX
         + _ALIAS_MONTHLY_RX
+        + _ALIAS_CLEAR_DAY
     ):
         assert f'"{alias}"' in source, f"{alias} is aliased but never requested"
+
+
+# --- Monthly reset day (`_clear_day`) ---
+
+
+@pytest.mark.parametrize(
+    "key", ["traffic_clear_date", "data_volume_clear_date", "data_volume_clear_day"]
+)
+def test_clear_day_reads_every_spelling(key):
+    """Any one of the three spellings alone resolves."""
+    assert _clear_day({key: "15"}) == 15
+
+
+def test_clear_day_prefers_the_live_probed_spelling():
+    """`traffic_clear_date` leads the tuple, so it wins a disagreement."""
+    assert _clear_day({"traffic_clear_date": "1", "data_volume_clear_date": "20"}) == 1
+
+
+def test_clear_day_warns_when_spellings_disagree(caplog):
+    """A silent disagreement would show up months later as a skewed cycle."""
+    _clear_day({"traffic_clear_date": "1", "data_volume_clear_date": "20"})
+    assert "disagreeing monthly reset days" in caplog.text
+
+
+def test_clear_day_is_quiet_when_spellings_agree(caplog):
+    """Two spellings carrying the same value is not a fault."""
+    _clear_day({"traffic_clear_date": "9", "data_volume_clear_day": "9"})
+    assert "disagreeing" not in caplog.text
+
+
+@pytest.mark.parametrize("raw", ["", None, "not-a-day"])
+def test_clear_day_returns_none_when_absent_or_unparsable(raw):
+    """Present-but-empty is absent — the router's answer for an unknown key."""
+    assert _clear_day({"traffic_clear_date": raw}) is None
+
+
+@pytest.mark.parametrize("raw", ["0", "32", "-1"])
+def test_clear_day_rejects_days_outside_the_month(raw):
+    """A day outside 1-31 is not a calendar date, whatever the router says."""
+    assert _clear_day({"traffic_clear_date": raw}) is None
+
+
+def test_clear_day_sensor_is_bounded_and_enabled():
+    """Guard bands match the value range; the sensor is worth showing by default."""
+    description = next(d for d in SENSOR_TYPES if d.key == "data_clear_day")
+    assert (description.min_limit, description.max_limit) == (1, 31)
+    assert description.entity_registry_enabled_default is True
+    assert description.entity_category is EntityCategory.DIAGNOSTIC
+    assert description.group == "data"
+    assert description.about
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "lte_multi_ca_scell_info",
+        "opms_wan_mode",
+        "opms_wan_auto_mode",
+        "sntp_timezone",
+        "apn_interface_version",
+    ],
+)
+def test_discovered_diagnostic_sensors_are_disabled_by_default(key):
+    """Newly discovered read-only detail should not clutter a default install."""
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+    assert description.entity_registry_enabled_default is False
+    assert description.entity_category is EntityCategory.DIAGNOSTIC
+    assert description.about
+
+
+# --- Data-usage projection ---
+
+_CYCLE_DATA = {
+    "traffic_clear_date": "1",
+    "monthly_tx_bytes": "10000000000",
+    "monthly_rx_bytes": "40000000000",
+}
+
+
+def _at(day, hour=12):
+    """Return a patch target fixing `dt_util.now()` to a July 2026 instant."""
+    return patch(
+        "custom_components.zte_router_5g.sensor.dt_util.now",
+        return_value=datetime(2026, 7, day, hour, tzinfo=dt_util.DEFAULT_TIME_ZONE),
+    )
+
+
+def test_projection_is_produced_from_the_monthly_total():
+    """50 GB by midday on the 16th of a 31-day cycle projects to 100 GB.
+
+    15.5 days elapsed at 50 GB is 3.23 GB/day, and 15.5 days remain.
+    """
+    with _at(16):
+        projected = _projected_bytes(dict(_CYCLE_DATA))
+    assert projected == pytest.approx(100e9, rel=0.01)
+
+
+def test_projection_is_shown_on_the_first_day_rather_than_unknown():
+    """An `unknown` on day one reads as a broken sensor, so a figure is given."""
+    with _at(1, hour=6):
+        projected = _projected_bytes({**_CYCLE_DATA, "monthly_rx_bytes": "2000000000"})
+    assert projected is not None
+    assert projected > 0
+
+
+def test_projection_on_day_one_is_bounded_by_the_denominator_floor():
+    """2 GB six hours into a cycle reads as 64 GB, not 248 GB.
+
+    The naive form divides by 0.25 days, giving a rate of 8 GB/day and a
+    projection of 248 GB off a single morning's download. Flooring the
+    denominator at one day caps the rate at 2 GB/day, so the figure is
+    2 + 30.75 x 2. It is still an overestimate — six hours is six hours — but
+    it is no longer an artefact of dividing by something close to zero.
+    """
+    data = {**_CYCLE_DATA, "monthly_tx_bytes": "0", "monthly_rx_bytes": "2000000000"}
+    with _at(1, hour=6):
+        projected = _projected_bytes(data)
+    assert projected == pytest.approx(63.5e9, rel=0.01)
+
+
+def test_projection_is_none_when_the_router_reports_no_reset_day():
+    """No reset day means no cycle, which is not the same as no data."""
+    with _at(16):
+        assert (
+            _projected_bytes(
+                {k: v for k, v in _CYCLE_DATA.items() if k != "traffic_clear_date"}
+            )
+            is None
+        )
+
+
+def test_projection_is_none_when_the_automatic_reset_is_switched_off():
+    """With auto-clear off the counters never roll over, so nothing to project."""
+    data = {**_CYCLE_DATA, "wan_auto_clear_flow_data_switch": "off"}
+    with _at(16):
+        assert _projected_bytes(data) is None
+
+
+def test_projection_is_produced_when_the_automatic_reset_is_on():
+    """The guard must key on 'off' alone, not on the key being present."""
+    data = {**_CYCLE_DATA, "wan_auto_clear_flow_data_switch": "on"}
+    with _at(16):
+        assert _projected_bytes(data) is not None
+
+
+def test_projection_is_none_without_monthly_counters():
+    """Both halves of the total are required; one alone would understate it."""
+    with _at(16):
+        assert _projected_bytes({"traffic_clear_date": "1"}) is None
+
+
+@pytest.mark.parametrize(("day", "expected"), [(1, "low"), (4, "medium"), (16, "high")])
+def test_projection_confidence_reflects_how_much_is_observed(day, expected):
+    """The caveat lives in an attribute so the state can always show a number."""
+    with _at(day):
+        result = _projection(dict(_CYCLE_DATA))
+    assert result.confidence == expected
+
+
+def test_projection_reports_run_rate_only_until_history_exists():
+    """No stored prior cycle yet, and the attribute must say so plainly."""
+    with _at(16):
+        result = _projection(dict(_CYCLE_DATA))
+    assert result.basis == "run_rate_only"
+
+
+def test_projection_attributes_describe_the_cycle():
+    """Cycle day and start let a user judge the figure without reading docs."""
+    description = next(d for d in SENSOR_TYPES if d.key == "data_projection")
+    coordinator = MagicMock()
+    coordinator.data = dict(_CYCLE_DATA)
+    entity = ZTERouterSensor(coordinator, MagicMock(), description)
+
+    with _at(16):
+        attrs = entity.extra_state_attributes
+
+    assert attrs["cycle_day"] == "16 of 31"
+    assert attrs["cycle_start"] == "2026-07-01"
+    assert attrs["basis"] == "run_rate_only"
+    assert attrs["confidence"] == "high"
+
+
+def test_projection_attributes_are_absent_when_there_is_no_cycle():
+    """The `about` note must survive even when the projection cannot be made."""
+    description = next(d for d in SENSOR_TYPES if d.key == "data_projection")
+    coordinator = MagicMock()
+    coordinator.data = {"wan_auto_clear_flow_data_switch": "off"}
+    entity = ZTERouterSensor(coordinator, MagicMock(), description)
+
+    with _at(16):
+        attrs = entity.extra_state_attributes
+
+    assert "cycle_day" not in attrs
+    assert attrs["about"]
+
+
+def test_projection_state_class_is_measurement_not_total():
+    """A projection falls as a heavy week is diluted.
+
+    Under a TOTAL class long-term statistics would read every such fall as a
+    counter reset, which only a manual purge undoes.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "data_projection")
+    assert description.state_class is SensorStateClass.MEASUREMENT
+    assert description.device_class is SensorDeviceClass.DATA_SIZE
+    assert description.native_unit_of_measurement == UnitOfInformation.BYTES
+    assert description.suggested_unit_of_measurement == UnitOfInformation.GIGABYTES
+    assert description.group == "data"
+    assert description.entity_registry_enabled_default is True
+    assert description.about

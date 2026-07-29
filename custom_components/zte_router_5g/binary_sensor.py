@@ -18,7 +18,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .coordinator import ZTERouterDataUpdateCoordinator
+from .coordinator import ENDPOINT_EXTENDED, ZTERouterDataUpdateCoordinator
 from .helpers import ZTEAboutEntity, build_device_info
 
 PARALLEL_UPDATES = 0
@@ -31,6 +31,10 @@ class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
     group: str = "signal"
     value_fn: Callable[[Any], bool] | None = None
     extra_attrs_fn: Callable[[Any], dict[str, Any]] | None = None
+    # Optional endpoint this entity's value comes from. When set, the entity
+    # goes unavailable once that endpoint exhausts its own strike budget
+    # rather than serving a stale value forever (dev_standards Section 8).
+    source: str | None = None
     # Optional plain-language note surfaced as an unrecorded `about` attribute
     # (dev_standards Section 14). Resolved by the ZTEAboutEntity mixin.
     about: str | None = None
@@ -55,11 +59,14 @@ INTEGRATION_HEALTH_DESCRIPTION = ZTEBinarySensorEntityDescription(
 BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ZTEBinarySensorEntityDescription(
         key="reboot_schedule",
+        source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router reboots itself on its own schedule. The time it "
-            "runs, and which day, are in the attributes exactly as the router "
-            "reports them. This is the router's internal schedule and is "
-            "separate from any reboot automation built in Home Assistant."
+            "runs is in the attributes, along with the repeat mode - weekly or "
+            "monthly - and both candidate days. The mode decides which day "
+            "applies: weekly uses the day of week, monthly the day of month. "
+            "This is the router's internal schedule and is separate from any "
+            "reboot automation built in Home Assistant."
         ),
         translation_key="system_reboot_schedule",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -68,10 +75,15 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
         value_fn=lambda data: (
             data.get("reboot_schedule_enable") == "1" if data else False
         ),
-        # `reboot_schedule_mode` selects whether the weekly day (`reboot_dow`)
-        # or the monthly one (`reboot_dod`) applies. Which mode value means
-        # which is not confirmed on any firmware, so all three are published
-        # raw rather than resolved into a guess.
+        # `reboot_schedule_mode` selects whether the weekly day (`reboot_dow`,
+        # 1-indexed from Sunday) or the monthly one (`reboot_dod`) applies:
+        # 1 = weekly, 2 = monthly. Confirmed 2026-07-29 from the router's own
+        # `js/service.js` — see `docs/zte_how_to_access.md` § Field formats.
+        #
+        # Still published raw. Resolving them into one "reboots every Monday"
+        # string would be friendlier, but this is a disabled-by-default
+        # diagnostic whose consumer is someone comparing Home Assistant against
+        # the router's own settings page — where these are the values shown.
         extra_attrs_fn=lambda data: {
             "reboot_hour1": data.get("reboot_hour1") if data else None,
             "reboot_min1": data.get("reboot_min1") if data else None,
@@ -84,11 +96,12 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="web_sleep",
+        source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router puts its own web page to sleep after a period "
             "of inactivity. It does not affect this integration, which logs in "
-            "afresh as needed. Changing it is not offered here because the "
-            "router exposes no command for it."
+            "afresh as needed, so it is shown for reference only - change it on "
+            "the router's own settings page."
         ),
         translation_key="system_web_sleep",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -98,9 +111,10 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="web_wake",
+        source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router's web page wakes itself again after sleeping. "
-            "Read-only for the same reason as the sleep setting."
+            "Shown for reference only, like the sleep setting."
         ),
         translation_key="system_web_wake",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -110,6 +124,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="upnp_enabled",
+        source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router lets devices open their own inbound ports. "
             "Convenient for games and consoles, but it means any device on the "
@@ -124,6 +139,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="sip_alg_enabled",
+        source=ENDPOINT_EXTENDED,
         about=(
             "SIP ALG rewrites internet-telephony traffic as it passes through. It "
             "is meant to help, and frequently does the opposite: one-way audio and "
@@ -357,6 +373,19 @@ class ZTERouterBinarySensor(
         self.entity_description = description
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
+
+    @property
+    def available(self) -> bool:
+        """Return whether this entity has a working data source.
+
+        Entities fed by an optional endpoint go unavailable when that endpoint
+        alone has exhausted its strike budget, while the rest of the
+        integration keeps serving data (Section 8).
+        """
+        if not super().available:
+            return False
+        source = self.entity_description.source
+        return source is None or self.coordinator.endpoint_available(source)
 
     @property
     def is_on(self) -> bool | None:

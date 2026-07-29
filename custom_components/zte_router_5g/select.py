@@ -15,6 +15,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .const import APN_PROFILE_SLOTS
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .helpers import ZTEAboutEntity, build_device_info
 
@@ -41,7 +42,7 @@ def _get_apn_profiles(data: Any) -> list[tuple[int, str, str]]:
     profiles: list[tuple[int, str, str]] = []
     if not data:
         return profiles
-    for i in range(20):
+    for i in range(APN_PROFILE_SLOTS):
         val = data.get(f"APN_config{i}")
         if val:
             parts = val.split("($)")
@@ -61,7 +62,7 @@ def _get_current_apn_profile(data: Any) -> str | None:
     except (ValueError, TypeError):
         return None
 
-    if active_idx < 0 or active_idx > 19:
+    if active_idx < 0 or active_idx >= APN_PROFILE_SLOTS:
         return None
 
     val = data.get(f"APN_config{active_idx}")

@@ -254,7 +254,7 @@
         "name": "Time Server (SNTP)"
       },
       "data_clear_day": {
-        "name": "Data Reset Day"
+        "name": "Reset Day"
       },
       "signal_lte_multi_ca_scell_info": {
         "name": "Carrier Aggregation Secondary Cells"
@@ -270,6 +270,9 @@
       },
       "system_apn_interface_version": {
         "name": "APN Interface Version"
+      },
+      "data_projection": {
+        "name": "Projected Cycle Usage"
       }
     },
     "button": {
@@ -364,6 +367,9 @@
     },
     "delete_all_button_failed": {
       "message": "Failed to delete all SMS messages: {error}"
+    },
+    "switch_set_failed": {
+      "message": "Could not change {entity} on the router: {error}"
     }
   },
   "issues": {

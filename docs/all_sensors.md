@@ -1,20 +1,20 @@
 # ZTE Router 5G Integration - Entity Manifest
 
-This document provides a comprehensive list of all 81 entities currently implemented in the ZTE Router 5G integration. It serves as a master reference for debugging, maintenance, and future development.
+This document provides a comprehensive list of all 91 entities currently implemented in the ZTE Router 5G integration. It serves as a master reference for debugging, maintenance, and future development.
 
 ## Summary
 
 | Sub-Device | Entity Count | Description |
 | :-- | :-- | :-- |
-| **System** | 27 | Core router info and global integration settings. |
-| **Signal** | 39 | Cellular connectivity, signal strength (LTE/5G), and network info. |
-| **Data** | 12 | Monthly and session traffic volume (Bytes and GB). |
+| **System** | 32 | Core router info and global integration settings. |
+| **Signal** | 40 | Cellular connectivity, signal strength (LTE/5G), and network info. |
+| **Data** | 14 | Monthly and session traffic volume (Bytes and GB). |
 | **SMS** | 4 | Message counts and recent message content. |
-| **Total** | **82** |  |
+| **Total** | **91** |  |
 
 ---
 
-## 1. System Sub-Device (27 Entities)
+## 1. System Sub-Device (32 Entities)
 
 _Group: `system`_
 
@@ -42,11 +42,17 @@ _Group: `system`_
 | Pause Polling | `pause_polling` | Switch | Options: `stop_polling` | - | Config | State persists in `ConfigEntry.options`. | ✔ |
 | Polling Interval | `polling_interval` | Number | Options: `scan_interval` | s | Config | Range: 30s - 3600s. Persists in options. | ✔ |
 | Integration Health | `integration_health` | Binary | `coordinator.health_snapshot` | - | Diagnostic | ON when the integration detects a problem, including a poll that succeeds but returns nothing usable. Stays available during an outage, when other entities do not. Attributes carry the detail. | ✔ |
-| Reboot Schedule | `reboot_schedule` | Binary | `reboot_schedule_enable` | - | Diagnostic | **Disabled by default.** Scheduled reboot active status. Extra attributes: hour, minute. | — |
+| Reboot Schedule | `reboot_schedule` | Binary | `reboot_schedule_enable` | - | Diagnostic | **Disabled by default.** Scheduled reboot active status. Extra attributes: hour, minute, schedule mode, day of week, day of month - the last three raw, as the mode-to-day mapping is unconfirmed. | ✔ |
 | UPnP Enabled | `upnp_enabled` | Binary | `upnp_enable` | - | Diagnostic | **Disabled by default.** UPnP active status. | ✔ |
 | SIP ALG Enabled | `sip_alg_enabled` | Binary | `alg_sip_enable` | - | Diagnostic | **Disabled by default.** SIP ALG active status. | ✔ |
 | ODU LED Switch | `odu_led_switch` | Switch | `ODU_led_switch` | - | Config | **Disabled by default.** Toggle router outdoor unit LED light. | — |
 | Time Server (SNTP) | `sntp_server` | Sensor | `sntp_server` | - | Diagnostic | **Disabled by default.** Configuration time server. | ✔ |
+| Router Timezone | `sntp_timezone` | Sensor | `sntp_timezone` | - | Diagnostic | **Disabled by default.** Vendor-format timezone string (e.g. `0-1`), shown raw rather than interpreted. | ✔ |
+| WAN Operating Mode | `opms_wan_mode` | Sensor | `opms_wan_mode` | - | Diagnostic | **Disabled by default.** e.g. `LTE_BRIDGE`. Read-only by design - changing it alters the path the integration reaches the router over. | ✔ |
+| WAN Fallback Mode | `opms_wan_auto_mode` | Sensor | `opms_wan_auto_mode` | - | Diagnostic | **Disabled by default.** e.g. `AUTO_LTE_GATEWAY`. Differing from the active mode is normal. | ✔ |
+| APN Interface Version | `apn_interface_version` | Sensor | `apn_interface_version` | - | Diagnostic | **Disabled by default.** Router APN configuration schema version. | ✔ |
+| Web Page Sleep | `web_sleep` | Binary | `web_sleep_switch` | - | Diagnostic | **Disabled by default.** Read-only: no write command was found for it. | ✔ |
+| Web Page Auto-Wake | `web_wake` | Binary | `web_wake_switch` | - | Diagnostic | **Disabled by default.** Read-only for the same reason. | ✔ |
 
 ---
 
@@ -95,10 +101,11 @@ _Group: `signal`_
 | APN Selection Mode | `apn_mode` | Select | `apn_mode` | - | Config | Switch between Automatic and Manual APN selection modes. | ✔ |
 | Network Mode Selection | `net_select_mode` | Select | `BearerPreference` | - | Config | Choose network bearer preference (Auto, 5G NSA, 5G SA, 4G Only). | ✔ |
 | LTE Band Lock Mask | `lte_band_lock` | Sensor | `lte_band_lock` | - | Diagnostic | **Disabled by default.** LTE band lock configuration mask. | ✔ |
+| Carrier Aggregation Secondary Cells | `lte_multi_ca_scell_info` | Sensor | `lte_multi_ca_scell_info` | - | Diagnostic | **Disabled by default.** Raw descriptor, one comma-separated group per secondary cell (e.g. `2,352,2,20,6300,10;`). | ✔ |
 
 ---
 
-## 3. Data Sub-Device (12 Entities)
+## 3. Data Sub-Device (14 Entities)
 
 _Group: `data`_
 
@@ -116,6 +123,8 @@ _Group: `data`_
 | Session Received | `realtime_rx_bytes` | Sensor | `realtime_rx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. Other display units may be used (e.g. GB). | ✔ |
 | Data Limit Switch | `data_limit_switch` | Switch | `data_volume_limit_switch` | - | Config | **Disabled by default.** Control data volume limit switch. | ✔ |
 | Data Volume Alert | `data_volume_alert_percent` | Sensor | `data_volume_alert_percent` | % | Sensor | **Disabled by default.** Alert threshold percentage of limit. | ✔ |
+| Reset Day | `data_clear_day` | Sensor | `traffic_clear_date` | - | Diagnostic | Day of month the router zeroes its monthly counters. Aliased across three spellings; guard band 1-31. | ✔ |
+| Projected Cycle Usage | `data_projection` | Sensor | `TX + RX` vs cycle elapsed | Bytes | Sensor | Estimated end-of-cycle total. `measurement` state class, not `total`. Attributes: confidence, basis, cycle day, cycle start. Other display units may be used (e.g. GB). | ✔ |
 
 ---
 

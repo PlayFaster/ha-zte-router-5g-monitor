@@ -4,6 +4,102 @@ All notable changes to this project will be documented in this file.
 
 > **Note on the `3.3.0` version tags.** The `3.3.0-dev*` and `3.3.0-rc*` entries below are kept as written, but **`3.3.0` was never released**. Its content shipped as part of `3.3.1`, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.1` and contains no `3.3.0` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
 
+## [3.3.1-dev13] - 2026-07-29 - Unreleased - No Manifest Bump - Batch Poll Split In Two
+
+The batch poll had grown to 1,889 characters against a ~2,048-character URL ceiling. Rather than keep trading one key away to make room for the next, the request is now two.
+
+### Changed
+
+- **`get_all_data()` split into a mandatory core fetch and an optional extended one**, divided by criticality rather than alphabetically.
+  - **`_CORE_PARAMS`** (75 names, ~1,167 characters) — everything feeding an enabled-by-default entity, the contract keys, and the device identity latched into `entry.data`. Mandatory: its failure is a whole-integration failure, exactly as before.
+  - **`_EXTENDED_PARAMS`** (41 names, ~735 characters) — diagnostics, disabled-by-default entities, router settings and the thermal keys. Optional, through the existing `_fetch_optional`.
+  - Headroom goes from ~160 characters to ~880 and ~1,310. A future addition no longer forces a removal.
+- **Hardened as an optional endpoint, not merely as a second request.** The extended fetch gets its own last-good payload and its own three-strike budget: a single failed cycle changes nothing a user can see, three hold the previous values, and only past that do its entities go unavailable — while Signal and Data keep serving real values throughout. `ZTEAuthError` is still not absorbed there; it reaches the global handler so the session is renewed and the whole set retried once.
+- **`source=ENDPOINT_EXTENDED` on every entity fed from it**, so those entities follow that endpoint's health rather than showing a value frozen hours ago. `binary_sensor.py` and `switch.py` gained the `source` field and the `available` gate that `sensor.py` already had.
+- **Merge order is core-over-extended**, so a stale cached diagnostic can never mask a fresh core value if the two batches ever come to share a key.
+- **Cross-model aliases stay in the core batch** despite the MC7010 answering `""` for all of them. They feed enabled-by-default sensors on other `goform` models, and a Signal sensor on an MC888 must not depend on an endpoint that is allowed to degrade.
+- **APN profile slots capped at 10** (`APN_PROFILE_SLOTS`), from 20. The firmware exposes twenty and an MC7010 in normal use populates two; twenty cost 250 characters — a fifth of the old request — to carry eighteen empty strings. The request and the APN select now derive from one constant, so they cannot disagree about how many slots exist.
+- `Extended diagnostics` is reported by name in the Integration Health `degraded_capabilities` list when it exhausts its budget.
+
+### Added
+
+- Seven coordinator tests for the split, covering the properties that matter rather than the plumbing: core data survives an extended failure, last-good values are held within budget, only the extended entities degrade past it, one success recovers, an auth error still drives reauth, core wins a key collision, and the degraded endpoint is named in health.
+- Availability tests for the new `source` gate on both binary sensors and switches.
+- `test_batch_poll_urls_stay_within_the_router_budget` is now parametrised across both halves.
+
+### Verified
+
+Live MC7010 after a full restart: 120 merged keys, values present from both batches (`traffic_clear_date` and `monthly_tx_bytes` from core, `sntp_timezone`, `opms_wan_mode`, `data_volume_limit_size`, `reboot_dow` from extended), Integration Health `off`, and `endpoint_failures` zero across all three optional endpoints.
+
+## [3.3.1-dev12] - 2026-07-29 - Unreleased - No Manifest Bump - Data Limit Switch Fixed; Batch Poll Budgeted
+
+Acts on the router-facing agent's answers in `.notes/info/zte_element_discovery_report.md` §6, which resolved every question raised against the discovery report. One of the answers uncovered a defect in shipped code.
+
+### Fixed
+
+- **The Data Limit Switch had never worked.** `DATA_LIMIT_SETTING` is a six-field form covering the limit switch, the cap and its unit, the alert percentage, the monthly auto-reset and the billing reset day. The integration sent one field, and the router refuses a partial payload — confirmed on hardware, where the same single-field POST returned `{"result":"failure"}`. `set_data_volume_settings()` now performs a read-modify-write, sourcing untouched fields from the last successful poll and refusing to write at all if any is missing rather than inventing a value for someone's data cap. `set_data_limit_switch()` routes through it, so there is one write path for this form instead of two that can drift.
+- **A refused switch write no longer disappears into the log.** `switch.py` caught every exception and logged it, so a command the router declined looked like a toggle that quietly sprang back. It now raises a translated `HomeAssistantError` (IQS `action-exceptions`). This mattered more than usual here because the API answers `200 OK` for a refused write.
+- **Two `about` notes stated something untrue.** Web Page Sleep and Web Page Auto-Wake said no write command existed for them. `SAVE_TSW` does. They remain read-only — a setting governing the router's own web page has no bearing on Home Assistant — but the stated reason was wrong and is now the actual one.
+
+### Added
+
+- **`test_batch_poll_url_stays_within_the_router_budget`.** The batch limit is a **URL length of roughly 2,048 characters**, not a number of names, and the poll had grown to ~1,885 without anything watching. Past the ceiling the response truncates, which presents as missing fields and is indistinguishable from firmware contract drift. The test carries a soft threshold ahead of the hard one, so the warning arrives before the failure.
+- `data_volume_limit_unit` and `data_volume_limit_size` to the batch poll — the write path cannot echo back a field it never reads. `test_every_data_volume_field_is_polled` keeps the two in step.
+
+### Changed
+
+- **Three keys dropped from the batch poll** to pay for the two above: `sms_received_flag`, `ipv6_apn_index` and `ODU_led_off_time`. None fed an entity or any logic. Net effect is one key fewer and slightly more headroom than before.
+- **The reboot-schedule encoding is now documented rather than guessed at.** `reboot_schedule_mode` is `1` = weekly, `2` = monthly; `reboot_dow` is 1-indexed from Sunday. The attributes are still published raw — this is a disabled-by-default diagnostic whose reader is comparing against the router's own settings page, where these are the values shown — but the code comment no longer claims the mapping is unconfirmed, and the `about` note now says which day field applies.
+
+### Documentation
+
+- **`docs/zte_how_to_access.md` substantially extended.** The batch-poll key list was 25 keys behind the code; it is current. New sections cover the **three-way response split** (populated, present-but-empty, genuinely absent — a distinction that has caused defects here), the **URL-length ceiling**, the **full 26-command `goformId` inventory** with a status and reason for each, **field formats** for the values this API returns as opaque strings, and the **two-step discovery method** that found them.
+- **Two claims in that document were wrong and are corrected.** It asserted there is no bulk-delete `goformId` — `ALL_DELETE_SMS` exists. And it documented `DATA_LIMIT_SETTING` as a single-field toggle.
+- Recorded that `SET_DEVICE_LED`, which the discovery report offered as an alternative to `ODU_LED_SWITCH_SET`, is in fact an unrelated night-mode LED scheduler. Not a conflict, a separate feature.
+- Two decisions to publish a raw string rather than parse it were vindicated by the answers. The field order given for `lte_multi_ca_scell_info` has **positions 4 and 5 transposed** — the sample reads `…,20,6300,…`, and EARFCN 6300 falls inside band 20's allocation while `20` is not a valid EARFCN. And `sntp_timezone` rests on a single sample from a UTC+0 unit with a sign convention that runs backwards from expectation. Parsing either would have shipped a wrong value.
+- **`battery_value` returns a hardcoded `100`**, not an empty string. An earlier probe reported it empty because its batch chunk contained fictional names and timed out. The `about` note calling the value meaningless on a mains-powered unit was right all along.
+
+## [3.3.1-dev11] - 2026-07-29 - Unreleased - No Manifest Bump - Billing-Cycle Reads and Data-Usage Projection
+
+Acts on `.notes/info/zte_element_discovery_report.md`, a two-step discovery run (web UI JavaScript mining plus a live batch probe against the MC7010) that isolated 66 answering parameters. Phase 1 and Phase 3 of the plan in `.notes/issues/data_cycle_and_projection_plan.md`. **Reads only — no new write command reaches the router in this entry.**
+
+### Added
+
+- **Projected Cycle Usage** (`data_projection`) — an estimate of end-of-cycle data usage, and the answer to the question the monthly counters do not address: _am I on course to exceed my allowance?_ Enabled by default on the Data sub-device.
+  - **Cycle-relative, not calendar-relative.** The router's counters reset on its own billing day, which need not be the 1st. Projecting against a calendar month would be wrong for most users.
+  - **Never shows `unknown`.** The naive form divides by elapsed time, so seconds into a cycle its error is unbounded — half a gigabyte one second in projects to over a million. The denominator is floored at one day, which bounds the result without inventing a cap. An `unknown` on day one reads as a broken sensor; the caveat belongs in the attributes, which carry `confidence`, `basis`, `cycle_day` and `cycle_start`.
+  - **`state_class` is `MEASUREMENT`, not `TOTAL`.** A projection falls whenever a heavy first week is diluted by a quiet second one. Under `TOTAL`, long-term statistics would read every such fall as a counter reset — a corruption only a manual purge undoes.
+  - Suppressed entirely when the router's automatic monthly reset is switched off, because then there is no cycle to project against.
+- **Reset Day** (`data_clear_day`) — the day of the month the router zeroes its counters. Enabled by default; bounded 1-31. Named `Reset Day` rather than `Data Reset Day` because Home Assistant prefixes the sub-device name, which would otherwise yield `ZTE 5G Data Data Reset Day` and an entity ID to match.
+- **Seven diagnostic entities**, all disabled by default: Carrier Aggregation Secondary Cells, WAN Operating Mode, WAN Fallback Mode, Router Timezone, APN Interface Version, Web Page Sleep and Web Page Auto-Wake.
+- **Reboot schedule detail** — `reboot_schedule_mode`, `reboot_dow` and `reboot_dod` added as attributes on the existing **Scheduled Reboot** binary sensor rather than as new entities, which already carried the hour and minute. All three are published **raw**: which mode value selects the weekly day versus the monthly one is not confirmed on any firmware, and resolving it would mean publishing a guess as a state.
+- `sntp_server2` folded into the existing SNTP Server attributes.
+
+### Changed
+
+- **Three spellings of the reset day are requested and aliased** — `traffic_clear_date`, `data_volume_clear_date`, `data_volume_clear_day`. Two internal analyses disagreed on the name; only the first is confirmed by a live probe, and requesting an unknown `cmd` costs nothing because the router omits it rather than erroring. `_clear_day()` **warns when two spellings arrive with different values** instead of silently taking the leader — a disagreement between firmware spellings of the same setting is the kind of fault that surfaces months later as a projection a week out.
+- **`test_get_all_data_requests_every_aliased_key` now derives its key set** from the `_ALIAS_*` constants by introspection rather than a hand-maintained list. That list had already drifted; a new alias tuple is now covered the moment it is added.
+- 15 new keys in the batch poll. Safe by the existing rule: an unknown `cmd` is absent from the response rather than an error, and an absent key cannot trip the "every value is an empty string" expired-session detection.
+
+### Verified on hardware
+
+Live MC7010 (`IRL_H3G_MC7010DV1.0.0B03`), read from a diagnostics download after a full restart.
+
+- **All 15 new keys answered.** `traffic_clear_date` returned `1` — the discovery report's spelling is the right one. The two `data_volume_*` spellings returned `""`, meaning the firmware knows the names but does not populate them on this model; `_safe_int` treats present-but-empty as absent, so the resolution is clean and the disagreement warning does not fire.
+- **No truncation.** 131 keys came back with every pre-existing field intact, closing the risk that a longer `cmd` list would silently drop data and look like firmware contract drift.
+- **The projection is coherent against real usage** — 1107.75 GB on day 29 of 31 projected to 1200.5 GB, `confidence: high`.
+- 91 entities registered, 7 of the 9 new ones disabled by default.
+
+### Deferred
+
+- **`wan_auto_clear_flow_data_switch` is polled but has no entity.** The projection reads it directly. Shipping it as a binary sensor now and a switch when the write path lands would strand a registry entry needing migration.
+- **The clear-day write is not implemented.** `DATA_LIMIT_SETTING` is a multi-field form covering the cap, the unit and the alert percentage, so a POST carrying only the clear date may zero the other two — a user would discover it when the router stopped passing traffic. It needs a read-modify-write path and a hardware round-trip test first.
+- **`RESET_DATA_COUNTER` and `FLOW_CALIBRATION_MANUAL` not implemented.** The first is irreversible and destroys the projection's own input; the second has semantics the discovery report does not describe, and a write whose effect cannot be stated in an `about` note should not ship.
+
+### Declined
+
+- **`OPERATION_MODE`, `LTE_LOCK_CELL_SET`, `ROUTER_DNS_SETTING`, `SET_BIND_STATIC_ADDRESS`.** Each changes how the router routes traffic — including the traffic this integration reaches it over — so the control that undoes a bad change becomes unavailable exactly when it is needed. This is the objection `Future.md` already records against band and cell locking, applied consistently. `opms_wan_mode` ships read-only so the mode is visible without offering a switch that can strand the user; the router's own web page remains the right place to change it.
+
 ## [3.3.1-dev10] - 2026-07-29 - Unreleased - No Manifest Bump - `Future.md` Roadmap Rewritten
 
 `docs/Future.md` dated from 2026-05 and had not been revisited. Reviewed every item against the running instance and the current source, then rewrote it. Documentation only — no code touched.

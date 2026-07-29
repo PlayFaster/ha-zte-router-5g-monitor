@@ -59,6 +59,7 @@ def coordinator(hass: HomeAssistant, entry):
     api = MagicMock(spec=ZTERouterAPI)
     api.protocol = "http"
     api.get_all_data = AsyncMock(return_value=dict(GOOD_DATA))
+    api.get_extended_data = AsyncMock(return_value={})
     api.get_sms_capacity = AsyncMock(return_value={})
     api.get_sms_messages = AsyncMock(return_value=[])
     api.login = AsyncMock(return_value="stok=test")

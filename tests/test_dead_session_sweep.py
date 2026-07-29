@@ -63,12 +63,23 @@ _DEAD: dict[str, Any] = {"cell_id": "", "messages": "", "result": "", "LD": ""}
 # Every public method that talks to the router, with arguments to drive it.
 # Adding a method to the API without adding it here fails the coverage test
 # below — that is the point of the file.
+# A complete data-volume form, as the last successful poll would supply it.
+_DATA_VOLUME_STATE = {
+    "data_volume_limit_switch": "0",
+    "data_volume_limit_unit": "data",
+    "data_volume_limit_size": "2_1048576",
+    "data_volume_alert_percent": "80",
+    "wan_auto_clear_flow_data_switch": "on",
+    "traffic_clear_date": "1",
+}
+
 _CALLS: dict[str, tuple[Any, ...]] = {
     "get_version": (),
     "get_ld": (),
     "login": (),
     "logout": (),
     "get_all_data": (),
+    "get_extended_data": (),
     "get_sms_capacity": (),
     "get_last_sms_content": (),
     "get_sms_messages": (),
@@ -81,7 +92,8 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     "set_apn": (1, "IP"),
     "set_apn_mode": ("auto",),
     "set_odu_led_switch": ("1",),
-    "set_data_limit_switch": ("1",),
+    "set_data_limit_switch": ("1", _DATA_VOLUME_STATE),
+    "set_data_volume_settings": (_DATA_VOLUME_STATE,),
     "set_bearer_preference": ("Only_5G",),
     "try_set_protocol": (),
 }

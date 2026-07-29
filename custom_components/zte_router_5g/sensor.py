@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Final
 
 from homeassistant.components.sensor import (
@@ -27,13 +28,25 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
-from .coordinator import ENDPOINT_SMS_MESSAGES, ZTERouterDataUpdateCoordinator
+from .const import (
+    PROJECTION_CONFIDENCE_LOW,
+    PROJECTION_CONFIDENCE_MEDIUM,
+    PROJECTION_CREDIBILITY_DAYS,
+)
+from .coordinator import (
+    ENDPOINT_EXTENDED,
+    ENDPOINT_SMS_MESSAGES,
+    ZTERouterDataUpdateCoordinator,
+)
 from .helpers import (
     ZTEAboutEntity,
     arfcn_to_band,
     build_device_info,
+    cycle_bounds,
     earfcn_to_band,
+    project_cycle_usage,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -194,6 +207,83 @@ def _clear_day(data: dict[str, Any]) -> int | None:
     return day if 1 <= day <= 31 else None
 
 
+@dataclass(frozen=True)
+class _Projection:
+    """A projected end-of-cycle figure and the context needed to judge it."""
+
+    bytes_used: int
+    projected_bytes: int
+    cycle_start: datetime
+    cycle_length_days: int
+    elapsed_days: float
+    weight: float
+    basis: str
+
+    @property
+    def confidence(self) -> str:
+        """Return how much of this figure rests on observed data."""
+        if self.weight < PROJECTION_CONFIDENCE_LOW:
+            return "low"
+        if self.weight < PROJECTION_CONFIDENCE_MEDIUM:
+            return "medium"
+        return "high"
+
+
+def _projection(data: dict[str, Any]) -> _Projection | None:
+    """Project this cycle's data usage to its end, or None if it cannot be.
+
+    Returns None in exactly two cases, both of which mean there is genuinely no
+    cycle to project against rather than merely a shortage of data: the router
+    does not report a reset day, or its automatic monthly reset is switched off
+    so the counters never roll over. Everything else — including the first
+    minute of a new cycle — produces a figure, because a sensor showing
+    `unknown` on day one reads as broken.
+    """
+    if data.get("wan_auto_clear_flow_data_switch") == "off":
+        return None
+
+    clear_day = _clear_day(data)
+    if clear_day is None:
+        return None
+
+    used = _monthly_total_bytes(data)
+    if used is None:
+        return None
+
+    now = dt_util.now()
+    start, _end, length = cycle_bounds(clear_day, now)
+    elapsed = (now - start).total_seconds() / 86400.0
+
+    # No cycle history yet. Phase 4 supplies `prior_rate` from the stored
+    # previous-cycle total; until then the denominator floor inside
+    # `project_cycle_usage` carries the whole job on its own.
+    prior_rate: float | None = None
+
+    projected = project_cycle_usage(
+        used=used,
+        elapsed_days=elapsed,
+        cycle_length_days=length,
+        prior_rate=prior_rate,
+        credibility_days=PROJECTION_CREDIBILITY_DAYS,
+    )
+
+    return _Projection(
+        bytes_used=used,
+        projected_bytes=int(projected),
+        cycle_start=start,
+        cycle_length_days=length,
+        elapsed_days=elapsed,
+        weight=elapsed / (elapsed + PROJECTION_CREDIBILITY_DAYS),
+        basis="run_rate_only" if prior_rate is None else "blended",
+    )
+
+
+def _projected_bytes(data: dict[str, Any]) -> int | None:
+    """Return the projected end-of-cycle byte count, or None."""
+    result = _projection(data)
+    return None if result is None else result.projected_bytes
+
+
 def _monthly_total_bytes(data: dict[str, Any]) -> int | None:
     """Sum the monthly TX and RX counters, honouring the key aliases.
 
@@ -339,6 +429,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=0,
         max_limit=100,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_int(data.get("battery_value")),
     ),
     # Thermal telemetry. This is the set of thermal keys the sibling project
@@ -366,6 +457,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-40,
         max_limit=125,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_float(data.get("pm_sensor_pa1")),
     ),
     ZTESensorEntityDescription(
@@ -384,6 +476,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-40,
         max_limit=125,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_float(data.get("pm_sensor_ambient")),
     ),
     ZTESensorEntityDescription(
@@ -402,6 +495,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-40,
         max_limit=125,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_float(data.get("pm_sensor_mdm")),
     ),
     ZTESensorEntityDescription(
@@ -420,6 +514,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-40,
         max_limit=125,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_float(data.get("pm_modem_5g")),
     ),
     ZTESensorEntityDescription(
@@ -438,6 +533,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-40,
         max_limit=125,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_float(data.get("pm_sensor_5g")),
     ),
     ZTESensorEntityDescription(
@@ -451,6 +547,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: data.get("sim_imsi"),
     ),
     ZTESensorEntityDescription(
@@ -464,6 +561,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: data.get("sim_iccid"),
     ),
     # --- Signal Sub-device ---
@@ -560,6 +658,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: data.get("rmcc"),
     ),
     ZTESensorEntityDescription(
@@ -572,6 +671,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: data.get("rmnc"),
     ),
     ZTESensorEntityDescription(
@@ -714,6 +814,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: data.get("lte_ca_scell_band") or None,
     ),
     ZTESensorEntityDescription(
@@ -728,6 +829,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_float(data.get("lte_ca_scell_bandwidth")),
     ),
     ZTESensorEntityDescription(
@@ -873,6 +975,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-120,
         max_limit=-20,
         group="signal",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_float(data.get("rssi")),
     ),
     ZTESensorEntityDescription(
@@ -890,6 +993,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-120,
         max_limit=-20,
         group="signal",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_float(data.get("rscp")),
     ),
     ZTESensorEntityDescription(
@@ -1132,6 +1236,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_str(data.get("lte_band_lock")),
     ),
     ZTESensorEntityDescription(
@@ -1148,6 +1253,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=0,
         max_limit=100,
         group="data",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_int(data.get("data_volume_alert_percent")),
     ),
     ZTESensorEntityDescription(
@@ -1161,6 +1267,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_str(data.get("sntp_server0")),
     ),
     ZTESensorEntityDescription(
@@ -1180,6 +1287,30 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         value_fn=_clear_day,
     ),
     ZTESensorEntityDescription(
+        key="data_projection",
+        about=(
+            "An estimate of how much data you will have used by the end of the "
+            "current billing cycle, if usage carries on at the rate it has so "
+            "far. Early in a cycle there is little to go on, so the figure "
+            "moves about - the attributes say how much of it rests on real "
+            "usage. It is an estimate, not a prediction: a single large "
+            "download early on will inflate it for a few days."
+        ),
+        translation_key="data_projection",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        # MEASUREMENT, not TOTAL. A projection falls whenever a heavy first
+        # week is diluted by a quiet second one, and a TOTAL class would have
+        # long-term statistics read every such fall as a counter reset. That
+        # corrupts the statistics table in a way only a manual purge undoes.
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        suggested_display_precision=1,
+        min_limit=0,
+        group="data",
+        value_fn=_projected_bytes,
+    ),
+    ZTESensorEntityDescription(
         key="lte_multi_ca_scell_info",
         about=(
             "Raw description of the additional 4G carriers in use, as the router "
@@ -1191,6 +1322,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_str(data.get("lte_multi_ca_scell_info")),
     ),
     ZTESensorEntityDescription(
@@ -1206,6 +1338,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_str(data.get("opms_wan_mode")),
     ),
     ZTESensorEntityDescription(
@@ -1218,6 +1351,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_str(data.get("opms_wan_auto_mode")),
     ),
     ZTESensorEntityDescription(
@@ -1232,6 +1366,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_str(data.get("sntp_timezone")),
     ),
     ZTESensorEntityDescription(
@@ -1244,6 +1379,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
+        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_str(data.get("apn_interface_version")),
     ),
 )
@@ -1293,6 +1429,10 @@ class ZTERouterSensor(
             "sntp_server1",
             "sntp_server2",
             "sntp_dst_enable",
+            "confidence",
+            "basis",
+            "cycle_day",
+            "cycle_start",
             "id",
             "number",
             "date",
@@ -1404,6 +1544,17 @@ class ZTERouterSensor(
                     "number": msg.get("number_decoded"),
                     "date": msg.get("date_decoded"),
                 }
+            elif key == "data_projection":
+                if (result := _projection(data)) is not None:
+                    detail = {
+                        "confidence": result.confidence,
+                        "basis": result.basis,
+                        "cycle_day": (
+                            f"{int(result.elapsed_days) + 1} of "
+                            f"{result.cycle_length_days}"
+                        ),
+                        "cycle_start": result.cycle_start.date().isoformat(),
+                    }
             elif key == "sntp_server":
                 detail = {
                     "sntp_server1": data.get("sntp_server1"),

@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.zte_router_5g.const import CONF_STOP_POLLING, DOMAIN
 from custom_components.zte_router_5g.switch import (
@@ -135,7 +136,7 @@ async def test_router_switch_turn_on_success(mock_coordinator, mock_config_entry
     )
     switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
     await switch.async_turn_on()
-    setter_fn.assert_called_once_with(mock_coordinator.api, True)
+    setter_fn.assert_called_once_with(mock_coordinator.api, True, mock_coordinator.data)
     mock_coordinator.async_force_refresh.assert_called_once()
 
 
@@ -152,7 +153,9 @@ async def test_router_switch_turn_off_success(mock_coordinator, mock_config_entr
     )
     switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
     await switch.async_turn_off()
-    setter_fn.assert_called_once_with(mock_coordinator.api, False)
+    setter_fn.assert_called_once_with(
+        mock_coordinator.api, False, mock_coordinator.data
+    )
     mock_coordinator.async_force_refresh.assert_called_once()
 
 
@@ -160,10 +163,17 @@ async def test_router_switch_turn_off_success(mock_coordinator, mock_config_entr
 async def test_router_switch_turn_on_exception(
     mock_coordinator, mock_config_entry, caplog
 ):
-    """Test ZTERouterSwitch.async_turn_on catches and logs exception."""
+    """A refused write must reach the user, not just the log.
+
+    This API answers `200 OK` for a command it declined, so a switch whose
+    failure is only logged looks to the user like one that quietly sprang
+    back. Asserted on `translation_key` rather than the message because a
+    translated exception resolves its text through `hass` at `str()` time,
+    which the mocked hass in this suite cannot do.
+    """
     mock_coordinator.api = MagicMock()
 
-    async def failing_setter(api, state):
+    async def failing_setter(api, state, data):
         raise ValueError("test turn on error")
 
     desc = ZTESwitchEntityDescription(
@@ -172,19 +182,31 @@ async def test_router_switch_turn_on_exception(
         setter_fn=failing_setter,
     )
     switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
-    await switch.async_turn_on()
-    assert "Failed to turn on" in caplog.text
+
+    with pytest.raises(HomeAssistantError) as err:
+        await switch.async_turn_on()
+
+    assert err.value.translation_key == "switch_set_failed"
+    assert "Failed to set" in caplog.text
     assert "odu_led_switch" in caplog.text
+    mock_coordinator.async_force_refresh.assert_not_called()
 
 
 @pytest.mark.asyncio
 async def test_router_switch_turn_off_exception(
     mock_coordinator, mock_config_entry, caplog
 ):
-    """Test ZTERouterSwitch.async_turn_off catches and logs exception."""
+    """A refused write must reach the user, not just the log.
+
+    This API answers `200 OK` for a command it declined, so a switch whose
+    failure is only logged looks to the user like one that quietly sprang
+    back. Asserted on `translation_key` rather than the message because a
+    translated exception resolves its text through `hass` at `str()` time,
+    which the mocked hass in this suite cannot do.
+    """
     mock_coordinator.api = MagicMock()
 
-    async def failing_setter(api, state):
+    async def failing_setter(api, state, data):
         raise ValueError("test turn off error")
 
     desc = ZTESwitchEntityDescription(
@@ -193,9 +215,14 @@ async def test_router_switch_turn_off_exception(
         setter_fn=failing_setter,
     )
     switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
-    await switch.async_turn_off()
-    assert "Failed to turn off" in caplog.text
+
+    with pytest.raises(HomeAssistantError) as err:
+        await switch.async_turn_off()
+
+    assert err.value.translation_key == "switch_set_failed"
+    assert "Failed to set" in caplog.text
     assert "odu_led_switch" in caplog.text
+    mock_coordinator.async_force_refresh.assert_not_called()
 
 
 def test_router_switch_device_info(mock_coordinator, mock_config_entry):
@@ -225,3 +252,28 @@ def test_pause_polling_switch_is_on(mock_coordinator, mock_config_entry):
     assert (
         switch.is_on is False
     )  # Because entry.options doesn't have CONF_STOP_POLLING=True
+
+
+def test_switch_unavailable_when_its_endpoint_is_degraded(
+    mock_coordinator, mock_config_entry
+):
+    """A switch reading from a degraded fetch would show a stale position."""
+    description = next(d for d in SWITCH_TYPES if d.key == "data_limit_switch")
+    mock_coordinator.last_update_success = True
+    mock_coordinator.endpoint_available.return_value = False
+    switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, description)
+    assert switch.available is False
+
+    mock_coordinator.endpoint_available.return_value = True
+    assert switch.available is True
+
+
+def test_switch_unavailable_when_the_whole_fetch_is_down(
+    mock_coordinator, mock_config_entry
+):
+    """A healthy endpoint cannot rescue an integration-wide outage."""
+    description = next(d for d in SWITCH_TYPES if d.key == "data_limit_switch")
+    mock_coordinator.last_update_success = False
+    mock_coordinator.endpoint_available.return_value = True
+    switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, description)
+    assert switch.available is False

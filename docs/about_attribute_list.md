@@ -12,7 +12,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 >
 > **These notes are never written to your database.** They are declared as _unrecorded attributes_, so Home Assistant shows them live in the entity's details but the recorder ignores them entirely — they cost nothing to carry, however often the entity updates. See `dev_standards.md` Section 14.
 
-**74 of the 82 entities carry a note.** The other 8 deliberately do not — a note on everything trains you to ignore notes. They are listed in full at the end, so the omissions stay visible and deliberate rather than looking like gaps.
+**84 of the 91 entities carry a note.** The other 7 deliberately do not — a note on everything trains you to ignore notes. They are listed in full at the end, so the omissions stay visible and deliberate rather than looking like gaps.
 
 ᴰ = **disabled by default.** Enable it from the entity's settings if you want it; it is hidden to keep the default entity list manageable.
 
@@ -20,11 +20,11 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 
 ## Contents
 
-- [🔧 System](#-system) — 21 entities
-- [📡 Signal](#-signal) — 39 entities
-- [📉 Data](#-data) — 12 entities
+- [🔧 System](#-system) — 28 entities
+- [📡 Signal](#-signal) — 40 entities
+- [📉 Data](#-data) — 14 entities
 - [💬 SMS](#-sms) — 2 entities
-- [🚫 Entities without a note](#-entities-without-a-note) — 8 entities
+- [🚫 Entities without a note](#-entities-without-a-note) — 7 entities
 
 ---
 
@@ -37,6 +37,7 @@ Router identity, firmware, uptime and the controls.
 | **5G Modem Temperature** ᴰ | Temperature reported by the 5G modem section. The vendor does not document how this differs from the 5G radio temperature; on hardware that populates both, compare them before relying on either. |
 | **5G Radio Temperature** ᴰ | Temperature of the 5G radio. The vendor does not document how this differs from the 5G modem temperature; on hardware that populates both, compare them before relying on either. |
 | **Ambient Modem Temperature** ᴰ | Internal air temperature inside the modem, away from the radio itself. Read alongside the power amplifier temperature it indicates whether the unit as a whole is running hot or just the transmitter. |
+| **APN Interface Version** ᴰ | Which version of the router's own APN configuration format is in use. Only of interest when an APN change is not taking effect. |
 | **Battery** ᴰ | Battery charge, on ZTE models that have one. A mains-powered unit such as the MC7010 has no battery yet still reports 100%, so the value means nothing unless your model actually has one. Disabled by default for that reason. |
 | **Device Uptime** | The moment the router last booted, held steady between reboots rather than recalculated each poll. It only moves when the router's own uptime counter drops, so a genuine restart is easy to trigger automations on. |
 | **Firmware Version** | The router's firmware build string. Worth recording before a firmware update, so you can tell what changed if the router starts behaving differently afterwards. |
@@ -55,6 +56,13 @@ Router identity, firmware, uptime and the controls.
 | **UPnP Enabled** ᴰ | Whether the router lets devices open their own inbound ports. Convenient for games and consoles, but it means any device on the network can expose itself without being asked. On a router in bridge mode this usually has no effect - your main firewall handles it. |
 | **Uptime Duration** ᴰ | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp, which is usually the easier one to automate against. |
 | **WAN IP Address** | The address your ISP has given the router on the mobile network - what the internet sees. Often a shared carrier-grade NAT address, which is why inbound connections and port forwarding usually do not work on mobile broadband. |
+
+| **Reboot Schedule** ᴰ | Whether the router reboots itself on its own schedule. The time it runs, and which day, are in the attributes exactly as the router reports them. This is the router's internal schedule and is separate from any reboot automation built in Home Assistant. |
+| **Router Timezone** ᴰ | The timezone the router keeps its own clock in, shown exactly as the router reports it. The format is the vendor's own and is not translated here, because guessing at it would risk stating the wrong offset. |
+| **WAN Fallback Mode** ᴰ | The mode the router falls back to on its own. It differing from the active mode is normal and not a fault. |
+| **WAN Operating Mode** ᴰ | Whether the router is passing traffic as a gateway of its own or bridging it straight through to equipment behind it. Changing this is deliberately not offered here: it alters the path this integration reaches the router over, so use the router's own web page where a mistake can still be undone. |
+| **Web Page Auto-Wake** ᴰ | Whether the router's web page wakes itself again after sleeping. Read-only for the same reason as the sleep setting. |
+| **Web Page Sleep** ᴰ | Whether the router puts its own web page to sleep after a period of inactivity. It does not affect this integration, which logs in afresh as needed. Changing it is not offered here because the router exposes no command for it. |
 
 ## 📡 Signal
 
@@ -102,6 +110,8 @@ Radio measurements and cell information. This is where the acronyms live.
 | **Signal Bars** | The router's own signal rating, 0 to 5, the same one shown on its web page. It is a coarse summary - for anything precise use RSRP or SINR, which is what the bars are derived from. |
 | **WAN Connect Status** | Whether the router currently has a data connection to the mobile network. This covers the mobile side only - it can report connected while the wider internet is unreachable. |
 
+| **Carrier Aggregation Secondary Cells** ᴰ | Raw description of the additional 4G carriers in use, as the router reports it - one group of comma-separated figures per secondary cell. The named Carrier Aggregation sensors are easier to read; this one is for when they do not cover what you need. |
+
 ## 📉 Data
 
 Usage counters and throughput.
@@ -117,6 +127,8 @@ Usage counters and throughput.
 | **Monthly Sent GB** ᴰ | Data uploaded this billing month, as counted by the router. This is the router's own counter, not your ISP's - it resets when the router says so and may not match your operator's billing exactly. |
 | **Monthly Total** | Combined monthly upload and download in bytes. The GB sensor is easier to read; this one avoids rounding in automations. |
 | **Monthly Total GB** ᴰ | Combined upload and download for the billing month - the figure to compare against a data cap. |
+| **Projected Cycle Usage** | An estimate of how much data you will have used by the end of the current billing cycle, if usage carries on at the rate it has so far. Early in a cycle there is little to go on, so the figure moves about - the attributes say how much of it rests on real usage. It is an estimate, not a prediction: a single large download early on will inflate it for a few days. |
+| **Reset Day** | The day of the month on which the router zeroes its monthly data counters. This is the router's own billing cycle, which need not start on the 1st - check it against your provider's bill. If your month is shorter than this day, the reset happens on the last day instead. |
 | **Session Received** | Data downloaded during the current session, reset on every router reboot. For billing, use the monthly sensors instead. |
 | **Session Sent** | Data uploaded during the current session - since the router last restarted, not since the start of the month. It resets to zero on every reboot. |
 | **Upload Speed** | Current upload rate. This is a snapshot taken at the moment the router was last polled, not an average - brief peaks between polls are not captured. |
@@ -134,7 +146,7 @@ Message storage and the most recent message.
 
 ## 🚫 Entities without a note
 
-These 8 entities carry no `about` attribute. That is a decision, not an oversight: where the entity's name already answers the question, a note adds noise and teaches you to skip reading them.
+These 7 entities carry no `about` attribute. That is a decision, not an oversight: where the entity's name already answers the question, a note adds noise and teaches you to skip reading them.
 
 | Entity | Group | Why no note |
 | :-- | :-- | :-- |
@@ -144,7 +156,6 @@ These 8 entities carry no `about` attribute. That is a decision, not an oversigh
 | **Last Updated** | System | Self-describing. |
 | **Model Name** | System | The value is the answer. |
 | **ODU LED Switch** ᴰ | System | Turns the outdoor unit's status LED on or off. Cosmetic; nothing depends on it. |
-| **Reboot Schedule** ᴰ | System | Reflects the router's own scheduled-reboot setting. |
 | **Unread Msg** | SMS | A count of unread SMS. |
 
 ---

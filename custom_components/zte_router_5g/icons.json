@@ -232,6 +232,9 @@
       },
       "system_apn_interface_version": {
         "default": "mdi:file-code-outline"
+      },
+      "data_projection": {
+        "default": "mdi:chart-timeline-variant"
       }
     },
     "button": {

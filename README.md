@@ -131,10 +131,43 @@ Monitor monthly data consumption, active session totals, and real-time upload/do
 - **Monthly Data Usage**: Track your monthly download, upload and total data usage. See the [Data Usage Alert](#-data-usage-alert) example.
 - **Session Usage**: Track your download and upload for this session (i.e. since last router restart).
 - **Download & Upload Speed**: Track your upload and download speeds. Note: This is valid, but only at the instant data was fetched from the router.
+- **Reset Day** (`sensor.zte_5g_data_reset_day`): The day of the month the router zeroes its counters. This is the router's own billing cycle and need not be the 1st - worth checking against your provider's bill.
+- **Projected Cycle Usage** (`sensor.zte_5g_data_projected_cycle_usage`): An estimate of where you will finish the cycle at your current rate. See [Understanding the usage projection](#understanding-the-usage-projection) below.
 
 ---
 
 </details>
+
+<br>
+
+#### Understanding the usage projection
+
+**Projected Cycle Usage** answers the question the monthly counters do not: _am I on course to exceed my allowance?_
+
+It is arithmetic, not a forecast. Usage so far is divided by the days elapsed in the current cycle, and that rate is carried across the days remaining. Two things are worth knowing before you build an automation on it.
+
+**It is least reliable at the start of a cycle, and it says so.** Two days in, the sensor has two days of evidence and 29 days to extrapolate across, so one large download distorts it. Rather than hide the value — an `unknown` on day one looks like a broken sensor — the caveat is published in the attributes:
+
+| Attribute | Meaning |
+| :-- | :-- |
+| `confidence` | `low`, `medium` or `high` — how much of the figure rests on observed usage rather than extrapolation. Reaches `high` around a quarter of the way through a cycle. |
+| `basis` | How the estimate was made. Currently always `run_rate_only`. |
+| `cycle_day` | Where you are in the cycle, e.g. `12 of 31`. |
+| `cycle_start` | The date the current cycle began. |
+
+If you automate on it, gate the automation on `confidence` so you are not paged on day two:
+
+```yaml
+condition:
+  - condition: state
+    entity_id: sensor.zte_5g_data_projected_cycle_usage
+    attribute: confidence
+    state: high
+```
+
+**It follows the router's cycle, not the calendar month.** The cycle boundary comes from **Reset Day**, so a cycle running the 15th to the 15th is handled correctly. Where the reset day is later than a short month allows — day 31 in February — the reset is taken as the last day of that month.
+
+The sensor is unavailable if the router's automatic monthly reset is switched off, because then the counters never roll over and there is no cycle to project against.
 
 <br>
 
@@ -336,10 +369,10 @@ This integration reports a lot of signal numbers. This section explains which on
 
 ### Start with two numbers
 
-| Look at | To answer | Entity |
-| :-- | :-- | :-- |
-| **SINR** (or **SNR**) | _How fast will this actually go?_ | `5G SNR`, `LTE SNR` |
-| **RSRP** | _Do I have coverage at all?_ | `5G RSRP`, `LTE RSRP` |
+| Look at               | To answer                         | Entity                |
+| :-------------------- | :-------------------------------- | :-------------------- |
+| **SINR** (or **SNR**) | _How fast will this actually go?_ | `5G SNR`, `LTE SNR`   |
+| **RSRP**              | _Do I have coverage at all?_      | `5G RSRP`, `LTE RSRP` |
 
 **SINR is the single most useful number.** It measures your signal against everything competing with it, and it tracks achievable throughput more closely than anything else the router reports.
 
@@ -352,12 +385,12 @@ They move independently, and that is the point:
 
 ### What the numbers mean
 
-| Metric | Excellent | Good | Fair | Poor |
-| :-- | :-- | :-- | :-- | :-- |
-| **RSRP** (dBm) | > −80 | −80 to −90 | −90 to −100 | < −100 |
-| **RSRQ** (dB) | > −10 | −10 to −15 | −15 to −20 | < −20 |
-| **SINR / SNR** (dB) | > 20 | 13 to 20 | 0 to 13 | < 0 |
-| **RSSI** (dBm) | > −65 | −65 to −75 | −75 to −85 | < −85 |
+| Metric              | Excellent | Good       | Fair        | Poor   |
+| :------------------ | :-------- | :--------- | :---------- | :----- |
+| **RSRP** (dBm)      | > −80     | −80 to −90 | −90 to −100 | < −100 |
+| **RSRQ** (dB)       | > −10     | −10 to −15 | −15 to −20  | < −20  |
+| **SINR / SNR** (dB) | > 20      | 13 to 20   | 0 to 13     | < 0    |
+| **RSSI** (dBm)      | > −65     | −65 to −75 | −75 to −85  | < −85  |
 
 RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
 
@@ -461,6 +494,8 @@ Several settings are exposed as control entities so you can drive them from dash
 ### 📈 Billing & Data Controls (Data Device)
 
 - **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`, _disabled by default_): Enable/disable the router's data limit settings.
+
+The billing cycle **Reset Day** is currently read-only. Change it from the router's own web page — the command that writes it also carries the data cap and the alert percentage, so writing it safely needs work not yet done.
 
 ### ✉️ SMS Management Controls (SMS Device)
 

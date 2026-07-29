@@ -79,7 +79,15 @@ def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
         "sms_sim_send_total",
         "sms_sim_draftbox_total",
         "sntp_server1",
+        "sntp_server2",
         "sntp_dst_enable",
+        # Projection context. `cycle_day` and `cycle_start` are static within a
+        # cycle and the other two describe how much of the state rests on
+        # observed data — none of it is a measurement whose history is wanted.
+        "confidence",
+        "basis",
+        "cycle_day",
+        "cycle_start",
     }
     assert emitted == set(ZTERouterSensor._unrecorded_attributes)
 

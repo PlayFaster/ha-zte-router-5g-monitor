@@ -31,6 +31,8 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 |  | Session Sent | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
 |  | Session Received | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
 |  | Data Volume Alert | 0 | 100 | Percentage threshold. |
+|  | Reset Day | 1 | 31 | Day of the month. A value outside this range is not a calendar date, whatever the router reports. |
+|  | Projected Cycle Usage | 0 | — | A projection cannot be negative. No upper bound: exceeding it is the very thing the sensor exists to warn about, so a ceiling would hide the case that matters. |
 | **Device** | Battery | 0 | 100 | Physical percentage bounds. |
 |  | Power Amplifier Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
 |  | Ambient Modem Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |

@@ -41,6 +41,10 @@ UPTIME_REBOOT_MARGIN = 30
 # failure is a whole-integration failure and belongs on the global path.
 ENDPOINT_SMS_CAPACITY = "sms_capacity"
 ENDPOINT_SMS_MESSAGES = "sms_messages"
+# The second half of the batch poll. Split off because the router bounds a GET
+# at ~2048 characters; optional because it carries only diagnostics and
+# disabled-by-default entities, so a failure must not blank Signal and Data.
+ENDPOINT_EXTENDED = "extended_data"
 
 # Keys the router is expected to return on every successful poll. Used only for
 # the Section 19 contract-drift check: a non-empty response in which none of
@@ -237,18 +241,31 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         return result
 
     async def _fetch_all(self) -> tuple[dict[str, Any], dict[str, Any], list[Any]]:
-        """Fetch the mandatory payload plus both optional endpoints.
+        """Fetch the mandatory payload plus all three optional endpoints.
 
         ``get_all_data`` is mandatory: its failure is a whole-integration
-        failure and falls through to the global strike handler. The two SMS
-        endpoints are optional and each carries its own last-good payload and
-        strike count, so one flaky endpoint degrades only the SMS entities
-        rather than blanking Signal and Data too (Section 8).
+        failure and falls through to the global strike handler. The other three
+        are optional and each carries its own last-good payload and strike
+        count, so one flaky endpoint degrades only its own entities rather than
+        blanking Signal and Data too (Section 8).
 
-        A ``ZTEAuthError`` from any of the three propagates, so the caller can
+        ``get_extended_data`` is the second half of the batch poll, split off
+        because the router bounds a GET at ~2048 characters. It is optional
+        because everything in it is a diagnostic or a disabled-by-default
+        entity: three cycles of held values, then those entities alone go
+        unavailable.
+
+        A ``ZTEAuthError`` from any of the four propagates, so the caller can
         renew the session and retry the whole set once.
         """
         data = await self.api.get_all_data()
+        # Merged under the core payload rather than over it, so a stale cached
+        # extended value can never mask a fresh core one if the two ever come
+        # to share a key.
+        extended = await self._fetch_optional(
+            ENDPOINT_EXTENDED, self.api.get_extended_data, {}
+        )
+        data = {**extended, **data}
         sms_cap = await self._fetch_optional(
             ENDPOINT_SMS_CAPACITY, self.api.get_sms_capacity, {}
         )
@@ -493,6 +510,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         friendly = {
             ENDPOINT_SMS_CAPACITY: "SMS storage capacity",
             ENDPOINT_SMS_MESSAGES: "SMS messages",
+            ENDPOINT_EXTENDED: "Extended diagnostics",
         }
         return [
             friendly.get(source, source)
