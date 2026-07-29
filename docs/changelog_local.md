@@ -4,6 +4,45 @@ All notable changes to this project will be documented in this file.
 
 > **Note on the `3.3.0` version tags.** The `3.3.0-dev*` and `3.3.0-rc*` entries below are kept as written, but **`3.3.0` was never released**. Its content shipped as part of `3.3.1`, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.1` and contains no `3.3.0` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
 
+## [3.3.1-dev7] - 2026-07-29 - Unreleased - No Manifest Bump - Dead-Session Fault-Injection Sweep
+
+The systematic guard behind `[3.3.1-dev6]`. Both silent-failure bugs in this class were found one at a time, by a user, after release. This makes the next one fail in CI instead.
+
+### Added
+
+- **`tests/test_dead_session_sweep.py`** (116 tests). Drives every public API method against three fault modes and asserts one property throughout: **a method either does the thing or raises — it may never return a success-shaped result having done nothing.**
+  - **`_DyingSession`** — session dies after _N_ requests (`N` = 0…3, so it dies at each point in a method's internal sequence). Exercises the expiry detection in `_request`.
+  - **`_RefusingSession`** — live session, `{"result":"failure"}` on writes. Exercises `_require_success`.
+  - **`_DriftingSession`** — a populated response missing the key the caller contracts for. Exercises `_require_contract`.
+- **Three drift guards**: `_CALLS` must name every public API method, `_WRITES` every write command, and `_BEST_EFFORT` is capped at five entries each needing a stated reason. **A new API method fails the suite the moment it exists** — which is the whole point of the file.
+- **`test_an_empty_inbox_is_not_an_error`** as a deliberate counterweight: without it, the drift test could be satisfied by making any empty result raise, which would break a router that genuinely has no messages. It pins the distinction the SMS fix rests on — `{"messages": []}` is an empty inbox, a missing `messages` key is a broken conversation.
+
+### Notes
+
+- **The first two versions of this file were worth nothing, and mutation testing is what proved it.** With only `_DyingSession`, deleting `_require_success` from `send_sms` left the suite **green**, and so did deleting `_require_contract` from `get_sms_messages`. Both blind for the same reason: on a dead session `_request` raises _upstream_, so neither guard is ever reached. A single fault mode could not exercise the code it claimed to cover. `_RefusingSession` and `_DriftingSession` exist solely because those mutations came back green.
+- **Mutation matrix, all caught, all reverted**: `_require_success` removed from `send_sms`; from `set_bearer_preference`; `_require_contract` removed from `get_sms_messages`; and the `last_activity` gate reverted to reproduce the original field bug.
+- The double deliberately serves `LD` and `wa_inner_version` even while dead, because the real hardware does — and that is precisely why those calls could reset the activity clock. Modelling them as dying would be a fault the router cannot produce.
+
+## [3.3.1-dev6] - 2026-07-29 - Unreleased - No Manifest Bump - Actions Silently Failed on an Expired Session
+
+**User-reported.** With Pause Polling on, `zte_router_5g.send_sms` reported success and no message arrived. Turning Pause Polling off and resending worked immediately. Two distinct defects, both shipped in **3.2.5**.
+
+### Fixed
+
+- **The session-activity clock was reset by calls that prove nothing.** `_request` stamped `last_activity` on **every** successful request, including unauthenticated ones. Every write calls `get_ad()` → `get_version()` first, and `get_version()` is unauthenticated — so it reset the clock immediately before the authenticated call that depended on it. The 150-second idle check then saw a session that had been idle for hours as "active 0 seconds ago", kept the stale `stok`, and the write went out on a dead session. **Only authenticated calls now count as activity**, because only they prove the session is alive. Present since `[3.1.1-dev4]`, so this shipped in 3.2.5.
+- **Write commands never checked whether the router accepted them.** `send_sms`, `reboot`, `delete_sms`, `set_apn`, `set_apn_mode`, `set_odu_led_switch`, `set_data_limit_switch` and `set_bearer_preference` all awaited the request and returned success unconditionally. This API answers `200 OK` with `{"result":"failure"}` for a refused write, so **a rejected command was reported to the user as success** — the green action screen with no SMS. New `_require_success()` is applied to all eight.
+- **`send_sms` did not refresh afterwards.** It was the only write action not calling `async_force_refresh()`, against the invariant stated in `AGENTS.md`. So even a successful send left the SMS counters and Recent Message frozen — and with Pause Polling on, frozen indefinitely.
+
+### Notes
+
+- **Live-hardware verification eliminated the leading hypothesis.** The suspicion was that `_request` retries a write payload verbatim after re-login, carrying an `AD` token derived from the dead session. Probing an MC7010 (`V1.0.0B03`) showed `RD` is a **static per-device seed**, so `AD` is constant for a given router and a retried payload is still valid. Full test plan and results: [`.notes/issues/silent_login_fail.md`](../.notes/issues/silent_login_fail.md).
+- **Reboot is deliberately not special-cased.** An earlier draft swallowed connection errors on `REBOOT_DEVICE`, on the theory that the router acknowledges then drops the link. An existing test caught it, and the test was right: that theory is untested, and a dropped link cannot be told from a router that was never reachable — so swallowing it would report "rebooted" for a command that never arrived, reintroducing the exact failure being removed. Reboot keeps its previous connection-error behaviour and gains only the refusal check.
+- **Static audit of all 20 `_request` call sites** found no further unguarded path. `get_all_data` relies solely on the all-empty detector, which is correct — it requests ~110 keys and has no single mandatory one. `get_rd`'s exception swallowing is now harmless: an empty `AD` makes the router refuse, and that refusal is now raised.
+
+### Not in the public changelog — decision needed
+
+Both defects were present in the released **3.2.5**, so by the "would a user on the last release have hit this?" test they qualify for a `Fixed` bullet in `CHANGELOG.md` `[3.3.1]`. Recorded here as an open decision rather than assumed either way.
+
 ## [3.3.1-dev5] - 2026-07-29 - Unreleased - No Manifest Bump - Thermal Set Completed to Five
 
 Completes the thermal telemetry set following independent verification of the source research. The set is now defined by a statable rule rather than by which keys the research document happened to name.
