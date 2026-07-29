@@ -5,12 +5,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.zte_router_5g import async_setup_entry, async_unload_entry
+from custom_components.zte_router_5g import (
+    _validate_sms_length,
+    async_setup_entry,
+    async_unload_entry,
+)
 from custom_components.zte_router_5g.api import ZTEAuthError
 from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
+    SMS_MAX_CHARS_GSM7,
+    SMS_MAX_CHARS_UNICODE,
 )
 from custom_components.zte_router_5g.coordinator import (
     ZTERouterDataUpdateCoordinator,
@@ -1084,3 +1091,44 @@ async def test_coordinator_sms_message_missing_id_handled(mock_hass, mock_config
 
         data = await coordinator._async_update_data()
         assert data["last_sms"]["number_decoded"] == "111"
+
+
+# --- SMS length: the limit depends on the encoding the text forces ----------
+
+
+def test_plain_text_may_use_the_full_gsm7_length():
+    """765 = 5 concatenated segments of 153 septets, as the router advertises."""
+    _validate_sms_length("A" * SMS_MAX_CHARS_GSM7)
+
+
+def test_plain_text_is_rejected_past_the_gsm7_limit():
+    """Beyond five segments the router's behaviour is untested; stay out of it."""
+    with pytest.raises(ServiceValidationError) as err:
+        _validate_sms_length("A" * (SMS_MAX_CHARS_GSM7 + 1))
+    assert err.value.translation_key == "sms_too_long"
+
+
+def test_unicode_gets_the_shorter_limit():
+    """One emoji forces UCS-2 for the whole message, at 67 chars per segment."""
+    message = "\U0001f4f6" + "A" * SMS_MAX_CHARS_UNICODE
+    with pytest.raises(ServiceValidationError) as err:
+        _validate_sms_length(message)
+    assert err.value.translation_key == "sms_too_long"
+
+
+def test_unicode_within_its_own_limit_is_accepted():
+    """335 = 5 x 67. Valid, even though it is far below the GSM-7 ceiling."""
+    _validate_sms_length("\U0001f4f6" + "A" * (SMS_MAX_CHARS_UNICODE - 1))
+
+
+def test_a_message_between_the_two_limits_turns_on_content_alone():
+    """The same length passes as plain text and fails with one emoji in it.
+
+    This is the whole point of validating per-message: a flat limit is either
+    too small for plain text or lets a Unicode message become several charged
+    segments without saying so.
+    """
+    length = SMS_MAX_CHARS_UNICODE + 10
+    _validate_sms_length("A" * length)
+    with pytest.raises(ServiceValidationError):
+        _validate_sms_length("\U0001f4f6" + "A" * (length - 1))

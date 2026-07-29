@@ -55,3 +55,18 @@ FETCH_STRIKE_LIMIT = 3
 # the condition has stopped resolving itself, which is what makes it worth a
 # Repair rather than just an unavailable entity (Section 19, second tier).
 UNREACHABLE_STRIKE_LIMIT = 10
+
+# SMS length ceilings, by the encoding the message forces.
+#
+# A single SMS carries 160 GSM 03.38 septets, or 70 UCS-2 characters. Longer
+# messages are split into concatenated segments, and each segment gives up
+# space to a header: 153 septets or 67 characters. The MC7010 web UI advertises
+# 765 for plain text, which is exactly 5 x 153 — so the router accepts at most
+# five segments, and the Unicode equivalent is 5 x 67.
+#
+# Enforced in `async_send_sms` rather than the service schema, because which
+# limit applies depends on the message content. Behaviour past five segments is
+# untested on hardware; these ceilings keep callers out of that zone.
+SMS_SEGMENTS_MAX = 5
+SMS_MAX_CHARS_GSM7 = 765
+SMS_MAX_CHARS_UNICODE = 335

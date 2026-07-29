@@ -6,15 +6,15 @@ This document provides a comprehensive list of all 81 entities currently impleme
 
 | Sub-Device | Entity Count | Description |
 | :-- | :-- | :-- |
-| **System** | 26 | Core router info and global integration settings. |
+| **System** | 27 | Core router info and global integration settings. |
 | **Signal** | 39 | Cellular connectivity, signal strength (LTE/5G), and network info. |
 | **Data** | 12 | Monthly and session traffic volume (Bytes and GB). |
 | **SMS** | 4 | Message counts and recent message content. |
-| **Total** | **81** |  |
+| **Total** | **82** |  |
 
 ---
 
-## 1. System Sub-Device (26 Entities)
+## 1. System Sub-Device (27 Entities)
 
 _Group: `system`_
 
@@ -41,6 +41,7 @@ _Group: `system`_
 | Reboot | `reboot` | Button | API Call: `REBOOT_DEVICE` | - | Control |  |
 | Pause Polling | `pause_polling` | Switch | Options: `stop_polling` | - | Config | State persists in `ConfigEntry.options`. |
 | Polling Interval | `polling_interval` | Number | Options: `scan_interval` | s | Config | Range: 30s - 3600s. Persists in options. |
+| Integration Health | `integration_health` | Binary | `coordinator.health_snapshot` | - | Diagnostic | ON when the integration detects a problem, including a poll that succeeds but returns nothing usable. Stays available during an outage, when other entities do not. Attributes carry the detail. |
 | Reboot Schedule | `reboot_schedule` | Binary | `reboot_schedule_enable` | - | Diagnostic | **Disabled by default.** Scheduled reboot active status. Extra attributes: hour, minute. |
 | UPnP Enabled | `upnp_enabled` | Binary | `upnp_enable` | - | Diagnostic | **Disabled by default.** UPnP active status. |
 | SIP ALG Enabled | `sip_alg_enabled` | Binary | `alg_sip_enable` | - | Diagnostic | **Disabled by default.** SIP ALG active status. |
@@ -55,8 +56,8 @@ _Group: `signal`_
 
 | Name | Key | Type | Source (Raw Key) | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| Connection Status | `wan_connect_status` | Sensor | `wan_connect_status` | - | Diagnostic |  |
-| Network APN | `wan_apn` | Sensor | `wan_apn` | - | Diagnostic |  |
+| WAN Connect Status | `wan_connect_status` | Sensor | `wan_connect_status` | - | Diagnostic |  |
+| Network APN | `wan_apn` | Sensor | `wan_apn` | - | Diagnostic | Data may not be available in all configurations. |
 | Network Type | `network_type` | Sensor | `network_type` | - | Sensor | e.g., LTE, ENDC, NR5G. |
 | Signal Bars | `signalbar` | Sensor | `signalbar` | - | Sensor | 0-5 scale. |
 | Network Provider | `network_provider` | Sensor | `network_provider` | - | Diagnostic |  |
@@ -77,13 +78,13 @@ _Group: `signal`_
 | LTE Secondary Bandwidth | `lte_ca_scell_bandwidth` | Sensor | `lte_ca_scell_bandwidth` | MHz | Diagnostic | **Disabled by default.** Data may not be available in all configurations. |
 | LTE Active Band | `wan_active_band` | Sensor | `wan_active_band` | - | Diagnostic |  |
 | LTE Active Channel | `wan_active_channel` | Sensor | `wan_active_channel` | - | Diagnostic |  |
-| 5G RSRP | `z5g_rsrp` | Sensor | `Z5g_rsrp` | dBm | Sensor | Range: -140 to -30. |
-| 5G RSRQ | `z5g_rsrq` | Sensor | `Z5g_rsrq` | dB | Sensor | Range: -40 to 0. |
-| 5G RSSI | `z5g_rssi` | Sensor | `Z5g_rssi` | dBm | Sensor | Range: -120 to -20. |
-| 5G SNR | `z5g_sinr` | Sensor | `Z5g_SINR` | dB | Sensor | Range: -20 to 50. |
-| 5G PCI | `nr5g_pci` | Sensor | `nr5g_pci` | - | Diagnostic |  |
-| 5G Active Band | `nr5g_action_band` | Sensor | `nr5g_action_band` | - | Diagnostic |  |
-| 5G Active Channel | `nr5g_action_channel` | Sensor | `nr5g_action_channel` | - | Diagnostic |  |
+| 5G RSRP | `z5g_rsrp` | Sensor | `Z5g_rsrp` | dBm | Sensor | Range: -140 to -30. Data may not be available in all configurations (no 5G attachment reports empty 5G metrics). |
+| 5G RSRQ | `z5g_rsrq` | Sensor | `Z5g_rsrq` | dB | Sensor | Range: -40 to 0. Data may not be available in all configurations (no 5G attachment reports empty 5G metrics). |
+| 5G RSSI | `z5g_rssi` | Sensor | `Z5g_rssi` | dBm | Sensor | Range: -120 to -20. Data may not be available in all configurations (no 5G attachment reports empty 5G metrics). |
+| 5G SNR | `z5g_sinr` | Sensor | `Z5g_SINR` | dB | Sensor | Range: -20 to 50. Data may not be available in all configurations (no 5G attachment reports empty 5G metrics). |
+| 5G PCI | `nr5g_pci` | Sensor | `nr5g_pci` | - | Diagnostic | Data may not be available in all configurations (no 5G attachment reports empty 5G metrics). |
+| 5G Active Band | `nr5g_action_band` | Sensor | `nr5g_action_band` | - | Diagnostic | Data may not be available in all configurations (no 5G attachment reports empty 5G metrics). |
+| 5G Active Channel | `nr5g_action_channel` | Sensor | `nr5g_action_channel` | - | Diagnostic | Data may not be available in all configurations (no 5G attachment reports empty 5G metrics). |
 | Legacy RSSI | `rssi` | Sensor | `rssi` | dBm | Sensor | **Disabled by default.** Data may not be available in all configurations. |
 | Legacy RSCP | `rscp` | Sensor | `rscp` | dBm | Sensor | **Disabled by default.** Data may not be available in all configurations. |
 | eNodeB ID | `enodeb_id` | Sensor | `enodeb_id` | - | Diagnostic | Serving cell tower identifier (hex string). |
@@ -127,7 +128,7 @@ _Group: `sms`_
 | Unread Msg | `sms_unread_num` | Sensor | `sms_unread_num` | - | Sensor |  |
 | Total Msg | `msg_total` | Sensor | Sum of all NV/SIM banks | - | Sensor | Includes attributes for each bank. |
 | Recent Msg | `msg_recent` | Sensor | `last_sms` content | - | Sensor | Content is hex-decoded from router. |
-| Delete All Msg | `delete_all` | Button | API Call: `DELETE_SMS` (batch) | - | Control |  |
+| Delete All | `delete_all` | Button | API Call: `DELETE_SMS` (batch) | - | Control |  |
 | Send Sms | `send_sms` | Service | — | — | — | Send an SMS message via the router. |
 | Delete Sms | `delete_sms` | Service | — | — | — | Delete an SMS message by its index. |
 | Delete All Sms | `delete_all_sms` | Service | — | — | — | Delete all SMS messages from the router inbox. |
@@ -238,4 +239,5 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.2.5-dev7** (2026-07-02) — Added the "Refresh Now" button (System sub-device) for on-demand coordinator refresh, raising total count from 75 to 76.
 - **v3.2.5-dev8** (2026-07-02) — Added suggested display units/precision to 16 sensors (data size → GB, data rate → Mbit/s, uptime duration → hours, bandwidth and dBm → 0 dp). No entity count change. Added the "Suggested Display Units & Precision" reference table.
 - **v3.2.5-dev9** (2026-07-03) — Documented unit displays for Data sub-device and System Uptime Duration; added SMS service definitions to the SMS sub-device table.
+- **v3.3.1** (2026-07-29) — Live reconciliation against the running instance via `sensor_review` (82 entities). Added the **Integration Health** binary sensor, which had never been documented. Renamed two rows to match HA: Connection Status -> WAN Connect Status, Delete All Msg -> Delete All. Corrected System 26 -> 27 and total 81 -> 82. Annotated the seven 5G signal metrics and Network APN as legitimately unavailable without a 5G attachment.
 - **v3.3.1** (2026-07-29) — Added five thermal diagnostic sensors (Power Amplifier, Ambient Modem, Modem, 5G Modem, 5G Radio temperatures), all disabled by default because the MC7010 does not populate any of them. System count 21 to 26, total 76 to 81.

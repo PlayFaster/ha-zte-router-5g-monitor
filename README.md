@@ -191,7 +191,7 @@ See [SMS Actions](#-sms-actions) below for more detail, and [SMS Examples](#-sms
 
 ## 🔍 What You Get
 
-This integration provides **75+ entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **82 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -211,13 +211,19 @@ This integration provides **75+ entities** (depending on your firmware) organize
 
 > [!TIP]
 >
-> **Not sure what a sensor does?** Many entities carry a short built-in **About** note. Click the sensor to open it, use the **⋮ (three-dots) menu → Details**, and look for the **`about`** attribute - a one-line explanation of that sensor.
+> **Not sure what a sensor does?** Most entities carry a short built-in **About** note. Click the sensor to open it, use the **⋮ (three-dots) menu → Details**, and look for the **`about`** attribute - a one-line explanation of that sensor.
 >
 > ![About Attribute Example](.github/images/zte_5g_about_attribute.png)
 >
 > That is where the acronyms are decoded: **RSRP**, **RSRQ**, **SINR**, **PCI**, **eNodeB**, **ENDC**, **APN** and the rest each explain themselves in place, so you do not have to look them up to read your own dashboard.
 >
 > These **About** notes - and all other attributes this integration publishes are set **unrecorded**. Home Assistant still shows them live in the entity's details, but **never writes them to the history/recorder database**. That keeps bulky or purely-informational values from bloating your database, with no downside to what you see day-to-day.
+
+---
+
+> [!NOTE]
+>
+> Entity Visibility: To keep your Home Assistant UI clean, some entities are disabled by default. You can enable them via the Entities tab in the device settings.
 
 ---
 
@@ -235,34 +241,6 @@ This integration provides **75+ entities** (depending on your firmware) organize
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-> [!NOTE]
->
-> Entity Visibility: To keep your Home Assistant UI clean, some entities are disabled by default. You can enable them via the Entities tab in the device settings.
-
-| Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
-| :-- | :-- | :-- | :-- |
-| ⚙️ **System** | 18 Sensors, 4 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+15) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, Power Amplifier Temp, Ambient Modem Temp, Modem Temp, 5G Modem Temp, 5G Radio Temp, Time Server (SNTP), ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
-| 📶 **Signal** | 35 Sensors, 1 Binary Sensor, 3 Selects (+7) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
-| 📈 **Data** | 11 Sensors, 1 Switch (+5) | Monthly Usage, Near-real-time Speed, Session Data, Data Limit Switch, Data Volume Alert | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
-| ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
-| 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
-
-> [!TIP]
->
-> **Clean up your UI: Disable Unnecessary Devices or Entities**
->
-> - If you never use the Router's SMS, you may not need the SMS sub-device.
-> - Devices can be disabled from the main device page: (⋮ menu) > **Disable Device** which also disables all the device entities.
-> - Individual entities can be disabled via their properties, or in bulk on the entities list page.
-
----
-
-Typical cases:
-
-- If you never use the Router's SMS, you may not care about the **SMS** sensors.
-- Not interested in data usage? You may not need the **Data** sub-device.
-- Not monitoring **signal metrics**? You may have no use for the **Signal** sub-device. …and so on.
-
 ### 1. Do nothing (the easy option)
 
 If you're simply not interested in some sensors, **you don't need to do anything - just ignore them.** The overhead is minimal (a disabled entity costs nothing; even an enabled one is just a row on a card). If in doubt, leave everything as-is.
@@ -272,7 +250,13 @@ If you're simply not interested in some sensors, **you don't need to do anything
 Use Home Assistant's built-in visibility controls - nothing specific to this integration:
 
 - **One sensor:** click the entity → **⚙️ (settings)** → turn **Enabled** off.
-- **A whole sub-device:** open its device page (e.g. _UniFi Network Speedtest_) → **⋮ menu → Disable device** - this disables every entity on that card at once.
+- **A whole sub-device:** open its device page (e.g. _ZTE 5G Data_) → **⋮ menu → Disable device** - this disables every entity on that card at once.
+
+Typical cases:
+
+- If you never use the Router's SMS, you may not care about the **SMS** sensors.
+- Not interested in data usage? You may not need the **Data** sub-device.
+- Not monitoring **signal metrics**? You may have no use for the **Signal** sub-device. …and so on.
 
 Disabled entities stay in the registry (greyed out) and can be re-enabled any time. This hides them from your UI; the integration still polls as normal.
 
@@ -426,7 +410,20 @@ Provides unread SMS count and latest message content sensors, a one-click **Dele
 | :-- | :-- | :-- |
 | `entry_id` | No | The router to use. Optional if only one router is configured. |
 | `target` | **Yes** | Recipient phone number(s) (e.g. `+353871234567`). |
-| `message` | **Yes** | Message content. |
+| `message` | **Yes** | Message content. Length limit depends on the characters used - see below. |
+
+> [!NOTE]
+>
+> **How long can a message be?** It depends on what is in it, not just how long it is.
+>
+> | Message contains | Fits in one SMS | Maximum accepted |
+> | :-- | :-- | :-- |
+> | Only standard characters (letters, digits, common punctuation) | **160** | **765** |
+> | Any emoji, curly quote, or other special character | **70** | **335** |
+>
+> A single special character changes the encoding for the **whole** message, which is why the second row is so much shorter. Longer messages are split into parts by the router and reassembled by the receiving phone, so they arrive as one message - but **your carrier charges for each part**. A 200-character plain-text alert is 2 parts; the same text with one emoji is 3.
+>
+> Going over the maximum is rejected with an error naming the limit that applied, rather than being silently cut short.
 
 ```yaml
 action: zte_router_5g.send_sms
@@ -1670,7 +1667,7 @@ This is a **personal project**. Support and updates are provided on a **"best-ef
 
 - 🙏 **[@william-aqn](https://github.com/william-aqn)** ([`huawei_lte_extended`](https://github.com/william-aqn/huawei_lte_extended)): The approach to expanded SMS service functionality, bus events, and inbox management is based on this work.
 
-- 🙏 **[Miononno](https://miononno.it/)**: Foundational community reverse-engineer whose browser inspector scripts and parameter mappings (`goformId` values, Z5g_rsrp and related signal keys, and the AD token derivation md5(md5(wa_inner_version + cr_version) + RD)) opened up the ZTE `goformId` interface for the MC-series 5G CPEs.
+- 🙏 **[Miononno](https://miononno.it/)**: Foundational community reverse-engineer whose browser inspector scripts and parameter mappings (`goformId` values, Z5g_rsrp and related signal keys, and the AD token derivation md5(md5(wa_inner_version + cr_version) + RD)) opened up the ZTE `goform` interface for the MC-series 5G CPEs.
 
 - 🙏 **[@rosenrot00](https://github.com/rosenrot00)** ([`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router)) & **[@juacas](https://github.com/juacas)** ([`zte_tracker`](https://github.com/juacas/zte_tracker)): For insights into ZTE's `ubus` JSON-RPC and Lua/XML API architectures across broader ZTE router families.
 

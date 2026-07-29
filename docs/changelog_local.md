@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 > **Note on the `3.3.0` version tags.** The `3.3.0-dev*` and `3.3.0-rc*` entries below are kept as written, but **`3.3.0` was never released**. Its content shipped as part of `3.3.1`, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.1` and contains no `3.3.0` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
 
+## [3.3.1-dev8] - 2026-07-29 - Unreleased - No Manifest Bump - Encoding-Aware SMS Length Limit
+
+The `send_sms` limit was a flat **160** in the service schema — an integration invention the router never saw, and wrong in both directions.
+
+### Changed
+
+- **The message limit now depends on the message.** `_validate_sms_length()` applies **765** characters when the text is entirely GSM 03.38, and **335** when anything in it forces UCS-2. Constants `SMS_MAX_CHARS_GSM7` / `SMS_MAX_CHARS_UNICODE` / `SMS_SEGMENTS_MAX` in `const.py`.
+- **Rejection is now explanatory.** The old failure was voluptuous' `length of value must be at most 160 for dictionary value @ data['message']. Got None` — which names no limit the router has, and whose "Got None" is a voluptuous artefact rather than a real value. A new translated `sms_too_long` `ServiceValidationError` names the actual length, the limit that applied, which encoding triggered it, and that removing emoji buys the longer one.
+
+### Why those numbers
+
+A single SMS carries 160 GSM-7 septets or 70 UCS-2 characters; concatenated segments give up 7 bytes each to a header, leaving 153 and 67. The MC7010 web UI advertises `(765) (1/5)` for plain text — exactly 5 x 153, confirming a five-segment ceiling, so the Unicode equivalent is 5 x 67 = 335. Behaviour past five segments is untested, and the limit keeps callers out of it.
+
+Validation lives in `async_send_sms`, not the schema, because which limit applies is only knowable from the message content. The schema keeps the absolute ceiling so a wildly oversized payload is still refused early.
+
+**Live-confirmed (2026-07-29):** a 159-character plain message and an 80-character message with three emoji each arrived as **one** message on the handset. The router segments and the phone reassembles — nothing is truncated. The practical effect of the GSM-7 change in `[3.3.1-dev2]` is therefore **fewer billable segments**, not more characters: a 159-character plain message was 3 Unicode segments before and is 1 now.
+
+### Documentation
+
+- **`README.md`**: a limits table under `send_sms`, that one special character changes the encoding for the whole message, and that carriers charge per segment.
+- **`docs/zte_how_to_access.md`**: new "`encode_type` and message length" section — the segment arithmetic, the `MessageBody`-stays-UTF-16BE rule with its two independent sources, and the hardware confirmation. `SEND_SMS` table row corrected: `encode_type` is no longer hardcoded to `UNICODE`.
+- **`AGENTS.md`**: the content-dependent limit and why it is not in the schema.
+
 ## [3.3.1-dev7] - 2026-07-29 - Unreleased - No Manifest Bump - Dead-Session Fault-Injection Sweep
 
 The systematic guard behind `[3.3.1-dev6]`. Both silent-failure bugs in this class were found one at a time, by a user, after release. This makes the next one fail in CI instead.

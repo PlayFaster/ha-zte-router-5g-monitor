@@ -17,8 +17,15 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
-from .const import DOMAIN, LIVE_OPTION_KEYS
+from .const import (
+    DOMAIN,
+    LIVE_OPTION_KEYS,
+    SMS_MAX_CHARS_GSM7,
+    SMS_MAX_CHARS_UNICODE,
+    SMS_SEGMENTS_MAX,
+)
 from .coordinator import ZTERouterDataUpdateCoordinator
+from .helpers import is_gsm7
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,7 +33,12 @@ SERVICE_SEND_SMS_SCHEMA = vol.Schema(
     {
         vol.Optional("entry_id"): str,
         vol.Required("target"): vol.All(cv.ensure_list, [str]),
-        vol.Required("message"): vol.All(str, vol.Length(min=1, max=160)),
+        # The absolute ceiling only. Which limit actually applies depends on
+        # whether the text forces UCS-2, so the real check lives in
+        # `async_send_sms` where the message content is known.
+        vol.Required("message"): vol.All(
+            str, vol.Length(min=1, max=SMS_MAX_CHARS_GSM7)
+        ),
     }
 )
 
@@ -112,11 +124,41 @@ def _get_coordinator(
     )
 
 
+def _validate_sms_length(message: str) -> None:
+    """Reject a message longer than the router will carry, before sending it.
+
+    Which ceiling applies depends on the content: a message drawn entirely
+    from the GSM 03.38 alphabet is packed as septets and fits far more than
+    one containing a single emoji or curly quote, which forces UCS-2 for the
+    whole message. A flat limit is wrong in both directions — too small for
+    plain text, and large enough to let a Unicode message silently become
+    several charged segments.
+
+    `ServiceValidationError` rather than `HomeAssistantError`: the caller got
+    the call wrong and can fix it (dev_standards Section 9).
+    """
+    gsm7 = is_gsm7(message)
+    limit = SMS_MAX_CHARS_GSM7 if gsm7 else SMS_MAX_CHARS_UNICODE
+    if len(message) <= limit:
+        return
+    raise ServiceValidationError(
+        translation_domain=DOMAIN,
+        translation_key="sms_too_long",
+        translation_placeholders={
+            "length": str(len(message)),
+            "limit": str(limit),
+            "encoding": "GSM-7" if gsm7 else "Unicode",
+            "segments": str(SMS_SEGMENTS_MAX),
+        },
+    )
+
+
 async def async_send_sms(hass: HomeAssistant, call: ServiceCall) -> None:
     """Service to send an SMS."""
     coordinator = _get_coordinator(hass, call.data)
     target = call.data["target"]
     message = call.data["message"]
+    _validate_sms_length(message)
 
     try:
         for num in target:

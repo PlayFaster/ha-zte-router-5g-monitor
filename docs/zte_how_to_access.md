@@ -227,7 +227,7 @@ All are `POST`, all carry `Content-Type: application/x-www-form-urlencoded`, all
 | `LOGIN` / `LOGIN_MULTI_USER` | Authenticate | `password`, optional `username` | `api.py:287` |
 | `LOGOUT` | End the session | — (but **`AD` is required**) | `api.py:391` |
 | `REBOOT_DEVICE` | Reboot the router | — | `api.py:584` |
-| `SEND_SMS` | Send a message | `Number`, `MessageBody` (UTF-16BE hex), `encode_type=UNICODE`, `ID=-1`, `sms_time`, `notCallback=true` | `api.py:635` |
+| `SEND_SMS` | Send a message | `Number`, `MessageBody` (UTF-16BE hex), `encode_type` (`GSM7_default` or `UNICODE`), `ID=-1`, `sms_time`, `notCallback=true` | `api.py:send_sms` |
 | `DELETE_SMS` | Delete one or more messages | `msg_id` — semicolon-separated for a batch | `api.py:596` |
 | `APN_PROC_EX` | Set default APN profile, or switch auto/manual | `apn_mode`, `apn_action`, `set_default_flag`, `pdp_type`, `index` | `api.py:721`, `api.py:737` |
 | `ODU_LED_SWITCH_SET` | Outdoor-unit LED on/off | `ODU_led_switch` (`1`/`0`) | `api.py:749` |
@@ -270,6 +270,23 @@ Documented for reference — these exist on the interface but are deliberately n
 ## ⚠️ Gotchas
 
 Behaviors of this interface that have cost real debugging time.
+
+### `encode_type` and message length
+
+`encode_type` selects the **encoding the router declares on the wire** — it does _not_ change the format of `MessageBody`, which this API always takes as **UTF-16BE hex regardless**. Verified against two independent implementations (`Kajkac/pygsm7.py::encodeMessage()`, `rosenrot00/zte_api.py::_encode_sms_message()`), both of which hex-encode UTF-16 code units for either type. **Do not "fix" a `GSM7_default` send by packing 7-bit septets client-side.**
+
+What it does change is how the router counts segments:
+
+| `encode_type` | Single SMS | Per concatenated segment | Router maximum (5 segments) |
+| :-- | :-- | :-- | :-- |
+| `GSM7_default` | 160 septets | 153 | **765** |
+| `UNICODE` | 70 characters | 67 | **335** |
+
+Concatenated segments give up 7 bytes each to a header, which is why the per-segment figure is lower than the single-message one. The MC7010 web UI advertises `(765) (1/5)` for plain text — exactly 5 x 153, confirming the five-segment ceiling.
+
+Pick the type from the message content: if every character is in the GSM 03.38 alphabet, `GSM7_default`; otherwise `UNICODE`. **One out-of-alphabet character changes the encoding for the entire message**, so a single emoji cuts the ceiling from 765 to 335. Behaviour past five segments is untested — `async_send_sms` rejects it rather than finding out.
+
+Confirmed on hardware (2026-07-29): a 159-character plain message and an 80-character message with three emoji both arrived as **one** message on the handset, so the router segments and the phone reassembles. Nothing is truncated.
 
 **Everything fails soft.** An unknown `cmd`, a missing `AD`, an expired session — none of these produce an HTTP error. You get `200 OK` with an empty field, a `{"result":"failure"}`, or a body of blank strings. **Never treat a 200 as success on this API.** Check the body shape every time.
 

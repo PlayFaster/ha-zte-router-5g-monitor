@@ -8,7 +8,8 @@ All notable changes to this project will be documented in this file.
 
 - Most entities now carry a short built-in explanation of what the value means — and for signal metrics, what counts as good, fair or poor.
 - New **Integration Health** sensor: tells you when the integration is running fine but the data coming back from the router is not.
-- SMS actions no longer report an empty inbox when the router has quietly ended the integration's session, and plain-text messages now fit 160 characters instead of 70.
+- Actions no longer report success without doing anything when the router has quietly ended the integration's session — the case where an SMS appeared to send but never arrived.
+- Plain-text SMS messages can now be much longer, and are often sent as one message where they used to be split into several.
 - Broader support for other ZTE `goform` routers, plus a new repair alert when the router has been unreachable for a long stretch.
 - Ready for Home Assistant 2026.8.
 
@@ -25,7 +26,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Plain-text SMS now fit 160 characters instead of 70**: messages using only standard characters are sent as GSM-7; anything with an emoji, curly quote or other special character still uses Unicode at 70. Chosen automatically per message — nothing to configure.
+- **Longer SMS messages, and fewer of them**: messages using only standard characters are now sent in the more efficient encoding, so up to **765** characters are accepted instead of a flat 160 — and a message that used to be split into three charged parts may now be sent as one. Anything containing an emoji, curly quote or other special character uses the other encoding and is limited to **335**. Chosen automatically per message, with nothing to configure. Going over the limit now gives a clear error naming the limit that applied, instead of a confusing validation message.
 - **Wider ZTE model support**: signal and data-usage sensors now recognise the alternative field names used by other `goform` routers, the login falls back to the other form when a model rejects the first, and the LTE/5G band name is worked out from the channel number when the router leaves it blank. **No effect on the MC7010**, which is unchanged in every case — this is about the integration working on more hardware, not working differently on yours.
 - **Diagnostic attributes are no longer written to history**: attributes on the SMS totals and SNTP sensors, and on the new health sensor, are excluded from the recorder database. They are still visible in Developer Tools and usable in templates — they are simply no longer stored, which keeps the database smaller. If you were graphing one of these attributes, it will stop accumulating history.
 - **Ready for Home Assistant 2026.8**: adapted to the device-registry changes in that release. No minimum-version change — the integration still supports 2024.8.0 and works on both old and new.
@@ -34,6 +35,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **Actions could report success without actually doing anything**: the router quietly ends the integration's session after a few minutes of no contact, which happens routinely while Pause Polling is on. When that had happened, sending an SMS, deleting one, rebooting, or changing a setting could show a success message while nothing at all reached the router. The most visible case was sending an SMS: the action went green and no message ever arrived. The integration now notices the session has gone and signs back in before acting, and it reads the router's reply instead of assuming the action worked — so a refused command now reports an error. Sending an SMS also updates the message counters straight away, which it previously did not.
 - **SMS actions could wrongly report an empty inbox**: this router allows only one login session, so logging into its web page ends the integration's. When that happened the router answered normally but with empty values, which the integration read as "no messages" rather than "no session" — so `get_sms_list` returned nothing while messages were sitting on the router. It now detects this, logs back in and retries.
 
 _Full technical detail for every change in this release is in [`docs/changelog_local.md`](docs/changelog_local.md)._

@@ -320,6 +320,9 @@
     "multiple_entries": {
       "message": "More than one ZTE router is configured. Specify which one to use with the entry_id field."
     },
+    "sms_too_long": {
+      "message": "The message is {length} characters, but this router accepts at most {limit} when the text needs {encoding} encoding ({segments} segments). Shorten it, or remove any emoji and special characters to get the longer GSM-7 limit."
+    },
     "send_sms_failed": {
       "message": "Failed to send the SMS: {error}"
     },
