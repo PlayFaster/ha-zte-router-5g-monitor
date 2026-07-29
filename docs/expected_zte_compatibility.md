@@ -36,7 +36,7 @@ The following ZTE 5G and 4G CPE models use the **ZTE `goform` HTTP API** (`gofor
 
 ### 2. 4G LTE CPEs & Modems
 
-- **ZTE MF266** (LTE Outdoor CPE)
+- **ZTE MF266** (LTE Outdoor CPE) — an alternative dedicated integration also exists: [`teixeluis/zte-lte-modem`](https://github.com/teixeluis/zte-lte-modem).
 - **ZTE MF286 / MF286D / MF289F** (LTE Indoor Routers)
 - Other ZTE 4G/5G CPE modems using the `goform` web interface.
 
@@ -45,6 +45,15 @@ The following ZTE 5G and 4G CPE models use the **ZTE `goform` HTTP API** (`gofor
 1. **Shared Batch Endpoint**: They respond to `GET goform_get_cmd_process?multi_data=1&cmd=...` with flat JSON objects.
 2. **Identical Login Challenge**: They utilize the `LD` token salt challenge + double SHA-256 password hash + `stok` cookie.
 3. **Built-in `AD` Token branching**: ZRM automatically switches between MD5 (MC7010/MC801) and SHA-256 (MC888/MC889) based on the router's firmware version string.
+
+#### What ZRM does to accommodate them (added 3.3.1)
+
+- **Alternative field names**: the same measurement is spelled differently across firmware releases. Signal and data-usage sensors try each known spelling in turn and take whichever the router populated — `Z5g_rsrp` / `5g_rsrp` / `nr5g_rsrp`, `Z5g_SINR` / `Z5g_snr`, `nr5g_pci` / `Z5g_CELL_ID`, `monthly_*_bytes` / `flux_monthly_*_bytes`. The MC7010 spelling is always tried first, so its behaviour is unchanged.
+- **Login form fallback**: which form a `goform` router accepts is a per-model quirk, and the tested-model list covers only MC801 and MC7010. If the first form yields no session, ZRM retries once with the other (`LOGIN` ↔ `LOGIN_MULTI_USER`). A credentials rejection is **not** retried — a wrong password is wrong on either form, and a second attempt only counts against routers that lock out.
+- **Band name from channel number**: where a router reports `wan_active_channel` / `nr5g_action_channel` but leaves the band name blank, ZRM derives it from the 3GPP EARFCN/NR-ARFCN tables. A band name the router reports always wins. NR ranges overlap (n78 sits inside n77), so the derived NR band is best-effort.
+- **Optional thermal telemetry**: five temperature sensors (`pm_sensor_pa1`, `pm_sensor_ambient`, `pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`), all **disabled by default**. The MC7010 returns an empty value for every one and no model is yet confirmed to populate them.
+
+> [!NOTE] **None of the above is verified on hardware.** It is derived from other open-source `goform` projects and from published 3GPP tables. Every path tries the MC7010 behaviour first, so the realistic failure mode on an untested model is that a fallback quietly does nothing — not that anything regresses on a tested one. Reports from other models are welcome.
 
 ---
 
@@ -91,5 +100,5 @@ ZRM will **NOT** work with the following router families because they use fundam
 ## 📚 Related Documents
 
 - [`zte_how_to_access.md`](zte_how_to_access.md) — Technical reference for the ZTE `goform` HTTP API, login challenge, and `AD` tokens.
-- [`all_sensors.md`](all_sensors.md) — Complete inventory of the 76 entities provided by ZRM.
+- [`all_sensors.md`](all_sensors.md) — Complete inventory of the entities provided by ZRM, and the authoritative source for the count.
 - [`DEVELOPMENT.md`](DEVELOPMENT.md) — Architecture, devcontainer setup, and DataUpdateCoordinator resilience rules.

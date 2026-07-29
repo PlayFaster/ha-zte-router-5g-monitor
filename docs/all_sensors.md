@@ -1,6 +1,6 @@
 # ZTE Router 5G Integration - Entity Manifest
 
-This document provides a comprehensive list of all 76 entities currently implemented in the ZTE Router 5G integration. It serves as a master reference for debugging, maintenance, and future development.
+This document provides a comprehensive list of all 81 entities currently implemented in the ZTE Router 5G integration. It serves as a master reference for debugging, maintenance, and future development.
 
 ## Summary
 
@@ -14,7 +14,7 @@ This document provides a comprehensive list of all 76 entities currently impleme
 
 ---
 
-## 1. System Sub-Device (21 Entities)
+## 1. System Sub-Device (26 Entities)
 
 _Group: `system`_
 

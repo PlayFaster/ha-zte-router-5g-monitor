@@ -2,6 +2,8 @@
 
 All notable changes to this project will be documented in this file.
 
+> **Note on the `3.3.0` version tags.** The `3.3.0-dev*` and `3.3.0-rc*` entries below are kept as written, but **`3.3.0` was never released**. Its content shipped as part of `3.3.1`, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.1` and contains no `3.3.0` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
+
 ## [3.3.1-dev5] - 2026-07-29 - Unreleased - No Manifest Bump - Thermal Set Completed to Five
 
 Completes the thermal telemetry set following independent verification of the source research. The set is now defined by a statable rule rather than by which keys the research document happened to name.

@@ -1034,3 +1034,161 @@ async def test_get_all_data_params_have_no_duplicates(mock_aiohttp_client):
     requested = _requested_params(mock_aiohttp_client)
     duplicates = {key for key in requested if requested.count(key) > 1}
     assert not duplicates, f"duplicated batch-poll keys: {sorted(duplicates)}"
+
+
+# --- Session activity clock: only authenticated calls count -----------------
+
+
+@pytest.mark.asyncio
+async def test_unauthenticated_call_does_not_refresh_the_session_clock(
+    mock_aiohttp_client,
+):
+    """Regression: an action after a long pause used to reuse a dead session.
+
+    Every write calls `get_ad()` -> `get_version()` first, and `get_version()`
+    is unauthenticated. When that stamped `last_activity`, the idle check on
+    the very next authenticated call saw a session that had been idle for
+    hours as "active 0 seconds ago" and kept the stale `stok`. Reported from
+    the field: with Pause Polling on, `send_sms` reported success and no
+    message arrived.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=stale"
+    stale = datetime.now(UTC) - timedelta(seconds=10_000)
+    api.last_activity = stale
+
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"wa_inner_version": "MC7010_V1"}
+    )
+    await api.get_version()
+
+    assert api.last_activity == stale, (
+        "an unauthenticated call must not count as session activity"
+    )
+
+
+@pytest.mark.asyncio
+async def test_authenticated_call_does_refresh_the_session_clock(mock_aiohttp_client):
+    """The other half: a real authenticated call proves the session is alive."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=live"
+    stale = datetime.now(UTC) - timedelta(seconds=10)
+    api.last_activity = stale
+
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"RD": "abc"})
+    await api.get_rd()
+
+    assert api.last_activity > stale
+
+
+@pytest.mark.asyncio
+async def test_idle_session_is_reset_before_a_write_after_a_long_pause(
+    mock_aiohttp_client,
+):
+    """End-to-end shape of the reported bug: pause, idle out, then send."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=stale"
+    api.last_activity = datetime.now(UTC) - timedelta(seconds=10_000)
+
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"wa_inner_version": "MC7010_V1", "RD": "abc", "LD": "LD"}
+    )
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "success"}
+    )
+
+    with patch.object(api, "login", return_value="stok=fresh") as mock_login:
+        await api.send_sms("+123456", "Hello")
+
+    assert mock_login.called, "a write after a long pause must re-authenticate"
+
+
+# --- Write commands must not report a refused command as success ------------
+
+_WRITE_CALLS = [
+    ("send_sms", ("+123456", "Hello")),
+    ("delete_sms", ("1",)),
+    ("set_apn", (1, "IP")),
+    ("set_apn_mode", ("auto",)),
+    ("set_odu_led_switch", ("1",)),
+    ("set_data_limit_switch", ("1",)),
+    ("set_bearer_preference", ("Only_5G",)),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method", "args"), _WRITE_CALLS)
+async def test_write_commands_raise_when_the_router_refuses(
+    mock_aiohttp_client, method, args
+):
+    """A refused write comes back as 200 OK with `result=failure`.
+
+    Without an explicit check every one of these reported success while the
+    router did nothing — the failure mode the user actually hit.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+
+    with patch.object(api, "get_ad", return_value="ad"):
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "failure"}, status=200
+        )
+        with pytest.raises(ZTEConnectionError, match="rejected"):
+            await getattr(api, method)(*args)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("method", "args"), _WRITE_CALLS)
+async def test_write_commands_accept_success(mock_aiohttp_client, method, args):
+    """The happy path must stay quiet."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+
+    with patch.object(api, "get_ad", return_value="ad"):
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "success"}, status=200
+        )
+        await getattr(api, method)(*args)
+
+
+def test_require_success_ignores_a_non_dict_response():
+    """Some endpoints answer with a list; there is no result to check."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    api._require_success(["not", "a", "dict"], "SOME_CMD")
+    api._require_success(None, "SOME_CMD")
+
+
+@pytest.mark.asyncio
+async def test_write_commands_tolerate_a_response_with_no_result_key(
+    mock_aiohttp_client,
+):
+    """Not every goformId returns `result`; absence must not become an error."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+
+    with patch.object(api, "get_ad", return_value="ad"):
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"apn_mode": "auto"}, status=200
+        )
+        await api.set_apn_mode("auto")
+
+
+# --- Reboot ----------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reboot_still_raises_on_an_explicit_refusal(mock_aiohttp_client):
+    """An intact `result=failure` means the router declined, not that it restarted."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+
+    with patch.object(api, "get_ad", return_value="ad"):
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "failure"}, status=200
+        )
+        with pytest.raises(ZTEConnectionError, match="rejected"):
+            await api.reboot()

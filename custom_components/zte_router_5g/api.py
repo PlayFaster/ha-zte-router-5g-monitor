@@ -102,6 +102,31 @@ class ZTERouterAPI:
                 f"{list(data)[:6] if isinstance(data, dict) else type(data).__name__}"
             )
 
+    def _require_success(self, data: Any, cmd: str) -> None:
+        """Fail loudly when the router declines a write command.
+
+        This API never signals a rejected write with an HTTP status: it
+        answers ``200 OK`` with ``{"result":"failure"}`` and does nothing
+        (see ``docs/zte_how_to_access.md`` — "never treat a 200 as success").
+        Without this check a stale ``AD`` token, an expired session or a
+        malformed payload all surface to the user as a successful action.
+
+        Only an explicit non-success ``result`` is treated as failure. A
+        response with no ``result`` key at all is left alone: not every
+        ``goformId`` returns one, and inventing a requirement would turn
+        working commands into errors.
+        """
+        if not isinstance(data, dict):
+            return
+        result = data.get("result")
+        if result is None:
+            return
+        if str(result).lower() not in ("success", "0", "ok"):
+            raise ZTEConnectionError(
+                f"Router rejected {cmd}: result={result!r}. The command was not "
+                f"carried out — this API answers 200 OK for a refused write."
+            )
+
     def _parse_date(self, date_str: str) -> str | None:
         if not date_str:
             return None
@@ -293,7 +318,17 @@ class ZTERouterAPI:
                     )
                 raise ZTEAuthError("Session expired/unauthorized")
 
-        self.last_activity = datetime.now(UTC)
+        # Only an authenticated call proves the session is still alive, so only
+        # one counts as activity. Unauthenticated endpoints (`LD`, `RD`'s
+        # sibling `wa_inner_version`) answer perfectly well with a dead
+        # session — letting them stamp this clock told the idle check below
+        # that a long-idle session was fresh, so the stale `stok` was never
+        # cleared. Every write action calls `get_ad()` -> `get_version()`
+        # first, so an action taken after a pause was exactly the case that
+        # broke: the unauthenticated version fetch reset the clock immediately
+        # before the authenticated call that needed it.
+        if authenticated:
+            self.last_activity = datetime.now(UTC)
         return resp_json
 
     async def try_set_protocol(self, timeout_sec: int = 5) -> None:
@@ -695,15 +730,25 @@ class ZTERouterAPI:
         return msg_out
 
     async def reboot(self) -> int:
-        """Execute a device reboot."""
+        """Execute a device reboot.
+
+        A connection error still propagates, exactly as before. It is tempting
+        to swallow it on the theory that the router acknowledges and then
+        drops the link — but that is untested speculation, and it cannot be
+        told apart from a router that was simply unreachable. Swallowing it
+        would report "rebooted" for a router that never received the command,
+        reintroducing the silent-success failure this check exists to remove.
+        An intact ``{"result":"failure"}`` is a refusal and is raised.
+        """
         ad = await self.get_ad()
         payload = f"isTest=false&goformId=REBOOT_DEVICE&AD={ad}"
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
-        await self._request(
+        res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._require_success(res, "REBOOT_DEVICE")
         return 200
 
     async def delete_sms(self, msg_id: str) -> int:
@@ -713,9 +758,10 @@ class ZTERouterAPI:
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
-        await self._request(
+        res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._require_success(res, "DELETE_SMS")
         return 200
 
     async def delete_all(self) -> int:
@@ -778,9 +824,10 @@ class ZTERouterAPI:
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
-        await self._request(
+        res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._require_success(res, "SEND_SMS")
         return 200
 
     async def get_sms_messages(
@@ -856,6 +903,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._require_success(res, "APN_PROC_EX")
         return cast(dict[str, Any], res)
 
     async def set_apn_mode(self, mode: str) -> dict[str, Any]:
@@ -868,6 +916,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._require_success(res, "APN_PROC_EX")
         return cast(dict[str, Any], res)
 
     async def set_odu_led_switch(self, status: str) -> dict[str, Any]:
@@ -882,6 +931,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._require_success(res, "ODU_LED_SWITCH_SET")
         return cast(dict[str, Any], res)
 
     async def set_data_limit_switch(self, status: str) -> dict[str, Any]:
@@ -897,6 +947,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._require_success(res, "DATA_LIMIT_SETTING")
         return cast(dict[str, Any], res)
 
     async def set_bearer_preference(self, preference: str) -> dict[str, Any]:
@@ -912,4 +963,5 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._require_success(res, "SET_BEARER_PREFERENCE")
         return cast(dict[str, Any], res)

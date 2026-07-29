@@ -2,13 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.3.0] - 2026-07-27 - Release
+## [3.3.1] - 2026-07-29 - Release
 
 ### Summary
 
+- Most entities now carry a short built-in explanation of what the value means — and for signal metrics, what counts as good, fair or poor.
 - New **Integration Health** sensor: tells you when the integration is running fine but the data coming back from the router is not.
-- SMS actions no longer report an empty inbox when the router has quietly ended the integration's session.
-- New repair alert when the router has been unreachable for a long stretch.
+- SMS actions no longer report an empty inbox when the router has quietly ended the integration's session, and plain-text messages now fit 160 characters instead of 70.
+- Broader support for other ZTE `goform` routers, plus a new repair alert when the router has been unreachable for a long stretch.
 - Ready for Home Assistant 2026.8.
 
 ### ⚠️ Action Required
@@ -18,12 +19,17 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Integration Health sensor**: a new diagnostic binary sensor on the System device that turns on when the integration detects a problem — including the case where a fetch _succeeds_ but returns nothing usable, which nothing else catches. Attributes carry the detail: `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, `last_good_update` and `consecutive_failures`. Raises a repair when the router's firmware appears to have renamed the fields the integration reads.
+- **Built-in explanations on entities**: 68 entities now carry an `about` attribute — a plain sentence saying what the value is. Click the entity, then **⋮ → Details**. Signal metrics also give typical ranges ("better than -80 excellent, -80 to -90 good…"), which is usually the real question when siting a router. Deliberately not on every entity: self-explanatory ones were left alone. The note is never written to history, so it costs nothing to carry.
 - **Router Unreachable repair**: after 10 consecutive failed fetches, a repair appears in the Repairs panel. Set deliberately well above the 3 failures that mark entities unavailable, so an ordinary router reboot never triggers it.
+- **Five temperature sensors**, all **disabled by default**: Power Amplifier, Ambient Modem, Modem, 5G Modem and 5G Radio. The MC7010 does not report any of them and no ZTE model is yet confirmed to — they are here for hardware that does. Enable them from the System device's entity list if your router populates them.
 
 ### Changed
 
+- **Plain-text SMS now fit 160 characters instead of 70**: messages using only standard characters are sent as GSM-7; anything with an emoji, curly quote or other special character still uses Unicode at 70. Chosen automatically per message — nothing to configure.
+- **Wider ZTE model support**: signal and data-usage sensors now recognise the alternative field names used by other `goform` routers, the login falls back to the other form when a model rejects the first, and the LTE/5G band name is worked out from the channel number when the router leaves it blank. **No effect on the MC7010**, which is unchanged in every case — this is about the integration working on more hardware, not working differently on yours.
 - **Diagnostic attributes are no longer written to history**: attributes on the SMS totals and SNTP sensors, and on the new health sensor, are excluded from the recorder database. They are still visible in Developer Tools and usable in templates — they are simply no longer stored, which keeps the database smaller. If you were graphing one of these attributes, it will stop accumulating history.
 - **Ready for Home Assistant 2026.8**: adapted to the device-registry changes in that release. No minimum-version change — the integration still supports 2024.8.0 and works on both old and new.
+- **Documentation**: the README's example automations now ignore `unknown` and `unavailable` states, so a router reboot no longer fires false alerts, and data figures render as whole numbers. Added a list of which other ZTE models should work, and of alternative integrations if this one does not suit.
 - **Icons and branding** refreshed.
 
 ### Fixed

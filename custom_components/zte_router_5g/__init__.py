@@ -121,6 +121,10 @@ async def async_send_sms(hass: HomeAssistant, call: ServiceCall) -> None:
     try:
         for num in target:
             await coordinator.api.send_sms(num, message)
+        # Every write action refreshes, or the SMS counters and Recent Message
+        # stay frozen until the next poll — and never, while Pause Polling is
+        # on. `async_force_refresh` is the variant that bypasses the pause.
+        await coordinator.async_force_refresh()
     except Exception as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
