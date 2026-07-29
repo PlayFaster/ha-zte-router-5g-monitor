@@ -6,7 +6,7 @@ This document provides a comprehensive list of all 91 entities currently impleme
 
 | Sub-Device | Entity Count | Description |
 | :-- | :-- | :-- |
-| **System** | 32 | Core router info and global integration settings. |
+| **System** | 33 | Core router info and global integration settings. |
 | **Signal** | 40 | Cellular connectivity, signal strength (LTE/5G), and network info. |
 | **Data** | 14 | Monthly and session traffic volume (Bytes and GB). |
 | **SMS** | 4 | Message counts and recent message content. |
@@ -14,7 +14,7 @@ This document provides a comprehensive list of all 91 entities currently impleme
 
 ---
 
-## 1. System Sub-Device (32 Entities)
+## 1. System Sub-Device (33 Entities)
 
 _Group: `system`_
 
@@ -56,7 +56,7 @@ _Group: `system`_
 
 ---
 
-## 2. Signal Sub-Device (39 Entities)
+## 2. Signal Sub-Device (40 Entities)
 
 _Group: `signal`_
 

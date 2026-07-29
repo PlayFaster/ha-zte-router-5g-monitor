@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 > **Note on the `3.3.0` version tags.** The `3.3.0-dev*` and `3.3.0-rc*` entries below are kept as written, but **`3.3.0` was never released**. Its content shipped as part of `3.3.1`, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.1` and contains no `3.3.0` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
 
+## [3.3.1-dev14] - 2026-07-29 - Unreleased - No Manifest Bump - Documentation Reconciliation
+
+Documentation only. Closes the gap between what this session built and what the docs claim, and folds the last of the discovery report into the interface reference.
+
+### Fixed
+
+- **Entity counts were wrong in three places.** `README.md` said 82 entities; the registry holds **91**. `all_sensors.md` section headers said System 32 and Signal 39 against actual row counts of 33 and 40 — the summary table had been corrected earlier but the headers had not. All three now agree with the live registry, and the README's per-sub-device breakdown lists the nine entities added this session.
+- **`docs/Future.md` item 4 described a blocker that no longer exists.** It warned that a partial `DATA_LIMIT_SETTING` POST might zero the user's data cap. Hardware showed the router **refuses** an incomplete form instead, and the read-modify-write path is now built and verified. Rescoped: only the Number and Switch entities remain, effort drops Medium → Low.
+- **The implementation plan claimed Phase 2 complete. It is not.** Phase 2 was defined as the clear-day Number and the auto-clear Switch; what shipped was the write path underneath them. Corrected rather than quietly left — the entities do not exist, and a status line saying otherwise is how work gets skipped.
+
+### Added
+
+- **`zte_how_to_access.md` § Available but not polled** — the fifteen keys the MC7010 populates that neither batch requests (`monthly_time`, `odu_mode`, `dns_mode`, the PPPoE and PDP fields, the SNTP server menu, the battery detail), plus the notable present-but-empty ones: **`gps_lat` / `gps_lon`**, three further thermal spellings, and the night-mode state. The point is to stop the next person re-running a 183-key probe to discover what already exists.
+- **`DEVELOPMENT.md` § 5** gains two pitfalls: the **URL-length budget** (with the rule that a speculative key is probed alone first, since a batch containing fictional names was seen to time out and fall back to empty defaults), and **`DATA_LIMIT_SETTING` being all-or-nothing** — the write that never worked, and the swallowed exception that hid it.
+- **`DEVELOPMENT.md` § 7** gains the two real debts: the billing-cycle write entities, and the projection's missing cycle-history store.
+
 ## [3.3.1-dev13] - 2026-07-29 - Unreleased - No Manifest Bump - Batch Poll Split In Two
 
 The batch poll had grown to 1,889 characters against a ~2,048-character URL ceiling. Rather than keep trading one key away to make room for the next, the request is now two.

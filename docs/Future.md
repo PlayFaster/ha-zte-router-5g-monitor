@@ -74,9 +74,18 @@ The README carries an auto-reboot example with the necessary glitch guards. A sh
 
 ---
 
-### 4. Billing-cycle write controls ⭐⭐⭐
+### 4. Billing-cycle write controls ⭐⭐⭐ — _unblocked; only the entities remain_
 
-The reset day is now readable but not writable, and the router's automatic-reset master switch is polled without an entity. Both are wanted; neither is hard. The blocker is that `DATA_LIMIT_SETTING` is a multi-field form covering the data cap, its unit and the alert percentage, so a POST carrying only the reset day may zero the other two — which a user would discover when the router stopped passing traffic. Needs a read-modify-write path that echoes every field, plus a hardware round-trip test proving the untouched fields survive. Plan in `.notes/issues/data_cycle_and_projection_plan.md` §2.2.
+**The hard part is done.** `DATA_LIMIT_SETTING` was confirmed as a six-field, all-or-nothing form, `api.set_data_volume_settings()` performs the read-modify-write, and the round trip is verified on hardware. The same work fixed a Data Limit Switch that had never functioned, because it was sending exactly the partial payload the router refuses.
+
+What is left is two entities on the Data sub-device:
+
+- a **Number** for the reset day (1–31), writing `traffic_clear_date`
+- a **Switch** for `wan_auto_clear_flow_data_switch`, the master that decides whether monthly counters roll over at all
+
+The key is already polled and the switch's state already drives the projection sensor's suppression logic; neither has a user-facing control. Both are thin wrappers over a write path that exists and is tested. Detail in `.notes/issues/data_cycle_and_projection_plan.md` §8.
+
+**One decision to make first.** The reset day is the router's own billing configuration, and changing it moves the boundary the projection sensor and any data-cap automation reason about. It is not dangerous in the way a band lock is — nothing becomes unreachable — but it is not a display setting either. Both controls should ship **disabled by default**, matching the existing Data Limit Switch.
 
 ### 5. Projection accuracy from cycle history ⭐⭐
 
@@ -88,18 +97,19 @@ The reset day is now readable but not writable, and the router's automatic-reset
 | :-- | :-- | :-- | :-- |
 | **Short term** | Cross-model verification via user diagnostics | Low | ⭐⭐⭐⭐ |
 | **Short term** | SMS feature-group toggle (§15) | Medium | ⭐⭐⭐ |
-| **Short term** | Billing-cycle write controls (needs a hardware round-trip test) | Medium | ⭐⭐⭐ |
+| **Short term** | Billing-cycle write controls — write path done, two entities outstanding | Low | ⭐⭐⭐ |
 | **Medium term** | Projection accuracy from cycle history | Medium | ⭐⭐ |
 | **Long term** | Band locking write side — **only** with a self-clearing lock | High | ⭐⭐⭐ |
 | **Declined** | Token persistence | — | — |
 | **Blocked** | Custom triggers (HA version floor) | Low | ⭐⭐ |
 
-**Current status.** 91 entities across four sub-devices, 84 carrying `about` notes. 694 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
+**Current status.** 91 entities across four sub-devices, 84 carrying `about` notes. 729 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
 ---
 
 ## Version Control
 
+- **v2.3.0** (2026-07-29) — Item 4 (billing-cycle write controls) rescoped after the router-facing agent answered the open questions. The blocker it described — a partial POST possibly clearing the user's data cap — turned out not to exist: the router **refuses** an incomplete form rather than blanking the omitted fields. The read-modify-write path is built and verified, which also fixed a Data Limit Switch that had never worked. Only the Number and Switch entities remain, so the effort drops from Medium to Low.
 - **v2.2.0** (2026-07-29) — **Data-usage projection delivered** and moved to the delivered table. `Projected Cycle Usage` and `Reset Day` ship on the Data sub-device, cycle-relative rather than calendar-relative, after a live probe confirmed the router exposes `traffic_clear_date`. Two candidates added in its place, both carved out of the same work and both deliberately not shipped: the **billing-cycle write controls**, blocked on `DATA_LIMIT_SETTING` being a multi-field form that a partial POST could clear; and **projection accuracy from cycle history**, which needs a store the integration does not yet have. Also recorded that `OPERATION_MODE`, `LTE_LOCK_CELL_SET`, `ROUTER_DNS_SETTING` and `SET_BIND_STATIC_ADDRESS` were found by the same discovery run and declined under the objection this document already applies to band and cell locking — the control that undoes a bad change sits on the far side of the connection it breaks.
 - **v2.1.0** (2026-07-29) — Removed the proposed _signal-quality history sensor_. Home Assistant's built-in **Statistics** helper already produces a rolling mean over any signal entity with no code, and there is no sound formula for a single combined quality score: which metric limits a connection depends on whether the site is interference-limited or noise-limited, so a weighted average would score one of those two cases wrong. SINR is the honest single number. Replaced by a **Reading Your Signal Data** section in `README.md` covering which metric answers which question, the threshold tables gathered in one place, establishing a personal baseline, and building the Statistics helper to compare antenna positions. Also removed the _config-entry migration handler_ row — it is a tripwire documented in `DEVELOPMENT.md`, not roadmap work, and there is no VERSION 3 planned. Removed the thermal-sensor row: that decision is closed.
 - **v2.0.0** (2026-07-29) — Rewritten after review against the live instance. Three of the four original priorities are delivered (`send_sms`, CA metrics, write-action fast path); recorded that the fast path shipped as `async_force_refresh()` rather than the proposed `async_request_refresh()`, which would have been swallowed while polling was paused. Token persistence **declined** with reasoning rather than left open. Band and cell locking re-scoped around the observation that the control which undoes a bad lock is unreachable over the connection the lock breaks. Added five new candidates and folded in the open items from `DEVELOPMENT.md`. Corrected a stale claim of compliance with "PlayFaster v1.2 standards".

@@ -273,6 +273,35 @@ Encodings for the reboot-schedule and timezone fields are under [Field formats](
 
 Entities fed from here carry `source=ENDPOINT_EXTENDED` on their description and gate `available` on it, so once the endpoint exhausts its three strikes they go unavailable rather than showing a value frozen at whatever it was hours ago.
 
+### Available but not polled
+
+The 2026-07-29 discovery run probed 183 candidate names. These answered with a value and are **not** in either batch — recorded so the next person asking "what else does this router expose?" can start here rather than re-running the probe. Adding any of them costs URL budget (see above).
+
+| Key | Live value | What it is |
+| :-- | :-- | :-- |
+| `monthly_time` | — | Connected time this billing month, alongside the byte counters. Zeroed by `RESET_DATA_COUNTER` with them. |
+| `odu_mode` | — | Outdoor-unit operating mode. |
+| `RadioOff` | — | Radio disable flag. |
+| `dns_mode` | — | Automatic or manual DNS. Paired with the `ROUTER_DNS_SETTING` write, which is declined. |
+| `pppoe_status`, `pppoe_dial_mode`, `dhcp_wan_status` | — | WAN establishment detail beyond `wan_connect_status`. |
+| `pdp_type_ui`, `ipv6_pdp_type` | — | PDP context types; `pdp_type` is already polled for the APN select. |
+| `rplmn_num` | — | Registered PLMN, numeric. Overlaps `rmcc`/`rmnc`, which are polled. |
+| `nitz_sync_flag`, `sntp_time_set_mode` | — | How the router last set its clock — network time versus SNTP. |
+| `modem_msn`, `hardwarenumber`, `web_version` | — | Further hardware and web-UI identifiers. |
+| `sntp_server_list1` … `sntp_server_list7` | — | The router's menu of selectable time servers, distinct from the three configured ones. |
+| `battery_pers`, `battery_charging`, `battery_vol_percent` | `4`, `0`, `100` | Battery detail. See the note on `battery_value` above — `100` is a sentinel on hardware with no battery. |
+
+**Present but empty on the MC7010**, so real names with nothing behind them here:
+
+| Key | Note |
+| :-- | :-- |
+| `gps_lat`, `gps_lon` | The firmware has GPS fields. This unit reports nothing in them; a model with a GPS receiver might. |
+| `pm_sensor_pa2`, `pm_mdm`, `modem_5g` | Three more thermal spellings beyond the five already polled. |
+| `night_mode_switch` | State for the `SET_DEVICE_LED` night-mode scheduler. |
+| `DIAG_CHECK`, `DIAG_URL`, `LocalDomain` | Vendor diagnostic and LAN-domain fields. |
+
+Full probe results, and the router-facing agent's answers on encodings and write semantics, are in `.notes/info/zte_element_discovery_report.md`.
+
 ### `cmd=sms_capacity_info`
 
 - **Used**: Yes — optional endpoint, polled with its own strike budget.

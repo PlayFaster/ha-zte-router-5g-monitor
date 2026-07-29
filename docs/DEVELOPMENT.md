@@ -151,6 +151,27 @@ To reach its current "modern" state, the project underwent several major refacto
 - **VS16 Compound Emoji in README Headings (2026-06-08)**: Using VS16 compound emoji (e.g., `⚙️`, `🏗️`, `⚠️`, `🗑️`) in README headings causes Table of Contents links to silently 404. GitHub's anchor generator strips VS16 bytes (U+FE0F) when computing heading slugs, but Markdown tooling includes them in `href` values. The mismatch is completely invisible in source editors — the heading renders fine and GitHub preview looks correct, but clicking a ToC link jumps nowhere.
   - _Fix_: Replace all VS16 compound emoji in headings and their corresponding ToC `href` values with always-color single-codepoint alternatives (e.g., 🔧 🔩 ❌ ❗ 🔄 💬). See root `CLAUDE.md` → "Shared Markdown Notes" for the full replacement table and detection script.
 
+### The batch poll is bounded by URL length, not by key count
+
+The router accepts a GET of roughly **2,048 characters** and truncates past it. Truncation presents as missing fields — which is indistinguishable from a firmware update renaming things, and will send you looking for contract drift that is not there.
+
+A single key list had reached 127 names and 1,889 characters before anyone noticed there was a ceiling. The poll is now **two requests split by criticality** — `_CORE_PARAMS` (mandatory) and `_EXTENDED_PARAMS` (optional, under its own strike budget) — with roughly 880 and 1,310 characters spare. `test_batch_poll_urls_stay_within_the_router_budget` fails well before the hard limit on either half.
+
+Two rules follow:
+
+- **Never move a key feeding an enabled-by-default entity into the extended batch.** That includes the cross-model aliases, which look dead on an MC7010 but feed enabled sensors on an MC888.
+- **Probe a speculative key on its own before adding it.** The "unknown names are simply absent" rule holds for names in the firmware's dictionary. A batch mixing in genuinely fictional names was observed to **time out and fall back to empty defaults**, taking a populated key down with it — which is how `battery_value` was briefly misreported as unpopulated when it in fact returns a hardcoded `100`.
+
+### `DATA_LIMIT_SETTING` is an all-or-nothing form
+
+It carries six fields — the limit switch, the cap and its unit, the alert percentage, the monthly auto-reset switch and the billing reset day — and the router answers `{"result":"failure"}` for a payload missing any of them.
+
+`set_data_limit_switch()` sent one field for its whole life, so the Data Limit Switch **never worked**. `_require_success()` caught the refusal correctly; `switch.py` then swallowed the exception into the log, so the user saw a toggle spring back with no explanation. Both halves of that are fixed — writes go through `set_data_volume_settings()`, and switch failures raise a translated `HomeAssistantError`.
+
+The general lesson is the one this API keeps teaching: a write that is refused looks exactly like a write that succeeded, so the guard must be on the body and the failure must reach the user.
+
+---
+
 ## 6. Environment Constraints
 
 - **Native Async API**: The integration uses `aiohttp` for all network communication, aligning with the Home Assistant event loop. This removes the need for `executor_job` threading and eliminates the maintenance burden of pinning external libraries like `requests`.
@@ -163,6 +184,8 @@ To reach its current "modern" state, the project underwent several major refacto
 - **Translation-Key Naming**: When migrating from `name="..."` to `translation_key="..."`, both `strings.json` and `translations/en.json` must be kept in sync. `strings.json` is the authoritative source; `translations/en.json` is the runtime-loaded file. Adding a sensor requires adding entries to both files, not just the Python code.
 - **Device Registry Lookup for Metadata Updates**: When the coordinator detects hardware metadata changes (model, firmware version), it looks up the system device by identifier `(DOMAIN, f"{sub_id_prefix}_system")` in the device registry. This avoids needing to pass device IDs around but requires that the device was already created by an entity's `device_info` property in a previous update cycle. If the device doesn't exist yet (first poll), the update is safely skipped.
 
+- **Billing-Cycle Write Entities Not Built**: the write path for `traffic_clear_date` and `wan_auto_clear_flow_data_switch` exists, is tested and is verified on hardware, but neither has a user-facing control — no Number for the reset day, no Switch for the auto-reset master. The key is polled and the switch already drives the projection sensor's suppression logic. Both should ship **disabled by default**, matching the Data Limit Switch: changing the reset day moves the boundary every data-cap automation reasons about. `docs/Future.md` item 4.
+- **Data-Usage Projection Has No Cycle History**: `Projected Cycle Usage` extrapolates from the cycle in flight alone, which is why it is volatile in the first days. `helpers.project_cycle_usage()` already takes a `prior_rate` argument; what is missing is a `Store` holding the last two or three cycle totals, snapshotted on cycle-start change rather than by watching for the counter to drop (which misses a rollover if HA was down, and misfires on a manual reset). Design in `.notes/issues/data_cycle_and_projection_plan.md` §2.4.
 - **SMS Page Limits**: The `delete_all` feature is limited to the first 500 messages to avoid API timeouts.
 - **Cross-Model Support Is Inferred, Not Tested**: the key aliases, login form fallback and band resolvers were derived from other open-source `goform` projects and from 3GPP tables — none of it is exercised on hardware, because only an MC7010 is available. Every path is written so the MC7010 takes the original branch first, so the risk is that a fallback silently does nothing on other hardware, not that it breaks this one. Two specifics worth knowing: three alias spellings (`5g_rsrp`, `5g_sinr`, `nr5g_sinr`) were **not** found in any source project and are speculative — kept because an alias that never fires is free; and the login fallback never fires on an MC7010, so it is covered only by unit tests.
 - **Thermal Sensors — Added for Cross-Model Compatibility, Unverified Elsewhere (settled)**: the five `pm_*` temperature sensors (`pm_sensor_pa1`, `pm_sensor_ambient`, `pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`) return `""` on the MC7010, the only hardware available. They were added deliberately because the sibling `goform` project polls exactly this set with °C units, and they are **disabled by default** so the cost on the primary target is zero. **This is a closed decision — they stay.** Whether another model populates them is simply unknown and cannot be established from here; if a diagnostics download from an MC888 or MC889 ever shows the keys populated, that is useful confirmation, not a trigger for action. Do not re-open this as a question.

@@ -225,7 +225,7 @@ See [SMS Actions](#-sms-actions) below for more detail, and [SMS Examples](#-sms
 
 ## 🔍 What You Get
 
-This integration provides **82 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **91 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -235,9 +235,9 @@ This integration provides **82 entities** (depending on your firmware) organized
 
 | Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
 | :-- | :-- | :-- | :-- |
-| ⚙️ **System** | 18 Sensors, 4 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+15) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls, Reboot Schedule, UPnP, SIP ALG, SNTP Server | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, Power Amplifier Temp, Ambient Modem Temp, Modem Temp, 5G Modem Temp, 5G Radio Temp, Time Server (SNTP), ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled |
-| 📶 **Signal** | 35 Sensors, 1 Binary Sensor, 3 Selects (+7) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
-| 📈 **Data** | 11 Sensors, 1 Switch (+5) | Monthly Usage, Near-real-time Speed, Session Data, Data Limit Switch, Data Volume Alert | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
+| ⚙️ **System** | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+21) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
+| 📶 **Signal** | 36 Sensors, 1 Binary Sensor, 3 Selects (+8) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
+| 📈 **Data** | 13 Sensors, 1 Switch (+5) | Monthly Usage, **Projected Cycle Usage**, **Reset Day**, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
 | ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
 | 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
 

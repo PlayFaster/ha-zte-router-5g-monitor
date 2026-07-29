@@ -48,21 +48,22 @@ Router identity, firmware, uptime and the controls.
 | **Polling Interval** | How often the integration fetches from the router, from 30 seconds to 1 hour. The router permits only one login session at a time, so polling less often leaves its web page free for longer. |
 | **Power Amplifier Temperature** ᴰ | Temperature of the power amplifier - the part of the radio that drives the transmit signal, and normally the hottest thing in the unit. Many ZTE models do not report it, in which case this stays unknown. |
 | **Reboot** | Restarts the router. The connection drops for a minute or two, and session data counters reset to zero. Monthly counters are unaffected. |
+| **Reboot Schedule** ᴰ | Whether the router reboots itself on its own schedule. The time it runs is in the attributes, along with the repeat mode - weekly or monthly - and both candidate days. The mode decides which day applies: weekly uses the day of week, monthly the day of month. This is the router's internal schedule and is separate from any reboot automation built in Home Assistant. |
 | **Refresh Now** | Fetches from the router immediately, without waiting for the next scheduled poll. It works even while polling is paused - explicit actions always fetch. |
+| **Router Timezone** ᴰ | The timezone the router keeps its own clock in, shown exactly as the router reports it. The format is the vendor's own and is not translated here, because guessing at it would risk stating the wrong offset. |
 | **SIM ICCID** ᴰ | Integrated Circuit Card ID - the SIM card's own serial number, printed on the card itself. Useful for identifying which SIM is in the router without opening it. |
 | **SIM IMSI** ᴰ | International Mobile Subscriber Identity - the unique number identifying your SIM's subscription on the network, as distinct from the IMEI which identifies the hardware. |
 | **SIP ALG Enabled** ᴰ | SIP ALG rewrites internet-telephony traffic as it passes through. It is meant to help, and frequently does the opposite: one-way audio and calls that drop after a set time are the classic symptoms. If VoIP misbehaves, this is the first thing to turn off. |
 | **Time Server (SNTP)** ᴰ | The time server the router synchronises its clock from. An unreachable time server can make the timestamps on SMS messages and logs wrong, so it is worth checking if dates look implausible. |
 | **UPnP Enabled** ᴰ | Whether the router lets devices open their own inbound ports. Convenient for games and consoles, but it means any device on the network can expose itself without being asked. On a router in bridge mode this usually has no effect - your main firewall handles it. |
 | **Uptime Duration** ᴰ | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp, which is usually the easier one to automate against. |
-| **WAN IP Address** | The address your ISP has given the router on the mobile network - what the internet sees. Often a shared carrier-grade NAT address, which is why inbound connections and port forwarding usually do not work on mobile broadband. |
-
-| **Reboot Schedule** ᴰ | Whether the router reboots itself on its own schedule. The time it runs, and which day, are in the attributes exactly as the router reports them. This is the router's internal schedule and is separate from any reboot automation built in Home Assistant. |
-| **Router Timezone** ᴰ | The timezone the router keeps its own clock in, shown exactly as the router reports it. The format is the vendor's own and is not translated here, because guessing at it would risk stating the wrong offset. |
 | **WAN Fallback Mode** ᴰ | The mode the router falls back to on its own. It differing from the active mode is normal and not a fault. |
+| **WAN IP Address** | The address your ISP has given the router on the mobile network - what the internet sees. Often a shared carrier-grade NAT address, which is why inbound connections and port forwarding usually do not work on mobile broadband. |
 | **WAN Operating Mode** ᴰ | Whether the router is passing traffic as a gateway of its own or bridging it straight through to equipment behind it. Changing this is deliberately not offered here: it alters the path this integration reaches the router over, so use the router's own web page where a mistake can still be undone. |
-| **Web Page Auto-Wake** ᴰ | Whether the router's web page wakes itself again after sleeping. Read-only for the same reason as the sleep setting. |
-| **Web Page Sleep** ᴰ | Whether the router puts its own web page to sleep after a period of inactivity. It does not affect this integration, which logs in afresh as needed. Changing it is not offered here because the router exposes no command for it. |
+| **Web Page Auto-Wake** ᴰ | Whether the router's web page wakes itself again after sleeping. Shown for reference only, like the sleep setting. |
+| **Web Page Sleep** ᴰ | Whether the router puts its own web page to sleep after a period of inactivity. It does not affect this integration, which logs in afresh as needed, so it is shown for reference only - change it on the router's own settings page. |
+
+
 
 ## 📡 Signal
 
