@@ -2,10 +2,6 @@
 extend = ".validate/pyproject_common.toml"
 
 [tool.ruff.lint.per-file-ignores]
-# A hand-run operator tool, not shipped code: its output IS the deliverable, and
-# it reaches into the API client's internals deliberately, to reproduce states
-# the public surface is designed to hide.
-"scripts/**" = ["T201", "SLF001", "D102", "D103", "D107", "D401"]
 # Pytest files rely on assert statements and other custom styling (aligned with HA Core)
 "tests/**" = [
     "F821", "F841", "S101", "S105", "S106", "S107",

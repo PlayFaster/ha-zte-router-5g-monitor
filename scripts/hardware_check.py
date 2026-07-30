@@ -26,14 +26,33 @@ Deliberately excluded, and not by oversight:
                                  expired session. Testing these needs a human
                                  watching, not a script.
 
-Usage, inside the devcontainer:
+Usage, inside the devcontainer, **from anywhere** — paths are resolved from
+`__file__`, not the working directory:
 
-    python scripts/hardware_check.py                # exercise, restore, report
-    python scripts/hardware_check.py --capture      # also write fixtures
+    /usr/local/bin/python scripts/hardware_check.py             # check + restore
+    /usr/local/bin/python scripts/hardware_check.py --capture   # also record
 
-Reads credentials from the configured Home Assistant entry. Every write is
-restored to its original value, including on failure.
+Or run the **Hardware: Device Check** VS Code task, which does the same and tees
+the output to `.reports/`.
+
+**Use the container interpreter, not `uv run`.** This imports the integration,
+which imports Home Assistant; only `/usr/local/bin/python` has those installed.
+The project `.venv` that `uv` selects does not, and fails on `import aiohttp`.
+
+Reads credentials from the configured Home Assistant entry — nothing is passed
+on the command line. Every write is restored to its original value, including on
+failure.
+
+Nothing recorded by `--capture` may contain personal data. The capture holds key
+*names* plus a few literal protocol responses; it must never hold identifiers,
+addresses, cell IDs or message content. `_assert_capture_is_safe` enforces this
+before anything is written.
 """
+
+# The console report is this script's entire output — there is no logger to
+# route it through, and a caller reading `.reports/hardware_check.txt` is the
+# point. This is the only rule the file cannot satisfy on its own terms.
+# ruff: noqa: T201
 
 from __future__ import annotations
 
@@ -46,14 +65,20 @@ import sys
 import time
 from typing import Any
 
-import aiohttp
-
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from custom_components.zte_router_5g.api import (
-    ZTEAuthError,
-    ZTERouterAPI,
-)
+try:
+    import aiohttp
+
+    from custom_components.zte_router_5g.api import ZTEAuthError, ZTERouterAPI
+except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
+    raise SystemExit(
+        f"cannot import {err.name!r}.\n\n"
+        "This script imports the integration, which imports Home Assistant, so "
+        "it needs the devcontainer's interpreter:\n\n"
+        "    /usr/local/bin/python scripts/hardware_check.py\n\n"
+        "`uv run` and the project .venv do not carry those dependencies."
+    ) from err
 
 CONFIG_ENTRIES = "/config/.storage/core.config_entries"
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent / "tests" / "fixtures"
@@ -76,10 +101,12 @@ class Report:
     """Collects results so one failure does not hide the rest."""
 
     def __init__(self) -> None:
+        """Start an empty report."""
         self.checks: list[tuple[bool, str, str]] = []
         self.captured: dict[str, Any] = {}
 
     def record(self, ok: bool, name: str, detail: str = "") -> None:
+        """Print one result and remember it for the summary."""
         self.checks.append((ok, name, detail))
         print(
             f"  {'PASS' if ok else 'FAIL'}  {name}{f'  — {detail}' if detail else ''}"
@@ -87,10 +114,12 @@ class Report:
 
     @property
     def failed(self) -> int:
+        """Return how many checks failed, for the exit code."""
         return sum(1 for ok, _, _ in self.checks if not ok)
 
 
 def _credentials() -> dict[str, str]:
+    """Read the router credentials from the configured Home Assistant entry."""
     with open(CONFIG_ENTRIES) as handle:
         data = json.load(handle)
     for entry in data["data"]["entries"]:
@@ -199,7 +228,7 @@ async def check_write_round_trip(
 
 
 async def check_refusal_is_not_retried(api: ZTERouterAPI, report: Report) -> None:
-    """A malformed write must be reported, never resent.
+    """Check that a malformed write is reported rather than resent.
 
     `DATA_LIMIT_SETTING` is the one safe way to provoke a genuine refusal: the
     router requires all six fields and declines a partial form outright, without
@@ -233,7 +262,63 @@ async def capture_reference_payloads(api: ZTERouterAPI, report: Report) -> None:
     report.record(True, "captured live payload shapes")
 
 
+# Values that may appear in a capture. Everything else must be a key *name*, so
+# a future check cannot quietly start recording telemetry.
+_ALLOWED_CAPTURE_VALUES = {"", "failure", "0", "1", "ppp_connected"}
+
+# Substrings of keys whose *values* must never be recorded, whatever they hold.
+_NEVER_CAPTURE = (
+    "imei",
+    "imsi",
+    "iccid",
+    "ipaddr",
+    "cell",
+    "sms",
+    "apn",
+    "provider",
+    "mcc",
+    "mnc",
+    "rd",
+    "ld",
+    "stok",
+    "password",
+)
+
+
+def _assert_capture_is_safe(captured: dict[str, Any]) -> None:
+    """Refuse to write a fixture containing anything personal.
+
+    The capture exists so mocks can be built from observation, which needs the
+    *shape* of a response, not its contents. This file is committed, so a check
+    added later that happens to record a payload would publish an IMEI, an
+    ICCID, a cell ID or a message body. Fail loudly instead.
+    """
+    offenders: list[str] = []
+    for name, value in captured.items():
+        if name.endswith("_keys") or isinstance(value, bool):
+            continue  # key names and observations carry nothing
+        if not isinstance(value, dict):
+            offenders.append(f"{name}: unexpected {type(value).__name__}")
+            continue
+        for key, item in value.items():
+            if any(bad in key.lower() for bad in _NEVER_CAPTURE):
+                offenders.append(f"{name}.{key}: key is on the never-capture list")
+            elif str(item) not in _ALLOWED_CAPTURE_VALUES:
+                offenders.append(
+                    f"{name}.{key}: value {item!r} is not an allowed literal"
+                )
+
+    if offenders:
+        raise SystemExit(
+            "refusing to write fixtures — capture may contain personal data:\n  "
+            + "\n  ".join(offenders)
+            + "\n\nRecord the response *shape* (key names), or add the literal to "
+            "_ALLOWED_CAPTURE_VALUES if it is genuinely a protocol constant."
+        )
+
+
 async def main() -> int:
+    """Run every check in order and return a shell exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--capture",
@@ -263,6 +348,7 @@ async def main() -> int:
             await api.logout()
 
     if args.capture:
+        _assert_capture_is_safe(report.captured)
         FIXTURES.mkdir(parents=True, exist_ok=True)
         target = FIXTURES / "mc7010_observed.json"
         target.write_text(
