@@ -2,13 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-> **Note on the `3.3.0` and `3.3.1` version tags.** The `3.3.0-dev*`, `3.3.0-rc*` and `3.3.1-dev*` entries below are kept as written, but **neither `3.3.0` nor `3.3.1` was ever released**. All of their content shipped as part of **`3.3.2`**, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.2` and contains no `3.3.0` or `3.3.1` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
->
-> This has now happened twice. The tags are assigned when work starts, not when it ships, so a version that slips gets absorbed by the next one. If it matters that the two files agree, the fix is to tag dev entries against the _next unreleased_ number rather than a guessed release number.
+---
+
+## [3.3.2-rc3] - 2026-07-30 - Unreleased - No Manifest Bump - Bumps
+
+### Bumps
+
+- **Validate Bump**: Update `ruff` from 0.15.22 to 0.16.0
+- **Validate Bump**: Update `zizmor` from 1.25.2 to 1.28.0
+- **Validate Bump**: Update PHACC `pytest-homeassistant-custom-component` from 0.13.348 to 0.13.349
+
+### Changed
+
+- **Docs**: Changes to CHANGELOG.md and README.md prior to v3.3.2 release
 
 ## [3.3.2-dev2] - 2026-07-30 - Unreleased - No Manifest Bump - `TOTAL` State Class Banned; Release Notes Rewritten
 
-Two things: a guard so the `TOTAL` / `TOTAL_INCREASING` confusion cannot recur, and a review pass over the `[3.3.2]` release notes that retracted a claim which had no evidence behind it.
+A guard so the `TOTAL` / `TOTAL_INCREASING` confusion cannot recur
 
 ### Added
 
@@ -16,22 +26,7 @@ Two things: a guard so the `TOTAL` / `TOTAL_INCREASING` confusion cannot recur, 
   - **Why a blanket ban rather than "resetting counters must be `TOTAL_INCREASING`".** The narrower rule needs the test to know _which sensors reset_ — a list that drifts silently the moment someone adds one. The ban needs no such knowledge and cannot go stale. `TOTAL` is for a value that can legitimately fall without that being a reset (net import/export, a draining tank) and requires a `last_reset` attribute; nothing a 5G router reports fits. Current state: **16 `MEASUREMENT`, 6 `TOTAL_INCREASING`, 0 `TOTAL`**, so the ban cost nothing to adopt.
   - Sweeps live entities rather than the static `SENSOR_TYPES` tuple, matching the other two sweeps in the file, and carries the same `checked >= 3` guard-the-guard.
   - **Mutation-verified**, not merely passing: flipping one description to `TOTAL` fails with the offending entity named (`sensor.zte_5g_data_monthly_sent_gb`). Restored; 14/14 pass, ruff clean. The four `mypy --strict` findings in that file are pre-existing and outside this addition.
-  - Known gap, deliberately not covered: the ban does not stop a resetting counter being marked `MEASUREMENT`. That failure is loud — no statistics at all, rather than wrong ones — so it does not warrant a second test.
-
-### Changed — public `CHANGELOG.md` `[3.3.2]`
-
-Reviewed against annotations. The whole `⚠️ Action Required` section was **removed** — all three items failed on the merits.
-
-- **Retracted the "monthly statistics drifted downwards" claim.** It was written as something users had experienced, and there was no observation behind it. Checked the dev recorder database: `sensor.zte_5g_data_monthly_total` has 519 hourly rows over 2026-07-02 → 07-30, state climbing 68 GB → 1110 GB with **zero drops**, no rollover captured, and a freshly rotated log with no `Detected new cycle` or dip warnings. The `Fixed` entry now claims only what is demonstrable: the counters were classified as `TOTAL` when they reset to zero, so the reset was logged as an error rather than recognised. No user-facing impact asserted, no history-repair advice.
-- **The `Alert Threshold` rename is not breaking.** Cards reference `entity_id`, not the friendly name, so nothing needs updating; and the entity dates from **3.2.0**, disabled by default, so almost nobody has it. Moved to `Added`.
-- **`get_sms_list` raising** demoted from Action Required to `Changed`. It can halt an unguarded automation, which is real but small, and raising on failure is the correct behaviour.
-- **Removed as not user-facing:** the split-poll bullet (which also gave the wrong reason — the driver was the ~2048-character URL budget, not resilience), the default-visibility bullet, the HA 2026.8 bullet, and the duplicated `about`-rewrites bullet.
-- **Rewritten:** the data-management block now leads with router setup (Data Management → Clear Date, Data Plan, limit reminder) before naming the resulting entities, so it is clear what belongs to the router and what to the integration, including the calendar-month fallback. SMS reframed around matching the router's own 765/335 limits, with a note that providers still bill long messages as multiple SMS. The attributes entry now states the actual rule — no entity records any attribute, only its state — rather than listing a subset.
-- The two dead-session `Fixed` bullets were **one fault** (silent writes and empty reads from the same dropped session) and are now one entry.
-
-### Not done
-
-- **A recorder test proving what `TOTAL` does to the statistics `sum` at a rollover.** Designed and dropped. The fix is in, and it would only characterise behaviour on data that no longer exists. The guard above is the durable part.
+  - Known gap, deliberately not covered: the ban does not stop a resetting counter being marked `MEASUREMENT`.
 
 ## [3.3.2-dev1] - 2026-07-30 - Unreleased - No Manifest Bump - Device-Registry Tests Unlocked From HA 2026.7
 
@@ -104,7 +99,7 @@ User-directed pass over which entities appear out of the box, and over six `abou
 ### Fixed — `about` notes
 
 - **WAN Fallback Mode** — "It differing from the active mode is normal" was an awkward gerund. Now "A difference between the fallback mode and the active mode is normal and not a fault."
-- **Monthly Sent / Received / Total** — all three told users to prefer the legacy GB sensors for display and the byte sensors for arithmetic. That advice predates Home Assistant's unit normalisation and is now wrong: the byte sensors carry `DATA_SIZE` with a `GIGABYTES` suggested unit, so HA renders them in GB on a dashboard while storing exact bytes. The legacy GB sensors are disabled by default and exist only for history. Rewritten to say HA displays in GB while storing the byte count, so one sensor serves both purposes.
+- **Monthly Sent / Received / Total** — all three told users to prefer the legacy GB sensors for display and the byte sensors for arithmetic. That advice predates Home Assistant's unit normalization and is now wrong: the byte sensors carry `DATA_SIZE` with a `GIGABYTES` suggested unit, so HA renders them in GB on a dashboard while storing exact bytes. The legacy GB sensors are disabled by default and exist only for history. Rewritten to say HA displays in GB while storing the byte count, so one sensor serves both purposes.
 - **Bridge Mode** — the note described the PPP session accurately but never connected it to the entity's name, leaving users to wonder how it relates to WAN Operating Mode. It now states the distinction directly: this reports whether the pass-through session is **up**, while WAN Operating Mode reports which mode the router is **configured** for. The APN-versus-coverage diagnostic hint is kept.
 - **Router Timezone** — previously declined to interpret the format at all. The encoding is now known, so it explains it: base timezone plus DST offset, with `0-1` as the worked example.
 
@@ -114,7 +109,7 @@ Prompted by a user challenge to a claim made in review, which turned out to be h
 
 ### Fixed
 
-- **The six monthly counters were `TOTAL`; they are now `TOTAL_INCREASING`.** These zero on the router's billing day, and the two state classes handle that completely differently. Verified against `homeassistant/components/sensor/recorder.py`: `reset_detected()` — which treats a fall below 90% of the previous value as a new cycle — is reached **only** from the `TOTAL_INCREASING` branch. Under plain `TOTAL` a reset is recognised solely from a `last_reset` attribute this integration does not publish, so **every monthly rollover recorded as a large negative delta and walked the long-term statistics sum backwards**. Affects `monthly_tx_bytes`, `monthly_rx_bytes`, `monthly_total_bytes` and their three `_raw` counterparts.
+- **The six monthly counters were `TOTAL`; they are now `TOTAL_INCREASING`.** These zero on the router's billing day, and the two state classes handle that completely differently. Verified against `homeassistant/components/sensor/recorder.py`: `reset_detected()` — which treats a fall below 90% of the previous value as a new cycle — is reached **only** from the `TOTAL_INCREASING` branch. Under plain `TOTAL` a reset is recognized solely from a `last_reset` attribute this integration does not publish, so **every monthly rollover recorded as a large negative delta and walked the long-term statistics sum backwards**. Affects `monthly_tx_bytes`, `monthly_rx_bytes`, `monthly_total_bytes` and their three `_raw` counterparts.
   - **Existing statistics are not repaired by this.** Home Assistant applies the new class going forward; historical sums already skewed by past rollovers stay as they are. Developer Tools → Statistics offers a fix-up for affected entities.
 - **`data_volume_limit_size` was documented as `2_1048576` = "2 GB".** It is **2 TiB** — the multiplier is the number of mebibytes in the chosen unit. The annotation came from the discovery report; the router's own Data Management page shows "2TB" for that stored value with an 80% reminder at "1.6TB", and direct observation of the device beats the annotation. Also recorded that the router counts in **binary** units throughout that page, so its "1.01TB used" and a Monthly Total of 1,107.75 GB decimal are the same quantity, not a disagreement.
 
@@ -157,7 +152,7 @@ Four changes to `Projected Cycle Usage` following a review of how it behaves in 
 ### Added
 
 - **A calendar-month fallback.** A router reporting no reset day previously produced a permanently `unknown` sensor with no explanation. It now assumes the 1st — right for anyone billed calendar-monthly, no worse than nothing for anyone else, and far better than a blank that never clears. The assumption is published as a new `cycle_source` attribute (`router` or `calendar_assumed`) so it is visible rather than buried in the arithmetic.
-- **README note on first-day behaviour.** The projection reads _low_ on day one, not high: the denominator floor caps the rate at one day's usage rather than dividing by a fraction of a day. It settles within 24 hours and is accurate from day 2 of every cycle — including the first cycle after install, which is worth stating because "wait a few months for it to learn" would be wrong.
+- **README note on first-day behavior.** The projection reads _low_ on day one, not high: the denominator floor caps the rate at one day's usage rather than dividing by a fraction of a day. It settles within 24 hours and is accurate from day 2 of every cycle — including the first cycle after install, which is worth stating because "wait a few months for it to learn" would be wrong.
 - **A `Projected Overage Alert` automation example**, gated on `cycle_day >= 3` so a single large download on the 1st cannot page the user about an overage that never happens. The template guards the attribute being absent (`or '0 of 0'`), since `.split` on a missing attribute throws when the sensor is unavailable. Both `confidence`-based alternatives are documented alongside it. YAML and Jinja verified by parsing them out of the README and rendering the condition at day 2, day 3 and with the attribute absent.
 
 ### Not done
@@ -201,7 +196,7 @@ The batch poll had grown to 1,889 characters against a ~2,048-character URL ceil
 
 - Seven coordinator tests for the split, covering the properties that matter rather than the plumbing: core data survives an extended failure, last-good values are held within budget, only the extended entities degrade past it, one success recovers, an auth error still drives reauth, core wins a key collision, and the degraded endpoint is named in health.
 - Availability tests for the new `source` gate on both binary sensors and switches.
-- `test_batch_poll_urls_stay_within_the_router_budget` is now parametrised across both halves.
+- `test_batch_poll_urls_stay_within_the_router_budget` is now parametrized across both halves.
 
 ### Verified
 
@@ -345,7 +340,7 @@ The `send_sms` limit was a flat **160** in the service schema — an integration
 
 ### Why those numbers
 
-A single SMS carries 160 GSM-7 septets or 70 UCS-2 characters; concatenated segments give up 7 bytes each to a header, leaving 153 and 67. The MC7010 web UI advertises `(765) (1/5)` for plain text — exactly 5 x 153, confirming a five-segment ceiling, so the Unicode equivalent is 5 x 67 = 335. Behaviour past five segments is untested, and the limit keeps callers out of it.
+A single SMS carries 160 GSM-7 septets or 70 UCS-2 characters; concatenated segments give up 7 bytes each to a header, leaving 153 and 67. The MC7010 web UI advertises `(765) (1/5)` for plain text — exactly 5 x 153, confirming a five-segment ceiling, so the Unicode equivalent is 5 x 67 = 335. behavior past five segments is untested, and the limit keeps callers out of it.
 
 Validation lives in `async_send_sms`, not the schema, because which limit applies is only knowable from the message content. The schema keeps the absolute ceiling so a wildly oversized payload is still refused early.
 
@@ -389,7 +384,7 @@ The systematic guard behind `[3.3.1-dev6]`. Both silent-failure bugs in this cla
 ### Notes
 
 - **Live-hardware verification eliminated the leading hypothesis.** The suspicion was that `_request` retries a write payload verbatim after re-login, carrying an `AD` token derived from the dead session. Probing an MC7010 (`V1.0.0B03`) showed `RD` is a **static per-device seed**, so `AD` is constant for a given router and a retried payload is still valid. Full test plan and results: [`.notes/issues/silent_login_fail.md`](../.notes/issues/silent_login_fail.md).
-- **Reboot is deliberately not special-cased.** An earlier draft swallowed connection errors on `REBOOT_DEVICE`, on the theory that the router acknowledges then drops the link. An existing test caught it, and the test was right: that theory is untested, and a dropped link cannot be told from a router that was never reachable — so swallowing it would report "rebooted" for a command that never arrived, reintroducing the exact failure being removed. Reboot keeps its previous connection-error behaviour and gains only the refusal check.
+- **Reboot is deliberately not special-cased.** An earlier draft swallowed connection errors on `REBOOT_DEVICE`, on the theory that the router acknowledges then drops the link. An existing test caught it, and the test was right: that theory is untested, and a dropped link cannot be told from a router that was never reachable — so swallowing it would report "rebooted" for a command that never arrived, reintroducing the exact failure being removed. Reboot keeps its previous connection-error behavior and gains only the refusal check.
 - **Static audit of all 20 `_request` call sites** found no further unguarded path. `get_all_data` relies solely on the all-empty detector, which is correct — it requests ~110 keys and has no single mandatory one. `get_rd`'s exception swallowing is now harmless: an empty `AD` makes the router refuse, and that refusal is now raised.
 
 ### Not in the public changelog — decision needed
@@ -416,7 +411,7 @@ Verified directly against `Kajkac/ZTE-MC-Home-assistant-repo`: its `const.py` na
 ### Verified
 
 - 498 tests passing, **100% coverage**, `ruff`, `mypy --strict`, `codespell`, `prettier`, hassfest (`Invalid integrations: 0`).
-- **Mutation-checked (dev_standards §11)**: deleting the `pm_sensor_5g` description fails the drift guard plus its three parametrised cases. Reverted.
+- **Mutation-checked (dev_standards §11)**: deleting the `pm_sensor_5g` description fails the drift guard plus its three parametrized cases. Reverted.
 
 ### Changed
 
@@ -430,7 +425,7 @@ Release preparation for 3.3.1. This is the first entry in this line to carry a m
 ### Changed
 
 - **`manifest.json`**: Version bumped `3.3.0` → `3.3.1`.
-- **`api.py` login result type**: `_attempt_login()` now returns a `_LoginAttempt` named tuple carrying the session token alongside the two error classifications, instead of the caller re-reading `self.stok`. Behaviour is unchanged; the previous shape made mypy narrow `self.stok` to `None` across the retry and report the fallback's success branch as unreachable, which was a fair complaint about readability as much as types — which attempt produced the session is now explicit.
+- **`api.py` login result type**: `_attempt_login()` now returns a `_LoginAttempt` named tuple carrying the session token alongside the two error classifications, instead of the caller re-reading `self.stok`. behavior is unchanged; the previous shape made mypy narrow `self.stok` to `None` across the retry and report the fallback's success branch as unreachable, which was a fair complaint about readability as much as types — which attempt produced the session is now explicit.
 - **`sensor.py` band resolver typing**: `_band_or_channel_fallback()` takes a typed `Callable` rather than `Any`, so the return type is checked rather than inferred.
 - **`docs/all_sensors.md`**: Added a `v3.3.1` version-history entry recording the two thermal entities and the count change.
 - **`docs/value_min_max.md`**: Added a `v1.3.0` version-history entry recording the two temperature guard bands.
@@ -459,13 +454,13 @@ Phase 3 of the cross-model compatibility expansion. On an MC7010 every existing 
 
 ### Changed
 
-- **`sensor.py` monthly totals**: The two total sensors previously inlined `int(data.get(...))` and are now shared via `_monthly_total_bytes()`. Behaviour is unchanged, but aliasing only the individual TX/RX sensors would have left the totals silently zeroed on `flux_`-spelling hardware — a divergence that would have looked like real data rather than a bug.
+- **`sensor.py` monthly totals**: The two total sensors previously inlined `int(data.get(...))` and are now shared via `_monthly_total_bytes()`. behavior is unchanged, but aliasing only the individual TX/RX sensors would have left the totals silently zeroed on `flux_`-spelling hardware — a divergence that would have looked like real data rather than a bug.
 - **`docs/all_sensors.md`**: Added both thermal entities; System count 21 → 23, total 76 → 78.
 - **`docs/value_min_max.md`**: Added guard band entries for both thermal sensors (-40 to 125 °C).
 
 ## [3.3.1-dev2] - 2026-07-28 - Unreleased - No Manifest Bump - API Params & Login Fallback
 
-Phase 2 of the cross-model compatibility expansion. Behaviour on the MC7010 is unchanged except for SMS encoding, which now stops wasting more than half of every plain-text message.
+Phase 2 of the cross-model compatibility expansion. behavior on the MC7010 is unchanged except for SMS encoding, which now stops wasting more than half of every plain-text message.
 
 ### Added
 
@@ -479,7 +474,7 @@ Phase 2 of the cross-model compatibility expansion. Behaviour on the MC7010 is u
 
 ## [3.3.1-dev1] - 2026-07-28 - Unreleased - No Manifest Bump - Helpers & GSM-7 Inspector
 
-Phase 1 of the cross-model compatibility expansion. Pure additions to `helpers.py` with no call sites yet — nothing in the integration's behaviour changes until Phases 2 and 3 wire these in.
+Phase 1 of the cross-model compatibility expansion. Pure additions to `helpers.py` with no call sites yet — nothing in the integration's behavior changes until Phases 2 and 3 wire these in.
 
 ### Added
 
@@ -640,12 +635,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request                     | Live session       | Dead session                                         |
-  | :-------------------------- | :----------------- | :--------------------------------------------------- |
-  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
-  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
-  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
+  | Request | Live session | Dead session |
+  | :-- | :-- | :-- |
+  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
+  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
+  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -1037,16 +1032,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category                                   | Count       | Fix                                                                        |
-| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
-| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
-| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
-| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
-| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
-| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
-| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
-| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
+| Category | Count | Fix |
+| :-- | :-- | :-- |
+| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
+| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
+| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
+| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
+| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
+| **Indentation error** | 1 test | Fixed broken indent |
+| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
 
 ### Files modified
 

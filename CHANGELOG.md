@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Summary
 
+Wider router support, better data use tracking, SMS improvements, several fixes and a lot of under the hood improvements in this release.
+
 - **Data usage tracking**: the router's own billing cycle, data cap and alert threshold now appear as entities, alongside a new projection of where the current cycle will finish.
 
 - **Wider ZTE model support**: should now have better support for the wider family of ZTE 5G/LTE Routers that use the `goform` API.
@@ -15,28 +17,31 @@ All notable changes to this project will be documented in this file.
 
 - **`about` attribute**: Most entities now carry a short built-in explanation of what the value means — and for signal metrics, what counts as good, fair or poor.
 
-- **Integration Health** sensor: tells you when the integration is running but the data coming back from the router has issues.
+- **Integration Health** problem sensor: tells you when the integration is running but the data coming back from the router has issues.
 
 ### Added
 
 - **Data usage tracking follows your router's Data Management settings.** If you enable **Data Management** in the router's web page, you can set a **Clear Date** matching your provider's billing day, a **Data Plan** cap, and a **limit reminder** percentage. Those three settings now appear in Home Assistant as **Reset Day**, **Allowance** and **Alert Threshold**, so an automation can use your actual plan instead of numbers typed in by hand — the README has a worked example. Note the router counts in binary units, so a plan it calls "2TB" shows here as about 2199 GB: the same amount, counted the way Home Assistant counts. If you have not set Data Management on the router, the integration falls back to the calendar month.
   - Alongside them, a new **Projected Cycle Usage** sensor estimates how much data you will have used by the end of the cycle, based on your average daily consumption so far. It follows whichever cycle applies — the router's or the calendar month — and reads low on the first day before settling within 24 hours. Its attributes say how much of the figure rests on real usage rather than assumption: `confidence`, `basis`, `cycle_day`, `cycle_start` and `cycle_source`.
 
-- **Integration Health sensor**: a new diagnostic binary sensor on the System device that turns on when the integration detects a problem — including the case where a fetch _succeeds_ but returns nothing usable, which nothing else catches. Attributes carry the detail: `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, `last_good_update` and `consecutive_failures`. Raises a repair when the router's firmware appears to have renamed the fields the integration reads.
+- **Integration Health sensor**: a new problem binary sensor on the System device that turns on when the integration detects a problem — including the case where a fetch _succeeds_ but returns nothing usable, which can otherwise be a silent fail, unless you are watching the entities closely. Attributes carry the detail: `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, `last_good_update` and `consecutive_failures`. Raises a repair when the router's firmware appears to have renamed the fields the integration reads.
 
-- **Built-in explanations on entities**: most entities now carry an `about` attribute — a plain sentence saying what the value is. Click the entity, then **⋮ → Details**. Signal metrics also give typical ranges ("better than -80 excellent, -80 to -90 good…"). The note is never written to history, so it costs nothing to carry.
+- **Built-in explanations on entities**: most entities now carry an `about` attribute — a plain sentence saying what the value is. Click the entity, then **⋮ → Details**. Signal metrics also give typical ranges ("better than -80 excellent, -80 to -90 good…"). The note is never written to the history database, to avoid bloat.
 
 - **Router Unreachable repair**: after multiple consecutive failed fetches, a repair appears in the Repairs panel.
 
 - **Seven new entities**, all **disabled by default**: Carrier Aggregation Secondary Cells, WAN Operating Mode, WAN Fallback Mode, Router Timezone, APN Interface Version, Web Page Sleep and Web Page Auto-Wake.
+  - This is part of _completeness_. These are included because they are available, and may be of use to some, not necessarily because they contain critical info.
 
 ### Changed
 
-- **Longer SMS messages**: `send_sms` now accepts the same message length the router's own web page does — up to **765** characters, where the integration previously capped you at 160. A message containing an emoji, curly quote or other special character uses a different encoding and is limited to **335**, again matching the router. The limit is chosen automatically per message, with nothing to configure, and going over it now gives a clear error naming the limit that applied. Be aware that your provider still bills long messages as multiple SMS.
+- **Longer SMS messages**: `send_sms` now accepts the same message length the router's own web page does — up to **765** characters, where the integration previously capped you at 160. A message containing an emoji, curly quote or other special character uses a different encoding and is limited to **335**, again matching the router. The limit is chosen automatically per message, with nothing to configure, and going over it now gives a clear error naming the limit that applied.
+  - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
+  - And **longer** messages generally get **billed** as multiple SMS.
 
 - **Wider ZTE model support**: signal and data-usage sensors now recognize the alternative field names used by other `goform` routers, the login falls back to the other form when a model rejects the first, and the LTE/5G band name is worked out from the channel number when the router leaves it blank.
 
-- **Attributes are not written to history**: no entity in this integration records any attribute to the database — only its state. Attributes stay visible in the More Info dialog, Developer Tools and templates.
+- **Attributes are not written to history**: no entity in this integration records any attribute to the database — only its state. The current state of all Attributes stay visible in the More Info dialog, Developer Tools and templates.
 
 - **Documentation**: the README's example automations now ignore `unknown` and `unavailable` states, so a HA restart or router reboot no longer fires false alerts.
 
@@ -44,11 +49,15 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **Data Limit Switch**: The switch correctly showed the state but would not successfully toggle the sate. This has now been fixed.
+- **Data Limit Switch**: The switch correctly showed the state but would not successfully toggle the state. This has now been fixed.
 
-- **Monthly Data counters misclassified**: the monthly upload, download and total sensors were recorded state_class=TOTAL. This has now been corrected to TOTAL_INCREASING - a resetting counter.
+- **Monthly Data counters misclassified**: the monthly upload, download and total sensors were recorded state_class=TOTAL, which is incorrect and can cause issues on reset. This has now been corrected to TOTAL_INCREASING - a resetting counter.
 
-- **Actions Silent Fail**: If the polling interval was long, Pause Polling was on or the web GUI was used, the integrations login to the router could get dropped. Actions like `get_sms_list` run in this state provided empty responses but no error. This is now corrected - actions re-login if the session has expired, and confirm the router's action response. Sending an SMS also updates the message counters immediately, which it previously did not.
+- **Actions Silent Fail**: If the polling interval was long, Pause Polling was on or the web GUI was used, the integrations login to the router could get dropped. Actions like `get_sms_list` run in this state provided empty responses but no error. This is now corrected - Actions:
+  - re-login if the session has expired
+  - confirm the router's action response
+  - provide an error message is there is an error
+- Sending an SMS also updates the message counters immediately, which it previously did not.
 
 ---
 
@@ -63,7 +72,7 @@ All notable changes to this project will be documented in this file.
 - **Display Units & Precision**: 16 sensors now display expected units and decimal places in the UI — data sizes in GB, throughput in Mbit/s, uptime duration in hours, and rounded signal-strength/bandwidth values. Underlying native values (used for long-term statistics) are unchanged.
 - **SMS Actions Default to the Sole Router**: The `delete_sms`, `delete_all_sms`, and `get_sms_list` actions no longer require `entry_id`. When exactly one router is configured it is selected automatically; with more than one configured, `entry_id` is required and omitting it now raises a clear "specify entry_id".
 - **Polling Toggle Future Ready**: Turning off "Enable polling for changes" in the entry's system options now reliably stops scheduled polling and will satisfy the upcoming HA requirement (implicit `ContextVar` detection is being removed in HA 2026.8).
-- **Minimum Home Assistant Version**: Documented minimum raised to 2024.8.0 (driven my polling option change above, this was added to HA in 2024.8)
+- **Minimum Home Assistant Version**: Documented minimum raised to 2024.8.0 (driven by polling option change above, this was added to HA in 2024.8)
 
 ### Fixed
 
@@ -98,7 +107,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **New Sensors**: Added several new entities, the most useful of which is a select for **APN Profile**. Changing APN can be as or more effective than rebooting to restore 5G signal that has dropped to 4G only. New entities are:
+- **New Sensors**: Added several new entities, the most useful of which is a select for **APN Profile**. Changing APN can be as or more effective than rebooting to restore 5G signal that has dropped to 4G (+ or LTE) only. New entities are:
   - **APN Control Selects**: Added select entities for switching active APN profiles (`apn_profile`) and toggling between automatic/manual APN mode (`apn_mode`).
   - **Network Mode Select**: Added carrier network preference selection (`net_select_mode`) to choose between Auto (4G/5G), 5G NSA, 5G SA, and 4G Only.
   - **ODU LED Control Switch**: Added a switch (`odu_led_switch`) to toggle the physical outdoor unit status LEDs.
