@@ -1,22 +1,4 @@
 {
-  "inputs": [
-    {
-      "id": "hardwareCheckCapture",
-      "type": "pickString",
-      "description": "Also re-record tests/fixtures from the live device?",
-      "options": [
-        {
-          "label": "Check only",
-          "value": ""
-        },
-        {
-          "label": "Check and re-capture fixtures",
-          "value": "--capture"
-        }
-      ],
-      "default": ""
-    }
-  ],
   "tasks": [
     {
       "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.yml' '*.yaml' | xargs -0 -r yamllint -c .validate/.yamllint | tee .reports/yaml_lint.txt; echo \"\"; if [ ! -s \".reports/yaml_lint.txt\" ]; then echo -e \"\\033[1;32m✔  YAML Lint: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  YAML Lint: FAILED\\033[0m\"; fi",
@@ -538,5 +520,23 @@
       "type": "shell"
     }
   ],
-  "version": "2.0.0"
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "hardwareCheckCapture",
+      "type": "pickString",
+      "description": "Also re-record tests/fixtures from the live device?",
+      "options": [
+        {
+          "label": "Check only",
+          "value": ""
+        },
+        {
+          "label": "Check and re-capture fixtures",
+          "value": "--capture"
+        }
+      ],
+      "default": ""
+    }
+  ]
 }
