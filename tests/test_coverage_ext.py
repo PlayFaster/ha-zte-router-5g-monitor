@@ -167,7 +167,10 @@ async def test_api_delete_all_exception(mock_aiohttp_client):
 async def test_api_get_ad_empty_version(mock_aiohttp_client):
     """Test get_ad when version is empty."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    with patch.object(api, "get_version", return_value=""):
+    with (
+        patch.object(api, "_ensure_session", AsyncMock()),
+        patch.object(api, "get_version", return_value=""),
+    ):
         ad = await api.get_ad()
         assert ad == ""
 

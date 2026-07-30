@@ -24,7 +24,10 @@ from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
-PARALLEL_UPDATES = 0
+# Writes are serialised — see the note in `switch.py`. `0` (unlimited) stays
+# correct for the read-only platforms; a platform that commands this
+# single-session router must not issue concurrent `goform` writes.
+PARALLEL_UPDATES = 1
 
 
 @dataclass(frozen=True, kw_only=True)

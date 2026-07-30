@@ -79,6 +79,27 @@ APN_PROFILE_SLOTS = 10
 # Enforced in `async_send_sms` rather than the service schema, because which
 # limit applies depends on the message content. Behaviour past five segments is
 # untested on hardware; these ceilings keep callers out of that zone.
+# Targeted write confirmation (switch platform).
+#
+# A control's position is read back from the router straight after the write,
+# rather than waiting for the coordinator's debounced poll — which can be up to
+# ten seconds away and made the UI appear to toggle, revert, then correct
+# itself. Measured on an MC7010: the write returns in ~112 ms and the read-back
+# in ~16 ms (~38 ms worst case with a full poll in flight), so the confirmed
+# round trip stays well inside the ~150 ms that reads as instant.
+#
+# No delay before the *first* read: the router applies these settings before it
+# answers the write, so waiting would spend responsiveness on nothing. The
+# delay exists only for a second attempt, so a slower model — or a future
+# firmware that applies asynchronously — is not reported as a failed write on
+# the strength of one early read.
+WRITE_VERIFY_RETRY_DELAY = 0.2
+
+# Kept well under the API's default 15 s. A confirmation that hangs must not
+# hold the UI; past this the write is treated as *unverified* and left for the
+# next poll, which is a different outcome from a write that was refused.
+WRITE_VERIFY_TIMEOUT = 3
+
 # Data-usage projection tuning.
 #
 # PROJECTION_CREDIBILITY_DAYS is the point at which this cycle's own usage rate

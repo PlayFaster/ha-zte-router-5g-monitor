@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.zte_router_5g.select import (
     ZTERouterSelect,
@@ -201,7 +202,11 @@ async def test_select_async_select_option_success(mock_coordinator, mock_config_
 async def test_select_async_select_option_exception(
     mock_coordinator, mock_config_entry, caplog
 ):
-    """Test async_select_option catches and logs exception."""
+    """A refused select must raise, not spring back with only a log line.
+
+    The router answers `200 OK` for a refused write, so a swallowed exception
+    left the user watching the value revert with no indication why.
+    """
     mock_coordinator.data = {}
     mock_coordinator.api = MagicMock()
     desc = ZTESelectEntityDescription(
@@ -215,7 +220,10 @@ async def test_select_async_select_option_exception(
     )
     select = ZTERouterSelect(mock_coordinator, mock_config_entry, desc)
 
-    await select.async_select_option("any_option")
+    with pytest.raises(HomeAssistantError) as err:
+        await select.async_select_option("any_option")
+
+    assert err.value.translation_key == "select_set_failed"
     assert "Failed to set" in caplog.text
 
 

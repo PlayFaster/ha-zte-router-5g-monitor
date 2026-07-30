@@ -1,7 +1,7 @@
 """Tests for ZTE Router 5G API."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
@@ -344,6 +344,8 @@ async def test_api_get_ad_new_gen(mock_aiohttp_client):
     """Test AD hash generation for new generation models (MC888/MC889)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     with (
+        # `get_ad` now assures the session first — see the stale-session tests.
+        patch.object(api, "_ensure_session", AsyncMock()),
         patch.object(api, "get_version", return_value="MC888_VER"),
         patch.object(api, "get_rd", return_value="test_rd"),
     ):
@@ -1373,3 +1375,104 @@ def test_every_data_volume_field_is_polled():
         assert polled.intersection(aliases), (
             f"none of {aliases} is requested by either batch"
         )
+
+
+# --- Stale-session recovery on writes ---------------------------------------
+#
+# Verified against an MC7010 on 2026-07-30 by replaying an invalidated stok.
+# A read signals a dead session by echoing every requested key back empty, which
+# `_request` already recovers from. A *write* answers `{"result":"failure"}`,
+# which is indistinguishable from a command the router declined on its merits —
+# so nothing recovered it, and a control failed on every attempt until some read
+# happened to re-login. That was the reported fault.
+#
+# The recovery has to happen *before* the write. Recovering afterwards — renew
+# the session, replay the payload — was implemented first and verified NOT to
+# work against hardware. The reason is not established; the tidy explanation
+# (that `RD` rotates on re-login, staling the `AD`) was disproved by
+# `scripts/hardware_check.py`. These tests therefore assert the *ordering* that
+# was measured to work, and deliberately do not encode a mechanism.
+#
+# A caution about this file: the earlier version of these tests passed while the
+# code failed on hardware, because the mock was written from the same wrong
+# model as the code. Mocks cannot falsify an assumption about the device — only
+# `scripts/hardware_check.py` can.
+
+
+@pytest.mark.asyncio
+async def test_a_write_checks_the_session_before_deriving_its_token(
+    mock_aiohttp_client,
+):
+    """`get_ad` is the choke point every write passes through."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=live"
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),  # probe
+        MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"RD": "abc"}),
+    ]
+
+    await api.get_ad()
+
+    probe_url = mock_aiohttp_client.get.call_args_list[0][0][0]
+    assert "wan_connect_status" in probe_url, "the session was not checked first"
+
+
+@pytest.mark.asyncio
+async def test_a_dead_session_is_renewed_before_the_token_is_built(
+    mock_aiohttp_client,
+):
+    """The whole point: the token must come from the *new* session.
+
+    `RD` changes when a session is created, so deriving `AD` first and
+    re-logging-in afterwards produces a token the router will reject — which is
+    exactly how the original attempt at this failed on hardware.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=stale"
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": ""}),  # dead session
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),  # after
+        MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"RD": "post-login-value"}),
+    ]
+    login = AsyncMock(return_value="stok=fresh")
+
+    with patch.object(api, "login", login):
+        await api.get_ad()
+
+    login.assert_awaited_once()
+    # The RD read must come after the re-login, or the token is stale.
+    rd_call = mock_aiohttp_client.get.call_args_list[-1][0][0]
+    assert "RD" in rd_call
+
+
+@pytest.mark.asyncio
+async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client):
+    """The hazard this design avoids.
+
+    `{"result":"failure"}` is what the router returns for a command it declined
+    on its merits. Resending it would deliver a `send_sms` twice. With the
+    session assured up front there is no reason to retry, and nothing does.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=live"
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"RD": "abc"}),
+    ]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "failure"}
+    )
+
+    with pytest.raises(ZTEConnectionError):
+        await api.set_odu_led_switch("1")
+
+    assert mock_aiohttp_client.post.call_count == 1, "a declined write was resent"

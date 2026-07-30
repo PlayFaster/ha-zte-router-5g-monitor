@@ -84,6 +84,20 @@ _CORE_PARAMS: list[str] = [
     # by default, so they belong in the mandatory fetch.
     "traffic_clear_date",
     "wan_auto_clear_flow_data_switch",
+    # --- Writable settings ---
+    #
+    # These are the only router state a *control* is read from that would
+    # otherwise sit in the optional batch. A control showing a cached position
+    # is worse than a diagnostic showing one: it invites a write against a
+    # stale reading, and `DATA_LIMIT_SETTING` echoes four of these fields back
+    # in the form it sends, so a degraded read there would build a bad write.
+    # They are also the two switches confirmed by targeted read-back after a
+    # write, which needs the poll to agree with the confirmation.
+    "ODU_led_switch",
+    "data_volume_limit_switch",
+    "data_volume_alert_percent",
+    "data_volume_limit_unit",
+    "data_volume_limit_size",
     # --- Device identity ---
     #
     # `imei` stays here despite feeding only a disabled sensor: it is
@@ -145,20 +159,10 @@ _EXTENDED_PARAMS: list[str] = [
     "opms_wan_auto_mode",
     "apn_interface_version",
     # --- Router settings ---
-    "ODU_led_switch",
     "upnpEnabled",
     "alg_sip_enable",
     "web_sleep_switch",
     "web_wake_switch",
-    # --- Data-volume form ---
-    #
-    # Read back by `set_data_volume_settings()`. If this fetch is
-    # degraded the write refuses rather than sending a partial form,
-    # which is the correct outcome — see that method.
-    "data_volume_limit_switch",
-    "data_volume_alert_percent",
-    "data_volume_limit_unit",
-    "data_volume_limit_size",
     # --- Reboot schedule ---
     "reboot_schedule_enable",
     "reboot_schedule_mode",
@@ -287,16 +291,70 @@ class ZTERouterAPI:
         ``goformId`` returns one, and inventing a requirement would turn
         working commands into errors.
         """
+        if self._is_refusal(data):
+            raise ZTEConnectionError(
+                f"Router rejected {cmd}: result={data['result']!r}. The command "
+                f"was not carried out — this API answers 200 OK for a refused "
+                f"write."
+            )
+
+    @staticmethod
+    def _is_refusal(data: Any) -> bool:
+        """Return whether a response is an explicit non-success ``result``.
+
+        Shared by `_require_success` and the stale-session recovery in
+        `_request`, which must agree on what a refusal looks like: one deciding
+        a response is a refusal while the other did not would either retry a
+        command the router meant to decline, or fail to recover one it never
+        authorised.
+
+        A response with no ``result`` key at all is not a refusal. Not every
+        ``goformId`` returns one, and inventing a requirement would turn working
+        commands into errors.
+        """
         if not isinstance(data, dict):
-            return
+            return False
         result = data.get("result")
         if result is None:
-            return
-        if str(result).lower() not in ("success", "0", "ok"):
-            raise ZTEConnectionError(
-                f"Router rejected {cmd}: result={result!r}. The command was not "
-                f"carried out — this API answers 200 OK for a refused write."
-            )
+            return False
+        return str(result).lower() not in ("success", "0", "ok")
+
+    async def _ensure_session(self, timeout_sec: int | None = None) -> None:
+        """Confirm the session before a write derives its ``AD`` token.
+
+        Necessary because of how the two halves of this API fail differently.
+        A *read* signals a dead session by echoing every requested key back
+        empty, which `_request` detects and recovers from. A *write* answers
+        ``{"result":"failure"}`` — indistinguishable from a command the router
+        declined on its merits — so nothing recovers it, and a control failed on
+        every attempt until some read happened to re-login. That is the reported
+        fault: turning the LED on failed repeatedly after the router's web page
+        had taken the session, until Refresh Now ran the batch poll.
+
+        It must happen *before* the write, not after it fails. Recovering
+        afterwards was tried first and **verified not to work on hardware**: the
+        session was renewed and the write replayed, and the router refused it
+        again. Why is not established — a first guess that ``RD`` rotates on
+        re-login, invalidating the ``AD`` in the replayed payload, was itself
+        disproved by `scripts/hardware_check.py`, which observed ``RD``
+        surviving a re-login. What *is* established, by repeated hardware runs,
+        is that assuring the session first works and recovering afterwards does
+        not. The design rests on the measurement, not on the explanation.
+
+        Retrying is also unattractive on its own terms: ``{"result":"failure"}``
+        is equally what the router returns for a command it declined on its
+        merits, so resending would deliver a `send_sms` twice.
+
+        Costs one short read (~16 ms) on a path where the write itself is
+        ~112 ms. `_request` does the recovery: a retrying read re-logs-in on its
+        own when the session has gone.
+        """
+        await self._request(
+            "GET",
+            "goform/goform_get_cmd_process?multi_data=1&isTest=false"
+            "&sms_received_flag_flag=0&cmd=wan_connect_status",
+            timeout_sec=timeout_sec,
+        )
 
     def _parse_date(self, date_str: str) -> str | None:
         if not date_str:
@@ -328,6 +386,7 @@ class ZTERouterAPI:
         self,
         method: str,
         path: str,
+        *,
         params: dict[str, Any] | None = None,
         data: Any = None,
         headers: dict[str, str] | None = None,
@@ -412,11 +471,11 @@ class ZTERouterAPI:
                 return await self._request(
                     method,
                     path,
-                    params,
-                    data,
-                    headers,
-                    timeout_sec,
-                    authenticated,
+                    params=params,
+                    data=data,
+                    headers=headers,
+                    timeout_sec=timeout_sec,
+                    authenticated=authenticated,
                     _retry=False,
                 )
             _LOGGER.error(
@@ -437,11 +496,11 @@ class ZTERouterAPI:
                 return await self._request(
                     method,
                     path,
-                    params,
-                    data,
-                    headers,
-                    timeout_sec,
-                    authenticated,
+                    params=params,
+                    data=data,
+                    headers=headers,
+                    timeout_sec=timeout_sec,
+                    authenticated=authenticated,
                     _retry=False,
                 )
             raise ZTEConnectionError("Failed to parse JSON response from router")
@@ -480,11 +539,11 @@ class ZTERouterAPI:
                     return await self._request(
                         method,
                         path,
-                        params,
-                        data,
-                        headers,
-                        timeout_sec,
-                        authenticated,
+                        params=params,
+                        data=data,
+                        headers=headers,
+                        timeout_sec=timeout_sec,
+                        authenticated=authenticated,
                         _retry=False,
                     )
                 raise ZTEAuthError("Session expired/unauthorized")
@@ -720,15 +779,33 @@ class ZTERouterAPI:
             self.stok = None
             self.session.cookie_jar.clear(predicate=lambda m: m.key == "stok")
 
-    async def _batch_get(self, params: list[str]) -> dict[str, Any]:
+    async def _batch_get(
+        self, params: list[str], *, timeout_sec: int | None = None
+    ) -> dict[str, Any]:
         """Issue one `multi_data` batch read for the given `cmd` names."""
         cmd = ",".join(params)
         path = (
             "goform/goform_get_cmd_process?multi_data=1&isTest=false"
             f"&sms_received_flag_flag=0&cmd={cmd}"
         )
-        data = await self._request("GET", path)
+        data = await self._request("GET", path, timeout_sec=timeout_sec)
         return cast(dict[str, Any], data)
+
+    async def get_params(
+        self, params: list[str], *, timeout_sec: int | None = None
+    ) -> dict[str, Any]:
+        """Read a named handful of keys, for confirming a write.
+
+        A round trip to this router costs about the same whatever the payload —
+        16 ms median for one key against 30 ms for the full 75-key core batch —
+        so this exists for *precision*, not speed: it answers with the state of
+        one setting without disturbing, or being disturbed by, the poll cycle.
+
+        Callers must treat a raised exception as *unverified*, never as a failed
+        write. The write may well have landed; only a successful read reporting
+        the wrong value proves otherwise.
+        """
+        return await self._batch_get(params, timeout_sec=timeout_sec)
 
     async def get_all_data(self) -> dict[str, Any]:
         """Fetch the mandatory core payload.
@@ -932,7 +1009,12 @@ class ZTERouterAPI:
             return []
 
     async def get_ad(self, timeout_sec: int | None = None) -> str:
-        """Get the AD parameter for commands."""
+        """Get the AD parameter for commands.
+
+        The single choke point every write passes through, which is why the
+        session check lives here rather than in each setter.
+        """
+        await self._ensure_session(timeout_sec=timeout_sec)
         version = await self.get_version(timeout_sec=timeout_sec)
         if not version:
             return ""

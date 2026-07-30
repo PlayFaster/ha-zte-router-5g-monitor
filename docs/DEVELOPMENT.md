@@ -16,11 +16,15 @@ The integration follows the standard Home Assistant Custom Component pattern, op
 - **`__init__.py`**: Manages the integration lifecycle (setup/unload). Also handles background initialization to prevent blocking HA startup.
 - **`sensor.py`**: Extracts technical metrics using declarative `value_fn` callbacks and handles transformations (e.g., Bytes to GB, Uptime to ISO Datetime).
 - **`binary_sensor.py`**: Maps boolean states (e.g., `best_connection` logic).
-- **`switch.py`**: Implements "Pause Polling" to stop API calls without disabling the integration, allowing temporary exclusive access to the router WebUI.
+- **`switch.py`**: Implements "Pause Polling" to stop API calls without disabling the integration, allowing temporary exclusive access to the router WebUI. Also the two router-facing switches, which confirm their own writes by targeted read-back rather than waiting for the debounced poll (`verify_after_write` + `state_key`) and latch their last reported position so a payload missing the key is never rendered as "off".
 - **`button.py`**: Triggers stateless actions (Refresh Now, Reboot, Delete All SMS). "Refresh Now" forces an immediate coordinator poll via `async_force_refresh()` — the force variant, so it fetches even while Pause Polling is on — complementing the Pause Polling switch and the configurable polling interval.
 - **`diagnostics.py`**: Sanitizes the diagnostics download. Blanks credentials and carrier identity, pseudonymizes IPs/cell IDs/SMS senders to stable tokens, summarizes APN profiles to their shape, and sweeps for IP/MAC-shaped strings under unknown keys.
 - **`number.py`**: Provides UI control over the `DataUpdateCoordinator` refresh interval with persistent storage in `ConfigEntry` options.
 - **`config_flow.py`**: Manages initial setup and reconfiguration via `OptionsFlow`, storing credentials in `entry.options`. Normalizes the host input (`_clean_host`) before storage, and on edit screens leaves credential fields blank (masked, never pre-filled) — restoring the stored password on a blank submit via `_merge_credentials`, so the password can be re-set without ever being displayed.
+
+### Operator Tooling (`scripts/`)
+
+- **`hardware_check.py`**: exercises the write path against a real router and records what it answers. Not part of CI — it needs the hardware. Round-trips every safe write (including with the session deliberately invalidated), asserts the device assumptions the write path rests on, and captures observed payloads to `tests/fixtures/` with `--capture`. Run before a release and after any firmware update. See §5 for why the unit suite cannot do this job.
 
 ## 3. Historical Architectural Shifts
 
@@ -170,6 +174,40 @@ It carries six fields — the limit switch, the cap and its unit, the alert perc
 
 The general lesson is the one this API keeps teaching: a write that is refused looks exactly like a write that succeeded, so the guard must be on the body and the failure must reach the user.
 
+### A control's position must not wait for the debounced poll
+
+`async_force_refresh()` goes through the coordinator's debouncer — `immediate=True`, cooldown **10 s**. The first call runs at once; any call inside the following ten seconds is deferred to the end of it. A write landing in that window therefore left the entity state unchanged for up to ten seconds, and the frontend's optimistic toggle reverted long before it arrived. The symptom was a switch that appeared to toggle, revert, then correct itself — intermittent, because it depended on the timing of the _previous_ refresh.
+
+The router was measured before anything was changed, and **exonerated**: it applies a setting in ~128 ms and answers correctly on the very first read-back. Do not go looking for slow hardware here.
+
+The fix is a **targeted read-back** (`api.get_params()`), opt-in per description via `verify_after_write` and `state_key`. Three outcomes must stay distinct, and collapsing any two of them reintroduces a bug:
+
+| Outcome                            | Meaning                    | Action                                  |
+| :--------------------------------- | :------------------------- | :-------------------------------------- |
+| Read agrees                        | Confirmed                  | Publish immediately                     |
+| Read disagrees twice, 200 ms apart | The router declined it     | Raise `switch_write_not_applied`        |
+| Read errors, or omits the key      | **Unverified, not failed** | Log at debug; leave it to the next poll |
+
+The third row is the subtle one. A failed _confirmation_ is not a failed _write_ — the command may well have landed, and raising there would report success as failure on every connection blip.
+
+**Verification is opt-in, and the APN and bearer selects must never have it.** Those setters re-establish the connection, and the router answers with blank values while it does — which this integration reads as an expired session. A read-back there would risk a needless re-login and would report a slow-but-successful change as a failure.
+
+### A write cannot detect a session that was taken away
+
+Reads recover from a stolen session; writes do not, because a write on a dead session answers `{"result":"failure"}` — indistinguishable from a command the router genuinely declined. Signing into the router's web page ends Home Assistant's session, and every write then failed until some read happened to re-login.
+
+**The recovery is ordering, not detection.** `_ensure_session()` runs one short authenticated read _before_ the write derives its `AD`, and is called from `get_ad()` — the choke point every write passes through. Recovering _after_ a refused write was implemented first and **verified not to work on hardware**; the reason is not established, and the tidy explanation offered for it was disproved by `scripts/hardware_check.py`. Full detail in `docs/zte_how_to_access.md`.
+
+Do not add `"failure"` to the session-expiry strings. It is equally what a declined command returns, and retrying would resend it — for `send_sms`, twice.
+
+### Mocks cannot falsify a belief about the router
+
+The test asserting that a refused write could be retried after re-login **passed while that code failed on hardware**. The mock was written from the same wrong model as the code, so it could only confirm the code agreed with the mistake.
+
+`scripts/hardware_check.py` exists for this. It round-trips every safe write against a real router — including with the session deliberately invalidated — asserts the device assumptions the write path rests on, and captures observed payloads to `tests/fixtures/` so mocks can be built from observation. Run it before a release, and after any firmware update. It disproved one of this document's own claims on its first run.
+
+It deliberately excludes `send_sms`, `delete_sms`, `reboot` and the APN/bearer selects: real messages, real downtime, real connection loss.
+
 ---
 
 ## 6. Environment Constraints
@@ -221,3 +259,4 @@ The general lesson is the one this API keeps teaching: a write that is refused l
 - **v3.3.0-dev3** (2026-07-27) — IQS pass and follow-up. Added success patterns for translated exceptions (`translation_domain` + `translation_key`, and the `ServiceValidationError` vs `HomeAssistantError` choice) and for the Repair selection rule (persistence **plus** agency, and why `router_unreachable` waits 10 failures rather than 3). Added two pitfalls: translated exceptions breaking `pytest.raises(..., match=...)` under a mocked hass, and `": "` inside a folded YAML comment breaking `quality_scale.yaml`. Added §15 SMS feature-group toggle and the deferred custom-trigger work to Technical Debt.
 - **v3.3.1** (2026-07-29) — Cross-model compatibility expansion. Documented the new `helpers.py` utilities (`is_gsm7`, `earfcn_to_band`, `arfcn_to_band`) under Core Files. Added two Technical Debt items: cross-model support is inferred from other projects rather than tested on hardware (including the three speculative alias spellings and the login fallback that never fires on an MC7010), and no model is yet confirmed to populate any of the five thermal keys — with the condition under which they should be removed rather than left indefinitely.
 - **v3.3.0-dev1** (2026-07-27) — `dev_standards` conformance pass. Added success patterns for force-refresh-bypasses-pause, per-endpoint strike budgets, the health snapshot held outside `coordinator.data`, the always-available health sensor, reload-by-default options with a live-apply allow-list, layered diagnostics sanitization, and per-attribute recorder evaluation. Added four pitfalls: `goformId=LOGOUT` needs an `AD` token (and why the obvious web-UI verification cannot detect it), Refresh Now silently swallowed while paused, the options flow changing credentials without applying them, and diagnostics leaking SMS content and cell location. Recorded the §3 root-identity deviation and the config-entry migration-handler constraint under Technical Debt.
+- **v3.3.2** (2026-07-30) — Control write path reworked after a report of erratic LED toggling. Added three pitfalls: a control's position waiting on the 10-second debounce (with the three-outcome table for targeted read-back, and why the APN/bearer selects must be excluded), a write's inability to detect a stolen session (and why `"failure"` must not join the expiry strings), and mocks being unable to falsify a belief about the router — a test passed while the code it covered failed on hardware. Added `scripts/hardware_check.py` under new Operator Tooling, and noted the switch platform's read-back confirmation and position latching under Core Files.

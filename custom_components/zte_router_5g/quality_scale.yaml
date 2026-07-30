@@ -73,8 +73,11 @@ rules:
   parallel-updates:
     status: done
     comment:
-      PARALLEL_UPDATES = 0 in all six platform files (sensor, binary_sensor, button,
-      number, switch, select). Coordinator-driven, so no per-entity polling.
+      Set deliberately per platform. PARALLEL_UPDATES = 0 on the read-only platforms
+      (sensor, binary_sensor) — coordinator-driven, so there is no per-entity polling to
+      serialise. PARALLEL_UPDATES = 1 on the platforms that command the router (switch,
+      select, number, button) the router permits a single session, so concurrent goform
+      writes are how a session gets torn down. Rapid toggling queues rather than racing.
   reauthentication-flow:
     status: done
     comment:

@@ -371,8 +371,14 @@
     "delete_all_button_failed": {
       "message": "Failed to delete all SMS messages: {error}"
     },
+    "select_set_failed": {
+      "message": "Could not change {entity} on the router: {error}"
+    },
     "switch_set_failed": {
       "message": "Could not change {entity} on the router: {error}"
+    },
+    "switch_write_not_applied": {
+      "message": "The router accepted the change to {entity} but is still reporting the old value, so the setting did not take effect. Try again, or change it from the router's own web page."
     }
   },
   "issues": {

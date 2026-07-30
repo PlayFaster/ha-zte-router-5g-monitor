@@ -246,7 +246,7 @@ def test_best_connection_sensor_device_info(mock_coordinator, mock_config_entry)
 )
 @pytest.mark.parametrize(("raw", "expected"), [("1", True), ("0", False)])
 def test_web_power_sensors_read_the_router_flag(
-    mock_coordinator, mock_config_entry, key, raw_key, raw, expected
+    mock_coordinator, mock_config_entry, *, key, raw_key, raw, expected
 ):
     """The router reports these as '1'/'0' strings, not booleans."""
     description = next(d for d in BINARY_SENSORS if d.key == key)

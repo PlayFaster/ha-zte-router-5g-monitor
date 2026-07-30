@@ -653,7 +653,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 ),
                 "consecutive_failures": 0,
             }
-        except Exception:  # noqa: BLE001 # pragma: no cover - defensive
+        except Exception:  # pragma: no cover - defensive
             # Section 19: the health computation must never crash the update it
             # exists to diagnose. Any failure degrades to healthy/unknown and is
             # logged at debug — a narrower catch would defeat the requirement.
@@ -724,7 +724,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 ),
                 "consecutive_failures": self.consecutive_failures,
             }
-        except Exception:  # noqa: BLE001 # pragma: no cover - defensive
+        except Exception:  # pragma: no cover - defensive
             # Section 19: the health computation must never crash the update it
             # exists to diagnose. Any failure degrades to healthy/unknown and is
             # logged at debug — a narrower catch would defeat the requirement.

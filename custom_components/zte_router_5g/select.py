@@ -11,17 +11,21 @@ from homeassistant.components.select import SelectEntity, SelectEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import APN_PROFILE_SLOTS
+from .const import APN_PROFILE_SLOTS, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
-PARALLEL_UPDATES = 0
+# Writes are serialised — see the note in `switch.py`. `0` (unlimited) stays
+# correct for the read-only platforms; a platform that commands this
+# single-session router must not issue concurrent `goform` writes.
+PARALLEL_UPDATES = 1
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -184,19 +188,42 @@ class ZTERouterSelect(
         return self.entity_description.value_fn(self.coordinator.data)
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option."""
+        """Change the selected option, surfacing a refusal rather than logging it.
+
+        A failure here used to be swallowed into the log, so a rejected APN or
+        bearer change looked like a select that silently sprang back. This API
+        answers `200 OK` for a refused write, which makes an unreported failure
+        especially easy to miss (IQS `action-exceptions`).
+
+        Deliberately *not* confirmed by a targeted read-back, unlike the
+        switches. Every setter here re-establishes the connection, and the
+        router answers with blank values while it does — which this integration
+        reads as an expired session. Reading back would risk a needless
+        re-login and would report a slow-but-successful change as a failure.
+        The debounced refresh is the right instrument for a change that takes
+        seconds to settle.
+        """
         try:
             await self.entity_description.setter_fn(
                 self.coordinator.api, option, self.coordinator.data
             )
-            await self.coordinator.async_force_refresh()
-        except Exception:
-            _LOGGER.exception(
-                "%s: Failed to set %s to %s",
+        except Exception as err:
+            _LOGGER.error(
+                "%s: Failed to set %s to %s: %s",
                 self._entry.title,
                 self.entity_description.key,
                 option,
+                err,
             )
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="select_set_failed",
+                translation_placeholders={
+                    "entity": self.entity_description.key,
+                    "error": str(err),
+                },
+            ) from err
+        await self.coordinator.async_force_refresh()
 
     @property
     def device_info(self) -> DeviceInfo:

@@ -80,6 +80,11 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     "logout": (),
     "get_all_data": (),
     "get_extended_data": (),
+    # The targeted read-back used to confirm a switch write. It must behave
+    # exactly like the batch reads against a dead session: the switch treats a
+    # raised error as *unverified*, but a silent empty answer would be read as
+    # the router reporting the old value — a false "did not apply".
+    "get_params": (["ODU_led_switch"],),
     "get_sms_capacity": (),
     "get_last_sms_content": (),
     "get_sms_messages": (),

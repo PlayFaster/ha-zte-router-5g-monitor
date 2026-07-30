@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.2-rc5] - 2026-07-30 - Unreleased - No Manifest Bump - Control Write Path Reworked
+
+Reported as erratic ODU LED toggling: the switch would move, revert, then correct itself seconds later. Two independent faults, neither in the router.
+
+### Fixed
+
+- **Controls did not reach the state machine until the debounced poll ran.** `async_force_refresh()` goes through the coordinator's debouncer, cooldown **10 s**, so a write landing inside that window left the entity state unchanged for up to ten seconds — long enough for the frontend's optimistic toggle to revert first. Whether it happened depended on the timing of the _previous_ refresh, which is why it felt random.
+  - Fixed with a **targeted read-back**: `api.get_params()` reads the key straight back and publishes it. Opt-in per description via `verify_after_write` + `state_key`, set on the two switches only.
+  - Three outcomes kept distinct: read agrees → publish; read disagrees twice (200 ms apart) → `switch_write_not_applied`; read **errors or omits the key** → _unverified_, left to the next poll. A failed confirmation is not a failed write.
+  - The router was measured first and exonerated: it applies in **~128 ms**, correct on the first read-back, holding. The read-back costs ~16 ms median, ~38 ms with a full poll in flight.
+- **A write never noticed a session taken away.** Signing into the router's web page ends Home Assistant's session; the write then answers `{"result":"failure"}`, which matches neither the all-values-empty read rule nor the `is_auth_error` list. Every subsequent attempt failed until some read happened to re-login — the user hit exactly this, and Refresh Now cleared it.
+  - Fixed by `_ensure_session()`, called from `get_ad()` — the choke point every write passes through, so `send_sms`, `reboot`, the selects and both switches all inherit it.
+  - **`"failure"` was deliberately not added to `is_auth_error`.** It is equally what a genuinely declined command returns, and retrying one would resend it — for `send_sms`, twice.
+- **`select.py` swallowed write exceptions**, so a rejected APN or bearer change silently sprang back. Now raises `select_set_failed`. Deliberately **not** given a read-back: those setters re-establish the connection and the router answers blank meanwhile, which reads as an expired session.
+- **A missing key rendered as a confident "off".** Switch position is now latched and held when a payload omits the key. `None`/unknown was considered and rejected — a toggle landing on unknown is worse than the bug.
+
+### Changed
+
+- **`PARALLEL_UPDATES = 1`** on `switch`, `select`, `number`, `button`; `0` retained on `sensor` and `binary_sensor`. `0` means _unlimited_, which on a single-session router is how concurrent writes tear a session down. Confirmed not an IQS violation: the rule requires the constant to be set deliberately, and core does exactly this split (`liebherr` has `1`/`0` and `parallel-updates: done`).
+- **Five writable keys promoted to `_CORE_PARAMS`** — `ODU_led_switch` and the four `data_volume_*` fields. A control showing a cached position invites a write built on a stale reading, and `DATA_LIMIT_SETTING` composes four of them into its form. Core 80 keys/1269 chars, extended 36/623; budget test unchanged at 1700.
+
+### Added
+
+- **`scripts/hardware_check.py`** — round-trips every safe write against a real router, including with the session deliberately invalidated, and captures observed payloads to `tests/fixtures/`. Excludes `send_sms`, `reboot` and the APN/bearer selects by design.
+
+### Corrected — a claim this file made hours earlier
+
+`[3.3.2-rc5]` originally explained the failed retry by `RD` rotating on re-login. **`hardware_check.py` disproved that on its first run**: `RD` survived a re-login. The retry's failure is real and reproducible; its mechanism is **not established**. The code and tests now assert the ordering that was measured to work and claim no mechanism, and the script records `rd_survives_relogin` as an observation rather than a scored check.
+
+### Testing lesson, recorded because it cost real time
+
+`test_write_refused_with_a_dead_session_relogs_in_and_retries` **passed against code that failed on hardware**. The mock was written from the same wrong model as the code, so it could only confirm the code agreed with the mistake. Mocks cannot falsify a belief about the device. The enumerate-and-guard tests fared better — the dead-session sweep forced `get_params` into coverage the moment it was added.
+
+## [3.3.2-rc4] - 2026-07-30 - Unreleased - No Manifest Bump - Toolchain Moved To HA 2026.8; Harness Unblocked
+
+The devcontainer took **HA 2026.8.0b1**, **PHACC 0.13.349** and **ruff 0.16.0**. The harness problem recorded in `[3.3.2-dev1]` is **resolved** — PHACC 0.13.349 supports 2026.8, so the suite runs with no shim and the throwaway probe is gone for good. Pins were already updated in `.validate/requirements_test.txt` and `version_matrix.json`.
+
+### Fixed — two `PLR0917` findings from ruff 0.16
+
+`PLR0917` (too many positional arguments) is newly enforced. Both findings were real signature smells rather than noise.
+
+- **`ZTERouterAPI._request()` took 7 positional parameters.** Everything after `path` is now **keyword-only**. Nothing outside the class was passing them positionally — only the three internal retry calls were, each re-listing `method, path, params, data, headers, timeout_sec, authenticated` in order, which is exactly the argument-transposition risk the rule exists to catch. Those three now pass by keyword. No call site outside `api.py` changed, and no behaviour changed.
+- **`test_web_power_sensors_read_the_router_flag` took 6.** Two fixtures plus four parametrize values. The four parametrized values are now keyword-only; pytest injects by name, so the decorators are untouched.
+
+### Verified on the new stack
+
+- **750 tests pass** (749 plus `test_no_sensor_uses_the_total_state_class`), **100% coverage**, `mypy --strict` clean across 14 source files, `ruff check` and `ruff format --check` clean on 0.16.0 across 47 files.
+- This is the first unshimmed run on 2026.8. The nine device-registry test fixes in `[3.3.2-dev1]` hold up without the probe, and nothing beyond them surfaced.
+
+### Still open
+
+- **`unifi_network_monitor` and `huawei_router_5g` keep the same `via_device` test gap**, and both will now also hit `PLR0917` if they have comparable signatures. Neither is actioned here.
+- §7 of the shared device-registry record was verified against **b0**; this run was on **b1**, with no change observed. A final-release check is still the honest closing step.
+
 ## [3.3.2-rc3] - 2026-07-30 - Unreleased - No Manifest Bump - Bumps
 
 ### Bumps
@@ -16,7 +70,7 @@ All notable changes to this project will be documented in this file.
 
 - **Docs**: Changes to CHANGELOG.md and README.md prior to v3.3.2 release
 
-## [3.3.2-dev2] - 2026-07-30 - Unreleased - No Manifest Bump - `TOTAL` State Class Banned; Release Notes Rewritten
+## [3.3.2-rc2] - 2026-07-30 - Unreleased - No Manifest Bump - `TOTAL` State Class Banned; Release Notes Rewritten
 
 A guard so the `TOTAL` / `TOTAL_INCREASING` confusion cannot recur
 
@@ -28,7 +82,7 @@ A guard so the `TOTAL` / `TOTAL_INCREASING` confusion cannot recur
   - **Mutation-verified**, not merely passing: flipping one description to `TOTAL` fails with the offending entity named (`sensor.zte_5g_data_monthly_sent_gb`). Restored; 14/14 pass, ruff clean. The four `mypy --strict` findings in that file are pre-existing and outside this addition.
   - Known gap, deliberately not covered: the ban does not stop a resetting counter being marked `MEASUREMENT`.
 
-## [3.3.2-dev1] - 2026-07-30 - Unreleased - No Manifest Bump - Device-Registry Tests Unlocked From HA 2026.7
+## [3.3.2-rc1] - 2026-07-30 - Unreleased - No Manifest Bump - Device-Registry Tests Unlocked From HA 2026.7
 
 The devcontainer took **HA 2026.8.0b0**, which triggered the pending re-verification in `.shared/issues/x_project/device_registry_2026_08.md` §7. The compat shims are correct; nine tests were not.
 
@@ -635,12 +689,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request | Live session | Dead session |
-  | :-- | :-- | :-- |
-  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
-  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
-  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+  | Request                     | Live session       | Dead session                                         |
+  | :-------------------------- | :----------------- | :--------------------------------------------------- |
+  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
+  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
+  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -1032,16 +1086,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 

@@ -461,7 +461,7 @@ Screenshots are embedded throughout the document near relevant sections. This is
 
 | Signal | System |
 | :-: | :-: |
-| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_sensor_control_info_mini.png) |
+| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_system_screen.png) |
 
 | Data | SMS |
 | :-: | :-: |
