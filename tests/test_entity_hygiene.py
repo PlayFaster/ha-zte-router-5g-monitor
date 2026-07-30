@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from homeassistant.components.sensor import SensorStateClass
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -313,6 +314,56 @@ async def test_no_entity_publishes_a_recorded_attribute(hass: HomeAssistant) -> 
     # Guard the guard: if the fixture stops producing attributes, the sweep
     # would pass vacuously and go on passing after a real regression.
     assert checked >= 3, f"sweep only inspected {checked} entities — fixture is stale"
+
+
+# Sensors allowed to use `SensorStateClass.TOTAL`, with the justification this
+# test demands. Empty by design — see the docstring below. Adding an entry is a
+# reviewable act; typing `TOTAL` into a new description is not.
+ALLOWED_TOTAL_STATE_CLASS: frozenset[str] = frozenset()
+
+
+async def test_no_sensor_uses_the_total_state_class(hass: HomeAssistant) -> None:
+    """No sensor may use `SensorStateClass.TOTAL`.
+
+    `TOTAL` and `TOTAL_INCREASING` look interchangeable and are not. Under
+    `TOTAL` the recorder recognises a new cycle *only* from a changing
+    `last_reset` attribute; a counter that simply drops to zero is not treated
+    as having reset. `TOTAL_INCREASING` detects the drop itself and needs no
+    attribute. Every counter this integration exposes resets to zero without
+    publishing `last_reset`, so `TOTAL_INCREASING` is always the correct class
+    and `TOTAL` is always a mistake. Nothing fails at runtime when it is wrong,
+    which is why this is a test and not a code review item.
+
+    **If this test fails, the `TOTAL` must be justified, not silenced.** A
+    genuine `TOTAL` sensor is one whose value can legitimately fall without
+    that being a reset — net import/export, a draining tank — and it must
+    publish `last_reset`. If the new sensor is really that, add its key to
+    `ALLOWED_TOTAL_STATE_CLASS` with a comment saying why; the allowlist exists
+    for exactly that case. If it is a counter that resets to zero, the sensor
+    is wrong, not the test.
+    """
+    async with _live_entities(hass) as entities:
+        checked = 0
+        offenders: list[str] = []
+        for entity in entities:
+            state_class = getattr(entity, "state_class", None)
+            if state_class is None:
+                continue
+            checked += 1
+            if (
+                state_class is SensorStateClass.TOTAL
+                and entity.entity_id not in ALLOWED_TOTAL_STATE_CLASS
+            ):
+                offenders.append(entity.entity_id)
+
+    assert not offenders, (
+        "sensors using SensorStateClass.TOTAL — use TOTAL_INCREASING for a "
+        "counter that resets to zero, or justify the TOTAL in "
+        "ALLOWED_TOTAL_STATE_CLASS:\n" + "\n".join(sorted(offenders))
+    )
+    # Guard the guard: if the fixture stops producing sensors with a state
+    # class, the sweep passes vacuously and keeps passing after a regression.
+    assert checked >= 3, f"sweep only inspected {checked} sensors — fixture is stale"
 
 
 async def test_every_live_entity_has_an_icon_or_a_device_class(

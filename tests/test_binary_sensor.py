@@ -15,6 +15,8 @@ from custom_components.zte_router_5g.binary_sensor import (
 )
 from custom_components.zte_router_5g.const import DOMAIN
 
+from .conftest import assert_links_to_parent
+
 
 def test_binary_sensor_is_on(mock_coordinator, mock_config_entry):
     """Test the optimal connection logic."""
@@ -214,7 +216,7 @@ def test_router_binary_sensor_device_info_signal_group(
     )
     sensor = ZTERouterBinarySensor(mock_coordinator, mock_config_entry, desc)
     info = sensor.device_info
-    assert "via_device" in info
+    assert_links_to_parent(info, DOMAIN, "864155042229309_system")
 
 
 def test_best_connection_sensor_is_on_no_data(mock_coordinator, mock_config_entry):
@@ -232,7 +234,7 @@ def test_best_connection_sensor_device_info(mock_coordinator, mock_config_entry)
         mock_coordinator, mock_config_entry, BEST_CONN_DESCRIPTION
     )
     info = sensor.device_info
-    assert "via_device" in info
+    assert_links_to_parent(info, DOMAIN, "864155042229309_system")
 
 
 # --- Newly discovered read-only switches and reboot-schedule detail ---

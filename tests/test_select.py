@@ -13,6 +13,8 @@ from custom_components.zte_router_5g.select import (
     async_setup_entry,
 )
 
+from .conftest import assert_links_to_parent
+
 
 def test_get_apn_profiles_empty():
     """Test _get_apn_profiles with empty data."""
@@ -231,7 +233,7 @@ def test_select_device_info(mock_coordinator, mock_config_entry):
     info = select.device_info
     assert info["identifiers"] == {("zte_router_5g", "864155042229309_signal")}
     assert info["manufacturer"] == "ZTE"
-    assert info["via_device"] == ("zte_router_5g", "864155042229309_system")
+    assert_links_to_parent(info, "zte_router_5g", "864155042229309_system")
 
 
 def test_select_device_info_system_group(mock_coordinator, mock_config_entry):

@@ -57,9 +57,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Expected Compatible**: Other ZTE 5G CPE devices (e.g., MC801A) may work but are currently untested.
 - **Not Supported**: Non-ZTE hardware.
 
-> [!NOTE] ZRM is a **cellular WAN & signal monitor** (designed for 5G/4G CPEs, particularly in bridge mode). It does not provide LAN/Wi-Fi client device tracking.
-
-**📟 Router Hardware:**
+> [!NOTE] This is a **cellular WAN & signal monitor** (designed for 5G/4G CPEs, particularly in bridge mode). It does not provide LAN/Wi-Fi client device tracking.
 
 - **Fully Tested**:
   - **ZTE MC7010** (5G Outdoor CPE) — tested on firmware `V1.0.0B01` and later. _This is currently the ONLY model verified on live hardware._
@@ -134,12 +132,6 @@ Monitor monthly data consumption, active session totals, and real-time upload/do
 - **Reset Day** (`sensor.zte_5g_data_reset_day`): The day of the month the router zeroes its counters. This is the router's own billing cycle and need not be the 1st - worth checking against your provider's bill.
 - **Projected Cycle Usage** (`sensor.zte_5g_data_projected_cycle_usage`): An estimate of where you will finish the cycle at your current rate. See [Understanding the usage projection](#understanding-the-usage-projection) below.
 
----
-
-</details>
-
-<br>
-
 #### Understanding the usage projection
 
 **Projected Cycle Usage** answers the question the monthly counters do not: _am I on course to exceed my allowance?_
@@ -173,6 +165,10 @@ condition:
 **It follows the router's cycle, not the calendar month.** The cycle boundary comes from **Reset Day**, so a cycle running the 15th to the 15th is handled correctly. Where the reset day is later than a short month allows — day 31 in February — the reset is taken as the last day of that month.
 
 The sensor is unavailable if the router's automatic monthly reset is switched off, because then the counters never roll over and there is no cycle to project against.
+
+---
+
+</details>
 
 <br>
 

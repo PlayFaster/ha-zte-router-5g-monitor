@@ -34,6 +34,8 @@ from custom_components.zte_router_5g.sensor import (
     async_setup_entry,
 )
 
+from .conftest import assert_is_root, assert_links_to_parent
+
 # --- TESTS FOR ZTERouterSensor ---
 
 
@@ -145,7 +147,7 @@ def test_sensor_device_info(mock_coordinator, mock_config_entry):
     info = sensor.device_info
     assert info["identifiers"] == {(DOMAIN, f"{mac}_system")}
     assert info["name"] == "My ZTE Router System"
-    assert "via_device" not in info
+    assert_is_root(info)
 
     # Signal group sensor
     description = next(d for d in SENSOR_TYPES if d.key == "lte_rsrp")
@@ -153,7 +155,7 @@ def test_sensor_device_info(mock_coordinator, mock_config_entry):
     info = sensor.device_info
     assert info["identifiers"] == {(DOMAIN, f"{mac}_signal")}
     assert info["name"] == "My ZTE Router Signal"
-    assert info["via_device"] == (DOMAIN, f"{mac}_system")
+    assert_links_to_parent(info, DOMAIN, f"{mac}_system")
 
     # Data group sensor
     description = next(d for d in SENSOR_TYPES if d.key == "monthly_rx_bytes")
@@ -161,7 +163,7 @@ def test_sensor_device_info(mock_coordinator, mock_config_entry):
     info = sensor.device_info
     assert info["identifiers"] == {(DOMAIN, f"{mac}_data")}
     assert info["name"] == "My ZTE Router Data"
-    assert info["via_device"] == (DOMAIN, f"{mac}_system")
+    assert_links_to_parent(info, DOMAIN, f"{mac}_system")
 
     # SMS group sensor
     description = next(d for d in SENSOR_TYPES if d.key == "msg_total")
@@ -169,7 +171,7 @@ def test_sensor_device_info(mock_coordinator, mock_config_entry):
     info = sensor.device_info
     assert info["identifiers"] == {(DOMAIN, f"{mac}_sms")}
     assert info["name"] == "My ZTE Router SMS"
-    assert info["via_device"] == (DOMAIN, f"{mac}_system")
+    assert_links_to_parent(info, DOMAIN, f"{mac}_system")
 
 
 # --- SMS SPECIFIC TESTS ---

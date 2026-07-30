@@ -18,8 +18,9 @@ from custom_components.zte_router_5g.button import (
     ZTEDeleteAllSMSButton,
     ZTERebootButton,
 )
+from custom_components.zte_router_5g.const import DOMAIN
 
-from .conftest import MockResponse
+from .conftest import MockResponse, assert_links_to_parent
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -203,6 +204,24 @@ async def test_config_flow_options_auth_error(
         assert result["errors"]["base"] == "invalid_auth"
 
 
+def _assert_looked_up_the_root_device(mock_dev_reg) -> None:
+    """Assert the registry lookup happened, whichever branch HA takes.
+
+    `_compat.device_by_identifier` calls `async_get_device_by_identifier` on
+    2026.8+ and `async_get_device` below it. Asserting either one by name locks
+    the test to one Home Assistant version — which is how these two came to
+    fail the moment the devcontainer took 2026.8.0b0, while the production code
+    was doing exactly the right thing.
+    """
+    from custom_components.zte_router_5g import _compat
+
+    if _compat._HAS_BY_IDENTIFIER:
+        mock_dev_reg.async_get_device_by_identifier.assert_called_once()
+        mock_dev_reg.async_get_device.assert_not_called()
+    else:
+        _assert_looked_up_the_root_device(mock_dev_reg)
+
+
 @pytest.mark.asyncio
 async def test_coordinator_metadata_change(
     hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
@@ -234,13 +253,17 @@ async def test_coordinator_metadata_change(
     ):
         mock_dev_reg = MagicMock()
         mock_dr_get.return_value = mock_dev_reg
+        # Set both: `_compat.device_by_identifier` calls the scoped
+        # `async_get_device_by_identifier` on 2026.8+ and `async_get_device`
+        # below it. Stubbing only one locks the test to one HA version.
         mock_dev_reg.async_get_device.return_value = None  # device doesn't exist yet
+        mock_dev_reg.async_get_device_by_identifier.return_value = None
 
         await coordinator._async_update_data()
         assert coordinator.sw_version == "NEW_VER"
         assert coordinator.model == "MC888"
         # sw_version is no longer written to entry.data; it's updated in device registry
-        mock_dev_reg.async_get_device.assert_called_once()
+        _assert_looked_up_the_root_device(mock_dev_reg)
 
 
 @pytest.mark.asyncio
@@ -273,7 +296,9 @@ async def test_coordinator_metadata_update_device_exists(
         mock_dev_reg = MagicMock()
         mock_dr_get.return_value = mock_dev_reg
         mock_device = MagicMock()
+        # Both, for the same reason as above.
         mock_dev_reg.async_get_device.return_value = mock_device
+        mock_dev_reg.async_get_device_by_identifier.return_value = mock_device
 
         await coordinator._async_update_data()
         assert coordinator.sw_version == "NEW_VER"
@@ -521,7 +546,7 @@ async def test_switch_properties(
         False,
     )
     info_signal = switch_signal.device_info
-    assert "via_device" in info_signal
+    assert_links_to_parent(info_signal, DOMAIN, "864155042229309_system")
 
 
 @pytest.mark.asyncio

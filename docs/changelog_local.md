@@ -6,6 +6,54 @@ All notable changes to this project will be documented in this file.
 >
 > This has now happened twice. The tags are assigned when work starts, not when it ships, so a version that slips gets absorbed by the next one. If it matters that the two files agree, the fix is to tag dev entries against the _next unreleased_ number rather than a guessed release number.
 
+## [3.3.2-dev2] - 2026-07-30 - Unreleased - No Manifest Bump - `TOTAL` State Class Banned; Release Notes Rewritten
+
+Two things: a guard so the `TOTAL` / `TOTAL_INCREASING` confusion cannot recur, and a review pass over the `[3.3.2]` release notes that retracted a claim which had no evidence behind it.
+
+### Added
+
+- **`test_no_sensor_uses_the_total_state_class`** (`tests/test_entity_hygiene.py`). No sensor may use `SensorStateClass.TOTAL`. Backed by `ALLOWED_TOTAL_STATE_CLASS`, an **empty** frozenset in the same shape as `ALLOWED_RECORDED` — adding an entry is a reviewable act, typing `TOTAL` into a new description is not.
+  - **Why a blanket ban rather than "resetting counters must be `TOTAL_INCREASING`".** The narrower rule needs the test to know _which sensors reset_ — a list that drifts silently the moment someone adds one. The ban needs no such knowledge and cannot go stale. `TOTAL` is for a value that can legitimately fall without that being a reset (net import/export, a draining tank) and requires a `last_reset` attribute; nothing a 5G router reports fits. Current state: **16 `MEASUREMENT`, 6 `TOTAL_INCREASING`, 0 `TOTAL`**, so the ban cost nothing to adopt.
+  - Sweeps live entities rather than the static `SENSOR_TYPES` tuple, matching the other two sweeps in the file, and carries the same `checked >= 3` guard-the-guard.
+  - **Mutation-verified**, not merely passing: flipping one description to `TOTAL` fails with the offending entity named (`sensor.zte_5g_data_monthly_sent_gb`). Restored; 14/14 pass, ruff clean. The four `mypy --strict` findings in that file are pre-existing and outside this addition.
+  - Known gap, deliberately not covered: the ban does not stop a resetting counter being marked `MEASUREMENT`. That failure is loud — no statistics at all, rather than wrong ones — so it does not warrant a second test.
+
+### Changed — public `CHANGELOG.md` `[3.3.2]`
+
+Reviewed against annotations. The whole `⚠️ Action Required` section was **removed** — all three items failed on the merits.
+
+- **Retracted the "monthly statistics drifted downwards" claim.** It was written as something users had experienced, and there was no observation behind it. Checked the dev recorder database: `sensor.zte_5g_data_monthly_total` has 519 hourly rows over 2026-07-02 → 07-30, state climbing 68 GB → 1110 GB with **zero drops**, no rollover captured, and a freshly rotated log with no `Detected new cycle` or dip warnings. The `Fixed` entry now claims only what is demonstrable: the counters were classified as `TOTAL` when they reset to zero, so the reset was logged as an error rather than recognised. No user-facing impact asserted, no history-repair advice.
+- **The `Alert Threshold` rename is not breaking.** Cards reference `entity_id`, not the friendly name, so nothing needs updating; and the entity dates from **3.2.0**, disabled by default, so almost nobody has it. Moved to `Added`.
+- **`get_sms_list` raising** demoted from Action Required to `Changed`. It can halt an unguarded automation, which is real but small, and raising on failure is the correct behaviour.
+- **Removed as not user-facing:** the split-poll bullet (which also gave the wrong reason — the driver was the ~2048-character URL budget, not resilience), the default-visibility bullet, the HA 2026.8 bullet, and the duplicated `about`-rewrites bullet.
+- **Rewritten:** the data-management block now leads with router setup (Data Management → Clear Date, Data Plan, limit reminder) before naming the resulting entities, so it is clear what belongs to the router and what to the integration, including the calendar-month fallback. SMS reframed around matching the router's own 765/335 limits, with a note that providers still bill long messages as multiple SMS. The attributes entry now states the actual rule — no entity records any attribute, only its state — rather than listing a subset.
+- The two dead-session `Fixed` bullets were **one fault** (silent writes and empty reads from the same dropped session) and are now one entry.
+
+### Not done
+
+- **A recorder test proving what `TOTAL` does to the statistics `sum` at a rollover.** Designed and dropped. The fix is in, and it would only characterise behaviour on data that no longer exists. The guard above is the durable part.
+
+## [3.3.2-dev1] - 2026-07-30 - Unreleased - No Manifest Bump - Device-Registry Tests Unlocked From HA 2026.7
+
+The devcontainer took **HA 2026.8.0b0**, which triggered the pending re-verification in `.shared/issues/x_project/device_registry_2026_08.md` §7. The compat shims are correct; nine tests were not.
+
+### Fixed
+
+- **Nine tests asserted the pre-2026.8 device-link shape and would have failed on any 2026.8 install.** They hard-coded `info["via_device"] == (DOMAIN, …)`, or stubbed `dev_reg.async_get_device.return_value`, where 2026.8 emits `via_device_id` and calls `async_get_device_by_identifier`. The production code was behaving **correctly** throughout — the shim feature-detects and had already switched branch. The tests were only ever green because 2026.7 takes the branch they assert.
+  - Added `assert_links_to_parent()` and `assert_is_root()` to `tests/conftest.py`. They branch on `_compat._HAS_BY_IDENTIFIER` and assert the link's **presence and exclusivity** — never both keys, since `DeviceInfo` raises if both are set — rather than a hard-coded key name. Value and shape stay covered by `test_compat.py`, which patches a real registry.
+  - Two coordinator tests needed the same treatment, stubbing both registry methods so the mock answers whichever branch runs.
+- **Result: 749 pass on 2026.8.0b0** (with the harness unblocked, below). `mypy --strict` and `ruff` clean.
+
+### Verified — HA 2026.8 device registry
+
+The §7 checklist ran against the beta. Every assumed API landed unchanged, so **no shim needs updating in any project**. `async_get_device_by_identifier((DOMAIN, id), entry_id)` matches its assumed signature exactly; `config_entry_id` is a scalar with `config_entries` as a compat property; `DeviceInfo` carries both keys and raises if both are set; and all three ZTE sub-devices resolve to the System root by `via_device_id` on the live instance. **Zero deprecation lines in the log, from any integration.**
+
+### Known — the test harness cannot run on 2026.8 yet
+
+`pytest-homeassistant-custom-component` 0.13.348 — the newest published, hard-pinned to `homeassistant==2026.7.4` — patches two symbols 2026.8 removed, so all 749 tests error at _setup_. There is **no newer release to move to**, and this is not beta-specific: the symbol is gone from the 2026.8 source tree entirely. It will likely resolve when PHACC publishes for 2026.8, or if the removal changes before final. **No workaround has been committed** — a local monkeypatch of the harness would outlive the problem. Full reasoning, and the shape of the workaround should it ever be needed, in the shared record.
+
+**Other projects:** the same test pattern almost certainly exists in `unifi_network_monitor` and `huawei_router_5g`. Flagged in the shared record, not actioned here.
+
 ## [3.3.1-dev20] - 2026-07-30 - Unreleased - No Manifest Bump - Allowance Enabled; Entity Naming Convention
 
 ### Changed
@@ -592,12 +640,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request | Live session | Dead session |
-  | :-- | :-- | :-- |
-  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
-  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
-  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+  | Request                     | Live session       | Dead session                                         |
+  | :-------------------------- | :----------------- | :--------------------------------------------------- |
+  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
+  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
+  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -989,16 +1037,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 

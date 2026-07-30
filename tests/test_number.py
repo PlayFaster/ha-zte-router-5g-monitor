@@ -16,6 +16,8 @@ from custom_components.zte_router_5g.number import (
     async_setup_entry,
 )
 
+from .conftest import assert_is_root, assert_links_to_parent
+
 
 def _mock_hass_with_async_create_task():
     """Return a MagicMock hass where async_create_task returns a real Task."""
@@ -173,7 +175,7 @@ async def test_device_info_system_group(mock_coordinator, mock_config_entry):
     assert info["name"] == "My ZTE Router System"
     assert info["manufacturer"] == "ZTE"
     assert info["configuration_url"] == "http://192.168.0.1"
-    assert "via_device" not in info
+    assert_is_root(info)
 
 
 @pytest.mark.asyncio
@@ -192,7 +194,7 @@ async def test_device_info_signal_group(mock_coordinator, mock_config_entry):
     number = ZTEPollingInterval(mock_coordinator, mock_config_entry, desc, 50)
 
     info = number.device_info
-    assert info["via_device"] == (DOMAIN, "864155042229309_system")
+    assert_links_to_parent(info, DOMAIN, "864155042229309_system")
     assert info["name"] == "My ZTE Router Signal"
 
 

@@ -15,6 +15,8 @@ from custom_components.zte_router_5g.switch import (
     async_setup_entry,
 )
 
+from .conftest import assert_links_to_parent
+
 
 @pytest.mark.asyncio
 async def test_pause_polling_switch(mock_coordinator, mock_config_entry):
@@ -240,7 +242,7 @@ def test_router_switch_device_info_data_group(mock_coordinator, mock_config_entr
     switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
     info = switch.device_info
     assert info["identifiers"] == {("zte_router_5g", "864155042229309_data")}
-    assert "via_device" in info
+    assert_links_to_parent(info, DOMAIN, "864155042229309_system")
 
 
 def test_pause_polling_switch_is_on(mock_coordinator, mock_config_entry):
