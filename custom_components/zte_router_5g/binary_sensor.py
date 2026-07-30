@@ -61,12 +61,9 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
         key="reboot_schedule",
         source=ENDPOINT_EXTENDED,
         about=(
-            "Whether the router reboots itself on its own schedule. The time it "
-            "runs is in the attributes, along with the repeat mode - weekly or "
-            "monthly - and both candidate days. The mode decides which day "
-            "applies: weekly uses the day of week, monthly the day of month. "
-            "This is the router's internal schedule and is separate from any "
-            "reboot automation built in Home Assistant."
+            "Whether the router reboots itself on an internal schedule. Execution "
+            "time, repeat mode (weekly/monthly), and both candidate days are in "
+            "the attributes."
         ),
         translation_key="system_reboot_schedule",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -98,10 +95,9 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
         key="web_sleep",
         source=ENDPOINT_EXTENDED,
         about=(
-            "Whether the router puts its own web page to sleep after a period "
-            "of inactivity. It does not affect this integration, which logs in "
-            "afresh as needed, so it is shown for reference only - change it on "
-            "the router's own settings page."
+            "Whether the router puts its web management page to sleep after "
+            "inactivity. This affects browser logins only, not integration "
+            "polling."
         ),
         translation_key="system_web_sleep",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -113,8 +109,8 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
         key="web_wake",
         source=ENDPOINT_EXTENDED,
         about=(
-            "Whether the router's web page wakes itself again after sleeping. "
-            "Shown for reference only, like the sleep setting."
+            "Whether the router's web management interface automatically wakes "
+            "from sleep when accessed."
         ),
         translation_key="system_web_wake",
         entity_category=EntityCategory.DIAGNOSTIC,

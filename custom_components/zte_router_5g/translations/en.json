@@ -248,7 +248,7 @@
         "name": "LTE Band Lock Mask"
       },
       "data_volume_alert_percent": {
-        "name": "Data Volume Alert"
+        "name": "Alert Threshold"
       },
       "system_sntp_server": {
         "name": "Time Server (SNTP)"
@@ -273,6 +273,9 @@
       },
       "data_projection": {
         "name": "Projected Cycle Usage"
+      },
+      "data_allowance": {
+        "name": "Allowance"
       }
     },
     "button": {

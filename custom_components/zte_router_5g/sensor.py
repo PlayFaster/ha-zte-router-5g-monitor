@@ -207,6 +207,39 @@ def _clear_day(data: dict[str, Any]) -> int | None:
     return day if 1 <= day <= 31 else None
 
 
+def _data_allowance_bytes(data: dict[str, Any]) -> int | None:
+    """Return the configured monthly data cap in bytes, or None.
+
+    The router encodes the cap as `<value>_<multiplier>`, where the multiplier
+    is the number of mebibytes in the chosen unit — `2_1048576` is 2 TiB,
+    because 1 TiB is 1048576 MiB. **Inferred from one sample**, cross-checked
+    against the router's own Data Management page showing "2TB" and an 80%
+    reminder at "1.6TB" for exactly this value.
+
+    Note the router's "TB" is binary, so 2 TiB shows here as ~2199 GB once
+    Home Assistant converts to decimal gigabytes. That is the same quantity,
+    not a discrepancy.
+
+    Returns None when the cap is expressed in time rather than data — the
+    router can limit by hours instead of bytes, and a duration is not an
+    allowance this sensor can report.
+    """
+    if data.get("data_volume_limit_unit") == "time":
+        return None
+
+    raw = _safe_str(data.get("data_volume_limit_size"))
+    if raw is None or raw.count("_") != 1:
+        return None
+
+    value_s, mult_s = raw.split("_")
+    value = _safe_float(value_s)
+    mult = _safe_int(mult_s)
+    if value is None or mult is None or value <= 0 or mult <= 0:
+        return None
+
+    return int(value * mult * 1024 * 1024)
+
+
 @dataclass(frozen=True)
 class _Projection:
     """A projected end-of-cycle figure and the context needed to judge it."""
@@ -218,6 +251,7 @@ class _Projection:
     elapsed_days: float
     weight: float
     basis: str
+    cycle_source: str
 
     @property
     def confidence(self) -> str:
@@ -232,19 +266,26 @@ class _Projection:
 def _projection(data: dict[str, Any]) -> _Projection | None:
     """Project this cycle's data usage to its end, or None if it cannot be.
 
-    Returns None in exactly two cases, both of which mean there is genuinely no
-    cycle to project against rather than merely a shortage of data: the router
-    does not report a reset day, or its automatic monthly reset is switched off
-    so the counters never roll over. Everything else — including the first
-    minute of a new cycle — produces a figure, because a sensor showing
-    `unknown` on day one reads as broken.
+    Returns None only when the router's automatic monthly reset is switched
+    off, because then the counters never roll over and there is genuinely no
+    cycle to project against. Everything else — including the first minute of a
+    new cycle — produces a figure, because a sensor showing `unknown` reads as
+    broken.
+
+    A router that reports no reset day falls back to the **calendar month**
+    rather than going silent. That is right for anyone billed calendar-monthly
+    and no worse than nothing for anyone else, whereas an unexplained `unknown`
+    that never clears is worse than both. The assumption is published as
+    `cycle_source` so it is visible rather than hidden in the arithmetic.
     """
     if data.get("wan_auto_clear_flow_data_switch") == "off":
         return None
 
     clear_day = _clear_day(data)
+    cycle_source = "router"
     if clear_day is None:
-        return None
+        clear_day = 1
+        cycle_source = "calendar_assumed"
 
     used = _monthly_total_bytes(data)
     if used is None:
@@ -275,6 +316,7 @@ def _projection(data: dict[str, Any]) -> _Projection | None:
         elapsed_days=elapsed,
         weight=elapsed / (elapsed + PROJECTION_CREDIBILITY_DAYS),
         basis="run_rate_only" if prior_rate is None else "blended",
+        cycle_source=cycle_source,
     )
 
 
@@ -417,10 +459,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="battery_value",
         about=(
-            "Battery charge, on ZTE models that have one. A mains-powered unit such "
-            "as the MC7010 has no battery yet still reports 100%, so the value means "
-            "nothing unless your model actually has one. Disabled by default for "
-            "that reason."
+            "Battery charge level for portable ZTE models. Mains-powered units "
+            "lacking a battery report 100%."
         ),
         translation_key="system_battery_value",
         device_class=SensorDeviceClass.BATTERY,
@@ -444,9 +484,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="pm_sensor_pa1",
         about=(
-            "Temperature of the power amplifier - the part of the radio that drives "
-            "the transmit signal, and normally the hottest thing in the unit. Many "
-            "ZTE models do not report it, in which case this stays unknown."
+            "Temperature of the RF power amplifier driving the transmit signal, "
+            "typically the warmest component in the unit. Not reported by all "
+            "models."
         ),
         translation_key="system_pm_sensor_pa1",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -465,7 +505,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         about=(
             "Internal air temperature inside the modem, away from the radio itself. "
             "Read alongside the power amplifier temperature it indicates whether the "
-            "unit as a whole is running hot or just the transmitter."
+            "unit as a whole is running hot or just the transmitter. Not reported by "
+            "all models."
         ),
         translation_key="system_pm_sensor_ambient",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -482,9 +523,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="pm_sensor_mdm",
         about=(
-            "Temperature of the modem module - the cellular baseband, as distinct "
-            "from the power amplifier that drives the transmit signal. Many ZTE "
-            "models do not report it, in which case this stays unknown."
+            "Temperature of the 4G/LTE cellular baseband module. Not reported by "
+            "all models."
         ),
         translation_key="system_pm_sensor_mdm",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -501,9 +541,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="pm_modem_5g",
         about=(
-            "Temperature reported by the 5G modem section. The vendor does not "
-            "document how this differs from the 5G radio temperature; on hardware "
-            "that populates both, compare them before relying on either."
+            "Temperature reported by the router's 5G modem section. Not reported "
+            "by all models."
         ),
         translation_key="system_pm_modem_5g",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -520,9 +559,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="pm_sensor_5g",
         about=(
-            "Temperature of the 5G radio. The vendor does not document how this "
-            "differs from the 5G modem temperature; on hardware that populates "
-            "both, compare them before relying on either."
+            "Temperature reported by the router's 5G radio. Not reported by all models."
         ),
         translation_key="system_pm_sensor_5g",
         device_class=SensorDeviceClass.TEMPERATURE,
@@ -633,6 +670,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         ),
         translation_key="signal_mdm_mcc",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         group="signal",
         value_fn=lambda data: data.get("mdm_mcc"),
     ),
@@ -644,6 +682,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         ),
         translation_key="signal_mdm_mnc",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         group="signal",
         value_fn=lambda data: data.get("mdm_mnc"),
     ),
@@ -963,9 +1002,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="rssi",
         about=(
-            "Overall received signal strength reported by the modem, in dBm. Kept for "
-            "completeness - the per-technology LTE and 5G metrics are more "
-            "diagnostic."
+            "Combined signal strength across all active radio frequencies, in dBm. "
+            "Technology-specific LTE and 5G RSRP metrics provide more diagnostic "
+            "detail."
         ),
         translation_key="signal_rssi",
         device_class=SensorDeviceClass.SIGNAL_STRENGTH,
@@ -1023,9 +1062,13 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="ppp_status",
         about=(
-            "The state of the data session with your ISP. It can show disconnected "
-            "while the radio signal is still strong, which points at an APN or "
-            "account problem rather than coverage."
+            "Whether the router is currently passing the connection straight "
+            "through in bridge mode - connected means it is. This is the live "
+            "session, not the configuration: WAN Operating Mode reports which mode "
+            "the router is set to, bridge or gateway, while this reports whether "
+            "that session is actually up. It can show disconnected while the radio "
+            "signal is still strong, which points at an APN or account problem "
+            "rather than coverage."
         ),
         translation_key="signal_ppp_status",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1043,7 +1086,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         ),
         translation_key="data_monthly_tx_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         entity_registry_enabled_default=False,
         group="data",
@@ -1058,7 +1101,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         ),
         translation_key="data_monthly_rx_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         entity_registry_enabled_default=False,
         group="data",
@@ -1073,7 +1116,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         ),
         translation_key="data_monthly_total_bytes",
         device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         entity_registry_enabled_default=False,
         group="data",
@@ -1083,13 +1126,13 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="monthly_tx_bytes_raw",
         about=(
-            "The same monthly upload total in bytes, unconverted. Provided for "
-            "automations that need the exact number; the GB version is the friendlier "
-            "one to display."
+            "Monthly upload total, counted by the router. Home Assistant displays "
+            "it in GB while storing the exact byte count, so no separate sensor is "
+            "needed for automations that want the precise figure."
         ),
         translation_key="data_monthly_tx_bytes_raw",
         device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
@@ -1099,12 +1142,13 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="monthly_rx_bytes_raw",
         about=(
-            "The same monthly download total in bytes, unconverted. Use the GB "
-            "version for display and this one for precise arithmetic."
+            "Monthly download total, counted by the router. Home Assistant "
+            "displays it in GB while storing the exact byte count, so it is both "
+            "readable on a dashboard and precise in automations."
         ),
         translation_key="data_monthly_rx_bytes_raw",
         device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
@@ -1113,13 +1157,23 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ),
     ZTESensorEntityDescription(
         key="monthly_total_bytes_raw",
+        # TOTAL_INCREASING, not TOTAL. These counters zero on the router's
+        # billing day, and the two classes handle that completely differently:
+        # under TOTAL_INCREASING the recorder calls `reset_detected()` and
+        # treats a fall below 90% of the previous value as a new cycle, while
+        # under TOTAL a reset is only recognised via a `last_reset` attribute
+        # this integration does not publish. The monthly rollover therefore
+        # recorded as a large negative delta and walked the long-term
+        # statistics sum backwards every month. Verified against
+        # `homeassistant/components/sensor/recorder.py`.
         about=(
-            "Combined monthly upload and download in bytes. The GB sensor is easier "
-            "to read; this one avoids rounding in automations."
+            "Combined monthly upload and download - the figure to compare against "
+            "a data cap. Home Assistant displays it in GB while storing the exact "
+            "byte count, so nothing is rounded away in automations."
         ),
         translation_key="data_monthly_total_bytes_raw",
         device_class=SensorDeviceClass.DATA_SIZE,
-        state_class=SensorStateClass.TOTAL,
+        state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
@@ -1228,9 +1282,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="lte_band_lock",
         about=(
-            "Which 4G bands the modem is permitted to use, as a bitmask. Locking to a "
-            "band can help a marginal connection, but locking to one that is "
-            "unavailable will leave the router with no service."
+            "Hexadecimal bitmask of the 4G bands the modem is permitted to use. "
+            "Bit 0 is band 1, so bit 2 is band 3 and bit 19 is band 20 - "
+            "0x60088080045 means bands 1, 3, 7, 20, 28, 32, 42 and 43. Use it to "
+            "confirm which bands a band lock has left available; locking to one "
+            "the router cannot see leaves it with no service."
         ),
         translation_key="signal_lte_band_lock",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1240,16 +1296,49 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         value_fn=lambda data: _safe_str(data.get("lte_band_lock")),
     ),
     ZTESensorEntityDescription(
+        key="data_allowance",
+        about=(
+            "The monthly data cap configured on the router itself, matching the "
+            "Data Plan figure on its Data Management page. Useful as the "
+            "threshold for an automation, so it tracks the router rather than a "
+            "number typed into the automation. The router counts in binary "
+            "units, so a 2 TB plan shows here as about 2199 GB - the same "
+            "amount, counted the way Home Assistant counts. Unavailable if no "
+            "limit is set, or if the limit is set in hours rather than data."
+        ),
+        translation_key="data_allowance",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        suggested_display_precision=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        # Enabled by default: it is the number Projected Cycle Usage is judged
+        # against, and pairs with Alert Threshold. Reports nothing when no cap
+        # is configured, which is the honest answer rather than a reason to
+        # hide it.
+        min_limit=0,
+        # 1 PiB. The encoding is inferred from a single sample, so a guard band
+        # keeps a misparse out of the statistics rather than trusting it.
+        max_limit=1125899906842624,
+        source=ENDPOINT_EXTENDED,
+        group="data",
+        value_fn=_data_allowance_bytes,
+    ),
+    ZTESensorEntityDescription(
         key="data_volume_alert_percent",
         about=(
-            "The percentage of your configured data allowance at which the router "
-            "raises its own alert. This is the router's internal warning threshold, "
-            "separate from any automation you build in Home Assistant."
+            "The percentage of the Allowance at which the router raises its own "
+            "alert - 80% of a 2 TB plan means it warns you at 1.6 TB. This is the "
+            "router's internal threshold, separate from any automation you build "
+            "in Home Assistant."
         ),
         translation_key="data_volume_alert_percent",
         native_unit_of_measurement="%",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        # Deliberately no `state_class`: a configured threshold changes at most
+        # a handful of times in the life of an install, so a trend line of it
+        # holds nothing. Enabled by default because it is the number the
+        # router's own alert fires on, and it pairs with `Allowance`.
         min_limit=0,
         max_limit=100,
         group="data",
@@ -1289,20 +1378,26 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="data_projection",
         about=(
-            "An estimate of how much data you will have used by the end of the "
-            "current billing cycle, if usage carries on at the rate it has so "
-            "far. Early in a cycle there is little to go on, so the figure "
-            "moves about - the attributes say how much of it rests on real "
-            "usage. It is an estimate, not a prediction: a single large "
-            "download early on will inflate it for a few days."
+            "Projected total data usage for the current billing cycle, based on "
+            "average daily consumption so far. It reads low on the first day of a "
+            "cycle and settles within 24 hours."
         ),
         translation_key="data_projection",
         device_class=SensorDeviceClass.DATA_SIZE,
-        # MEASUREMENT, not TOTAL. A projection falls whenever a heavy first
-        # week is diluted by a quiet second one, and a TOTAL class would have
-        # long-term statistics read every such fall as a counter reset. That
-        # corrupts the statistics table in a way only a manual purge undoes.
-        state_class=SensorStateClass.MEASUREMENT,
+        # Deliberately **no** `state_class`, so this never reaches long-term
+        # statistics.
+        #
+        # This is an estimate of where the current cycle ends up, and it is
+        # useful now — not as a history. The measurement it derives from,
+        # `Monthly Total`, is already recorded with a proper state class, so
+        # keeping the projection's own history would store a derived view of a
+        # number that is already stored, and invite charts of what we once
+        # guessed rather than what actually happened.
+        #
+        # `MEASUREMENT` would have been the only defensible class if it were
+        # kept — `TOTAL` would make the statistics engine read every fall (a
+        # heavy first week diluted by a quiet second) as a counter reset, which
+        # only a manual purge undoes.
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
@@ -1313,10 +1408,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="lte_multi_ca_scell_info",
         about=(
-            "Raw description of the additional 4G carriers in use, as the router "
-            "reports it - one group of comma-separated figures per secondary "
-            "cell. The named Carrier Aggregation sensors are easier to read; "
-            "this one is for when they do not cover what you need."
+            "Raw descriptor of the additional 4G carriers in use, one "
+            "semicolon-terminated group per secondary cell. The fields are cell "
+            "index, PCI, a value that varies between polls, LTE band, EARFCN and "
+            "bandwidth in MHz - so '2,352,1,20,6300,10' is band 20 on EARFCN 6300 "
+            "at 10 MHz. The named Carrier Aggregation sensors are friendlier for "
+            "display."
         ),
         translation_key="signal_lte_multi_ca_scell_info",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1344,8 +1441,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="opms_wan_auto_mode",
         about=(
-            "The mode the router falls back to on its own. It differing from the "
-            "active mode is normal and not a fault."
+            "The WAN operating mode the router falls back to automatically. A "
+            "difference between this and the active mode is normal."
         ),
         translation_key="system_opms_wan_auto_mode",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1357,10 +1454,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="sntp_timezone",
         about=(
-            "The timezone the router keeps its own clock in, shown exactly as "
-            "the router reports it. The format is the vendor's own and is not "
-            "translated here, because guessing at it would risk stating the "
-            "wrong offset."
+            "The router's configured base timezone and Daylight Saving Time "
+            "(DST) offset - for example '0-1' represents base offset UTC+0 with "
+            "DST active."
         ),
         translation_key="system_sntp_timezone",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1433,6 +1529,7 @@ class ZTERouterSensor(
             "basis",
             "cycle_day",
             "cycle_start",
+            "cycle_source",
             "id",
             "number",
             "date",
@@ -1554,6 +1651,7 @@ class ZTERouterSensor(
                             f"{result.cycle_length_days}"
                         ),
                         "cycle_start": result.cycle_start.date().isoformat(),
+                        "cycle_source": result.cycle_source,
                     }
             elif key == "sntp_server":
                 detail = {

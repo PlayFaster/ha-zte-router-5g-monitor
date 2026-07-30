@@ -15,6 +15,7 @@ from homeassistant.const import (
 from homeassistant.util import dt as dt_util
 
 from custom_components.zte_router_5g.const import DOMAIN
+from custom_components.zte_router_5g.coordinator import ENDPOINT_EXTENDED
 from custom_components.zte_router_5g.sensor import (
     _ALIAS_5G_PCI,
     _ALIAS_5G_RSRP,
@@ -26,6 +27,7 @@ from custom_components.zte_router_5g.sensor import (
     ZTERouterSensor,
     ZTESensorEntityDescription,
     _clear_day,
+    _data_allowance_bytes,
     _get_first,
     _projected_bytes,
     _projection,
@@ -807,15 +809,28 @@ def test_projection_on_day_one_is_bounded_by_the_denominator_floor():
     assert projected == pytest.approx(63.5e9, rel=0.01)
 
 
-def test_projection_is_none_when_the_router_reports_no_reset_day():
-    """No reset day means no cycle, which is not the same as no data."""
+def test_projection_falls_back_to_the_calendar_month():
+    """A router with no reset day must not leave a permanently blank sensor.
+
+    Assuming the 1st is right for anyone billed calendar-monthly and no worse
+    than nothing for anyone else, whereas an unexplained `unknown` that never
+    clears is worse than both. The assumption is published, not hidden.
+    """
+    data = {k: v for k, v in _CYCLE_DATA.items() if k != "traffic_clear_date"}
     with _at(16):
-        assert (
-            _projected_bytes(
-                {k: v for k, v in _CYCLE_DATA.items() if k != "traffic_clear_date"}
-            )
-            is None
-        )
+        result = _projection(data)
+
+    assert result is not None
+    assert result.cycle_source == "calendar_assumed"
+    assert result.cycle_start.day == 1
+    assert result.cycle_length_days == 31
+
+
+def test_projection_reports_the_router_as_the_cycle_source_when_it_has_one():
+    """The fallback must not mask a reset day the router did report."""
+    with _at(16):
+        result = _projection(dict(_CYCLE_DATA))
+    assert result.cycle_source == "router"
 
 
 def test_projection_is_none_when_the_automatic_reset_is_switched_off():
@@ -883,17 +898,98 @@ def test_projection_attributes_are_absent_when_there_is_no_cycle():
     assert attrs["about"]
 
 
-def test_projection_state_class_is_measurement_not_total():
-    """A projection falls as a heavy week is diluted.
+def test_projection_has_no_state_class():
+    """It must never reach long-term statistics.
 
-    Under a TOTAL class long-term statistics would read every such fall as a
-    counter reset, which only a manual purge undoes.
+    This is an estimate of where the cycle ends up, useful now rather than as
+    a history — and the measurement it derives from, `Monthly Total`, is
+    already recorded with a proper state class. Keeping this one too would
+    store a derived view of a number already stored, and invite charts of what
+    was once guessed rather than what happened.
     """
     description = next(d for d in SENSOR_TYPES if d.key == "data_projection")
-    assert description.state_class is SensorStateClass.MEASUREMENT
+    assert description.state_class is None
     assert description.device_class is SensorDeviceClass.DATA_SIZE
     assert description.native_unit_of_measurement == UnitOfInformation.BYTES
     assert description.suggested_unit_of_measurement == UnitOfInformation.GIGABYTES
     assert description.group == "data"
     assert description.entity_registry_enabled_default is True
+    assert description.about
+
+
+# --- Monthly counters reset on the billing day ------------------------------
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "monthly_tx_bytes",
+        "monthly_rx_bytes",
+        "monthly_total_bytes",
+        "monthly_tx_bytes_raw",
+        "monthly_rx_bytes_raw",
+        "monthly_total_bytes_raw",
+    ],
+)
+def test_monthly_counters_are_total_increasing(key):
+    """These zero on the router's billing day, and the class must say so.
+
+    `reset_detected()` in the recorder is reached only from the
+    TOTAL_INCREASING branch; under plain TOTAL a reset is recognised solely
+    from a `last_reset` attribute this integration does not publish. With the
+    wrong class the monthly rollover records as a large negative delta and
+    walks the long-term statistics sum backwards every single month.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+    assert description.state_class is SensorStateClass.TOTAL_INCREASING
+
+
+# --- Data allowance ---------------------------------------------------------
+
+
+def test_data_allowance_decodes_the_router_encoding():
+    """`2_1048576` is 2 TiB — value times mebibytes-in-the-unit.
+
+    Cross-checked against the router's own Data Management page, which shows
+    "2TB" and an 80% reminder at "1.6TB" for exactly this stored value.
+    """
+    assert _data_allowance_bytes({"data_volume_limit_size": "2_1048576"}) == 2 * 1024**4
+
+
+def test_data_allowance_is_none_when_the_limit_is_a_duration():
+    """The router can cap by hours instead of bytes; that is not an allowance."""
+    data = {"data_volume_limit_size": "2_1048576", "data_volume_limit_unit": "time"}
+    assert _data_allowance_bytes(data) is None
+
+
+def test_data_allowance_is_returned_when_the_limit_is_data():
+    """The guard must key on 'time' alone, not on the field being present."""
+    data = {"data_volume_limit_size": "2_1048576", "data_volume_limit_unit": "data"}
+    assert _data_allowance_bytes(data) == 2 * 1024**4
+
+
+@pytest.mark.parametrize(
+    "raw", ["", None, "garbage", "2", "2_", "_1048576", "2_1_3", "0_1048576", "2_0"]
+)
+def test_data_allowance_rejects_anything_it_cannot_parse(raw):
+    """A misparsed cap is worse than no cap — it would misinform an automation."""
+    assert _data_allowance_bytes({"data_volume_limit_size": raw}) is None
+
+
+def test_data_allowance_sensor_is_guard_banded_and_enabled():
+    """Enabled by default, but still bounded against a misparse.
+
+    It is the figure `Projected Cycle Usage` is judged against, so hiding it
+    while showing the projection would be odd. The guard band stays because a
+    misparsed cap would misinform an automation rather than merely look wrong.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "data_allowance")
+    assert description.entity_registry_enabled_default is True
+    assert description.entity_category is EntityCategory.DIAGNOSTIC
+    assert description.device_class is SensorDeviceClass.DATA_SIZE
+    assert description.state_class is None
+    assert description.min_limit == 0
+    assert description.max_limit == 1024**5  # 1 PiB
+    assert description.source == ENDPOINT_EXTENDED
+    assert description.group == "data"
     assert description.about

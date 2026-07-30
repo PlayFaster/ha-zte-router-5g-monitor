@@ -30,7 +30,8 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 |  | Download Speed | 0 | — | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
 |  | Session Sent | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
 |  | Session Received | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
-|  | Data Volume Alert | 0 | 100 | Percentage threshold. |
+|  | Alert Threshold | 0 | 100 | Percentage threshold. |
+|  | Allowance | 0 | 1 PiB | Confirmed against the router's own Data Management page (2 TiB cap, 1.6 TiB reminder), but the upper bound stays as a guard against a misparse reaching the statistics. |
 |  | Reset Day | 1 | 31 | Day of the month. A value outside this range is not a calendar date, whatever the router reports. |
 |  | Projected Cycle Usage | 0 | — | A projection cannot be negative. No upper bound: exceeding it is the very thing the sensor exists to warn about, so a ceiling would hide the case that matters. |
 | **Device** | Battery | 0 | 100 | Physical percentage bounds. |
@@ -73,3 +74,4 @@ except (ValueError, TypeError):
 - **v1.1.0** (2026-05-07) - Initial versioned snapshot. Added guard bands for Battery (0–100 %), Upload Speed (min 0 B/s), Download Speed (min 0 B/s), Session Sent (min 0 bytes), Session Received (min 0 bytes), and Device Battery category.
 - **v1.2.0** (2026-05-27) - Added guard band for Data Volume Alert percentage (0-100%).
 - **v1.3.0** (2026-07-29) - Added guard bands for the five thermal sensors: Power Amplifier, Ambient Modem, Modem, 5G Modem and 5G Radio temperatures (-40 to 125 degrees C), covering the silicon operating range and rejecting the sentinel values some firmware emits when the sensor is absent.
+- **v1.4.0** (2026-07-30) — Added guard bands for `Reset Day` (1–31, a day of the month), `Projected Cycle Usage` (min 0, no ceiling — exceeding it is the very thing the sensor exists to warn about) and `Allowance` (0 to 1 PiB, an upper bound against a misparse of the router's `<value>_<multiplier>` encoding reaching the statistics). Renamed `Data Volume Alert` → **`Alert Threshold`** after the entity was renamed to avoid a doubled entity ID.

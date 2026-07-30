@@ -1,6 +1,6 @@
 # ZTE Router 5G Integration - Entity Manifest
 
-This document provides a comprehensive list of all 91 entities currently implemented in the ZTE Router 5G integration. It serves as a master reference for debugging, maintenance, and future development.
+This document provides a comprehensive list of all 92 entities currently implemented in the ZTE Router 5G integration. It serves as a master reference for debugging, maintenance, and future development.
 
 ## Summary
 
@@ -8,9 +8,9 @@ This document provides a comprehensive list of all 91 entities currently impleme
 | :-- | :-- | :-- |
 | **System** | 33 | Core router info and global integration settings. |
 | **Signal** | 40 | Cellular connectivity, signal strength (LTE/5G), and network info. |
-| **Data** | 14 | Monthly and session traffic volume (Bytes and GB). |
+| **Data** | 15 | Monthly and session traffic volume (Bytes and GB). |
 | **SMS** | 4 | Message counts and recent message content. |
-| **Total** | **91** |  |
+| **Total** | **92** |  |
 
 ---
 
@@ -24,7 +24,7 @@ _Group: `system`_
 | Firmware Version | `wa_inner_version` | Sensor | `wa_inner_version` | - | Diagnostic |  | ✔ |
 | WAN IP Address | `wan_ipaddr` | Sensor | `wan_ipaddr` | - | Diagnostic |  | ✔ |
 | LAN IP Address | `lan_ipaddr` | Sensor | `lan_ipaddr` | - | Diagnostic |  | — |
-| Uptime | `device_uptime` | Sensor | `realtime_time` | Timestamp | Sensor | Calculated as `now() - uptime_seconds`. | ✔ |
+| Device Uptime | `device_uptime` | Sensor | `realtime_time` | Timestamp | Sensor | Calculated as `now() - uptime_seconds`. | ✔ |
 | Uptime Duration | `realtime_time` | Sensor | `realtime_time` | h | Sensor | **Disabled by default.** Raw uptime duration. Other display units may be used (e.g. h). | ✔ |
 | Last Updated | `last_updated` | Sensor | `coordinator.last_update_success_time` | Timestamp | Sensor | Internal tracking of last successful poll. | — |
 | IMEI | `imei` | Sensor | `imei` | - | Diagnostic | **Disabled by default (sensitive).** Hardware-bound modem identifier. | ✔ |
@@ -42,16 +42,16 @@ _Group: `system`_
 | Pause Polling | `pause_polling` | Switch | Options: `stop_polling` | - | Config | State persists in `ConfigEntry.options`. | ✔ |
 | Polling Interval | `polling_interval` | Number | Options: `scan_interval` | s | Config | Range: 30s - 3600s. Persists in options. | ✔ |
 | Integration Health | `integration_health` | Binary | `coordinator.health_snapshot` | - | Diagnostic | ON when the integration detects a problem, including a poll that succeeds but returns nothing usable. Stays available during an outage, when other entities do not. Attributes carry the detail. | ✔ |
-| Reboot Schedule | `reboot_schedule` | Binary | `reboot_schedule_enable` | - | Diagnostic | **Disabled by default.** Scheduled reboot active status. Extra attributes: hour, minute, schedule mode, day of week, day of month - the last three raw, as the mode-to-day mapping is unconfirmed. | ✔ |
+| Reboot Schedule | `reboot_schedule` | Binary | `reboot_schedule_enable` | - | Diagnostic | **Disabled by default.** Scheduled reboot active status. Extra attributes: hour, minute, schedule mode (1 = weekly, 2 = monthly), day of week (1-indexed from Sunday) and day of month, all published raw. | ✔ |
 | UPnP Enabled | `upnp_enabled` | Binary | `upnp_enable` | - | Diagnostic | **Disabled by default.** UPnP active status. | ✔ |
 | SIP ALG Enabled | `sip_alg_enabled` | Binary | `alg_sip_enable` | - | Diagnostic | **Disabled by default.** SIP ALG active status. | ✔ |
 | ODU LED Switch | `odu_led_switch` | Switch | `ODU_led_switch` | - | Config | **Disabled by default.** Toggle router outdoor unit LED light. | — |
 | Time Server (SNTP) | `sntp_server` | Sensor | `sntp_server` | - | Diagnostic | **Disabled by default.** Configuration time server. | ✔ |
-| Router Timezone | `sntp_timezone` | Sensor | `sntp_timezone` | - | Diagnostic | **Disabled by default.** Vendor-format timezone string (e.g. `0-1`), shown raw rather than interpreted. | ✔ |
+| Router Timezone | `sntp_timezone` | Sensor | `sntp_timezone` | - | Diagnostic | **Disabled by default.** Base timezone and DST offset, e.g. `0-1` is UTC+0 with DST active. Published raw. | ✔ |
 | WAN Operating Mode | `opms_wan_mode` | Sensor | `opms_wan_mode` | - | Diagnostic | **Disabled by default.** e.g. `LTE_BRIDGE`. Read-only by design - changing it alters the path the integration reaches the router over. | ✔ |
-| WAN Fallback Mode | `opms_wan_auto_mode` | Sensor | `opms_wan_auto_mode` | - | Diagnostic | **Disabled by default.** e.g. `AUTO_LTE_GATEWAY`. Differing from the active mode is normal. | ✔ |
+| WAN Fallback Mode | `opms_wan_auto_mode` | Sensor | `opms_wan_auto_mode` | - | Diagnostic | **Disabled by default.** e.g. `AUTO_LTE_GATEWAY`. A difference from the active mode is normal. | ✔ |
 | APN Interface Version | `apn_interface_version` | Sensor | `apn_interface_version` | - | Diagnostic | **Disabled by default.** Router APN configuration schema version. | ✔ |
-| Web Page Sleep | `web_sleep` | Binary | `web_sleep_switch` | - | Diagnostic | **Disabled by default.** Read-only: no write command was found for it. | ✔ |
+| Web Page Sleep | `web_sleep` | Binary | `web_sleep_switch` | - | Diagnostic | **Disabled by default.** Read-only by choice; `SAVE_TSW` would write it but the setting governs the router's own web page, not this integration. | ✔ |
 | Web Page Auto-Wake | `web_wake` | Binary | `web_wake_switch` | - | Diagnostic | **Disabled by default.** Read-only for the same reason. | ✔ |
 
 ---
@@ -67,8 +67,8 @@ _Group: `signal`_
 | Network Type | `network_type` | Sensor | `network_type` | - | Sensor | e.g., LTE, ENDC, NR5G. | ✔ |
 | Signal Bars | `signalbar` | Sensor | `signalbar` | - | Sensor | 0-5 scale. | ✔ |
 | Network Provider | `network_provider` | Sensor | `network_provider` | - | Diagnostic |  | ✔ |
-| MDM MCC | `mdm_mcc` | Sensor | `mdm_mcc` | - | Diagnostic |  | ✔ |
-| MDM MNC | `mdm_mnc` | Sensor | `mdm_mnc` | - | Diagnostic |  | ✔ |
+| MDM MCC | `mdm_mcc` | Sensor | `mdm_mcc` | - | Diagnostic | **Disabled by default.** Country code of the attached network; static in normal use. | ✔ |
+| MDM MNC | `mdm_mnc` | Sensor | `mdm_mnc` | - | Diagnostic | **Disabled by default.** Operator code within that country; static in normal use. | ✔ |
 | Roaming MCC | `rmcc` | Sensor | `rmcc` | - | Diagnostic | **Disabled by default.** | ✔ |
 | Roaming MNC | `rmnc` | Sensor | `rmnc` | - | Diagnostic | **Disabled by default.** | ✔ |
 | LTE RSRP | `lte_rsrp` | Sensor | `lte_rsrp` | dBm | Sensor | Range: -140 to -30. | ✔ |
@@ -105,7 +105,7 @@ _Group: `signal`_
 
 ---
 
-## 3. Data Sub-Device (14 Entities)
+## 3. Data Sub-Device (15 Entities)
 
 _Group: `data`_
 
@@ -122,9 +122,10 @@ _Group: `data`_
 | Session Sent | `realtime_tx_bytes` | Sensor | `realtime_tx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. Other display units may be used (e.g. GB). | ✔ |
 | Session Received | `realtime_rx_bytes` | Sensor | `realtime_rx_bytes` | Bytes | Sensor | Cumulative bytes since last connection. Resets on reconnect. No LTS. Other display units may be used (e.g. GB). | ✔ |
 | Data Limit Switch | `data_limit_switch` | Switch | `data_volume_limit_switch` | - | Config | **Disabled by default.** Control data volume limit switch. | ✔ |
-| Data Volume Alert | `data_volume_alert_percent` | Sensor | `data_volume_alert_percent` | % | Sensor | **Disabled by default.** Alert threshold percentage of limit. | ✔ |
+| Allowance | `data_allowance` | Sensor | `data_volume_limit_size` | Bytes | Diagnostic | The router's configured monthly cap, decoded from `<value>_<MiB multiplier>`. Unavailable when no limit is set or the limit is in hours. Other display units may be used (e.g. GB). | ✔ |
+| Alert Threshold | `data_volume_alert_percent` | Sensor | `data_volume_alert_percent` | % | Diagnostic | Alert threshold percentage of the limit. No state class - a configured threshold has no useful trend. | ✔ |
 | Reset Day | `data_clear_day` | Sensor | `traffic_clear_date` | - | Diagnostic | Day of month the router zeroes its monthly counters. Aliased across three spellings; guard band 1-31. | ✔ |
-| Projected Cycle Usage | `data_projection` | Sensor | `TX + RX` vs cycle elapsed | Bytes | Sensor | Estimated end-of-cycle total. `measurement` state class, not `total`. Attributes: confidence, basis, cycle day, cycle start. Other display units may be used (e.g. GB). | ✔ |
+| Projected Cycle Usage | `data_projection` | Sensor | `TX + RX` vs cycle elapsed | Bytes | Sensor | Estimated end-of-cycle total. **No state class** - deliberately excluded from long-term statistics. Falls back to the calendar month when the router reports no reset day. Attributes: confidence, basis, cycle day, cycle start, cycle source. Other display units may be used (e.g. GB). | ✔ |
 
 ---
 
@@ -252,3 +253,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.3.2** (2026-07-29) — Added an `About` column (✔ / —) marking which entities carry an unrecorded `about` note; 68 of 82 do. The note text itself stays in `about_attribute_list.md` and is deliberately not duplicated here — it is 1-3 sentences per entity and would make this table unreadable. Reconciled against the live instance by `sensor_review` (SCOPE=About).
 - **v3.3.1** (2026-07-29) — Live reconciliation against the running instance via `sensor_review` (82 entities). Added the **Integration Health** binary sensor, which had never been documented. Renamed two rows to match HA: Connection Status -> WAN Connect Status, Delete All Msg -> Delete All. Corrected System 26 -> 27 and total 81 -> 82. Annotated the seven 5G signal metrics and Network APN as legitimately unavailable without a 5G attachment.
 - **v3.3.1** (2026-07-29) — Added five thermal diagnostic sensors (Power Amplifier, Ambient Modem, Modem, 5G Modem, 5G Radio temperatures), all disabled by default because the MC7010 does not populate any of them. System count 21 to 26, total 76 to 81.
+- **v3.4.0** (2026-07-30) — Live reconciliation via `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) against all 92 entities, with the 34 disabled ones temporarily enabled. Counts 82 → 92 across the session: five discovery-report diagnostics, two web-power binary sensors, `Reset Day`, `Projected Cycle Usage`, `Allowance` and `Alert Threshold`. Renamed the uptime row `Uptime` → **`Device Uptime`** to match `strings.json` and the live instance — the only inventory discrepancy the review found. Platform counts now match live and `README.md` exactly at 75 / 7 / 3 / 3 / 3 / 1.

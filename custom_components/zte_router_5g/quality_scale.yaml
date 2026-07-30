@@ -119,9 +119,9 @@ rules:
   docs-supported-functions:
     status: done
     comment:
-      README section 'Entity Overview' provides a structured summary of all 91
-      entities by sub-device and metric type, naming which are disabled by default.
-      The authoritative inventory is docs/all_sensors.md.
+      README section 'Entity Overview' provides a structured summary of every entity by
+      sub-device and metric type, naming which are disabled by default. The authoritative inventory is docs/all_sensors.md
+      kept current against live HA by sensor_review.
   docs-troubleshooting:
     status: done
     comment:

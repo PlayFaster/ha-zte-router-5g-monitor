@@ -2,23 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.3.1] - 2026-07-29 - Release
+## [3.3.2] - 2026-07-30 - Release
 
 ### Summary
 
+- **Data usage now answers the question that matters**: a projection of where the current billing cycle will finish, alongside the router's own reset day, data allowance and alert threshold.
 - Most entities now carry a short built-in explanation of what the value means — and for signal metrics, what counts as good, fair or poor.
 - New **Integration Health** sensor: tells you when the integration is running fine but the data coming back from the router is not.
 - Actions no longer report success without doing anything when the router has quietly ended the integration's session — the case where an SMS appeared to send but never arrived.
-- Plain-text SMS messages can now be much longer, and are often sent as one message where they used to be split into several.
-- Broader support for other ZTE `goform` routers, plus a new repair alert when the router has been unreachable for a long stretch.
-- Ready for Home Assistant 2026.8.
+- Two long-standing faults fixed: the data limit switch never actually worked, and monthly usage statistics went backwards at every billing rollover.
+- Longer plain-text SMS, broader support for other ZTE `goform` routers, and ready for Home Assistant 2026.8.
 
 ### ⚠️ Action Required
 
 - **If an automation calls `get_sms_list`**: it now raises an error when the router cannot be reached, instead of returning an empty list. This is deliberate — it lets you tell "no messages" from "couldn't ask" — but an automation with no error handling will now stop rather than continue silently. Add `continue_on_error: true` to that step if you would rather it carried on.
+- **Monthly usage history may show dips at past billing rollovers**: the monthly upload, download and total counters were recorded in a way that treated the router's monthly reset as a fall in value rather than the start of a new cycle, so their long-term statistics drifted downwards a little each month. New cycles now record correctly. Past figures are not corrected automatically — if the history matters to you, **Developer Tools → Statistics** can adjust or clear the affected sums.
+- **`Data Volume Alert` is now called `Alert Threshold`**, and is shown by default rather than hidden. The entity ID is unchanged, so automations and templates keep working — but a dashboard card that refers to the old _name_ will need updating.
 
 ### Added
 
+- **Projected Cycle Usage**: an estimate of how much data you will have used by the end of the current billing cycle, based on your average daily consumption so far. It follows the router's own billing cycle rather than the calendar month, and reads low on the first day before settling within 24 hours. Attributes say how much of the figure rests on real usage — `confidence`, `basis`, `cycle_day`, `cycle_start` and `cycle_source`. Deliberately kept out of long-term statistics: it is an estimate for right now, and the usage it is derived from is already recorded.
+- **Reset Day**: the day of the month the router zeroes its usage counters. This is the router's own billing cycle and need not be the 1st — worth checking against your provider's bill.
+- **Allowance** and **Alert Threshold**: the data cap configured on the router and the percentage at which it raises its own warning. Use `Allowance` as the threshold in an automation and it tracks your actual plan instead of a number typed into the automation. The README has a worked example. Note the router counts in binary units, so a plan it calls "2TB" shows here as about 2199 GB — the same amount, counted the way Home Assistant counts.
+- **Seven new diagnostics**, all **disabled by default**: Carrier Aggregation Secondary Cells, WAN Operating Mode, WAN Fallback Mode, Router Timezone, APN Interface Version, Web Page Sleep and Web Page Auto-Wake.
 - **Integration Health sensor**: a new diagnostic binary sensor on the System device that turns on when the integration detects a problem — including the case where a fetch _succeeds_ but returns nothing usable, which nothing else catches. Attributes carry the detail: `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, `last_good_update` and `consecutive_failures`. Raises a repair when the router's firmware appears to have renamed the fields the integration reads.
 - **Built-in explanations on entities**: 68 entities now carry an `about` attribute — a plain sentence saying what the value is. Click the entity, then **⋮ → Details**. Signal metrics also give typical ranges ("better than -80 excellent, -80 to -90 good…"), which is usually the real question when siting a router. Deliberately not on every entity: self-explanatory ones were left alone. The note is never written to history, so it costs nothing to carry.
 - **Router Unreachable repair**: after 10 consecutive failed fetches, a repair appears in the Repairs panel. Set deliberately well above the 3 failures that mark entities unavailable, so an ordinary router reboot never triggers it.
@@ -26,6 +32,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **Diagnostics can now fail on their own without taking the rest with them**: the router limits how much can be requested at once, so readings are fetched in two batches — everything shown by default in one, diagnostics and disabled entities in the other. If the second batch has trouble, only those entities go unavailable while signal and data keep updating. You may occasionally see a few disabled-by-default diagnostics drop out on their own; that is the design working, and Integration Health names which capability degraded.
+- **Two entities changed their default visibility**: `Alert Threshold` is now shown, and `MDM MCC` / `MDM MNC` are now hidden on new installs — both are fixed values that never change in normal use. Existing installs keep whatever you have; Home Assistant does not hide an entity you may be relying on.
+- **Clearer built-in explanations**: nineteen of the `about` notes were rewritten — chiefly the monthly data sensors, which still advised using the older gigabyte sensors for display when Home Assistant now does that conversion itself, and the temperature and radio diagnostics, which now say what the value is rather than hedging about it.
 - **Longer SMS messages, and fewer of them**: messages using only standard characters are now sent in the more efficient encoding, so up to **765** characters are accepted instead of a flat 160 — and a message that used to be split into three charged parts may now be sent as one. Anything containing an emoji, curly quote or other special character uses the other encoding and is limited to **335**. Chosen automatically per message, with nothing to configure. Going over the limit now gives a clear error naming the limit that applied, instead of a confusing validation message.
 - **Wider ZTE model support**: signal and data-usage sensors now recognise the alternative field names used by other `goform` routers, the login falls back to the other form when a model rejects the first, and the LTE/5G band name is worked out from the channel number when the router leaves it blank. **No effect on the MC7010**, which is unchanged in every case — this is about the integration working on more hardware, not working differently on yours.
 - **Diagnostic attributes are no longer written to history**: attributes on the SMS totals and SNTP sensors, and on the new health sensor, are excluded from the recorder database. They are still visible in Developer Tools and usable in templates — they are simply no longer stored, which keeps the database smaller. If you were graphing one of these attributes, it will stop accumulating history.
@@ -35,6 +44,8 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- **The Data Limit Switch never worked**: the command that sets the router's data cap replaces the whole form — the limit switch, the cap and its unit, the alert percentage, the auto-reset switch and the reset day — and the router refuses anything less. The integration was sending one field, so the router declined it every time, and the switch quietly sprang back with the failure recorded only in the log. It now sends the complete form, preserving everything you have not changed, and a refusal is reported to you rather than swallowed.
+- **Monthly usage statistics went backwards at each billing rollover**: the monthly counters were recorded in a way that had no notion of a reset, so when the router zeroed them the long-term statistics recorded a large fall instead of the start of a new cycle. Fixed going forward — see **Action Required** above for existing history.
 - **Actions could report success without actually doing anything**: the router quietly ends the integration's session after a few minutes of no contact, which happens routinely while Pause Polling is on. When that had happened, sending an SMS, deleting one, rebooting, or changing a setting could show a success message while nothing at all reached the router. The most visible case was sending an SMS: the action went green and no message ever arrived. The integration now notices the session has gone and signs back in before acting, and it reads the router's reply instead of assuming the action worked — so a refused command now reports an error. Sending an SMS also updates the message counters straight away, which it previously did not.
 - **SMS actions could wrongly report an empty inbox**: this router allows only one login session, so logging into its web page ends the integration's. When that happened the router answered normally but with empty values, which the integration read as "no messages" rather than "no session" — so `get_sms_list` returned nothing while messages were sitting on the router. It now detects this, logs back in and retries.
 

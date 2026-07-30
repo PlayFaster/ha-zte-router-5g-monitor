@@ -235,6 +235,9 @@
       },
       "data_projection": {
         "default": "mdi:chart-timeline-variant"
+      },
+      "data_allowance": {
+        "default": "mdi:gauge-full"
       }
     },
     "button": {

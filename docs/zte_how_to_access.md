@@ -403,7 +403,24 @@ Twenty-six write actions were recovered from the router's own `js/service.js` bu
 | `SET_UPGRADE_NOTICE` | Not used | Firmware-update prompt suppression. |
 | `REDIRECT_REDIRECT_OFF` | Not used | Web UI redirect behaviour. |
 
-The five **declined** rows share one objection: each changes how the router routes traffic — including the traffic Home Assistant reaches it over — so the control that undoes a mistake becomes unreachable at the moment it is needed. `RESET_DATA_COUNTER` is declined on different grounds: irreversible data loss from a single press.
+### Why the declined rows are declined
+
+An earlier revision of this document gave all of them one reason — that each changes the path Home Assistant reaches the router over, so the control that undoes a mistake becomes unreachable. **That is true of one command, not five.** Home Assistant talks to the router at its **LAN address**, and locking to a dead cell or setting bad DNS breaks the _WAN_, not the management path. The undo stays available.
+
+The reasons are actually three:
+
+| Command | Objection |
+| :-- | :-- |
+| `OPERATION_MODE` | **Reachability.** Bridge ↔ gateway changes the router's LAN role and addressing, so it genuinely can move or remove the management path. On a headless outdoor unit, recovery may mean physical access. |
+| `LTE_LOCK_CELL_SET` | **Foot-gun, poor value.** Cells change with load and maintenance, so a lock that works today fails next week — and the failure is no service at all. The diagnostic value already exists in `lte_pci` and `nr5g_pci`. |
+| `ROUTER_DNS_SETTING` | **Scope and blast radius.** This integration monitors the CPE. DNS breaks name resolution for every device on the LAN, which is far wider than the thing being managed. |
+| `SET_BIND_STATIC_ADDRESS`, `DHCP_RESERVATION_TO_STATIC` | **Scope, plus collision risk.** A bad reservation can change Home Assistant's own address. LAN address management belongs in the router's UI or a DHCP integration. |
+| `SET_NETWORK`, `UNLOCK_NETWORK` | **Scope.** Operator selection and network unlock are one-time provisioning acts, not automation. |
+| `RESET_DATA_COUNTER` | **Irreversible.** Zeroes the monthly counters with no undo, and destroys the projection sensor's own input. |
+
+**Recoverable is not the same as harmless.** Three of these are reversible from the router's own web page in under a minute, and that is the point: where a setting is a one-time act with a wide blast radius, the router's UI is the better place for it. It shows the current configuration in context, warns before applying, and does not tempt anyone into automating a change that should be made once and deliberately. Exposing a control in Home Assistant implies it is safe to script; for these, it is not.
+
+Where the read side is useful it is still exposed — `opms_wan_mode` ships read-only so the operating mode is visible without offering a switch that can strand the user.
 
 ---
 
@@ -461,15 +478,36 @@ Format is `<utc_offset><dst_offset>`. The observed `0-1` is UTC+0 with a DST adj
 
 ### `lte_multi_ca_scell_info`
 
-Comma-separated fields, one semicolon-terminated group per secondary cell. Observed: `2,352,2,20,6300,10;`
+Comma-separated fields, one semicolon-terminated group per secondary cell. Observed: `2,352,1,20,6300,10;`
 
-Reported field order is `[scell_index],[pci],[dl_bandwidth_code],[earfcn],[band_number],[ul_bandwidth_code]`.
+| Position | Field | Confidence |
+| :-- | :-- | :-- |
+| 1 | Cell index | Inferred |
+| 2 | PCI | Inferred; 352 is a valid PCI |
+| 3 | **Unidentified** | Observed to change between polls (`1` ↔ `2`) while every other field held steady |
+| 4 | LTE band | **Confirmed** |
+| 5 | EARFCN | **Confirmed** |
+| 6 | Bandwidth, MHz | **Confirmed** |
 
-**Positions 4 and 5 look transposed.** In the observed sample those fields are `20` and `6300`. EARFCN 6300 sits inside the range allocated to **LTE band 20** (6150–6449), and `20` is not a valid EARFCN. So the sample reads much more naturally as `…,[band]=20,[earfcn]=6300,…`. This is inference from one sample against the 3GPP allocation, not a vendor statement — which is why the integration publishes the string raw and does not parse it.
+**Positions 4 and 5 are the other way round from the discovery report**, which listed `[earfcn],[band_number]` and so read the sample as EARFCN 20 on band 6300. EARFCN 6300 sits inside band 20's allocation (6150–6449) and `20` is not a valid EARFCN, so the report's ordering is wrong. Corroborated twice on live hardware: band 20's bit is set in `lte_band_lock`, and field 6 (`10`) matches `lte_ca_pcell_bandwidth` of `10.0`.
+
+**Position 3 is deliberately unnamed.** The report called it `dl_bandwidth_code`, which the data contradicts — a bandwidth code of `2` means 5 MHz, disagreeing with field 6, and a bandwidth would not change between polls while the band and channel do not. It is more likely an SCell activation state or a MIMO layer count, but that is a guess and the integration publishes the string raw.
+
+### `lte_band_lock`
+
+Hexadecimal bitmask of the 4G bands the modem may use. **Bit N represents band N+1** — bit 0 is band 1, bit 2 is band 3, bit 19 is band 20.
+
+**Verified on hardware 2026-07-30.** `0x60088080045` decodes to bands **1, 3, 7, 20, 28, 32, 42, 43** — the standard European CPE set. Two independent cross-checks on the same poll: `wan_active_band` reported `LTE BAND 28` and bit 27 is set; the carrier-aggregation secondary cell reported band 20 and bit 19 is set.
 
 ### `data_volume_limit_size`
 
-Cap size as `<value>_<multiplier>`, e.g. `2_1048576` for 2 GB. Paired with `data_volume_limit_unit`, which is `data` for a byte cap or `time` for an hours/minutes cap.
+Cap size as `<value>_<multiplier>`, where the multiplier is **the number of mebibytes in the chosen unit**. `2_1048576` is **2 TiB**, because 1 TiB is 1,048,576 MiB.
+
+**Corrected 2026-07-29.** The discovery report annotated this same value as "2 GB". The router's own Data Management page shows **2TB** for it, with the 80% reminder at **1.6TB** — direct observation of the device beats the annotation, so the multiplier is MiB-based rather than KiB-based.
+
+Note the router counts in **binary** units throughout that page: its "1.01TB used" against a Monthly Total of 1,107.75 GB decimal is the same quantity (1,107.75 GB ÷ 1024⁴ ≈ 1.01 TiB), not a disagreement. A cap that reads "2TB" on the router therefore reads about **2199 GB** in Home Assistant, which converts to decimal.
+
+Paired with `data_volume_limit_unit`, which is `data` for a byte cap or `time` for an hours/minutes cap. When it is `time`, the size field is a duration and means nothing as an allowance.
 
 ### SMS date fields
 

@@ -2,7 +2,119 @@
 
 All notable changes to this project will be documented in this file.
 
-> **Note on the `3.3.0` version tags.** The `3.3.0-dev*` and `3.3.0-rc*` entries below are kept as written, but **`3.3.0` was never released**. Its content shipped as part of `3.3.1`, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.1` and contains no `3.3.0` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
+> **Note on the `3.3.0` and `3.3.1` version tags.** The `3.3.0-dev*`, `3.3.0-rc*` and `3.3.1-dev*` entries below are kept as written, but **neither `3.3.0` nor `3.3.1` was ever released**. All of their content shipped as part of **`3.3.2`**, so the public `CHANGELOG.md` goes straight from `3.2.5` to `3.3.2` and contains no `3.3.0` or `3.3.1` entry. This file is a work diary and its tags record when work happened, not what reached users — expect the two files to differ here.
+>
+> This has now happened twice. The tags are assigned when work starts, not when it ships, so a version that slips gets absorbed by the next one. If it matters that the two files agree, the fix is to tag dev entries against the _next unreleased_ number rather than a guessed release number.
+
+## [3.3.1-dev20] - 2026-07-30 - Unreleased - No Manifest Bump - Allowance Enabled; Entity Naming Convention
+
+### Changed
+
+- **`Allowance` is now enabled by default.** It is the figure `Projected Cycle Usage` is judged against, and hiding it while showing both the projection and the alert threshold made no sense. It reports nothing when no cap is configured, which is the honest answer rather than a reason to hide the entity.
+- **`Data Volume Alert` renamed to `Alert Threshold`.** It was producing `sensor.zte_5g_data_data_volume_alert` — Home Assistant prefixes the device name, so "Data Volume Alert" in the Data group doubles the word. Neither candidate name quite fit: "Volume Alert" reads as an alert entity when this is a **setting** that never alerts, and "Usage Alert Percent" repeats a unit the `%` already shows. `Alert Threshold` says what it is and pairs with its sibling — **Allowance** 2199 GB, **Alert Threshold** 80%.
+- Its `about` note now names that pairing explicitly: "80% of a 2 TB plan means it warns you at 1.6 TB".
+
+### Added
+
+- **`AGENTS.md` § Entity naming — do not repeat the sub-device word.** Written up after a scan found three doubled entity IDs, only one of which was worth fixing.
+
+### Deliberately not changed
+
+- **`sensor.zte_5g_signal_signal_bars` and `switch.zte_5g_data_data_limit_switch` keep their doubled IDs.** Both are long released. Renaming fixes nothing for anyone who already has them — **Home Assistant never renames an existing `entity_id`** — while anyone referencing the friendly name in a dashboard or template gets a silent break. The only beneficiary would be a new install. `Data Volume Alert` was worth renaming precisely because it was disabled by default until this session, so almost nobody has it.
+
+### Known state on the development instance
+
+`sensor.zte_5g_data_allowance` shows `disabled_by='user'` in the registry rather than `'integration'`, so Home Assistant will not auto-enable it there — an explicit user choice is respected over an integration default. It has to be enabled once by hand. Fresh installs get it enabled. This is the same asymmetry recorded in `[3.3.1-dev18]`: the enable direction propagates from an integration default, the disable direction and any explicit user choice do not.
+
+## [3.3.1-dev19] - 2026-07-30 - Unreleased - No Manifest Bump - Two Raw Diagnostics Made Readable
+
+`Carrier Aggregation Secondary Cells` and `LTE Band Lock Mask` both told the user the value was raw without telling them how to read it. Both notes now carry the decode, and both decodes are verified on hardware rather than asserted.
+
+### Fixed
+
+- **`LTE Band Lock Mask` now explains the bitmask.** Bit N is band N+1. Verified: the live value `0x60088080045` decodes to bands **1, 3, 7, 20, 28, 32, 42, 43** — the standard European CPE set — and two independent cross-checks land on the same poll. `wan_active_band` reported `LTE BAND 28` with bit 27 set, and the carrier-aggregation secondary cell reported band 20 with bit 19 set.
+- **`Carrier Aggregation Secondary Cells` now names its fields**, and in the process corrects the discovery report. The report ordered them `[earfcn],[band_number]`, which read the live sample as EARFCN 20 on band 6300 — impossible, since EARFCN 6300 falls inside band 20's allocation (6150-6449) and `20` is not a valid EARFCN. The order is band then EARFCN.
+
+### Not adopted
+
+- **Field 3 was proposed as a "Subframe Code" and is left unnamed.** Three readings of the same string show it oscillating between `1` and `2` while band, EARFCN and bandwidth hold steady — a subframe configuration does not do that. The discovery report's own label, `dl_bandwidth_code`, is contradicted by the same data: code `2` would mean 5 MHz, disagreeing with field 6's `10`. It is more likely an SCell activation state or a MIMO layer count; naming either would be publishing a guess in a note whose whole purpose is to let someone parse the string.
+
+### Notes
+
+- `docs/zte_how_to_access.md` § Field formats now carries a per-position confidence column for the CA descriptor, so the three confirmed fields are distinguishable from the two inferred ones and the one unknown.
+- The band-lock warning was retained rather than dropped: the sensor is read-only, but it is where someone checks a lock they applied elsewhere, and "locking to a band the router cannot see leaves it with no service" is the consequence they need at that moment.
+
+## [3.3.1-dev18] - 2026-07-29 - Unreleased - No Manifest Bump - Default-State Review and `about` Note Corrections
+
+User-directed pass over which entities appear out of the box, and over six `about` notes that were awkward, outdated or misleading. Note text is edited in the entity descriptions, not in `docs/about_attribute_list.md`, which is generated from them.
+
+### Changed
+
+- **`MDM MCC` and `MDM MNC` are now disabled by default.** Both are static in normal use — they change only if the modem attaches to a different operator — so they were two permanently unchanging rows in every user's default entity list. `RMCC` and `RMNC`, which report the _registered_ network and do differ while roaming, were already disabled.
+- **`Data Volume Alert` is now enabled by default**, and keeps its lack of a `state_class` so it stays out of long-term statistics. It is the threshold the router's own alert fires on, and it pairs directly with the new `Allowance` sensor; hiding it while showing the cap made little sense. A configured percentage has no useful trend line, hence no statistics.
+
+### Fixed — `about` notes
+
+- **WAN Fallback Mode** — "It differing from the active mode is normal" was an awkward gerund. Now "A difference between the fallback mode and the active mode is normal and not a fault."
+- **Monthly Sent / Received / Total** — all three told users to prefer the legacy GB sensors for display and the byte sensors for arithmetic. That advice predates Home Assistant's unit normalisation and is now wrong: the byte sensors carry `DATA_SIZE` with a `GIGABYTES` suggested unit, so HA renders them in GB on a dashboard while storing exact bytes. The legacy GB sensors are disabled by default and exist only for history. Rewritten to say HA displays in GB while storing the byte count, so one sensor serves both purposes.
+- **Bridge Mode** — the note described the PPP session accurately but never connected it to the entity's name, leaving users to wonder how it relates to WAN Operating Mode. It now states the distinction directly: this reports whether the pass-through session is **up**, while WAN Operating Mode reports which mode the router is **configured** for. The APN-versus-coverage diagnostic hint is kept.
+- **Router Timezone** — previously declined to interpret the format at all. The encoding is now known, so it explains it: base timezone plus DST offset, with `0-1` as the worked example.
+
+## [3.3.1-dev17] - 2026-07-29 - Unreleased - No Manifest Bump - Monthly Counter Statistics Fixed; Allowance Sensor Added
+
+Prompted by a user challenge to a claim made in review, which turned out to be half right and exposed a defect that had been corrupting statistics every month.
+
+### Fixed
+
+- **The six monthly counters were `TOTAL`; they are now `TOTAL_INCREASING`.** These zero on the router's billing day, and the two state classes handle that completely differently. Verified against `homeassistant/components/sensor/recorder.py`: `reset_detected()` — which treats a fall below 90% of the previous value as a new cycle — is reached **only** from the `TOTAL_INCREASING` branch. Under plain `TOTAL` a reset is recognised solely from a `last_reset` attribute this integration does not publish, so **every monthly rollover recorded as a large negative delta and walked the long-term statistics sum backwards**. Affects `monthly_tx_bytes`, `monthly_rx_bytes`, `monthly_total_bytes` and their three `_raw` counterparts.
+  - **Existing statistics are not repaired by this.** Home Assistant applies the new class going forward; historical sums already skewed by past rollovers stay as they are. Developer Tools → Statistics offers a fix-up for affected entities.
+- **`data_volume_limit_size` was documented as `2_1048576` = "2 GB".** It is **2 TiB** — the multiplier is the number of mebibytes in the chosen unit. The annotation came from the discovery report; the router's own Data Management page shows "2TB" for that stored value with an 80% reminder at "1.6TB", and direct observation of the device beats the annotation. Also recorded that the router counts in **binary** units throughout that page, so its "1.01TB used" and a Monthly Total of 1,107.75 GB decimal are the same quantity, not a disagreement.
+
+### Added
+
+- **`Allowance` sensor** (`data_allowance`) on the Data sub-device — the monthly cap configured on the router, decoded from `<value>_<MiB multiplier>`. Disabled by default, `DIAGNOSTIC`, guard-banded to 1 PiB. Returns nothing when no cap is set or the router is limiting by **hours** rather than data, since a duration is not an allowance. Verified live: decodes to 2.00 TiB against the router's "2TB", and 80% of it to 1.60 TiB against the router's "1.6TB" — two independent cross-checks of the same encoding.
+- **A cap-relative variant of the Projected Overage automation.** With `Allowance` enabled the threshold tracks the router instead of a number typed into the automation, so changing your plan does not mean editing YAML. The template carries a `> 0` guard because the sensor is unavailable when no cap is set, and without it an unset cap would read as zero and fire immediately. Verified by rendering it at four states.
+
+### Notes
+
+- Every field on the router's **Data Management** page is now polled. Three are still without an entity: `wan_auto_clear_flow_data_switch`, `data_volume_limit_unit`, and the "Data Used" calibration write.
+- **`FLOW_CALIBRATION_MANUAL` is that "Data Used" box** — an editable current-usage field, not a missing feature. It re-bases the counter to match an operator's billing figure, which means it _writes_ the counter and so carries the same statistics caveats as a reset, upward as well as down.
+- Named `Allowance` rather than `Data Allowance`: Home Assistant prefixes the sub-device name, so the latter yields "ZTE 5G Data Data Allowance". Same reasoning as `Reset Day`.
+
+## [3.3.1-dev16] - 2026-07-29 - Unreleased - No Manifest Bump - Corrected Reasoning on Declined Write Controls
+
+Documentation only. All declined write commands stay declined; the reason given for most of them was wrong.
+
+### Fixed
+
+- **One objection had been applied to five commands, and it only fits one.** `docs/zte_how_to_access.md` and `docs/Future.md` both claimed that each declined write changes the path Home Assistant reaches the router over, so the control that undoes a mistake becomes unreachable. Home Assistant talks to the router at its **LAN address**. A cell lock, a band lock or bad DNS breaks the **WAN**, not the management path — the undo stays available. Only `OPERATION_MODE`, which changes the router's LAN role and addressing, carries a genuine reachability risk.
+- **Replaced with a per-command reason.** Reachability for `OPERATION_MODE`; poor value against real risk for `LTE_LOCK_CELL_SET`, where cells change with operator load and maintenance so a working lock can fail later; scope and blast radius for `ROUTER_DNS_SETTING`, which affects every device on the LAN; scope plus address-collision risk for the DHCP reservation commands; one-time provisioning for `SET_NETWORK` / `UNLOCK_NETWORK`. `RESET_DATA_COUNTER` remains declined for irreversibility, which was always its own reason.
+- **Recorded the case where reachability does hold** — a user reaching Home Assistant remotely over the same WAN loses both the connection and the control that fixes it. That is a property of their access path rather than of the router, but it is common enough to design for.
+
+### Added
+
+- **"Recoverable is not the same as harmless", stated explicitly.** Three of these are reversible from the router's web page in under a minute, and that is the argument for leaving them there rather than against it: a setting that is a one-time deliberate act with a wide blast radius belongs somewhere that shows it in context and warns before applying. Exposing a control in Home Assistant implies it is safe to script.
+- Each declined entry now names the router's own web page as where the user should go, rather than only saying no.
+
+**Why this was worth correcting rather than leaving.** A tidy single objection that does not survive inspection is worse than three specific ones: the next reader either applies it to a sixth command where it also fails, or notices the LAN path survives, concludes the whole rationale is bogus, and implements all of them.
+
+## [3.3.1-dev15] - 2026-07-29 - Unreleased - No Manifest Bump - Projection Refinements
+
+Four changes to `Projected Cycle Usage` following a review of how it behaves in the first days of a cycle.
+
+### Changed
+
+- **Removed the `state_class`, so it no longer reaches long-term statistics.** It was `measurement`, which generated LTS mean/min/max. That was wrong on reflection: this is an estimate of where the cycle ends up, useful _now_ rather than as a history, and the measurement it derives from — `Monthly Total` — is already recorded with a proper state class. Keeping both stored a derived view of a number already stored, and invited charts of what was once guessed rather than what happened. It still appears in normal recorder history; an integration can exclude its own attributes but not its own state.
+
+### Added
+
+- **A calendar-month fallback.** A router reporting no reset day previously produced a permanently `unknown` sensor with no explanation. It now assumes the 1st — right for anyone billed calendar-monthly, no worse than nothing for anyone else, and far better than a blank that never clears. The assumption is published as a new `cycle_source` attribute (`router` or `calendar_assumed`) so it is visible rather than buried in the arithmetic.
+- **README note on first-day behaviour.** The projection reads _low_ on day one, not high: the denominator floor caps the rate at one day's usage rather than dividing by a fraction of a day. It settles within 24 hours and is accurate from day 2 of every cycle — including the first cycle after install, which is worth stating because "wait a few months for it to learn" would be wrong.
+- **A `Projected Overage Alert` automation example**, gated on `cycle_day >= 3` so a single large download on the 1st cannot page the user about an overage that never happens. The template guards the attribute being absent (`or '0 of 0'`), since `.split` on a missing attribute throws when the sensor is unavailable. Both `confidence`-based alternatives are documented alongside it. YAML and Jinja verified by parsing them out of the README and rendering the condition at day 2, day 3 and with the attribute absent.
+
+### Not done
+
+- **Phase 4, the cycle-history store, is declined for now.** It would only improve the opening ~18-24 hours of each cycle — precisely the window `confidence` already reports as `low`. `helpers.project_cycle_usage()` keeps its `prior_rate` hook, so it remains one line plus a store if the 1 August rollover shows something worse than predicted. Were it built, it should use `homeassistant.helpers.storage.Store` (already used in two sibling projects) rather than `RestoreEntity` (used in none).
 
 ## [3.3.1-dev14] - 2026-07-29 - Unreleased - No Manifest Bump - Documentation Reconciliation
 

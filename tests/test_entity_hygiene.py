@@ -88,6 +88,7 @@ def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
         "basis",
         "cycle_day",
         "cycle_start",
+        "cycle_source",
     }
     assert emitted == set(ZTERouterSensor._unrecorded_attributes)
 

@@ -2,7 +2,7 @@
 
 Strategic opportunities for `ha-zte-router-5g-monitor`. The original roadmap (2026-05) framed the goal as a transition from **monitoring** to **active management**. That transition has largely happened — most of what follows is now either shipped or deliberately declined.
 
-**Reviewed 2026-07-29** against the running instance (82 entities) and the current source. Status below is verified, not assumed.
+**Reviewed 2026-07-30** against the running instance (92 entities) and the current source. Status below is verified, not assumed.
 
 ---
 
@@ -35,13 +35,21 @@ That failure mode is not hypothetical: it is the class behind both the `[3.3.0-d
 - **Adjacent control: done.** `Network Mode Selection` sets the bearer preference (4G/5G combinations, or either alone).
 - **Write side: not implemented.** No `select` forces a specific band such as B20 or n78. `api.py` contains no `BAND_SELECT` or `WAN_PERFORM_NR5G_BAND_LOCK` command.
 
-The original safety requirement — a "Reset to Auto" escape — remains correct and is not sufficient on its own. Locking to a band the router cannot currently see drops the connection, and the integration reaches the router **over that connection**. The reset control would be unreachable at precisely the moment it is needed; recovery would mean physical access to the router's web UI.
+The original safety requirement — a "Reset to Auto" escape — remains correct. **A previous revision of this entry overstated why.** It claimed the integration reaches the router over the connection a bad lock breaks, so the reset control would be unreachable. That is wrong in the ordinary case: Home Assistant talks to the router at its **LAN address**, and a band lock kills the WAN, not the management path. The escape stays reachable and the lock can be undone.
 
-**If this is ever built**, the design must survive that: a self-clearing lock (revert if no data connection within _N_ seconds, enforced router-side, not by the integration) is the only shape that is safe on a headless outdoor unit.
+The objection that survives is different, and still sufficient:
+
+- **The failure is total, and silent to automation.** A lock to a band the router cannot see means no service at all — not degraded service. Anything depending on that connection stops.
+- **It genuinely is unreachable for remote users.** Anyone reaching Home Assistant over that same WAN, via cloud or VPN, loses both the connection and the control that fixes it. That is a property of their access path, not of the router, but it is common enough to design for.
+- **It is a setting to make once, not to script.** Band selection is tuning done deliberately with a signal meter to hand. Exposing it as an entity implies it is safe to automate.
+
+**Where a user should go instead:** the router's own web page. It shows the current band and the alternatives in context, applies the change with the modem in front of it, and is reachable on the LAN whether or not the WAN is up.
+
+**If this is ever built**, a self-clearing lock — revert if no data connection within _N_ seconds, enforced router-side rather than by the integration — is the only shape that is safe unattended.
 
 ### Cell locking (PCI) — **not implemented, and lower value than it appears**
 
-No PCI lock control. The safety objection above applies with more force: a cell is a smaller target than a band, and cells change with load and maintenance. The router already reports `lte_pci` and `nr5g_pci` for diagnosis, which is where the value is.
+No PCI lock control (`LTE_LOCK_CELL_SET` exists in the firmware and is deliberately not called). The objection above applies with more force: a cell is a smaller target than a band, and cells change with load and maintenance — so a lock that works today can leave the router with no service next week, after a change at the operator's end that the user never sees. The router already reports `lte_pci` and `nr5g_pci` for diagnosis, which is where the value is. If someone genuinely wants to pin a cell, the router's web page is the right place: it is a one-time tuning act, not something to automate.
 
 ---
 
@@ -103,12 +111,13 @@ The key is already polled and the switch's state already drives the projection s
 | **Declined** | Token persistence | — | — |
 | **Blocked** | Custom triggers (HA version floor) | Low | ⭐⭐ |
 
-**Current status.** 91 entities across four sub-devices, 84 carrying `about` notes. 729 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
+**Current status.** 92 entities across four sub-devices, 85 carrying `about` notes. 749 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
 ---
 
 ## Version Control
 
+- **v2.4.0** (2026-07-29) — Corrected the reasoning behind the declined write controls. Every one of them had been justified with a single claim: that the integration reaches the router over the connection the change breaks, so the undo would be unreachable. **That holds only for `OPERATION_MODE`.** Home Assistant talks to the router at its LAN address, so a band lock, a cell lock or bad DNS kills the WAN and leaves the management path intact. The declines all stand, but on three distinct grounds — reachability, foot-gun value, and scope — now stated per command rather than blanket. Also recorded the case where reachability _does_ apply (a user reaching Home Assistant remotely over that same WAN) and, for each, that the router's own web page is the better place for a one-time tuning act.
 - **v2.3.0** (2026-07-29) — Item 4 (billing-cycle write controls) rescoped after the router-facing agent answered the open questions. The blocker it described — a partial POST possibly clearing the user's data cap — turned out not to exist: the router **refuses** an incomplete form rather than blanking the omitted fields. The read-modify-write path is built and verified, which also fixed a Data Limit Switch that had never worked. Only the Number and Switch entities remain, so the effort drops from Medium to Low.
 - **v2.2.0** (2026-07-29) — **Data-usage projection delivered** and moved to the delivered table. `Projected Cycle Usage` and `Reset Day` ship on the Data sub-device, cycle-relative rather than calendar-relative, after a live probe confirmed the router exposes `traffic_clear_date`. Two candidates added in its place, both carved out of the same work and both deliberately not shipped: the **billing-cycle write controls**, blocked on `DATA_LIMIT_SETTING` being a multi-field form that a partial POST could clear; and **projection accuracy from cycle history**, which needs a store the integration does not yet have. Also recorded that `OPERATION_MODE`, `LTE_LOCK_CELL_SET`, `ROUTER_DNS_SETTING` and `SET_BIND_STATIC_ADDRESS` were found by the same discovery run and declined under the objection this document already applies to band and cell locking — the control that undoes a bad change sits on the far side of the connection it breaks.
 - **v2.1.0** (2026-07-29) — Removed the proposed _signal-quality history sensor_. Home Assistant's built-in **Statistics** helper already produces a rolling mean over any signal entity with no code, and there is no sound formula for a single combined quality score: which metric limits a connection depends on whether the site is interference-limited or noise-limited, so a weighted average would score one of those two cases wrong. SINR is the honest single number. Replaced by a **Reading Your Signal Data** section in `README.md` covering which metric answers which question, the threshold tables gathered in one place, establishing a personal baseline, and building the Statistics helper to compare antenna positions. Also removed the _config-entry migration handler_ row — it is a tripwire documented in `DEVELOPMENT.md`, not roadmap work, and there is no VERSION 3 planned. Removed the thermal-sensor row: that decision is closed.

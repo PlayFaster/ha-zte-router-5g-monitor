@@ -59,6 +59,7 @@ Data flows in one direction: **`api.py` → `coordinator.py` → platform entiti
 
 - **Platforms** (`sensor`, `binary_sensor`, `button`, `number`, `switch`, `select`) — read `coordinator.data` and attach to sub-devices via `helpers.build_device_info`.
   - **`sensor.py` key aliasing**: `_get_first(data, keys)` returns the first spelling the router populated, treating present-but-empty as absent. Alias tuples are named constants (`_ALIAS_5G_RSRP` etc.) so the set is checkable against `api.py`. It nests **inside** the existing converters — `_safe_float(_get_first(...))`, never bare — or coercion and rounding are lost. All six monthly TX/RX call sites are aliased, including the two totals via `_monthly_total_bytes()`; aliasing only some would let the totals silently disagree with their own components on `flux_`-spelling hardware.
+  - **`Projected Cycle Usage` carries two deliberate non-defaults.** It has **no `state_class`**, so it never reaches long-term statistics — it is an estimate of where the cycle ends up, and the usage it derives from is already recorded by `Monthly Total`; `test_projection_has_no_state_class` guards it, because "a numeric sensor with no state class" looks like an oversight. And it **falls back to the calendar month** when the router reports no reset day, publishing `cycle_source: calendar_assumed` rather than going `unknown` — an unexplained blank that never clears is worse than a stated assumption. Its `prior_rate` hook in `helpers.project_cycle_usage()` is always `None` today; the cycle-history store behind it is declined, see `DEVELOPMENT.md` §7.
   - **Thermal sensors are a defined set, not a subset.** The five `pm_*` entities are the thermal keys the sibling `goform` project polls with °C units. `test_thermal_sensor_set_matches_the_descriptions` fails if one is added without a test or vice versa. No model is yet confirmed to populate any of them — all are disabled by default, and the MC7010 returns `""` for every one. Two exceptions read elsewhere: `ZTEIntegrationHealthSensor` reads `coordinator.health_snapshot` and overrides `available` to `True` unconditionally, and sensors with a `source` on their description gate `available` on `endpoint_available()`.
 
 - **`diagnostics.py`** — sanitizes rather than key-redacts. `coordinator.data` is the vendor payload verbatim, so it blanks credentials/subscriber IDs/carrier identity, pseudonymizes IPs, cell IDs and SMS senders to stable tokens, summarizes `APN_config*` to its shape, and sweeps everything else for IP/MAC-shaped strings. Identifiers are matched by shape and position only — **never** seed it with real values. Verify changes against a regenerated download with an SMS present, not by reading the code.
@@ -85,6 +86,21 @@ There is **no** `async_migrate_entry`, which is safe only because the first publ
 ## Key Patterns & Conventions
 
 Shared conventions (ruff/mypy strictness, `_LOGGER` prefixing, `PARALLEL_UPDATES`, `translation_key`, icons, exception tuple syntax, markdown emoji rules) are in [shared conventions §4–5](.shared/dev_std/agent_conventions.md). Nothing in this project deviates.
+
+### Entity naming — do not repeat the sub-device word
+
+Home Assistant prefixes the **device** name to the entity name, and this integration's devices are `ZTE 5G System` / `Signal` / `Data` / `SMS`. So an entity in the `data` group named "Data Reset Day" becomes **"ZTE 5G Data Data Reset Day"** and `sensor.zte_5g_data_data_reset_day`.
+
+**Name the entity for what it is within its group, not including the group.** `Reset Day`, `Allowance`, `Alert Threshold` — never `Data Reset Day`, `Data Allowance`, `Data Volume Alert`.
+
+Two released entities already carry the doubling and are **deliberately left alone**:
+
+- `sensor.zte_5g_signal_signal_bars`
+- `switch.zte_5g_data_data_limit_switch`
+
+Renaming them would fix nothing. **Home Assistant never renames an existing `entity_id`** — the registry keeps whatever was assigned at creation — so every current install keeps the doubled ID regardless, while anyone referencing the friendly name in a dashboard or template gets a silent break. The only beneficiary is a new install, which is not worth the breakage. Fix the convention going forward; do not retrofit.
+
+The corollary matters when adding an entity: **get the name right before it ships**, because after that only new installs see the correction. `Reset Day`, `Allowance` and `Alert Threshold` were all renamed within hours of being added, for exactly this reason.
 
 ### Raising user-facing exceptions
 

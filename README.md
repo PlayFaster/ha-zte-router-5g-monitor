@@ -154,6 +154,11 @@ It is arithmetic, not a forecast. Usage so far is divided by the days elapsed in
 | `basis` | How the estimate was made. Currently always `run_rate_only`. |
 | `cycle_day` | Where you are in the cycle, e.g. `12 of 31`. |
 | `cycle_start` | The date the current cycle began. |
+| `cycle_source` | `router` when the reset day came from the router, `calendar_assumed` when it did not report one and the 1st of the month was assumed. |
+
+**On the first day of a cycle it reads low.** With only a few hours of usage to extrapolate from, the calculation deliberately refuses to divide by a fraction of a day — otherwise a single morning's download would project to an absurd figure. The effect is that the number starts low and climbs, settling on a sensible value once a full day has passed. It is accurate from day 2 of every cycle, including the first one after you install the integration.
+
+**It is not recorded in long-term statistics**, by design. It is an estimate of where you will finish, useful now rather than as a history — and the usage it derives from is already recorded by **Monthly Total**.
 
 If you automate on it, gate the automation on `confidence` so you are not paged on day two:
 
@@ -225,7 +230,7 @@ See [SMS Actions](#-sms-actions) below for more detail, and [SMS Examples](#-sms
 
 ## 🔍 What You Get
 
-This integration provides **91 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **92 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -236,8 +241,8 @@ This integration provides **91 entities** (depending on your firmware) organized
 | Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
 | :-- | :-- | :-- | :-- |
 | ⚙️ **System** | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+21) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
-| 📶 **Signal** | 36 Sensors, 1 Binary Sensor, 3 Selects (+8) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
-| 📈 **Data** | 13 Sensors, 1 Switch (+5) | Monthly Usage, **Projected Cycle Usage**, **Reset Day**, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch, Data Volume Alert % |
+| 📶 **Signal** | 36 Sensors, 1 Binary Sensor, 3 Selects (+10) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
+| 📈 **Data** | 14 Sensors, 1 Switch (+4) | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
 | 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
 
@@ -326,7 +331,10 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 | Uptime Duration | Resets on reboot; predictable pattern adds no insight |
 | Battery | Always 100% when plugged in |
 | Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
-| Data Volume Alert % (disabled) | Configuration setting; historical trend holds no analytical value |
+| **Projected Cycle Usage** | An estimate of where the cycle ends up, useful now rather than as a history. The usage it is derived from is already recorded by Monthly Total, so keeping both would store a derived view of a number already stored |
+| **Reset Day** | A billing-cycle setting that changes at most once; a trend line of it says nothing |
+| **Allowance** | A configured cap, not a measurement |
+| Alert Threshold | Configuration setting; historical trend holds no analytical value |
 | LTE Band Lock Mask (disabled) | Text string diagnostic sensor |
 | Time Server (SNTP) (disabled) | Text string configuration sensor |
 
@@ -933,6 +941,79 @@ actions:
 
 </details>
 
+#### 🔮 Projected Overage Alert
+
+<details>
+
+<summary> &nbsp; &nbsp; Warn when you are <b>on course</b> to exceed your allowance, rather than waiting until you already have. Suppressed for the first two days of each cycle, when the estimate has too little to go on.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
+</summary><br>
+
+```yaml
+alias: "ZTE Data: Projected Overage Alert"
+description: "Warns once per cycle when the projection exceeds the allowance"
+mode: single
+triggers:
+  - trigger: numeric_state
+    entity_id: sensor.zte_5g_data_projected_cycle_usage
+    above: 1000 # your allowance, in the unit the sensor displays (GB by default)
+conditions:
+  - condition: template
+    value_template: >-
+      {{ (state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') or '0 of 0').split(' ')[0] | int(0) >= 3 }}
+
+
+    note: |
+      The gate that makes this usable. `cycle_day` reads like "3 of 31", so the
+      first token is the day number. Before day 3 the projection is extrapolating
+      from a couple of days of usage and swings widely - a single large download
+      on the 1st would page you for an overage that never happens.
+      The `or '0 of 0'` matters: if the sensor is unavailable the attribute is
+      absent, and calling .split on nothing would throw. This way it reads as
+      day 0 and the condition simply fails.
+actions:
+  - action: persistent_notification.create
+    data:
+      title: "ZTE Data: projected to exceed allowance"
+      message: >
+        On current usage this cycle is projected to finish at {{ states('sensor.zte_5g_data_projected_cycle_usage') | float(0) | round(0) }} {{ state_attr('sensor.zte_5g_data_projected_cycle_usage',
+                      'unit_of_measurement') }}
+        - day {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') }}, confidence {{ state_attr('sensor.zte_5g_data_projected_cycle_usage',
+                                 'confidence') }}.
+
+
+    note: |
+      Including the cycle day and confidence in the message tells you how much
+      weight to give the warning without opening the entity.
+```
+
+**Comparing against the router's own cap instead of a fixed number.** The **Allowance** sensor reports the cap configured on the router, so the threshold tracks your actual plan and changing it does not mean editing the automation. Swap the `numeric_state` trigger for a template one:
+
+```yaml
+triggers:
+  - trigger: template
+    value_template: >-
+      {{ states('sensor.zte_5g_data_projected_cycle_usage') | float(0)
+         > states('sensor.zte_5g_data_allowance') | float(0) > 0 }}
+```
+
+The trailing `> 0` matters: **Allowance** is unavailable when no cap is set or the router is limiting by hours rather than data, and without it an unset cap would read as zero and fire immediately.
+
+**Two alternatives to the day-3 gate**, depending on how twitchy you want it:
+
+- `confidence` **is not** `low` — equivalent to roughly day 2 onward, and self-adjusting if the thresholds ever change.
+- `confidence` **is** `high` — around day 9 onward. Fewer false alarms, but less warning time.
+
+Use the day-number gate when you want a fixed, predictable rule; use `confidence` when you would rather the sensor decide.
+
+> [!NOTE]
+>
+> `mode: single` plus a `numeric_state` trigger means this fires on the **crossing**, not on every poll above the threshold. If the projection dips back under and rises again later in the same cycle it will fire a second time — add an `input_boolean` guard reset by a cycle-start automation if you want strictly once per cycle.
+
+---
+
+</details>
+
 #### 📶 Signal Quality Alert
 
 <details>
@@ -1501,13 +1582,14 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-- **Polling Loop**: Fetches all diagnostic and SMS data in a single optimized request.
+- **Polling Loop**: Fetches everything in as few requests as the router allows — a core batch, a diagnostics batch, and two SMS calls per cycle. The router caps a request by its **length**, not by how many values you ask for, so the readings are split across two batches by how important they are rather than crammed into one.
 - **Triggered Refresh**: Actions like **Reboot**, **Delete SMS**, or **Change Config** trigger an immediate API refresh to provide instant feedback.
 - **3-Strike Logic**: To avoid "Unavailable" flickers during momentary router congestion or signal loss:
   1. **First Failure**: Logs a warning; retries immediately.
   2. **Second Failure**: Logs a warning; retries again.
   3. **Third Failure**: Marks all entities as `Unavailable` and logs an error.
-- **Per-Endpoint Resilience**: The SMS endpoints carry their **own** strike budget. If SMS stops responding while the main data fetch keeps working, only the SMS entities are affected — Signal and Data keep updating.
+- **Per-Endpoint Resilience**: The SMS endpoints and the diagnostics batch each carry their **own** strike budget. If one stops responding while the main fetch keeps working, only the entities it feeds are affected — Signal and Data keep updating. In practice you may see a handful of the disabled-by-default diagnostic entities go `Unavailable` on their own; that is the design working, not a fault, and the **Integration Health** sensor names which capability degraded.
+- **What is in the main fetch**: everything shown by default — signal, data usage, connection state, SMS counts and the router's identity. Diagnostics, the temperature sensors and the router's own settings ride the second batch, so a problem there can never blank the readings you actually watch.
 - **Auto-Recovery**: Once the router is back online, the integration restores all entities automatically.
 - **Forced Refresh Always Fetches**: Every explicit action — **Refresh Now**, changing a setting, deleting an SMS — fetches immediately **even while Pause Polling is on**. Only scheduled polls respect the pause.
 
