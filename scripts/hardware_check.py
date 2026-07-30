@@ -60,6 +60,7 @@ import argparse
 import asyncio
 import contextlib
 import json
+import os
 import pathlib
 import sys
 import time
@@ -96,6 +97,47 @@ PROBE_PATH = (
 )
 RD_PATH = "goform/goform_get_cmd_process?isTest=false&cmd=RD"
 
+# Seconds to let the radio re-register before reading a value back. Only the
+# attended tier waits: nothing in the safe tier disturbs the connection.
+RECONNECT_SETTLE = 12.0
+
+# Colour is emitted unconditionally, the way `pytest --color=yes` is used by the
+# sibling tasks: stdout here is a pipe into `tee`, so auto-detection would strip
+# it exactly when it is wanted. The VS Code task sends the coloured stream to the
+# terminal and a `sed`-stripped copy to `.reports/`, so the log stays plain text.
+# `NO_COLOR` (https://no-color.org) and `--no-color` both turn it off.
+_COLOUR = os.environ.get("NO_COLOR") is None
+
+
+def _c(code: str, text: str) -> str:
+    """Wrap text in an ANSI code, or return it unchanged when colour is off."""
+    return f"\033[{code}m{text}\033[0m" if _COLOUR else text
+
+
+def _green(text: str) -> str:
+    """Return text in bold green."""
+    return _c("1;32", text)
+
+
+def _red(text: str) -> str:
+    """Return text in bold red."""
+    return _c("1;31", text)
+
+
+def _yellow(text: str) -> str:
+    """Return text in bold yellow."""
+    return _c("1;33", text)
+
+
+def _cyan(text: str) -> str:
+    """Return text in bold cyan."""
+    return _c("1;36", text)
+
+
+def _dim(text: str) -> str:
+    """Return text dimmed, for supporting detail."""
+    return _c("2", text)
+
 
 class Report:
     """Collects results so one failure does not hide the rest."""
@@ -108,9 +150,9 @@ class Report:
     def record(self, ok: bool, name: str, detail: str = "") -> None:
         """Print one result and remember it for the summary."""
         self.checks.append((ok, name, detail))
-        print(
-            f"  {'PASS' if ok else 'FAIL'}  {name}{f'  — {detail}' if detail else ''}"
-        )
+        badge = _green("\u2714  PASS") if ok else _red("\u2716  FAIL")
+        suffix = _dim(f"  \u2014 {detail}") if detail else ""
+        print(f"  {badge}  {name}{suffix}")
 
     @property
     def failed(self) -> int:
@@ -148,7 +190,7 @@ async def check_session_assumptions(
     here is not necessarily a bug in the integration — it may mean the firmware
     changed and the design needs revisiting.
     """
-    print("\n[1] Session and token assumptions")
+    print(_cyan("\n[1] Session and token assumptions"))
 
     live = (await api._request("GET", RD_PATH, _retry=False))["RD"]
     again = (await api._request("GET", RD_PATH, _retry=False))["RD"]
@@ -167,8 +209,9 @@ async def check_session_assumptions(
     after_login = (await api._request("GET", RD_PATH, _retry=False))["RD"]
     report.captured["rd_survives_relogin"] = after_login == live
     print(
-        f"  NOTE  RD {'survives' if after_login == live else 'changes on'} "
-        "re-login (observation only, nothing depends on it)"
+        f"  {_yellow('\u25cf  NOTE')}  RD "
+        f"{'survives' if after_login == live else 'changes on'} re-login "
+        + _dim("(observation only, nothing depends on it)")
     )
 
     _kill_session(api, session)
@@ -192,7 +235,7 @@ async def check_write_round_trip(
 ) -> None:
     """Write, read back, restore — optionally with the session taken away first."""
     label = "with a DEAD session" if hostile else "with a live session"
-    print(f"\n[{3 if hostile else 2}] Safe writes {label}")
+    print(_cyan(f"\n[{3 if hostile else 2}] Safe writes {label}"))
 
     for setter_name, state_key, values in SAFE_WRITES:
         setter = getattr(api, setter_name)
@@ -227,6 +270,246 @@ async def check_write_round_trip(
                 )
 
 
+async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
+    """Round-trip the alert percentage, exercising the all-or-nothing form.
+
+    `DATA_LIMIT_SETTING` replaces the *whole* six-field data-volume
+    configuration and the router refuses a payload missing any field. The
+    integration sent one field for its entire life, so the Data Limit Switch
+    never worked in any release — and nobody noticed for weeks, because nobody
+    used that entity.
+
+    Only `data_volume_alert_percent` is moved, and it is put straight back. The
+    cap and the limit switch are deliberately untouched: this must remain safe
+    to strand, and a stranded alert percentage warns at a slightly wrong point
+    whereas a stranded cap can stop the router passing traffic.
+    """
+    print(_cyan("\n[4] The data-volume form (alert percentage only)"))
+
+    current = await api.get_params(list(api._DATA_VOLUME_FIELDS))
+    original = current.get("data_volume_alert_percent")
+    if original is None or not str(original).strip():
+        report.record(
+            False,
+            "read the data-volume form",
+            "no alert percentage reported — is Data Management enabled?",
+        )
+        return
+
+    nudged = "81" if str(original).strip() != "81" else "80"
+    # One retry, and the fact of it is reported. A well-formed form was seen
+    # refused once (2026-07-30) immediately after the session-churn section
+    # above, then accepted on the very next attempt with an identical payload.
+    # Why is not established. Retrying silently would hide an intermittent
+    # refusal, which is the class of fault this script exists to expose, so the
+    # attempt count is always printed.
+    attempts = 0
+    last_error: str | None = None
+    observed: Any = None
+    for attempt in range(2):
+        if attempt:
+            await asyncio.sleep(1.0)
+        attempts = attempt + 1
+        try:
+            await api.set_data_volume_settings(
+                current, data_volume_alert_percent=nudged
+            )
+        except Exception as err:  # noqa: BLE001 - reporting, not handling
+            last_error = str(err)
+            continue
+        observed = (await api.get_params(["data_volume_alert_percent"])).get(
+            "data_volume_alert_percent"
+        )
+        last_error = None
+        break
+
+    if last_error is None:
+        report.record(
+            str(observed) == nudged,
+            "six-field form accepted and applied",
+            f"{original} -> {observed}"
+            + ("" if attempts == 1 else f"  [needed {attempts} attempts]"),
+        )
+    else:
+        report.record(
+            False,
+            "six-field form accepted and applied",
+            f"refused {attempts}x: {last_error}",
+        )
+
+    # Restore unconditionally. The retry loop above handles its own exceptions,
+    # so nothing escapes before this point — a `finally` here would imply a
+    # `try` that no longer exists.
+    with contextlib.suppress(Exception):
+        latest = await api.get_params(list(api._DATA_VOLUME_FIELDS))
+        if str(latest.get("data_volume_alert_percent")) != str(original):
+            await api.set_data_volume_settings(
+                latest, data_volume_alert_percent=str(original)
+            )
+        back = (await api.get_params(["data_volume_alert_percent"])).get(
+            "data_volume_alert_percent"
+        )
+        report.record(
+            str(back) == str(original),
+            f"alert percentage restored to {original}",
+        )
+
+
+async def check_logout_ends_the_session(api: ZTERouterAPI, report: Report) -> None:
+    """Confirm LOGOUT genuinely ends the session, then log back in.
+
+    Worth its own check because the failure is invisible from the outside. The
+    router permits one session, so an ignored LOGOUT leaves the user locked out
+    of their own web UI with nothing logged anywhere. It also carries a
+    non-obvious requirement — `goformId=LOGOUT` needs an `AD` token — which
+    cannot be verified by loading the web UI, since logging in there terminates
+    whatever session existed regardless.
+
+    The only sound check is to replay the old token and confirm it is rejected.
+    """
+    print(_cyan("\n[5] Logout actually ends the session"))
+
+    stale = api.stok
+    try:
+        await api.logout()
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.record(False, "logout completed", f"{err}")
+    else:
+        api.stok = stale
+        try:
+            await api._request("GET", PROBE_PATH, _retry=False)
+        except ZTEAuthError:
+            report.record(True, "the old session token is rejected afterwards")
+        else:
+            report.record(
+                False,
+                "the old session token is rejected afterwards",
+                "the session survived LOGOUT — the user's web UI stays locked",
+            )
+    finally:
+        api.stok = await api.login()
+
+
+# ---------------------------------------------------------------------------
+# Attended tier
+# ---------------------------------------------------------------------------
+# Everything here re-establishes the router's connection. That is recoverable,
+# but a script cannot judge whether it recovered — the router answers with blank
+# values while reconnecting, which is indistinguishable from a dead session.
+#
+# So each one is offered singly, with an explicit description of what will
+# change and how to undo it by hand, and nothing proceeds without a typed `y`.
+# One operation is in flight at a time, and the current value is printed before
+# and after, so an interruption leaves a reader in no doubt about what state the
+# device is in.
+
+
+def _confirm(prompt: str) -> bool:
+    """Ask before touching anything, and treat everything but `y` as no."""
+    if not sys.stdin.isatty():
+        print(_yellow("  SKIP  no terminal attached — attended checks need one"))
+        return False
+    try:
+        return input(f"  {prompt} [y/N] ").strip().lower() == "y"
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return False
+
+
+async def _attended_round_trip(
+    api: ZTERouterAPI,
+    report: Report,
+    *,
+    title: str,
+    state_key: str,
+    setter: str,
+    target: str,
+    risk: str,
+    undo: str,
+) -> None:
+    """Offer one reconnecting write, then put the setting back."""
+    original = (await api.get_params([state_key])).get(state_key)
+    print(f"\n  {_yellow(title)}")
+    print(f"    current   : {original!r}")
+    print(f"    will set  : {target!r}, then restore {original!r}")
+    print(f"    risk      : {risk}")
+    print(f"    undo by hand: {undo}")
+
+    if original in (None, ""):
+        report.record(False, f"{title}: read the current value", "not reported")
+        return
+    if str(original) == target:
+        print(_dim("    already at the target value — nothing to prove, skipping"))
+        return
+    if not _confirm(f"Change {state_key} to {target!r}?"):
+        print(_dim("    skipped"))
+        return
+
+    changed = False
+    try:
+        await getattr(api, setter)(target)
+        changed = True
+        await asyncio.sleep(RECONNECT_SETTLE)
+        observed = (await api.get_params([state_key])).get(state_key)
+        report.record(str(observed) == target, f"{title}: applied", f"-> {observed!r}")
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.record(False, f"{title}: applied", f"{type(err).__name__}: {err}")
+    finally:
+        if changed:
+            print(_dim(f"    restoring {state_key} to {original!r}…"))
+            try:
+                await getattr(api, setter)(str(original))
+                await asyncio.sleep(RECONNECT_SETTLE)
+                back = (await api.get_params([state_key])).get(state_key)
+                report.record(
+                    str(back) == str(original),
+                    f"{title}: restored",
+                    f"-> {back!r}",
+                )
+            except Exception as err:  # noqa: BLE001 - must be loud
+                report.record(False, f"{title}: restored", f"{err}")
+                print(
+                    _red(
+                        f"\n  !! {state_key} MAY STILL BE {target!r} — "
+                        f"original was {original!r}.\n"
+                        f"  !! Undo by hand: {undo}\n"
+                    )
+                )
+
+
+async def check_attended_writes(api: ZTERouterAPI, report: Report) -> None:
+    """Run the reconnecting writes, one at a time, each individually confirmed."""
+    print(_cyan("\n[A] Attended writes — each one asks first"))
+    print(
+        _dim(
+            "    These re-establish the mobile connection. Expect a short "
+            "outage per step."
+        )
+    )
+
+    await _attended_round_trip(
+        api,
+        report,
+        title="APN selection mode",
+        state_key="apn_mode",
+        setter="set_apn_mode",
+        target="manual",
+        risk="brief reconnect; a wrong APN profile means no data until restored",
+        undo="router web UI -> Settings -> APN -> set back to Auto",
+    )
+
+    await _attended_round_trip(
+        api,
+        report,
+        title="Bearer preference",
+        state_key="net_select",
+        setter="set_bearer_preference",
+        target="LTE_AND_5G",
+        risk="radio re-registration; locking to a single mode can drop service",
+        undo="router web UI -> Settings -> Network -> set the preference back",
+    )
+
+
 async def check_refusal_is_not_retried(api: ZTERouterAPI, report: Report) -> None:
     """Check that a malformed write is reported rather than resent.
 
@@ -235,7 +518,7 @@ async def check_refusal_is_not_retried(api: ZTERouterAPI, report: Report) -> Non
     changing anything. Resending a declined command is the hazard that rules out
     blind retry — for `send_sms` it would deliver the message twice.
     """
-    print("\n[4] A genuinely refused write")
+    print(_cyan("\n[6] A genuinely refused write"))
     try:
         await api.set_data_volume_settings({}, data_volume_limit_switch="0")
     except Exception as err:  # noqa: BLE001 - the expected outcome
@@ -255,7 +538,7 @@ async def check_refusal_is_not_retried(api: ZTERouterAPI, report: Report) -> Non
 
 async def capture_reference_payloads(api: ZTERouterAPI, report: Report) -> None:
     """Record real responses so mocks can be built from observation."""
-    print("\n[5] Capturing reference payloads")
+    print(_cyan("\n[7] Capturing reference payloads"))
     report.captured["core_keys"] = sorted(await api.get_all_data())
     report.captured["extended_keys"] = sorted(await api.get_extended_data())
     report.captured["single_key_read"] = await api.get_params(["ODU_led_switch"])
@@ -325,7 +608,24 @@ async def main() -> int:
         action="store_true",
         help="write observed responses to tests/fixtures/ for mock construction",
     )
+    parser.add_argument(
+        "--attended",
+        action="store_true",
+        help=(
+            "also offer the writes that re-establish the connection, one at a "
+            "time, each requiring a typed confirmation. Needs a terminal, and "
+            "someone watching it."
+        ),
+    )
+    parser.add_argument(
+        "--no-color",
+        action="store_true",
+        help="disable ANSI colour (NO_COLOR in the environment does the same)",
+    )
     args = parser.parse_args()
+    if args.no_color:
+        global _COLOUR  # noqa: PLW0603 - one flag, set once before any output
+        _COLOUR = False
 
     options = _credentials()
     report = Report()
@@ -341,7 +641,11 @@ async def main() -> int:
         await check_session_assumptions(api, session, report)
         await check_write_round_trip(api, report, hostile=False, session=session)
         await check_write_round_trip(api, report, hostile=True, session=session)
+        await check_data_volume_form(api, report)
+        await check_logout_ends_the_session(api, report)
         await check_refusal_is_not_retried(api, report)
+        if args.attended:
+            await check_attended_writes(api, report)
         await capture_reference_payloads(api, report)
 
         with contextlib.suppress(Exception):
@@ -358,7 +662,14 @@ async def main() -> int:
         print(f"\ncaptured -> {target}")
 
     total = len(report.checks)
-    print(f"\n{total - report.failed}/{total} checks passed")
+    passed = total - report.failed
+    # The banner lives here rather than in the VS Code task because `tee >(...)`
+    # reports the exit status of `tee`, not of this script — a shell-side banner
+    # would have to reach for PIPESTATUS to know what actually happened.
+    if report.failed:
+        print(_red(f"\n\u2716  Hardware check: FAILED  ({passed}/{total} passed)"))
+    else:
+        print(_green(f"\n\u2714  Hardware check: PASSED  ({passed}/{total})"))
     return 1 if report.failed else 0
 
 

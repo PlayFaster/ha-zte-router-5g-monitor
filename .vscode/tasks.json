@@ -1,4 +1,22 @@
 {
+  "inputs": [
+    {
+      "id": "hardwareCheckCapture",
+      "type": "pickString",
+      "description": "Also re-record tests/fixtures from the live device?",
+      "options": [
+        {
+          "label": "Check only",
+          "value": ""
+        },
+        {
+          "label": "Check and re-capture fixtures",
+          "value": "--capture"
+        }
+      ],
+      "default": ""
+    }
+  ],
   "tasks": [
     {
       "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.yml' '*.yaml' | xargs -0 -r yamllint -c .validate/.yamllint | tee .reports/yaml_lint.txt; echo \"\"; if [ ! -s \".reports/yaml_lint.txt\" ]; then echo -e \"\\033[1;32m✔  YAML Lint: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  YAML Lint: FAILED\\033[0m\"; fi",
@@ -506,6 +524,18 @@
         "panel": "dedicated",
         "reveal": "always"
       }
+    },
+    {
+      "command": "[ -f scripts/hardware_check.py ] && { mkdir -p .reports && /usr/local/bin/python scripts/hardware_check.py ${input:hardwareCheckCapture} 2>&1 | tee >(sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/hardware_check.txt); } || echo \"[Skipped: no scripts/hardware_check.py in this project]\"",
+      "label": "Hardware: Device Check (writes to real hardware)",
+      "detail": "Exercises the write path against the REAL device and restores every value. Needs the hardware; never run in CI. Uses the container interpreter directly — uv/.venv lacks the HA dependencies.",
+      "presentation": {
+        "clear": true,
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "problemMatcher": [],
+      "type": "shell"
     }
   ],
   "version": "2.0.0"
