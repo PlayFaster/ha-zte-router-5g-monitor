@@ -17,7 +17,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from ._compat import device_by_identifier
-from .api import ZTEAuthError, ZTERouterAPI
+from .api import ZTEAuthError, ZTECredentialsError, ZTERouterAPI
 from .const import (
     CONF_SCAN_INTERVAL,
     CONF_STOP_POLLING,
@@ -50,10 +50,17 @@ ENDPOINT_EXTENDED = "extended_data"
 # the Section 19 contract-drift check: a non-empty response in which none of
 # these resolve means the upstream schema changed underneath a "successful"
 # fetch — the silent failure HA itself cannot detect.
+#
+# Every key here must require a session. `wa_inner_version` was removed on
+# 2026-07-31: the router answers it without one, so it was populated in every
+# response the router could produce, `present` was never empty, the strike
+# counter reset on every cycle, and the check could not fire under any
+# circumstances — including the firmware change it exists to catch. Adding an
+# unauthenticated key here disables this check silently; `_UNAUTHENTICATED_KEYS`
+# in `api.py` names the ones known to qualify, and a test enforces the split.
 CORE_KEYS = (
     "network_type",
     "signalbar",
-    "wa_inner_version",
     "realtime_time",
     "wan_connect_status",
 )
@@ -454,12 +461,24 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                 return self.data
 
+            # Only a rejected password is the user's to fix. A session that
+            # merely lapsed is ours, and re-login above has already tried; if
+            # it is still failing, telling the user their credentials are wrong
+            # sends them to re-enter a password that was never the problem.
+            if isinstance(err, ZTECredentialsError):
+                _LOGGER.error(
+                    "%s: Router rejected the credentials: %s",
+                    self.entry.title,
+                    err,
+                )
+                raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
+
             _LOGGER.error(
-                "%s: Authentication failed: %s",
+                "%s: Session could not be established: %s",
                 self.entry.title,
                 err,
             )
-            raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
+            raise UpdateFailed(f"Session could not be established: {err}") from err
 
         except Exception as err:
             self.consecutive_failures += 1

@@ -195,12 +195,103 @@ _EXTENDED_PARAMS: list[str] = [
 _SESSION_SENTINEL = "wan_connect_status"
 
 
+# Keys this router answers **without a session**. Measured against an MC7010 on
+# firmware V1.0.0B03 (2026-07-31) by replaying an invalidated stok: of the 80
+# core keys, exactly these three still carried values, and of the 36 extended
+# keys, exactly these two.
+#
+# This list is load-bearing, and getting it wrong is not a small error. The
+# expiry rule used to be "every value in the response is empty", which is a
+# property of *what was asked for* rather than of the session. Adding `imei`,
+# `model_name` and `wa_inner_version` to the core batch made that rule
+# permanently false: the core poll could no longer return an all-empty
+# response, so an expired session was scored a clean success and never renewed.
+# Every enabled entity published `unknown` while the health sensor stayed
+# green — the fault reported after a router reboot. `_EXTENDED_PARAMS` was
+# defeated the same way by its two `opms_` keys.
+#
+# Anything added here must be verified on hardware, never assumed from a name.
+# `test_session_detection` asserts each batch still contains keys of *both*
+# classes, because a batch of only one kind makes the test below undecidable.
+_UNAUTHENTICATED_KEYS = frozenset(
+    {
+        "imei",
+        "model_name",
+        "wa_inner_version",
+        "opms_wan_auto_mode",
+        "opms_wan_mode",
+    }
+)
+
+
 class ZTEConnectionError(Exception):
     """Raised when the router cannot be reached."""
 
 
 class ZTEAuthError(Exception):
-    """Raised when login credentials are rejected."""
+    """Raised when the session is not usable."""
+
+
+class ZTECredentialsError(ZTEAuthError):
+    """Raised only when the router rejects the password itself.
+
+    Separated from its parent because the two demand opposite responses. A
+    rejected password is the user's to fix, so it earns a reauth prompt. A
+    session that has merely lapsed is the integration's to fix, and it already
+    does — silently, by logging in again. Before the split, three lapsed
+    sessions in a row raised `ConfigEntryAuthFailed` and told the user their
+    credentials were wrong when they were not.
+
+    Only `login()` raises this, and only on an explicit rejection.
+    """
+
+
+def _classify_session(payload: dict[str, Any]) -> str:
+    """Say what a `200 OK` response proves about the session.
+
+    This router never reports an expired session as an error. It answers
+    ``200 OK`` and echoes every *authenticated* value back as an empty string,
+    which at the HTTP layer is indistinguishable from success. The only way to
+    tell the two apart is to read the response as two classes of key:
+
+    ``live``
+        Something authenticated carried a value, so the session works.
+    ``expired``
+        Every authenticated key came back blank *while* an unauthenticated key
+        carried a value. The router is plainly answering, so blankness cannot
+        be a reachability problem — it is the session.
+    ``not_ready``
+        Everything came back blank, unauthenticated keys included. The router
+        is answering but has nothing to report yet, which is what it does for
+        a while after a reboot. Logging in again would not help, so this must
+        not be mistaken for an expiry.
+    ``undecidable``
+        The request carried no unauthenticated key, so the second and third
+        cases cannot be told apart. The caller falls back to the older, weaker
+        rule. This is the normal case for the SMS endpoints, whose responses
+        contain no unauthenticated keys at all.
+
+    Deciding from the *relationship* between the two classes is what makes this
+    robust. The previous rule asked whether the whole response was blank, which
+    silently stopped being a valid test of anything the moment the batch gained
+    a key that answers without a session.
+    """
+    if not payload:
+        return "undecidable"
+
+    authenticated = [v for k, v in payload.items() if k not in _UNAUTHENTICATED_KEYS]
+    unauthenticated = [v for k, v in payload.items() if k in _UNAUTHENTICATED_KEYS]
+
+    if not authenticated:
+        return "undecidable"
+    if any(value != "" for value in authenticated):
+        return "live"
+
+    # Every authenticated value is blank. What the unauthenticated ones say
+    # decides whether that means "no session" or "nothing to report yet".
+    if not unauthenticated:
+        return "undecidable"
+    return "expired" if any(v != "" for v in unauthenticated) else "not_ready"
 
 
 class _LoginAttempt(NamedTuple):
@@ -512,30 +603,41 @@ class ZTERouterAPI:
 
         # 3. Check JSON structure for session expiry/invalid indicators
         if isinstance(resp_json, dict):
-            # A dead session answers HTTP 200 with the *requested keys echoed
-            # back empty* — never an error, never a redirect. Captured from an
-            # MC7010 on firmware V1.0.0B03 (2026-07-27) by replaying an
+            # A dead session answers HTTP 200 with the *authenticated* keys
+            # echoed back empty — never an error, never a redirect. Captured
+            # from an MC7010 on firmware V1.0.0B03 (2026-07-27) by replaying an
             # invalidated stok:
             #
             #   batch poll  -> {"network_type":"","signalbar":"","wan_ipaddr":""}
             #   SMS list    -> {"sms_data_total":""}
             #   SMS capacity-> {"sms_capacity_info":""}
             #
-            # The rule is "every value is an empty string", not "these two named
-            # keys are empty". The old form only knew the batch-poll keys, so it
-            # could never fire on an SMS response: `.get("network_type")` is
-            # None there, and `None == ""` is False. The SMS action therefore
-            # returned an empty list on an expired session while Refresh Now
-            # (which runs the batch poll) recovered it — the exact asymmetry
-            # reported. Do not narrow this back to named keys.
-            is_status_expired = bool(resp_json) and all(
-                value == "" for value in resp_json.values()
+            # `_classify_session` reads that shape against the two classes of
+            # key rather than against the whole response; see its docstring for
+            # why the difference matters. `undecidable` keeps the older rule for
+            # the SMS endpoints, which carry no unauthenticated key to compare
+            # against — the case that rule was written for and still handles.
+            verdict = _classify_session(resp_json)
+            is_status_expired = verdict == "expired" or (
+                verdict == "undecidable"
+                and bool(resp_json)
+                and all(value == "" for value in resp_json.values())
             )
             # Other endpoints might return explicit error indications
             is_auth_error = (
                 resp_json.get("result") in ["session expired", "unauth", "fail"]
                 or resp_json.get("status") == "fail"
             )
+
+            # Answering, but with nothing to say yet. Logging in again would
+            # not help, so this is reported as a reachability problem and picks
+            # up the coordinator's hold-last-known-values path instead of
+            # burning a re-login and then a reauth prompt.
+            if verdict == "not_ready" and authenticated:
+                raise ZTEConnectionError(
+                    "Router answered but reported no data — it is probably "
+                    "still starting up"
+                )
 
             if (is_status_expired or is_auth_error) and authenticated:
                 if _retry:
@@ -614,7 +716,7 @@ class ZTERouterAPI:
         version = await self.get_version(timeout_sec=tout)
 
         if not self.password:
-            raise ZTEAuthError("No password provided")
+            raise ZTECredentialsError("No password provided")
         pass_hash = self._hash(self.password).upper()
         zte_pass = self._hash(pass_hash + ld).upper()
 
@@ -655,7 +757,10 @@ class ZTERouterAPI:
             attempt = retry
 
         if attempt.auth_error:
-            raise ZTEAuthError(attempt.auth_error)
+            # The router rejected the password itself. This is the one auth
+            # condition the user has to resolve, so it is the one condition
+            # allowed to reach a reauth prompt.
+            raise ZTECredentialsError(attempt.auth_error)
         if attempt.conn_error:
             raise ZTEConnectionError(attempt.conn_error)
 

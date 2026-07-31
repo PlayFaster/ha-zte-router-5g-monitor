@@ -9,28 +9,33 @@ first explanation offered for that failure was itself wrong, and this script
 disproved it on its first run. Both the code and the tests now record what was
 measured and stop short of claiming a mechanism.
 
-So this script does two jobs:
+So this script does three jobs:
 
   1. Round-trips every *safe* write end to end, including with the session
      deliberately taken away — the scenario a user hit by logging into the
      router's web page while Home Assistant was connected.
   2. Records the router's actual responses to `--capture`, so unit-test mocks
      can be built from observation instead of imagination.
+  3. Under `--attended`, offers the writes that cannot be made quiet — real
+     messages, deletions, the APN and bearer selects, and a reboot — one at a
+     time, each behind its own confirmation, with the cost stated before the
+     prompt. Nothing in this tier runs without a human answering `y`.
 
-Deliberately excluded, and not by oversight:
-
-  * `send_sms` / `delete_sms`  — real messages, real cost.
-  * `reboot`                   — takes the router down.
-  * APN and bearer selects     — re-establish the connection; the router
-                                 answers blank while it does, which reads as an
-                                 expired session. Testing these needs a human
-                                 watching, not a script.
+The reboot step ([G]) also **watches what the router answers on the way back**,
+key by key against a settled baseline. That is not decoration. The fault found
+on 2026-07-31 lived entirely inside *successful* responses: recovering, the
+router served a payload with every authenticated key blanked, the integration
+scored it a clean success, and every entity published `unknown` while the health
+sensor stayed green. Waiting for the router to answer would have shown nothing
+wrong. A `LOST` line in that step means the two-class session detection has been
+defeated again — most likely by a firmware change to which keys need a session.
 
 Usage, inside the devcontainer, **from anywhere** — paths are resolved from
 `__file__`, not the working directory:
 
     /usr/local/bin/python scripts/hardware_check.py             # check + restore
     /usr/local/bin/python scripts/hardware_check.py --capture   # also record
+    /usr/local/bin/python scripts/hardware_check.py --attended  # + prompted tier
 
 Or run the **Hardware: Device Check** VS Code task, which does the same and tees
 the output to `.reports/`.
@@ -948,8 +953,82 @@ async def check_delete_all_sms(api: ZTERouterAPI, report: Report) -> None:
     )
 
 
+async def _core_baseline(api: ZTERouterAPI) -> set[str]:
+    """Return the core keys that carry a value while the router is settled.
+
+    The raw count of empty keys says almost nothing on this device: a healthy
+    MC7010 answers ~25 of 80 core keys empty, because unused APN slots and the
+    5G metrics are legitimately blank on LTE. Only the *delta* against a
+    settled reading identifies a key that has genuinely gone missing.
+    """
+    settled = await api.get_all_data()
+    return {key for key, value in settled.items() if value not in (None, "")}
+
+
+async def _watch_recovery(
+    api: ZTERouterAPI, baseline: set[str], report: Report
+) -> None:
+    """Poll while the router returns, and score what it answers.
+
+    This is the half of the reboot check that matters. Waiting for the router
+    to answer only proves it is powered; it says nothing about *what* it
+    answers, and what it answered was the bug — a partly-populated payload that
+    the integration scored as a clean success while every entity fed from a
+    blanked key published `unknown`.
+
+    So this asserts the property the fix restored: while recovering, the router
+    is either unreachable, or reporting an expired session that drives a
+    re-login, but never quietly serving a payload with the authenticated keys
+    stripped out. A `LOST` line here means the two-class detection in
+    `_classify_session` has been defeated again — most likely because a
+    firmware update changed which keys answer without a session.
+    """
+    print(_dim("    watching what it answers while it comes back…"))
+    deadline = time.monotonic() + REBOOT_TIMEOUT
+    silent_success = 0
+    recovered = False
+
+    while time.monotonic() < deadline:
+        await asyncio.sleep(RECONNECT_RETRY)
+        try:
+            payload = await api.get_all_data()
+        except ZTEAuthError:
+            print(_dim("      expired session reported — the detector fired"))
+            continue
+        except Exception:  # noqa: BLE001 - absence is expected while it boots
+            print(_dim("      still down…"))
+            continue
+
+        lost = sorted(baseline & {k for k, v in payload.items() if v in (None, "")})
+        if not lost:
+            recovered = True
+            break
+        silent_success += 1
+        print(
+            _red(f"      LOST {len(lost)} normally-populated keys: ")
+            + _dim(", ".join(lost[:8]) + ("…" if len(lost) > 8 else ""))
+        )
+
+    report.record(
+        silent_success == 0,
+        "reboot: no payload served with the authenticated keys stripped",
+        (
+            "clean throughout"
+            if silent_success == 0
+            else f"{silent_success} poll(s) succeeded while missing live keys — "
+            f"session detection is defeated again"
+        ),
+    )
+    if not recovered:
+        report.record(
+            False,
+            "reboot: full payload restored",
+            f"still incomplete after {REBOOT_TIMEOUT:.0f}s — check it by hand",
+        )
+
+
 async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
-    """Reboot, then wait for the device to come back.
+    """Reboot, then watch what the device says on the way back.
 
     Left until last because it ends the session and takes the connection down
     for minutes. Nothing is *changed* by it, which is why it is only a matter of
@@ -957,14 +1036,19 @@ async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
     or quiet" confused cost with danger and kept it unscripted for no good
     reason.
 
-    Verified by the uptime counter going backwards, not merely by the router
-    answering again: a device that never rebooted also answers.
+    Two things are checked, and the second is the one that has caught a real
+    bug. The reboot itself is verified by the uptime counter going backwards,
+    not merely by the router answering again: a device that never rebooted also
+    answers. The recovery is then watched key by key, because the fault found on
+    2026-07-31 lived entirely in *successful* responses.
     """
-    print(_cyan("\n[G] Reboot"))
+    print(_cyan("\n[G] Reboot and recovery"))
 
+    baseline = await _core_baseline(api)
     before = await api.get_params(["realtime_time"])
     uptime_before = str(before.get("realtime_time") or "?")
     print(f"    uptime now: {uptime_before}s")
+    print(f"    baseline  : {len(baseline)} core keys carry a value when settled")
     print("    cost      : the connection drops for a few minutes")
     print("    risk      : nothing is left changed; this is time, not danger")
 
@@ -1009,6 +1093,8 @@ async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
         "reboot: uptime reset",
         f"{uptime_before}s -> {uptime_after}s",
     )
+
+    await _watch_recovery(api, baseline, report)
 
 
 async def _guarded(report: Report, title: str, coro: Any) -> None:

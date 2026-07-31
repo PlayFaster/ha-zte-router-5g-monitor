@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import ServiceCall
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceValidationError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.zte_router_5g import (
@@ -13,7 +13,7 @@ from custom_components.zte_router_5g import (
     async_setup_entry,
     async_unload_entry,
 )
-from custom_components.zte_router_5g.api import ZTEAuthError
+from custom_components.zte_router_5g.api import ZTEAuthError, ZTECredentialsError
 from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
     SMS_MAX_CHARS_GSM7,
@@ -235,10 +235,22 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
 
 
 @pytest.mark.asyncio
-async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
-    """Test that ZTEAuthError triggers reauth after 3 consecutive failures."""
-    from homeassistant.exceptions import ConfigEntryAuthFailed
-
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        # A password the router rejects is the user's to fix, so it earns the
+        # reauth prompt.
+        (ZTECredentialsError("Bad password"), ConfigEntryAuthFailed),
+        # A session that merely lapsed is ours, and re-login has already been
+        # tried. Prompting here would tell the user their credentials were
+        # wrong when they were not, and re-entering them would change nothing.
+        (ZTEAuthError("Session expired"), UpdateFailed),
+    ],
+)
+async def test_only_a_rejected_password_triggers_reauth(
+    mock_hass, mock_config_entry, error, expected
+):
+    """Both auth failures hold values for three strikes, then diverge."""
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI"),
         patch("custom_components.zte_router_5g.async_get_clientsession"),
@@ -247,8 +259,8 @@ async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_config_entry.runtime_data
         coordinator.data = {"old": "data"}
-        coordinator.api.get_all_data = AsyncMock(side_effect=ZTEAuthError("Auth fail"))
-        coordinator.api.login = AsyncMock(return_value="stok=fake")
+        coordinator.api.get_all_data = AsyncMock(side_effect=error)
+        coordinator.api.login = AsyncMock(side_effect=error)
 
         # First 3 failures return cached data (resilience)
         for i in range(3):
@@ -256,8 +268,7 @@ async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
             assert data == {"old": "data"}
             assert coordinator.consecutive_failures == i + 1
 
-        # 4th failure raises ConfigEntryAuthFailed
-        with pytest.raises(ConfigEntryAuthFailed, match="Authentication failed"):
+        with pytest.raises(expected):
             await coordinator._async_update_data()
 
 

@@ -4,6 +4,70 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.2-rc11] - 2026-07-31 - Unreleased - No Manifest Bump - Session Detection Rebuilt On A Measured Invariant
+
+The reported fault — many entities going `unknown` for up to a minute after a reboot or an APN change — was investigated on hardware and turned out to be neither transient nor a fetch failure. It was a _successful_ fetch of a dead session, and it had silently disabled two detectors.
+
+### The fault, as measured
+
+Two instrumented reboots plus a direct probe with an invalidated `stok` (MC7010, firmware `V1.0.0B03`, 2026-07-31):
+
+- A dead session leaves **3 of 80 core keys populated** (`imei`, `model_name`, `wa_inner_version`) and **2 of 36 extended keys** (`opms_wan_mode`, `opms_wan_auto_mode`). These answer without authentication.
+- The expiry rule was `all(value == "" for value in resp_json.values())`. With those keys in the batch, that condition **cannot be true**, so neither batch poll could ever detect an expired session.
+- Consequence: the poll was scored a clean success, `consecutive_failures` reset to zero, the health sensor stayed green, nothing was logged, and every sensor fed by a blanked key resolved to `None` and published `unknown`.
+- **There is no self-recovery on this path.** The observed run held 52 blanked keys for 130 s and was still blank when the watch ended. Recovery in normal use comes from something incidental re-authenticating — a write via `_ensure_session`, or an SMS endpoint whose response genuinely is all-empty and does trip the rule.
+
+Two things had been masking it. Normal polling is covered by `SESSION_IDLE_RESET_SECONDS = 150`: at the 180 s default interval every scheduled poll already re-logs in preemptively, so the reactive detector is never needed. And **Refresh Now does not re-authenticate** — it re-publishes the blank payload, which is why pressing it repeatedly made the symptom worse rather than better.
+
+The same three keys had also disabled `_check_contract_drift`: `wa_inner_version` sat in `CORE_KEYS`, so `present` was never empty, `_drift_strikes` reset every cycle, and the check could not fire under any circumstances — including the firmware change it exists to catch.
+
+### Changed — the rule now tests a relationship, not a total
+
+`_classify_session` reads a `200 OK` response as two classes of key and returns one of four verdicts:
+
+| verdict       | condition                                          | response                                      |
+| ------------- | -------------------------------------------------- | --------------------------------------------- |
+| `live`        | any authenticated key populated                    | proceed                                       |
+| `expired`     | authenticated all blank, unauthenticated populated | re-login and retry                            |
+| `not_ready`   | everything blank                                   | `ZTEConnectionError` — hold last known values |
+| `undecidable` | no unauthenticated key requested                   | fall back to the previous all-empty rule      |
+
+`not_ready` is new and matters: a router that is answering but has nothing to report yet is booting, not expired. Re-logging in would not help, so it takes the reachability path instead of burning a login and heading toward a reauth prompt.
+
+The project owner's framing drove this. The device separates the two states cleanly — unauthenticated keys prove reachability, authenticated keys prove the session — and deciding from the _relationship_ between them removes the fragility that caused both recurrences. The old rule was a property of **what was requested**, not of the session, so it silently stopped being a valid test the moment the batch composition changed. Nothing could notice, because the rule had no stated precondition.
+
+### Changed — a rejected password is no longer confused with a lapsed session
+
+`ZTECredentialsError`, a subclass of `ZTEAuthError`, is raised only when the router rejects the password. The coordinator raises `ConfigEntryAuthFailed` for that alone; a session that merely lapsed now raises `UpdateFailed`.
+
+Without this, fixing the detection would have introduced a new fault: three lapsed sessions in a row would have told the user their credentials were wrong and sent them to re-enter a password that was never the problem. The subclass keeps every existing `except ZTEAuthError` handler working, including the config flow's.
+
+Confirmed with the project owner and material to the design: on this router **the most recent login wins**. HA logging in takes the session back from the web GUI, which ends the web session with an on-screen notice. There is therefore no state in which HA is reachable but permanently unable to authenticate.
+
+### Added — the test that stops this recurring
+
+`tests/test_session_detection.py`, 16 tests. The load-bearing one is `test_every_batch_carries_both_classes`, which fails if a batch edit leaves either class unrepresented — the precondition the rule needs and never had. Also `test_contract_keys_all_require_a_session`, which fails if an unauthenticated key is put back into `CORE_KEYS`.
+
+All three fixes were mutation-proved by reverting them in turn:
+
+- old all-empty rule restored → `test_expired_session_triggers_a_relogin` fails
+- `wa_inner_version` returned to `CORE_KEYS` → `test_contract_keys_all_require_a_session` and `test_drift_can_now_fire` fail
+- `opms_` keys dropped from the unauthenticated set → `test_every_batch_carries_both_classes[extended]` fails
+
+`test_init.py`'s reauth test was rewritten as a parametrised pair covering both branches. It had asserted the old behaviour, so it correctly failed on the change.
+
+### Changed — attended `[G]` now watches the recovery
+
+The reboot step took a baseline, rebooted, and waited for the router to answer. Answering only proves it is powered, and the bug lived entirely inside successful responses, so waiting could never have found it.
+
+`[G]` now takes a settled baseline of which core keys carry values, then polls the recovery and scores each response against it. A `LOST` line means a poll succeeded while normally-populated keys were blank — the signature of the detection being defeated again, most likely by a firmware change to which keys need a session. This is the only instrument that can catch that: a mock is written from our model of the device, and this model was wrong for the life of the release.
+
+`scripts/observe_recovery.py`, written to investigate this, was folded into `[G]` and deleted rather than left as a second reboot path to maintain.
+
+### Known — not addressed here
+
+Polling intervals below 150 s stop the preemptive idle reset firing on every cycle, which is what covered this fault in normal operation. That is now safe because detection works, but it is worth recording that the two settings interact.
+
 ## [3.3.2-rc10] - 2026-07-31 - Unreleased - No Manifest Bump - Sensor Review; APN Documentation Completed
 
 `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) reconciled the whole inventory, and the APN behaviour documented across rc7-rc9 was completed with the half that was missing.
@@ -609,7 +673,7 @@ The systematic guard behind `[3.3.1-dev6]`. Both silent-failure bugs in this cla
 
 ### Notes
 
-- **Live-hardware verification eliminated the leading hypothesis.** The suspicion was that `_request` retries a write payload verbatim after re-login, carrying an `AD` token derived from the dead session. Probing an MC7010 (`V1.0.0B03`) showed `RD` is a **static per-device seed**, so `AD` is constant for a given router and a retried payload is still valid. Full test plan and results: [`.notes/issues/silent_login_fail.md`](../.notes/issues/silent_login_fail.md).
+- **Live-hardware verification eliminated the leading hypothesis.** The suspicion was that `_request` retries a write payload verbatim after re-login, carrying an `AD` token derived from the dead session. Probing an MC7010 (`V1.0.0B03`) showed `RD` is a **static per-device seed**, so `AD` is constant for a given router and a retried payload is still valid. Full test plan and results: `.notes/issues/silent_login_fail.md`.
 - **Reboot is deliberately not special-cased.** An earlier draft swallowed connection errors on `REBOOT_DEVICE`, on the theory that the router acknowledges then drops the link. An existing test caught it, and the test was right: that theory is untested, and a dropped link cannot be told from a router that was never reachable — so swallowing it would report "rebooted" for a command that never arrived, reintroducing the exact failure being removed. Reboot keeps its previous connection-error behavior and gains only the refusal check.
 - **Static audit of all 20 `_request` call sites** found no further unguarded path. `get_all_data` relies solely on the all-empty detector, which is correct — it requests ~110 keys and has no single mandatory one. `get_rd`'s exception swallowing is now harmless: an empty `AD` makes the router refuse, and that refusal is now raised.
 
@@ -861,12 +925,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request | Live session | Dead session |
-  | :-- | :-- | :-- |
-  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
-  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
-  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+  | Request                     | Live session       | Dead session                                         |
+  | :-------------------------- | :----------------- | :--------------------------------------------------- |
+  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
+  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
+  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -1258,16 +1322,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 

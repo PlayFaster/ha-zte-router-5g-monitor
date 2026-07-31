@@ -204,11 +204,11 @@ The router was measured before anything was changed, and **exonerated**: it appl
 
 The fix is a **targeted read-back** (`api.get_params()`), opt-in per description via `verify_after_write` and `state_key`. Three outcomes must stay distinct, and collapsing any two of them reintroduces a bug:
 
-| Outcome | Meaning | Action |
-| :-- | :-- | :-- |
-| Read agrees | Confirmed | Publish immediately |
-| Read disagrees twice, 200 ms apart | The router declined it | Raise `switch_write_not_applied` |
-| Read errors, or omits the key | **Unverified, not failed** | Log at debug; leave it to the next poll |
+| Outcome                            | Meaning                    | Action                                  |
+| :--------------------------------- | :------------------------- | :-------------------------------------- |
+| Read agrees                        | Confirmed                  | Publish immediately                     |
+| Read disagrees twice, 200 ms apart | The router declined it     | Raise `switch_write_not_applied`        |
+| Read errors, or omits the key      | **Unverified, not failed** | Log at debug; leave it to the next poll |
 
 The third row is the subtle one. A failed _confirmation_ is not a failed _write_ — the command may well have landed, and raising there would report success as failure on every connection blip.
 
@@ -228,7 +228,36 @@ The test asserting that a refused write could be retried after re-login **passed
 
 `scripts/hardware_check.py` exists for this. It round-trips every safe write against a real router — including with the session deliberately invalidated — asserts the device assumptions the write path rests on, and captures observed payloads to `tests/fixtures/` so mocks can be built from observation. Run it before a release, and after any firmware update. It disproved one of this document's own claims on its first run.
 
-It deliberately excludes `send_sms`, `delete_sms`, `reboot` and the APN/bearer selects: real messages, real downtime, real connection loss.
+Those writes that cannot be made quiet — `send_sms`, `delete_sms`, the APN/bearer selects and `reboot` — live in the `--attended` tier, offered one at a time behind individual confirmations with the cost stated before each prompt.
+
+### A health check must test a relationship, not a total
+
+The rule for detecting an expired session was `all(value == "" for value in response.values())`. It was correct when written and it broke silently, because it is a property of **what was requested**, not of the session. Adding `imei`, `model_name` and `wa_inner_version` to the core batch made the condition unsatisfiable — those three answer without a session, so the core poll could never again look expired. The poll was scored a success, `consecutive_failures` reset, the health sensor stayed green, and every entity fed by a blanked key published `unknown` with nothing in the log.
+
+This was the second recurrence of the same shape. The first (`[3.3.0-dev12]`) was a rule naming batch-poll keys that therefore could not fire on an SMS response. Both escaped for the same reason: **the rule's validity depended on the request's composition, and nothing asserted that dependency.**
+
+The fix is not a better total. It is to test a relationship between two classes of key that the device separates for us:
+
+| verdict       | condition                                          | meaning                          |
+| ------------- | -------------------------------------------------- | -------------------------------- |
+| `live`        | any authenticated key populated                    | session works                    |
+| `expired`     | authenticated all blank, unauthenticated populated | reachable, not logged in         |
+| `not_ready`   | everything blank                                   | reachable, nothing to report yet |
+| `undecidable` | no unauthenticated key requested                   | fall back to the weaker rule     |
+
+Three things generalize beyond this router:
+
+- **A detector whose precondition is not asserted is not a detector.** `test_every_batch_carries_both_classes` is the load-bearing test here, not any single classification — it fails the moment a batch edit makes the comparison undecidable again.
+- **Distinguish "cannot" from "not yet".** `not_ready` exists because a booting router and an expired session look identical if you only count blanks, and they need opposite responses.
+- **Check whether a fix re-enables a dormant detector.** The same three keys had disabled `_check_contract_drift`: `wa_inner_version` was in `CORE_KEYS`, so `present` was never empty and the strike counter reset every cycle. It could not fire under any circumstances, including on the firmware change it exists to catch. A green suite says nothing about a check that never runs.
+
+### Only a rejected credential may ask for re-authentication
+
+`ConfigEntryAuthFailed` puts a "re-authenticate" prompt in front of the user. It is only honest when the credential is the problem. A session that has merely lapsed is the integration's to fix — and it does, by logging in again — so raising it there tells the user their password is wrong and sends them to re-enter one that was never at fault.
+
+`ZTECredentialsError` subclasses `ZTEAuthError` and is raised only on an explicit rejection. The subclass relationship matters: every existing `except ZTEAuthError` still catches it, so only the one site that needs the distinction has to know about it.
+
+Router-specific and load-bearing: **the most recent login wins.** Home Assistant logging in takes the session back from the web GUI. There is no state where HA is reachable but permanently locked out, so a persistent auth failure really does mean bad credentials.
 
 ---
 
@@ -281,6 +310,7 @@ It deliberately excludes `send_sms`, `delete_sms`, `reboot` and the APN/bearer s
 - **v3.3.0-dev3** (2026-07-27) — IQS pass and follow-up. Added success patterns for translated exceptions (`translation_domain` + `translation_key`, and the `ServiceValidationError` vs `HomeAssistantError` choice) and for the Repair selection rule (persistence **plus** agency, and why `router_unreachable` waits 10 failures rather than 3). Added two pitfalls: translated exceptions breaking `pytest.raises(..., match=...)` under a mocked hass, and `": "` inside a folded YAML comment breaking `quality_scale.yaml`. Added §15 SMS feature-group toggle and the deferred custom-trigger work to Technical Debt.
 - **v3.3.1** (2026-07-29) — Cross-model compatibility expansion. Documented the new `helpers.py` utilities (`is_gsm7`, `earfcn_to_band`, `arfcn_to_band`) under Core Files. Added two Technical Debt items: cross-model support is inferred from other projects rather than tested on hardware (including the three speculative alias spellings and the login fallback that never fires on an MC7010), and no model is yet confirmed to populate any of the five thermal keys — with the condition under which they should be removed rather than left indefinitely.
 - **v3.3.0-dev1** (2026-07-27) — `dev_standards` conformance pass. Added success patterns for force-refresh-bypasses-pause, per-endpoint strike budgets, the health snapshot held outside `coordinator.data`, the always-available health sensor, reload-by-default options with a live-apply allow-list, layered diagnostics sanitization, and per-attribute recorder evaluation. Added four pitfalls: `goformId=LOGOUT` needs an `AD` token (and why the obvious web-UI verification cannot detect it), Refresh Now silently swallowed while paused, the options flow changing credentials without applying them, and diagnostics leaking SMS content and cell location. Recorded the §3 root-identity deviation and the config-entry migration-handler constraint under Technical Debt.
+- **v3.3.5** (2026-07-31) — Added two pitfalls after a reboot-recovery investigation. A health check must test a relationship rather than a total: the all-values-blank expiry rule was a property of what was requested, not of the session, and adding three unauthenticated keys to the core batch made it unsatisfiable — a dead session read as a clean success, entities published `unknown`, and the same keys had silently disabled the contract-drift check. Records the four-verdict classification, why `not_ready` must be separated from `expired`, and that a detector whose precondition is unasserted is not a detector. Second pitfall: only a rejected credential may raise `ConfigEntryAuthFailed`, with the `ZTECredentialsError` subclass pattern and the most-recent-login-wins behaviour it rests on. Noted that attended `[G]` now scores the recovery key by key rather than waiting for the router to answer.
 - **v3.3.4** (2026-07-31) — Added the pitfall on resolving state from the authoritative field rather than the convenient one, after a fix that read the APN from `apn_index` was found able to activate the wrong APN in auto mode. Records the refuse-rather-than-guess rule, the one justified fallback, and the related router behaviours that read as bugs (choosing a profile forces manual; the `Default` profile leaves Network APN blank).
 - **v3.3.3** (2026-07-31) — Added the pitfall that every `goform` write should be assumed to replace a whole form until proven otherwise, after a third instance (`APN_PROC_EX`) was found, plus the replay-against-the-current-value probing technique that establishes a payload shape without changing device state.
 - **v3.3.2** (2026-07-30) — Control write path reworked after a report of erratic LED toggling. Added three pitfalls: a control's position waiting on the 10-second debounce (with the three-outcome table for targeted read-back, and why the APN/bearer selects must be excluded), a write's inability to detect a stolen session (and why `"failure"` must not join the expiry strings), and mocks being unable to falsify a belief about the router — a test passed while the code it covered failed on hardware. Added `scripts/hardware_check.py` under new Operator Tooling, and noted the switch platform's read-back confirmation and position latching under Core Files.
