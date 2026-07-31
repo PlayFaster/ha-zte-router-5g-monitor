@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [3.3.2] - 2026-07-30 - Release
+## [3.3.2] - 2026-08-01 - Release
 
 ### Summary
 
@@ -13,7 +13,9 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 - **Wider ZTE model support**: should now have better support for the wider family of ZTE 5G/LTE Routers that use the `goform` API.
   - MC7010, MC801, MC888, MC889, MF266, MF286, MF289
 
-- **SMS improvements**: send the same long messages the router's own web page allows, and SMS actions no longer fail silently on long polling intervals.
+- **SMS improvements**: send the same long messages the router's own web page allows.
+
+- **Action & Settings Fixes**: Fixed issues where Actions (SMS read or send etc.) and Settings Changes (APN, Data Limit switch etc.) could fail silently on long polling intervals.
 
 - **`about` attribute**: Most entities now carry a short built-in explanation of what the value means — and for signal metrics, what counts as good, fair or poor.
 
@@ -49,32 +51,28 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
+- **APN Profile could show a profile that was not in use**: while APN Selection Mode is **Auto** the router uses the routers default APN — but the dropdown still displayed whichever profile was last chosen **manually**. It now shows the profile only when it genuinely matches the APN in use, and blank otherwise. The **Network APN** sensor remains the authoritative answer to which APN is in use.
+
 - **APN Selection Mode could not be set to Manual**: switching it to **Auto** worked, but switching back to **Manual** was silently rejected by the router.
   - Both directions now work. Switching to **Manual** requires the router to be told _which_ stored profile to use, so if the APN currently in use is not one of your saved profiles, the integration asks you to choose one from **APN Profile** instead — which sets the mode and the profile together, in one step.
   - The integration can only **select** among profiles already stored on the router. Creating, editing or deleting an APN profile is done on the router's own web page; a new one appears in the **APN Profile** dropdown at the next poll, or immediately if you press **Refresh Now**.
 
-- **APN Profile could show a profile that was not in use**: while APN Selection Mode is **Auto** the router uses the routers default APN — but the dropdown still displayed whichever profile was last chosen **manually**. It now shows the profile only when it genuinely matches the APN in use, and blank otherwise. The **Network APN** sensor remains the authoritative answer to which APN is in use.
+- **Settings & Actions did not check for login**: If the polling interval was long, Pause Polling was on or the web GUI was used, the integrations login to the router could get dropped.
+  - It re-establishes on every new read, but independent activities, e.g. changing settings or running actions, were not properly checking for an active login.
+  - This, coupled with problems with some of the setting writes, could result in silent failures and unpredictable behavior.
+  - This was also an issue immediately after Router reboot, as that also logged out active sessions.
+  - Now addressed across all Actions and Writes (Settings changes), and for Router reboots.
 
-- **Settings & Actions did not check for login**: If the polling interval was long, Pause Polling was on or the web GUI was used, the integrations login to the router could get dropped. It re-establishes on every new read, but independent activities, e.g. changing settings or running actions, were not properly checking for an active login. This, couple with problems with some of the setting writes, could result in silent failures and unpredictable behavior.
-
-- **Data Limit Switch**: The switch correctly showed the state but would not successfully toggle the state. This has now been fixed.
-
-- **Many entities went `unknown` after a router reboot, and stayed that way**: after a reboot — or a setting change that causes one, such as switching APN Profile — most sensors would show `unknown` for a minute or more before returning on their own. Pressing **Refresh Now** made it worse rather than better.
-  - The cause was that the integration could not tell that its login had been dropped. The router answers a dropped login by returning blank values rather than an error, and the check for that had stopped working, so the integration accepted the blanks as real readings and never logged back in. Nothing appeared in the log and the **Integration Health** sensor stayed healthy, because as far as the integration was concerned every update had succeeded.
-  - The login check has been rebuilt on a signal the router always gives, and now recovers by itself. While the router is still starting up and genuinely has nothing to report, the integration holds the last known values instead of blanking them.
-  - **Refresh Now** now re-establishes the login when it needs to, so pressing it during a reboot helps rather than prolonging the problem.
-
-- **"Re-authenticate" could be requested when the password was fine**: a temporary loss of the router login could ask you to re-enter your credentials, which never helped because the password was not the problem. Home Assistant now only asks you to re-authenticate when the router actually rejects your password; a login the integration can fix itself is handled quietly, holding the last known values in the meantime.
-
-- **ODU LED Switch behaved erratically**: toggling it could show the new position, snap back, then correct itself a few seconds later. The router was applying the change correctly all along — Home Assistant simply was not asking again until its next scheduled update. Controls now read the value straight back from the router, so the switch settles immediately.
-
-- **Settings changes would not apply if the router had logged Home Assistant out**: Settings changes now ensure a re-established session first.
-
-- **Actions Silent Fail**: If the polling interval was long, Pause Polling was on or the web GUI was used, the integrations login to the router could get dropped. Actions like `get_sms_list` run in this state provided empty responses but no error. This is now corrected - Actions:
+- **Actions Fixes**:
   - re-login if the session has expired
   - confirm the router's action response
-  - provide an error message is there is an error
-- Sending an SMS also updates the message counters immediately, which it previously did not.
+  - provide an error message if there is an error
+  - update the message counters on SMS send immediately
+
+- **Settings Fixes**:
+  - **Data Limit Switch**: This always read the correct state but could fail to set the state, now fixed.
+  - **ODU LED Switch**: Could show incorrect state and invalid toggles temporarily after trying to change. Now fixed.
+  - **APN Prole & Mode**: Also fixed, see above.
 
 - **Monthly Data counters misclassified**: the monthly upload, download and total sensors were recorded state_class=TOTAL, which is incorrect and can cause issues on reset. This has now been corrected to TOTAL_INCREASING - a resetting counter.
 

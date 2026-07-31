@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ## [3.3.2-rc11] - 2026-07-31 - Unreleased - No Manifest Bump - Session Detection Rebuilt On A Measured Invariant
 
+### Bumps
+
+- **Shared CI**: Bump `.github` Shared CI Validation via SHA from v2.0.7 to v2.0.8
+- **Validate Bump**: Update PHACC `pytest-homeassistant-custom-component` from 0.13.349 to 0.13.350
+
+### Summary
+
 The reported fault — many entities going `unknown` for up to a minute after a reboot or an APN change — was investigated on hardware and turned out to be neither transient nor a fetch failure. It was a _successful_ fetch of a dead session, and it had silently disabled two detectors.
 
 ### The fault, as measured
@@ -54,7 +61,7 @@ All three fixes were mutation-proved by reverting them in turn:
 - `wa_inner_version` returned to `CORE_KEYS` → `test_contract_keys_all_require_a_session` and `test_drift_can_now_fire` fail
 - `opms_` keys dropped from the unauthenticated set → `test_every_batch_carries_both_classes[extended]` fails
 
-`test_init.py`'s reauth test was rewritten as a parametrised pair covering both branches. It had asserted the old behaviour, so it correctly failed on the change.
+`test_init.py`'s reauth test was rewritten as a parametrized pair covering both branches. It had asserted the old behavior, so it correctly failed on the change.
 
 ### Changed — attended `[G]` now watches the recovery
 
@@ -70,7 +77,7 @@ Polling intervals below 150 s stop the preemptive idle reset firing on every cyc
 
 ## [3.3.2-rc10] - 2026-07-31 - Unreleased - No Manifest Bump - Sensor Review; APN Documentation Completed
 
-`sensor_review` (SOURCE=Via_HAB, SCOPE=Full) reconciled the whole inventory, and the APN behaviour documented across rc7-rc9 was completed with the half that was missing.
+`sensor_review` (SOURCE=Via_HAB, SCOPE=Full) reconciled the whole inventory, and the APN behavior documented across rc7-rc9 was completed with the half that was missing.
 
 ### Verified — `sensor_review`, full run
 
@@ -133,7 +140,7 @@ All eleven write commands are now either exercised on hardware or locked against
 
 - **`send_sms` reported a successful send as a failure**, twice over.
   - The narrow bug: the check read the counters from the **batch poll**, where those keys are empty, instead of `sms_capacity_info`, where they are populated. `0 -> 0` forever.
-  - The real error: I probed the message list, saw zero, and concluded **"this model does not retain sent messages"** — writing it into a code comment as fact. The inbox was empty **because `delete_all` had just emptied it**. I measured a state I had created and generalised it into a property of the hardware.
+  - The real error: I probed the message list, saw zero, and concluded **"this model does not retain sent messages"** — writing it into a code comment as fact. The inbox was empty **because `delete_all` had just emptied it**. I measured a state I had created and generalized it into a property of the hardware.
   - Corrected by the project owner, who had the sent message in front of him. The router does retain sent messages (`tag=2`, against `tag=1` for received) and `sms_nv_send_total` does increment.
   - The check now takes two independent confirmations — counter increment via `sms_capacity_info`, plus a new `tag=2` message — and treats the absence of either as **unverified, not failed**.
   - This is the third time this session a plausible mechanism was written down as established: after `RD` rotation and the first `set_apn_mode` explanation. **`dev_standards` §11 already forbids it** — "record what was measured and stop there" — and it was written hours before this happened. The rule is right; following it is the hard part.
@@ -158,7 +165,7 @@ The rc7 fix introduced a hazard, caught before release by the project owner's de
 
 ### Changed
 
-- **`about` notes rewritten for all three selects**, recording behaviour that reads as broken otherwise: choosing a profile also switches the mode to manual; in auto the list may not contain the APN in use and `Network APN` is authoritative; the `Default` profile stores an empty APN so `Network APN` goes blank; and the network-mode values carry their web-UI names (`4G_AND_5G` = Auto, `LTE_AND_5G` = 5G NSA, `Only_5G` = 5G SA, `Only_LTE` = 4G Only) — **reported by the project owner**, not verifiable from the API.
+- **`about` notes rewritten for all three selects**, recording behavior that reads as broken otherwise: choosing a profile also switches the mode to manual; in auto the list may not contain the APN in use and `Network APN` is authoritative; the `Default` profile stores an empty APN so `Network APN` goes blank; and the network-mode values carry their web-UI names (`4G_AND_5G` = Auto, `LTE_AND_5G` = 5G NSA, `Only_5G` = 5G SA, `Only_LTE` = 4G Only) — **reported by the project owner**, not verifiable from the API.
 
 ### Fixed — the hardware script's own defects, both exposed by running it
 
@@ -238,7 +245,7 @@ The attended **confirm** path (`y`) has not been run: doing so reconnects the li
 
 ### Testing note
 
-The register is not a behavioural test and proves nothing about whether any write works. It makes it impossible to add one **in silence** — which is the actual failure that let two broken controls ship.
+The register is not a behavioral test and proves nothing about whether any write works. It makes it impossible to add one **in silence** — which is the actual failure that let two broken controls ship.
 
 ## [3.3.2-rc5] - 2026-07-30 - Unreleased - No Manifest Bump - Control Write Path Reworked
 
@@ -281,7 +288,7 @@ The devcontainer took **HA 2026.8.0b1**, **PHACC 0.13.349** and **ruff 0.16.0**.
 
 `PLR0917` (too many positional arguments) is newly enforced. Both findings were real signature smells rather than noise.
 
-- **`ZTERouterAPI._request()` took 7 positional parameters.** Everything after `path` is now **keyword-only**. Nothing outside the class was passing them positionally — only the three internal retry calls were, each re-listing `method, path, params, data, headers, timeout_sec, authenticated` in order, which is exactly the argument-transposition risk the rule exists to catch. Those three now pass by keyword. No call site outside `api.py` changed, and no behaviour changed.
+- **`ZTERouterAPI._request()` took 7 positional parameters.** Everything after `path` is now **keyword-only**. Nothing outside the class was passing them positionally — only the three internal retry calls were, each re-listing `method, path, params, data, headers, timeout_sec, authenticated` in order, which is exactly the argument-transposition risk the rule exists to catch. Those three now pass by keyword. No call site outside `api.py` changed, and no behavior changed.
 - **`test_web_power_sensors_read_the_router_flag` took 6.** Two fixtures plus four parametrize values. The four parametrized values are now keyword-only; pytest injects by name, so the decorators are untouched.
 
 ### Verified on the new stack
