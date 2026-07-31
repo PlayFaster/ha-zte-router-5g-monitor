@@ -51,6 +51,14 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 - **Data Limit Switch**: The switch correctly showed the state but would not successfully toggle the state. This has now been fixed.
 
+- **APN Selection Mode could not be set to Manual**: switching it to **Auto** worked, but switching back to **Manual** was silently rejected by the router in every previous release. It was easy to miss, because choosing an **APN Profile** does work and has the side effect of setting the mode to Manual — so the mode appeared to follow along. Both directions now work directly.
+
+- **APN Profile could show a profile that was not in use**: while APN Selection Mode is **Auto** the router uses the network's own default APN, which need not be one of your stored profiles — but the dropdown still displayed whichever profile was last chosen manually. It now shows the profile only when it genuinely matches the APN in use, and blank otherwise. The **Network APN** sensor remains the authoritative answer to what the router is actually connected with.
+
+- **ODU LED Switch behaved erratically**: toggling it could show the new position, snap back, then correct itself a few seconds later. The router was applying the change correctly all along — Home Assistant simply was not asking again until its next scheduled update. Controls now read the value straight back from the router, so the switch settles immediately.
+
+- **Settings changes made no difference if the router had logged Home Assistant out**: opening the router's own web page ends the integration's session. Reading recovered from this automatically, but _writing_ did not — so a switch or dropdown would fail every time until something else happened to re-establish the connection (pressing **Refresh Now** was the usual accidental cure). Settings changes now re-establish the session first.
+
 - **Monthly Data counters misclassified**: the monthly upload, download and total sensors were recorded state_class=TOTAL, which is incorrect and can cause issues on reset. This has now been corrected to TOTAL_INCREASING - a resetting counter.
 
 - **Actions Silent Fail**: If the polling interval was long, Pause Polling was on or the web GUI was used, the integrations login to the router could get dropped. Actions like `get_sms_list` run in this state provided empty responses but no error. This is now corrected - Actions:

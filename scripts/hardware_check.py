@@ -72,6 +72,7 @@ try:
     import aiohttp
 
     from custom_components.zte_router_5g.api import ZTEAuthError, ZTERouterAPI
+    from custom_components.zte_router_5g.const import APN_PROFILE_SLOTS
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
     raise SystemExit(
         f"cannot import {err.name!r}.\n\n"
@@ -100,6 +101,10 @@ RD_PATH = "goform/goform_get_cmd_process?isTest=false&cmd=RD"
 # Seconds to let the radio re-register before reading a value back. Only the
 # attended tier waits: nothing in the safe tier disturbs the connection.
 RECONNECT_SETTLE = 12.0
+
+# Gap between attempts while the router is away. The reconnect an attended
+# write causes routinely outlasts a single request timeout.
+RECONNECT_RETRY = 8.0
 
 # Colour is emitted unconditionally, the way `pytest --color=yes` is used by the
 # sibling tasks: stdout here is a pipe into `tee`, so auto-detection would strip
@@ -416,6 +421,69 @@ def _confirm(prompt: str) -> bool:
         return False
 
 
+async def _read_through_reconnect(
+    api: ZTERouterAPI, key: str, tries: int = 8
+) -> str | None:
+    """Read one key, tolerating the router being away.
+
+    Every attended write re-establishes the connection, so the router is
+    *expected* to be unreachable immediately afterwards. Treating that as a
+    failure — which the first version did — reports a successful write as
+    failed and, worse, abandons the restore.
+    """
+    for attempt in range(tries):
+        try:
+            return (await api.get_params([key])).get(key)
+        except Exception:  # noqa: BLE001 - absence is the expected state here
+            if attempt == tries - 1:
+                return None
+            await asyncio.sleep(RECONNECT_RETRY)
+    return None
+
+
+async def _write_through_reconnect(
+    api: ZTERouterAPI, setter: str, value: str, tries: int = 4
+) -> str | None:
+    """Send a setter, retrying while the router is still coming back.
+
+    Safe to retry *these* commands specifically: they are idempotent settings
+    changes, and the value is read back afterwards. This is not a general
+    licence to retry writes — see `write_classification.py`.
+    """
+    last: str | None = None
+    for attempt in range(tries):
+        try:
+            await _call_setter(api, setter, value)
+        except Exception as err:  # noqa: BLE001 - reporting, not handling
+            last = f"{type(err).__name__}: {err}"
+            if attempt == tries - 1:
+                return last
+            await asyncio.sleep(RECONNECT_RETRY)
+        else:
+            return None
+    return last
+
+
+async def _call_setter(api: ZTERouterAPI, setter: str, value: str) -> None:
+    """Invoke a setter, supplying poll data to the ones that need it.
+
+    `set_apn_mode` is a read-modify-write: the router refuses a mode change to
+    manual unless it is also told which profile, so the call needs the current
+    `apn_index` and its `APN_config` entry. Fetched fresh rather than cached,
+    because this runs either side of a reconnect.
+    """
+    if setter == "set_apn_mode":
+        # Needs the whole picture, not just the index: the profile is resolved
+        # from `wan_apn` (authoritative) and falls back to `apn_index` only
+        # while already manual. Fetching just the index would make every switch
+        # to manual unresolvable, and the call would refuse.
+        keys = ["apn_mode", "apn_index", "wan_apn"]
+        keys += [f"APN_config{slot}" for slot in range(APN_PROFILE_SLOTS)]
+        await api.set_apn_mode(value, await api.get_params(keys))
+        return
+    await getattr(api, setter)(value)
+
+
 async def _attended_round_trip(
     api: ZTERouterAPI,
     report: Report,
@@ -445,36 +513,237 @@ async def _attended_round_trip(
         print(_dim("    skipped"))
         return
 
-    changed = False
-    try:
-        await getattr(api, setter)(target)
-        changed = True
+    error = await _write_through_reconnect(api, setter, target)
+    if error is None:
         await asyncio.sleep(RECONNECT_SETTLE)
-        observed = (await api.get_params([state_key])).get(state_key)
+        observed = await _read_through_reconnect(api, state_key)
         report.record(str(observed) == target, f"{title}: applied", f"-> {observed!r}")
+    else:
+        report.record(False, f"{title}: applied", error)
+
+    # Restore unconditionally. Even a write reported as failed may have landed —
+    # this API answers 200 OK for a refusal and can lose the reply to a
+    # reconnect it caused — so the only trustworthy question is what the router
+    # says *now*.
+    print(_dim(f"    restoring {state_key} to {original!r}…"))
+    await asyncio.sleep(RECONNECT_SETTLE)
+    if str(await _read_through_reconnect(api, state_key)) == str(original):
+        report.record(True, f"{title}: restored", f"-> {original!r}")
+        return
+
+    restore_error = await _write_through_reconnect(api, setter, str(original))
+    await asyncio.sleep(RECONNECT_SETTLE)
+    back = await _read_through_reconnect(api, state_key)
+    if str(back) == str(original):
+        report.record(True, f"{title}: restored", f"-> {back!r}")
+        return
+
+    report.record(False, f"{title}: restored", restore_error or f"reads {back!r}")
+    print(
+        _red(
+            f"\n  !! {state_key} MAY STILL BE {target!r} — "
+            f"original was {original!r}.\n"
+            f"  !! Undo by hand: {undo}\n"
+        )
+    )
+
+
+async def check_apn_profile(api: ZTERouterAPI, report: Report) -> None:
+    """Round-trip the APN profile itself, between two stored profiles.
+
+    `set_apn` sends the complete `APN_PROC_EX` form and is the one APN write
+    that always worked — which is precisely why it is worth exercising: it is
+    the reference for the form the router demands, and the reason the broken
+    `set_apn_mode` went unnoticed (choosing a profile flips the mode to manual
+    as a side effect, so the mode appeared to follow along).
+
+    Moves to a *different stored profile* and back. Both must already exist on
+    the device; nothing is created. The restore also returns the selection mode,
+    because `set_apn` changes it as a side effect and leaving that altered would
+    be an unannounced change to the user's configuration.
+    """
+    print(_cyan("\n[B] APN profile round trip"))
+
+    keys = ["apn_mode", "apn_index", "wan_apn"]
+    keys += [f"APN_config{slot}" for slot in range(APN_PROFILE_SLOTS)]
+    current = await api.get_params(keys)
+
+    profiles: list[tuple[str, str, str]] = []
+    for slot in range(APN_PROFILE_SLOTS):
+        raw = current.get(f"APN_config{slot}")
+        if not raw:
+            continue
+        parts = str(raw).split("($)")
+        apn = parts[1] if len(parts) > 1 else ""
+        pdp = parts[7] if len(parts) > 7 and parts[7] else "IP"
+        if apn:  # the Default profile stores an empty APN and is skipped
+            profiles.append((str(slot), apn, pdp))
+
+    active_apn = str(current.get("wan_apn") or "").strip().lower()
+    origin = next((p for p in profiles if p[1].strip().lower() == active_apn), None)
+    other = next((p for p in profiles if p is not origin), None)
+
+    if origin is None or other is None:
+        report.record(
+            False,
+            "APN profile: two usable profiles available",
+            f"found {len(profiles)} with an APN set; need the active one plus one more",
+        )
+        return
+
+    original_mode = str(current.get("apn_mode") or "auto")
+    print(f"    active    : {origin[1]!r} (slot {origin[0]}), mode {original_mode!r}")
+    print(f"    will set  : {other[1]!r} (slot {other[0]}), then restore")
+    print("    risk      : reconnect on each step; a profile your SIM rejects")
+    print("                means no data until restored")
+    print("    undo by hand: router web UI -> Settings -> APN")
+
+    if not _confirm(f"Switch the APN profile to {other[1]!r}?"):
+        print(_dim("    skipped"))
+        return
+
+    try:
+        await api.set_apn(int(other[0]), other[2])
+        await asyncio.sleep(RECONNECT_SETTLE)
+        observed = await _read_through_reconnect(api, "wan_apn")
+        report.record(
+            str(observed).strip().lower() == other[1].strip().lower(),
+            "APN profile: applied",
+            f"Network APN -> {observed!r}",
+        )
     except Exception as err:  # noqa: BLE001 - reporting, not handling
-        report.record(False, f"{title}: applied", f"{type(err).__name__}: {err}")
-    finally:
-        if changed:
-            print(_dim(f"    restoring {state_key} to {original!r}…"))
-            try:
-                await getattr(api, setter)(str(original))
-                await asyncio.sleep(RECONNECT_SETTLE)
-                back = (await api.get_params([state_key])).get(state_key)
-                report.record(
-                    str(back) == str(original),
-                    f"{title}: restored",
-                    f"-> {back!r}",
-                )
-            except Exception as err:  # noqa: BLE001 - must be loud
-                report.record(False, f"{title}: restored", f"{err}")
-                print(
-                    _red(
-                        f"\n  !! {state_key} MAY STILL BE {target!r} — "
-                        f"original was {original!r}.\n"
-                        f"  !! Undo by hand: {undo}\n"
-                    )
-                )
+        report.record(False, "APN profile: applied", f"{type(err).__name__}: {err}")
+
+    print(_dim(f"    restoring profile {origin[1]!r}…"))
+    try:
+        await api.set_apn(int(origin[0]), origin[2])
+        await asyncio.sleep(RECONNECT_SETTLE)
+        back = await _read_through_reconnect(api, "wan_apn")
+        report.record(
+            str(back).strip().lower() == origin[1].strip().lower(),
+            "APN profile: restored",
+            f"Network APN -> {back!r}",
+        )
+    except Exception as err:  # noqa: BLE001 - must be loud
+        report.record(False, "APN profile: restored", f"{err}")
+        print(_red(f"\n  !! APN may still be {other[1]!r} — restore by hand\n"))
+
+    if original_mode.lower() == "auto":
+        # `set_apn` forces manual, so auto has to be put back deliberately.
+        print(_dim("    restoring selection mode to 'auto'…"))
+        error = await _write_through_reconnect(api, "set_apn_mode", "auto")
+        await asyncio.sleep(RECONNECT_SETTLE)
+        mode = await _read_through_reconnect(api, "apn_mode")
+        report.record(
+            str(mode) == "auto",
+            "APN profile: selection mode restored to auto",
+            error or f"-> {mode!r}",
+        )
+
+
+async def check_data_limit_switch(api: ZTERouterAPI, report: Report) -> None:
+    """Round-trip the data cap, but only from ON — never from OFF.
+
+    This is the switch that had never worked in any release, so it earns an
+    exercise. It is ATTENDED rather than SAFE because the router *enforces* the
+    cap: turning it on stops traffic once the limit is reached, it does not
+    merely warn.
+
+    That asymmetry decides what may be automated. Starting from **on**, the
+    round trip is off-then-on and the risky direction is simply restoring what
+    was already there — if the script dies mid-way the cap is off, which
+    inconveniences nobody. Starting from **off**, the same round trip would
+    switch enforcement *on* and a crash could leave it that way, against a cap
+    and a usage figure only the owner can judge. So that direction is refused
+    rather than offered with a warning.
+
+    No reconnect here — this is a settings write, not a radio change — but the
+    six-field form has been seen refused once and accepted immediately after,
+    so the write is retried once and the attempt count reported.
+    """
+    print(_cyan("\n[C] Data limit switch round trip"))
+
+    fields = list(api._DATA_VOLUME_FIELDS)
+    current = await api.get_params(fields)
+    original = str(current.get("data_volume_limit_switch") or "")
+
+    if original != "1":
+        report.record(
+            True,
+            "data limit switch: skipped, currently off",
+            "exercising it would switch enforcement ON, which a crash could strand",
+        )
+        return
+
+    size = current.get("data_volume_limit_size")
+    print(f"    current   : cap enforcement ON (limit {size!r})")
+    print("    will set  : OFF, then restore ON")
+    print("    risk      : low - the restore direction is the one already set;")
+    print("                a failure part-way leaves the cap OFF, not ON")
+    print("    undo by hand: router web UI -> Settings -> Data Management")
+
+    if not _confirm("Turn the data cap off and back on?"):
+        print(_dim("    skipped"))
+        return
+
+    attempts = 0
+    error: str | None = None
+    for attempt in range(2):
+        if attempt:
+            await asyncio.sleep(1.0)
+        attempts = attempt + 1
+        try:
+            await api.set_data_limit_switch("0", current)
+        except Exception as err:  # noqa: BLE001 - reporting, not handling
+            error = f"{type(err).__name__}: {err}"
+            continue
+        error = None
+        break
+
+    if error is None:
+        observed = (await api.get_params(["data_volume_limit_switch"])).get(
+            "data_volume_limit_switch"
+        )
+        report.record(
+            str(observed) == "0",
+            "data limit switch: turned off",
+            f"-> {observed!r}" + ("" if attempts == 1 else f"  [{attempts} attempts]"),
+        )
+    else:
+        report.record(False, "data limit switch: turned off", error)
+
+    # Restore from what the router reports now, not from the read taken before
+    # the write — the form is all-or-nothing and must be rebuilt from current
+    # values, or the restore itself would be refused.
+    print(_dim("    restoring the cap to ON…"))
+    latest = await api.get_params(fields)
+    if str(latest.get("data_volume_limit_switch")) != "1":
+        try:
+            await api.set_data_limit_switch("1", latest)
+        except Exception as err:  # noqa: BLE001 - must be loud
+            report.record(False, "data limit switch: restored", f"{err}")
+            print(_red("\n  !! THE DATA CAP IS STILL OFF — turn it back on\n"))
+            return
+    back = (await api.get_params(["data_volume_limit_switch"])).get(
+        "data_volume_limit_switch"
+    )
+    report.record(str(back) == "1", "data limit switch: restored", f"-> {back!r}")
+    if str(back) != "1":
+        print(_red("\n  !! THE DATA CAP IS STILL OFF — turn it back on\n"))
+
+
+async def _guarded(report: Report, title: str, coro: Any) -> None:
+    """Run one attended check so its failure cannot abandon the others.
+
+    An unhandled error used to end the whole run, which mattered most in the
+    one place it must not: after a write had already changed something and the
+    restore had not yet happened.
+    """
+    try:
+        await coro
+    except Exception as err:  # noqa: BLE001 - containment is the point
+        report.record(False, f"{title}: check aborted", f"{type(err).__name__}: {err}")
+        print(_red(f"  !! {title} did not complete — verify this setting by hand"))
 
 
 async def check_attended_writes(api: ZTERouterAPI, report: Report) -> None:
@@ -487,26 +756,38 @@ async def check_attended_writes(api: ZTERouterAPI, report: Report) -> None:
         )
     )
 
-    await _attended_round_trip(
-        api,
+    await _guarded(
         report,
-        title="APN selection mode",
-        state_key="apn_mode",
-        setter="set_apn_mode",
-        target="manual",
-        risk="brief reconnect; a wrong APN profile means no data until restored",
-        undo="router web UI -> Settings -> APN -> set back to Auto",
+        "APN selection mode",
+        _attended_round_trip(
+            api,
+            report,
+            title="APN selection mode",
+            state_key="apn_mode",
+            setter="set_apn_mode",
+            target="manual",
+            risk="brief reconnect; a wrong profile means no data until restored",
+            undo="router web UI -> Settings -> APN -> set back to Auto",
+        ),
     )
 
-    await _attended_round_trip(
-        api,
+    await _guarded(report, "APN profile", check_apn_profile(api, report))
+
+    await _guarded(report, "Data limit switch", check_data_limit_switch(api, report))
+
+    await _guarded(
         report,
-        title="Bearer preference",
-        state_key="net_select",
-        setter="set_bearer_preference",
-        target="LTE_AND_5G",
-        risk="radio re-registration; locking to a single mode can drop service",
-        undo="router web UI -> Settings -> Network -> set the preference back",
+        "Bearer preference",
+        _attended_round_trip(
+            api,
+            report,
+            title="Bearer preference",
+            state_key="net_select",
+            setter="set_bearer_preference",
+            target="LTE_AND_5G",
+            risk="radio re-registration; locking a mode can drop service",
+            undo="router web UI -> Settings -> Network -> set the preference back",
+        ),
     )
 
 

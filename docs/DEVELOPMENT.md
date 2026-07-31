@@ -174,6 +174,28 @@ It carries six fields — the limit switch, the cap and its unit, the alert perc
 
 The general lesson is the one this API keeps teaching: a write that is refused looks exactly like a write that succeeded, so the guard must be on the body and the failure must reach the user.
 
+### Resolve state from the authoritative field, not the convenient one
+
+`apn_index` looks like it names the APN in use. It does not. While the router is in **auto** mode it connects with the network-provided default and `apn_index` merely retains the last _manual_ choice — observed live as `apn_index=5` (`open.internet.public`) while traffic ran over `3FWA.ie`, which is slot 6. The authoritative value is `wan_apn`, the **Network APN** sensor.
+
+The cost of getting this wrong is not a wrong label. A fix that built the switch-to-manual payload from `apn_index` would have **activated a different APN than the one working** — a worse outcome than the refusal it was written to cure. It shipped in that state for about an hour, and was caught by the project owner describing how the router actually behaves, not by any test: every test agreed with the wrong model, because the model came from the same place the code did.
+
+Three rules follow, and they generalise beyond APNs:
+
+- **Ask what a field is _for_, not what it appears to describe.** An index is a stored preference; a reported value is a fact. When the two can disagree, the fact wins.
+- **Where the authoritative value cannot be resolved, refuse rather than guess.** In auto mode the network default need not exist in the stored profile list at all — on the reference device it does only because a duplicate profile was added by hand. There is no correct automatic answer, so `set_apn_mode()` refuses and names the route that works (choosing an APN Profile, which sets mode and profile together).
+- **A "convenient" fallback needs its own justification.** `apn_index` is still used, but only while the router is already in manual mode, where it genuinely is the selection. That branch exists for one real case: the `Default` profile stores an empty APN, so `wan_apn` is blank while the selection is perfectly valid.
+
+Related behaviours that read as bugs and are not, all now in the `about` notes: choosing an APN Profile always forces the mode to manual, because `set_apn()`'s payload carries `apn_mode=manual`; and selecting `Default` leaves **Network APN** blank, matching the router's own page.
+
+### Assume every `goform` write replaces a whole form
+
+Three of the eleven write commands were found sending incomplete payloads that the router refuses: `DATA_LIMIT_SETTING` (six fields), `APN_PROC_EX` (five, for the manual direction), and — differently — every write's failure to notice a dead session. That is no longer a run of coincidences. **Treat "this write sends a partial form" as the default suspicion for any `goform` command that is not verified on hardware.**
+
+The pattern is nastier than it looks because refusal is invisible: `200 OK`, `{"result":"failure"}`, nothing changed. And these defects survive for months, because the entities they break are ones nobody routinely uses.
+
+The cheap way to check, and the one to reuse: **replay a payload against the value the router already holds.** Acceptance is tested without changing anything, so a command that would otherwise reconnect the radio becomes a free probe. That is how the `APN_PROC_EX` shape was established with a single real reconnect rather than a dozen.
+
 ### A control's position must not wait for the debounced poll
 
 `async_force_refresh()` goes through the coordinator's debouncer — `immediate=True`, cooldown **10 s**. The first call runs at once; any call inside the following ten seconds is deferred to the end of it. A write landing in that window therefore left the entity state unchanged for up to ten seconds, and the frontend's optimistic toggle reverted long before it arrived. The symptom was a switch that appeared to toggle, revert, then correct itself — intermittent, because it depended on the timing of the _previous_ refresh.
@@ -182,11 +204,11 @@ The router was measured before anything was changed, and **exonerated**: it appl
 
 The fix is a **targeted read-back** (`api.get_params()`), opt-in per description via `verify_after_write` and `state_key`. Three outcomes must stay distinct, and collapsing any two of them reintroduces a bug:
 
-| Outcome | Meaning | Action |
-| :-- | :-- | :-- |
-| Read agrees | Confirmed | Publish immediately |
-| Read disagrees twice, 200 ms apart | The router declined it | Raise `switch_write_not_applied` |
-| Read errors, or omits the key | **Unverified, not failed** | Log at debug; leave it to the next poll |
+| Outcome                            | Meaning                    | Action                                  |
+| :--------------------------------- | :------------------------- | :-------------------------------------- |
+| Read agrees                        | Confirmed                  | Publish immediately                     |
+| Read disagrees twice, 200 ms apart | The router declined it     | Raise `switch_write_not_applied`        |
+| Read errors, or omits the key      | **Unverified, not failed** | Log at debug; leave it to the next poll |
 
 The third row is the subtle one. A failed _confirmation_ is not a failed _write_ — the command may well have landed, and raising there would report success as failure on every connection blip.
 
@@ -259,4 +281,6 @@ It deliberately excludes `send_sms`, `delete_sms`, `reboot` and the APN/bearer s
 - **v3.3.0-dev3** (2026-07-27) — IQS pass and follow-up. Added success patterns for translated exceptions (`translation_domain` + `translation_key`, and the `ServiceValidationError` vs `HomeAssistantError` choice) and for the Repair selection rule (persistence **plus** agency, and why `router_unreachable` waits 10 failures rather than 3). Added two pitfalls: translated exceptions breaking `pytest.raises(..., match=...)` under a mocked hass, and `": "` inside a folded YAML comment breaking `quality_scale.yaml`. Added §15 SMS feature-group toggle and the deferred custom-trigger work to Technical Debt.
 - **v3.3.1** (2026-07-29) — Cross-model compatibility expansion. Documented the new `helpers.py` utilities (`is_gsm7`, `earfcn_to_band`, `arfcn_to_band`) under Core Files. Added two Technical Debt items: cross-model support is inferred from other projects rather than tested on hardware (including the three speculative alias spellings and the login fallback that never fires on an MC7010), and no model is yet confirmed to populate any of the five thermal keys — with the condition under which they should be removed rather than left indefinitely.
 - **v3.3.0-dev1** (2026-07-27) — `dev_standards` conformance pass. Added success patterns for force-refresh-bypasses-pause, per-endpoint strike budgets, the health snapshot held outside `coordinator.data`, the always-available health sensor, reload-by-default options with a live-apply allow-list, layered diagnostics sanitization, and per-attribute recorder evaluation. Added four pitfalls: `goformId=LOGOUT` needs an `AD` token (and why the obvious web-UI verification cannot detect it), Refresh Now silently swallowed while paused, the options flow changing credentials without applying them, and diagnostics leaking SMS content and cell location. Recorded the §3 root-identity deviation and the config-entry migration-handler constraint under Technical Debt.
+- **v3.3.4** (2026-07-31) — Added the pitfall on resolving state from the authoritative field rather than the convenient one, after a fix that read the APN from `apn_index` was found able to activate the wrong APN in auto mode. Records the refuse-rather-than-guess rule, the one justified fallback, and the related router behaviours that read as bugs (choosing a profile forces manual; the `Default` profile leaves Network APN blank).
+- **v3.3.3** (2026-07-31) — Added the pitfall that every `goform` write should be assumed to replace a whole form until proven otherwise, after a third instance (`APN_PROC_EX`) was found, plus the replay-against-the-current-value probing technique that establishes a payload shape without changing device state.
 - **v3.3.2** (2026-07-30) — Control write path reworked after a report of erratic LED toggling. Added three pitfalls: a control's position waiting on the 10-second debounce (with the three-outcome table for targeted read-back, and why the APN/bearer selects must be excluded), a write's inability to detect a stolen session (and why `"failure"` must not join the expiry strings), and mocks being unable to falsify a belief about the router — a test passed while the code it covered failed on hardware. Added `scripts/hardware_check.py` under new Operator Tooling, and noted the switch platform's read-back confirmation and position latching under Core Files.

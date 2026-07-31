@@ -485,9 +485,44 @@ async def test_api_set_apn_success(mock_aiohttp_client):
         assert "pdp_type=IPV4V6" in data
 
 
+# Profile shapes taken verbatim from the reference MC7010 (2026-07-31). Slot 6
+# duplicates the network default so it is selectable manually — a deliberate
+# user setup, not a router quirk, and the reason `wan_apn` matching succeeds
+# there at all.
+_IP = "($)manual($)*99#($)none($)($)($)IP"
+_APN_PROFILES = {
+    "APN_config0": "Default($)($)manual($)*99#($)none($)($)($)IPv4v6",
+    "APN_config1": "3broadband.ie($)3broadband.ie" + _IP,
+    "APN_config5": "open.internet.public($)open.internet.public" + _IP,
+    "APN_config6": "3FWA.ie($)3fwa.ie" + _IP,
+}
+
+_MANUAL_ON_1 = {
+    **_APN_PROFILES,
+    "apn_mode": "manual",
+    "apn_index": "1",
+    "wan_apn": "3broadband.ie",
+}
+
+# The state that made the first fix dangerous: auto mode, `apn_index` left at a
+# stale manual choice, traffic actually running over a different APN.
+_AUTO_INDEX_DISAGREES = {
+    **_APN_PROFILES,
+    "apn_mode": "auto",
+    "apn_index": "5",
+    "wan_apn": "3FWA.ie",
+}
+
+
 @pytest.mark.asyncio
-async def test_api_set_apn_mode_success(mock_aiohttp_client):
-    """Test set_apn_mode calls the right endpoint."""
+async def test_api_set_apn_mode_manual_sends_the_complete_form(mock_aiohttp_client):
+    """Manual needs all five fields; four of them are refused by the router.
+
+    Measured 2026-07-31: `apn_mode=manual` alone, and with `apn_action` but
+    without `set_default_flag`/`pdp_type`, are both refused. Asserting only the
+    mode — as this test originally did — passed against a payload the router
+    had never once accepted.
+    """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
     api.last_activity = datetime.now(UTC)
@@ -496,11 +531,136 @@ async def test_api_set_apn_mode_success(mock_aiohttp_client):
         patch.object(api, "login"),
     ):
         mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
-        result = await api.set_apn_mode("manual")
-        assert result == {"result": "ok"}
-        _args, kwargs = mock_aiohttp_client.post.call_args
-        data = kwargs["data"]
+        await api.set_apn_mode("manual", _MANUAL_ON_1)
+        data = mock_aiohttp_client.post.call_args[1]["data"]
         assert "apn_mode=manual" in data
+        assert "apn_action=set_default" in data
+        assert "set_default_flag=1" in data
+        assert "pdp_type=IP" in data
+        assert "index=1" in data
+
+
+@pytest.mark.asyncio
+async def test_apn_mode_manual_follows_the_active_apn_not_the_stale_index(
+    mock_aiohttp_client,
+):
+    """The regression test for a hazard introduced while fixing this method.
+
+    In auto mode `apn_index` is a leftover manual choice, not a description of
+    what the router is doing: observed live as `apn_index=5`
+    (`open.internet.public`) while traffic ran over `3FWA.ie`, which is slot 6.
+    Building the manual switch from `apn_index` would quietly move the
+    connection to a different APN — worse than the refusal being fixed.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+    ):
+        mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
+        await api.set_apn_mode("manual", _AUTO_INDEX_DISAGREES)
+        data = mock_aiohttp_client.post.call_args[1]["data"]
+        assert "index=6" in data, "must follow wan_apn, the authoritative value"
+        assert "index=5" not in data, "apn_index is stale in auto mode"
+
+
+@pytest.mark.asyncio
+async def test_apn_mode_manual_refuses_when_no_profile_matches(mock_aiohttp_client):
+    """The normal case on a router without a hand-added duplicate profile.
+
+    In auto mode the router uses the network-provided default, which need not
+    exist in the manual list at all. There is then no honest answer to "which
+    profile?", so this refuses and points at the workflow that does work.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    state = {
+        "APN_config1": "3broadband.ie($)3broadband.ie" + _IP,
+        "apn_mode": "auto",
+        "apn_index": "1",
+        "wan_apn": "some.carrier.default",
+    }
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+        pytest.raises(ZTEConnectionError, match="Choose an APN Profile"),
+    ):
+        await api.set_apn_mode("manual", state)
+
+    mock_aiohttp_client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_apn_mode_manual_trusts_the_index_when_already_manual(
+    mock_aiohttp_client,
+):
+    """`wan_apn` is blank for the Default profile, whose APN field is empty.
+
+    Selecting Default is legitimate — the router's own page shows a blank APN
+    for it — so a blank `wan_apn` must not be read as "cannot resolve" when the
+    router is already in manual mode and `apn_index` is therefore authoritative.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    state = {**_APN_PROFILES, "apn_mode": "manual", "apn_index": "0", "wan_apn": ""}
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+    ):
+        mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
+        await api.set_apn_mode("manual", state)
+        data = mock_aiohttp_client.post.call_args[1]["data"]
+        assert "index=0" in data
+        assert "pdp_type=IPv4v6" in data
+
+
+@pytest.mark.asyncio
+async def test_api_set_apn_mode_auto_falls_back_to_the_bare_form(mock_aiohttp_client):
+    """Auto needs no profile, and the bare form is accepted for it.
+
+    Verified on hardware: `apn_mode=auto` alone returns success. Keeping the
+    fallback means a poll that has not yet supplied the profile list can still
+    return the router to auto — the direction that gets someone out of trouble.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+    ):
+        mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
+        await api.set_apn_mode("auto", {})
+        data = mock_aiohttp_client.post.call_args[1]["data"]
+        assert "apn_mode=auto" in data
+        assert "index=" not in data
+
+
+@pytest.mark.asyncio
+async def test_api_set_apn_mode_auto_prefers_the_complete_form(mock_aiohttp_client):
+    """With a profile resolvable, auto uses the form verified to actually apply.
+
+    The bare form is only *accepted*; the complete form was observed to change
+    the mode and carry `wan_apn` with it. Where both are available, prefer the
+    one with evidence behind it.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+    ):
+        mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
+        await api.set_apn_mode("auto", _MANUAL_ON_1)
+        data = mock_aiohttp_client.post.call_args[1]["data"]
+        assert "apn_mode=auto" in data
+        assert "set_default_flag=1" in data
+        assert "index=1" in data
 
 
 @pytest.mark.asyncio
@@ -645,24 +805,6 @@ async def test_api_set_bearer_preference_error(mock_aiohttp_client):
         mock_aiohttp_client.post.side_effect = aiohttp.ClientError("Bearer pref fail")
         with pytest.raises(ZTEConnectionError, match="Request failed"):
             await api.set_bearer_preference("Only_LTE")
-
-
-@pytest.mark.asyncio
-async def test_api_set_apn_mode_manual(mock_aiohttp_client):
-    """Test set_apn_mode with 'manual'."""
-    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
-    api.last_activity = datetime.now(UTC)
-    with (
-        patch.object(api, "get_ad", return_value="test_ad"),
-        patch.object(api, "login"),
-    ):
-        mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
-        result = await api.set_apn_mode("manual")
-        assert result == {"result": "ok"}
-        _args, kwargs = mock_aiohttp_client.post.call_args
-        data = kwargs["data"]
-        assert "apn_mode=manual" in data
 
 
 # --------------------------------------------------------------------------

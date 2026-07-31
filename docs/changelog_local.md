@@ -4,6 +4,69 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.2-rc8] - 2026-07-31 - Unreleased - No Manifest Bump - APN Resolution Corrected; Attended Tier Completed
+
+The rc7 fix introduced a hazard, caught before release by the project owner's description of how the router actually behaves. All four scriptable ATTENDED writes are now exercised on hardware.
+
+### Fixed — a hazard introduced by the previous entry
+
+- **`set_apn_mode` resolved the profile from `apn_index`, which is meaningless in auto mode.** Observed live: `apn_mode=auto`, `apn_index=5` (`open.internet.public`), traffic running over `3FWA.ie` — profile 6. Switching to manual would have activated a **different APN than the one working**. That is worse than the refusal rc7 set out to fix, and it existed for about an hour.
+  - `_resolve_apn_profile()` now matches `wan_apn` (the authoritative value) against each profile's APN field, case insensitively.
+  - Falls back to `apn_index` **only while already manual**, where it genuinely is the selection — the branch that makes the `Default` profile work, since its empty APN leaves `wan_apn` blank.
+  - Otherwise **refuses**, pointing at the APN Profile selector. The network default need not exist in the manual list at all; on the reference device it does only because a duplicate profile was added by hand. There is no honest automatic answer, so it does not invent one.
+  - **Verified on hardware**: the attended run resolved to slot 6, not the stale 5.
+
+- **The APN Profile selector displayed a profile that was not in use.** In auto mode it reported whatever `apn_index` held. It now matches `wan_apn` and returns nothing when no stored profile corresponds, which is the normal case.
+
+### Changed
+
+- **`about` notes rewritten for all three selects**, recording behaviour that reads as broken otherwise: choosing a profile also switches the mode to manual; in auto the list may not contain the APN in use and `Network APN` is authoritative; the `Default` profile stores an empty APN so `Network APN` goes blank; and the network-mode values carry their web-UI names (`4G_AND_5G` = Auto, `LTE_AND_5G` = 5G NSA, `Only_5G` = 5G SA, `Only_LTE` = 4G Only) — **reported by the project owner**, not verifiable from the API.
+
+### Fixed — the hardware script's own defects, both exposed by running it
+
+- **The restore did not survive the reconnect it had just caused.** It reported `restored — Request failed` while the router had in fact already gone back to auto. Restore now **reads the current value first** and only re-writes if the router still disagrees, then retries through the reconnect. On this API a write reported as failed may well have landed, so what the router says _now_ is the only trustworthy question.
+- **One failing check aborted the whole run** — worst in the one place it must not, after a write had changed something and before its restore. Each attended check is now wrapped so a failure is recorded and the rest continue.
+
+### Added — attended coverage completed
+
+- **`set_apn`** round-trips between two stored profiles, verifying against `wan_apn` rather than `apn_index`, and restores the selection mode afterwards because `set_apn` forces manual as a side effect. The `Default` profile is skipped as a target, since its empty APN makes verification meaningless. **Passed**: `3fwa.ie` → `3broadband.ie` → `3fwa.ie`, mode restored to auto.
+- **`set_data_limit_switch`** round-trips the cap, and **only from ON**. Starting from on, the risky direction is merely restoring what was there, and a crash leaves the cap off — harmless. Starting from off, the same round trip would switch enforcement _on_ and a crash could strand it, against a cap and usage figure only the owner can judge; that direction is refused rather than offered with a warning. **Passed**: on → off → on. This is the switch that had never worked in any release.
+- `reboot` remains classified ATTENDED and deliberately unscripted.
+
+### Verified state after all exercises
+
+`apn_mode=auto`, `wan_apn=3FWA.ie`, `net_select=4G_AND_5G`, all six data-volume fields at their original values, `ppp_connected`. Checked independently of the script.
+
+## [3.3.2-rc7] - 2026-07-31 - Unreleased - No Manifest Bump - `APN_PROC_EX` Partial-Form Defect
+
+Found by the attended tier on its **first real run**, one prompt in. A defect the safe tier structurally could not reach.
+
+### Fixed
+
+- **`set_apn_mode()` sent a payload the router refuses, for the manual direction, in every release.** Established by replaying payloads against the value already set, so acceptance was tested without changing anything:
+  - `apn_mode=manual` — refused
+  - `apn_mode=manual&apn_action=set_default&index=N` — refused
+  - `apn_mode=manual&apn_action=set_default` — refused
+  - `apn_mode=auto` — **accepted**
+  - complete five-field form — accepted, **both** directions
+  - So `APN_PROC_EX` is all-or-nothing like `DATA_LIMIT_SETTING`, and **asymmetric**: `auto` needs no profile, `manual` is meaningless without one.
+  - Now a read-modify-write taking the poll data, deriving `index` and `pdp_type` from `APN_config{index}`. The complete form is used for **both** directions — it is the only one verified to actually _apply_ (mode changed, `wan_apn` followed). Bare `auto` is verified only as _accepted_, so it survives purely as the fallback when the poll has not yet supplied `apn_index`.
+  - Manual with no known profile now **raises locally** rather than sending a doomed payload, so the user sees "refresh and retry" instead of an opaque `result=failure`.
+  - **Verified on hardware, both directions**: manual → auto → manual, with `wan_apn` tracking and the connection restored.
+
+### Corrected — a claim made in this session
+
+"`set_apn_mode` has never worked" was **half wrong**. The auto direction always worked; only manual was refused. That asymmetry is why the entity never looked dead, and it was masked further by `set_apn()`, which already sends the complete form — choosing an **APN Profile** works, and that form carries `apn_mode=manual`, so the mode flipped as a side effect. The project owner supplied that observation; it is what made the asymmetry make sense.
+
+### Testing note — the same lesson, a third time
+
+The two existing tests asserted only `"apn_mode=manual" in data`. **Both passed against a payload the router had never once accepted.** Replaced with assertions on every required field, plus two tests for the auto paths. This is the third defect this session where a green mock-based test sat on top of a wrong model of the device.
+
+### Changed
+
+- `select.py` passes the poll data to `set_apn_mode`.
+- `scripts/hardware_check.py` gained `_call_setter`, which supplies the profile context that setter now needs — fetched fresh either side of a reconnect rather than cached.
+
 ## [3.3.2-rc6] - 2026-07-30 - Unreleased - No Manifest Bump - Write Classification, Hardware Exercise, Attended Tier
 
 Follow-on from the control write-path work. The question that prompted it: the ODU LED switch was broken for weeks and nobody noticed, because the owner does not use that entity. What else is in that position, and how far can hardware exercise be pushed safely?

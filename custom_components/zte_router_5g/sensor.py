@@ -617,9 +617,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="wan_apn",
         about=(
-            "Access Point Name - the gateway profile the router uses to reach your "
-            "ISP's network. A wrong APN is a common cause of a router that has good "
-            "signal but no working data."
+            "Access Point Name - the gateway the router is actually connected "
+            "with. This is the authoritative answer: while APN Selection Mode is "
+            "auto the router uses the network's own default, which may not be one "
+            "of your stored profiles, so the APN Profile selector can differ from "
+            "this or read blank. A wrong APN is a common cause of a router that "
+            "has good signal but no working data."
         ),
         translation_key="signal_wan_apn",
         entity_category=EntityCategory.DIAGNOSTIC,

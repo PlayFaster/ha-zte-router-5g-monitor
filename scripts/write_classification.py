@@ -113,7 +113,12 @@ EXERCISED_BY_HARDWARE_CHECK: frozenset[str] = frozenset(
 # made quick or quiet, and `set_data_limit_switch` turns on a cap that stops
 # traffic, which is a judgement about the user's plan rather than a check.
 OFFERED_WHEN_ATTENDED: frozenset[str] = frozenset(
-    {"set_apn_mode", "set_bearer_preference"}
+    {
+        "set_apn_mode",
+        "set_apn",
+        "set_bearer_preference",
+        "set_data_limit_switch",
+    }
 )
 
 

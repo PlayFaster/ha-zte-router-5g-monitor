@@ -1058,10 +1058,109 @@ class ZTERouterAPI:
         self._require_success(res, "APN_PROC_EX")
         return cast(dict[str, Any], res)
 
-    async def set_apn_mode(self, mode: str) -> dict[str, Any]:
-        """Set the APN selection mode (auto or manual)."""
+    @staticmethod
+    def _resolve_apn_profile(current: dict[str, Any]) -> tuple[str, str] | None:
+        """Work out which stored profile a manual switch should select.
+
+        **`apn_index` is not authoritative while the router is in auto mode.**
+        Observed live (2026-07-31): `apn_mode=auto`, `apn_index=5`
+        (`open.internet.public`), while the APN actually carrying traffic was
+        `3FWA.ie` — profile 6. `apn_index` there is a leftover manual choice,
+        not a description of what the router is doing. Building a manual switch
+        from it would silently activate a different APN than the one working,
+        which is a worse failure than the refusal this method exists to fix.
+
+        The authoritative value is `wan_apn` (the **Network APN** sensor), so
+        the active APN is matched against the profiles' APN field first, case
+        insensitively — the router reports `3FWA.ie` for a profile storing
+        `3fwa.ie`.
+
+        Returns `None` when no profile can be justified, and the caller then
+        refuses rather than guessing. That is the honest outcome: in auto mode
+        the router uses the network-provided default, which need not exist in
+        the manual list at all. It does on the reference device only because a
+        matching profile was added there by hand.
+        """
+        profiles: dict[str, tuple[str, str]] = {}
+        by_index: dict[str, tuple[str, str]] = {}
+        for slot in range(APN_PROFILE_SLOTS):
+            raw = current.get(f"APN_config{slot}")
+            if not raw:
+                continue
+            parts = str(raw).split("($)")
+            apn = parts[1] if len(parts) > 1 else ""
+            pdp = parts[7] if len(parts) > 7 and parts[7] else "IP"
+            by_index[str(slot)] = (str(slot), pdp)
+            if apn:
+                profiles[apn.strip().lower()] = (str(slot), pdp)
+
+        active = str(current.get("wan_apn") or "").strip().lower()
+        if active and active in profiles:
+            return profiles[active]
+
+        # Already manual: `apn_index` *is* the active selection, so it can be
+        # trusted here even when `wan_apn` is blank — which is what the router
+        # reports for the "Default" profile, whose APN field is empty.
+        if str(current.get("apn_mode") or "").strip().lower() == "manual":
+            index = str(current.get("apn_index") or "").strip()
+            if index in by_index:
+                return by_index[index]
+
+        return None
+
+    async def set_apn_mode(
+        self, mode: str, current: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Set the APN selection mode, sending the form the router requires.
+
+        `APN_PROC_EX` is another all-or-nothing form, and the two directions do
+        not need the same one. Measured on MC7010 firmware `V1.0.0B03`
+        (2026-07-31) by replaying payloads against the value already set, so
+        acceptance could be tested without changing anything:
+
+        - ``apn_mode=manual`` alone — **refused**
+        - ``apn_mode=manual&apn_action=set_default&index=N`` — **refused**
+        - ``apn_mode=manual&apn_action=set_default`` — **refused**
+        - the complete five-field form (``apn_mode``, ``apn_action``,
+          ``set_default_flag``, ``pdp_type``, ``index``) — **accepted**, in
+          both directions, and verified to actually apply
+        - ``apn_mode=auto`` alone — **accepted**
+
+        So this method sent a payload the router refused **for the manual
+        direction in every release** — the `APN Selection Mode` select could
+        never switch to manual. Switching to *auto* did work, which is why the
+        entity never looked completely dead. Choosing an **APN Profile** also
+        worked throughout, because `set_apn()` already sends the complete form,
+        and that form carries `apn_mode=manual` — so picking a profile flipped
+        the mode as a side effect and masked this.
+
+        The complete form is used for both directions whenever the profile
+        index is known: it is the only one verified to actually *apply* (the
+        mode changed and `wan_apn` followed). The bare form is kept as the
+        fallback for `auto` alone, where it is accepted and where no profile
+        index is needed to make sense of the request.
+        """
+        resolved = self._resolve_apn_profile(current or {})
+
+        if resolved is None:
+            if mode != "auto":
+                raise ZTEConnectionError(
+                    "Cannot switch the APN selection mode to manual: the router "
+                    "must be told which stored profile to use, and the active "
+                    "APN does not correspond to any of them. Choose an APN "
+                    "Profile instead — selecting one switches the mode to "
+                    "manual and picks the profile in a single step."
+                )
+            body = f"apn_mode={mode}"
+        else:
+            index, pdp_type = resolved
+            body = (
+                f"apn_mode={mode}&apn_action=set_default&set_default_flag=1"
+                f"&pdp_type={pdp_type}&index={index}"
+            )
+
         ad = await self.get_ad()
-        payload = f"isTest=false&goformId=APN_PROC_EX&apn_mode={mode}&AD={ad}"
+        payload = f"isTest=false&goformId=APN_PROC_EX&{body}&AD={ad}"
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }

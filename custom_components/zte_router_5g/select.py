@@ -58,9 +58,35 @@ def _get_apn_profiles(data: Any) -> list[tuple[int, str, str]]:
 
 
 def _get_current_apn_profile(data: Any) -> str | None:
-    """Get the active APN profile name based on apn_index."""
+    """Return the profile in use, which is not always the one `apn_index` names.
+
+    While the router is in **auto** mode it uses the network-provided default
+    APN, and `apn_index` retains whatever was last chosen manually. Observed
+    live (2026-07-31): auto mode reporting `apn_index=5`
+    (`open.internet.public`) while traffic ran over `3FWA.ie`. Showing the
+    indexed profile there states something untrue.
+
+    So in auto mode the active APN (`wan_apn`, the **Network APN** sensor) is
+    matched against the stored profiles, and `None` is returned when it matches
+    none — which is the normal case, since the default APN need not exist in
+    the manual list. In manual mode `apn_index` is authoritative and is used
+    directly, including for the "Default" profile, whose APN field is empty and
+    which therefore leaves **Network APN** blank.
+    """
     if not data:
         return None
+
+    if str(data.get("apn_mode") or "").strip().lower() == "auto":
+        active = str(data.get("wan_apn") or "").strip().lower()
+        if not active:
+            return None
+        for idx, name, _pdp in _get_apn_profiles(data):
+            raw = str(data.get(f"APN_config{idx}") or "").split("($)")
+            apn = raw[1] if len(raw) > 1 else ""
+            if apn.strip().lower() == active:
+                return name
+        return None
+
     try:
         active_idx = int(float(data.get("apn_index", -1)))
     except (ValueError, TypeError):
@@ -93,10 +119,14 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
     ZTESelectEntityDescription(
         key="apn_profile",
         about=(
-            "Which stored APN profile the router uses to connect. The APN is the "
-            "gateway your SIM's network expects; the wrong one usually means no "
-            "data at all rather than slow data. Only takes effect when APN "
-            "Selection Mode is set to manual."
+            "Which stored APN profile to connect with. The APN is the gateway "
+            "your SIM's network expects; the wrong one usually means no data at "
+            "all rather than slow data. Choosing one here also switches APN "
+            "Selection Mode to manual. While the mode is auto the router uses "
+            "the network's default APN, which may not be in this list - the "
+            "Network APN sensor is the authoritative answer to what is actually "
+            "in use. Note the Default profile stores an empty APN, so selecting "
+            "it leaves Network APN blank, matching the router's own page."
         ),
         translation_key="signal_apn_profile",
         entity_category=EntityCategory.CONFIG,
@@ -108,24 +138,28 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
     ZTESelectEntityDescription(
         key="apn_mode",
         about=(
-            "Whether the router picks the APN itself from the SIM (auto) or uses "
-            "the profile you chose (manual). Auto is right for almost everyone; "
-            "manual is for a carrier whose APN the router guesses wrongly."
+            "Whether the router picks the APN itself (auto, using the network's "
+            "default) or uses the profile you chose (manual). Auto is right for "
+            "almost everyone. To switch to manual, choose an APN Profile "
+            "instead - that sets the mode and the profile together, which is "
+            "what the router requires."
         ),
         translation_key="signal_apn_mode",
         entity_category=EntityCategory.CONFIG,
         group="signal",
         options_fn=lambda data: ["auto", "manual"],
         value_fn=lambda data: data.get("apn_mode") if data else None,
-        setter_fn=lambda api, option, data: api.set_apn_mode(option),
+        setter_fn=lambda api, option, data: api.set_apn_mode(option, data),
     ),
     ZTESelectEntityDescription(
         key="net_select",
         about=(
-            "Which mobile technologies the router may use. The combined options "
-            "let it fall back when a signal weakens; the Only options lock it. "
-            "Locking to 5G can drop the connection entirely where 5G coverage is "
-            "marginal, so prefer a combined setting unless you are testing."
+            "Which mobile technologies the router may use. These are the "
+            "router's own web page settings under different names: 4G_AND_5G is "
+            "Auto, LTE_AND_5G is 5G NSA, Only_5G is 5G SA, Only_LTE is 4G Only. "
+            "Auto lets it fall back when a signal weakens; the Only options lock "
+            "it. Locking to 5G can drop the connection entirely where 5G "
+            "coverage is marginal, so prefer Auto unless you are testing."
         ),
         translation_key="signal_net_select_mode",
         entity_category=EntityCategory.CONFIG,
