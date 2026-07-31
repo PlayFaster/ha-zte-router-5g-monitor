@@ -204,11 +204,11 @@ The router was measured before anything was changed, and **exonerated**: it appl
 
 The fix is a **targeted read-back** (`api.get_params()`), opt-in per description via `verify_after_write` and `state_key`. Three outcomes must stay distinct, and collapsing any two of them reintroduces a bug:
 
-| Outcome                            | Meaning                    | Action                                  |
-| :--------------------------------- | :------------------------- | :-------------------------------------- |
-| Read agrees                        | Confirmed                  | Publish immediately                     |
-| Read disagrees twice, 200 ms apart | The router declined it     | Raise `switch_write_not_applied`        |
-| Read errors, or omits the key      | **Unverified, not failed** | Log at debug; leave it to the next poll |
+| Outcome | Meaning | Action |
+| :-- | :-- | :-- |
+| Read agrees | Confirmed | Publish immediately |
+| Read disagrees twice, 200 ms apart | The router declined it | Raise `switch_write_not_applied` |
+| Read errors, or omits the key | **Unverified, not failed** | Log at debug; leave it to the next poll |
 
 The third row is the subtle one. A failed _confirmation_ is not a failed _write_ — the command may well have landed, and raising there would report success as failure on every connection blip.
 
@@ -238,12 +238,12 @@ This was the second recurrence of the same shape. The first (`[3.3.0-dev12]`) wa
 
 The fix is not a better total. It is to test a relationship between two classes of key that the device separates for us:
 
-| verdict       | condition                                          | meaning                          |
-| ------------- | -------------------------------------------------- | -------------------------------- |
-| `live`        | any authenticated key populated                    | session works                    |
-| `expired`     | authenticated all blank, unauthenticated populated | reachable, not logged in         |
-| `not_ready`   | everything blank                                   | reachable, nothing to report yet |
-| `undecidable` | no unauthenticated key requested                   | fall back to the weaker rule     |
+| verdict | condition | meaning |
+| --- | --- | --- |
+| `live` | any authenticated key populated | session works |
+| `expired` | authenticated all blank, unauthenticated populated | reachable, not logged in |
+| `not_ready` | everything blank | reachable, nothing to report yet |
+| `undecidable` | no unauthenticated key requested | fall back to the weaker rule |
 
 Three things generalize beyond this router:
 
