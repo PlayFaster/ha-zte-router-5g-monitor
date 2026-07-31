@@ -1793,6 +1793,56 @@ The router permits only **one login session at a time**. The integration release
 
 </details>
 
+#### 🐛 **How do I download diagnostics?**
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+**Settings > Devices & Services > ZTE Router 5G Monitor > ⋮ (three dots) > Download diagnostics.**
+
+This is by far the most useful file to attach to a GitHub issue. Because this integration talks to a family of routers that behave differently from one another, a diagnostics file from _your_ model is often the only way a problem can be understood at all — several fixes have come directly from one.
+
+**It is redacted before it is written**, in four layers. The reason for the care is that `coordinator.data` holds the router's `goform` response **verbatim**, so it carries whatever your firmware chose to return — which includes things you would not expect a bug report to contain.
+
+- **Blanked outright** — the fields with no diagnostic value once removed: your password and username, IMEI, SIM IMSI and ICCID, and your carrier identity (network name, MCC/MNC, APN).
+- **Pseudonymized, not blanked** — values worth cross-referencing become stable tokens. IP addresses become `ip-1`, `ip-2`…, cell identifiers become `cell-1`, `cell-2`…, and the same value keeps the same token throughout the file. A maintainer can still see that two fields refer to the same cell, which is often the whole question.
+- **Summarized** — an APN profile is reduced to its shape, `<apn profile: 12 fields, 4 set, pdp=IP>`. On some firmware that raw string carries an APN username and password.
+- **Swept structurally** — anything IP-shaped or MAC-shaped is tokenized wherever it appears, including inside free text and under keys the integration does not know about. This is the backstop for firmware that returns something unexpected.
+
+**SMS is treated as the most sensitive content in the file, because it is data about someone else.** The message body and the sender's number are removed entirely — not tokenized. What survives is the shape: whether decoding worked, and how long the text was.
+
+**What deliberately stays:** model, firmware and hardware version, every signal metric, bands and channels, byte counters, uptime, the health snapshot and per-endpoint failure counts. Those are the parts that diagnose.
+
+> [!TIP]
+>
+> If you are reporting a problem on a model other than the MC7010, say so in the issue. Most of this integration's cross-model support is inferred from other open-source projects rather than tested on hardware, so a diagnostics file from an MC888, MC889 or MF-series unit is genuinely valuable even when nothing is wrong.
+
+---
+
+**If setup itself is failing**, there is no config entry yet, so there is nothing to download. Capture a log instead — add this to `configuration.yaml` and restart:
+
+```yaml
+logger:
+  default: warning
+  logs:
+    custom_components.zte_router_5g: debug
+```
+
+Logs are then visible under **Settings > System > Logs** (click **Load Full Logs**).
+
+> [!IMPORTANT]
+>
+> **Log files have NO redaction of any kind.** Nothing is stripped or pseudonymized, unlike the diagnostics file above. Review a log before pasting it anywhere.
+>
+> At `debug` this integration logs status messages, error text and the names of failing endpoints — not response payloads — so your password, session token and SMS content are not written to it. What **can** appear is your **router's host or IP**, because HTTP error messages quote the request URL. Other integrations logging alongside it are another matter entirely.
+
+---
+
+</details>
+
 #### 🔄 **I deleted and re-added the integration for a fresh start - why did my settings and history come back?**
 
 <details>

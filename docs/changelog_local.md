@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.2-rc9] - 2026-07-31 - Unreleased - No Manifest Bump - Attended Tier Completed; Two Self-Inflicted Defects
+
+All eleven write commands are now either exercised on hardware or locked against silent change. Getting there produced two defects of my own making, both caught by running the thing rather than by any test.
+
+### Added
+
+- **`tests/test_write_payload_shapes.py`** — a payload shape lock over all eleven writes. A **change detector, not a correctness check**: it cannot tell you a shape is right, it makes any change to one visible and deliberate. That is the gap left by commands no script may exercise unattended.
+  - **Mutation-proved three ways**: dropping `encode_type` from `send_sms`, dropping a field from the six-field data-volume form, and changing `delete_all`'s `;` id separator each fail the suite.
+  - Asserts the **set**, not membership — every defect of this class has been a _missing_ field, which `in` cannot see.
+  - Cross-checked against the classification register, so a command cannot be classified but left unlocked.
+
+- **Four attended checks**, taking scripted coverage from 4 writes to 8: `send_sms`, `delete_sms` (newest message), `delete_all`, and `reboot`. Ordered send → delete one → delete all → reboot, since reboot ends the session.
+  - `send_sms` takes the destination **at the prompt** — never stored, never echoed, only its character count printed. A phone number in a committed script or a `.reports/` log is exactly the personal data that should not be lying around.
+  - `delete_sms` prints **id and timestamp only**; sender and body are withheld because the run is teed to a log file.
+  - `delete_all` states the **message count** in the prompt. "Yes" to an unspecified number is not informed consent, and that is the whole safeguard.
+  - `reboot` verifies by **uptime going backwards**, not by the router answering — a device that never rebooted also answers.
+
+### Changed
+
+- **Tier renamed `NEVER` → `NEVER_AUTOMATED`, and it is now empty.** The old name conflated _cannot be automated_ with _cannot be scripted at all_. With a person supplying the target and confirming, sending and deleting an SMS are ordinary tests. The tier stays defined so the decision point exists for a future command that genuinely warrants it. The project owner made this argument; it was right.
+- **README**: network-mode values as a table with their web-UI names, and a new **How do I download diagnostics?** section modelled on the `unifi_network_monitor` one — including the note that a diagnostics file from a non-MC7010 model is valuable even when nothing is wrong, since cross-model support is inferred rather than tested.
+
+### Fixed — a false dead-session detection I introduced this session
+
+- **A targeted read of legitimately empty keys was mistaken for an expired session.** `sms_nv_send_total` and `sms_nv_total` are empty on the reference MC7010, so reading just those two produced an all-empty response — the exact dead-session signature — causing a spurious re-login and a `ZTEAuthError` on a healthy session.
+  - The rule was written when every read was a 75-key poll, where something is always populated. **The targeted reads added earlier this session broke that assumption**, and nothing asked whether the rule still held.
+  - `get_params()` now always appends a **sentinel key** (`wan_connect_status`, a contract key populated whenever the session is alive), so an all-empty response still distinguishes "these fields are empty" from "this session is gone".
+  - Verified on hardware both ways: the empty-counter read now succeeds, and a genuinely dead session still raises. Mutation-proved — removing the sentinel fails the suite.
+  - Latent elsewhere: the switch read-back would have hit this if a control's key were ever empty. Harmless there (a failed verify is treated as _unverified_), but it would have caused needless re-logins.
+
+### Fixed — a reasoning failure, recorded because it is the third of its kind
+
+- **`send_sms` reported a successful send as a failure**, twice over.
+  - The narrow bug: the check read the counters from the **batch poll**, where those keys are empty, instead of `sms_capacity_info`, where they are populated. `0 -> 0` forever.
+  - The real error: I probed the message list, saw zero, and concluded **"this model does not retain sent messages"** — writing it into a code comment as fact. The inbox was empty **because `delete_all` had just emptied it**. I measured a state I had created and generalised it into a property of the hardware.
+  - Corrected by the project owner, who had the sent message in front of him. The router does retain sent messages (`tag=2`, against `tag=1` for received) and `sms_nv_send_total` does increment.
+  - The check now takes two independent confirmations — counter increment via `sms_capacity_info`, plus a new `tag=2` message — and treats the absence of either as **unverified, not failed**.
+  - This is the third time this session a plausible mechanism was written down as established: after `RD` rotation and the first `set_apn_mode` explanation. **`dev_standards` §11 already forbids it** — "record what was measured and stop there" — and it was written hours before this happened. The rule is right; following it is the hard part.
+
+### State
+
+All eleven writes: **8 exercised on hardware**, 3 covered by real-world use, **11 locked** against payload change. 800 tests, 100% coverage, `mypy --strict` clean.
+
 ## [3.3.2-rc8] - 2026-07-31 - Unreleased - No Manifest Bump - APN Resolution Corrected; Attended Tier Completed
 
 The rc7 fix introduced a hazard, caught before release by the project owner's description of how the router actually behaves. All four scriptable ATTENDED writes are now exercised on hardware.
