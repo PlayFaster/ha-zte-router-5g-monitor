@@ -126,7 +126,8 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
             "the network's default APN, which may not be in this list - the "
             "Network APN sensor is the authoritative answer to what is actually "
             "in use. Note the Default profile stores an empty APN, so selecting "
-            "it leaves Network APN blank, matching the router's own page."
+            "it leaves Network APN blank, matching the router's own page. New "
+            "profiles are added on the router's own web page, not here."
         ),
         translation_key="signal_apn_profile",
         entity_category=EntityCategory.CONFIG,

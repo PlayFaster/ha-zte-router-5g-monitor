@@ -502,8 +502,7 @@ Several settings are exposed as control entities so you can drive them from dash
 | `Only_5G`      | **5G SA**       | 5G standalone, no LTE anchor                          |
 | `Only_LTE`     | **4G Only**     | LTE only, 5G disabled                                 |
 
-> [!WARNING]
-> The two `Only_` values lock the radio. Where 5G coverage is marginal, `Only_5G` can drop the connection entirely and it may not recover on its own — prefer `4G_AND_5G` unless you are deliberately testing.
+> [!WARNING] The two `Only_` values lock the radio. Where 5G coverage is marginal, `Only_5G` can drop the connection entirely and it may not recover on its own — prefer `4G_AND_5G` unless you are deliberately testing.
 
 #### How APN selection actually behaves
 
@@ -517,8 +516,11 @@ These three controls interact in ways that each look like a fault in isolation. 
 
 **The Default profile stores an empty APN.** Selecting it is legitimate and matches the router's own page, but it leaves **Network APN** blank because there is genuinely no APN string to report.
 
-> [!TIP]
-> If you want your network's default APN to appear in the Manual list too, add it as a profile on the router's own page with the same APN string. The integration then matches it, and the APN Profile selector will name it even while the mode is Auto.
+**Profiles are created on the router, not here.** The integration selects among the profiles already stored on your router; it cannot add, edit or delete one — that is done on the router's own web page. A profile you add there appears in the **APN Profile** dropdown at the next poll, or immediately if you press **Refresh Now**. The router holds up to ten.
+
+**Switching to Manual needs a profile to switch _to_.** The router refuses a mode change that does not name one, so if the APN currently in use is not among your saved profiles, choosing `manual` in **APN Selection Mode** reports an error asking you to pick from **APN Profile** instead. That is the route that works — it sets both at once.
+
+> [!TIP] If you want your network's default APN to appear in the Manual list too, add it as a profile on the router's own page with the same APN string. The integration then matches it, the **APN Profile** selector names it even while the mode is Auto, and switching to Manual works directly.
 
 ### 📈 Billing & Data Controls (Data Device)
 

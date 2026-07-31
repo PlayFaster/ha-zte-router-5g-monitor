@@ -10,10 +10,10 @@ Everything below is drawn from `custom_components/zte_router_5g/api.py` and veri
 
 The UniFi companion document (`ha-unifi-network-monitor/docs/api_endpoints.md`) is organized by URL, because that API has a URL per resource. **ZTE does not.** The entire interface is two endpoints:
 
-| Endpoint                        | Method                           | Role                                                        |
-| :------------------------------ | :------------------------------- | :---------------------------------------------------------- |
-| `goform/goform_get_cmd_process` | GET (and POST for paged queries) | **Reads.** The resource is named in a `cmd=` parameter.     |
-| `goform/goform_set_cmd_process` | POST                             | **Writes.** The action is named in a `goformId=` parameter. |
+| Endpoint | Method | Role |
+| :-- | :-- | :-- |
+| `goform/goform_get_cmd_process` | GET (and POST for paged queries) | **Reads.** The resource is named in a `cmd=` parameter. |
+| `goform/goform_set_cmd_process` | POST | **Writes.** The action is named in a `goformId=` parameter. |
 
 So the unit that corresponds to "an endpoint" elsewhere is **a `cmd` name or a `goformId` name**, and this document is organized that way. Two practical consequences:
 
@@ -64,11 +64,11 @@ It is also why you cannot verify a logout by checking whether the web UI is reac
 
 The router does not return `401`. Expiry is detected by pattern, and all three are handled in `_request` (`api.py:96`):
 
-| Signature           | What it looks like                                                                                                                                     | Where        |
-| :------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------- | :----------- |
-| **HTML redirect**   | Response URL contains `index.html`, or `Content-Type: text/html` with a body starting `<`                                                              | `api.py:152` |
-| **Unparsable JSON** | Body is not JSON at all                                                                                                                                | `api.py:202` |
-| **Hollow JSON**     | Valid JSON, HTTP 200, in which **every value is an empty string** — or `result` is one of `session expired` / `unauth` / `fail`, or `status` is `fail` | `api.py:219` |
+| Signature | What it looks like | Where |
+| :-- | :-- | :-- |
+| **HTML redirect** | Response URL contains `index.html`, or `Content-Type: text/html` with a body starting `<` | `api.py:152` |
+| **Unparsable JSON** | Body is not JSON at all | `api.py:202` |
+| **Hollow JSON** | Valid JSON, HTTP 200, in which **every value is an empty string** — or `result` is one of `session expired` / `unauth` / `fail`, or `status` is `fail` | `api.py:219` |
 
 The third is the dangerous one: a successful-looking 200 with a well-formed body whose fields are blank. Any client that checks only the status code will silently record a router full of empty values. This is precisely the "silent failure" class that `dev_standards.md` §19 Integration Health exists to catch.
 
@@ -136,11 +136,11 @@ This is the second model-dependent branch in the protocol. MD5 here is a vendor 
 
 This is not a binary, and treating it as one has caused defects here before:
 
-| State                 | Response                     | Meaning                                                                               |
-| :-------------------- | :--------------------------- | :------------------------------------------------------------------------------------ |
-| **Populated**         | `"key": "value"`             | Supported and in use.                                                                 |
-| **Present but empty** | `"key": ""`                  | The firmware **knows the name** but this model or configuration does not populate it. |
-| **Absent**            | key not in the object at all | The name is not in the firmware's dictionary.                                         |
+| State | Response | Meaning |
+| :-- | :-- | :-- |
+| **Populated** | `"key": "value"` | Supported and in use. |
+| **Present but empty** | `"key": ""` | The firmware **knows the name** but this model or configuration does not populate it. |
+| **Absent** | key not in the object at all | The name is not in the firmware's dictionary. |
 
 The middle state is the one that surprises. On the MC7010, `data_volume_clear_date`, `data_volume_clear_day`, all five `pm_*` thermal keys and `night_mode_switch` all answer `""` — the names are real, the hardware simply has nothing to report. By contrast `SET_DATA_VOLUME_LIMIT`, `clear_data_day`, `clean_date`, `reset_date` and `cycle_start_date` are genuinely absent: invented names that no firmware knows.
 
@@ -154,10 +154,10 @@ Not a name count. The router accepts a GET up to roughly **2,048 characters**; a
 
 **This is why the poll is split in two.** A single list had reached 127 names and 1,889 characters — within ~160 of the ceiling, where the next addition would have truncated the response. Rather than keep trading one key away for another, the request became two:
 
-| Request             | Names |    URL | Headroom | Failure mode                                         |
-| :------------------ | ----: | -----: | -------: | :--------------------------------------------------- |
-| `get_all_data`      |    75 | ~1,167 |     ~880 | Mandatory — a whole-integration failure              |
-| `get_extended_data` |    41 |   ~735 |   ~1,310 | Optional — three strikes, then its own entities only |
+| Request | Names | URL | Headroom | Failure mode |
+| :-- | --: | --: | --: | :-- |
+| `get_all_data` | 75 | ~1,167 | ~880 | Mandatory — a whole-integration failure |
+| `get_extended_data` | 41 | ~735 | ~1,310 | Optional — three strikes, then its own entities only |
 
 The split is **by criticality, not alphabetically**, and that is the part worth preserving. The core request carries everything feeding an enabled-by-default entity, the contract keys, and the device identity latched into `entry.data`. The extended request carries diagnostics, disabled-by-default entities, router settings and the thermal keys — so a failure there degrades diagnostics while Signal and Data keep serving real values.
 
@@ -291,28 +291,28 @@ Entities fed from here carry `source=ENDPOINT_EXTENDED` on their description and
 
 The 2026-07-29 discovery run probed 183 candidate names. These answered with a value and are **not** in either batch — recorded so the next person asking "what else does this router expose?" can start here rather than re-running the probe. Adding any of them costs URL budget (see above).
 
-| Key                                                       | Live value      | What it is                                                                                                |
-| :-------------------------------------------------------- | :-------------- | :-------------------------------------------------------------------------------------------------------- |
-| `monthly_time`                                            | —               | Connected time this billing month, alongside the byte counters. Zeroed by `RESET_DATA_COUNTER` with them. |
-| `odu_mode`                                                | —               | Outdoor-unit operating mode.                                                                              |
-| `RadioOff`                                                | —               | Radio disable flag.                                                                                       |
-| `dns_mode`                                                | —               | Automatic or manual DNS. Paired with the `ROUTER_DNS_SETTING` write, which is declined.                   |
-| `pppoe_status`, `pppoe_dial_mode`, `dhcp_wan_status`      | —               | WAN establishment detail beyond `wan_connect_status`.                                                     |
-| `pdp_type_ui`, `ipv6_pdp_type`                            | —               | PDP context types; `pdp_type` is already polled for the APN select.                                       |
-| `rplmn_num`                                               | —               | Registered PLMN, numeric. Overlaps `rmcc`/`rmnc`, which are polled.                                       |
-| `nitz_sync_flag`, `sntp_time_set_mode`                    | —               | How the router last set its clock — network time versus SNTP.                                             |
-| `modem_msn`, `hardwarenumber`, `web_version`              | —               | Further hardware and web-UI identifiers.                                                                  |
-| `sntp_server_list1` … `sntp_server_list7`                 | —               | The router's menu of selectable time servers, distinct from the three configured ones.                    |
-| `battery_pers`, `battery_charging`, `battery_vol_percent` | `4`, `0`, `100` | Battery detail. See the note on `battery_value` above — `100` is a sentinel on hardware with no battery.  |
+| Key | Live value | What it is |
+| :-- | :-- | :-- |
+| `monthly_time` | — | Connected time this billing month, alongside the byte counters. Zeroed by `RESET_DATA_COUNTER` with them. |
+| `odu_mode` | — | Outdoor-unit operating mode. |
+| `RadioOff` | — | Radio disable flag. |
+| `dns_mode` | — | Automatic or manual DNS. Paired with the `ROUTER_DNS_SETTING` write, which is declined. |
+| `pppoe_status`, `pppoe_dial_mode`, `dhcp_wan_status` | — | WAN establishment detail beyond `wan_connect_status`. |
+| `pdp_type_ui`, `ipv6_pdp_type` | — | PDP context types; `pdp_type` is already polled for the APN select. |
+| `rplmn_num` | — | Registered PLMN, numeric. Overlaps `rmcc`/`rmnc`, which are polled. |
+| `nitz_sync_flag`, `sntp_time_set_mode` | — | How the router last set its clock — network time versus SNTP. |
+| `modem_msn`, `hardwarenumber`, `web_version` | — | Further hardware and web-UI identifiers. |
+| `sntp_server_list1` … `sntp_server_list7` | — | The router's menu of selectable time servers, distinct from the three configured ones. |
+| `battery_pers`, `battery_charging`, `battery_vol_percent` | `4`, `0`, `100` | Battery detail. See the note on `battery_value` above — `100` is a sentinel on hardware with no battery. |
 
 **Present but empty on the MC7010**, so real names with nothing behind them here:
 
-| Key                                     | Note                                                                                               |
-| :-------------------------------------- | :------------------------------------------------------------------------------------------------- |
-| `gps_lat`, `gps_lon`                    | The firmware has GPS fields. This unit reports nothing in them; a model with a GPS receiver might. |
-| `pm_sensor_pa2`, `pm_mdm`, `modem_5g`   | Three more thermal spellings beyond the five already polled.                                       |
-| `night_mode_switch`                     | State for the `SET_DEVICE_LED` night-mode scheduler.                                               |
-| `DIAG_CHECK`, `DIAG_URL`, `LocalDomain` | Vendor diagnostic and LAN-domain fields.                                                           |
+| Key | Note |
+| :-- | :-- |
+| `gps_lat`, `gps_lon` | The firmware has GPS fields. This unit reports nothing in them; a model with a GPS receiver might. |
+| `pm_sensor_pa2`, `pm_mdm`, `modem_5g` | Three more thermal spellings beyond the five already polled. |
+| `night_mode_switch` | State for the `SET_DEVICE_LED` night-mode scheduler. |
+| `DIAG_CHECK`, `DIAG_URL`, `LocalDomain` | Vendor diagnostic and LAN-domain fields. |
 
 Full probe results, and the router-facing agent's answers on encodings and write semantics, are in `.notes/info/zte_element_discovery_report.md`.
 
@@ -345,17 +345,17 @@ Used, but as protocol machinery rather than telemetry — see [Authentication](#
 
 All are `POST`, all carry `Content-Type: application/x-www-form-urlencoded`, all require `AD`, and all are sent as a **pre-built form string** rather than a dict — the parameter order matters to some firmware.
 
-| `goformId`                   | Purpose                                        | Extra parameters                                                                                                                                                     | Implementation             |
-| :--------------------------- | :--------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------- |
-| `LOGIN` / `LOGIN_MULTI_USER` | Authenticate                                   | `password`, optional `username`                                                                                                                                      | `api.py:287`               |
-| `LOGOUT`                     | End the session                                | — (but **`AD` is required**)                                                                                                                                         | `api.py:391`               |
-| `REBOOT_DEVICE`              | Reboot the router                              | —                                                                                                                                                                    | `api.py:584`               |
-| `SEND_SMS`                   | Send a message                                 | `Number`, `MessageBody` (UTF-16BE hex), `encode_type` (`GSM7_default` or `UNICODE`), `ID=-1`, `sms_time`, `notCallback=true`                                         | `api.py:send_sms`          |
-| `DELETE_SMS`                 | Delete one or more messages                    | `msg_id` — semicolon-separated for a batch                                                                                                                           | `api.py:596`               |
-| `APN_PROC_EX`                | Set default APN profile, or switch auto/manual | `apn_mode`, `apn_action`, `set_default_flag`, `pdp_type`, `index`                                                                                                    | `api.py:721`, `api.py:737` |
-| `ODU_LED_SWITCH_SET`         | Outdoor-unit LED on/off                        | `ODU_led_switch` (`1`/`0`)                                                                                                                                           | `api.py:749`               |
-| `DATA_LIMIT_SETTING`         | **The entire data-volume form** — see below    | `data_volume_limit_switch`, `data_volume_limit_unit`, `data_volume_limit_size`, `data_volume_alert_percent`, `wan_auto_clear_flow_data_switch`, `traffic_clear_date` | `api.py:763`               |
-| `SET_BEARER_PREFERENCE`      | Network mode                                   | `BearerPreference` (`4G_AND_5G`, `Only_5G`, `Only_LTE`)                                                                                                              | `api.py:778`               |
+| `goformId` | Purpose | Extra parameters | Implementation |
+| :-- | :-- | :-- | :-- |
+| `LOGIN` / `LOGIN_MULTI_USER` | Authenticate | `password`, optional `username` | `api.py:287` |
+| `LOGOUT` | End the session | — (but **`AD` is required**) | `api.py:391` |
+| `REBOOT_DEVICE` | Reboot the router | — | `api.py:584` |
+| `SEND_SMS` | Send a message | `Number`, `MessageBody` (UTF-16BE hex), `encode_type` (`GSM7_default` or `UNICODE`), `ID=-1`, `sms_time`, `notCallback=true` | `api.py:send_sms` |
+| `DELETE_SMS` | Delete one or more messages | `msg_id` — semicolon-separated for a batch | `api.py:596` |
+| `APN_PROC_EX` | Set default APN profile, or switch auto/manual | `apn_mode`, `apn_action`, `set_default_flag`, `pdp_type`, `index` | `api.py:721`, `api.py:737` |
+| `ODU_LED_SWITCH_SET` | Outdoor-unit LED on/off | `ODU_led_switch` (`1`/`0`) | `api.py:749` |
+| `DATA_LIMIT_SETTING` | **The entire data-volume form** — see below | `data_volume_limit_switch`, `data_volume_limit_unit`, `data_volume_limit_size`, `data_volume_alert_percent`, `wan_auto_clear_flow_data_switch`, `traffic_clear_date` | `api.py:763` |
+| `SET_BEARER_PREFERENCE` | Network mode | `BearerPreference` (`4G_AND_5G`, `Only_5G`, `Only_LTE`) | `api.py:778` |
 
 **`sms_time` format**: `yy;mm;dd;HH;MM;SS;+0` — semicolon-delimited, unlike the comma-delimited format the router _returns_ on received messages. The two are not interchangeable.
 
@@ -363,12 +363,12 @@ All are `POST`, all carry `Content-Type: application/x-www-form-urlencoded`, all
 
 Measured on MC7010 firmware `V1.0.0B03` (2026-07-31). Payloads were replayed against the value the router **already had**, so acceptance could be tested without changing anything — the technique worth reusing, because it turns a reconnecting write into a free probe:
 
-| Payload                                                                   | Result                        |
-| :------------------------------------------------------------------------ | :---------------------------- |
-| `apn_mode=manual`                                                         | **refused**                   |
-| `apn_mode=manual&apn_action=set_default&index=N`                          | **refused**                   |
-| `apn_mode=manual&apn_action=set_default`                                  | **refused**                   |
-| `apn_mode=auto`                                                           | accepted                      |
+| Payload | Result |
+| :-- | :-- |
+| `apn_mode=manual` | **refused** |
+| `apn_mode=manual&apn_action=set_default&index=N` | **refused** |
+| `apn_mode=manual&apn_action=set_default` | **refused** |
+| `apn_mode=auto` | accepted |
 | `apn_mode=…&apn_action=set_default&set_default_flag=1&pdp_type=…&index=N` | accepted, **both** directions |
 
 Two things follow. The form is all-or-nothing like `DATA_LIMIT_SETTING` — `apn_action` alone is not enough, `set_default_flag` and `pdp_type` are required too. And it is **asymmetric**: `auto` needs no profile and is accepted bare, while `manual` is meaningless without being told _which_ profile, and is refused without one.
@@ -434,31 +434,31 @@ A native **`ALL_DELETE_SMS`** does exist — it takes `which_cgi` and clears rou
 
 Twenty-six write actions were recovered from the router's own `js/service.js` bundle. Nine are used. The rest are listed so the same discovery is not repeated, and so a decision not to use one is visible rather than implied by absence.
 
-| `goformId`                       | Status       | Note                                                                                                                                                                                                              |
-| :------------------------------- | :----------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `LOGIN`                          | **Used**     | Also `LOGIN_MULTI_USER`, which the mining did not surface separately.                                                                                                                                             |
-| `SEND_SMS`                       | **Used**     |                                                                                                                                                                                                                   |
-| `DELETE_SMS`                     | **Used**     |                                                                                                                                                                                                                   |
-| `APN_PROC_EX`                    | **Used**     | `APN_PROC` also exists — presumably the older form.                                                                                                                                                               |
-| `DATA_LIMIT_SETTING`             | **Used**     | See above; the current single-field call is wrong.                                                                                                                                                                |
-| `SET_DEVICE_LED`                 | Not used     | **Not** the LED toggle. It configures _night mode_: `night_mode_switch`, `night_mode_start_time`, `night_mode_end_time`, `night_mode_close_all_led`. A scheduled LED shutoff, distinct from `ODU_LED_SWITCH_SET`. |
-| `ALL_DELETE_SMS`                 | Not used     | Bulk SMS delete, `which_cgi`. See above.                                                                                                                                                                          |
-| `SAVE_SMS`                       | Not used     | Save a draft. No use case here.                                                                                                                                                                                   |
-| `SET_MSG_READ`                   | Not used     | Marks a message read. **The most interesting unused command** — the integration exposes an unread count it cannot currently clear.                                                                                |
-| `SAVE_TSW`                       | Not used     | Writes `web_sleep_switch`, `web_wake_switch`, `web_wake_time`, `web_sleep_time`. This is the write path for the two web-power sensors, which currently ship read-only.                                            |
-| `FLOW_CALIBRATION_MANUAL`        | **Declined** | Calibrates the monthly counter baseline against an ISP billing figure. Adjusting a usage counter to match an external number is a manual reconciliation, not an automation.                                       |
-| `RESET_DATA_COUNTER`             | **Declined** | Zeroes `monthly_rx_bytes`, `monthly_tx_bytes` and `monthly_time`. Session counters unaffected. **No undo.** One accidental press destroys the month's record and the projection sensor's input.                   |
-| `OPERATION_MODE`                 | **Declined** | Bridge ↔ gateway.                                                                                                                                                                                                |
-| `LTE_LOCK_CELL_SET`              | **Declined** | Lock to a PCI / cell ID.                                                                                                                                                                                          |
-| `ROUTER_DNS_SETTING`             | **Declined** | Custom LAN/WAN DNS.                                                                                                                                                                                               |
-| `SET_BIND_STATIC_ADDRESS`        | **Declined** | DHCP static reservations.                                                                                                                                                                                         |
-| `DHCP_RESERVATION_TO_STATIC`     | **Declined** | As above.                                                                                                                                                                                                         |
-| `SET_NETWORK` / `UNLOCK_NETWORK` | **Declined** | Network selection and unlock.                                                                                                                                                                                     |
-| `SET_WIFI_BAND`                  | Not used     | Out of scope — this integration monitors the CPE, not its WLAN.                                                                                                                                                   |
-| `QUICK_SETUP` / `QUICK_SETUP_EX` | Not used     | First-run wizard.                                                                                                                                                                                                 |
-| `SET_NV`                         | Not used     | Raw NV-item write. Unbounded and undocumented; nothing good comes of calling it blind.                                                                                                                            |
-| `SET_UPGRADE_NOTICE`             | Not used     | Firmware-update prompt suppression.                                                                                                                                                                               |
-| `REDIRECT_REDIRECT_OFF`          | Not used     | Web UI redirect behaviour.                                                                                                                                                                                        |
+| `goformId` | Status | Note |
+| :-- | :-- | :-- |
+| `LOGIN` | **Used** | Also `LOGIN_MULTI_USER`, which the mining did not surface separately. |
+| `SEND_SMS` | **Used** |  |
+| `DELETE_SMS` | **Used** |  |
+| `APN_PROC_EX` | **Used** | `APN_PROC` also exists — presumably the older form. |
+| `DATA_LIMIT_SETTING` | **Used** | See above; the current single-field call is wrong. |
+| `SET_DEVICE_LED` | Not used | **Not** the LED toggle. It configures _night mode_: `night_mode_switch`, `night_mode_start_time`, `night_mode_end_time`, `night_mode_close_all_led`. A scheduled LED shutoff, distinct from `ODU_LED_SWITCH_SET`. |
+| `ALL_DELETE_SMS` | Not used | Bulk SMS delete, `which_cgi`. See above. |
+| `SAVE_SMS` | Not used | Save a draft. No use case here. |
+| `SET_MSG_READ` | Not used | Marks a message read. **The most interesting unused command** — the integration exposes an unread count it cannot currently clear. |
+| `SAVE_TSW` | Not used | Writes `web_sleep_switch`, `web_wake_switch`, `web_wake_time`, `web_sleep_time`. This is the write path for the two web-power sensors, which currently ship read-only. |
+| `FLOW_CALIBRATION_MANUAL` | **Declined** | Calibrates the monthly counter baseline against an ISP billing figure. Adjusting a usage counter to match an external number is a manual reconciliation, not an automation. |
+| `RESET_DATA_COUNTER` | **Declined** | Zeroes `monthly_rx_bytes`, `monthly_tx_bytes` and `monthly_time`. Session counters unaffected. **No undo.** One accidental press destroys the month's record and the projection sensor's input. |
+| `OPERATION_MODE` | **Declined** | Bridge ↔ gateway. |
+| `LTE_LOCK_CELL_SET` | **Declined** | Lock to a PCI / cell ID. |
+| `ROUTER_DNS_SETTING` | **Declined** | Custom LAN/WAN DNS. |
+| `SET_BIND_STATIC_ADDRESS` | **Declined** | DHCP static reservations. |
+| `DHCP_RESERVATION_TO_STATIC` | **Declined** | As above. |
+| `SET_NETWORK` / `UNLOCK_NETWORK` | **Declined** | Network selection and unlock. |
+| `SET_WIFI_BAND` | Not used | Out of scope — this integration monitors the CPE, not its WLAN. |
+| `QUICK_SETUP` / `QUICK_SETUP_EX` | Not used | First-run wizard. |
+| `SET_NV` | Not used | Raw NV-item write. Unbounded and undocumented; nothing good comes of calling it blind. |
+| `SET_UPGRADE_NOTICE` | Not used | Firmware-update prompt suppression. |
+| `REDIRECT_REDIRECT_OFF` | Not used | Web UI redirect behaviour. |
 
 ### Why the declined rows are declined
 
@@ -466,14 +466,14 @@ An earlier revision of this document gave all of them one reason — that each c
 
 The reasons are actually three:
 
-| Command                                                 | Objection                                                                                                                                                                                                             |
-| :------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OPERATION_MODE`                                        | **Reachability.** Bridge ↔ gateway changes the router's LAN role and addressing, so it genuinely can move or remove the management path. On a headless outdoor unit, recovery may mean physical access.              |
-| `LTE_LOCK_CELL_SET`                                     | **Foot-gun, poor value.** Cells change with load and maintenance, so a lock that works today fails next week — and the failure is no service at all. The diagnostic value already exists in `lte_pci` and `nr5g_pci`. |
-| `ROUTER_DNS_SETTING`                                    | **Scope and blast radius.** This integration monitors the CPE. DNS breaks name resolution for every device on the LAN, which is far wider than the thing being managed.                                               |
-| `SET_BIND_STATIC_ADDRESS`, `DHCP_RESERVATION_TO_STATIC` | **Scope, plus collision risk.** A bad reservation can change Home Assistant's own address. LAN address management belongs in the router's UI or a DHCP integration.                                                   |
-| `SET_NETWORK`, `UNLOCK_NETWORK`                         | **Scope.** Operator selection and network unlock are one-time provisioning acts, not automation.                                                                                                                      |
-| `RESET_DATA_COUNTER`                                    | **Irreversible.** Zeroes the monthly counters with no undo, and destroys the projection sensor's own input.                                                                                                           |
+| Command | Objection |
+| :-- | :-- |
+| `OPERATION_MODE` | **Reachability.** Bridge ↔ gateway changes the router's LAN role and addressing, so it genuinely can move or remove the management path. On a headless outdoor unit, recovery may mean physical access. |
+| `LTE_LOCK_CELL_SET` | **Foot-gun, poor value.** Cells change with load and maintenance, so a lock that works today fails next week — and the failure is no service at all. The diagnostic value already exists in `lte_pci` and `nr5g_pci`. |
+| `ROUTER_DNS_SETTING` | **Scope and blast radius.** This integration monitors the CPE. DNS breaks name resolution for every device on the LAN, which is far wider than the thing being managed. |
+| `SET_BIND_STATIC_ADDRESS`, `DHCP_RESERVATION_TO_STATIC` | **Scope, plus collision risk.** A bad reservation can change Home Assistant's own address. LAN address management belongs in the router's UI or a DHCP integration. |
+| `SET_NETWORK`, `UNLOCK_NETWORK` | **Scope.** Operator selection and network unlock are one-time provisioning acts, not automation. |
+| `RESET_DATA_COUNTER` | **Irreversible.** Zeroes the monthly counters with no undo, and destroys the projection sensor's own input. |
 
 **Recoverable is not the same as harmless.** Three of these are reversible from the router's own web page in under a minute, and that is the point: where a setting is a one-time act with a wide blast radius, the router's UI is the better place for it. It shows the current configuration in context, warns before applying, and does not tempt anyone into automating a change that should be made once and deliberately. Exposing a control in Home Assistant implies it is safe to script; for these, it is not.
 
@@ -520,11 +520,11 @@ Day of the month, `1`–`31`. **If the value exceeds the length of the current m
 
 ### `reboot_schedule_mode`, `reboot_dow`, `reboot_dod`
 
-| Field                  | Encoding                                                            |
-| :--------------------- | :------------------------------------------------------------------ |
-| `reboot_schedule_mode` | `1` = weekly, `2` = monthly                                         |
-| `reboot_dow`           | Day of week, **1-indexed from Sunday** — `1` = Sunday, `2` = Monday |
-| `reboot_dod`           | Day of month, `1`–`31`                                              |
+| Field | Encoding |
+| :-- | :-- |
+| `reboot_schedule_mode` | `1` = weekly, `2` = monthly |
+| `reboot_dow` | Day of week, **1-indexed from Sunday** — `1` = Sunday, `2` = Monday |
+| `reboot_dod` | Day of month, `1`–`31` |
 
 Both day fields are populated regardless of mode, so the mode is what selects which one applies. Reading `reboot_dow` without checking `reboot_schedule_mode` will report a weekday for a router that reboots monthly.
 
@@ -538,14 +538,14 @@ Format is `<utc_offset><dst_offset>`. The observed `0-1` is UTC+0 with a DST adj
 
 Comma-separated fields, one semicolon-terminated group per secondary cell. Observed: `2,352,1,20,6300,10;`
 
-| Position | Field            | Confidence                                                                        |
-| :------- | :--------------- | :-------------------------------------------------------------------------------- |
-| 1        | Cell index       | Inferred                                                                          |
-| 2        | PCI              | Inferred; 352 is a valid PCI                                                      |
-| 3        | **Unidentified** | Observed to change between polls (`1` ↔ `2`) while every other field held steady |
-| 4        | LTE band         | **Confirmed**                                                                     |
-| 5        | EARFCN           | **Confirmed**                                                                     |
-| 6        | Bandwidth, MHz   | **Confirmed**                                                                     |
+| Position | Field | Confidence |
+| :-- | :-- | :-- |
+| 1 | Cell index | Inferred |
+| 2 | PCI | Inferred; 352 is a valid PCI |
+| 3 | **Unidentified** | Observed to change between polls (`1` ↔ `2`) while every other field held steady |
+| 4 | LTE band | **Confirmed** |
+| 5 | EARFCN | **Confirmed** |
+| 6 | Bandwidth, MHz | **Confirmed** |
 
 **Positions 4 and 5 are the other way round from the discovery report**, which listed `[earfcn],[band_number]` and so read the sample as EARFCN 20 on band 6300. EARFCN 6300 sits inside band 20's allocation (6150–6449) and `20` is not a valid EARFCN, so the report's ordering is wrong. Corroborated twice on live hardware: band 20's bit is set in `lte_band_lock`, and field 6 (`10`) matches `lte_ca_pcell_bandwidth` of `10.0`.
 
@@ -602,10 +602,10 @@ Behaviors of this interface that have cost real debugging time.
 
 What it does change is how the router counts segments:
 
-| `encode_type`  | Single SMS    | Per concatenated segment | Router maximum (5 segments) |
-| :------------- | :------------ | :----------------------- | :-------------------------- |
-| `GSM7_default` | 160 septets   | 153                      | **765**                     |
-| `UNICODE`      | 70 characters | 67                       | **335**                     |
+| `encode_type` | Single SMS | Per concatenated segment | Router maximum (5 segments) |
+| :-- | :-- | :-- | :-- |
+| `GSM7_default` | 160 septets | 153 | **765** |
+| `UNICODE` | 70 characters | 67 | **335** |
 
 Concatenated segments give up 7 bytes each to a header, which is why the per-segment figure is lower than the single-message one. The MC7010 web UI advertises `(765) (1/5)` for plain text — exactly 5 x 153, confirming the five-segment ceiling.
 
@@ -617,23 +617,23 @@ Confirmed on hardware (2026-07-29): a 159-character plain message and an 80-char
 
 The client enforces this in three layers, each covering a shape the others miss:
 
-| Guard                               | Catches                                                                                  | Where                                             |
-| :---------------------------------- | :--------------------------------------------------------------------------------------- | :------------------------------------------------ |
-| Expiry detection in `_request`      | A body whose values are **all** empty strings — the dead-session shape                   | `api.py:_request`                                 |
+| Guard | Catches | Where |
+| :-- | :-- | :-- |
+| Expiry detection in `_request` | A body whose values are **all** empty strings — the dead-session shape | `api.py:_request` |
 | `_require_contract(data, key, cmd)` | A populated body missing the key the caller needs — firmware drift, or a partial session | reads (`get_sms_messages`, `get_sms_capacity`, …) |
-| `_require_success(data, cmd)`       | An explicit `{"result":"failure"}` on an otherwise healthy session                       | all eight write commands                          |
+| `_require_success(data, cmd)` | An explicit `{"result":"failure"}` on an otherwise healthy session | all eight write commands |
 
 They are deliberately separate: the first raises before the others are reached, so a single guard cannot stand in for the rest. `tests/test_dead_session_sweep.py` drives every public API method against all three fault shapes and asserts that each either succeeds or raises — never returns a success-shaped result having done nothing.
 
 **The dead-session signature, precisely.** An expired session does not redirect and does not error. It answers **HTTP 200** with the **requested keys echoed back empty** — verified on MC7010 firmware `V1.0.0B03` (2026-07-27) by replaying an invalidated `stok`:
 
-| Request                         | Live session       | Dead session                            |
-| :------------------------------ | :----------------- | :-------------------------------------- |
-| `cmd=sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                 |
-| `cmd=sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                 |
-| batch poll                      | real values        | `{"network_type":"","signalbar":"", …}` |
-| `cmd=sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`              |
-| `cmd=wa_inner_version`          | real value         | **real value** — unauthenticated        |
+| Request | Live session | Dead session |
+| :-- | :-- | :-- |
+| `cmd=sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
+| `cmd=sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
+| batch poll | real values | `{"network_type":"","signalbar":"", …}` |
+| `cmd=sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+| `cmd=wa_inner_version` | real value | **real value** — unauthenticated |
 
 So the test is **"every value is an empty string"**, not "these named keys are empty". Detecting on named keys works for the batch poll and silently fails everywhere else: an SMS response has no `network_type`, so a check for `network_type == ""` can never fire, and the caller sees an empty inbox rather than an error. That was a real defect, fixed 2026-07-27.
 

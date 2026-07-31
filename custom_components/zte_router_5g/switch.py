@@ -86,6 +86,13 @@ SWITCH_TYPES: tuple[ZTESwitchEntityDescription, ...] = (
         key="odu_led_switch",
         state_key="ODU_led_switch",
         verify_after_write=True,
+        about=(
+            "Turns the status light on the outdoor unit on or off. Cosmetic "
+            "only - the connection is unaffected, so switching it off is safe "
+            "if the unit is visible from a window or a bedroom. The router "
+            "reports the light's real state, so this reflects the unit rather "
+            "than the last command sent."
+        ),
         translation_key="system_odu_led_switch",
         entity_category=EntityCategory.CONFIG,
         group="system",

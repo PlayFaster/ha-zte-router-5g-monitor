@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.2-rc10] - 2026-07-31 - Unreleased - No Manifest Bump - Sensor Review; APN Documentation Completed
+
+`sensor_review` (SOURCE=Via_HAB, SCOPE=Full) reconciled the whole inventory, and the APN behaviour documented across rc7-rc9 was completed with the half that was missing.
+
+### Verified — `sensor_review`, full run
+
+Report: `.notes/sensors_states/ha_sensor_review_20260731_0320.md`.
+
+- **The entity inventory reconciles exactly in both directions**: 92 live, 92 documented, and the per-sub-device split matches the README table row for row (System 33, Signal 40, Data 15, SMS 4). Categories A, B, C, E, F, G, H all clean; 4 services live and documented.
+- **A restart was used, not a config-entry reload.** Code changed during this session, and a reload re-serves cached modules — the fetch would have faithfully reported the state before the change, with nothing erroring. Confirmed effective: the rewritten `Network APN` note appeared in the live fetch.
+- **Category D**: 19 entities report `unknown`, 18 already annotated or expected. The two buttons were deliberately **not** flagged — a button has no state until pressed, and an availability note there would be wrong. The one finding, `Recent Msg`, was **not** actioned: `unknown` with an empty inbox is the correct reading.
+- **No delivery faults.** Every documented `about` note reaches the user; nothing is declared in code and dropped in delivery.
+- The 34 temporarily-enabled entities were restored to disabled and verified twice — live list back to 58, registry at 92 registered / 34 disabled.
+
+### Changed
+
+- **`about_attribute_list.md` v1.4.0.** The four notes rewritten in code during rc7-rc9 refreshed here: the three APN/network selects and `Network APN`.
+- **`ODU LED Switch` gains a note** (code and inventory), moving out of the deliberate-omission list. Coverage **85 → 86 of 92**, omissions 7 → 6. It was self-explanatory when that list was drawn up; it is now a control whose position is confirmed by reading the router back, and the note says so — the switch reflects the unit, not the last command sent.
+
+### Added — the missing half of the APN documentation
+
+The project owner asked whether adding an APN is documented as a router-web-page action. It was not, anywhere. Verified against the code: the only `apn_action` used is `set_default`, so the integration can **select** among stored profiles and cannot create, edit or delete one. The dropdown is built from `APN_config0-9` in the core poll, so a profile added on the router appears at the next poll or on **Refresh Now**; the router holds ten.
+
+- **`CHANGELOG.md`** — the `APN Selection Mode` entry said "Both directions now work directly", which is true on the reference router only because a duplicate of the network default was added there by hand. On a stock router, switching to Manual is **refused** with guidance, because the router will not accept a mode change that does not name a profile. Amended to state the condition and the add-a-profile route.
+- **`README.md`** — the same two facts stated plainly in the APN section, ahead of the existing tip.
+- **`about` note on `APN Profile`** — one clause: new profiles are added on the router's own web page, not here. Inventory updated in the same pass, so no drift was introduced.
+
+### Known — deliberately left
+
+`all_sensors.md`'s `About` column reads 85 ✔ and now understates by one; `ODU LED Switch` should be ✔. Left as-is by decision rather than oversight, and recorded here so the next `sensor_review` run reads it as known rather than as fresh drift.
+
 ## [3.3.2-rc9] - 2026-07-31 - Unreleased - No Manifest Bump - Attended Tier Completed; Two Self-Inflicted Defects
 
 All eleven write commands are now either exercised on hardware or locked against silent change. Getting there produced two defects of my own making, both caught by running the thing rather than by any test.

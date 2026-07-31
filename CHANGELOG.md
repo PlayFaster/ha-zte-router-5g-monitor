@@ -51,7 +51,9 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 - **Data Limit Switch**: The switch correctly showed the state but would not successfully toggle the state. This has now been fixed.
 
-- **APN Selection Mode could not be set to Manual**: switching it to **Auto** worked, but switching back to **Manual** was silently rejected by the router in every previous release. It was easy to miss, because choosing an **APN Profile** does work and has the side effect of setting the mode to Manual — so the mode appeared to follow along. Both directions now work directly.
+- **APN Selection Mode could not be set to Manual**: switching it to **Auto** worked, but switching back to **Manual** was silently rejected by the router in every previous release. It was easy to miss, because choosing an **APN Profile** does work and has the side effect of setting the mode to Manual — so the mode appeared to follow along.
+  - Both directions now work. Switching to **Manual** requires the router to be told _which_ stored profile to use, so if the APN currently in use is not one of your saved profiles, the integration asks you to choose one from **APN Profile** instead — which sets the mode and the profile together, in one step.
+  - The integration can only **select** among profiles already stored on the router. Creating, editing or deleting an APN profile is done on the router's own web page; a new one appears in the **APN Profile** dropdown at the next poll, or immediately if you press **Refresh Now**.
 
 - **APN Profile could show a profile that was not in use**: while APN Selection Mode is **Auto** the router uses the network's own default APN, which need not be one of your stored profiles — but the dropdown still displayed whichever profile was last chosen manually. It now shows the profile only when it genuinely matches the APN in use, and blank otherwise. The **Network APN** sensor remains the authoritative answer to what the router is actually connected with.
 

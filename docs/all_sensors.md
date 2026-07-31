@@ -45,7 +45,7 @@ _Group: `system`_
 | Reboot Schedule | `reboot_schedule` | Binary | `reboot_schedule_enable` | - | Diagnostic | **Disabled by default.** Scheduled reboot active status. Extra attributes: hour, minute, schedule mode (1 = weekly, 2 = monthly), day of week (1-indexed from Sunday) and day of month, all published raw. | ✔ |
 | UPnP Enabled | `upnp_enabled` | Binary | `upnp_enable` | - | Diagnostic | **Disabled by default.** UPnP active status. | ✔ |
 | SIP ALG Enabled | `sip_alg_enabled` | Binary | `alg_sip_enable` | - | Diagnostic | **Disabled by default.** SIP ALG active status. | ✔ |
-| ODU LED Switch | `odu_led_switch` | Switch | `ODU_led_switch` | - | Config | **Disabled by default.** Toggle router outdoor unit LED light. | — |
+| ODU LED Switch | `odu_led_switch` | Switch | `ODU_led_switch` | - | Config | **Disabled by default.** Toggle router outdoor unit LED light. | ✔ |
 | Time Server (SNTP) | `sntp_server` | Sensor | `sntp_server` | - | Diagnostic | **Disabled by default.** Configuration time server. | ✔ |
 | Router Timezone | `sntp_timezone` | Sensor | `sntp_timezone` | - | Diagnostic | **Disabled by default.** Base timezone and DST offset, e.g. `0-1` is UTC+0 with DST active. Published raw. | ✔ |
 | WAN Operating Mode | `opms_wan_mode` | Sensor | `opms_wan_mode` | - | Diagnostic | **Disabled by default.** e.g. `LTE_BRIDGE`. Read-only by design - changing it alters the path the integration reaches the router over. | ✔ |
