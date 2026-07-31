@@ -230,13 +230,13 @@ It is arithmetic, not a forecast. Usage so far is divided by the days elapsed in
 
 **It is least reliable at the start of a cycle, and it says so.** Two days in, the sensor has two days of evidence and 29 days to extrapolate across, so one large download distorts it. Rather than hide the value — an `unknown` on day one looks like a broken sensor — the caveat is published in the attributes:
 
-| Attribute      | Meaning                                                                                                                                                           |
-| :------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `confidence`   | `low`, `medium` or `high` — how much of the figure rests on observed usage rather than extrapolation. Reaches `high` around a quarter of the way through a cycle. |
-| `basis`        | How the estimate was made. Currently always `run_rate_only`.                                                                                                      |
-| `cycle_day`    | Where you are in the cycle, e.g. `12 of 31`.                                                                                                                      |
-| `cycle_start`  | The date the current cycle began.                                                                                                                                 |
-| `cycle_source` | `router` when the reset day came from the router, `calendar_assumed` when it did not report one and the 1st of the month was assumed.                             |
+| Attribute | Meaning |
+| :-- | :-- |
+| `confidence` | `low`, `medium` or `high` — how much of the figure rests on observed usage rather than extrapolation. Reaches `high` around a quarter of the way through a cycle. |
+| `basis` | How the estimate was made. Currently always `run_rate_only`. |
+| `cycle_day` | Where you are in the cycle, e.g. `12 of 31`. |
+| `cycle_start` | The date the current cycle began. |
+| `cycle_source` | `router` when the reset day came from the router, `calendar_assumed` when it did not report one and the 1st of the month was assumed. |
 
 **On the first day of a cycle it reads low.** With only a few hours of usage to extrapolate from, the calculation deliberately refuses to divide by a fraction of a day — otherwise a single morning's download would project to an absurd figure. The effect is that the number starts low and climbs, settling on a sensible value once a full day has passed. It is accurate from day 2 of every cycle, including the first one after you install the integration.
 
@@ -324,13 +324,13 @@ This integration provides **92 entities** (depending on your firmware) organized
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Sub-Device          | Entity Types (+disabled)                                            | Key Metrics                                                                                                                     | Disabled by Default                                                                                                                                                                                                                                                                      |
-| :------------------ | :------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ⚙️ **System**       | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+21) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls                                   | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
-| 📶 **Signal**       | 36 Sensors, 1 Binary Sensor, 3 Selects (+10)                        | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection                          | MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask                                                                                                                                      |
-| 📈 **Data**         | 14 Sensors, 1 Switch (+4)                                           | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch                                                                                                                                                                                                                     |
-| ✉️ **SMS Entities** | 3 Sensors, 1 Button                                                 | Unread Count, Total Msg, Recent Msg, Delete All (one-click)                                                                     | None                                                                                                                                                                                                                                                                                     |
-| 🛠️ **SMS Actions**  | 4 Actions                                                           | Send, Delete, and List SMS                                                                                                      | —                                                                                                                                                                                                                                                                                        |
+| Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
+| :-- | :-- | :-- | :-- |
+| ⚙️ **System** | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+21) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
+| 📶 **Signal** | 36 Sensors, 1 Binary Sensor, 3 Selects (+10) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
+| 📈 **Data** | 14 Sensors, 1 Switch (+4) | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
+| ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
+| 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
 
 ---
 
@@ -401,28 +401,28 @@ Home Assistant records Long Term Statistics for numeric sensors that have a `sta
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Sensors with LTS enabled                        | Why                                       |
-| :---------------------------------------------- | :---------------------------------------- |
+| Sensors with LTS enabled | Why |
+| :-- | :-- |
 | LTE & 5G signal metrics (RSRP, RSRQ, RSSI, SNR) | Track connection quality trends over time |
-| Monthly data usage (Sent, Received, Total)      | Monitor data consumption month-over-month |
-| SMS counts (Unread, Total)                      | Track message volume over time            |
-| Signal Bars                                     | Coarse signal summary over time           |
+| Monthly data usage (Sent, Received, Total) | Monitor data consumption month-over-month |
+| SMS counts (Unread, Total) | Track message volume over time |
+| Signal Bars | Coarse signal summary over time |
 
 The following sensors have **no LTS** to avoid unnecessary database growth:
 
-| Sensor                        | Reason                                                                                                                                                                                                                |
-| :---------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Upload / Download Speed       | Instantaneous readings — history at poll intervals has limited analytical value                                                                                                                                       |
-| Session Sent / Received       | Resets on every reconnect — not meaningful for long-term trends                                                                                                                                                       |
-| Uptime Duration               | Resets on reboot; predictable pattern adds no insight                                                                                                                                                                 |
-| Battery                       | Always 100% when plugged in                                                                                                                                                                                           |
-| Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default                                                                                                                                                                                    |
-| **Projected Cycle Usage**     | An estimate of where the cycle ends up, useful now rather than as a history. The usage it is derived from is already recorded by Monthly Total, so keeping both would store a derived view of a number already stored |
-| **Reset Day**                 | A billing-cycle setting that changes at most once; a trend line of it says nothing                                                                                                                                    |
-| **Allowance**                 | A configured cap, not a measurement                                                                                                                                                                                   |
-| Alert Threshold               | Configuration setting; historical trend holds no analytical value                                                                                                                                                     |
-| LTE Band Lock Mask (disabled) | Text string diagnostic sensor                                                                                                                                                                                         |
-| Time Server (SNTP) (disabled) | Text string configuration sensor                                                                                                                                                                                      |
+| Sensor | Reason |
+| :-- | :-- |
+| Upload / Download Speed | Instantaneous readings — history at poll intervals has limited analytical value |
+| Session Sent / Received | Resets on every reconnect — not meaningful for long-term trends |
+| Uptime Duration | Resets on reboot; predictable pattern adds no insight |
+| Battery | Always 100% when plugged in |
+| Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
+| **Projected Cycle Usage** | An estimate of where the cycle ends up, useful now rather than as a history. The usage it is derived from is already recorded by Monthly Total, so keeping both would store a derived view of a number already stored |
+| **Reset Day** | A billing-cycle setting that changes at most once; a trend line of it says nothing |
+| **Allowance** | A configured cap, not a measurement |
+| Alert Threshold | Configuration setting; historical trend holds no analytical value |
+| LTE Band Lock Mask (disabled) | Text string diagnostic sensor |
+| Time Server (SNTP) (disabled) | Text string configuration sensor |
 
 > [!TIP]
 >
@@ -459,12 +459,12 @@ Screenshots are embedded throughout the document near relevant sections. This is
 
 ![Integration](.github/images/zte_5g_integration_screen.png)
 
-|                          Signal                          |                       System                       |
-| :------------------------------------------------------: | :------------------------------------------------: |
+| Signal | System |
+| :-: | :-: |
 | ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_system_screen.png) |
 
-|                        Data                         |                    SMS                     |
-| :-------------------------------------------------: | :----------------------------------------: |
+| Data | SMS |
+| :-: | :-: |
 | ![Data](.github/images/zte_5g_data_screen_mini.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
 
 ### Setup
@@ -495,12 +495,12 @@ Several settings are exposed as control entities so you can drive them from dash
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:
 
-| Selector value | Router web page | Meaning                                               |
-| :------------- | :-------------- | :---------------------------------------------------- |
-| `4G_AND_5G`    | **Auto**        | Let the router choose, falling back as signal changes |
-| `LTE_AND_5G`   | **5G NSA**      | 5G anchored to an LTE carrier                         |
-| `Only_5G`      | **5G SA**       | 5G standalone, no LTE anchor                          |
-| `Only_LTE`     | **4G Only**     | LTE only, 5G disabled                                 |
+| Selector value | Router web page | Meaning |
+| :-- | :-- | :-- |
+| `4G_AND_5G` | **Auto** | Let the router choose, falling back as signal changes |
+| `LTE_AND_5G` | **5G NSA** | 5G anchored to an LTE carrier |
+| `Only_5G` | **5G SA** | 5G standalone, no LTE anchor |
+| `Only_LTE` | **4G Only** | LTE only, 5G disabled |
 
 > [!WARNING] The two `Only_` values lock the radio. Where 5G coverage is marginal, `Only_5G` can drop the connection entirely and it may not recover on its own — prefer `4G_AND_5G` unless you are deliberately testing.
 
@@ -532,12 +532,12 @@ The billing cycle **Reset Day** is currently read-only. Change it from the route
 
 - **Delete All** (`button.zte_5g_sms_delete_all`): One-click UI button to clear stored inbox messages (see [SMS Actions](#-sms-actions) for service options).
 
-|                        System Control                        |                      SMS Control                       |
-| :----------------------------------------------------------: | :----------------------------------------------------: |
+| System Control | SMS Control |
+| :-: | :-: |
 | ![System Control](.github/images/zte_5g_system_controls.png) | ![SMS Control](.github/images/zte_5g_sms_controls.png) |
 
-|                       System Configuration                       |                       Signal Configuration                       |
-| :--------------------------------------------------------------: | :--------------------------------------------------------------: |
+| System Configuration | Signal Configuration |
+| :-: | :-: |
 | ![System Configuration](.github/images/zte_5g_system_config.png) | ![Signal Configuration](.github/images/zte_5g_signal_config.png) |
 
 ---
@@ -563,20 +563,20 @@ Provides unread SMS count and latest message content sensors, a one-click **Dele
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
 </summary><br>
 
-| Parameter  | Required | Description                                                               |
-| :--------- | :------- | :------------------------------------------------------------------------ |
-| `entry_id` | No       | The router to use. Optional if only one router is configured.             |
-| `target`   | **Yes**  | Recipient phone number(s) (e.g. `+353871234567`).                         |
-| `message`  | **Yes**  | Message content. Length limit depends on the characters used - see below. |
+| Parameter | Required | Description |
+| :-- | :-- | :-- |
+| `entry_id` | No | The router to use. Optional if only one router is configured. |
+| `target` | **Yes** | Recipient phone number(s) (e.g. `+353871234567`). |
+| `message` | **Yes** | Message content. Length limit depends on the characters used - see below. |
 
 > [!NOTE]
 >
 > **How long can a message be?** It depends on what is in it, not just how long it is.
 >
-> | Message contains                                               | Fits in one SMS | Maximum accepted |
-> | :------------------------------------------------------------- | :-------------- | :--------------- |
-> | Only standard characters (letters, digits, common punctuation) | **160**         | **765**          |
-> | Any emoji, curly quote, or other special character             | **70**          | **335**          |
+> | Message contains | Fits in one SMS | Maximum accepted |
+> | :-- | :-- | :-- |
+> | Only standard characters (letters, digits, common punctuation) | **160** | **765** |
+> | Any emoji, curly quote, or other special character | **70** | **335** |
 >
 > A single special character changes the encoding for the **whole** message, which is why the second row is so much shorter. Longer messages are split into parts by the router and reassembled by the receiving phone, so they arrive as one message - but **your carrier charges for each part**. A 200-character plain-text alert is 2 parts; the same text with one emoji is 3.
 >
@@ -605,10 +605,10 @@ data:
 
 Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
 
-| Parameter  | Required | Description                                                                               |
-| :--------- | :------- | :---------------------------------------------------------------------------------------- |
-| `entry_id` | No       | The router to use. Defaults to your only router; required if more than one is configured. |
-| `index`    | **Yes**  | Storage index of the message to delete (integer ≥ 0).                                     |
+| Parameter | Required | Description |
+| :-- | :-- | :-- |
+| `entry_id` | No | The router to use. Defaults to your only router; required if more than one is configured. |
+| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
 
 ```yaml
 action: zte_router_5g.delete_sms
@@ -631,10 +631,10 @@ data:
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
 </summary><br>
 
-| Parameter   | Required | Default | Range | Description                                                                               |
-| :---------- | :------- | :------ | :---- | :---------------------------------------------------------------------------------------- |
-| `entry_id`  | No       | —       | —     | The router to use. Defaults to your only router; required if more than one is configured. |
-| `keep_last` | No       | `0`     | 0–50  | Number of most recent messages to preserve. `0` deletes all.                              |
+| Parameter | Required | Default | Range | Description |
+| :-- | :-- | :-- | :-- | :-- |
+| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
+| `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
 
 ```yaml
 action: zte_router_5g.delete_all_sms
@@ -659,12 +659,12 @@ data:
 
 Fetch a list of SMS messages. Supports **Action Responses** — use the output directly in automations and scripts.
 
-| Parameter  | Required | Default | Range     | Description                                                                               |
-| :--------- | :------- | :------ | :-------- | :---------------------------------------------------------------------------------------- |
-| `entry_id` | No       | —       | —         | The router to use. Defaults to your only router; required if more than one is configured. |
-| `page`     | No       | `1`     | 1–100     | Page number for pagination.                                                               |
-| `count`    | No       | `20`    | 1–50      | Messages per page.                                                                        |
-| `box_type` | No       | `1`     | See below | Mailbox to read from.                                                                     |
+| Parameter | Required | Default | Range | Description |
+| :-- | :-- | :-- | :-- | :-- |
+| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
+| `page` | No | `1` | 1–100 | Page number for pagination. |
+| `count` | No | `20` | 1–50 | Messages per page. |
+| `box_type` | No | `1` | See below | Mailbox to read from. |
 
 **`box_type` values:** `1` Local Inbox · `2` Local Sent · `3` Local Draft · `4` Local Trash · `5` SIM Inbox · `6` SIM Sent · `7` SIM Draft · `8` Mix Inbox · `9` Mix Sent · `10` Mix Draft
 
@@ -705,13 +705,13 @@ response_variable: inbox
 
 Fires automatically when a new incoming SMS is detected. Use as an automation trigger.
 
-| Field      | Type    | Description                                                               |
-| :--------- | :------ | :------------------------------------------------------------------------ |
-| `entry_id` | Text    | Config entry ID of the router that received the message.                  |
-| `phone`    | Text    | Sender's phone number.                                                    |
-| `content`  | Text    | Message body.                                                             |
-| `date`     | Text    | Date/time of the message.                                                 |
-| `index`    | Integer | Storage index — pass directly to `delete_sms` to delete after processing. |
+| Field | Type | Description |
+| :-- | :-- | :-- |
+| `entry_id` | Text | Config entry ID of the router that received the message. |
+| `phone` | Text | Sender's phone number. |
+| `content` | Text | Message body. |
+| `date` | Text | Date/time of the message. |
+| `index` | Integer | Storage index — pass directly to `delete_sms` to delete after processing. |
 
 ---
 
@@ -987,6 +987,7 @@ conditions:
     value_template: >-
       {{ (state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') or '0 of 0').split(' ')[0] | int(0) >= 3 }}
 
+
     note: |
       The gate that makes this usable. `cycle_day` reads like "3 of 31", so the
       first token is the day number. Before day 3 the projection is extrapolating
@@ -1004,6 +1005,7 @@ actions:
                       'unit_of_measurement') }}
         - day {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') }}, confidence {{ state_attr('sensor.zte_5g_data_projected_cycle_usage',
                                  'confidence') }}.
+
 
     note: |
       Including the cycle day and confidence in the message tells you how much
@@ -1652,11 +1654,11 @@ Some problems need you to do something, so they are also raised in Home Assistan
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Repair                                | Raised when                                                         | Why it is a Repair                                                                                                                                                                      |
-| :------------------------------------ | :------------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Router is not responding**          | 10 consecutive failed fetches                                       | Ten failures in a row means the problem is not clearing on its own. The text lists what to check — power-cycle, whether the IP changed, whether the password changed, the network path. |
-| **Firmware may have changed its API** | 3 consecutive polls succeed but contain none of the expected fields | Nothing looks broken from the outside, but sensors will be blank. Needs reporting so the integration can be updated.                                                                    |
-| **SMS storage is full**               | The router's message store is at capacity                           | New messages will be rejected until some are deleted.                                                                                                                                   |
+| Repair | Raised when | Why it is a Repair |
+| :-- | :-- | :-- |
+| **Router is not responding** | 10 consecutive failed fetches | Ten failures in a row means the problem is not clearing on its own. The text lists what to check — power-cycle, whether the IP changed, whether the password changed, the network path. |
+| **Firmware may have changed its API** | 3 consecutive polls succeed but contain none of the expected fields | Nothing looks broken from the outside, but sensors will be blank. Needs reporting so the integration can be updated. |
+| **SMS storage is full** | The router's message store is at capacity | New messages will be rejected until some are deleted. |
 
 > [!NOTE] A brief outage — a router reboot, a passing network glitch — deliberately does **not** raise a Repair. Entities go unavailable after three failed polls, and Integration Health turns on, but the Repairs panel stays quiet until a problem has clearly stopped fixing itself.
 
@@ -1855,12 +1857,12 @@ Logs are then visible under **Settings > System > Logs** (click **Load Full Logs
 
 Because Home Assistant keeps most of it on purpose. This is **Home Assistant behavior, not something this integration controls**, and for most people it's the desirable outcome: re-add the same router and things carry on where they left off, rather than starting from nothing.
 
-| What                                                           | How long Home Assistant keeps it                  | On re-add                               |
-| :------------------------------------------------------------- | :------------------------------------------------ | :-------------------------------------- |
-| **Long-term statistics** (long-range graphs, Energy dashboard) | Indefinitely - these are never deleted            | Continue unbroken                       |
-| **Recent detailed history**                                    | Your recorder retention (10 days by default)      | Continues                               |
-| **Entity IDs** (`sensor.…`)                                    | Reused as long as nothing else has taken the name | Dashboards and automations keep working |
-| Renames, icons, areas, labels, enabled/disabled state          | **30 days**, in Home Assistant's entity registry  | Restored                                |
+| What | How long Home Assistant keeps it | On re-add |
+| :-- | :-- | :-- |
+| **Long-term statistics** (long-range graphs, Energy dashboard) | Indefinitely - these are never deleted | Continue unbroken |
+| **Recent detailed history** | Your recorder retention (10 days by default) | Continues |
+| **Entity IDs** (`sensor.…`) | Reused as long as nothing else has taken the name | Dashboards and automations keep working |
+| Renames, icons, areas, labels, enabled/disabled state | **30 days**, in Home Assistant's entity registry | Restored |
 
 The **30 days** applies only to that fourth row - the entity-registry customizations. Statistics aren't on a timer at all, and your entity IDs come back either way. So re-adding after a year still reconnects your graphs; you would just need to redo any renames. Restarting Home Assistant in between makes no difference to any of this.
 
