@@ -1618,3 +1618,74 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
         await api.set_odu_led_switch("1")
 
     assert mock_aiohttp_client.post.call_count == 1, "a declined write was resent"
+
+
+# --- Targeted reads must not be mistaken for a dead session -----------------
+#
+# The dead-session rule — "every value in the response is empty" — was written
+# when every read was a 75-key poll, where something is always populated. The
+# targeted reads added for write confirmation broke that assumption: on the
+# reference MC7010, `sms_nv_send_total` and `sms_nv_total` are legitimately
+# empty, so reading just those two produced an all-empty response, a spurious
+# re-login, and a `ZTEAuthError` on a perfectly healthy session.
+
+
+@pytest.mark.asyncio
+async def test_targeted_read_of_empty_keys_is_not_a_dead_session(mock_aiohttp_client):
+    """Legitimately empty fields must not look like an expired session."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={
+            "sms_nv_send_total": "",
+            "sms_nv_total": "",
+            "wan_connect_status": "ppp_connected",
+        }
+    )
+
+    result = await api.get_params(["sms_nv_send_total", "sms_nv_total"])
+
+    assert result["sms_nv_send_total"] == ""
+    requested = mock_aiohttp_client.get.call_args[0][0]
+    assert "wan_connect_status" in requested, (
+        "the sentinel key is what distinguishes 'these fields are empty' from "
+        "'this session is gone' — without it this read raises ZTEAuthError"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_sentinel_is_not_added_twice(mock_aiohttp_client):
+    """Asking for the sentinel explicitly must not duplicate it in the URL."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=test"
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"wan_connect_status": "ppp_connected"}
+    )
+
+    await api.get_params(["wan_connect_status"])
+
+    requested = mock_aiohttp_client.get.call_args[0][0]
+    assert requested.count("wan_connect_status") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_genuinely_dead_session_is_still_detected(mock_aiohttp_client):
+    """The sentinel must not blunt the rule it exists to protect.
+
+    With the session gone the sentinel comes back empty too, so the response is
+    all-empty and the expiry path fires exactly as before.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=stale"
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"ODU_led_switch": "", "wan_connect_status": ""}
+    )
+
+    with (
+        patch.object(api, "login", AsyncMock(return_value="stok=fresh")),
+        pytest.raises(ZTEAuthError),
+    ):
+        await api.get_params(["ODU_led_switch"])

@@ -493,7 +493,17 @@ Several settings are exposed as control entities so you can drive them from dash
 
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
-- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type: `4G_AND_5G` (Auto), `LTE_AND_5G` (5G NSA), `Only_5G` (5G SA), or `Only_LTE` (4G Only).
+- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:
+
+| Selector value | Router web page | Meaning                                               |
+| :------------- | :-------------- | :---------------------------------------------------- |
+| `4G_AND_5G`    | **Auto**        | Let the router choose, falling back as signal changes |
+| `LTE_AND_5G`   | **5G NSA**      | 5G anchored to an LTE carrier                         |
+| `Only_5G`      | **5G SA**       | 5G standalone, no LTE anchor                          |
+| `Only_LTE`     | **4G Only**     | LTE only, 5G disabled                                 |
+
+> [!WARNING]
+> The two `Only_` values lock the radio. Where 5G coverage is marginal, `Only_5G` can drop the connection entirely and it may not recover on its own — prefer `4G_AND_5G` unless you are deliberately testing.
 
 #### How APN selection actually behaves
 

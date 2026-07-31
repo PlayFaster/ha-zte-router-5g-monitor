@@ -215,11 +215,11 @@ def test_every_write_command_has_a_locked_shape():
     this forces a *recorded payload* for it. Without this check the lock would
     quietly cover ten of eleven commands and look complete.
     """
-    from scripts.write_classification import ATTENDED, NEVER, SAFE
+    from scripts.write_classification import ATTENDED, NEVER_AUTOMATED, SAFE
 
     covered = {label.split(" ")[0] for label, _, _, _ in _WRITES}
     covered.add("delete_all")  # locked by its own test above
-    classified = set(SAFE) | set(ATTENDED) | set(NEVER)
+    classified = set(SAFE) | set(ATTENDED) | set(NEVER_AUTOMATED)
 
     missing = sorted(classified - covered)
     assert not missing, (

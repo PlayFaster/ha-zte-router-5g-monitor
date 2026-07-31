@@ -190,6 +190,11 @@ _EXTENDED_PARAMS: list[str] = [
 ]
 
 
+# Appended to every targeted read so an all-empty response still distinguishes
+# "these fields are empty" from "the session is gone". See `get_params`.
+_SESSION_SENTINEL = "wan_connect_status"
+
+
 class ZTEConnectionError(Exception):
     """Raised when the router cannot be reached."""
 
@@ -804,8 +809,25 @@ class ZTERouterAPI:
         Callers must treat a raised exception as *unverified*, never as a failed
         write. The write may well have landed; only a successful read reporting
         the wrong value proves otherwise.
+
+        A **sentinel key is always appended**, and it is not optional. A dead
+        session is detected by every value in the response being empty — a rule
+        written when every read was a 75-key poll, where something is always
+        populated. A targeted read breaks that assumption: `sms_nv_send_total`
+        and `sms_nv_total` are legitimately empty on the reference MC7010, so
+        reading just those two produced an all-empty response, a spurious
+        re-login, and a `ZTEAuthError` on a perfectly healthy session.
+
+        `wan_connect_status` is populated whenever the session is alive — it is
+        one of the contract keys the coordinator checks for firmware drift — so
+        its presence distinguishes "these fields are empty" from "this session
+        is gone". It is left in the returned dict rather than stripped; callers
+        read by key and the extra costs nothing.
         """
-        return await self._batch_get(params, timeout_sec=timeout_sec)
+        request = list(params)
+        if _SESSION_SENTINEL not in request:
+            request.append(_SESSION_SENTINEL)
+        return await self._batch_get(request, timeout_sec=timeout_sec)
 
     async def get_all_data(self) -> dict[str, Any]:
         """Fetch the mandatory core payload.

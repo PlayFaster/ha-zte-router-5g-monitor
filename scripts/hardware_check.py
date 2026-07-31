@@ -64,6 +64,7 @@ import os
 import pathlib
 import sys
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
@@ -105,6 +106,14 @@ RECONNECT_SETTLE = 12.0
 # Gap between attempts while the router is away. The reconnect an attended
 # write causes routinely outlasts a single request timeout.
 RECONNECT_RETRY = 8.0
+
+# The router updates its SMS counters a moment after accepting a write.
+SMS_SETTLE = 3.0
+
+# A reboot on the reference MC7010 takes well under two minutes; the budget
+# is generous because a slow return is not a failure, only a wait.
+REBOOT_TIMEOUT = 240.0
+REBOOT_POLL = 15.0
 
 # Colour is emitted unconditionally, the way `pytest --color=yes` is used by the
 # sibling tasks: stdout here is a pipe into `tee`, so auto-detection would strip
@@ -732,6 +741,276 @@ async def check_data_limit_switch(api: ZTERouterAPI, report: Report) -> None:
         print(_red("\n  !! THE DATA CAP IS STILL OFF — turn it back on\n"))
 
 
+def _ask(prompt: str) -> str:
+    """Read a free-text answer, or "" when there is no terminal."""
+    if not sys.stdin.isatty():
+        print(_yellow("  SKIP  no terminal attached — attended checks need one"))
+        return ""
+    try:
+        return input(f"  {prompt}: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return ""
+
+
+async def _sent_count(api: ZTERouterAPI) -> int | None:
+    """Return how many sent messages the router is storing.
+
+    **Read through `sms_capacity_info`, never the batch poll.** The same key
+    names exist in both and behave differently: `multi_data` returns
+    `sms_nv_send_total` as an empty string, while the dedicated command returns
+    a real number. Reading the batch version made this check compare 0 with 0
+    forever and report a send that had demonstrably arrived as a failure.
+    """
+    try:
+        capacity = await api.get_sms_capacity()
+    except Exception:  # noqa: BLE001 - absence is an answer here
+        return None
+    raw = capacity.get("sms_nv_send_total")
+    if raw in (None, ""):
+        return None
+    try:
+        return int(str(raw))
+    except ValueError:
+        return None
+
+
+async def _sent_message_ids(api: ZTERouterAPI) -> set[str] | None:
+    """Return the ids of stored *sent* messages, or None if unreadable.
+
+    Observed on the reference MC7010 (2026-07-31): a sent message is stored
+    alongside received ones with `tag=2`, where received messages carry `tag=1`.
+    Sample size is small, so this is used as a *second* confirmation rather than
+    the primary one, and its absence is never treated as failure.
+    """
+    try:
+        messages = await api.get_sms_messages(mem_store="1")
+    except Exception:  # noqa: BLE001 - absence is an answer here
+        return None
+    return {str(m.get("id")) for m in messages if str(m.get("tag")) == "2"}
+
+
+async def check_send_sms(api: ZTERouterAPI, report: Report) -> None:
+    """Send one message to a number the operator supplies.
+
+    This is why the tier was renamed. The command cannot run unattended — it
+    costs money and reaches a third party — but with a person choosing the
+    destination and confirming, it is an ordinary test.
+
+    The destination is typed at the prompt rather than stored anywhere: a phone
+    number in a committed script, or in a `.reports/` log, is exactly the kind
+    of personal data that should not be lying around. It is not echoed back.
+    """
+    print(_cyan("\n[D] Send SMS"))
+    print("    cost      : one SMS, billed by your provider")
+    print("    risk      : delivers to a real handset - use a number you own")
+
+    number = _ask("Destination number (blank to skip)")
+    if not number:
+        print(_dim("    skipped"))
+        return
+
+    # Nothing about the destination is printed from here on.
+    print(_dim(f"    sending to a {len(number)}-character number…"))
+    before_count = await _sent_count(api)
+    before_ids = await _sent_message_ids(api) or set()
+    stamp = datetime.now(UTC).strftime("%H:%M:%S")
+    body = f"hardware_check {stamp} UTC"
+
+    try:
+        await api.send_sms(number, body)
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.record(False, "send_sms: accepted by the router", f"{err}")
+        return
+
+    report.record(True, "send_sms: accepted by the router")
+
+    # Two independent confirmations, because either can be unavailable. The
+    # counter is the primary one; the stored-message check backs it up.
+    #
+    # Neither absence is failure. That distinction matters here specifically:
+    # an earlier version of this check compared the batch-poll copies of these
+    # counters, which are always empty, and so reported every send as broken.
+    await asyncio.sleep(SMS_SETTLE)
+    after_count = await _sent_count(api)
+    after_ids = await _sent_message_ids(api) or set()
+    new_ids = after_ids - before_ids
+
+    if before_count is not None and after_count is not None:
+        report.record(
+            after_count > before_count,
+            "send_sms: sent counter incremented",
+            f"{before_count} -> {after_count}",
+        )
+    elif new_ids:
+        report.record(True, "send_sms: message stored", f"new id {sorted(new_ids)}")
+    else:
+        print(
+            _yellow(
+                "  NOTE  neither the counter nor the stored-message list was "
+                "readable — the send was accepted but is unconfirmed here"
+            )
+        )
+
+    if new_ids:
+        print(_dim(f"    stored as sent message id {min(new_ids)}"))
+    print(_dim("    check the handset — delivery itself is not observable"))
+
+
+async def check_delete_most_recent_sms(api: ZTERouterAPI, report: Report) -> None:
+    """Delete the single newest message, whichever it is.
+
+    Targeting the newest keeps this useful straight after the send check while
+    still working on its own — but the operator sees the message identified
+    before confirming, so it is never an arbitrary deletion.
+
+    **Only the id and timestamp are printed.** Sender and body are deliberately
+    withheld: this run is teed to `.reports/`, and message content does not
+    belong in a file on disk.
+    """
+    print(_cyan("\n[E] Delete the most recent SMS"))
+
+    try:
+        messages = await api.get_sms_messages(mem_store="1", tags="10")
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.record(False, "delete_sms: read the inbox", f"{err}")
+        return
+
+    if not messages:
+        report.record(True, "delete_sms: skipped, inbox empty", "nothing to delete")
+        return
+
+    newest = max(messages, key=lambda m: int(str(m.get("id") or 0)))
+    msg_id = str(newest.get("id"))
+    print(f"    target    : message id {msg_id}, dated {newest.get('date_decoded')}")
+    print(_dim("    sender and body withheld — this run is logged to .reports/"))
+    print("    risk      : irreversible; nothing can restore a deleted message")
+
+    if not _confirm(f"Delete message {msg_id}?"):
+        print(_dim("    skipped"))
+        return
+
+    try:
+        await api.delete_sms(msg_id)
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.record(False, "delete_sms: accepted", f"{type(err).__name__}: {err}")
+        return
+
+    await asyncio.sleep(SMS_SETTLE)
+    remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    ids = {str(m.get("id")) for m in remaining}
+    report.record(
+        msg_id not in ids,
+        "delete_sms: the message is gone",
+        f"{len(messages)} -> {len(remaining)} messages",
+    )
+
+
+async def check_delete_all_sms(api: ZTERouterAPI, report: Report) -> None:
+    """Clear the inbox, with the count stated before the confirmation.
+
+    The most destructive command here, and the only one with no restore of any
+    kind. The prompt names how many messages will go, because "yes" to an
+    unspecified number is not informed consent — that is the whole safeguard.
+    """
+    print(_cyan("\n[F] Delete ALL SMS"))
+
+    try:
+        messages = await api.get_sms_messages(mem_store="1", tags="10")
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.record(False, "delete_all: read the inbox", f"{err}")
+        return
+
+    if not messages:
+        report.record(True, "delete_all: skipped, inbox empty", "nothing to delete")
+        return
+
+    print(_red(f"    THIS WILL DELETE {len(messages)} MESSAGE(S), PERMANENTLY"))
+    print("    risk      : no undo, no partial recovery, no confirmation dialog")
+    print("                on the router either")
+
+    if not _confirm(f"Delete all {len(messages)} messages?"):
+        print(_dim("    skipped"))
+        return
+
+    try:
+        await api.delete_all()
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.record(False, "delete_all: accepted", f"{type(err).__name__}: {err}")
+        return
+
+    await asyncio.sleep(SMS_SETTLE)
+    remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    report.record(
+        not remaining,
+        "delete_all: inbox is empty",
+        f"{len(messages)} -> {len(remaining)} messages",
+    )
+
+
+async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
+    """Reboot, then wait for the device to come back.
+
+    Left until last because it ends the session and takes the connection down
+    for minutes. Nothing is *changed* by it, which is why it is only a matter of
+    time rather than risk — the earlier reasoning that it "cannot be made quick
+    or quiet" confused cost with danger and kept it unscripted for no good
+    reason.
+
+    Verified by the uptime counter going backwards, not merely by the router
+    answering again: a device that never rebooted also answers.
+    """
+    print(_cyan("\n[G] Reboot"))
+
+    before = await api.get_params(["realtime_time"])
+    uptime_before = str(before.get("realtime_time") or "?")
+    print(f"    uptime now: {uptime_before}s")
+    print("    cost      : the connection drops for a few minutes")
+    print("    risk      : nothing is left changed; this is time, not danger")
+
+    if not _confirm("Reboot the router now?"):
+        print(_dim("    skipped"))
+        return
+
+    try:
+        await api.reboot()
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.record(False, "reboot: accepted", f"{type(err).__name__}: {err}")
+        return
+
+    print(_dim(f"    waiting up to {REBOOT_TIMEOUT:.0f}s for the router to return…"))
+    deadline = time.monotonic() + REBOOT_TIMEOUT
+    uptime_after: str | None = None
+    while time.monotonic() < deadline:
+        await asyncio.sleep(REBOOT_POLL)
+        try:
+            api.stok = await api.login()
+            uptime_after = str(
+                (await api.get_params(["realtime_time"])).get("realtime_time")
+            )
+            break
+        except Exception:  # noqa: BLE001 - absence is expected while it boots
+            print(_dim("      still down…"))
+
+    if uptime_after is None:
+        report.record(
+            False,
+            "reboot: router came back",
+            f"still unreachable after {REBOOT_TIMEOUT:.0f}s — check it by hand",
+        )
+        return
+
+    try:
+        went_back = int(uptime_after) < int(uptime_before)
+    except ValueError:
+        went_back = False
+    report.record(
+        went_back,
+        "reboot: uptime reset",
+        f"{uptime_before}s -> {uptime_after}s",
+    )
+
+
 async def _guarded(report: Report, title: str, coro: Any) -> None:
     """Run one attended check so its failure cannot abandon the others.
 
@@ -789,6 +1068,13 @@ async def check_attended_writes(api: ZTERouterAPI, report: Report) -> None:
             undo="router web UI -> Settings -> Network -> set the preference back",
         ),
     )
+
+    # SMS first, so the delete checks have something of their own to work on,
+    # then reboot last because it ends the session and takes minutes.
+    await _guarded(report, "Send SMS", check_send_sms(api, report))
+    await _guarded(report, "Delete SMS", check_delete_most_recent_sms(api, report))
+    await _guarded(report, "Delete all SMS", check_delete_all_sms(api, report))
+    await _guarded(report, "Reboot", check_reboot(api, report))
 
 
 async def check_refusal_is_not_retried(api: ZTERouterAPI, report: Report) -> None:

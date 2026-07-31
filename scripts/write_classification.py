@@ -26,9 +26,17 @@ The three tiers:
     an unattended run. Everything that re-establishes the connection lives here:
     it is recoverable, but a script cannot judge whether it recovered.
 
-``NEVER``
-    Not scriptable at any tier. Costs money, reaches a third party, or destroys
-    user data. No flag enables these.
+``NEVER_AUTOMATED``
+    Must never be issued by a script under any flag, because no amount of human
+    confirmation makes it recoverable or acceptable.
+
+    **Currently empty, and that is deliberate.** The tier began as a catch-all
+    for "costs money, reaches a third party, or destroys data" — which conflated
+    *cannot be automated* with *cannot be scripted at all*. With a person typing
+    a confirmation and supplying the target, sending an SMS and deleting one are
+    ordinary tests; they simply cannot run unattended. Keeping the tier defined
+    but empty preserves the decision point for a future command that genuinely
+    warrants it.
 """
 
 from __future__ import annotations
@@ -78,27 +86,29 @@ ATTENDED: dict[str, str] = {
         "judgement, not a check."
     ),
     "reboot": (
-        "Minutes of downtime, and verification means waiting for the device to "
-        "come back. Classified rather than scripted: there is no way to make "
-        "this quick or quiet."
+        "Minutes of downtime. Verification is only a retry loop until the "
+        "device answers again, so the cost is time rather than risk — nothing "
+        "is left in a changed state."
+    ),
+    "send_sms": (
+        "Costs money and delivers to a third party, so it can never run "
+        "unattended. With a person supplying the destination and confirming, it "
+        "is an ordinary test: one message, to a number they chose."
+    ),
+    "delete_sms": (
+        "Irreversibly destroys a message — nothing can put one back. Acceptable "
+        "attended because the target is a single, named message the operator "
+        "sees identified before confirming, not an arbitrary one."
+    ),
+    "delete_all": (
+        "Clears the entire inbox with no way back. The most destructive command "
+        "here, and the one where the confirmation prompt must state the message "
+        "count, so nobody agrees to it without knowing the scale."
     ),
 }
 
-# --- Not scriptable at any tier ---------------------------------------------
-NEVER: dict[str, str] = {
-    "send_sms": (
-        "Costs money and delivers to a third party. There is no test recipient "
-        "that makes this acceptable, and a retry loop would send twice."
-    ),
-    "delete_sms": (
-        "Irreversibly destroys the user's messages. A round trip is impossible "
-        "— nothing can put a deleted message back."
-    ),
-    "delete_all": (
-        "As `delete_sms`, across the whole inbox. The most destructive command "
-        "this integration can issue."
-    ),
-}
+# --- Not scriptable under any flag ------------------------------------------
+NEVER_AUTOMATED: dict[str, str] = {}
 
 # Writes the hardware script is expected to exercise. Kept separate from `SAFE`
 # so the test can tell "classified safe" from "actually covered" — the gap that
@@ -118,13 +128,22 @@ OFFERED_WHEN_ATTENDED: frozenset[str] = frozenset(
         "set_apn",
         "set_bearer_preference",
         "set_data_limit_switch",
+        "reboot",
+        "send_sms",
+        "delete_sms",
+        "delete_all",
     }
 )
 
 
 def classification(name: str) -> str | None:
     """Return the tier a write belongs to, or None when unclassified."""
-    for tier, register in (("SAFE", SAFE), ("ATTENDED", ATTENDED), ("NEVER", NEVER)):
+    tiers = (
+        ("SAFE", SAFE),
+        ("ATTENDED", ATTENDED),
+        ("NEVER_AUTOMATED", NEVER_AUTOMATED),
+    )
+    for tier, register in tiers:
         if name in register:
             return tier
     return None

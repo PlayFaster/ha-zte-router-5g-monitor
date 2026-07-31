@@ -23,7 +23,7 @@ import pathlib
 from scripts.write_classification import (
     ATTENDED,
     EXERCISED_BY_HARDWARE_CHECK,
-    NEVER,
+    NEVER_AUTOMATED,
     SAFE,
     classification,
 )
@@ -73,8 +73,8 @@ def test_every_write_is_classified() -> None:
         + "\n  ".join(unclassified)
         + "\n\nDecide the tier and record the reason. SAFE means reversible "
         "in-process with both resting states harmless; ATTENDED means a human "
-        "confirms each step; NEVER means it costs money, reaches a third party "
-        "or destroys data."
+        "confirms each step; NEVER_AUTOMATED means no confirmation could make "
+        "it acceptable."
     )
 
 
@@ -82,8 +82,8 @@ def test_no_write_is_classified_twice() -> None:
     """Overlapping tiers would make the strictest one unenforceable."""
     overlaps = (
         (SAFE.keys() & ATTENDED.keys())
-        | (SAFE.keys() & NEVER.keys())
-        | (ATTENDED.keys() & NEVER.keys())
+        | (SAFE.keys() & NEVER_AUTOMATED.keys())
+        | (ATTENDED.keys() & NEVER_AUTOMATED.keys())
     )
     assert not overlaps, f"writes in more than one tier: {sorted(overlaps)}"
 
@@ -94,7 +94,7 @@ def test_the_register_does_not_name_writes_that_no_longer_exist() -> None:
     A stale entry is worse than a missing one: it reads as coverage.
     """
     known = _public_writes()
-    stale = sorted((SAFE.keys() | ATTENDED.keys() | NEVER.keys()) - known)
+    stale = sorted((SAFE.keys() | ATTENDED.keys() | NEVER_AUTOMATED.keys()) - known)
     assert not stale, (
         f"classified but no longer present in api.py: {stale}. "
         "Remove the entry, or fix the name if the method was renamed."
@@ -152,7 +152,7 @@ def test_every_classification_carries_a_reason() -> None:
     """A tier without a stated reason cannot be reviewed, only trusted."""
     thin = sorted(
         name
-        for register in (SAFE, ATTENDED, NEVER)
+        for register in (SAFE, ATTENDED, NEVER_AUTOMATED)
         for name, reason in register.items()
         if len(reason.strip()) < 40
     )
