@@ -26,7 +26,7 @@ Items that were on this roadmap and have since been built. Detail is in `CHANGEL
 
 ### Billing-cycle write controls
 
-**Value ⭐⭐⭐ · Effort Low**
+#### **Value ⭐⭐⭐ · Effort Low**
 
 The hard part is done. `DATA_LIMIT_SETTING` is confirmed as a six-field, all-or-nothing form, `api.set_data_volume_settings()` performs the read-modify-write, and the round trip is verified on hardware. The same work fixed a Data Limit Switch that had never functioned, because it was sending exactly the partial payload the router refuses.
 
@@ -45,7 +45,7 @@ Both keys are already polled, and the switch already drives the projection senso
 
 ### SMS feature-group toggle
 
-**Value ⭐⭐⭐ · Effort Medium**
+#### **Value ⭐⭐⭐ · Effort Medium**
 
 Two of the three polled endpoints exist solely for SMS, so a user who never sends one still pays two round trips per cycle. Disabling the sub-device hides the entities without stopping the polling.
 
@@ -53,7 +53,7 @@ Needs a `CONF_ENABLE_SMS` option, guards on both `_fetch_optional` calls, and an
 
 ### Reboot-on-degradation blueprint
 
-**Value ⭐⭐ · Effort Low**
+#### **Value ⭐⭐ · Effort Low**
 
 The README carries an auto-reboot example with the necessary glitch guards. A shipped blueprint would make it usable without copying YAML, and would put those guards beyond reach of a copy-paste error.
 
@@ -61,7 +61,7 @@ The README carries an auto-reboot example with the necessary glitch guards. A sh
 
 ### Projection accuracy from cycle history
 
-**Value ⭐⭐ · Effort Medium**
+#### **Value ⭐⭐ · Effort Medium**
 
 `Projected Cycle Usage` extrapolates from the cycle in flight alone, which is why it is volatile in the first few days. Storing the previous two or three cycle totals would let the estimate lean on them early and shed them as real usage accumulates — blended into the **unobserved remainder** only, so the prior's influence decays with the days remaining rather than needing a tuned constant.
 
@@ -75,7 +75,7 @@ The README carries an auto-reboot example with the necessary glitch guards. A sh
 
 ### Cross-model verification
 
-**Value ⭐⭐⭐⭐ · Effort Low once unblocked**
+#### **Value ⭐⭐⭐⭐ · Effort Low once unblocked**
 
 Release 3.3.1 added alternative key spellings, a login-form fallback and channel-to-band resolution for other `goform` routers — **none of it exercised on hardware**, because only an MC7010 is available here.
 
@@ -89,7 +89,7 @@ It would **not** trigger removal of the three speculative alias spellings (`5g_r
 
 ### Custom triggers for `zte_router_5g_sms_received`
 
-**Value ⭐⭐ · Effort Low once unblocked**
+#### **Value ⭐⭐ · Effort Low once unblocked**
 
 Would make the SMS event a GUI-discoverable trigger instead of something a user has to know the event name to use.
 

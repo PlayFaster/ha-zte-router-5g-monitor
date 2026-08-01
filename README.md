@@ -33,7 +33,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [🎯 Use Cases](#-use-cases)
   - [✅ Features](#-features)
   - [🔍 What You Get](#-what-you-get)
-  - [� Controls \& Settings](#-controls--settings)
+  - [🔘 Controls \& Settings](#-controls--settings)
   - [💬 SMS Actions](#-sms-actions)
   - [💡 Example Automations](#-example-automations)
   - [📥 Installation](#-installation)
@@ -162,10 +162,10 @@ RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
 
 | Acronym | Means | Think Of | Answers |
 | :-- | :-- | :-- | :-- |
-| **SNR** | **S**ignal-to-**N**oise **R**atio | **"Signal Quality"** | _How fast will this actually go?_ |
-| **RSRP** | **R**eference **S**ignal **R**eceived **P**ower | **"Signal Strength"** | _Do I have coverage at all?_ |
-| **RSRQ** | **R**eference **S**ignal **R**eceived **Q**uality | **"Connection Congestion"** | _Is the channel congested/busy?_ |
-| **RSSI** | **R**eceived **S**ignal **S**trength **I**ndicator | **"Total Power"** | _How much raw RF energy is reaching the modem?_ |
+| **SNR** | Signal-to-Noise Ratio | **"Signal Quality"** | _How fast will this actually go?_ |
+| **RSRP** | Reference Signal Received Power | **"Signal Strength"** | _Do I have coverage at all?_ |
+| **RSRQ** | Reference Signal Received Quality | **"Connection Congestion"** | _Is the channel congested/busy?_ |
+| **RSSI** | Received Signal Strength Indicator | **"Total Power"** | _How much raw RF energy is reaching the modem?_ |
 
 ---
 
@@ -332,9 +332,7 @@ This integration features **dynamic polling**, the ability to pause polling comp
 
 ### 💬 SMS Management Actions
 
-Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers ([example](#-forward-incoming-sms-to-mobile)), and four service actions for full programmatic control ([inbox cleanup](#-automated-inbox-maintenance) and [on-demand query](#-fetch-and-process-inbox-via-automation) examples).
-
-See [SMS Actions](#-sms-actions) below for more detail, and [SMS Examples](#-sms-examples) for some potential automation options.
+SMS count and text sensors, plus monitoring and control via events and actions. See [SMS Actions](#-sms-actions) and [SMS Examples](#-sms-examples)
 
 ## 🔍 What You Get
 
@@ -481,13 +479,13 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 
 Several settings are exposed as control entities so you can drive them from dashboards or automations, rather than reopening Configure:
 
+### 🔧 Router Administration & Polling (System Device)
+
 <details>
 
 <summary>
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
-
-### 🔧 Router Administration & Polling (System Device)
 
 - **Pause Polling** (`switch.zte_5g_system_pause_polling`): Halt all polling when you need exclusive access to the router's web UI.
 - **Polling Interval** (`number.zte_5g_system_polling_interval`): Adjust the scan interval slider (30s to 1 hour, default `180` seconds).
@@ -495,11 +493,29 @@ Several settings are exposed as control entities so you can drive them from dash
 - **Reboot** (`button.zte_5g_system_reboot`): Reboot the router hardware directly from Home Assistant.
 - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`, _disabled by default_): Turn the physical status LEDs of the outdoor unit on or off.
 
+| System Configuration | System Control |
+| :-: | :-: |
+| ![System Configuration](.github/images/zte_5g_system_config_with_led.png) | ![System Control](.github/images/zte_5g_system_controls.png) |
+
+---
+
+</details>
+
+<br>
+
 ### 📡 APN & Network Settings (Signal Device)
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
 
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:
+
+![Signal Config with APN](.github/images/zte_5g_signal_config_apn_dropdown.png) |
 
 | Selector value | Router web page | Meaning |
 | :-- | :-- | :-- |
@@ -509,42 +525,42 @@ Several settings are exposed as control entities so you can drive them from dash
 | `Only_LTE` | **4G Only** | LTE only, 5G disabled |
 
 > [!WARNING] The two `Only_` values lock the radio. Where 5G coverage is marginal, `Only_5G` can drop the connection entirely and it may not recover on its own — prefer `4G_AND_5G` unless you are deliberately testing.
+>
+> This is a risk of dropping your WAN/internet connection. This integration will allow you to change the setting back, even if there is no connection, but NOT if you are accessing remotely (e.g. VPN) and depend on this connection for remote access.
 
-#### How APN selection actually behaves
+#### **How APN selection behaves**
 
-These three controls interact in ways that each look like a fault in isolation. They are not — this is how the router works, and the same behavior is visible on its own web page.
+- **Choosing an APN Profile also switches the mode to Manual.** The router's command sets the profile and the mode together; there is no way to pick a profile without leaving auto. So the usual way to go manual is simply to choose the profile you want, not to change the mode first.
 
-**Choosing an APN Profile also switches the mode to Manual.** The router's command sets the profile and the mode together; there is no way to pick a profile without leaving auto. So the usual way to go manual is simply to choose the profile you want, not to change the mode first.
+- **In Auto, the router uses the network's own default APN.** That default does not have to be one of your stored profiles, so the **APN Profile** selector may show blank while you are perfectly well connected. Blank there means "the APN in use is not one of your saved profiles" — not "no APN".
 
-**In Auto, the router uses the network's own default APN.** That default does not have to be one of your stored profiles, so the **APN Profile** selector may show blank while you are perfectly well connected. Blank there means "the APN in use is not one of your saved profiles" — not "no APN".
+- **`sensor.zte_5g_signal_network_apn` is the authoritative value.** The APN Profile selector describes your stored _choice_; the **Network APN** sensor reports what the router is _actually connected with_. When the two disagree, believe the sensor. Use it in automations and templates rather than the selector.
 
-**`sensor.zte_5g_signal_network_apn` is the authoritative value.** The APN Profile selector describes your stored _choice_; the **Network APN** sensor reports what the router is _actually connected with_. When the two disagree, believe the sensor. Use it in automations and templates rather than the selector.
+- **The Default profile shows an empty APN.** Selecting it is legitimate and matches the router's own page, but it leaves **Network APN** blank because we cannot access that data element.
 
-**The Default profile stores an empty APN.** Selecting it is legitimate and matches the router's own page, but it leaves **Network APN** blank because there is genuinely no APN string to report.
+- **Profiles are created on the router, not here.** The integration selects among the profiles already stored on your router; it cannot add, edit or delete one — that is done on the router's own web page. A profile you add there appears in the **APN Profile** dropdown at the next poll, or immediately if you press **Refresh Now**. This integration lists up to ten APN Profiles.
 
-**Profiles are created on the router, not here.** The integration selects among the profiles already stored on your router; it cannot add, edit or delete one — that is done on the router's own web page. A profile you add there appears in the **APN Profile** dropdown at the next poll, or immediately if you press **Refresh Now**. The router holds up to ten.
-
-**Switching to Manual needs a profile to switch _to_.** The router refuses a mode change that does not name one, so if the APN currently in use is not among your saved profiles, choosing `manual` in **APN Selection Mode** reports an error asking you to pick from **APN Profile** instead. That is the route that works — it sets both at once.
+- **Switching to Manual needs a profile to switch _to_.** The router refuses a mode change that does not name one, so if the APN currently in use is not among your saved profiles, choosing `manual` in **APN Selection Mode** reports an error asking you to pick from **APN Profile** instead. That is the route that works — it sets both at once.
 
 > [!TIP] If you want your network's default APN to appear in the Manual list too, add it as a profile on the router's own page with the same APN string. The integration then matches it, the **APN Profile** selector names it even while the mode is Auto, and switching to Manual works directly.
 
-### 📈 Billing & Data Controls (Data Device)
+---
 
-- **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`, _disabled by default_): Enable/disable the router's data limit settings.
+</details>
 
-The billing cycle **Reset Day** is currently read-only. Change it from the router's own web page — the command that writes it also carries the data cap and the alert percentage, so writing it safely needs work not yet done.
+<br>
 
 ### ✉️ SMS Management Controls (SMS Device)
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 - **Delete All** (`button.zte_5g_sms_delete_all`): One-click UI button to clear stored inbox messages (see [SMS Actions](#-sms-actions) for service options).
 
-| System Control | SMS Control |
-| :-: | :-: |
-| ![System Control](.github/images/zte_5g_system_controls.png) | ![SMS Control](.github/images/zte_5g_sms_controls.png) |
-
-| System Configuration | Signal Configuration |
-| :-: | :-: |
-| ![System Configuration](.github/images/zte_5g_system_config.png) | ![Signal Configuration](.github/images/zte_5g_signal_config.png) |
+![SMS Control](.github/images/zte_5g_sms_controls.png)
 
 ---
 
@@ -554,12 +570,24 @@ The billing cycle **Reset Day** is currently read-only. Change it from the route
 
 ## 💬 SMS Actions
 
-Provides unread SMS count and latest message content sensors, a one-click **Delete All** button, a `zte_router_5g_sms_received` event for automation triggers ([example](#-forward-incoming-sms-to-mobile)), and four service actions for full programmatic control ([inbox cleanup](#-automated-inbox-maintenance) and [on-demand query](#-fetch-and-process-inbox-via-automation) examples).
+The SMS device has sensor entities that provide unread SMS count and latest message content plus a one-click **Delete All** button.
+
+There is also an SMS received event and four SMS actions to send, read and delete SMS messages.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+![SMS Screen](.github/images/zte_5g_sms_info.png)
 
 - The `Recent Msg` sensor displays the most recent message received **OR** _sent_.
-- In the examples below, the `entry_id:` of your router, where required, is drop-down menu selectable from the editor GUI.
-
-> The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
+- In addition to the sensor entities, there is
+  - A `zte_router_5g_sms_received` event for automation triggers ([example](#-forward-incoming-sms-to-mobile))
+  - Four service actions for full programmatic control ([inbox cleanup](#-automated-inbox-maintenance) and [on-demand query](#-fetch-and-process-inbox-via-automation) examples).
+- In the action examples below, the `entry_id:` of your router, where required, is drop-down menu selectable from the editor GUI.
+- See [SMS Examples](#-sms-examples) for additional automation options.
 
 ### `zte_router_5g.send_sms`
 
@@ -595,59 +623,7 @@ data:
   message: "Hello from Home Assistant!"
 ```
 
----
-
-</details>
-
-<br>
-
-### `zte_router_5g.delete_sms`
-
-<details>
-
-<summary> &nbsp; &nbsp; Delete a single SMS by its storage index.<br>
-&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
-</summary><br>
-
-Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
-
-| Parameter | Required | Description |
-| :-- | :-- | :-- |
-| `entry_id` | No | The router to use. Defaults to your only router; required if more than one is configured. |
-| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
-
-```yaml
-action: zte_router_5g.delete_sms
-data:
-  entry_id: <your_config_entry_id>
-  index: 3
-```
-
----
-
-</details>
-
-<br>
-
-### `zte_router_5g.delete_all_sms`
-
-<details>
-
-<summary> &nbsp; &nbsp; Bulk delete SMS messages from the router inbox.<br>
-&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
-</summary><br>
-
-| Parameter | Required | Default | Range | Description |
-| :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
-| `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
-
-```yaml
-action: zte_router_5g.delete_all_sms
-data:
-  entry_id: <your_config_entry_id>
-  keep_last: 5
-```
+![SMS Send Action](.github/images/zte_5g_action_send_sms.png)
 
 ---
 
@@ -695,6 +671,68 @@ data:
 response_variable: inbox
 ```
 
+![SMS Get Action](.github/images/zte_5g_action_get_sms_result.png)
+
+---
+
+</details>
+
+<br>
+
+### `zte_router_5g.delete_sms`
+
+<details>
+
+<summary> &nbsp; &nbsp; Delete a single SMS by its storage index.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
+</summary><br>
+
+Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
+
+| Parameter | Required | Description |
+| :-- | :-- | :-- |
+| `entry_id` | No | The router to use. Defaults to your only router; required if more than one is configured. |
+| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
+
+```yaml
+action: zte_router_5g.delete_sms
+data:
+  entry_id: <your_config_entry_id>
+  index: 3
+```
+
+![SMS Delete Action](.github/images/zte_5g_action_delete_sms.png)
+
+---
+
+</details>
+
+<br>
+
+### `zte_router_5g.delete_all_sms`
+
+<details>
+
+<summary> &nbsp; &nbsp; Bulk delete SMS messages from the router inbox.<br>
+&nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
+</summary><br>
+
+> The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
+
+| Parameter | Required | Default | Range | Description |
+| :-- | :-- | :-- | :-- | :-- |
+| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
+| `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
+
+```yaml
+action: zte_router_5g.delete_all_sms
+data:
+  entry_id: <your_config_entry_id>
+  keep_last: 5
+```
+
+![SMS Delete All Action](.github/images/zte_5g_action_delete_all_sms.png)
+
 ---
 
 </details>
@@ -722,6 +760,12 @@ Fires automatically when a new incoming SMS is detected. Use as an automation tr
 ---
 
 </details>
+
+---
+
+</details>
+
+<br>
 
 ## 💡 Example Automations
 
