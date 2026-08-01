@@ -99,6 +99,20 @@ The key is already polled and the switch's state already drives the projection s
 
 `Projected Cycle Usage` currently extrapolates from the cycle in flight alone, which is why it is volatile in the first few days. Storing the previous two or three cycle totals would let the estimate lean on them early and shed them as real usage accumulates — blended into the **unobserved remainder** only, so the prior's influence decays with the days left rather than needing a tuned constant. The groundwork is in place: `helpers.project_cycle_usage()` already takes a `prior_rate` argument. What is missing is the store. §2.4 of the same plan.
 
+### 6. "Refresh Now" always re-logs in — **held, with a defined trigger to revisit**
+
+Added 2026-08-01. This is not a proposal to implement; it is a **contingency with a stated trigger**, so the option is not rediscovered from scratch under pressure.
+
+**The change.** Make the Refresh Now button force a fresh login before its poll, instead of re-authenticating only when the poll's response says the session is gone.
+
+**Why it is held.** After the `[3.3.2-rc11]` session-detection rebuild, two mechanisms cover session loss with no gap between them: the proactive idle reset at 150s, and `_classify_session`, which now reaches a verdict on every core poll — `test_every_batch_carries_both_classes` makes `undecidable` unreachable there. An unconditional login adds no correctness and costs four round trips against one, on every press. It is worst in the case that motivated the question: repeated presses during a reboot would put four login attempts per press against a router that is still booting.
+
+The argument in favour is real — Refresh Now is what a user reaches for when something looks wrong, so making it always work is insurance against detection breaking again. It was declined because that insurance works by **masking**. This fault has recurred twice and both times the damage was in the silence, so a redundant mechanism in the most-exercised path would hide a third occurrence rather than surface it. Reasoning in full in `DEVELOPMENT.md` §5.
+
+**The trigger to revisit.** Any observation of a **silent logged-out fault** — entities blank or `unknown` while the integration reports success — reopens this immediately. The trade above assumes detection is sound; that observation would falsify the assumption, and the cost objection stops mattering the moment the cheap path is unreliable.
+
+**If implemented**, it should be Refresh Now only — not every write action, which already assures the session through `_ensure_session()` at one-round-trip cost — and it needs the `not_ready` case preserved, so a booting router still holds last known values rather than absorbing repeated login attempts.
+
 ## Roadmap Summary
 
 | Phase | Task | Effort | Value |
@@ -109,14 +123,16 @@ The key is already polled and the switch's state already drives the projection s
 | **Medium term** | Projection accuracy from cycle history | Medium | ⭐⭐ |
 | **Long term** | Band locking write side — **only** with a self-clearing lock | High | ⭐⭐⭐ |
 | **Declined** | Token persistence | — | — |
+| **Held** | Refresh Now always re-logs in — revisit only on a silent logged-out fault | Low | ⭐ |
 | **Blocked** | Custom triggers (HA version floor) | Low | ⭐⭐ |
 
-**Current status.** 92 entities across four sub-devices, 85 carrying `about` notes. 749 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
+**Current status.** 92 entities across four sub-devices, 86 carrying `about` notes. 817 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
 ---
 
 ## Version Control
 
+- **v2.5.0** (2026-08-01) — Added candidate 6, "Refresh Now always re-logs in", as a **held contingency with a defined trigger** rather than an open proposal. It is unnecessary after the `[3.3.2-rc11]` session-detection rebuild and costs four round trips against one, but the insurance argument is real enough to record, along with the reason it was declined (a redundant mechanism in the most-exercised path masks a recurrence instead of surfacing it). The trigger to reopen is stated explicitly: any silent logged-out fault falsifies the assumption the trade rests on.
 - **v2.4.0** (2026-07-29) — Corrected the reasoning behind the declined write controls. Every one of them had been justified with a single claim: that the integration reaches the router over the connection the change breaks, so the undo would be unreachable. **That holds only for `OPERATION_MODE`.** Home Assistant talks to the router at its LAN address, so a band lock, a cell lock or bad DNS kills the WAN and leaves the management path intact. The declines all stand, but on three distinct grounds — reachability, foot-gun value, and scope — now stated per command rather than blanket. Also recorded the case where reachability _does_ apply (a user reaching Home Assistant remotely over that same WAN) and, for each, that the router's own web page is the better place for a one-time tuning act.
 - **v2.3.0** (2026-07-29) — Item 4 (billing-cycle write controls) rescoped after the router-facing agent answered the open questions. The blocker it described — a partial POST possibly clearing the user's data cap — turned out not to exist: the router **refuses** an incomplete form rather than blanking the omitted fields. The read-modify-write path is built and verified, which also fixed a Data Limit Switch that had never worked. Only the Number and Switch entities remain, so the effort drops from Medium to Low.
 - **v2.2.0** (2026-07-29) — **Data-usage projection delivered** and moved to the delivered table. `Projected Cycle Usage` and `Reset Day` ship on the Data sub-device, cycle-relative rather than calendar-relative, after a live probe confirmed the router exposes `traffic_clear_date`. Two candidates added in its place, both carved out of the same work and both deliberately not shipped: the **billing-cycle write controls**, blocked on `DATA_LIMIT_SETTING` being a multi-field form that a partial POST could clear; and **projection accuracy from cycle history**, which needs a store the integration does not yet have. Also recorded that `OPERATION_MODE`, `LTE_LOCK_CELL_SET`, `ROUTER_DNS_SETTING` and `SET_BIND_STATIC_ADDRESS` were found by the same discovery run and declined under the objection this document already applies to band and cell locking — the control that undoes a bad change sits on the far side of the connection it breaks.

@@ -18,7 +18,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > - **If you have a ZTE 5G/LTE Router in the MC7010, MC801, MC888, MC889, MF266, MF286 or MF289 family** and want to monitor your 5G/LTE connection quality, data usage, and manage SMS messages directly from Home Assistant, then **yes**.
 > - **This integration is for you if** you want:
->   - **Advanced Signal Diagnostics** — Near-real-time tracking of RSRP, RSRQ, RSSI, and SNR for both LTE and 5G.
+>   - **Advanced Signal Diagnostics** — Near-real-time tracking of SNR, RSRP, RSRQ and RSSI for both LTE and 5G.
 >   - **Data Usage Monitoring** — Track data usage and projected usage per month or per bill, and set alerts for high use.
 >   - **SMS Management** — View the most recently received message content and send SMS messages directly in HA.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
@@ -56,7 +56,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - **ZTE MC7010** (5G Outdoor CPE) — tested on firmware `V1.0.0B01`.
   - _This is currently the ONLY model verified on live hardware._
 
-- **Expected Compatible (`goform` API Family)**:
+- **Expected Compatible (ZTE `goform` API Family)**:
   - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
     - **ZTE MC801 / MC801A** (Indoor 5G CPE)
     - **ZTE MC888 / MC888A / MC888 Ultra** (Indoor 5G Wi-Fi 6 CPE)
@@ -69,7 +69,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - ❌ **ZTE Landline Fiber ONTs / DSL Routers (F6640, F680, H288A, H388X, FIBRA6S/Livebox 6s, etc.)** — These use ZTE's `_type=` Lua/XML web interface and focus on LAN tracking rather than cellular metrics. Use **[`zte_tracker`](https://github.com/juacas/zte_tracker)** or **[`ha-zte-fibra`](https://github.com/AldenDana/ha-zte-fibra)** instead.
   - ❌ **Non-ZTE hardware.**
 
-> [!NOTE] This is a signal monitor, data use tracker and SMS client (designed for 5G/LTE Routers). It does not provide LAN/Wi-Fi client device tracking.
+> [!NOTE] This is a 5G/LTE signal monitor, data use tracker and SMS client. It does not provide LAN/Wi-Fi client device tracking.
 
 **🌐 Network:**
 
@@ -83,7 +83,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 ## 🎯 Use Cases
 
 - **Signal Monitoring**: Near-real-time and historical 5G/LTE signal data enable the monitoring of router performance. See [Reading Your Signal Data](#-reading-your-signal-data)
-  - **Best Signal**: Use signal diagnostics (RSRP, SNR) to optimize the physical placement or orientation of your router. → [Morning Signal Report](#-morning-signal-report) example.
+  - **Best Signal**: Use signal diagnostics (SNR, RSRP) to optimize the physical placement or orientation of your router. → [Morning Signal Report](#-morning-signal-report) example.
   - **Performance Tracking**: Use signal history to check whether the performance from your 5G/LTE ISP is stable or changing. → [Cell Tower Change Alert](#-cell-tower-change-alert) example.
   - **Connection Quality**: Know if your router has dropped to a lower-capability 4G/LTE only connection. → [Signal Quality Alert](#-signal-quality-alert) example.
 
@@ -92,13 +92,13 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Unattended Recovery**: Fail over to a backup APN, or restart the router, when the connection stops recovering on its own. → [APN Failover](#-apn-failover--network-selection) and [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) examples.
 
 - **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your mobile phone. → [Forward Incoming SMS](#-forward-incoming-sms-to-mobile) example.
-  - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
+  - ❗**Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
 
 ## ✅ Features
 
 ### 📡 Advanced 5G/LTE Diagnostics
 
-Track signal strength metrics (RSRP, RSRQ, RSSI, SNR), serving cell tower details, and active carrier bands in near-real-time.
+Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower details, and active carrier bands in near-real-time.
 
 <details>
 
@@ -106,7 +106,7 @@ Track signal strength metrics (RSRP, RSRQ, RSSI, SNR), serving cell tower detail
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-- **Detailed Signal Metrics**: RSRP, RSRQ, RSSI, and SNR for both the 5G NR and the LTE anchor cell.
+- **Detailed Signal Metrics**: SNR, RSRP, RSRQ and RSSI for both the 5G NR and the LTE anchor cell.
 - **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active frequency bands/channels. See the [Cell Tower Change Alert](#-cell-tower-change-alert) example.
 - **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use. See the [Signal Quality Alert](#-signal-quality-alert) example.
 
@@ -126,30 +126,38 @@ This integration reports a lot of signal numbers. This section explains which on
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
+> [!NOTE]
+>
+> **On SNR and SINR — related, but not the same thing.**
+>
+> **SNR** (Signal-to-Noise Ratio) compares the signal you want against background noise. **SINR** (Signal-to-Interference-plus-Noise Ratio) compares it against that noise _plus_ interference from other transmitters. On a busy network SINR is the harsher and more realistic of the two, and the terms are often used loosely as if they were interchangeable. They are not.
+>
+> Your router reports one such figure per technology, and names them **`LTE SNR`** and **`5G SNR`**. Those are the names this integration uses, and the names used throughout this section. **Which of the two each one is actually calculating is internal to the modem and is not documented** — so nothing here claims to know. Read them as **SNR**: a relative measure, most useful compared against your own earlier readings from the same site, rather than against a figure from someone else's router.
+
 #### Start with two numbers
 
-| Look at               | To answer                         | Entity                |
-| :-------------------- | :-------------------------------- | :-------------------- |
-| **SINR** (or **SNR**) | _How fast will this actually go?_ | `5G SNR`, `LTE SNR`   |
-| **RSRP**              | _Do I have coverage at all?_      | `5G RSRP`, `LTE RSRP` |
+| Look at  | To answer                         | Entity                |
+| :------- | :-------------------------------- | :-------------------- |
+| **SNR**  | _How fast will this actually go?_ | `5G SNR`, `LTE SNR`   |
+| **RSRP** | _Do I have coverage at all?_      | `5G RSRP`, `LTE RSRP` |
 
-**SINR is the single most useful number.** It measures your signal against everything competing with it, and it tracks achievable throughput more closely than anything else the router reports.
+**SNR is the single most useful number.** It measures your signal against what competes with it, and it tracks achievable throughput more closely than anything else the router reports.
 
 **RSRP is raw received power.** It tells you whether the tower is reaching you, not how well the connection will perform.
 
 They move independently, and that is the point:
 
-- **Strong RSRP, poor SINR** — you are close to a busy tower. Plenty of signal, but lots of interference. Speeds disappoint despite "full bars".
-- **Weak RSRP, good SINR** — you are far out but the sector is quiet. Often perfectly usable, sometimes better than the first case.
+- **Strong RSRP, poor SNR** — you are close to a busy tower. Plenty of signal, but lots of interference. Speeds disappoint despite "full bars".
+- **Weak RSRP, good SNR** — you are far out but the sector is quiet. Often perfectly usable, sometimes better than the first case.
 
 #### What the numbers mean
 
-| Metric              | Excellent | Good       | Fair        | Poor   |
-| :------------------ | :-------- | :--------- | :---------- | :----- |
-| **RSRP** (dBm)      | > −80     | −80 to −90 | −90 to −100 | < −100 |
-| **RSRQ** (dB)       | > −10     | −10 to −15 | −15 to −20  | < −20  |
-| **SINR / SNR** (dB) | > 20      | 13 to 20   | 0 to 13     | < 0    |
-| **RSSI** (dBm)      | > −65     | −65 to −75 | −75 to −85  | < −85  |
+| Metric         | Excellent | Good       | Fair        | Poor   |
+| :------------- | :-------- | :--------- | :---------- | :----- |
+| **RSRP** (dBm) | > −80     | −80 to −90 | −90 to −100 | < −100 |
+| **RSRQ** (dB)  | > −10     | −10 to −15 | −15 to −20  | < −20  |
+| **SNR** (dB)   | > 20      | 13 to 20   | 0 to 13     | < 0    |
+| **RSSI** (dBm) | > −65     | −65 to −75 | −75 to −85  | < −85  |
 
 RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
 
@@ -170,7 +178,7 @@ Both are comparisons, and both need readings over time rather than the number on
 
 #### Establish your own baseline
 
-When the connection is working well, note your RSRP, RSRQ and SINR. **That is your reference.** A later drop from 18 dB SINR to 6 dB tells you far more than any general table, because it is measured against your own site, your own antenna and your own cell.
+When the connection is working well, note your RSRP, RSRQ and SNR. **That is your reference.** A later drop from 18 dB SNR to 6 dB tells you far more than any general table, because it is measured against your own site, your own antenna and your own cell.
 
 #### Comparing over time (no code needed)
 
@@ -178,7 +186,7 @@ Individual readings jump around constantly, so a snapshot is a poor basis for a 
 
 1. **Settings → Devices & Services → Helpers → Create Helper**
 2. Choose **Combine the state of several sensors** → **Statistics**
-3. Pick an entity — `sensor.zte_5g_signal_5g_snr` is the one to start with
+3. Pick an entity — **`5G SNR`** if `Network Type` shows you are on 5G, otherwise **`LTE SNR`**. The 5G entity reads `unknown` whenever no 5G carrier is attached, and a Statistics helper built on it would have nothing to average.
 4. Set the characteristic to **Arithmetic mean** and the max age to **15 minutes**
 
 You now have a smoothed value that is stable enough to compare. Create a second one for RSRP if you are aligning an antenna.
@@ -191,14 +199,14 @@ You now have a smoothed value that is stable enough to compare. Create a second 
 
 **No, and that is a real answer rather than a missing feature.**
 
-There is no standard formula for combining RSRP, RSRQ and SINR into a single score, because which of them limits _your_ connection depends on where you are. Any weighted average would score an interference-limited site and a noise-limited site as if they were the same problem, and get at least one of them wrong.
+There is no standard formula for combining RSRP, RSRQ and SNR into a single score, because which of them limits _your_ connection depends on where you are. Any weighted average would score an interference-limited site and a noise-limited site as if they were the same problem, and get at least one of them wrong.
 
 The two closest things already exist:
 
-- **SINR** — the best single indicator of usable throughput.
+- **SNR** — the best single indicator of usable throughput.
 - **`Signal Bars`** (0–5) — the router's own composite. Coarse and vendor-defined, but it is the manufacturer's own summary.
 
-If you want one number on a dashboard, use SINR.
+If you want one number on a dashboard, use SNR.
 
 ---
 
@@ -327,7 +335,7 @@ This integration provides **92 entities** (depending on your firmware) organized
 | Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
 | :-- | :-- | :-- | :-- |
 | ⚙️ **System** | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+21) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
-| 📶 **Signal** | 36 Sensors, 1 Binary Sensor, 3 Selects (+10) | RSRP, RSRQ, SINR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
+| 📶 **Signal** | 36 Sensors, 1 Binary Sensor, 3 Selects (+10) | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
 | 📈 **Data** | 14 Sensors, 1 Switch (+4) | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
 | 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
@@ -340,7 +348,7 @@ This integration provides **92 entities** (depending on your firmware) organized
 >
 > ![About Attribute Example](.github/images/zte_5g_about_attribute.png)
 >
-> That is where the acronyms are decoded: **RSRP**, **RSRQ**, **SINR**, **PCI**, **eNodeB**, **ENDC**, **APN** and the rest each explain themselves in place, so you do not have to look them up to read your own dashboard.
+> That is where the acronyms are decoded: **RSRP**, **RSRQ**, **SNR**, **PCI**, **eNodeB**, **ENDC**, **APN** and the rest each explain themselves in place, so you do not have to look them up to read your own dashboard.
 >
 > These **About** notes - and all other attributes this integration publishes are set **unrecorded**. Home Assistant still shows them live in the entity's details, but **never writes them to the history/recorder database**. That keeps bulky or purely-informational values from bloating your database, with no downside to what you see day-to-day.
 
@@ -1089,7 +1097,7 @@ triggers:
     below: 4
     for: "00:05:00"
     note: |
-      Signal bars is the router's own 0-5 summary. Prefer RSRP or SINR if you want a
+      Signal bars is the router's own 0-5 summary. Prefer RSRP or SNR if you want a
       physically meaningful threshold; bars is coarse but matches what the router's
       own UI shows.
 conditions:
