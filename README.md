@@ -33,8 +33,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [🎯 Use Cases](#-use-cases)
   - [✅ Features](#-features)
   - [🔍 What You Get](#-what-you-get)
-  - [📸 Screenshots](#-screenshots)
-  - [🔘 Controls \& Settings](#-controls--settings)
+  - [� Controls \& Settings](#-controls--settings)
   - [💬 SMS Actions](#-sms-actions)
   - [💡 Example Automations](#-example-automations)
   - [📥 Installation](#-installation)
@@ -106,9 +105,11 @@ Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower detail
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-- **Detailed Signal Metrics**: SNR, RSRP, RSRQ and RSSI for both the 5G NR and the LTE anchor cell.
+- **Detailed Signal Metrics**: SNR, RSRP, RSRQ and RSSI for both the 5G NR and the LTE anchor cell tower.
 - **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active frequency bands/channels. See the [Cell Tower Change Alert](#-cell-tower-change-alert) example.
 - **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use. See the [Signal Quality Alert](#-signal-quality-alert) example.
+
+![Signal Sensors](.github/images/zte_5g_signal_sensors.png)
 
 ---
 
@@ -126,14 +127,6 @@ This integration reports a lot of signal numbers. This section explains which on
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-> [!NOTE]
->
-> **On SNR and SINR — related, but not the same thing.**
->
-> **SNR** (Signal-to-Noise Ratio) compares the signal you want against background noise. **SINR** (Signal-to-Interference-plus-Noise Ratio) compares it against that noise _plus_ interference from other transmitters. On a busy network SINR is the harsher and more realistic of the two, and the terms are often used loosely as if they were interchangeable. They are not.
->
-> Your router reports one such figure per technology, and names them **`LTE SNR`** and **`5G SNR`**. Those are the names this integration uses, and the names used throughout this section. **Which of the two each one is actually calculating is internal to the modem and is not documented** — so nothing here claims to know. Read them as **SNR**: a relative measure, most useful compared against your own earlier readings from the same site, rather than against a figure from someone else's router.
-
 #### Start with two numbers
 
 | Look at  | To answer                         | Entity                |
@@ -141,25 +134,40 @@ This integration reports a lot of signal numbers. This section explains which on
 | **SNR**  | _How fast will this actually go?_ | `5G SNR`, `LTE SNR`   |
 | **RSRP** | _Do I have coverage at all?_      | `5G RSRP`, `LTE RSRP` |
 
-**SNR is the single most useful number.** It measures your signal against what competes with it, and it tracks achievable throughput more closely than anything else the router reports.
+**SNR (Signal Quality) is the single most useful number.** It measures your signal against what competes with it, and it tracks achievable throughput more closely than anything else the router reports.
 
-**RSRP is raw received power.** It tells you whether the tower is reaching you, not how well the connection will perform.
+> **SNR and SINR** are related but separate metrics. **SNR** (Signal-to-Noise Ratio) measures the signal against background noise; **SINR** (Signal-to-Interference-plus-Noise Ratio) measures it against noise _plus_ interference from other transmitters. **This integration reports SNR**, as `LTE SNR` and `5G SNR`.
+
+**RSRP (Signal Strength) is raw received power.** It tells you whether the tower is reaching you, not how well the connection will perform.
 
 They move independently, and that is the point:
 
 - **Strong RSRP, poor SNR** — you are close to a busy tower. Plenty of signal, but lots of interference. Speeds disappoint despite "full bars".
 - **Weak RSRP, good SNR** — you are far out but the sector is quiet. Often perfectly usable, sometimes better than the first case.
 
+![SNR vs RSRP](.github/images/zte_5g_snr_rsrp.png)
+
 #### What the numbers mean
 
 | Metric         | Excellent | Good       | Fair        | Poor   |
 | :------------- | :-------- | :--------- | :---------- | :----- |
+| **SNR** (dB)   | > 20      | 13 to 20   | 0 to 13     | < 0    |
 | **RSRP** (dBm) | > −80     | −80 to −90 | −90 to −100 | < −100 |
 | **RSRQ** (dB)  | > −10     | −10 to −15 | −15 to −20  | < −20  |
-| **SNR** (dB)   | > 20      | 13 to 20   | 0 to 13     | < 0    |
 | **RSSI** (dBm) | > −65     | −65 to −75 | −75 to −85  | < −85  |
 
 RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
+
+---
+
+| Acronym | Means | Think Of | Answers |
+| :-- | :-- | :-- | :-- |
+| **SNR** | **S**ignal-to-**N**oise **R**atio | **"Signal Quality"** | _How fast will this actually go?_ |
+| **RSRP** | **R**eference **S**ignal **R**eceived **P**ower | **"Signal Strength"** | _Do I have coverage at all?_ |
+| **RSRQ** | **R**eference **S**ignal **R**eceived **Q**uality | **"Connection Congestion"** | _Is the channel congested/busy?_ |
+| **RSSI** | **R**eceived **S**ignal **S**trength **I**ndicator | **"Total Power"** | _How much raw RF energy is reaching the modem?_ |
+
+---
 
 > [!TIP]
 >
@@ -178,7 +186,7 @@ Both are comparisons, and both need readings over time rather than the number on
 
 #### Establish your own baseline
 
-When the connection is working well, note your RSRP, RSRQ and SNR. **That is your reference.** A later drop from 18 dB SNR to 6 dB tells you far more than any general table, because it is measured against your own site, your own antenna and your own cell.
+When the connection is working well, note your SNR, RSRP and RSRQ. **That is your reference.** A later drop from 18 dB SNR to 6 dB tells you far more than any general table, because it is measured against your own site, your own antenna and your own cell tower.
 
 #### Comparing over time (no code needed)
 
@@ -197,9 +205,9 @@ You now have a smoothed value that is stable enough to compare. Create a second 
 
 #### Is there one number for overall quality?
 
-**No, and that is a real answer rather than a missing feature.**
+Simple Answer - **No**
 
-There is no standard formula for combining RSRP, RSRQ and SNR into a single score, because which of them limits _your_ connection depends on where you are. Any weighted average would score an interference-limited site and a noise-limited site as if they were the same problem, and get at least one of them wrong.
+There is no standard formula for combining SNR, RSRP and RSRQ into a single score, because which of them limits _your_ connection depends on where you are. Any weighted average would score an interference-limited site and a noise-limited site as if they were the same problem, and get at least one of them wrong.
 
 The two closest things already exist:
 
@@ -230,13 +238,19 @@ Monitor monthly data consumption, active session totals, and real-time upload/do
 - **Reset Day** (`sensor.zte_5g_data_reset_day`): The day of the month the router zeroes its counters. This is the router's own billing cycle and need not be the 1st - worth checking against your provider's bill.
 - **Projected Cycle Usage** (`sensor.zte_5g_data_projected_cycle_usage`): An estimate of where you will finish the cycle at your current rate. See [Understanding the usage projection](#understanding-the-usage-projection) below.
 
+| Data Sensors | Data Diagnostics |
+| :-: | :-: |
+| ![Data Sensors](.github/images/zte_5g_data_screen_mini.png) | ![Data Diagnostics ](.github/images/zte_5g_data_diags.png) |
+
+---
+
 #### Understanding the usage projection
 
-**Projected Cycle Usage** answers the question the monthly counters do not: _am I on course to exceed my allowance?_
+**Projected Cycle Usage** answers the question the monthly counters do not: _am I on course to stay within or exceed my allowance?_
 
-It is arithmetic, not a forecast. Usage so far is divided by the days elapsed in the current cycle, and that rate is carried across the days remaining. Two things are worth knowing before you build an automation on it.
+It is a simple run-rate: usage period-to-date is divided by the days elapsed in the current cycle, and that rate is carried across the days remaining. Two things are worth knowing before you build an automation on it.
 
-**It is least reliable at the start of a cycle, and it says so.** Two days in, the sensor has two days of evidence and 29 days to extrapolate across, so one large download distorts it. Rather than hide the value — an `unknown` on day one looks like a broken sensor — the caveat is published in the attributes:
+**It is least reliable at the start of a cycle, when it is likely to under-report.** Two days in, the sensor has only two days of evidence and 29 days to extrapolate across, so one large download distorts it.
 
 | Attribute | Meaning |
 | :-- | :-- |
@@ -246,7 +260,7 @@ It is arithmetic, not a forecast. Usage so far is divided by the days elapsed in
 | `cycle_start` | The date the current cycle began. |
 | `cycle_source` | `router` when the reset day came from the router, `calendar_assumed` when it did not report one and the 1st of the month was assumed. |
 
-**On the first day of a cycle it reads low.** With only a few hours of usage to extrapolate from, the calculation deliberately refuses to divide by a fraction of a day — otherwise a single morning's download would project to an absurd figure. The effect is that the number starts low and climbs, settling on a sensible value once a full day has passed. It is accurate from day 2 of every cycle, including the first one after you install the integration.
+**On the first day of a cycle it reads low.** With only a few hours of usage to extrapolate from, the calculation clamps slightly, to avoid projecting unrealistically high totals. The effect is that the number starts low and climbs, settling on a more usable value once a full day has passed. It becomes more accurate from day 2 of every cycle (and day 2 after you first install the integration).
 
 **It is not recorded in long-term statistics**, by design. It is an estimate of where you will finish, useful now rather than as a history — and the usage it derives from is already recorded by **Monthly Total**.
 
@@ -260,9 +274,7 @@ condition:
     state: high
 ```
 
-**It follows the router's cycle, not the calendar month.** The cycle boundary comes from **Reset Day**, so a cycle running the 15th to the 15th is handled correctly. Where the reset day is later than a short month allows — day 31 in February — the reset is taken as the last day of that month.
-
-The sensor is unavailable if the router's automatic monthly reset is switched off, because then the counters never roll over and there is no cycle to project against.
+**It follows the router's cycle, if set, and the alendar month** as default, if it is not set. The cycle boundary comes from **Reset Day**, so a cycle running the 15th to the 14th is handled correctly. Where the reset day is later than a short month allows — day 31 in February — the reset is taken as the last day of that month.
 
 ---
 
@@ -304,6 +316,8 @@ This integration features **dynamic polling**, the ability to pause polling comp
 - **Explicit Actions Always Fetch**: **Refresh Now**, a settings change or an SMS action fetches immediately **even while paused** — only scheduled polls are suppressed. See the [Morning Signal Report](#-morning-signal-report) example.
 - **Standard System Option**: Also honours Home Assistant's **System options > Enable polling for changes** toggle.
 
+![System Configuration Controls](.github/images/zte_5g_system_config.png)
+
 > [!TIP]
 >
 > **Polling Interval can be controlled dynamically, via automation**
@@ -339,6 +353,10 @@ This integration provides **92 entities** (depending on your firmware) organized
 | 📈 **Data** | 14 Sensors, 1 Switch (+4) | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
 | 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
+
+---
+
+![Integration](.github/images/zte_5g_integration_screen.png)
 
 ---
 
@@ -393,6 +411,8 @@ Typical cases:
 
 Disabled entities stay in the registry (greyed out) and can be re-enabled any time. This hides them from your UI; the integration still polls as normal.
 
+![Signal Sensors](.github/images/zte_5g_disable_device.png)
+
 ---
 
 </details>
@@ -425,12 +445,10 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 | Uptime Duration | Resets on reboot; predictable pattern adds no insight |
 | Battery | Always 100% when plugged in |
 | Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
-| **Projected Cycle Usage** | An estimate of where the cycle ends up, useful now rather than as a history. The usage it is derived from is already recorded by Monthly Total, so keeping both would store a derived view of a number already stored |
-| **Reset Day** | A billing-cycle setting that changes at most once; a trend line of it says nothing |
+| **Projected Cycle Usage** | An estimate of where the cycle ends up, useful now rather than as a history. |
+| **Reset Day** | A billing-cycle setting that changes infrequently |
 | **Allowance** | A configured cap, not a measurement |
 | Alert Threshold | Configuration setting; historical trend holds no analytical value |
-| LTE Band Lock Mask (disabled) | Text string diagnostic sensor |
-| Time Server (SNTP) (disabled) | Text string configuration sensor |
 
 > [!TIP]
 >
@@ -458,26 +476,6 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 </details>
 
 <br>
-
-## 📸 Screenshots
-
-Screenshots are embedded throughout the document near relevant sections. This is the Integration Overview screen, highlighting the division into seven sub-devices.
-
-### Integration Overview
-
-![Integration](.github/images/zte_5g_integration_screen.png)
-
-| Signal | System |
-| :-: | :-: |
-| ![Signal](.github/images/zte_5g_signal_screen_mini1.png) | ![System](.github/images/zte_5g_system_screen.png) |
-
-| Data | SMS |
-| :-: | :-: |
-| ![Data](.github/images/zte_5g_data_screen_mini.png) | ![SMS](.github/images/zte_5g_sms_info.png) |
-
-### Setup
-
-![Setup](.github/images/zte_5g_setup_info.png)
 
 ## 🔘 Controls & Settings
 
@@ -514,7 +512,7 @@ Several settings are exposed as control entities so you can drive them from dash
 
 #### How APN selection actually behaves
 
-These three controls interact in ways that each look like a fault in isolation. They are not — this is how the router works, and the same behaviour is visible on its own web page.
+These three controls interact in ways that each look like a fault in isolation. They are not — this is how the router works, and the same behavior is visible on its own web page.
 
 **Choosing an APN Profile also switches the mode to Manual.** The router's command sets the profile and the mode together; there is no way to pick a profile without leaving auto. So the usual way to go manual is simply to choose the profile you want, not to change the mode first.
 
@@ -1318,7 +1316,7 @@ triggers:
 actions:
   - action: persistent_notification.create
     data:
-      title: "ZTE: Serving Cell Changed"
+      title: "ZTE: Serving Cell Tower Changed"
       message: |
         Cell ID {{ trigger.from_state.state }} → {{ trigger.to_state.state }}
         Band: {{ states('sensor.zte_5g_signal_lte_active_band') }}
