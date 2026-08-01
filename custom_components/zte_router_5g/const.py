@@ -39,7 +39,7 @@ LIVE_OPTION_KEYS = frozenset({CONF_SCAN_INTERVAL, CONF_STOP_POLLING})
 # Do not remove this in favour of relying on the reactive expiry detection in
 # `_request`. Reacting costs *more*, not less: a failed request, then a login,
 # then a retry — three round trips where preempting costs two. It is also the
-# second line of defence on a router whose expired-session response is
+# second line of defense on a router whose expired-session response is
 # indistinguishable from success at the HTTP layer.
 SESSION_IDLE_RESET_SECONDS = 150
 
@@ -77,7 +77,7 @@ APN_PROFILE_SLOTS = 10
 # five segments, and the Unicode equivalent is 5 x 67.
 #
 # Enforced in `async_send_sms` rather than the service schema, because which
-# limit applies depends on the message content. Behaviour past five segments is
+# limit applies depends on the message content. Behavior past five segments is
 # untested on hardware; these ceilings keep callers out of that zone.
 # Targeted write confirmation (switch platform).
 #

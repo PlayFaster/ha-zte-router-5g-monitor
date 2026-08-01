@@ -3,7 +3,7 @@
 HA 2026.8 makes a device belong to a single config entry and deprecates several
 registry surfaces (removed in 2027.8): the ambiguous ``async_get_device`` and the
 ``DeviceInfo.via_device`` identifier tuple. This integration stays **floor-free**
-— one behaviour on <=2026.7 and on post-2027.8 alike — by feature-detecting each
+— one behavior on <=2026.7 and on post-2027.8 alike — by feature-detecting each
 surface and using the new API where present, the old one otherwise.
 
 Detection probes the HA **classes** (not instances), so it reflects the actually

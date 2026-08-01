@@ -90,14 +90,14 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 - **Unattended Recovery**: Fail over to a backup APN, or restart the router, when the connection stops recovering on its own. → [APN Failover](#-apn-failover--network-selection) and [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) examples.
 
-- **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your mobile phone. → [Forward Incoming SMS](#-forward-incoming-sms-to-mobile) example.
+- **Smart SMS Gateway**: Use your router as a notification bridge; for example, forward home security alerts to your mobile phone. → [Alert on Incoming SMS](#-alert-on-incoming-sms) example.
   - ❗**Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
 
 ## ✅ Features
 
 ### 📡 Advanced 5G/LTE Diagnostics
 
-Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower details, and active carrier bands in near-real-time.
+Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower details, and active carrier bands — as often as every 30 seconds.
 
 <details>
 
@@ -160,18 +160,18 @@ RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
 
 ---
 
-| Acronym | Means | Think Of | Answers |
-| :-- | :-- | :-- | :-- |
-| **SNR** | Signal-to-Noise Ratio | **"Signal Quality"** | _How fast will this actually go?_ |
-| **RSRP** | Reference Signal Received Power | **"Signal Strength"** | _Do I have coverage at all?_ |
-| **RSRQ** | Reference Signal Received Quality | **"Connection Congestion"** | _Is the channel congested/busy?_ |
-| **RSSI** | Received Signal Strength Indicator | **"Total Power"** | _How much raw RF energy is reaching the modem?_ |
+| Acronym  | Means                              | Think Of                    | Answers                                         |
+| :------- | :--------------------------------- | :-------------------------- | :---------------------------------------------- |
+| **SNR**  | Signal-to-Noise Ratio              | **"Signal Quality"**        | _How fast will this actually go?_               |
+| **RSRP** | Reference Signal Received Power    | **"Signal Strength"**       | _Do I have coverage at all?_                    |
+| **RSRQ** | Reference Signal Received Quality  | **"Connection Congestion"** | _Is the channel congested/busy?_                |
+| **RSSI** | Received Signal Strength Indicator | **"Total Power"**           | _How much raw RF energy is reaching the modem?_ |
 
 ---
 
 > [!TIP]
 >
-> Every signal entity carries this guidance in its own **`about`** note. Click the entity → **⋮ menu → Details**. The table above simply gathers them in one place.
+> Every signal entity carries an **`about`** note explaining what it measures, and most also give these threshold bands. Click the entity → **⋮ menu → Details**.
 
 #### Treat these as a starting point, not a verdict
 
@@ -238,8 +238,8 @@ Monitor monthly data consumption, active session totals, and real-time upload/do
 - **Reset Day** (`sensor.zte_5g_data_reset_day`): The day of the month the router zeroes its counters. This is the router's own billing cycle and need not be the 1st - worth checking against your provider's bill.
 - **Projected Cycle Usage** (`sensor.zte_5g_data_projected_cycle_usage`): An estimate of where you will finish the cycle at your current rate. See [Understanding the usage projection](#understanding-the-usage-projection) below.
 
-| Data Sensors | Data Diagnostics |
-| :-: | :-: |
+|                        Data Sensors                         |                      Data Diagnostics                      |
+| :---------------------------------------------------------: | :--------------------------------------------------------: |
 | ![Data Sensors](.github/images/zte_5g_data_screen_mini.png) | ![Data Diagnostics ](.github/images/zte_5g_data_diags.png) |
 
 ---
@@ -252,13 +252,13 @@ It is a simple run-rate: usage period-to-date is divided by the days elapsed in 
 
 **It is least reliable at the start of a cycle, when it is likely to under-report.** Two days in, the sensor has only two days of evidence and 29 days to extrapolate across, so one large download distorts it.
 
-| Attribute | Meaning |
-| :-- | :-- |
-| `confidence` | `low`, `medium` or `high` — how much of the figure rests on observed usage rather than extrapolation. Reaches `high` around a quarter of the way through a cycle. |
-| `basis` | How the estimate was made. Currently always `run_rate_only`. |
-| `cycle_day` | Where you are in the cycle, e.g. `12 of 31`. |
-| `cycle_start` | The date the current cycle began. |
-| `cycle_source` | `router` when the reset day came from the router, `calendar_assumed` when it did not report one and the 1st of the month was assumed. |
+| Attribute      | Meaning                                                                                                                                                           |
+| :------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `confidence`   | `low`, `medium` or `high` — how much of the figure rests on observed usage rather than extrapolation. Reaches `high` around a quarter of the way through a cycle. |
+| `basis`        | How the estimate was made. Currently always `run_rate_only`.                                                                                                      |
+| `cycle_day`    | Where you are in the cycle, e.g. `12 of 31`.                                                                                                                      |
+| `cycle_start`  | The date the current cycle began.                                                                                                                                 |
+| `cycle_source` | `router` when the reset day came from the router, `calendar_assumed` when it did not report one and the 1st of the month was assumed.                             |
 
 **On the first day of a cycle it reads low.** With only a few hours of usage to extrapolate from, the calculation clamps slightly, to avoid projecting unrealistically high totals. The effect is that the number starts low and climbs, settling on a more usable value once a full day has passed. It becomes more accurate from day 2 of every cycle (and day 2 after you first install the integration).
 
@@ -294,6 +294,10 @@ Reboot router hardware directly from Home Assistant and monitor data integrity w
 
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
 - **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
+
+|                        System Control                        |                             System Diagnostics                             |
+| :----------------------------------------------------------: | :------------------------------------------------------------------------: |
+| ![System Control](.github/images/zte_5g_system_controls.png) | ![System Diagnostics](.github/images/zte_5g_system_integration_health.png) |
 
 ---
 
@@ -344,13 +348,13 @@ This integration provides **92 entities** (depending on your firmware) organized
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Sub-Device | Entity Types (+disabled) | Key Metrics | Disabled by Default |
-| :-- | :-- | :-- | :-- |
-| ⚙️ **System** | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+21) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
-| 📶 **Signal** | 36 Sensors, 1 Binary Sensor, 3 Selects (+10) | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
-| 📈 **Data** | 14 Sensors, 1 Switch (+4) | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
-| ✉️ **SMS Entities** | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
-| 🛠️ **SMS Actions** | 4 Actions | Send, Delete, and List SMS | — |
+| Sub-Device          | Entity Types (+disabled)                                            | Key Metrics                                                                                                                     | Disabled by Default                                                                                                                                                                                                                                                                      |
+| :------------------ | :------------------------------------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ⚙️ **System**       | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number (+21) | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls                                   | Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
+| 📶 **Signal**       | 36 Sensors, 1 Binary Sensor, 3 Selects (+10)                        | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection                           | MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask                                                                                                                                      |
+| 📈 **Data**         | 14 Sensors, 1 Switch (+4)                                           | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Near-real-time Speed, Session Data | Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch                                                                                                                                                                                                                     |
+| ✉️ **SMS Entities** | 3 Sensors, 1 Button                                                 | Unread Count, Total Msg, Recent Msg, Delete All (one-click)                                                                     | None                                                                                                                                                                                                                                                                                     |
+| 🛠️ **SMS Actions**  | 4 Actions                                                           | Send, Delete, and List SMS                                                                                                      | —                                                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -427,26 +431,26 @@ Home Assistant records Long Term Statistics for numeric sensors that have a `sta
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Sensors with LTS enabled | Why |
-| :-- | :-- |
+| Sensors with LTS enabled                        | Why                                       |
+| :---------------------------------------------- | :---------------------------------------- |
 | LTE & 5G signal metrics (RSRP, RSRQ, RSSI, SNR) | Track connection quality trends over time |
-| Monthly data usage (Sent, Received, Total) | Monitor data consumption month-over-month |
-| SMS counts (Unread, Total) | Track message volume over time |
-| Signal Bars | Coarse signal summary over time |
+| Monthly data usage (Sent, Received, Total)      | Monitor data consumption month-over-month |
+| SMS counts (Unread, Total)                      | Track message volume over time            |
+| Signal Bars                                     | Coarse signal summary over time           |
 
 The following sensors have **no LTS** to avoid unnecessary database growth:
 
-| Sensor | Reason |
-| :-- | :-- |
-| Upload / Download Speed | Instantaneous readings — history at poll intervals has limited analytical value |
-| Session Sent / Received | Resets on every reconnect — not meaningful for long-term trends |
-| Uptime Duration | Resets on reboot; predictable pattern adds no insight |
-| Battery | Always 100% when plugged in |
-| Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
-| **Projected Cycle Usage** | An estimate of where the cycle ends up, useful now rather than as a history. |
-| **Reset Day** | A billing-cycle setting that changes infrequently |
-| **Allowance** | A configured cap, not a measurement |
-| Alert Threshold | Configuration setting; historical trend holds no analytical value |
+| Sensor                        | Reason                                                                          |
+| :---------------------------- | :------------------------------------------------------------------------------ |
+| Upload / Download Speed       | Instantaneous readings — history at poll intervals has limited analytical value |
+| Session Sent / Received       | Resets on every reconnect — not meaningful for long-term trends                 |
+| Uptime Duration               | Resets on reboot; predictable pattern adds no insight                           |
+| Battery                       | Always 100% when plugged in                                                     |
+| Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default                                              |
+| **Projected Cycle Usage**     | An estimate of where the cycle ends up, useful now rather than as a history.    |
+| **Reset Day**                 | A billing-cycle setting that changes infrequently                               |
+| **Allowance**                 | A configured cap, not a measurement                                             |
+| Alert Threshold               | Configuration setting; historical trend holds no analytical value               |
 
 > [!TIP]
 >
@@ -493,8 +497,8 @@ Several settings are exposed as control entities so you can drive them from dash
 - **Reboot** (`button.zte_5g_system_reboot`): Reboot the router hardware directly from Home Assistant.
 - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`, _disabled by default_): Turn the physical status LEDs of the outdoor unit on or off.
 
-| System Configuration | System Control |
-| :-: | :-: |
+|                           System Configuration                            |                        System Control                        |
+| :-----------------------------------------------------------------------: | :----------------------------------------------------------: |
 | ![System Configuration](.github/images/zte_5g_system_config_with_led.png) | ![System Control](.github/images/zte_5g_system_controls.png) |
 
 ---
@@ -511,18 +515,20 @@ Several settings are exposed as control entities so you can drive them from dash
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-- **APN Profile** (`select.zte_5g_signal_apn_profile`): Switch the active default APN profile dynamically.
+> [!WARNING] Switching APN can be an important and useful connectivity managamenet tool. Bear in mind that your ISP may place restrictions on non-default APNs (reduced or no performance), so this is a procced with caution and only if you know what you are doing area.
+
+- **APN Profile** (`select.zte_5g_signal_apn_profile`): In Manual mode, switch the active APN profile.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:
 
 ![Signal Config with APN](.github/images/zte_5g_signal_config_apn_dropdown.png) |
 
-| Selector value | Router web page | Meaning |
-| :-- | :-- | :-- |
-| `4G_AND_5G` | **Auto** | Let the router choose, falling back as signal changes |
-| `LTE_AND_5G` | **5G NSA** | 5G anchored to an LTE carrier |
-| `Only_5G` | **5G SA** | 5G standalone, no LTE anchor |
-| `Only_LTE` | **4G Only** | LTE only, 5G disabled |
+| Selector value | Router web page | Meaning                                               |
+| :------------- | :-------------- | :---------------------------------------------------- |
+| `4G_AND_5G`    | **Auto**        | Let the router choose, falling back as signal changes |
+| `LTE_AND_5G`   | **5G NSA**      | 5G anchored to an LTE carrier                         |
+| `Only_5G`      | **5G SA**       | 5G standalone, no LTE anchor                          |
+| `Only_LTE`     | **4G Only**     | LTE only, 5G disabled                                 |
 
 > [!WARNING] The two `Only_` values lock the radio. Where 5G coverage is marginal, `Only_5G` can drop the connection entirely and it may not recover on its own — prefer `4G_AND_5G` unless you are deliberately testing.
 >
@@ -532,7 +538,7 @@ Several settings are exposed as control entities so you can drive them from dash
 
 - **Choosing an APN Profile also switches the mode to Manual.** The router's command sets the profile and the mode together; there is no way to pick a profile without leaving auto. So the usual way to go manual is simply to choose the profile you want, not to change the mode first.
 
-- **In Auto, the router uses the network's own default APN.** That default does not have to be one of your stored profiles, so the **APN Profile** selector may show blank while you are perfectly well connected. Blank there means "the APN in use is not one of your saved profiles" — not "no APN".
+- **In Auto, the router uses the network's own default APN.** That default does not have to be one of your stored profiles, so the **APN Profile** selector may show unknown while you are perfectly well connected. Unknown there means "the APN in use is not one of your saved profiles" — not "no APN".
 
 - **`sensor.zte_5g_signal_network_apn` is the authoritative value.** The APN Profile selector describes your stored _choice_; the **Network APN** sensor reports what the router is _actually connected with_. When the two disagree, believe the sensor. Use it in automations and templates rather than the selector.
 
@@ -541,8 +547,6 @@ Several settings are exposed as control entities so you can drive them from dash
 - **Profiles are created on the router, not here.** The integration selects among the profiles already stored on your router; it cannot add, edit or delete one — that is done on the router's own web page. A profile you add there appears in the **APN Profile** dropdown at the next poll, or immediately if you press **Refresh Now**. This integration lists up to ten APN Profiles.
 
 - **Switching to Manual needs a profile to switch _to_.** The router refuses a mode change that does not name one, so if the APN currently in use is not among your saved profiles, choosing `manual` in **APN Selection Mode** reports an error asking you to pick from **APN Profile** instead. That is the route that works — it sets both at once.
-
-> [!TIP] If you want your network's default APN to appear in the Manual list too, add it as a profile on the router's own page with the same APN string. The integration then matches it, the **APN Profile** selector names it even while the mode is Auto, and switching to Manual works directly.
 
 ---
 
@@ -597,20 +601,20 @@ There is also an SMS received event and four SMS actions to send, read and delet
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
 </summary><br>
 
-| Parameter | Required | Description |
-| :-- | :-- | :-- |
-| `entry_id` | No | The router to use. Optional if only one router is configured. |
-| `target` | **Yes** | Recipient phone number(s) (e.g. `+353871234567`). |
-| `message` | **Yes** | Message content. Length limit depends on the characters used - see below. |
+| Parameter  | Required | Description                                                               |
+| :--------- | :------- | :------------------------------------------------------------------------ |
+| `entry_id` | No       | The router to use. Optional if only one router is configured.             |
+| `target`   | **Yes**  | Recipient phone number(s) (e.g. `+1234567878`).                           |
+| `message`  | **Yes**  | Message content. Length limit depends on the characters used - see below. |
 
 > [!NOTE]
 >
-> **How long can a message be?** It depends on what is in it, not just how long it is.
+> **How long can a message be?**
 >
-> | Message contains | Fits in one SMS | Maximum accepted |
-> | :-- | :-- | :-- |
-> | Only standard characters (letters, digits, common punctuation) | **160** | **765** |
-> | Any emoji, curly quote, or other special character | **70** | **335** |
+> | Message contains                                               | Fits in one SMS | Maximum accepted |
+> | :------------------------------------------------------------- | :-------------- | :--------------- |
+> | Only standard characters (letters, digits, common punctuation) | **160**         | **765**          |
+> | Any emoji, curly quote, or other special character             | **70**          | **335**          |
 >
 > A single special character changes the encoding for the **whole** message, which is why the second row is so much shorter. Longer messages are split into parts by the router and reassembled by the receiving phone, so they arrive as one message - but **your carrier charges for each part**. A 200-character plain-text alert is 2 parts; the same text with one emoji is 3.
 >
@@ -619,8 +623,8 @@ There is also an SMS received event and four SMS actions to send, read and delet
 ```yaml
 action: zte_router_5g.send_sms
 data:
-  target: "+1234567891011"
-  message: "Hello from Home Assistant!"
+  target: "+1234567878"
+  message: "ZTE Router Test SMS Message"
 ```
 
 ![SMS Send Action](.github/images/zte_5g_action_send_sms.png)
@@ -641,12 +645,12 @@ data:
 
 Fetch a list of SMS messages. Supports **Action Responses** — use the output directly in automations and scripts.
 
-| Parameter | Required | Default | Range | Description |
-| :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
-| `page` | No | `1` | 1–100 | Page number for pagination. |
-| `count` | No | `20` | 1–50 | Messages per page. |
-| `box_type` | No | `1` | See below | Mailbox to read from. |
+| Parameter  | Required | Default | Range     | Description                                                                               |
+| :--------- | :------- | :------ | :-------- | :---------------------------------------------------------------------------------------- |
+| `entry_id` | No       | —       | —         | The router to use. Defaults to your only router; required if more than one is configured. |
+| `page`     | No       | `1`     | 1–100     | Page number for pagination.                                                               |
+| `count`    | No       | `20`    | 1–50      | Messages per page.                                                                        |
+| `box_type` | No       | `1`     | See below | Mailbox to read from.                                                                     |
 
 **`box_type` values:** `1` Local Inbox · `2` Local Sent · `3` Local Draft · `4` Local Trash · `5` SIM Inbox · `6` SIM Sent · `7` SIM Draft · `8` Mix Inbox · `9` Mix Sent · `10` Mix Draft
 
@@ -660,13 +664,10 @@ Fetch a list of SMS messages. Supports **Action Responses** — use the output d
 | `date`    | Text    | Date/time string.                                            |
 | `read`    | Boolean | `true` if read, `false` if unread.                           |
 
-> [!NOTE] **An empty `messages` list means the box really is empty.** If the router cannot be reached, or its session has expired, this action **raises an error** rather than returning an empty list — so an automation can tell "no messages" apart from "could not ask". Guard the call with `continue_on_error: true` if you would rather the automation carry on regardless.
-
 ```yaml
 action: zte_router_5g.get_sms_list
 data:
-  entry_id: <your_config_entry_id>
-  count: 50
+  count: 20
   box_type: 1
 response_variable: inbox
 ```
@@ -689,15 +690,14 @@ response_variable: inbox
 
 Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
 
-| Parameter | Required | Description |
-| :-- | :-- | :-- |
-| `entry_id` | No | The router to use. Defaults to your only router; required if more than one is configured. |
-| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
+| Parameter  | Required | Description                                                                               |
+| :--------- | :------- | :---------------------------------------------------------------------------------------- |
+| `entry_id` | No       | The router to use. Defaults to your only router; required if more than one is configured. |
+| `index`    | **Yes**  | Storage index of the message to delete (integer ≥ 0).                                     |
 
 ```yaml
 action: zte_router_5g.delete_sms
 data:
-  entry_id: <your_config_entry_id>
   index: 3
 ```
 
@@ -719,16 +719,15 @@ data:
 
 > The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
 
-| Parameter | Required | Default | Range | Description |
-| :-- | :-- | :-- | :-- | :-- |
-| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
-| `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
+| Parameter   | Required | Default | Range | Description                                                                               |
+| :---------- | :------- | :------ | :---- | :---------------------------------------------------------------------------------------- |
+| `entry_id`  | No       | —       | —     | The router to use. Defaults to your only router; required if more than one is configured. |
+| `keep_last` | No       | `0`     | 0–50  | Number of most recent messages to preserve. `0` deletes all.                              |
 
 ```yaml
 action: zte_router_5g.delete_all_sms
 data:
-  entry_id: <your_config_entry_id>
-  keep_last: 5
+  keep_last: 2
 ```
 
 ![SMS Delete All Action](.github/images/zte_5g_action_delete_all_sms.png)
@@ -749,15 +748,15 @@ data:
 
 Fires automatically when a new incoming SMS is detected. Use as an automation trigger.
 
-| Field | Type | Description |
-| :-- | :-- | :-- |
-| `entry_id` | Text | Config entry ID of the router that received the message. |
-| `phone` | Text | Sender's phone number. |
-| `content` | Text | Message body. |
-| `date` | Text | Date/time of the message. |
-| `index` | Integer | Storage index — pass directly to `delete_sms` to delete after processing. |
+| Field      | Type    | Description                                                               |
+| :--------- | :------ | :------------------------------------------------------------------------ |
+| `entry_id` | Text    | Config entry ID of the router that received the message.                  |
+| `phone`    | Text    | Sender's phone number.                                                    |
+| `content`  | Text    | Message body.                                                             |
+| `date`     | Text    | Date/time of the message.                                                 |
+| `index`    | Integer | Storage index — pass directly to `delete_sms` to delete after processing. |
 
----
+See [Forward incoming SMS to mobile](#-forward-incoming-sms-to-mobile) example.
 
 </details>
 
@@ -810,18 +809,16 @@ target:
 
 ### 💬 SMS Examples
 
-#### 📨 Forward Incoming SMS to Mobile
+#### 📨 Alert on Incoming SMS
 
 <details>
 
-<summary> &nbsp; &nbsp; This automation fires when a new SMS is detected and forwards the content to your mobile phone.<br>
+<summary> &nbsp; &nbsp; This automation fires when a new SMS is detected and generates a notification.<br>
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
 
-- **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
-
 ```yaml
-alias: "ZTE SMS: Forward to Mobile"
+alias: "ZTE SMS: Alert on New SMS"
 description: "Forwards the content of any newly received SMS to a notification"
 mode: queued
 max: 10
@@ -872,7 +869,6 @@ conditions:
 actions:
   - action: zte_router_5g.delete_all_sms
     data:
-      entry_id: <your_config_entry_id> # This is GUI selectable in the Automation Editor.
       keep_last: 5
     note: |
       keep_last preserves the newest N messages. Set it to 0 to clear the inbox
@@ -907,7 +903,6 @@ triggers:
 actions:
   - action: zte_router_5g.get_sms_list
     data:
-      entry_id: <your_config_entry_id> # This is GUI selectable in the Automation Editor.
       count: 50
     response_variable: inbox
     note: |
@@ -937,6 +932,8 @@ actions:
 <summary> &nbsp; &nbsp; Automatically switch to a backup APN profile if the primary connection goes offline.<br>
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
+
+> [!WARNING] Switching APN can be an important and useful connectivity managamenet tool. Bear in mind that your ISP may place restrictions on non-default APNs (reduced or no performance), so this is a procced with caution and only if you know what you are doing area.
 
 ```yaml
 alias: "ZTE APN: Switch Profile on Network Failure"
@@ -982,9 +979,11 @@ actions:
 
 <details>
 
-<summary> &nbsp; &nbsp; Monitor your data consumption and get notified when you approach your monthly limit. The example below assumes the data sensors display in **GB**. If your sensors are not in GB, check their unit and adjust the thresholds and templates accordingly.<br>
+<summary> &nbsp; &nbsp; Monitor your data consumption and get notified when you approach your monthly limit.<br>
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
+
+The example below assumes the data sensors display in **GB**, which is the default. If you have changed the display units, adjust the thresholds and templates accordingly.
 
 ```yaml
 alias: "ZTE Data: High Data Usage Alert"
@@ -993,11 +992,10 @@ mode: single
 triggers:
   - trigger: numeric_state
     entity_id: sensor.zte_5g_data_monthly_total
-    above: 500 # 500 GB - use 500000000000 if the sensor displays Bytes (B)
+    above: 500
     note: |
-      The sensor stores bytes and displays gigabytes. A numeric_state trigger compares
-      against the DISPLAYED value, so 500 means 500 GB here. Check the unit shown on
-      the entity before setting the number - see the note under this example.
+      This assumes the data sensors display in GB which is the default.
+      If you have changed the display units, adjust the threshold.
 actions:
   - action: persistent_notification.create
     data:
@@ -1020,70 +1018,43 @@ actions:
 
 <details>
 
-<summary> &nbsp; &nbsp; Warn when you are <b>on course</b> to exceed your allowance, rather than waiting until you already have. Suppressed for the first two days of each cycle, when the estimate has too little to go on.<br>
+<summary> &nbsp; &nbsp; Warn when you are <b>on course</b> to exceed your allowance, rather than waiting until you already have.<br>
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
 
+Uses the data cap set on the router under Data Management. If you do not use this, change the "above:" setting to an actual number, say 1000 for 1TB.
+
 ```yaml
 alias: "ZTE Data: Projected Overage Alert"
-description: "Warns once per cycle when the projection exceeds the allowance"
+description: "Warns when the projection is set to exceed the allowance"
 mode: single
 triggers:
   - trigger: numeric_state
     entity_id: sensor.zte_5g_data_projected_cycle_usage
-    above: 1000 # your allowance, in the unit the sensor displays (GB by default)
+    above: sensor.zte_5g_data_allowance
+    for:
+      hours: 2
+    note: |
+      The threshold follows the router's own cap rather than a fixed number.
+      The two-hour window rides out short swings in the projection.
 conditions:
   - condition: template
-    value_template: >-
-      {{ (state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') or '0 of 0').split(' ')[0] | int(0) >= 3 }}
-
-
+    value_template: |
+      {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'confidence') != 'low' }}
     note: |
-      The gate that makes this usable. `cycle_day` reads like "3 of 31", so the
-      first token is the day number. Before day 3 the projection is extrapolating
-      from a couple of days of usage and swings widely - a single large download
-      on the 1st would page you for an overage that never happens.
-      The `or '0 of 0'` matters: if the sensor is unavailable the attribute is
-      absent, and calling .split on nothing would throw. This way it reads as
-      day 0 and the condition simply fails.
+      Skips the first days of a cycle, when the projection is working from very
+      little usage and swings widely.
 actions:
   - action: persistent_notification.create
     data:
       title: "ZTE Data: projected to exceed allowance"
-      message: >
-        On current usage this cycle is projected to finish at {{ states('sensor.zte_5g_data_projected_cycle_usage') | float(0) | round(0) }} {{ state_attr('sensor.zte_5g_data_projected_cycle_usage',
-                      'unit_of_measurement') }}
-        - day {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') }}, confidence {{ state_attr('sensor.zte_5g_data_projected_cycle_usage',
-                                 'confidence') }}.
-
-
+      message: |
+        On current usage this cycle is projected to finish at {{ states('sensor.zte_5g_data_projected_cycle_usage') | float(0) | round(0) }} {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'unit_of_measurement') }}
+        - day {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') }}, confidence {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'confidence') }}.
     note: |
       Including the cycle day and confidence in the message tells you how much
       weight to give the warning without opening the entity.
 ```
-
-**Comparing against the router's own cap instead of a fixed number.** The **Allowance** sensor reports the cap configured on the router, so the threshold tracks your actual plan and changing it does not mean editing the automation. Swap the `numeric_state` trigger for a template one:
-
-```yaml
-triggers:
-  - trigger: template
-    value_template: >-
-      {{ states('sensor.zte_5g_data_projected_cycle_usage') | float(0)
-         > states('sensor.zte_5g_data_allowance') | float(0) > 0 }}
-```
-
-The trailing `> 0` matters: **Allowance** is unavailable when no cap is set or the router is limiting by hours rather than data, and without it an unset cap would read as zero and fire immediately.
-
-**Two alternatives to the day-3 gate**, depending on how twitchy you want it:
-
-- `confidence` **is not** `low` — equivalent to roughly day 2 onward, and self-adjusting if the thresholds ever change.
-- `confidence` **is** `high` — around day 9 onward. Fewer false alarms, but less warning time.
-
-Use the day-number gate when you want a fixed, predictable rule; use `confidence` when you would rather the sensor decide.
-
-> [!NOTE]
->
-> `mode: single` plus a `numeric_state` trigger means this fires on the **crossing**, not on every poll above the threshold. If the projection dips back under and rises again later in the same cycle it will fire a second time — add an `input_boolean` guard reset by a cycle-start automation if you want strictly once per cycle.
 
 ---
 
@@ -1106,11 +1077,11 @@ triggers:
     entity_id:
       - binary_sensor.zte_5g_signal_best_connection
     to: "off"
+    from: "on"
     for: "00:05:00"
     note: |
       Best Connection is on only when the router has BOTH 5G ENDC and LTE carrier
-      aggregation active. It reports unknown rather than off before the first poll
-      completes, so a restart does not fire this.
+      aggregation active.
   - trigger: state
     entity_id:
       - sensor.zte_5g_signal_network_type
@@ -1202,7 +1173,7 @@ actions:
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
 
-The **Integration Health** binary sensor turns on when the integration's self-checks find a problem — the router unreachable for several consecutive polls, an SMS endpoint that has stopped responding, or a poll that _succeeded_ but returned none of the fields the integration expects (typically a firmware update renaming them). It stays **available even when every other entity has gone unavailable**, so it can report the fault that made the others unreliable.
+The **Integration Health** binary sensor turns on when the integration's self-checks find a problem — the router unreachable for several consecutive polls, an SMS endpoint that has stopped responding, or a poll that _succeeded_ but returned none of the fields the integration expects. It stays **available even when every other entity has gone unavailable**, so it can report the fault that made the others unreliable.
 
 ```yaml
 alias: "ZTE Health: Integration Health Problem"
@@ -1244,7 +1215,7 @@ actions:
 
 <details>
 
-<summary> &nbsp; &nbsp; Monitor for router reboots by watching the device boot timestamp sensor.<br>
+<summary> &nbsp; &nbsp; Monitor and get alerted on router reboots.<br>
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
 
@@ -1253,15 +1224,16 @@ alias: "ZTE Reboot: Router Reboot Alert"
 description: "Notifies when the router's boot timestamp moves, indicating a restart"
 mode: single
 triggers:
-  - trigger: template
-    value_template: |
-      {% set uptime = states('sensor.zte_5g_system_device_uptime') | as_datetime %}
-      {{ uptime is not none and (now() - uptime).total_seconds() < 120 }}
+  - trigger: state
+    entity_id: sensor.zte_5g_system_device_uptime
+    not_from:
+      - unknown
+      - unavailable
+    not_to:
+      - unknown
+      - unavailable
     note: |
-      Device Uptime is a timestamp of when the router booted, not a counter. The
-      integration latches that instant and only re-derives it when the router's uptime
-      counter genuinely drops, so it does not drift between reboots - which is what
-      makes this template reliable rather than noisy.
+      Triggers after a reboot but avoids alerts due to availability glitches
 actions:
   - action: persistent_notification.create
     data:
@@ -1278,7 +1250,7 @@ actions:
 
 <details>
 
-<summary> &nbsp; &nbsp; Recover automatically from a wedged connection by restarting the router.<br>
+<summary> &nbsp; &nbsp; Recover automatically from a stuck connection by restarting the router.<br>
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
 
@@ -1337,7 +1309,7 @@ actions:
 
 <details>
 
-<summary> &nbsp; &nbsp; Be told when the router re-homes to a different cell, which often explains a sudden change in speed or signal.<br>
+<summary> &nbsp; &nbsp; Be told when the router moves to a different cell, which often explains a sudden change in speed or signal.<br>
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
 
@@ -1378,9 +1350,11 @@ actions:
 
 <details>
 
-<summary> &nbsp; &nbsp; Know when the router updates itself. A firmware change is the most likely cause of the integration's data shape shifting underneath it.<br>
+<summary> &nbsp; &nbsp; Know when the router's firmware has been updated.<br>
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
+
+ZTE CPEs can update their own firmware without prompting, so this is often the only notice you get that the router changed.
 
 ```yaml
 alias: "ZTE Firmware: Firmware Version Changed"
@@ -1396,22 +1370,14 @@ triggers:
       - "unknown"
       - "unavailable"
     note: |
-      ZTE CPEs can update firmware without warning. Worth knowing about, because a
-      firmware change can rename the API fields the integration reads - exactly the
-      condition the Integration Health sensor watches for. Ignores unknown or unavailable
-      transitions.
+      Ignoring transitions to and from unknown or unavailable means a Home
+      Assistant restart or a missed poll does not read as a version change.
 actions:
   - action: persistent_notification.create
     data:
       title: "ZTE Router Firmware Changed"
       message: |
-        {{ trigger.from_state.state }} → {{ trigger.to_state.state }}
-
-        If sensors start showing Unknown after this, check Integration Health and open
-        an issue quoting both version numbers.
-    note: |
-      If the update did break the API, Integration Health turns on and raises a Repair
-      within a few poll cycles.
+        Firmware version changed: {{ trigger.from_state.state }} → {{ trigger.to_state.state }}
 ```
 
 ---
@@ -1617,9 +1583,23 @@ Setup is handled entirely via the UI under **Settings > Devices & Services > Add
 You will need the same details that you use for the router's web UI:
 
 - **Host** — Router IP Address (e.g., 192.168.0.1)
-- **Username** — Router login username (default: admin)
+- **Username** — Optional. Leave blank unless your router's web page asks for one.
 - **Password** — Admin password for the router web interface
 - **Name** — Custom prefix for all devices and entities (default: `ZTE 5G`). This determines entity IDs — e.g. the default produces `sensor.zte_5g_data_monthly_total`. Change this if you have multiple routers or prefer a different naming scheme.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Screenshot:
+</summary><br>
+
+![Setup)](.github/images/zte_5g_setup_info.png)
+
+---
+
+</details>
+
+<br>
 
 ### 🔨 Runtime Options (Configure / Reconfigure)
 
@@ -1638,6 +1618,11 @@ After installation, open **Settings > Devices & Services > ZTE Router 5G Monitor
 | Host     | Router IP address (change if the router's LAN IP changes). |
 | Username | Router login username.                                     |
 | Password | Admin password (update if changed on the router).          |
+| Name     | Custom prefix for all devices (default: `ZTE 5G`).         |
+
+> [!TIP] Changing Name on the Reconfigure screen will change the name of the ZTE devices the integration provides, but will not change the individual sensor entity names. This only happens at set-up, not reconfigure.
+
+![(Re)Configure Screen)](.github/images/zte_5g_reconfig_screen.png)
 
 ---
 
@@ -1658,11 +1643,12 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 </summary><br>
 
 - **Polling Loop**: Fetches everything in as few requests as the router allows — a core batch, a diagnostics batch, and two SMS calls per cycle. The router caps a request by its **length**, not by how many values you ask for, so the readings are split across two batches by how important they are rather than crammed into one.
-- **Triggered Refresh**: Actions like **Reboot**, **Delete SMS**, or **Change Config** trigger an immediate API refresh to provide instant feedback.
+- **Triggered Refresh**: Changing a setting, deleting SMS, or pressing **Refresh Now** fetches immediately for instant feedback. **Reboot** deliberately does not — the router is on its way down.
 - **3-Strike Logic**: To avoid "Unavailable" flickers during momentary router congestion or signal loss:
-  1. **First Failure**: Logs a warning; retries immediately.
-  2. **Second Failure**: Logs a warning; retries again.
-  3. **Third Failure**: Marks all entities as `Unavailable` and logs an error.
+  1. **First failure** — logs a warning and holds the last known values until the next scheduled poll.
+  2. **Second and third failures** — keep holding, logged at debug so a long outage does not flood the log.
+  3. **Third failure** — **Integration Health** turns on, one cycle before anything disappears.
+  4. **Fourth failure** — entities are marked `Unavailable` and an error is logged.
 - **Per-Endpoint Resilience**: The SMS endpoints and the diagnostics batch each carry their **own** strike budget. If one stops responding while the main fetch keeps working, only the entities it feeds are affected — Signal and Data keep updating. In practice you may see a handful of the disabled-by-default diagnostic entities go `Unavailable` on their own; that is the design working, not a fault, and the **Integration Health** sensor names which capability degraded.
 - **What is in the main fetch**: everything shown by default — signal, data usage, connection state, SMS counts and the router's identity. Diagnostics, the temperature sensors and the router's own settings ride the second batch, so a problem there can never blank the readings you actually watch.
 - **Auto-Recovery**: Once the router is back online, the integration restores all entities automatically.
@@ -1676,13 +1662,13 @@ The integration uses a custom `DataUpdateCoordinator` designed for high stabilit
 
 Connection failures are visible already: entities go `Unavailable`. The gap this fills is the failure Home Assistant **cannot** see — a poll that _succeeds_ while the data is wrong.
 
-The **Integration Health** binary sensor (System device) reports:
-
 <details>
 
 <summary>
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
+
+The **Integration Health** binary sensor (System device) reports:
 
 - **Total outage** — the router unreachable. Flagged on the **first** failure at startup (there are no held values, so waiting would leave you with no explanation), or on the **third** consecutive failure at runtime. A success clears it in the same cycle.
 - **Degraded capability** — an optional endpoint that has exhausted its own strike budget.
@@ -1694,7 +1680,7 @@ It is deliberately **available at all times**, including when every other entity
 
 </details>
 
-#### 🔨 Repairs
+### 🔨 Repairs
 
 Some problems need you to do something, so they are also raised in Home Assistant's **Repairs** panel rather than only on a sensor. All three clear themselves automatically once the condition passes.
 
@@ -1704,13 +1690,13 @@ Some problems need you to do something, so they are also raised in Home Assistan
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Repair | Raised when | Why it is a Repair |
-| :-- | :-- | :-- |
-| **Router is not responding** | 10 consecutive failed fetches | Ten failures in a row means the problem is not clearing on its own. The text lists what to check — power-cycle, whether the IP changed, whether the password changed, the network path. |
-| **Firmware may have changed its API** | 3 consecutive polls succeed but contain none of the expected fields | Nothing looks broken from the outside, but sensors will be blank. Needs reporting so the integration can be updated. |
-| **SMS storage is full** | The router's message store is at capacity | New messages will be rejected until some are deleted. |
+| Repair                                       | Raised when                                                                                      | Why it is a Repair                                                                                                                                                                      |
+| :------------------------------------------- | :----------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ZTE router is not responding**             | 10 consecutive failed fetches                                                                    | Ten failures in a row means the problem is not clearing on its own. The text lists what to check — power-cycle, whether the IP changed, whether the password changed, the network path. |
+| **ZTE router data has changed unexpectedly** | 3 consecutive polls succeed but contain none of the expected fields, having reported them before | Nothing looks broken from the outside, but sensors will be blank. It can follow a firmware update or point to a fault in the integration, so it needs reporting either way.             |
+| **ZTE router SMS storage is full**           | The router's message store is at capacity                                                        | New messages will be rejected until some are deleted.                                                                                                                                   |
 
-> [!NOTE] A brief outage — a router reboot, a passing network glitch — deliberately does **not** raise a Repair. Entities go unavailable after three failed polls, and Integration Health turns on, but the Repairs panel stays quiet until a problem has clearly stopped fixing itself.
+> [!NOTE] A brief outage — a router reboot, a passing network glitch — deliberately does **not** raise a Repair. Integration Health turns on after three failed polls and entities go unavailable after four, but the Repairs panel stays quiet until a problem has clearly stopped fixing itself.
 
 ---
 
@@ -1742,7 +1728,7 @@ The router permits only **one login session at a time**. The integration release
 
 - **IMEI-Based Identity**: The integration uses the router's unique hardware IMEI as the primary key. This ensures that even if your router's IP address changes (DHCP), Home Assistant will track the same device and preserve your history and automations.
 - **Reconfiguration**: If you change your router's IP or password, use the **Reconfigure** button on the integration card to update settings without losing any data.
-- **Data Validation**: Router values are checked for validity against defined guard limits. Out-of-range sensor values (e.g., impossible signal metrics) are ignored or marked as unknown to ensure data integrity.
+- **Data Validation**: Router values are checked against defined guard limits. An out-of-range value (e.g., an impossible signal metric) is rejected and the sensor reads `unknown`, rather than publishing a figure known to be wrong.
 
 ---
 
@@ -1765,7 +1751,7 @@ The router permits only **one login session at a time**. The integration release
 </summary><br>
 
 - Verify the IP address is correct.
-- Confirm the username and password are correct (ZTE default is usually `admin`).
+- Confirm the username and password are correct. The username is optional and varies by model and firmware.
   - The username and password are the same as you use to login to the router via its webUI.
   - Username can be changed in the webUI, as well as password, so ensure you are using the current version of both.
 - Ensure the router is powered on and reachable from your Home Assistant instance.
@@ -1841,7 +1827,8 @@ The router permits only **one login session at a time**. The integration release
 - If sensors do not recover, perform these checks:
   - Ensure you can log into the router's web UI (confirms it is up and the password is correct).
   - Check your Home Assistant logs for specific error messages.
-  - Delete and re-add the integration.
+  - Try **⋮ > Reload** on the integration. It re-reads everything and re-applies your settings without removing anything.
+  - Delete and re-add the integration only if Reload does not help.
 
 ---
 
@@ -1891,7 +1878,7 @@ Logs are then visible under **Settings > System > Logs** (click **Load Full Logs
 >
 > **Log files have NO redaction of any kind.** Nothing is stripped or pseudonymized, unlike the diagnostics file above. Review a log before pasting it anywhere.
 >
-> At `debug` this integration logs status messages, error text and the names of failing endpoints — not response payloads — so your password, session token and SMS content are not written to it. What **can** appear is your **router's host or IP**, because HTTP error messages quote the request URL. Other integrations logging alongside it are another matter entirely.
+> At `debug` this integration logs status messages, error text and the names of failing endpoints — not response payloads — so your password, session token and the **text** of your SMS messages are not written to it. Two things **can** appear: your **router's host or IP**, because HTTP error messages quote the request URL, and the **sender's number of an incoming SMS**, which is recorded at `info` level and so is present even if you never enable debug logging. The diagnostics file above removes both. Other integrations logging alongside it are another matter entirely.
 
 ---
 
@@ -1907,18 +1894,18 @@ Logs are then visible under **Settings > System > Logs** (click **Load Full Logs
 
 Because Home Assistant keeps most of it on purpose. This is **Home Assistant behavior, not something this integration controls**, and for most people it's the desirable outcome: re-add the same router and things carry on where they left off, rather than starting from nothing.
 
-| What | How long Home Assistant keeps it | On re-add |
-| :-- | :-- | :-- |
-| **Long-term statistics** (long-range graphs, Energy dashboard) | Indefinitely - these are never deleted | Continue unbroken |
-| **Recent detailed history** | Your recorder retention (10 days by default) | Continues |
-| **Entity IDs** (`sensor.…`) | Reused as long as nothing else has taken the name | Dashboards and automations keep working |
-| Renames, icons, areas, labels, enabled/disabled state | **30 days**, in Home Assistant's entity registry | Restored |
+| What                                                           | How long Home Assistant keeps it                  | On re-add                               |
+| :------------------------------------------------------------- | :------------------------------------------------ | :-------------------------------------- |
+| **Long-term statistics** (long-range graphs, Energy dashboard) | Indefinitely - these are never deleted            | Continue unbroken                       |
+| **Recent detailed history**                                    | Your recorder retention (10 days by default)      | Continues                               |
+| **Entity IDs** (`sensor.…`)                                    | Reused as long as nothing else has taken the name | Dashboards and automations keep working |
+| Renames, icons, areas, labels, enabled/disabled state          | **30 days**, in Home Assistant's entity registry  | Restored                                |
 
 The **30 days** applies only to that fourth row - the entity-registry customizations. Statistics aren't on a timer at all, and your entity IDs come back either way. So re-adding after a year still reconnects your graphs; you would just need to redo any renames. Restarting Home Assistant in between makes no difference to any of this.
 
 **If you actually wanted a clean slate**, Home Assistant doesn't really offer one - and in practice you rarely need it. Two supported options exist:
 
-- **Developer Tools > Statistics** lists statistics whose entity no longer exists as _"There is no state available for this entity"_, and lets you delete them individually. Supported, immediate, no restart required.
+- **Tools > Statistics** lists statistics whose entity no longer exists as _"There is no state available for this entity"_, and lets you delete them individually. Supported, immediate, no restart required.
 - The **`recorder.purge_entities`** action drops recent history for entities you name. (It does not touch long-term statistics - use the screen above for those.)
 
 Clearing the retained _entity-registry_ customizations is a different matter: it means hand-editing `.storage/core.entity_registry` with Home Assistant stopped. **Don't.** That single file holds the settings for every entity from every integration you run, and the risk of unintended damage far outweighs re-doing a few renames. Nothing about this integration needs it.
@@ -1991,6 +1978,12 @@ To fully uninstall (HACS):
 ## 📝 Maintenance Status
 
 This is a **personal project**. Support and updates are provided on a **"best-effort"** basis only. While I use this integration daily and aim to keep it functional with the latest Home Assistant releases, I cannot guarantee immediate fixes for issues or compatibility with all router firmware versions.
+
+### 📖 Documentation Accuracy
+
+- This README is updated whenever the integration changes, and is intended to describe the current release accurately.
+- Two things can put it out of step: a passage this document missed during a revision, or a Home Assistant screen or setting that has been renamed or moved since it was written.
+- If you find either, please [open an issue](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues). It will be corrected.
 
 ---
 

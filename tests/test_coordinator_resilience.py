@@ -28,6 +28,7 @@ from custom_components.zte_router_5g.const import (
     UNREACHABLE_STRIKE_LIMIT,
 )
 from custom_components.zte_router_5g.coordinator import (
+    DRIFT_CONTRACT,
     ENDPOINT_EXTENDED,
     ENDPOINT_SMS_MESSAGES,
     ZTERouterDataUpdateCoordinator,
@@ -247,7 +248,8 @@ async def test_health_detects_contract_drift(coordinator) -> None:
     await coordinator._async_update_data()
     assert coordinator.health_snapshot["problem"] is False
 
-    # Firmware renames every field the integration knows about.
+    # Every field the integration knows about stops being reported — a firmware
+    # rename is one way to get here, an integration fault is another.
     coordinator.api.get_all_data = AsyncMock(
         return_value={"totally_different_key": "1", "another_new_one": "2"}
     )
@@ -255,7 +257,9 @@ async def test_health_detects_contract_drift(coordinator) -> None:
         await coordinator._async_update_data()
 
     assert coordinator.health_snapshot["problem"] is True
-    assert "firmware" in coordinator.health_snapshot["issues"][0]
+    # Compared against the constant rather than a substring: the wording is
+    # user-facing and has been revised, the condition it reports has not.
+    assert coordinator.health_snapshot["issues"][0] == DRIFT_CONTRACT
 
 
 async def test_drift_needs_no_verdict_before_a_baseline(coordinator) -> None:
@@ -265,6 +269,32 @@ async def test_drift_needs_no_verdict_before_a_baseline(coordinator) -> None:
     await coordinator._async_update_data()
 
     assert coordinator.health_snapshot["problem"] is False
+
+
+async def test_drift_never_fires_on_a_router_that_never_reported(coordinator) -> None:
+    """Drift means data went away, not that it was never there.
+
+    A router this integration does not fully support — a `goform` sibling that
+    spells the core keys differently — would return a payload containing none
+    of `CORE_KEYS` on *every* poll, forever. Calling that "the data has changed
+    unexpectedly" would be wrong twice over: nothing changed, and the user
+    cannot act on it.
+
+    The guarantee is carried implicitly, by `_drift_baseline` starting as an
+    empty set and the grace branch testing it for truthiness — so it never
+    establishes until a core key actually appears. That is easy to break in a
+    refactor (`None` plus an `is None` test would behave completely
+    differently) and nothing else asserts it, which is why this test loops well
+    past the strike limit rather than checking a single poll.
+    """
+    coordinator.api.get_all_data = AsyncMock(return_value={"unknown": "shape"})
+
+    for _ in range(FETCH_STRIKE_LIMIT * 4):
+        await coordinator._async_update_data()
+
+    assert coordinator.health_snapshot["problem"] is False
+    assert coordinator.health_snapshot["drift"] == []
+    assert not coordinator._drift_baseline
 
 
 async def test_health_reports_degraded_endpoint_on_success(coordinator) -> None:

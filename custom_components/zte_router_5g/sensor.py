@@ -646,7 +646,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="signalbar",
         about=(
             "The router's own signal rating, 0 to 5, the same one shown on its web "
-            "page. It is a coarse summary - for anything precise use RSRP or SINR, "
+            "page. It is a coarse summary - for anything precise use RSRP or SNR, "
             "which is what the bars are derived from."
         ),
         translation_key="signal_signalbar",
@@ -720,7 +720,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="lte_rsrp",
         about=(
             "Reference Signal Received Power - the strength of the 4G signal, in dBm. "
-            "This is the single most useful number for aiming or siting the router. "
+            "This is the number to watch when aiming or siting the router; SNR is the "
+            "better guide to how fast the connection will actually go. "
             "Typically: better than -80 is excellent, -80 to -90 good, -90 to -100 "
             "fair, below -100 poor. Values are negative, so closer to zero is "
             "stronger."
@@ -790,7 +791,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="lte_pci",
         about=(
             "Physical Cell Identity - a number from 0 to 503 identifying the specific "
-            "4G cell sector serving the router. Neighbouring sectors reuse the range, "
+            "4G cell sector serving the router. Neighboring sectors reuse the range, "
             "so a change means you have moved to a different sector or mast."
         ),
         translation_key="signal_lte_pci",
@@ -891,7 +892,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="wan_active_channel",
         about=(
             "The specific radio channel number in use within the active band. Mainly "
-            "of interest when comparing against neighbouring cells or diagnosing "
+            "of interest when comparing against neighboring cells or diagnosing "
             "interference."
         ),
         translation_key="signal_wan_active_channel",
@@ -952,10 +953,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="z5g_sinr",
         about=(
-            "Signal-to-Interference-plus-Noise Ratio for 5G, in dB - the clearest "
-            "predictor of 5G speed, because it accounts for interference as well as "
-            "noise. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, "
-            "below 0 poor."
+            "Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted "
+            "signal rises above everything competing with it. This is the best "
+            "predictor of achievable 5G speed. Typically: above 20 is excellent, "
+            "13 to 20 good, 0 to 13 fair, below 0 poor."
         ),
         translation_key="signal_z5g_sinr",
         state_class=SensorStateClass.MEASUREMENT,
@@ -995,7 +996,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         about=(
             "The 5G channel number in use within the active band, expressed as "
             "an NR-ARFCN. Useful when comparing your connection against "
-            "neighbouring cells."
+            "neighboring cells."
         ),
         translation_key="signal_nr5g_action_channel",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1164,7 +1165,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         # billing day, and the two classes handle that completely differently:
         # under TOTAL_INCREASING the recorder calls `reset_detected()` and
         # treats a fall below 90% of the previous value as a new cycle, while
-        # under TOTAL a reset is only recognised via a `last_reset` attribute
+        # under TOTAL a reset is only recognized via a `last_reset` attribute
         # this integration does not publish. The monthly rollover therefore
         # recorded as a large negative delta and walked the long-term
         # statistics sum backwards every month. Verified against

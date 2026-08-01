@@ -1,6 +1,6 @@
 # Signal Metric Guard Bands
 
-To ensure the Home Assistant UI remains clean and professional, we apply "Guard Bands" to incoming router data. If a value falls outside these realistic physical limits, the sensor is marked as `Unavailable` to prevent misleading spikes or "ghost" zeros.
+To ensure the Home Assistant UI remains clean and professional, we apply "Guard Bands" to incoming router data. If a value falls outside these realistic physical limits, the sensor reads `Unknown` to prevent misleading spikes or "ghost" zeros.
 
 ## Guard Band Strategy (Option C)
 
@@ -16,31 +16,31 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 
 ## Validated Signal Limits
 
-| Metric Category | Metric Name | Min | Max | Action if Out of Bounds |
-| :-- | :-- | :-- | :-- | :-- |
-| **Signal Power** | RSRP (5G/LTE) | -140 | -30 | Set to `Unavailable` |
-|  | RSRQ (5G/LTE) | -40 | 0 | Set to `Unavailable` |
-|  | RSSI (5G/LTE) | -120 | -20 | Set to `Unavailable` |
-| **Signal Quality** | SNR / SINR | -20 | 50 | Set to `Unavailable` |
-| **Diagnostics** | Signal Bar | 0 | 5 | Set to `Unavailable` |
-| **Data Usage** | Monthly Download | 0 | 100TB | Set to `Unavailable` |
-|  | Monthly Upload | 0 | 100TB | Set to `Unavailable` |
-|  | Monthly Total | 0 | 100TB | Set to `Unavailable` |
-|  | Upload Speed | 0 | — | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
-|  | Download Speed | 0 | — | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
-|  | Session Sent | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
-|  | Session Received | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
-|  | Alert Threshold | 0 | 100 | Percentage threshold. |
-|  | Allowance | 0 | 1 PiB | Confirmed against the router's own Data Management page (2 TiB cap, 1.6 TiB reminder), but the upper bound stays as a guard against a misparse reaching the statistics. |
-|  | Reset Day | 1 | 31 | Day of the month. A value outside this range is not a calendar date, whatever the router reports. |
-|  | Projected Cycle Usage | 0 | — | A projection cannot be negative. No upper bound: exceeding it is the very thing the sensor exists to warn about, so a ceiling would hide the case that matters. |
-| **Device** | Battery | 0 | 100 | Physical percentage bounds. |
-|  | Power Amplifier Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-|  | Ambient Modem Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-|  | Modem Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-|  | 5G Modem Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-|  | 5G Radio Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-| **SMS** | Total Count | 0 | 1000 | Set to `Unavailable` |
+| Metric Category    | Metric Name                 | Min  | Max   | Action if Out of Bounds                                                                                                                                                 |
+| :----------------- | :-------------------------- | :--- | :---- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Signal Power**   | RSRP (5G/LTE)               | -140 | -30   | Set to `Unknown`                                                                                                                                                        |
+|                    | RSRQ (5G/LTE)               | -40  | 0     | Set to `Unknown`                                                                                                                                                        |
+|                    | RSSI (5G/LTE)               | -120 | -20   | Set to `Unknown`                                                                                                                                                        |
+| **Signal Quality** | SNR                         | -20  | 50    | Set to `Unknown`                                                                                                                                                        |
+| **Diagnostics**    | Signal Bar                  | 0    | 5     | Set to `Unknown`                                                                                                                                                        |
+| **Data Usage**     | Monthly Download            | 0    | 100TB | Set to `Unknown`                                                                                                                                                        |
+|                    | Monthly Upload              | 0    | 100TB | Set to `Unknown`                                                                                                                                                        |
+|                    | Monthly Total               | 0    | 100TB | Set to `Unknown`                                                                                                                                                        |
+|                    | Upload Speed                | 0    | —     | Prevents negative values from firmware glitches. No upper bound (5G peak varies).                                                                                       |
+|                    | Download Speed              | 0    | —     | Prevents negative values from firmware glitches. No upper bound (5G peak varies).                                                                                       |
+|                    | Session Sent                | 0    | —     | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`).                                                                                              |
+|                    | Session Received            | 0    | —     | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`).                                                                                              |
+|                    | Alert Threshold             | 0    | 100   | Percentage threshold.                                                                                                                                                   |
+|                    | Allowance                   | 0    | 1 PiB | Confirmed against the router's own Data Management page (2 TiB cap, 1.6 TiB reminder), but the upper bound stays as a guard against a misparse reaching the statistics. |
+|                    | Reset Day                   | 1    | 31    | Day of the month. A value outside this range is not a calendar date, whatever the router reports.                                                                       |
+|                    | Projected Cycle Usage       | 0    | —     | A projection cannot be negative. No upper bound: exceeding it is the very thing the sensor exists to warn about, so a ceiling would hide the case that matters.         |
+| **Device**         | Battery                     | 0    | 100   | Physical percentage bounds.                                                                                                                                             |
+|                    | Power Amplifier Temperature | -40  | 125   | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent.                                                                     |
+|                    | Ambient Modem Temperature   | -40  | 125   | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent.                                                                     |
+|                    | Modem Temperature           | -40  | 125   | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent.                                                                     |
+|                    | 5G Modem Temperature        | -40  | 125   | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent.                                                                     |
+|                    | 5G Radio Temperature        | -40  | 125   | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent.                                                                     |
+| **SMS**            | Total Count                 | 0    | 1000  | Set to `Unknown`                                                                                                                                                        |
 
 ---
 

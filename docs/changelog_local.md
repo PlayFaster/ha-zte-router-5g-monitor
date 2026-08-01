@@ -80,6 +80,51 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ---
 
+## [3.3.2-rc12] - 2026-08-01 - Unreleased - No Manifest Bump - Repair Wording, Signal Note Consistency, Drift Guarantee Pinned
+
+Documentation and user-facing wording, plus one new test. No behavior changed except the text of two repairs and three `about` notes.
+
+### Changed — repair titles no longer assert a cause
+
+**`ZTE router firmware may have changed its API` → `ZTE router data has changed unexpectedly`.** The old title named the one cause the user cannot check, and the description reinforced it with "this **usually** means a router firmware update" — a frequency claim with nothing behind it. Firmware has caused this zero times; this integration's own code has caused or masked it twice, both found on 2026-07-31. The description now states the observation, offers a firmware update **or** an integration fault as candidates, and keeps the request for model and firmware version, which is what distinguishes them.
+
+**`SMS Storage Full` → `ZTE router SMS storage is full`.** Its two siblings both carry the `ZTE router` prefix; this one did not, and was Title Case where they are sentence case. Huawei has SMS and no repairs yet — if it ever gains this one, two identically-titled entries would sit in the panel distinguishable only by the integration label.
+
+**The `issue_id` values are unchanged and must stay that way.** `ir.async_delete_issue` looks up by id, so renaming one while a repair is live would orphan it permanently, with no UI path to clear it. Three tests also assert on the ids. `firmware_contract_drift` is now historical rather than descriptive, and `health_snapshot["repairs"]` still publishes it — accepted.
+
+`DRIFT_CONTRACT` moved with the repair, since it feeds the same verdict into the health sensor's `drift` attribute and would otherwise contradict the panel.
+
+### Added — the drift guarantee is now pinned
+
+`test_drift_never_fires_on_a_router_that_never_reported` loops four times the strike limit against a payload containing none of `CORE_KEYS` and asserts no drift, no problem, and no baseline.
+
+This behavior already existed, carried **implicitly**: `_drift_baseline` starts as an empty set and the grace branch tests it for truthiness, so it never establishes until a core key appears. A `goform` sibling spelling those keys differently therefore never raises the repair — correct, and worth having, because the alternative would tell exactly the users this project most wants to hear from that their firmware broke something. It was also one refactor away from disappearing: `None` plus an `is None` test reads identically and would fire on every unsupported router.
+
+### Fixed — one existing test was coupled to the wording
+
+`test_health_detects_contract_drift` asserted `"firmware" in ...issues[0]`, a substring of the user-facing message, and failed on the retitle. Now compares against the imported `DRIFT_CONTRACT` constant, matching how `test_integration_health.py` already did it. **The pre-change safety review missed this** — it searched for the constant name and the full title strings, not for the bare word.
+
+### Changed — signal `about` notes brought into line with the README
+
+- **`signalbar`** said "for anything precise use RSRP or **SINR**". The README settled on SNR throughout; this was the last SINR in user-facing prose outside the note that explains the difference.
+- **`z5g_sinr`** (displayed **5G SNR**) asserted "**Signal-to-Interference-plus-Noise Ratio** … because it accounts for interference as well as noise" — a claim about what the modem computes that cannot be verified from here, and a direct contradiction of the README's "this integration reports SNR". Rewritten to describe the number without asserting its internals.
+- **`lte_rsrp`** claimed to be "the single most useful number", as did the README of SNR. Now "the number to watch when aiming or siting the router", with SNR named as the better guide to speed — which also matches how `z5g_rsrp` was already worded.
+
+No entity, key or translation key changed. **`Z5g_SINR`, `z5g_sinr`, `5g_sinr` and `nr5g_sinr` are router fields and internal identifiers and were deliberately left alone** — a blanket SINR replace would have broken every 5G sensor.
+
+### Changed — documentation accuracy
+
+- **README** — the Repairs table quotes both new titles verbatim; "Every signal entity carries **this guidance**… the table simply **gathers them in one place**" softened, because the RSSI threshold row exists only in the README and in neither RSSI note; "in near-real-time" replaced with "as often as every 30 seconds", which is true and answers the question the phrase was gesturing at.
+- **`value_min_max.md`** — the `SNR / SINR` label, and a factual error throughout: out-of-range values were documented as setting the sensor `Unavailable`. `native_value` returns `None`, so they read **`Unknown`**. Ten occurrences plus the opening paragraph.
+- **`AGENTS.md`** — the claim that `about_attribute_list.md` "is generated from source … never edit that file by hand" described a generator that **does not exist**. Nothing produces it but the `sensor_review` prompt, and nothing tests it against the code. Now says what actually happens, including that an edit which stops at the note drifts silently.
+- **US spelling** applied across the component per `doc_style.md`: three `about` notes (`neighbouring`), and comments in `_compat.py`, `api.py`, `const.py`, `helpers.py`, `sensor.py`. `asyncio.CancelledError` and the comment beside it left alone.
+
+### Deliberately not done
+
+`docs/about_attribute_list.md` is **not** updated here and is now out of step with three notes — to be refreshed separately. No `CHANGELOG.md` entry: the repair titles are user-visible, but the release entry already covers the Repairs feature and this is wording rather than capability.
+
+`api.py:372` keeps "the session is probably expired or the firmware changed its API". Unlike the repair, that message cannot tell the two apart at the point it is raised, names both, hedges, and prints the keys actually received — a well-formed developer message rather than a verdict handed to a user.
+
 ## [3.3.2-rc11] - 2026-07-31 - Unreleased - No Manifest Bump - Session Detection Rebuilt On A Measured Invariant
 
 ### Bumps
@@ -108,12 +153,12 @@ The same three keys had also disabled `_check_contract_drift`: `wa_inner_version
 
 `_classify_session` reads a `200 OK` response as two classes of key and returns one of four verdicts:
 
-| verdict | condition | response |
-| --- | --- | --- |
-| `live` | any authenticated key populated | proceed |
-| `expired` | authenticated all blank, unauthenticated populated | re-login and retry |
-| `not_ready` | everything blank | `ZTEConnectionError` — hold last known values |
-| `undecidable` | no unauthenticated key requested | fall back to the previous all-empty rule |
+| verdict       | condition                                          | response                                      |
+| ------------- | -------------------------------------------------- | --------------------------------------------- |
+| `live`        | any authenticated key populated                    | proceed                                       |
+| `expired`     | authenticated all blank, unauthenticated populated | re-login and retry                            |
+| `not_ready`   | everything blank                                   | `ZTEConnectionError` — hold last known values |
+| `undecidable` | no unauthenticated key requested                   | fall back to the previous all-empty rule      |
 
 `not_ready` is new and matters: a router that is answering but has nothing to report yet is booting, not expired. Re-logging in would not help, so it takes the reachability path instead of burning a login and heading toward a reauth prompt.
 
@@ -1008,12 +1053,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request | Live session | Dead session |
-  | :-- | :-- | :-- |
-  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
-  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
-  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+  | Request                     | Live session       | Dead session                                         |
+  | :-------------------------- | :----------------- | :--------------------------------------------------- |
+  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
+  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
+  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -1405,16 +1450,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 

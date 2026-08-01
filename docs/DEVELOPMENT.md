@@ -186,7 +186,7 @@ Three rules follow, and they generalise beyond APNs:
 - **Where the authoritative value cannot be resolved, refuse rather than guess.** In auto mode the network default need not exist in the stored profile list at all — on the reference device it does only because a duplicate profile was added by hand. There is no correct automatic answer, so `set_apn_mode()` refuses and names the route that works (choosing an APN Profile, which sets mode and profile together).
 - **A "convenient" fallback needs its own justification.** `apn_index` is still used, but only while the router is already in manual mode, where it genuinely is the selection. That branch exists for one real case: the `Default` profile stores an empty APN, so `wan_apn` is blank while the selection is perfectly valid.
 
-Related behaviours that read as bugs and are not, all now in the `about` notes: choosing an APN Profile always forces the mode to manual, because `set_apn()`'s payload carries `apn_mode=manual`; and selecting `Default` leaves **Network APN** blank, matching the router's own page.
+Related behaviors that read as bugs and are not, all now in the `about` notes: choosing an APN Profile always forces the mode to manual, because `set_apn()`'s payload carries `apn_mode=manual`; and selecting `Default` leaves **Network APN** blank, matching the router's own page.
 
 ### Assume every `goform` write replaces a whole form
 
@@ -204,11 +204,11 @@ The router was measured before anything was changed, and **exonerated**: it appl
 
 The fix is a **targeted read-back** (`api.get_params()`), opt-in per description via `verify_after_write` and `state_key`. Three outcomes must stay distinct, and collapsing any two of them reintroduces a bug:
 
-| Outcome | Meaning | Action |
-| :-- | :-- | :-- |
-| Read agrees | Confirmed | Publish immediately |
-| Read disagrees twice, 200 ms apart | The router declined it | Raise `switch_write_not_applied` |
-| Read errors, or omits the key | **Unverified, not failed** | Log at debug; leave it to the next poll |
+| Outcome                            | Meaning                    | Action                                  |
+| :--------------------------------- | :------------------------- | :-------------------------------------- |
+| Read agrees                        | Confirmed                  | Publish immediately                     |
+| Read disagrees twice, 200 ms apart | The router declined it     | Raise `switch_write_not_applied`        |
+| Read errors, or omits the key      | **Unverified, not failed** | Log at debug; leave it to the next poll |
 
 The third row is the subtle one. A failed _confirmation_ is not a failed _write_ — the command may well have landed, and raising there would report success as failure on every connection blip.
 
@@ -238,18 +238,22 @@ This was the second recurrence of the same shape. The first (`[3.3.0-dev12]`) wa
 
 The fix is not a better total. It is to test a relationship between two classes of key that the device separates for us:
 
-| verdict | condition | meaning |
-| --- | --- | --- |
-| `live` | any authenticated key populated | session works |
-| `expired` | authenticated all blank, unauthenticated populated | reachable, not logged in |
-| `not_ready` | everything blank | reachable, nothing to report yet |
-| `undecidable` | no unauthenticated key requested | fall back to the weaker rule |
+| verdict       | condition                                          | meaning                          |
+| ------------- | -------------------------------------------------- | -------------------------------- |
+| `live`        | any authenticated key populated                    | session works                    |
+| `expired`     | authenticated all blank, unauthenticated populated | reachable, not logged in         |
+| `not_ready`   | everything blank                                   | reachable, nothing to report yet |
+| `undecidable` | no unauthenticated key requested                   | fall back to the weaker rule     |
 
 Three things generalize beyond this router:
 
 - **A detector whose precondition is not asserted is not a detector.** `test_every_batch_carries_both_classes` is the load-bearing test here, not any single classification — it fails the moment a batch edit makes the comparison undecidable again.
 - **Distinguish "cannot" from "not yet".** `not_ready` exists because a booting router and an expired session look identical if you only count blanks, and they need opposite responses.
 - **Check whether a fix re-enables a dormant detector.** The same three keys had disabled `_check_contract_drift`: `wa_inner_version` was in `CORE_KEYS`, so `present` was never empty and the strike counter reset every cycle. It could not fire under any circumstances, including on the firmware change it exists to catch. A green suite says nothing about a check that never runs.
+
+**Drift means data went away, not that it was never there.** `_drift_baseline` starts as an empty set and the grace branch tests it for truthiness, so the baseline never establishes until a core key actually appears. A `goform` sibling that spells those keys differently returns a payload with none of them on every poll, forever, and never raises the repair. That is the correct behavior and it is easy to destroy in a refactor — `None` with an `is None` test reads identically and would fire on every unsupported router. `test_drift_never_fires_on_a_router_that_never_reported` pins it.
+
+Which is also why the repair is titled **"ZTE router data has changed unexpectedly"** rather than naming firmware. It can only fire on a setup that was working, so something did change — but the only two occurrences to date were both this integration's own faults, not the router's. The `issue_id` stays `firmware_contract_drift`: renaming it would orphan any live repair, since `ir.async_delete_issue` looks up by id.
 
 ### Only a rejected credential may ask for re-authentication
 
@@ -275,6 +279,26 @@ One objection was raised and is **wrong**, recorded so it is not re-raised: that
 The real argument in favour is insurance — Refresh Now is what a user presses when something looks wrong, so making it always work would survive detection breaking again after a firmware change. **That is exactly why it was declined.** This bug has now recurred twice, and both times the damage came from silence. A redundant mechanism in the most-exercised path would mask the third occurrence rather than surface it. The tripwire belongs in the attended `[G]` hardware check, where a failure is visible, not in a code path that quietly papers over it.
 
 If a silent logged-out fault is ever observed again, this decision is the first thing to revisit — see `docs/ROADMAP.md` § Revisit.
+
+### Debounce the slider, never the switch
+
+**Only the Polling Interval number is debounced.** Every switch, select and button sends its command immediately. That split is deliberate and matches Home Assistant core practice.
+
+The test is what the intermediate values **are**:
+
+- A **slider emits values as an artifact of the input device**. Dragging 30 → 600 produces twenty values the user never intended to send; only the last is a command. `number.py` waits two seconds of stillness, cancelling and restarting the timer on each move, and cancels the pending task in `async_will_remove_from_hass` so a write cannot fire after teardown.
+- A **switch or select emits only deliberate values**. Debouncing one would silently swallow the second of two intentional presses, with nothing shown to the user.
+
+Core practice, measured against the installed Home Assistant: 106 integrations import `helpers.debounce.Debouncer`; **68** use it as a coordinator `request_refresh_debouncer`, and exactly **one** debounces an entity command — `flux_led/number.py`, a Number entity with `immediate=False`. No core switch or select debounces its command.
+
+Three mechanisms sit near this and only the first delays a command. The coordinator's refresh debouncer (HA default, 10s cooldown, `immediate=True`) governs when the display catches up, never whether the write is sent. `PARALLEL_UPDATES = 1` serializes concurrent calls without delaying a single one.
+
+**Two things considered and rejected**, recorded so they are not re-proposed:
+
+- **Throttling the APN and network selects**, on the grounds that each triggers a mini-reboot. Rejected because the failure is already visible: a write issued while the router is reconnecting raises, and `select.py` surfaces it as a translated `HomeAssistantError`. A throttle would replace a clear error with a silent delay.
+- **Skipping a write when the requested state already matches the current one.** Rejected because `_last_known` comes from the poll and can be a full scan interval old. If the router's state changed underneath — a web-GUI user, a reboot restoring a default — skipping on a stale reading leaves the device wrong and reports success. Trading a redundant but harmless write for a silently dropped necessary one is the wrong direction on a device whose failure history is entirely silent failures.
+
+Before adding any of this later: **debounce** when the input generates values the user did not intend; **throttle** when the vendor publishes a rate limit; **guard** when a repeat is both expensive and silent. Repeats here are either cheap (a targeted read-back costs ~16 ms) or loud (an error reaches the user), so none currently applies.
 
 ---
 
@@ -327,9 +351,11 @@ If a silent logged-out fault is ever observed again, this decision is the first 
 - **v3.3.0-dev3** (2026-07-27) — IQS pass and follow-up. Added success patterns for translated exceptions (`translation_domain` + `translation_key`, and the `ServiceValidationError` vs `HomeAssistantError` choice) and for the Repair selection rule (persistence **plus** agency, and why `router_unreachable` waits 10 failures rather than 3). Added two pitfalls: translated exceptions breaking `pytest.raises(..., match=...)` under a mocked hass, and `": "` inside a folded YAML comment breaking `quality_scale.yaml`. Added §15 SMS feature-group toggle and the deferred custom-trigger work to Technical Debt.
 - **v3.3.1** (2026-07-29) — Cross-model compatibility expansion. Documented the new `helpers.py` utilities (`is_gsm7`, `earfcn_to_band`, `arfcn_to_band`) under Core Files. Added two Technical Debt items: cross-model support is inferred from other projects rather than tested on hardware (including the three speculative alias spellings and the login fallback that never fires on an MC7010), and no model is yet confirmed to populate any of the five thermal keys — with the condition under which they should be removed rather than left indefinitely.
 - **v3.3.0-dev1** (2026-07-27) — `dev_standards` conformance pass. Added success patterns for force-refresh-bypasses-pause, per-endpoint strike budgets, the health snapshot held outside `coordinator.data`, the always-available health sensor, reload-by-default options with a live-apply allow-list, layered diagnostics sanitization, and per-attribute recorder evaluation. Added four pitfalls: `goformId=LOGOUT` needs an `AD` token (and why the obvious web-UI verification cannot detect it), Refresh Now silently swallowed while paused, the options flow changing credentials without applying them, and diagnostics leaking SMS content and cell location. Recorded the §3 root-identity deviation and the config-entry migration-handler constraint under Technical Debt.
+- **v3.3.9** (2026-08-01) — Recorded that drift can only fire on a router that previously reported the core keys, why the implicit empty-set baseline carries that guarantee, and the test that now pins it. Notes the repair retitle to "ZTE router data has changed unexpectedly" and why the `issue_id` must stay `firmware_contract_drift`.
+- **v3.3.8** (2026-08-01) — Added the pitfall on where debouncing belongs: the slider is debounced, switches and selects are not, and the test is whether intermediate values are artifacts of the input device or intentions of the user. Records the core-practice measurement (106 integrations import `Debouncer`; 68 for coordinator refresh; exactly one for an entity command, a Number), the distinction between the command debounce, the refresh debouncer and `PARALLEL_UPDATES`, and two rejected proposals — throttling the APN selects, and skipping a write that matches the last known state.
 - **v3.3.7** (2026-08-01) — Reference updates only. `docs/Future.md` renamed to `docs/ROADMAP.md` and restructured to the new shared standard at `.shared/dev_std/roadmap_format.md`; the two live pointers here now name the file and the section rather than an item number that no longer exists. Earlier Version Control entries naming `Future.md` are left as written — they record what was true at the time.
 - **v3.3.6** (2026-08-01) — Recorded why Refresh Now recovers the session reactively rather than forcing a login on every press: both the proactive idle reset and the now-decidable core-poll detection cover it, an unconditional login costs four round trips against one, and the insurance argument was declined because a redundant mechanism in the most-exercised path would mask a third recurrence rather than surface it. Also records the objection that was wrong (it cannot evict a web-GUI user — one session means nobody else is logged in). Deferred as a `Future.md` candidate, to be revisited only if a silent logged-out fault is seen again.
-- **v3.3.5** (2026-07-31) — Added two pitfalls after a reboot-recovery investigation. A health check must test a relationship rather than a total: the all-values-blank expiry rule was a property of what was requested, not of the session, and adding three unauthenticated keys to the core batch made it unsatisfiable — a dead session read as a clean success, entities published `unknown`, and the same keys had silently disabled the contract-drift check. Records the four-verdict classification, why `not_ready` must be separated from `expired`, and that a detector whose precondition is unasserted is not a detector. Second pitfall: only a rejected credential may raise `ConfigEntryAuthFailed`, with the `ZTECredentialsError` subclass pattern and the most-recent-login-wins behaviour it rests on. Noted that attended `[G]` now scores the recovery key by key rather than waiting for the router to answer.
-- **v3.3.4** (2026-07-31) — Added the pitfall on resolving state from the authoritative field rather than the convenient one, after a fix that read the APN from `apn_index` was found able to activate the wrong APN in auto mode. Records the refuse-rather-than-guess rule, the one justified fallback, and the related router behaviours that read as bugs (choosing a profile forces manual; the `Default` profile leaves Network APN blank).
+- **v3.3.5** (2026-07-31) — Added two pitfalls after a reboot-recovery investigation. A health check must test a relationship rather than a total: the all-values-blank expiry rule was a property of what was requested, not of the session, and adding three unauthenticated keys to the core batch made it unsatisfiable — a dead session read as a clean success, entities published `unknown`, and the same keys had silently disabled the contract-drift check. Records the four-verdict classification, why `not_ready` must be separated from `expired`, and that a detector whose precondition is unasserted is not a detector. Second pitfall: only a rejected credential may raise `ConfigEntryAuthFailed`, with the `ZTECredentialsError` subclass pattern and the most-recent-login-wins behavior it rests on. Noted that attended `[G]` now scores the recovery key by key rather than waiting for the router to answer.
+- **v3.3.4** (2026-07-31) — Added the pitfall on resolving state from the authoritative field rather than the convenient one, after a fix that read the APN from `apn_index` was found able to activate the wrong APN in auto mode. Records the refuse-rather-than-guess rule, the one justified fallback, and the related router behaviors that read as bugs (choosing a profile forces manual; the `Default` profile leaves Network APN blank).
 - **v3.3.3** (2026-07-31) — Added the pitfall that every `goform` write should be assumed to replace a whole form until proven otherwise, after a third instance (`APN_PROC_EX`) was found, plus the replay-against-the-current-value probing technique that establishes a payload shape without changing device state.
 - **v3.3.2** (2026-07-30) — Control write path reworked after a report of erratic LED toggling. Added three pitfalls: a control's position waiting on the 10-second debounce (with the three-outcome table for targeted read-back, and why the APN/bearer selects must be excluded), a write's inability to detect a stolen session (and why `"failure"` must not join the expiry strings), and mocks being unable to falsify a belief about the router — a test passed while the code it covered failed on hardware. Added `scripts/hardware_check.py` under new Operator Tooling, and noted the switch platform's read-back confirmation and position latching under Core Files.

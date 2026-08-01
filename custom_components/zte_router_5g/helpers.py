@@ -27,7 +27,7 @@ def get_router_model(coordinator_data: dict[str, Any] | None) -> str:
 
     Checks 'model_name' first (e.g. 'MC7010'), then falls back to parsing
     'wa_inner_version' (e.g. 'IRL_H3G_MC7010DV1.0.0B01').
-    Returns 'ZTE Router' if no model is recognised.
+    Returns 'ZTE Router' if no model is recognized.
     """
     if not coordinator_data:
         return "ZTE Router"

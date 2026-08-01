@@ -357,8 +357,8 @@ class ZTERouterAPI:
     def _require_contract(self, data: Any, key: str, cmd: str) -> None:
         """Fail loudly when a response is missing the key it must carry.
 
-        Second line of defence behind the expiry detection in ``_request``.
-        That detection recognises the router's dead-session shape as observed
+        Second line of defense behind the expiry detection in ``_request``.
+        That detection recognizes the router's dead-session shape as observed
         today; this asserts the shape each endpoint actually needs, so a
         response that slips past detection can never be mistaken for "no data".
 

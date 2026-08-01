@@ -71,7 +71,7 @@ CORE_KEYS = (
 # and the two must not be able to drift apart from each other.
 DRIFT_CONTRACT = (
     "Router returned data but none of the expected fields were present — "
-    "the firmware may have changed its API"
+    "they were reported before and have stopped"
 )
 
 
