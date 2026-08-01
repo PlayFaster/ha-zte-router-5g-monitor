@@ -71,7 +71,7 @@ def _get_current_apn_profile(data: Any) -> str | None:
     none — which is the normal case, since the default APN need not exist in
     the manual list. In manual mode `apn_index` is authoritative and is used
     directly, including for the "Default" profile, whose APN field is empty and
-    which therefore leaves **Network APN** blank.
+    which therefore leaves **Network APN** reading `unknown`.
     """
     if not data:
         return None
@@ -125,9 +125,10 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
             "Selection Mode to manual. While the mode is auto the router uses "
             "the network's default APN, which may not be in this list - the "
             "Network APN sensor is the authoritative answer to what is actually "
-            "in use. Note the Default profile stores an empty APN, so selecting "
-            "it leaves Network APN blank, matching the router's own page. New "
-            "profiles are added on the router's own web page, not here."
+            "in use. Note the Default profile stores no APN, so selecting it "
+            "leaves Network APN reading unknown - the router's own page shows "
+            "an empty field for the same reason. New profiles are added on the "
+            "router's own web page, not here."
         ),
         translation_key="signal_apn_profile",
         entity_category=EntityCategory.CONFIG,

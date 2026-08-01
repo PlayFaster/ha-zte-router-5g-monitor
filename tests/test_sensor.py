@@ -251,6 +251,74 @@ def test_sensor_value_fn_exception(mock_coordinator, mock_config_entry):
     assert sensor.native_value is None
 
 
+# Numeric sensors deliberately shipped without a guard band. Both report a
+# channel width the network chose, carry no state class, and so never reach
+# long-term statistics — there is nothing for a bad value to corrupt.
+_UNGUARDED_BY_DESIGN = {
+    "lte_ca_pcell_bandwidth",
+    "lte_ca_scell_bandwidth",
+}
+
+
+def test_every_numeric_sensor_has_a_guard_band() -> None:
+    """A numeric sensor with no bounds is one bad reading from permanent damage.
+
+    The guard-band mechanism is tested above with synthetic descriptions. This
+    tests something different and more easily lost: that the real sensors
+    actually use it.
+
+    That distinction is not academic. On 2026-08-01 a review found ten numeric
+    sensors with no bounds at all, six of them `TOTAL_INCREASING` byte counters
+    feeding long-term statistics — while `value_min_max.md` documented bounds
+    for five of them that the code did not apply. The document asserted
+    protection that did not exist, and nothing failed, because no test compared
+    the two. A guard band is a code property and is invisible to a live fetch,
+    so `sensor_review` could not see it either.
+
+    Adding a numeric sensor without bounds is a deliberate act, not a default.
+    If this fails, either give the sensor a band or name it in
+    `_UNGUARDED_BY_DESIGN` with a reason.
+    """
+    unguarded = sorted(
+        d.key
+        for d in SENSOR_TYPES
+        if (d.native_unit_of_measurement is not None or d.state_class is not None)
+        and d.min_limit is None
+        and d.max_limit is None
+        and d.key not in _UNGUARDED_BY_DESIGN
+    )
+    assert not unguarded, (
+        f"numeric sensors with no guard band: {unguarded}. Give each a bound, or "
+        f"add it to _UNGUARDED_BY_DESIGN with the reason it is safe without one."
+    )
+
+
+def test_unguarded_allowlist_has_no_dead_entries() -> None:
+    """An exemption for a sensor that no longer exists hides the next one."""
+    keys = {d.key for d in SENSOR_TYPES}
+    assert keys >= _UNGUARDED_BY_DESIGN
+
+
+def test_cumulative_counters_cannot_go_negative() -> None:
+    """Every accumulating byte counter needs a floor, not just some of them.
+
+    The session counters carried `min_limit=0` from the start; the monthly ones
+    did not, which is the inconsistency the review surfaced. A negative value on
+    a `TOTAL_INCREASING` sensor is not merely wrong — it is written to long-term
+    statistics and stays there.
+    """
+    accumulating = [
+        d
+        for d in SENSOR_TYPES
+        if d.state_class == SensorStateClass.TOTAL_INCREASING
+        and d.device_class == SensorDeviceClass.DATA_SIZE
+    ]
+    assert accumulating, "no accumulating byte counters found — has the shape changed?"
+    assert all(d.min_limit == 0 for d in accumulating), [
+        d.key for d in accumulating if d.min_limit != 0
+    ]
+
+
 def test_sensor_guard_band_min(mock_coordinator, mock_config_entry):
     """Test that native_value returns None when value is below min_limit.
 

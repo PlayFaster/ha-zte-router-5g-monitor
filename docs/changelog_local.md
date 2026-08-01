@@ -80,7 +80,62 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ---
 
+## [3.3.2-rc13] - 2026-08-01 - Unreleased - No Manifest Bump - Guard Bands Reconciled Against Code; Sensor Review
+
+`sensor_review` (SOURCE=Via_HAB, SCOPE=Full) found the entity inventory perfectly reconciled and `value_min_max.md` describing protection the code did not provide.
+
+Report: `.notes/sensors_states/ha_sensor_review_20260801_1911.md`.
+
+### Verified — the inventory needs nothing
+
+92 live, 92 documented, and every platform count matches across live, `all_sensors.md` and `README.md`: 75 sensors, 7 binary, 3 switch, 3 button, 3 select, 1 number. Four services live, four documented. Categories A, B, C, F, G and H all clean. `about` coverage exact at 86 of 92 with no delivery faults — every entity declaring a note publishes it.
+
+The run followed a Home Assistant restart rather than a config-entry reload, and that was verified before anything was trusted: `Signal Bars` published its post-edit text, proving the instance was serving current code rather than a cached module.
+
+### Fixed — five guard bands were documented and did not exist
+
+`value_min_max.md` specified bounds for `Signal Bar`, `Monthly Download`, `Monthly Upload`, `Monthly Total` and `Total Count`. **None of the five existed in code.** The document asserted that impossible values were rejected on those sensors; they were not, and a negative monthly byte total would have reached long-term statistics and stayed there.
+
+Two real guard bands were missing from the document in the other direction: `Legacy RSSI` and `Legacy RSCP`, both −120 to −20.
+
+**The bands were added to the code rather than the rows deleted.** Ten sensors gained bounds:
+
+- The **six monthly byte counters** — three raw plus three legacy GB — gained `min_limit=0`. The session counters had carried exactly that since the start, so the monthly ones lacking it was an inconsistency in the code, not an over-promise in the document.
+- `Signal Bars` (0–5), `Total Msg` (0–1000), `Unread Msg` (0–1000) and `Uptime Duration` (min 0).
+
+**Upper bounds on the accumulating counters were deliberately dropped**, against the document's previous `100TB`. A ceiling on a `TOTAL_INCREASING` counter silently discards legitimate data, and the failure it would prevent is far less likely than the one it would cause.
+
+Two row names never matched an entity: `Total Count` → **`Total Msg`**, `Signal Bar` → **`Signal Bars`**.
+
+### Added — the coverage guarantee is now a test
+
+`test_every_numeric_sensor_has_a_guard_band` fails if a sensor carrying a unit or a state class ships without bounds. `lte_ca_pcell_bandwidth` and `lte_ca_scell_bandwidth` are exempt by name in `_UNGUARDED_BY_DESIGN` — both report a channel width the network chose and carry no state class, so nothing accumulates for a bad value to corrupt. `test_unguarded_allowlist_has_no_dead_entries` stops that exemption outliving the sensors. `test_cumulative_counters_cannot_go_negative` asserts the floor on every `TOTAL_INCREASING` byte counter, which is the specific inconsistency found here.
+
+### Fixed — the review could not have found this, and now can
+
+**Ten numeric sensors had no bounds at all; the review surfaced five.** The other five were absent from both the code and the document, so no category could see them.
+
+Category E of `sensor_review.md` had two directions — does the documented entity still exist, and are undocumented entities numeric — and neither asks whether the band itself exists. A literally compliant run would have reported the file clean. The five were found only by exceeding the prompt.
+
+`sensor_review.md` **v2.10.0** adds the direction that checks documented bands against `min_limit` / `max_limit` in source, and a reverse direction listing numeric sensors present in neither, ranked by whether they reach long-term statistics. It also records why this category is different from every other: **a guard band is never published as a state or an attribute, so no live query can observe one** and enabling disabled entities does not help.
+
+### Changed — documentation
+
+- **`all_sensors.md`** — `APN Profile` now records that it reads `unknown` in auto mode when the APN in use is not a stored profile. Observed live during the review: `apn_mode = auto`, `Network APN = 3FWA.ie`, not among the stored profiles. README and the entity's own note explained it; the manifest did not.
+- **`about_attribute_list.md`** — eight note texts refreshed from live, all of them this file lagging same-day code edits. Coverage unchanged at 86 of 92, six deliberate omissions unchanged.
+- **`value_min_max.md`** — new Coverage section naming the two exemptions and the test that enforces the rest, plus a warning that this document describes the code and cannot be verified from a running instance.
+
+### Restored
+
+All 35 temporarily-enabled entities re-disabled and confirmed from the live entity list at 57.
+
 ## [3.3.2-rc12] - 2026-08-01 - Unreleased - No Manifest Bump - Repair Wording, Signal Note Consistency, Drift Guarantee Pinned
+
+### Bumps
+
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.350 to 0.13.351
+
+### Summary
 
 Documentation and user-facing wording, plus one new test. No behavior changed except the text of two repairs and three `about` notes.
 

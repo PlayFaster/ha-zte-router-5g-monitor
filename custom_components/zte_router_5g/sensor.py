@@ -426,6 +426,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=1,
         entity_registry_enabled_default=False,
         group="system",
+        min_limit=0,
         value_fn=lambda data: _safe_int(data.get("realtime_time")),
     ),
     ZTESensorEntityDescription(
@@ -621,7 +622,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "with. This is the authoritative answer: while APN Selection Mode is "
             "auto the router uses the network's own default, which may not be one "
             "of your stored profiles, so the APN Profile selector can differ from "
-            "this or read blank. A wrong APN is a common cause of a router that "
+            "this or read unknown. A wrong APN is a common cause of a router that "
             "has good signal but no working data."
         ),
         translation_key="signal_wan_apn",
@@ -652,6 +653,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_signalbar",
         state_class=SensorStateClass.MEASUREMENT,
         group="signal",
+        min_limit=0,
+        max_limit=5,
         value_fn=lambda data: _safe_int(data.get("signalbar")),
     ),
     ZTESensorEntityDescription(
@@ -1095,6 +1098,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="data",
         # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
+        min_limit=0,
         value_fn=lambda data: _get_bytes_to_gb(_get_first(data, _ALIAS_MONTHLY_TX)),
     ),
     ZTESensorEntityDescription(
@@ -1110,6 +1114,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="data",
         # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
+        min_limit=0,
         value_fn=lambda data: _get_bytes_to_gb(_get_first(data, _ALIAS_MONTHLY_RX)),
     ),
     ZTESensorEntityDescription(
@@ -1124,6 +1129,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.GIGABYTES,
         entity_registry_enabled_default=False,
         group="data",
+        min_limit=0,
         value_fn=lambda data: _get_bytes_to_gb(_monthly_total_bytes(data)),
     ),
     # Standard Byte Sensors (Enabled by default, supports UI conversion)
@@ -1141,6 +1147,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
         group="data",
+        min_limit=0,
         value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_MONTHLY_TX)),
     ),
     ZTESensorEntityDescription(
@@ -1157,6 +1164,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
         group="data",
+        min_limit=0,
         value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_MONTHLY_RX)),
     ),
     ZTESensorEntityDescription(
@@ -1182,6 +1190,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
         group="data",
+        min_limit=0,
         value_fn=_monthly_total_bytes,
     ),
     ZTESensorEntityDescription(
@@ -1253,6 +1262,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="sms_sms_unread_num",
         state_class=SensorStateClass.MEASUREMENT,
         group="sms",
+        min_limit=0,
+        max_limit=1000,
         value_fn=lambda data: _safe_int(data.get("sms_unread_num")),
     ),
     ZTESensorEntityDescription(
@@ -1266,6 +1277,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="sms_msg_total",
         state_class=SensorStateClass.MEASUREMENT,
         group="sms",
+        min_limit=0,
+        max_limit=1000,
         value_fn=_get_total_sms,
     ),
     ZTESensorEntityDescription(
