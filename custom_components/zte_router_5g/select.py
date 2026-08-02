@@ -11,16 +11,21 @@ from homeassistant.components.select import SelectEntity, SelectEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .const import APN_PROFILE_SLOTS, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import build_device_info
+from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
-PARALLEL_UPDATES = 0
+# Writes are serialised — see the note in `switch.py`. `0` (unlimited) stays
+# correct for the read-only platforms; a platform that commands this
+# single-session router must not issue concurrent `goform` writes.
+PARALLEL_UPDATES = 1
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -31,6 +36,9 @@ class ZTESelectEntityDescription(SelectEntityDescription):
     options_fn: Callable[[Any], list[str]]
     setter_fn: Callable[[Any, str, Any], Coroutine[Any, Any, None]]
     group: str = "system"
+    # Optional plain-language note surfaced as an unrecorded `about` attribute
+    # (dev_standards Section 14). Resolved by the ZTEAboutEntity mixin.
+    about: str | None = None
 
 
 def _get_apn_profiles(data: Any) -> list[tuple[int, str, str]]:
@@ -38,7 +46,7 @@ def _get_apn_profiles(data: Any) -> list[tuple[int, str, str]]:
     profiles: list[tuple[int, str, str]] = []
     if not data:
         return profiles
-    for i in range(20):
+    for i in range(APN_PROFILE_SLOTS):
         val = data.get(f"APN_config{i}")
         if val:
             parts = val.split("($)")
@@ -50,15 +58,41 @@ def _get_apn_profiles(data: Any) -> list[tuple[int, str, str]]:
 
 
 def _get_current_apn_profile(data: Any) -> str | None:
-    """Get the active APN profile name based on apn_index."""
+    """Return the profile in use, which is not always the one `apn_index` names.
+
+    While the router is in **auto** mode it uses the network-provided default
+    APN, and `apn_index` retains whatever was last chosen manually. Observed
+    live (2026-07-31): auto mode reporting `apn_index=5`
+    (`open.internet.public`) while traffic ran over `3FWA.ie`. Showing the
+    indexed profile there states something untrue.
+
+    So in auto mode the active APN (`wan_apn`, the **Network APN** sensor) is
+    matched against the stored profiles, and `None` is returned when it matches
+    none — which is the normal case, since the default APN need not exist in
+    the manual list. In manual mode `apn_index` is authoritative and is used
+    directly, including for the "Default" profile, whose APN field is empty and
+    which therefore leaves **Network APN** reading `unknown`.
+    """
     if not data:
         return None
+
+    if str(data.get("apn_mode") or "").strip().lower() == "auto":
+        active = str(data.get("wan_apn") or "").strip().lower()
+        if not active:
+            return None
+        for idx, name, _pdp in _get_apn_profiles(data):
+            raw = str(data.get(f"APN_config{idx}") or "").split("($)")
+            apn = raw[1] if len(raw) > 1 else ""
+            if apn.strip().lower() == active:
+                return name
+        return None
+
     try:
         active_idx = int(float(data.get("apn_index", -1)))
     except (ValueError, TypeError):
         return None
 
-    if active_idx < 0 or active_idx > 19:
+    if active_idx < 0 or active_idx >= APN_PROFILE_SLOTS:
         return None
 
     val = data.get(f"APN_config{active_idx}")
@@ -84,6 +118,18 @@ async def _set_apn_profile_option(api: Any, option: str, data: Any) -> None:
 SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
     ZTESelectEntityDescription(
         key="apn_profile",
+        about=(
+            "Which stored APN profile to connect with. The APN is the gateway "
+            "your SIM's network expects; the wrong one usually means no data at "
+            "all rather than slow data. Choosing one here also switches APN "
+            "Selection Mode to manual. While the mode is auto the router uses "
+            "the network's default APN, which may not be in this list - the "
+            "Network APN sensor is the authoritative answer to what is actually "
+            "in use. Note the Default profile stores no APN, so selecting it "
+            "leaves Network APN reading unknown - the router's own page shows "
+            "an empty field for the same reason. New profiles are added on the "
+            "router's own web page, not here."
+        ),
         translation_key="signal_apn_profile",
         entity_category=EntityCategory.CONFIG,
         group="signal",
@@ -93,15 +139,30 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
     ),
     ZTESelectEntityDescription(
         key="apn_mode",
+        about=(
+            "Whether the router picks the APN itself (auto, using the network's "
+            "default) or uses the profile you chose (manual). Auto is right for "
+            "almost everyone. To switch to manual, choose an APN Profile "
+            "instead - that sets the mode and the profile together, which is "
+            "what the router requires."
+        ),
         translation_key="signal_apn_mode",
         entity_category=EntityCategory.CONFIG,
         group="signal",
         options_fn=lambda data: ["auto", "manual"],
         value_fn=lambda data: data.get("apn_mode") if data else None,
-        setter_fn=lambda api, option, data: api.set_apn_mode(option),
+        setter_fn=lambda api, option, data: api.set_apn_mode(option, data),
     ),
     ZTESelectEntityDescription(
         key="net_select",
+        about=(
+            "Which mobile technologies the router may use. These are the "
+            "router's own web page settings under different names: 4G_AND_5G is "
+            "Auto, LTE_AND_5G is 5G NSA, Only_5G is 5G SA, Only_LTE is 4G Only. "
+            "Auto lets it fall back when a signal weakens; the Only options lock "
+            "it. Locking to 5G can drop the connection entirely where 5G "
+            "coverage is marginal, so prefer Auto unless you are testing."
+        ),
         translation_key="signal_net_select_mode",
         entity_category=EntityCategory.CONFIG,
         group="signal",
@@ -127,10 +188,13 @@ async def async_setup_entry(
     )
 
 
-class ZTERouterSelect(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectEntity):
+class ZTERouterSelect(
+    ZTEAboutEntity, CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectEntity
+):
     """Representation of a ZTE Router select entity."""
 
     _attr_has_entity_name = True
+    _unrecorded_attributes = frozenset({"about"})
     entity_description: ZTESelectEntityDescription
 
     def __init__(
@@ -160,12 +224,25 @@ class ZTERouterSelect(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectE
         return self.entity_description.value_fn(self.coordinator.data)
 
     async def async_select_option(self, option: str) -> None:
-        """Change the selected option."""
+        """Change the selected option, surfacing a refusal rather than logging it.
+
+        A failure here used to be swallowed into the log, so a rejected APN or
+        bearer change looked like a select that silently sprang back. This API
+        answers `200 OK` for a refused write, which makes an unreported failure
+        especially easy to miss (IQS `action-exceptions`).
+
+        Deliberately *not* confirmed by a targeted read-back, unlike the
+        switches. Every setter here re-establishes the connection, and the
+        router answers with blank values while it does — which this integration
+        reads as an expired session. Reading back would risk a needless
+        re-login and would report a slow-but-successful change as a failure.
+        The debounced refresh is the right instrument for a change that takes
+        seconds to settle.
+        """
         try:
             await self.entity_description.setter_fn(
                 self.coordinator.api, option, self.coordinator.data
             )
-            await self.coordinator.async_request_refresh()
         except Exception as err:
             _LOGGER.error(
                 "%s: Failed to set %s to %s: %s",
@@ -174,6 +251,15 @@ class ZTERouterSelect(CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectE
                 option,
                 err,
             )
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="select_set_failed",
+                translation_placeholders={
+                    "entity": self.entity_description.key,
+                    "error": str(err),
+                },
+            ) from err
+        await self.coordinator.async_force_refresh()
 
     @property
     def device_info(self) -> DeviceInfo:

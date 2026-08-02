@@ -21,11 +21,14 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_SCAN_INTERVAL
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import build_device_info
+from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
-PARALLEL_UPDATES = 0
+# Writes are serialised — see the note in `switch.py`. `0` (unlimited) stays
+# correct for the read-only platforms; a platform that commands this
+# single-session router must not issue concurrent `goform` writes.
+PARALLEL_UPDATES = 1
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -69,10 +72,17 @@ async def async_setup_entry(
 
 
 class ZTEPollingInterval(
+    ZTEAboutEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     NumberEntity,
 ):
     """Number entity to control the polling interval with persistence."""
+
+    _attr_about = (
+        "How often the integration fetches from the router, from 30 seconds to "
+        "1 hour. The router permits only one login session at a time, so "
+        "polling less often leaves its web page free for longer."
+    )
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -138,13 +148,13 @@ class ZTEPollingInterval(
             )
 
             # 3. Trigger an immediate refresh using the new interval
-            await self.coordinator.async_request_refresh()
+            await self.coordinator.async_force_refresh()
 
         except asyncio.CancelledError:
             # Task was cancelled because the user moved the slider again
             pass
-        except Exception as err:
-            _LOGGER.error("Failed to apply polling interval change: %s", err)
+        except Exception:
+            _LOGGER.exception("Failed to apply polling interval change")
 
     @property
     def device_info(self) -> DeviceInfo:

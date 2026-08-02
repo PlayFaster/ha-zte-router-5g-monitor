@@ -23,7 +23,7 @@ async def test_refresh_button_press(mock_coordinator, mock_config_entry):
     button = ZTERefreshButton(mock_coordinator, mock_config_entry, REFRESH_DESCRIPTION)
 
     await button.async_press()
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 def test_refresh_button_device_info(mock_coordinator, mock_config_entry):
@@ -57,7 +57,7 @@ async def test_delete_sms_button_press(mock_coordinator, mock_config_entry):
 
     await button.async_press()
     mock_api.delete_all.assert_called_once()
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 def test_button_device_info(mock_coordinator, mock_config_entry):
@@ -94,8 +94,10 @@ async def test_reboot_button_raises_on_failure(mock_coordinator, mock_config_ent
     mock_coordinator.api = mock_api
     button = ZTERebootButton(mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION)
 
-    with pytest.raises(HomeAssistantError, match="Reboot failed"):
+    with pytest.raises(HomeAssistantError) as err:
         await button.async_press()
+
+    assert err.value.translation_key == "reboot_failed"
 
 
 @pytest.mark.asyncio
@@ -108,5 +110,7 @@ async def test_delete_sms_button_raises_on_failure(mock_coordinator, mock_config
         mock_coordinator, mock_config_entry, DELETE_SMS_DESCRIPTION
     )
 
-    with pytest.raises(HomeAssistantError, match="Delete SMS failed"):
+    with pytest.raises(HomeAssistantError) as err:
         await button.async_press()
+
+    assert err.value.translation_key == "delete_all_button_failed"

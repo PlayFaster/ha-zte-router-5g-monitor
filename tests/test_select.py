@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.zte_router_5g.select import (
     ZTERouterSelect,
@@ -12,6 +13,8 @@ from custom_components.zte_router_5g.select import (
     _set_apn_profile_option,
     async_setup_entry,
 )
+
+from .conftest import assert_links_to_parent
 
 
 def test_get_apn_profiles_empty():
@@ -192,14 +195,18 @@ async def test_select_async_select_option_success(mock_coordinator, mock_config_
         return_value=[(0, "profile_a", "IPV4V6")],
     ):
         await select.async_select_option("profile_a")
-        mock_coordinator.async_request_refresh.assert_called_once()
+        mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_select_async_select_option_exception(
     mock_coordinator, mock_config_entry, caplog
 ):
-    """Test async_select_option catches and logs exception."""
+    """A refused select must raise, not spring back with only a log line.
+
+    The router answers `200 OK` for a refused write, so a swallowed exception
+    left the user watching the value revert with no indication why.
+    """
     mock_coordinator.data = {}
     mock_coordinator.api = MagicMock()
     desc = ZTESelectEntityDescription(
@@ -213,7 +220,10 @@ async def test_select_async_select_option_exception(
     )
     select = ZTERouterSelect(mock_coordinator, mock_config_entry, desc)
 
-    await select.async_select_option("any_option")
+    with pytest.raises(HomeAssistantError) as err:
+        await select.async_select_option("any_option")
+
+    assert err.value.translation_key == "select_set_failed"
     assert "Failed to set" in caplog.text
 
 
@@ -231,7 +241,7 @@ def test_select_device_info(mock_coordinator, mock_config_entry):
     info = select.device_info
     assert info["identifiers"] == {("zte_router_5g", "864155042229309_signal")}
     assert info["manufacturer"] == "ZTE"
-    assert info["via_device"] == ("zte_router_5g", "864155042229309_system")
+    assert_links_to_parent(info, "zte_router_5g", "864155042229309_system")
 
 
 def test_select_device_info_system_group(mock_coordinator, mock_config_entry):
@@ -324,3 +334,64 @@ def test_select_apn_profile_empty_data(mock_coordinator, mock_config_entry):
     select = ZTERouterSelect(mock_coordinator, mock_config_entry, desc)
     assert select.options == []
     assert select.current_option is None
+
+
+# --- Auto mode: the indexed profile is not the one in use --------------------
+#
+# Observed live on the reference MC7010 (2026-07-31): `apn_mode=auto`,
+# `apn_index=5` (`open.internet.public`), while traffic actually ran over
+# `3FWA.ie` — slot 6. In auto the router uses the network's default APN and
+# `apn_index` merely retains the last manual choice, so showing the indexed
+# profile states something untrue.
+
+_PROFILES = {
+    "APN_config0": "Default($)($)manual($)*99#($)none($)($)($)IPv4v6",
+    "APN_config5": "open.internet.public($)open.internet.public($)manual",
+    "APN_config6": "3FWA.ie($)3fwa.ie($)manual",
+}
+
+
+def test_auto_mode_reports_the_apn_actually_in_use():
+    """`wan_apn` wins over `apn_index`, matched case-insensitively.
+
+    The router reports `3FWA.ie` for a profile storing `3fwa.ie`.
+    """
+    data = {
+        **_PROFILES,
+        "apn_mode": "auto",
+        "apn_index": "5",
+        "wan_apn": "3FWA.ie",
+    }
+    assert _get_current_apn_profile(data) == "3FWA.ie"
+
+
+def test_auto_mode_reports_nothing_when_the_default_is_not_a_stored_profile():
+    """The normal case: the network default need not exist in the manual list.
+
+    Returning the indexed profile here would name one that is not in use;
+    `None` is the honest answer, and the Network APN sensor remains
+    authoritative.
+    """
+    data = {
+        **_PROFILES,
+        "apn_mode": "auto",
+        "apn_index": "5",
+        "wan_apn": "carrier.default.apn",
+    }
+    assert _get_current_apn_profile(data) is None
+
+
+def test_auto_mode_with_no_reported_apn_reports_nothing():
+    """Nothing to match against means nothing can be claimed."""
+    data = {**_PROFILES, "apn_mode": "auto", "apn_index": "5", "wan_apn": ""}
+    assert _get_current_apn_profile(data) is None
+
+
+def test_manual_mode_still_trusts_the_index():
+    """In manual the index *is* the selection, including for Default.
+
+    The Default profile stores an empty APN, so `wan_apn` is blank while the
+    selection is perfectly valid — matching what the router's own page shows.
+    """
+    data = {**_PROFILES, "apn_mode": "manual", "apn_index": "0", "wan_apn": ""}
+    assert _get_current_apn_profile(data) == "Default"

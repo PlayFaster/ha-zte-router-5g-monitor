@@ -2,51 +2,21 @@
 
 This file provides guidance to AI coding agents when working with code in this repository.
 
+> **Read the shared conventions first:** [`.shared/dev_std/agent_conventions.md`](.shared/dev_std/agent_conventions.md) — commands (tests, lint, mypy, validation), the Windows-host `docker exec` workflow, devcontainer access, HAB/MCP for interrogating the running HA instance, the post-modification SCOPE table, code conventions, and the markdown/Python rules. That file is the single source of truth for everything shared across the integration projects; this file covers only what is specific to **ha-zte-router-5g-monitor**.
+
 ## What This Integration Does
 
 A Home Assistant custom integration (`zte_router_5g`) for ZTE 5G CPE routers (primarily the MC7010). It is a `local_polling` `hub` integration distributed via HACS. It talks to the router's undocumented `goform` HTTP API, exposing signal diagnostics, data usage, SMS, and reboot/polling controls. There are no external `requirements` — it relies only on `aiohttp` and Home Assistant core.
 
+> **Entity `about` notes are listed in [`docs/about_attribute_list.md`](docs/about_attribute_list.md), which is derived from source, not authored** - the note in the entity description or `_attr_about` is the original; that file records it. Change the code first, then bring the file into line. There is no generator script: it is refreshed by the `sensor_review` prompt, or by hand against the source when a change is small. Nothing tests the two for agreement, so an edit to a note that stops there will drift silently.
+
+---
+
+> **Entity and service inventory lives in [`docs/all_sensors.md`](docs/all_sensors.md)** — it is authoritative and kept current against live HA by `sensor_review.md`. This file deliberately carries no entity counts or service descriptions.
+
 ## Commands
 
-### Tests
-
-```bash
-# Run the full test suite
-pytest
-
-# Run a single test file / test
-pytest tests/test_coordinator.py
-pytest tests/test_api.py::test_login -q
-```
-
-### Linting & Formatting
-
-```bash
-# Lint + autofix and format (config in pyproject.toml)
-ruff check --fix .
-ruff format .
-
-# Type check (only custom_components; needs /ha_core mounted)
-mypy custom_components/
-
-# Run all configured checks at once
-pre-commit run --all-files
-```
-
-### Running tools from a Windows host
-
-These commands only work **inside** the devcontainer — HA imports `fcntl`, so `pytest` (and the other tools) cannot run on a Windows host directly. From Windows, run everything through `docker exec` against the running container. See [`.shared/prompts/devcon_run_gen.md`](.shared/prompts/devcon_run_gen.md) for the full mini-skill. Quick reference:
-
-```bash
-# Confirm the container is up first
-docker ps --filter "name=<CONTAINER_NAME>" --format "{{.Names}}"
-
-# Run a tool inside the container (-w sets the in-container working dir)
-docker exec -w /workspaces/<PROJECT_DIR> <CONTAINER_NAME> bash -c "PYTHONPATH=. pytest tests/"
-docker exec -w /workspaces/<PROJECT_DIR> <CONTAINER_NAME> bash -c "ruff check ."
-```
-
-Do not install or run these tools on the host as a workaround.
+Standard for all integration projects — see [shared conventions §2](.shared/dev_std/agent_conventions.md). Nothing about this project's commands differs.
 
 ## Architecture
 
@@ -54,25 +24,53 @@ Data flows in one direction: **`api.py` → `coordinator.py` → platform entiti
 
 - **`api.py` (`ZTERouterAPI`)** — stateless-ish async client for the `goform` API. Key behaviors that are easy to break:
   - Auth uses a chained SHA-256 hash of password + a per-session `LD` token; commands need an `AD` token derived from firmware version + `RD` (MD5 vs SHA-256 depending on model — see `get_ad`).
-  - `_request` is the single choke point: it auto-detects expired sessions (HTML redirect, unparsable JSON, or empty/`fail` status fields) and transparently re-logs-in **once** (`_retry` guard prevents loops).
+  - `_request` is the single choke point: it auto-detects expired sessions and transparently re-logs-in **once** (`_retry` guard prevents loops). Three signatures — an HTML redirect, unparsable JSON, or **a JSON dict in which every value is an empty string**.
+  - **That last rule is "every value is empty", not "these named keys are empty" — do not narrow it.** A dead session answers `200 OK` with the requested keys echoed back blank: `{"sms_data_total":""}` for SMS, `{"network_type":"","signalbar":"",…}` for the batch poll. The rule previously named the batch-poll keys, so it could never fire on an SMS response (`.get("network_type")` is `None` there, and `None == ""` is `False`) — SMS actions silently returned an empty list on an expired session while Refresh Now recovered it. Signature table in [`docs/zte_how_to_access.md`](docs/zte_how_to_access.md).
+  - `_require_contract()` is the second, independent defence: each SMS call asserts the key it must receive (`messages`, `sms_nv_total`) and raises rather than falling back to an empty default. An empty inbox returns `{"messages":[]}` — the key is present — which is what keeps "no messages" distinguishable from "no session". Never reintroduce a `.get(key, [])` fallback on these paths.
   - An inactivity check in `_request` proactively clears `stok` if the gap since the last request exceeds 150 seconds, forcing a new login.
+  - **Only an authenticated call updates `last_activity`.** `LD` and `wa_inner_version` are served without a session, so letting them stamp the clock told the idle check a long-dead session was fresh. Every write calls `get_ad()` → `get_version()` first, so an action taken after a pause hit exactly that: the unauthenticated fetch reset the clock immediately before the authenticated call that needed it, the stale `stok` survived, and the write went out on a dead session reporting success. Do not move that update back outside the `if authenticated:` guard.
+  - **`DATA_LIMIT_SETTING` is an all-or-nothing form.** It carries the limit switch, the cap and its unit, the alert percentage, the monthly auto-reset switch and the billing reset day, and the router answers `{"result":"failure"}` for a payload missing any of them — which is why the old single-field `set_data_limit_switch()` had never worked. Every write goes through `set_data_volume_settings()`, a read-modify-write sourcing untouched fields from the last poll and raising rather than guessing when one is absent. `traffic_clear_date` has no separate `goformId`; it is written through this form or not at all.
+  - **`_require_success()` is checked on every write.** This API answers `200 OK` with `{"result":"failure"}` for a refused command, so an unchecked write reports success having done nothing — a user watched an SMS action go green with no message sent. Applied to all eight `goformId` writes. It raises only on an explicit non-success `result`; a response with no `result` key is left alone, because not every command returns one. **Reboot is not special-cased**: a connection error still propagates, since a dropped link cannot be told from a router that never received the command.
   - A GET request to `wa_inner_version` is executed inside `login()` immediately after obtaining a new `stok` to fully initialize/activate the session on the router, enabling subsequent POST commands.
   - Two exception types drive everything downstream: `ZTEAuthError` (bad credentials → reauth) vs `ZTEConnectionError` (network/transient). Raise the right one.
   - SMS content/numbers are hex-encoded on the wire; `_hex_decode` / `_parse_date` produce the `*_decoded` fields entities and services consume.
+  - **`send_sms` picks `encode_type` per message** — `GSM7_default` when `helpers.is_gsm7()` says the text is entirely within the GSM 03.38 alphabet, `UNICODE` otherwise. **`MessageBody` stays UTF-16BE hex for both.** `encode_type` selects the router's DCS and segment accounting; it is not an instruction to change the client-side encoding. Verified against two independent implementations (`Kajkac/pygsm7.py::encodeMessage()`, `rosenrot00/zte_api.py::_encode_sms_message()`), which both hex-encode UTF-16 code units regardless of the type they declare. Do not "fix" a GSM-7 send by packing 7-bit septets.
+  - **The message length limit therefore depends on content, not just length.** `SMS_MAX_CHARS_GSM7` (765 = 5 x 153) and `SMS_MAX_CHARS_UNICODE` (335 = 5 x 67) in `const.py`; enforced by `_validate_sms_length()` in `__init__.py`, **not** by the service schema, because which limit applies is only knowable from the message itself. The schema carries the absolute ceiling alone. A flat limit is wrong in both directions — too small for plain text, and large enough to let a Unicode message become several separately-charged segments unannounced. Segment arithmetic and the hardware confirmation are in [`docs/zte_how_to_access.md`](docs/zte_how_to_access.md).
+  - **`login()` tries one alternate form on failure.** `_attempt_login()` posts a single `goformId` and returns a `_LoginAttempt`; `login()` retries once with the other form (`LOGIN` ↔ `LOGIN_MULTI_USER`) when the first yields no session. It deliberately does **not** retry a credentials rejection — a wrong password is wrong on either form, and a second attempt only counts against routers that lock out. Real transport failures raise straight out rather than triggering a pointless retry.
+  - **The batch poll is two requests, split by criticality.** The router bounds a GET at ~2048 characters — a **URL-length budget, not a name count** — and a single list had reached 1,889 characters with ~160 to spare. `_CORE_PARAMS` (mandatory, `get_all_data`) carries everything feeding an enabled-by-default entity, the contract keys and the device identity; `_EXTENDED_PARAMS` (optional, `get_extended_data`) carries diagnostics, disabled-by-default entities, router settings and the thermal keys. The extended half runs through `_fetch_optional`, so it holds last-good values for three cycles and then marks **only its own** entities unavailable — entities fed from it set `source=ENDPOINT_EXTENDED`. **Do not move a key feeding an enabled-by-default entity into the extended batch**, and note that cross-model aliases stay in core for exactly that reason: they feed enabled sensors on other models. `test_batch_poll_urls_stay_within_the_router_budget` guards both halves.
+  - `get_all_data()` requests a block of cross-model keys the MC7010 does not populate. This is safe: an unknown `cmd` name is simply **absent** from the response rather than an error, and an absent key cannot trip the "every value is empty" rule above. **Keep that block in step with the alias tuples in `sensor.py`** — `test_get_all_data_requests_every_aliased_key` fails if an alias names a key that is never requested.
+  - Full interface reference — every `cmd` and `goformId`, the auth and `AD` chains, and the failure modes of this API: [`docs/zte_how_to_access.md`](docs/zte_how_to_access.md).
+  - `logout()` ends the router session on unload. It **must** send an `AD` token like every other state-changing command — without one the router answers `{"result":"failure"}` and leaves the session live. It is best-effort: it swallows its own errors and always clears local state, because an unreachable router must never block unload.
 
 - **`coordinator.py` (`ZTERouterDataUpdateCoordinator`)** — polling + resilience layer.
-  - **Failure resilience**: on timeout/auth/generic errors it holds the last known values for up to 3 consecutive failures before marking entities unavailable (`UpdateFailed`). After 3 auth failures it triggers reauth via `async_start_reauth`.
+  - **Failure resilience**: on timeout/auth/generic errors it holds the last known values for up to `FETCH_STRIKE_LIMIT` (3, in `const.py`) consecutive failures before marking entities unavailable (`UpdateFailed`). After 3 auth failures it triggers reauth via `ConfigEntryAuthFailed`.
+  - **Per-endpoint resilience**: `_fetch_optional()` gives each optional endpoint (the two SMS calls) its own last-good payload and strike count; entities fed by one consult `endpoint_available(source)` in their `available` property. `get_all_data` is mandatory and stays on the global path. `ZTEAuthError` is re-raised rather than absorbed so reauth still fires.
   - **Dynamic polling**: `CONF_STOP_POLLING` returns cached data without hitting the router (the router allows only one login session, so pausing frees the web UI); `CONF_SCAN_INTERVAL` sets the interval.
-  - Detects new SMS by timestamp + per-message hash and fires the `zte_router_5g_sms_received` bus event; raises a repair issue when SMS storage is full.
+  - **Force refresh**: `async_force_refresh()` sets a one-shot flag consumed **before** the pause check, so explicit user actions fetch even while paused. Every write action and the Refresh Now button route through it — never `async_request_refresh()` directly, which the pause short-circuit swallows.
+  - **Self-diagnosis**: `health_snapshot` is a coordinator attribute (deliberately **not** in `coordinator.data`, which is `None` before first success and frozen during an outage) written on both the success and failure paths. It reports total outage (first failure at cold start, 3rd at runtime), degraded endpoints, and contract drift — a successful response containing none of `CORE_KEYS`, which also raises the `firmware_contract_drift` repair.
+  - Detects new SMS by timestamp + per-message hash and fires the `zte_router_5g_sms_received` bus event. `_check_sms_storage` runs **before** the health snapshot so the repair state it reflects is current.
+  - **Three repair issues**, all auto-clearing: `sms_storage_full` (store at capacity), `firmware_contract_drift` (3 successful polls returning none of `CORE_KEYS`, **after at least one poll reported them** — the baseline never establishes on a router that has never populated them, so an unsupported model cannot raise it; the id is historical, the user-facing title no longer blames firmware), and `router_unreachable` (`UNREACHABLE_STRIKE_LIMIT` = **10** consecutive failures — deliberately far above the 3-strike unavailability threshold, so a router reboot never raises it). A Repair requires **persistence plus agency**: the condition must have stopped resolving itself _and_ there must be something the user can do. Adding a fourth needs that test applied, not just a `translation_key`.
   - Persists a stable `boot_time` into `entry.data` so the uptime timestamp doesn't jitter. The boot instant is latched once and only re-derived when the router's uptime counter drops by more than `UPTIME_REBOOT_MARGIN` (a genuine reboot); missing/garbage uptime readings leave the latched value untouched. `last_uptime` is persisted alongside `boot_time` as the reboot-detection anchor.
 
-- **`__init__.py`** — entry setup forwards platforms **immediately**, then runs login + first refresh in a background task (`async_create_background_task`) so HA startup isn't blocked. Also registers the 4 SMS services (`send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`). The coordinator is stored on `entry.runtime_data`, not `hass.data`.
+- **`__init__.py`** — entry setup forwards platforms **immediately**, then runs login + first refresh in a background task (`async_create_background_task`) so HA startup isn't blocked. Also registers the SMS services at domain level. The coordinator is stored on `entry.runtime_data`, not `hass.data`. `async_unload_entry` calls `api.logout()` after unloading platforms.
+  - **Options listener**: `_async_options_updated` diffs `entry.options` against `coordinator.reload_signature` (options minus `LIVE_OPTION_KEYS`). Anything outside the allow-list — host, username, password — schedules a reload; `scan_interval` and `stop_polling` live-apply. Reload is the default; adding a new option means deciding which side it falls on, and connection or entity-topology settings must always reload.
+
+- **`helpers.py`** — besides `build_device_info` and the `ZTEAboutEntity` mixin, carries two cross-model utilities with no HA dependency: `is_gsm7()` (GSM 03.38 alphabet, for the SMS encoding choice above) and `earfcn_to_band()` / `arfcn_to_band()` (3GPP channel-to-band lookup, for routers that report a channel number but no band name). **The NR ranges genuinely overlap** — n78 sits inside n77 — so `arfcn_to_band()` resolves ties by a documented table order and is best-effort by design. A band name the router reports always wins over it. All three return `None` rather than guessing on unparsable or out-of-range input.
 
 - **Platforms** (`sensor`, `binary_sensor`, `button`, `number`, `switch`, `select`) — read `coordinator.data` and attach to sub-devices via `helpers.build_device_info`.
+  - **`sensor.py` key aliasing**: `_get_first(data, keys)` returns the first spelling the router populated, treating present-but-empty as absent. Alias tuples are named constants (`_ALIAS_5G_RSRP` etc.) so the set is checkable against `api.py`. It nests **inside** the existing converters — `_safe_float(_get_first(...))`, never bare — or coercion and rounding are lost. All six monthly TX/RX call sites are aliased, including the two totals via `_monthly_total_bytes()`; aliasing only some would let the totals silently disagree with their own components on `flux_`-spelling hardware.
+  - **`Projected Cycle Usage` carries two deliberate non-defaults.** It has **no `state_class`**, so it never reaches long-term statistics — it is an estimate of where the cycle ends up, and the usage it derives from is already recorded by `Monthly Total`; `test_projection_has_no_state_class` guards it, because "a numeric sensor with no state class" looks like an oversight. And it **falls back to the calendar month** when the router reports no reset day, publishing `cycle_source: calendar_assumed` rather than going `unknown` — an unexplained blank that never clears is worse than a stated assumption. Its `prior_rate` hook in `helpers.project_cycle_usage()` is always `None` today; the cycle-history store behind it is declined, see `DEVELOPMENT.md` §7.
+  - **Thermal sensors are a defined set, not a subset.** The five `pm_*` entities are the thermal keys the sibling `goform` project polls with °C units. `test_thermal_sensor_set_matches_the_descriptions` fails if one is added without a test or vice versa. No model is yet confirmed to populate any of them — all are disabled by default, and the MC7010 returns `""` for every one. Two exceptions read elsewhere: `ZTEIntegrationHealthSensor` reads `coordinator.health_snapshot` and overrides `available` to `True` unconditionally, and sensors with a `source` on their description gate `available` on `endpoint_available()`.
+
+- **`diagnostics.py`** — sanitizes rather than key-redacts. `coordinator.data` is the vendor payload verbatim, so it blanks credentials/subscriber IDs/carrier identity, pseudonymizes IPs, cell IDs and SMS senders to stable tokens, summarizes `APN_config*` to its shape, and sweeps everything else for IP/MAC-shaped strings. Identifiers are matched by shape and position only — **never** seed it with real values. Verify changes against a regenerated download with an SMS present, not by reading the code.
 
 ### Device Identity Model ("Flat Identity")
 
-Hardware metadata (`model`, `sw_version`, `imei`) is read once and stored in `entry.data`, so device info is stable from boot before the first poll completes. Entities are grouped into sub-devices (System / Signal / Data / SMS) all linked `via_device` to a `{prefix}_system` root, where `prefix` is the IMEI (or `host_{host}` fallback). The System device is registered early in `async_setup_entry` to avoid `via_device` warnings.
+Hardware metadata (`model`, `sw_version`, `imei`) is read once and stored in `entry.data`, so device info is stable from boot before the first poll completes. Entities are grouped into sub-devices (System / Signal / Data / SMS) all linked to a `{prefix}_system` root, where `prefix` is the IMEI (or `host_{host}` fallback). The System device is registered early in `async_setup_entry` to avoid parent-link warnings.
+
+This is the **System-as-root** topology, and it is conformant — `dev_standards` §3 (Standard Version 1.15.0) ranks a stable non-MAC hardware identifier such as IMEI **equal** to a MAC, and names both System-as-root and hardware-as-root as valid. The `goform` API never exposes a MAC. Do not "fix" this to an IP-keyed root; the earlier ladder implied that and was wrong.
+
+**Version compatibility (`_compat.py`).** Parent links and registry lookups go through feature-detected shims — `via_device_link` and `device_by_identifier` — emitting `via_device_id` on HA 2026.8+ and the legacy `via_device` tuple on ≤2026.7, with **no version floor**. `owning_entry_ids` is deliberately absent: this integration never reads `device.config_entries`, and an unused shim is dead code against a 100% coverage bar. Family-wide analysis and the 2026.8.0 re-verification checklist: `.shared/issues/x_project/device_registry_2026_08.md`.
 
 ### Config Entry Data vs. Options
 
@@ -83,56 +81,48 @@ This integration intentionally splits config entry storage:
 
 Read credentials from `entry.options`, not `entry.data`. The config flow is `VERSION = 2` and supports user / reconfigure / reauth / options steps.
 
+There is **no** `async_migrate_entry`, which is safe only because the first public release (2.0.1) already shipped the v2 schema — no v1 entry exists in the wild. Bumping `VERSION` to 3 makes a migration handler mandatory. In tests, `MockConfigEntry` defaults to `version=1`, so pass `version=2` explicitly or setup fails with "Migration handler not found".
+
 ## Key Patterns & Conventions
 
-- Ruff is strict: `D` (pydocstyle — every module/class/function needs a docstring), `N`, `ASYNC`, `T20` (no `print`), `SIM`, `UP` are all enabled. Target `py314`, line length 88.
-- mypy runs in strict mode (`disallow_untyped_defs`, `disallow_any_generics`, etc.) over `custom_components/` only.
-- `_LOGGER` messages are prefixed with `self.entry.title` (`"%s: ..."`) — match that style.
-- The `.notes` and `.shared` symlinks point outside the repo (project notes / shared validation configs) and are not part of the shipped integration.
+Shared conventions (ruff/mypy strictness, `_LOGGER` prefixing, `PARALLEL_UPDATES`, `translation_key`, icons, exception tuple syntax, markdown emoji rules) are in [shared conventions §4–5](.shared/dev_std/agent_conventions.md). Nothing in this project deviates.
 
-### Exception Tuple Syntax — Settled Decision
+### Entity naming — do not repeat the sub-device word
 
-Always use `except (A, B):` with explicit parentheses for multi-exception catches. Never use the bare-tuple form `except A, B:`.
+Home Assistant prefixes the **device** name to the entity name, and this integration's devices are `ZTE 5G System` / `Signal` / `Data` / `SMS`. So an entity in the `data` group named "Data Reset Day" becomes **"ZTE 5G Data Data Reset Day"** and `sensor.zte_5g_data_data_reset_day`.
 
-- **Do not flag or change this** — it has been researched and decided.
-- `except A, B:` silently catches only `A` on Python 3.12–3.13 (what HA runs on in production), making it a correctness issue, not just style.
-- `except (A, B):` is correct and unambiguous across Python 2.6 through 3.14+.
-- Full background: `shared/SharedNotes/info/py_exception_tuple_syntax/issue_summary.md`
+**Name the entity for what it is within its group, not including the group.** `Reset Day`, `Allowance`, `Alert Threshold` — never `Data Reset Day`, `Data Allowance`, `Data Volume Alert`.
+
+Two released entities already carry the doubling and are **deliberately left alone**:
+
+- `sensor.zte_5g_signal_signal_bars`
+- `switch.zte_5g_data_data_limit_switch`
+
+Renaming them would fix nothing. **Home Assistant never renames an existing `entity_id`** — the registry keeps whatever was assigned at creation — so every current install keeps the doubled ID regardless, while anyone referencing the friendly name in a dashboard or template gets a silent break. The only beneficiary is a new install, which is not worth the breakage. Fix the convention going forward; do not retrofit.
+
+The corollary matters when adding an entity: **get the name right before it ships**, because after that only new installs see the correction. `Reset Day`, `Allowance` and `Alert Threshold` were all renamed within hours of being added, for exactly this reason.
+
+### Raising user-facing exceptions
+
+Every raise that can reach a user must be translated — no f-string messages:
+
+```python
+raise HomeAssistantError(
+    translation_domain=DOMAIN,
+    translation_key="send_sms_failed",
+    translation_placeholders={"error": str(err)},
+) from err
+```
+
+- Add a matching entry to the `exceptions` block in **both** `strings.json` and `translations/en.json`.
+- Pick the type deliberately: **`ServiceValidationError`** when the caller got the call wrong and can fix it (no `entry_id` given when several routers exist); **`HomeAssistantError`** when the operation failed (the router rejected a reboot).
+- `test_every_raised_exception_has_translated_text` walks every raise in the component and fails on an untranslated one or a key missing from either file.
+- **Testing gotcha:** a translated exception resolves its message through `hass` at `str()` time, so `pytest.raises(..., match="some text")` fails under this suite's mocked hass with `async_get_hass called from the wrong thread`. Assert on `err.value.translation_key` instead.
+
+### Editing `quality_scale.yaml`
+
+Comments are plain multi-line block scalars, so a `": "` sequence in prose is parsed as a mapping and breaks the file. Write `X — because Y`, not `X: because Y`. Check with `grep -nE '^      .*: ' custom_components/zte_router_5g/quality_scale.yaml` before committing.
 
 ## Development Environment
 
-The project uses a VS Code devcontainer (`.devcontainer/`, image `ha-dev-base:latest`; see `.devcontainer/docker-compose.yml`) running a Home Assistant instance for live testing. HA core source is mounted read-only at `/ha_core`; mypy resolves HA types against it via `mypy_path = "/ha_core"` and will not typecheck correctly outside an environment where that path exists.
-
-### MCP Access (ha-mcp-dev)
-
-When the devcontainer is running, the `ha-mcp-dev` MCP server automatically connects to the HA instance inside it (`http://localhost:8123`). Use it to verify integration changes without leaving the editor.
-
-**After any modification, follow the post-modification process** — see [`.shared/prompts/post_mod_process.md`](.shared/prompts/post_mod_process.md). Specify a `SCOPE` when invoking it:
-
-| SCOPE      | What runs                                                 |
-| :--------- | :-------------------------------------------------------- |
-| `None`     | Changes only — no validation                              |
-| `Basic`    | HA restart + error check + lint/format fixes              |
-| `Full`     | Basic + mypy (standard) + pytest (fix failing tests only) |
-| `Complete` | Full + pre-commit --all-files + mypy --strict             |
-
-Additional tools useful during development:
-
-- `ha_get_state` / `ha_search_entities` — verify entity states and attributes after a reload
-- `ha_call_service` — trigger service calls (e.g. `homeassistant.update_entity`) to exercise platform callbacks directly
-
-Live HA for manual testing runs at `http://localhost:8123`; the integration is mounted read-only into `/config/custom_components/`. Tests use `pytest-homeassistant-custom-component` with `asyncio_mode = "auto"` (no `@pytest.mark.asyncio` needed).
-
-Validation reports are written to the `.reports/` directory (gitignored outputs from lint/test runs).
-
-### Skill Prompts
-
-Three reusable prompts are available via `.shared/prompts/` for working within this devcontainer:
-
-| Prompt | Purpose |
-| :-- | :-- |
-| `devcon_run_gen.md` | Run any single command inside the container |
-| `devcon_run_and_fix.md` | Full test + lint cycle: pytest, ruff, prettier, validate — with auto-fix |
-| `devcon_coverage.md` | Coverage report, target file selection, and new test writing |
-
-Container identity values (`CONTAINER_NAME`, `PROJECT_DIR`) are in `.devcontainer/.env`.
+Standard for all integration projects — see [shared conventions §3](.shared/dev_std/agent_conventions.md). Nothing about this project's environment differs.

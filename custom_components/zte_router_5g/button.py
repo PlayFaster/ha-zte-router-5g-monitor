@@ -18,12 +18,16 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import build_device_info
+from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
-PARALLEL_UPDATES = 0
+# Writes are serialised — see the note in `switch.py`. `0` (unlimited) stays
+# correct for the read-only platforms; a platform that commands this
+# single-session router must not issue concurrent `goform` writes.
+PARALLEL_UPDATES = 1
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -76,7 +80,9 @@ async def async_setup_entry(
     )
 
 
-class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity):
+class ZTEButton(
+    ZTEAboutEntity, CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity
+):
     """Base class for ZTE Router buttons."""
 
     _attr_has_entity_name = True
@@ -105,13 +111,24 @@ class ZTEButton(CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity)
 class ZTERefreshButton(ZTEButton):
     """Button to trigger an immediate data refresh."""
 
+    _attr_about = (
+        "Fetches from the router immediately, without waiting for the next "
+        "scheduled poll. It works even while polling is paused - explicit "
+        "actions always fetch."
+    )
+
     async def async_press(self) -> None:
         """Handle the button press."""
-        await self.coordinator.async_request_refresh()
+        await self.coordinator.async_force_refresh()
 
 
 class ZTERebootButton(ZTEButton):
     """Button to reboot the ZTE router."""
+
+    _attr_about = (
+        "Restarts the router. The connection drops for a minute or two, and "
+        "session data counters reset to zero. Monthly counters are unaffected."
+    )
 
     async def async_press(self) -> None:
         """Handle the button press."""
@@ -119,7 +136,11 @@ class ZTERebootButton(ZTEButton):
             await self.coordinator.api.reboot()
         except Exception as err:
             _LOGGER.error("%s: Reboot failed: %s", self._entry.title, err)
-            raise HomeAssistantError(f"Reboot failed: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="reboot_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
 
 
 class ZTEDeleteAllSMSButton(ZTEButton):
@@ -129,7 +150,11 @@ class ZTEDeleteAllSMSButton(ZTEButton):
         """Handle the button press."""
         try:
             await self.coordinator.api.delete_all()
-            await self.coordinator.async_request_refresh()
+            await self.coordinator.async_force_refresh()
         except Exception as err:
             _LOGGER.error("%s: Delete SMS failed: %s", self._entry.title, err)
-            raise HomeAssistantError(f"Delete SMS failed: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="delete_all_button_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err

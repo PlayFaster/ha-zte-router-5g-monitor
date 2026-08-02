@@ -1,16 +1,23 @@
 """Tests for the ZTE Router init."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import ServiceCall
+from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceValidationError
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.zte_router_5g import async_setup_entry, async_unload_entry
-from custom_components.zte_router_5g.api import ZTEAuthError
+from custom_components.zte_router_5g import (
+    _validate_sms_length,
+    async_setup_entry,
+    async_unload_entry,
+)
+from custom_components.zte_router_5g.api import ZTEAuthError, ZTECredentialsError
 from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
+    SMS_MAX_CHARS_GSM7,
+    SMS_MAX_CHARS_UNICODE,
 )
 from custom_components.zte_router_5g.coordinator import (
     ZTERouterDataUpdateCoordinator,
@@ -55,8 +62,13 @@ async def test_setup_entry_success(mock_hass, mock_config_entry):
 @pytest.mark.asyncio
 async def test_unload_entry_success(mock_hass, mock_config_entry):
     """Test successful unloading of the integration."""
-    mock_config_entry.runtime_data = MagicMock()
+    coordinator = MagicMock()
+    # Unload releases the router session (dev_standards Section 10).
+    coordinator.api.logout = AsyncMock()
+    mock_config_entry.runtime_data = coordinator
+
     assert await async_unload_entry(mock_hass, mock_config_entry) is True
+    coordinator.api.logout.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -176,7 +188,9 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
         patch("homeassistant.helpers.device_registry.async_get"),
     ):
         mock_api = mock_api_class.return_value
-        mock_api.try_set_protocol = AsyncMock(side_effect=Exception("Background Fail"))
+        mock_api.try_set_protocol = AsyncMock(
+            side_effect=TimeoutError("Background Fail")
+        )
 
         background_coro = None
 
@@ -221,19 +235,32 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
 
 
 @pytest.mark.asyncio
-async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
-    """Test that ZTEAuthError triggers reauth after 3 consecutive failures."""
+@pytest.mark.parametrize(
+    ("error", "expected"),
+    [
+        # A password the router rejects is the user's to fix, so it earns the
+        # reauth prompt.
+        (ZTECredentialsError("Bad password"), ConfigEntryAuthFailed),
+        # A session that merely lapsed is ours, and re-login has already been
+        # tried. Prompting here would tell the user their credentials were
+        # wrong when they were not, and re-entering them would change nothing.
+        (ZTEAuthError("Session expired"), UpdateFailed),
+    ],
+)
+async def test_only_a_rejected_password_triggers_reauth(
+    mock_hass, mock_config_entry, error, expected
+):
+    """Both auth failures hold values for three strikes, then diverge."""
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI"),
         patch("custom_components.zte_router_5g.async_get_clientsession"),
         patch("homeassistant.helpers.device_registry.async_get"),
-        patch.object(mock_config_entry, "async_start_reauth") as mock_reauth,
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_config_entry.runtime_data
         coordinator.data = {"old": "data"}
-        coordinator.api.get_all_data = AsyncMock(side_effect=ZTEAuthError("Auth fail"))
-        coordinator.api.login = AsyncMock(return_value="stok=fake")
+        coordinator.api.get_all_data = AsyncMock(side_effect=error)
+        coordinator.api.login = AsyncMock(side_effect=error)
 
         # First 3 failures return cached data (resilience)
         for i in range(3):
@@ -241,11 +268,8 @@ async def test_async_update_data_reauth_trigger(mock_hass, mock_config_entry):
             assert data == {"old": "data"}
             assert coordinator.consecutive_failures == i + 1
 
-        # 4th failure raises UpdateFailed and triggers reauth
-        with pytest.raises(UpdateFailed, match="Authentication failed"):
+        with pytest.raises(expected):
             await coordinator._async_update_data()
-
-        mock_reauth.assert_called_once_with(mock_hass)
 
 
 @pytest.mark.asyncio
@@ -271,6 +295,7 @@ async def test_service_send_sms(mock_hass, mock_config_entry):
 
     mock_api = AsyncMock()
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -289,8 +314,10 @@ async def test_service_delete_sms(mock_hass, mock_config_entry):
 
     mock_api = AsyncMock()
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -299,7 +326,7 @@ async def test_service_delete_sms(mock_hass, mock_config_entry):
 
     await async_delete_sms(mock_hass, call)
     mock_api.delete_sms.assert_called_once_with("5")
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -309,8 +336,10 @@ async def test_service_delete_all_sms_simple(mock_hass, mock_config_entry):
 
     mock_api = AsyncMock()
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -320,7 +349,7 @@ async def test_service_delete_all_sms_simple(mock_hass, mock_config_entry):
     await async_delete_all_sms(mock_hass, call)
     mock_api.delete_all.assert_called_once()
     mock_api.get_sms_messages.assert_not_called()
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -336,8 +365,10 @@ async def test_service_delete_all_sms_keep_last(mock_hass, mock_config_entry):
         {"id": "1"},
     ]
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -347,7 +378,7 @@ async def test_service_delete_all_sms_keep_last(mock_hass, mock_config_entry):
     await async_delete_all_sms(mock_hass, call)
     mock_api.get_sms_messages.assert_called_once_with(mem_store="1")
     mock_api.delete_sms.assert_called_once_with("2;1")
-    mock_coordinator.async_request_refresh.assert_called_once()
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -380,6 +411,7 @@ async def test_service_get_sms_list(mock_hass, mock_config_entry):
         },
     ]
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -412,6 +444,7 @@ async def test_get_coordinator_with_entry_id(mock_hass, mock_config_entry):
     from custom_components.zte_router_5g import _get_coordinator
 
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
 
@@ -429,8 +462,10 @@ async def test_get_coordinator_with_entry_id_not_ready(mock_hass, mock_config_en
     mock_config_entry.runtime_data = None
     mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
 
-    with pytest.raises(HomeAssistantError, match="is not ready"):
+    with pytest.raises(HomeAssistantError) as err:
         _get_coordinator(mock_hass, {"entry_id": "test_entry"})
+
+    assert err.value.translation_key == "entry_not_ready"
 
 
 @pytest.mark.asyncio
@@ -442,8 +477,10 @@ async def test_get_coordinator_no_entries(mock_hass):
 
     mock_hass.config_entries.async_entries.return_value = []
 
-    with pytest.raises(HomeAssistantError, match="No active ZTE Router"):
+    with pytest.raises(HomeAssistantError) as err:
         _get_coordinator(mock_hass, {})
+
+    assert err.value.translation_key == "no_entries_found"
 
 
 @pytest.mark.asyncio
@@ -452,6 +489,7 @@ async def test_get_coordinator_single_entry_fallback(mock_hass, mock_config_entr
     from custom_components.zte_router_5g import _get_coordinator
 
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -462,7 +500,7 @@ async def test_get_coordinator_single_entry_fallback(mock_hass, mock_config_entr
 @pytest.mark.asyncio
 async def test_get_coordinator_multiple_entries(mock_hass):
     """Test _get_coordinator requires entry_id when more than one router is loaded."""
-    from homeassistant.exceptions import HomeAssistantError
+    from homeassistant.exceptions import ServiceValidationError
 
     from custom_components.zte_router_5g import _get_coordinator
 
@@ -472,8 +510,13 @@ async def test_get_coordinator_multiple_entries(mock_hass):
     entry_b.runtime_data = MagicMock()
     mock_hass.config_entries.async_entries.return_value = [entry_a, entry_b]
 
-    with pytest.raises(HomeAssistantError, match="specify entry_id"):
+    # ServiceValidationError (a HomeAssistantError subclass) — the caller can fix
+    # this by naming an entry_id, so it is a validation fault, not an integration
+    # failure. The message is resolved through hass at render time, so the stable
+    # thing to assert on is the translation key.
+    with pytest.raises(ServiceValidationError) as err:
         _get_coordinator(mock_hass, {})
+    assert err.value.translation_key == "multiple_entries"
 
 
 @pytest.mark.asyncio
@@ -486,6 +529,7 @@ async def test_service_send_sms_exception(mock_hass, mock_config_entry):
     mock_api = AsyncMock()
     mock_api.send_sms.side_effect = RuntimeError("Send failed")
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -493,8 +537,10 @@ async def test_service_send_sms_exception(mock_hass, mock_config_entry):
     call = MagicMock(spec=ServiceCall)
     call.data = {"target": ["+123456"], "message": "test msg"}
 
-    with pytest.raises(HomeAssistantError, match="Failed to send SMS"):
+    with pytest.raises(HomeAssistantError) as err:
         await async_send_sms(mock_hass, call)
+
+    assert err.value.translation_key == "send_sms_failed"
 
 
 @pytest.mark.asyncio
@@ -507,6 +553,7 @@ async def test_service_delete_sms_exception(mock_hass, mock_config_entry):
     mock_api = AsyncMock()
     mock_api.delete_sms.side_effect = RuntimeError("Delete failed")
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -514,8 +561,10 @@ async def test_service_delete_sms_exception(mock_hass, mock_config_entry):
     call = MagicMock(spec=ServiceCall)
     call.data = {"index": 5}
 
-    with pytest.raises(HomeAssistantError, match="Failed to delete SMS"):
+    with pytest.raises(HomeAssistantError) as err:
         await async_delete_sms(mock_hass, call)
+
+    assert err.value.translation_key == "delete_sms_failed"
 
 
 @pytest.mark.asyncio
@@ -528,6 +577,7 @@ async def test_service_delete_all_sms_exception(mock_hass, mock_config_entry):
     mock_api = AsyncMock()
     mock_api.delete_all.side_effect = RuntimeError("Delete all failed")
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -535,8 +585,10 @@ async def test_service_delete_all_sms_exception(mock_hass, mock_config_entry):
     call = MagicMock(spec=ServiceCall)
     call.data = {"keep_last": 0}
 
-    with pytest.raises(HomeAssistantError, match="Failed to delete all SMS"):
+    with pytest.raises(HomeAssistantError) as err:
         await async_delete_all_sms(mock_hass, call)
+
+    assert err.value.translation_key == "delete_all_sms_failed"
 
 
 @pytest.mark.asyncio
@@ -566,6 +618,7 @@ async def test_service_get_sms_list_mix_box_type(mock_hass, mock_config_entry):
         ],
     ]
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -589,6 +642,7 @@ async def test_service_get_sms_list_exception(mock_hass, mock_config_entry):
     mock_api = AsyncMock()
     mock_api.get_sms_messages.side_effect = RuntimeError("List failed")
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
@@ -596,8 +650,10 @@ async def test_service_get_sms_list_exception(mock_hass, mock_config_entry):
     call = MagicMock(spec=ServiceCall)
     call.data = {"page": 1, "count": 10, "box_type": 1}
 
-    with pytest.raises(HomeAssistantError, match="Failed to fetch SMS list"):
+    with pytest.raises(HomeAssistantError) as err:
         await async_get_sms_list(mock_hass, call)
+
+    assert err.value.translation_key == "get_sms_list_failed"
 
 
 @pytest.mark.asyncio
@@ -620,8 +676,10 @@ async def test_async_setup_service_handlers(mock_hass, mock_config_entry):
     # Set up coordinator for handler calls
     mock_api = AsyncMock()
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
     mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
@@ -801,7 +859,7 @@ async def test_reboot_detection_boundary(
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_config_entry.runtime_data
-        original_boot = datetime(2026, 1, 1, 0, 0, 0)
+        original_boot = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         coordinator._boot_time = original_boot
         coordinator._last_uptime = 100
 
@@ -831,7 +889,7 @@ async def test_boot_time_unchanged_on_bad_uptime(
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_config_entry.runtime_data
-        original_boot = datetime(2026, 1, 1, 0, 0, 0)
+        original_boot = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         coordinator._boot_time = original_boot
         coordinator._last_uptime = 3600
 
@@ -984,8 +1042,10 @@ async def test_delete_all_sms_keep_last_gte_total_deletes_nothing(
     mock_api = AsyncMock()
     mock_api.get_sms_messages.return_value = [{"id": "3"}, {"id": "2"}, {"id": "1"}]
     mock_coordinator = MagicMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
     mock_coordinator.async_request_refresh = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock()
     mock_config_entry.runtime_data = mock_coordinator
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
@@ -996,7 +1056,7 @@ async def test_delete_all_sms_keep_last_gte_total_deletes_nothing(
         call.data = {"keep_last": n}
         await async_delete_all_sms(mock_hass, call)
         mock_api.delete_sms.assert_not_called()
-    mock_coordinator.async_request_refresh.assert_called()
+    mock_coordinator.async_force_refresh.assert_called()
 
 
 # ── Strategy 3: Error State & Negative Path Engineering ─────────────────────
@@ -1042,3 +1102,44 @@ async def test_coordinator_sms_message_missing_id_handled(mock_hass, mock_config
 
         data = await coordinator._async_update_data()
         assert data["last_sms"]["number_decoded"] == "111"
+
+
+# --- SMS length: the limit depends on the encoding the text forces ----------
+
+
+def test_plain_text_may_use_the_full_gsm7_length():
+    """765 = 5 concatenated segments of 153 septets, as the router advertises."""
+    _validate_sms_length("A" * SMS_MAX_CHARS_GSM7)
+
+
+def test_plain_text_is_rejected_past_the_gsm7_limit():
+    """Beyond five segments the router's behaviour is untested; stay out of it."""
+    with pytest.raises(ServiceValidationError) as err:
+        _validate_sms_length("A" * (SMS_MAX_CHARS_GSM7 + 1))
+    assert err.value.translation_key == "sms_too_long"
+
+
+def test_unicode_gets_the_shorter_limit():
+    """One emoji forces UCS-2 for the whole message, at 67 chars per segment."""
+    message = "\U0001f4f6" + "A" * SMS_MAX_CHARS_UNICODE
+    with pytest.raises(ServiceValidationError) as err:
+        _validate_sms_length(message)
+    assert err.value.translation_key == "sms_too_long"
+
+
+def test_unicode_within_its_own_limit_is_accepted():
+    """335 = 5 x 67. Valid, even though it is far below the GSM-7 ceiling."""
+    _validate_sms_length("\U0001f4f6" + "A" * (SMS_MAX_CHARS_UNICODE - 1))
+
+
+def test_a_message_between_the_two_limits_turns_on_content_alone():
+    """The same length passes as plain text and fails with one emoji in it.
+
+    This is the whole point of validating per-message: a flat limit is either
+    too small for plain text or lets a Unicode message become several charged
+    segments without saying so.
+    """
+    length = SMS_MAX_CHARS_UNICODE + 10
+    _validate_sms_length("A" * length)
+    with pytest.raises(ServiceValidationError):
+        _validate_sms_length("\U0001f4f6" + "A" * (length - 1))

@@ -19,9 +19,20 @@ rules:
       config and options flow steps.
   dependency-transparency: done
   docs-actions: done
+  docs-conditions:
+    status: exempt
+    comment:
+      No custom condition platform — no condition.py, conditions.yaml, or conditions
+      block in strings.json. The integration exposes sensors and actions only.
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
+  docs-triggers:
+    status: exempt
+    comment:
+      No custom trigger platform — no trigger.py, triggers.yaml, or triggers block in
+      strings.json. The zte_router_5g_sms_received bus event is documented in the README
+      but is an event, not a trigger platform, so it does not change this.
   entity-event-setup: done
   entity-unique-id: done
   has-entity-name: done
@@ -62,8 +73,11 @@ rules:
   parallel-updates:
     status: done
     comment:
-      PARALLEL_UPDATES = 0 added to all five platform files (sensor, binary_sensor,
-      button, switch, number).
+      Set deliberately per platform. PARALLEL_UPDATES = 0 on the read-only platforms
+      (sensor, binary_sensor) — coordinator-driven, so there is no per-entity polling to
+      serialise. PARALLEL_UPDATES = 1 on the platforms that command the router (switch,
+      select, number, button) the router permits a single session, so concurrent goform
+      writes are how a session gets torn down. Rapid toggling queues rather than racing.
   reauthentication-flow:
     status: done
     comment:
@@ -77,9 +91,14 @@ rules:
   diagnostics:
     status: done
     comment:
-      diagnostics.py created with async_get_config_entry_diagnostics; redacts sensitive
-      fields (password, username, IPs); includes entry data, coordinator state, and live
-      router data.
+      diagnostics.py implements async_get_config_entry_diagnostics with a layered
+      sanitizer, not key-name redaction alone — the coordinator payload is the vendor
+      goform response stored verbatim. Credentials, subscriber identifiers and carrier
+      identity are blanked; IPs, cell identifiers and SMS senders become stable
+      pseudonyms (ip-1, cell-2, phone-1); APN profiles are reduced to their shape; and
+      anything IP- or MAC-shaped is swept structurally for keys not enumerated. The SMS
+      body and sender do not survive. Includes entry data, coordinator state, health
+      snapshot and endpoint failure counts.
   discovery-update-info:
     status: exempt
     comment: Depends on discovery, which is exempt for this fixed-IP integration.
@@ -103,8 +122,10 @@ rules:
   docs-supported-functions:
     status: done
     comment:
-      README section 'Entity Overview' provides a structured breakdown of all 51+
-      entities by sub-device and metric type.
+      README section 'Entity Overview' provides a structured summary of every entity by
+      sub-device and metric type, naming which are disabled by default. The
+      authoritative inventory is docs/all_sensors.md kept current against live HA by
+      sensor_review.
   docs-troubleshooting:
     status: done
     comment:
@@ -122,18 +143,30 @@ rules:
   entity-translations:
     status: done
     comment:
-      All platform entities (sensor, binary_sensor, button, switch, number) use prefixed
-      translation_key (system_, signal_, data_, or sms_) matching their respective
-      sub-device group. strings.json and en.json are fully synchronized and include all
-      51 entities.
+      All entities across the six platforms (sensor, binary_sensor, button, number,
+      switch, select) use a prefixed translation_key (system_, signal_, data_ or sms_)
+      matching their sub-device group. 77 keys, every one resolving in both strings.json
+      and translations/en.json with no stale entries — reconciled against the code
+      rather than by comparing the two files to each other.
   exception-translations:
     status: done
     comment:
-      Config flow errors (cannot_connect, invalid_auth, unknown, already_configured) are
-      translated via strings.json. No custom service exceptions required.
+      Config flow errors are translated via strings.json, and all nine user-facing
+      raises now carry translation_domain + translation_key with an exceptions block in
+      strings.json and translations/en.json. Seven are in __init__.py (four SMS service
+      handlers plus three coordinator target-resolution failures) and two in button.py
+      (reboot, delete all SMS). The three target-resolution failures use
+      ServiceValidationError rather than HomeAssistantError — they are faults in how the
+      action was called, which the user can correct. Guarded by
+      test_every_raised_exception_has_translated_text, which fails on any untranslated
+      raise or any key missing from either file.
   icon-translations:
     status: done
-    comment: All 51+ entities covered incl one dynamic icon (best_connection)
+    comment:
+      icons.json covers entities and services. All entity translation_keys have an entry
+      except system_uptime_duration, which derives its icon from
+      SensorDeviceClass.DURATION; best_connection and integration_health use state-
+      dependent icons. The services block covers all four SMS actions.
   reconfiguration-flow:
     status: done
     comment:
@@ -143,13 +176,25 @@ rules:
   repair-issues:
     status: done
     comment:
-      coordinator._check_sms_storage raises sms_storage_full repair issue when
-      sms_nv_total >= nv_sms_able; clears it otherwise. Translated in strings.json and
-      en.json.
+      Three repairs, all auto-clearing and translated in strings.json and en.json.
+      _check_sms_storage raises sms_storage_full when sms_nv_total >= nv_sms_able.
+      _set_drift_repair raises firmware_contract_drift when three consecutive successful
+      polls return none of the expected fields, which is the signature of a firmware
+      update renaming the API. _set_unreachable_repair raises router_unreachable after
+      UNREACHABLE_STRIKE_LIMIT (10) consecutive failed fetches — well above the 3-strike
+      unavailability threshold, so a router reboot never reaches it.
   stale-devices:
     status: exempt
     comment:
-      Devices persist intentionally; users control removal via the device registry.
+      Nothing here can become stale. The four sub-devices (System, Signal, Data, SMS)
+      are created from a fixed group list on every setup, and the integration never
+      enumerates clients behind the router — it monitors the CPE itself, not the LAN.
+      Replacing the router yields a new IMEI and therefore a new config entry, whose
+      removal takes its devices with it. This is N/A rather than the family-level REJECT
+      ("devices persist intentionally") — there is no removal policy to decline, because
+      no device can ever be orphaned. NOTE — that ceases to be true if dev_standards
+      Section 15 feature-group toggles are implemented, since disabling the SMS group
+      would orphan its sub-device and a cleanup path would be required.
 
   # Platinum
   async-dependency:

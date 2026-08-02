@@ -52,97 +52,346 @@
   },
   "entity": {
     "sensor": {
-      "system_model_name": { "name": "Model Name" },
-      "system_wa_inner_version": { "name": "Firmware Version" },
-      "system_wan_ipaddr": { "name": "WAN IP Address" },
-      "system_lan_ipaddr": { "name": "LAN IP Address" },
-      "system_device_uptime": { "name": "Device Uptime" },
-      "system_uptime_duration": { "name": "Uptime Duration" },
-      "system_last_updated": { "name": "Last Updated" },
-      "system_imei": { "name": "IMEI" },
-      "system_hardware_version": { "name": "Hardware Version" },
-      "system_battery_value": { "name": "Battery" },
-      "system_sim_imsi": { "name": "SIM IMSI" },
-      "system_sim_iccid": { "name": "SIM ICCID" },
-      "signal_wan_connect_status": { "name": "WAN Connect Status" },
-      "signal_wan_apn": { "name": "Network APN" },
-      "signal_network_type": { "name": "Network Type" },
-      "signal_signalbar": { "name": "Signal Bars" },
-      "signal_network_provider": { "name": "Network Provider" },
-      "signal_mdm_mcc": { "name": "MDM MCC" },
-      "signal_mdm_mnc": { "name": "MDM MNC" },
-      "signal_rmcc": { "name": "Roaming MCC" },
-      "signal_rmnc": { "name": "Roaming MNC" },
-      "signal_lte_rsrp": { "name": "LTE RSRP" },
-      "signal_lte_rsrq": { "name": "LTE RSRQ" },
-      "signal_lte_rssi": { "name": "LTE RSSI" },
-      "signal_lte_snr": { "name": "LTE SNR" },
-      "signal_lte_pci": { "name": "LTE PCI" },
-      "signal_cell_id": { "name": "Cell ID" },
-      "signal_wan_lte_ca": { "name": "Carrier Aggregation" },
-      "signal_lte_ca_pcell_band": { "name": "LTE Primary Band" },
-      "signal_lte_ca_pcell_bandwidth": { "name": "LTE Primary Bandwidth" },
-      "signal_lte_ca_scell_band": { "name": "LTE Secondary Band" },
-      "signal_lte_ca_scell_bandwidth": { "name": "LTE Secondary Bandwidth" },
-      "signal_wan_active_band": { "name": "LTE Active Band" },
-      "signal_wan_active_channel": { "name": "LTE Active Channel" },
-      "signal_z5g_rsrp": { "name": "5G RSRP" },
-      "signal_z5g_rsrq": { "name": "5G RSRQ" },
-      "signal_z5g_rssi": { "name": "5G RSSI" },
-      "signal_z5g_sinr": { "name": "5G SNR" },
-      "signal_nr5g_pci": { "name": "5G PCI" },
-      "signal_nr5g_action_band": { "name": "5G Active Band" },
-      "signal_nr5g_action_channel": { "name": "5G Active Channel" },
-      "signal_rssi": { "name": "Legacy RSSI" },
-      "signal_rscp": { "name": "Legacy RSCP" },
-      "signal_enodeb_id": { "name": "eNodeB ID" },
-      "signal_net_select": { "name": "Network Mode" },
-      "signal_ppp_status": { "name": "Bridge Mode" },
-      "data_monthly_tx_bytes": { "name": "Monthly Sent GB" },
-      "data_monthly_rx_bytes": { "name": "Monthly Received GB" },
-      "data_monthly_total_bytes": { "name": "Monthly Total GB" },
-      "data_monthly_tx_bytes_raw": { "name": "Monthly Sent" },
-      "data_monthly_rx_bytes_raw": { "name": "Monthly Received" },
-      "data_monthly_total_bytes_raw": { "name": "Monthly Total" },
-      "data_realtime_tx_thrpt": { "name": "Upload Speed" },
-      "data_realtime_rx_thrpt": { "name": "Download Speed" },
-      "data_realtime_tx_bytes": { "name": "Session Sent" },
-      "data_realtime_rx_bytes": { "name": "Session Received" },
-      "sms_sms_unread_num": { "name": "Unread Msg" },
-      "sms_msg_total": { "name": "Total Msg" },
-      "sms_msg_recent": { "name": "Recent Msg" },
-      "signal_lte_band_lock": { "name": "LTE Band Lock Mask" },
-      "data_volume_alert_percent": { "name": "Data Volume Alert" },
-      "system_sntp_server": { "name": "Time Server (SNTP)" }
+      "system_model_name": {
+        "name": "Model Name"
+      },
+      "system_wa_inner_version": {
+        "name": "Firmware Version"
+      },
+      "system_wan_ipaddr": {
+        "name": "WAN IP Address"
+      },
+      "system_lan_ipaddr": {
+        "name": "LAN IP Address"
+      },
+      "system_device_uptime": {
+        "name": "Device Uptime"
+      },
+      "system_uptime_duration": {
+        "name": "Uptime Duration"
+      },
+      "system_last_updated": {
+        "name": "Last Updated"
+      },
+      "system_imei": {
+        "name": "IMEI"
+      },
+      "system_hardware_version": {
+        "name": "Hardware Version"
+      },
+      "system_battery_value": {
+        "name": "Battery"
+      },
+      "system_pm_sensor_pa1": {
+        "name": "Power Amplifier Temperature"
+      },
+      "system_pm_sensor_ambient": {
+        "name": "Ambient Modem Temperature"
+      },
+      "system_pm_sensor_mdm": {
+        "name": "Modem Temperature"
+      },
+      "system_pm_modem_5g": {
+        "name": "5G Modem Temperature"
+      },
+      "system_pm_sensor_5g": {
+        "name": "5G Radio Temperature"
+      },
+      "system_sim_imsi": {
+        "name": "SIM IMSI"
+      },
+      "system_sim_iccid": {
+        "name": "SIM ICCID"
+      },
+      "signal_wan_connect_status": {
+        "name": "WAN Connect Status"
+      },
+      "signal_wan_apn": {
+        "name": "Network APN"
+      },
+      "signal_network_type": {
+        "name": "Network Type"
+      },
+      "signal_signalbar": {
+        "name": "Signal Bars"
+      },
+      "signal_network_provider": {
+        "name": "Network Provider"
+      },
+      "signal_mdm_mcc": {
+        "name": "MDM MCC"
+      },
+      "signal_mdm_mnc": {
+        "name": "MDM MNC"
+      },
+      "signal_rmcc": {
+        "name": "Roaming MCC"
+      },
+      "signal_rmnc": {
+        "name": "Roaming MNC"
+      },
+      "signal_lte_rsrp": {
+        "name": "LTE RSRP"
+      },
+      "signal_lte_rsrq": {
+        "name": "LTE RSRQ"
+      },
+      "signal_lte_rssi": {
+        "name": "LTE RSSI"
+      },
+      "signal_lte_snr": {
+        "name": "LTE SNR"
+      },
+      "signal_lte_pci": {
+        "name": "LTE PCI"
+      },
+      "signal_cell_id": {
+        "name": "Cell ID"
+      },
+      "signal_wan_lte_ca": {
+        "name": "Carrier Aggregation"
+      },
+      "signal_lte_ca_pcell_band": {
+        "name": "LTE Primary Band"
+      },
+      "signal_lte_ca_pcell_bandwidth": {
+        "name": "LTE Primary Bandwidth"
+      },
+      "signal_lte_ca_scell_band": {
+        "name": "LTE Secondary Band"
+      },
+      "signal_lte_ca_scell_bandwidth": {
+        "name": "LTE Secondary Bandwidth"
+      },
+      "signal_wan_active_band": {
+        "name": "LTE Active Band"
+      },
+      "signal_wan_active_channel": {
+        "name": "LTE Active Channel"
+      },
+      "signal_z5g_rsrp": {
+        "name": "5G RSRP"
+      },
+      "signal_z5g_rsrq": {
+        "name": "5G RSRQ"
+      },
+      "signal_z5g_rssi": {
+        "name": "5G RSSI"
+      },
+      "signal_z5g_sinr": {
+        "name": "5G SNR"
+      },
+      "signal_nr5g_pci": {
+        "name": "5G PCI"
+      },
+      "signal_nr5g_action_band": {
+        "name": "5G Active Band"
+      },
+      "signal_nr5g_action_channel": {
+        "name": "5G Active Channel"
+      },
+      "signal_rssi": {
+        "name": "Legacy RSSI"
+      },
+      "signal_rscp": {
+        "name": "Legacy RSCP"
+      },
+      "signal_enodeb_id": {
+        "name": "eNodeB ID"
+      },
+      "signal_net_select": {
+        "name": "Network Mode"
+      },
+      "signal_ppp_status": {
+        "name": "Bridge Mode"
+      },
+      "data_monthly_tx_bytes": {
+        "name": "Monthly Sent GB"
+      },
+      "data_monthly_rx_bytes": {
+        "name": "Monthly Received GB"
+      },
+      "data_monthly_total_bytes": {
+        "name": "Monthly Total GB"
+      },
+      "data_monthly_tx_bytes_raw": {
+        "name": "Monthly Sent"
+      },
+      "data_monthly_rx_bytes_raw": {
+        "name": "Monthly Received"
+      },
+      "data_monthly_total_bytes_raw": {
+        "name": "Monthly Total"
+      },
+      "data_realtime_tx_thrpt": {
+        "name": "Upload Speed"
+      },
+      "data_realtime_rx_thrpt": {
+        "name": "Download Speed"
+      },
+      "data_realtime_tx_bytes": {
+        "name": "Session Sent"
+      },
+      "data_realtime_rx_bytes": {
+        "name": "Session Received"
+      },
+      "sms_sms_unread_num": {
+        "name": "Unread Msg"
+      },
+      "sms_msg_total": {
+        "name": "Total Msg"
+      },
+      "sms_msg_recent": {
+        "name": "Recent Msg"
+      },
+      "signal_lte_band_lock": {
+        "name": "LTE Band Lock Mask"
+      },
+      "data_volume_alert_percent": {
+        "name": "Alert Threshold"
+      },
+      "system_sntp_server": {
+        "name": "Time Server (SNTP)"
+      },
+      "data_clear_day": {
+        "name": "Reset Day"
+      },
+      "signal_lte_multi_ca_scell_info": {
+        "name": "Carrier Aggregation Secondary Cells"
+      },
+      "system_opms_wan_mode": {
+        "name": "WAN Operating Mode"
+      },
+      "system_opms_wan_auto_mode": {
+        "name": "WAN Fallback Mode"
+      },
+      "system_sntp_timezone": {
+        "name": "Router Timezone"
+      },
+      "system_apn_interface_version": {
+        "name": "APN Interface Version"
+      },
+      "data_projection": {
+        "name": "Projected Cycle Usage"
+      },
+      "data_allowance": {
+        "name": "Allowance"
+      }
     },
     "button": {
-      "system_refresh": { "name": "Refresh Now" },
-      "system_reboot": { "name": "Reboot" },
-      "sms_delete_all": { "name": "Delete All" }
+      "system_refresh": {
+        "name": "Refresh Now"
+      },
+      "system_reboot": {
+        "name": "Reboot"
+      },
+      "sms_delete_all": {
+        "name": "Delete All"
+      }
     },
     "binary_sensor": {
-      "signal_best_connection": { "name": "Best Connection" },
-      "system_reboot_schedule": { "name": "Reboot Schedule" },
-      "system_upnp_enabled": { "name": "UPnP Enabled" },
-      "system_sip_alg_enabled": { "name": "SIP ALG Enabled" }
+      "signal_best_connection": {
+        "name": "Best Connection"
+      },
+      "system_reboot_schedule": {
+        "name": "Reboot Schedule"
+      },
+      "system_upnp_enabled": {
+        "name": "UPnP Enabled"
+      },
+      "system_sip_alg_enabled": {
+        "name": "SIP ALG Enabled"
+      },
+      "system_integration_health": {
+        "name": "Integration Health"
+      },
+      "system_web_sleep": {
+        "name": "Web Page Sleep"
+      },
+      "system_web_wake": {
+        "name": "Web Page Auto-Wake"
+      }
     },
     "switch": {
-      "system_pause_polling": { "name": "Pause Polling" },
-      "system_odu_led_switch": { "name": "ODU LED Switch" },
-      "data_limit_switch": { "name": "Data Limit Switch" }
+      "system_pause_polling": {
+        "name": "Pause Polling"
+      },
+      "system_odu_led_switch": {
+        "name": "ODU LED Switch"
+      },
+      "data_limit_switch": {
+        "name": "Data Limit Switch"
+      }
     },
     "select": {
-      "signal_apn_profile": { "name": "APN Profile" },
-      "signal_apn_mode": { "name": "APN Selection Mode" },
-      "signal_net_select_mode": { "name": "Network Mode Selection" }
+      "signal_apn_profile": {
+        "name": "APN Profile"
+      },
+      "signal_apn_mode": {
+        "name": "APN Selection Mode"
+      },
+      "signal_net_select_mode": {
+        "name": "Network Mode Selection"
+      }
     },
     "number": {
-      "system_polling_interval": { "name": "Polling Interval" }
+      "system_polling_interval": {
+        "name": "Polling Interval"
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_ready": {
+      "message": "The router {title} is not ready. It may still be starting up, or Home Assistant may not have reached it yet."
+    },
+    "no_entries_found": {
+      "message": "No active ZTE Router 5G integration was found. Check that the integration is set up and loaded."
+    },
+    "multiple_entries": {
+      "message": "More than one ZTE router is configured. Specify which one to use with the entry_id field."
+    },
+    "sms_too_long": {
+      "message": "The message is {length} characters, but this router accepts at most {limit} when the text needs {encoding} encoding ({segments} segments). Shorten it, or remove any emoji and special characters to get the longer GSM-7 limit."
+    },
+    "send_sms_failed": {
+      "message": "Failed to send the SMS: {error}"
+    },
+    "delete_sms_failed": {
+      "message": "Failed to delete the SMS: {error}"
+    },
+    "delete_all_sms_failed": {
+      "message": "Failed to delete the SMS messages: {error}"
+    },
+    "get_sms_list_failed": {
+      "message": "Failed to fetch the SMS list from the router: {error}"
+    },
+    "reboot_failed": {
+      "message": "Failed to reboot the router: {error}"
+    },
+    "delete_all_button_failed": {
+      "message": "Failed to delete all SMS messages: {error}"
+    },
+    "select_set_failed": {
+      "message": "Could not change {entity} on the router: {error}"
+    },
+    "switch_set_failed": {
+      "message": "Could not change {entity} on the router: {error}"
+    },
+    "switch_write_not_applied": {
+      "message": "The router accepted the change to {entity} but is still reporting the old value, so the setting did not take effect. Try again, or change it from the router's own web page."
     }
   },
   "issues": {
+    "firmware_contract_drift": {
+      "title": "ZTE router data has changed unexpectedly",
+      "description": "{name} is polling successfully, but none of the data fields the integration expects are present in the response. The router reported them before and has stopped, which would leave many sensors blank without any obvious error. A firmware update may have renamed or removed them, or the integration may need a fix.\n\nPlease report this, including your router model and firmware version, so the integration can be updated. This message clears automatically once recognizable data is received again."
+    },
+    "router_unreachable": {
+      "title": "ZTE router is not responding",
+      "description": "{name} has failed to reach the router at {host} on {count} consecutive attempts, so its entities are unavailable.\n\nTen failures in a row means the problem is not clearing on its own. Common causes, roughly in order of likelihood:\n\n- **The router is powered off, or has locked up.** Power it off, wait a few seconds, and power it back on.\n- **Its IP address has changed.** Many routers get a new address after a power cut or a DHCP lease change. Check the router's current address and, if it differs from `{host}`, use **Reconfigure** on the integration to update it. A static DHCP reservation prevents this recurring.\n- **The login details have changed.** If the router's password was changed, use **Reconfigure** to enter the new one.\n- **The network path is broken** — a cable, switch, VLAN or firewall rule between Home Assistant and the router.\n\nThis message clears automatically as soon as the router answers again."
+    },
     "sms_storage_full": {
-      "title": "SMS Storage Full",
+      "title": "ZTE router SMS storage is full",
       "description": "The router's NV SMS storage is full ({nv_total}/{nv_able} messages). Use the Delete All button to clear messages and restore normal SMS reception."
     }
   },

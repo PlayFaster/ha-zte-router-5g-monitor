@@ -3,6 +3,9 @@
 from unittest.mock import MagicMock
 
 from custom_components.zte_router_5g.diagnostics import (
+    CARRIER_KEYS,
+    CELL_KEYS,
+    IP_KEYS,
     TO_REDACT,
     async_get_config_entry_diagnostics,
 )
@@ -37,9 +40,12 @@ async def test_diagnostics_basic(mock_coordinator, mock_config_entry):
     assert result["coordinator"]["last_update_success_time"] == "2024-01-15T10:30:00"
     assert result["coordinator"]["data_available"] is True
 
-    # Data redaction
+    # Data sanitization. The IP is pseudonymized rather than blanked so it can
+    # still be cross-referenced within the file (dev_standards Section 20);
+    # `password` has no referential role and is blanked outright.
     assert result["data"]["signal_strength"] == 75
-    assert result["data"]["wan_ipaddr"] == "**REDACTED**"
+    assert result["data"]["wan_ipaddr"].startswith("ip-")
+    assert "1.2.3.4" not in str(result)
     assert result["data"]["password"] == "**REDACTED**"
 
 
@@ -56,9 +62,23 @@ async def test_diagnostics_no_data(mock_coordinator, mock_config_entry):
     assert result["coordinator"]["last_update_success_time"] is None
 
 
-async def test_diagnostics_redaction_fields():
-    """Test that TO_REDACT contains expected fields."""
+async def test_sensitive_keys_are_categorized():
+    """Every sensitive key must be handled, blanked or tokenized.
+
+    Key-name membership is a weak assertion on its own — see
+    test_diagnostics_sanitization.py for the properties that actually prove the
+    output is safe. This only guards the categorization itself.
+    """
+    # No referential value — blanked.
     assert "password" in TO_REDACT
     assert "username" in TO_REDACT
-    assert "wan_ipaddr" in TO_REDACT
-    assert "lan_ipaddr" in TO_REDACT
+    assert "imei" in TO_REDACT
+
+    # Cross-reference value — tokenized, not blanked.
+    assert "wan_ipaddr" in IP_KEYS
+    assert "lan_ipaddr" in IP_KEYS
+    assert "cell_id" in CELL_KEYS
+
+    # Carrier identity locates the subscriber; no diagnostic value.
+    assert "network_provider" in CARRIER_KEYS
+    assert "mdm_mcc" in CARRIER_KEYS
