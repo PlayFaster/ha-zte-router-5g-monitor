@@ -250,9 +250,11 @@ Monitor monthly data consumption, active session totals, and real-time upload/do
 
 **Projected Cycle Usage** answers the question the monthly counters do not: _am I on course to stay within or exceed my allowance?_
 
-It is a simple run-rate: usage period-to-date is divided by the days elapsed in the current cycle, and that rate is carried across the days remaining. Two things are worth knowing before you build an automation on it.
+See the [Projected Overage Alert](#-projected-overage-alert) automation example.
 
-**It is least reliable at the start of a cycle, when it is likely to under-report.** Two days in, the sensor has only two days of evidence and 29 days to extrapolate across, so one large download distorts it.
+It is a simple run-rate: usage period-to-date is divided by the days elapsed in the current cycle, and that rate is carried across the days remaining.
+
+![Use vs Projected Use](.github/images/zte_5g_data_project.png)
 
 | Attribute | Meaning |
 | :-- | :-- |
@@ -318,16 +320,10 @@ This integration features **dynamic polling**, the ability to pause polling comp
 
 - **Pause Polling**: Switch to halt polling when you need uninterrupted access to the router's web UI (ZTE only allows a single active login session). See the [Auto-Resume Polling](#-auto-resume-polling) example.
 - **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour, default 180s) via a number entity or automation. See the [Dynamic Polling Interval](#-dynamic-polling-interval) example.
-- **Explicit Actions Always Fetch**: **Refresh Now**, a settings change or an SMS action fetches immediately **even while paused** — only scheduled polls are suppressed. See the [Morning Signal Report](#-morning-signal-report) example.
+- **Actions Always Fetch**: Pressing **Refresh Now**, making a settings change (switch/select) or an SMS action fetches immediately **even while paused** — only scheduled polls are suppressed. See the [Morning Signal Report](#-morning-signal-report) example.
 - **Standard System Option**: Also honours Home Assistant's **System options > Enable polling for changes** toggle.
 
 ![System Configuration Controls](.github/images/zte_5g_system_config.png)
-
-> [!TIP]
->
-> **Polling Interval can be controlled dynamically, via automation**
->
-> - Set it to 30 seconds during periods of heavy use, to examine connection quality or when you need to receive new SMS messages quickly, and set it higher afterwards, to avoid taxing the router and your Home Assistant database.
 
 ---
 
@@ -337,7 +333,9 @@ This integration features **dynamic polling**, the ability to pause polling comp
 
 ### 💬 SMS Management Actions
 
-SMS count and text sensors, plus monitoring and control via events and actions. See [SMS Actions](#-sms-actions) and [SMS Examples](#-sms-examples)
+With SMS count and text sensors, plus monitoring and control via events and actions, you can **send, read and delete** Router SMS messages.
+
+- See [SMS Actions](#-sms-actions) and [SMS Examples](#-sms-examples)
 
 ## 🔍 What You Get
 
@@ -371,7 +369,7 @@ This integration provides **92 entities** (depending on your firmware) organized
 >
 > That is where the acronyms are decoded: **RSRP**, **RSRQ**, **SNR**, **PCI**, **eNodeB**, **ENDC**, **APN** and the rest each explain themselves in place, so you do not have to look them up to read your own dashboard.
 >
-> These **About** notes - and all other attributes this integration publishes are set **unrecorded**. Home Assistant still shows them live in the entity's details, but **never writes them to the history/recorder database**. That keeps bulky or purely-informational values from bloating your database, with no downside to what you see day-to-day.
+> These **About** notes - and all other attributes this integration publishes are set **unrecorded**. Home Assistant still shows them live in the entity's details, but **never writes them to the history/recorder database**. That keeps bulky or purely-informational values from bloating your database, while maintaining visibility to the current information.
 
 ---
 
@@ -472,7 +470,13 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 >
 > If you want to see the current value, but have no interest in short or long term history, you can [exclude a value from the Recorder](https://www.home-assistant.io/integrations/recorder/#configure-filter).
 >
-> And of course, if a particular sensor, or group of sensors is of no interest to you, you can very easily disable it. See [What You Get](#-what-you-get) above. Remember you don't **need** to do **any** of this. These are _extra_ options for the Home Assistant user who wants _extra_ control.
+> And of course, if a particular sensor, or group of sensors is of no interest to you, you can very easily disable it. See [What You Get](#-what-you-get) above.
+
+---
+
+> [!NOTE]
+>
+> Remember you don't **need** to do **any** of this. These are _extra_ options for the Home Assistant user who wants _extra_ control.
 
 ---
 
@@ -483,8 +487,6 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 ## 🔘 Controls & Settings
 
 Several settings are exposed as control entities so you can drive them from dashboards or automations, rather than reopening Configure:
-
-- **Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`, on the **Data** device, _disabled by default_): Turn the router's own data cap on or off. The cap itself, its units and the alert threshold are set on the router — see [Data Usage Tracking](#-data-usage-tracking).
 
 ### 🔧 Router Administration & Polling (System Device)
 
@@ -579,11 +581,29 @@ Several settings are exposed as control entities so you can drive them from dash
 
 <br>
 
+### 🔀 Data Limit Switch (Data Device)
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+**Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`, on the **Data** device, _disabled by default_): Turn the router's own data cap on or off.
+
+- The cap itself, its units and the alert threshold are set on the router — see [Data Usage Tracking](#-data-usage-tracking).
+
+---
+
+</details>
+
+<br>
+
 ## 💬 SMS Actions
 
 The SMS device has sensor entities that provide unread SMS count and latest message content plus a one-click **Delete All** button.
 
-There is also an SMS received event and four SMS actions to send, read and delete SMS messages.
+There is also an SMS received event and four SMS actions to **send, read and delete** SMS messages.
 
 <details>
 
@@ -833,22 +853,24 @@ triggers:
   - trigger: event
     event_type: zte_router_5g_sms_received
     note: |
-      Fires once per genuinely new message. Messages already on the router when Home
-      Assistant starts are recorded silently as a baseline, so a restart never replays
-      your whole inbox into this automation.
+      Fires once per genuinely new message. Messages already on the
+      router when Home Assistant starts are recorded silently as a
+      baseline, so a restart never replays your whole inbox into this
+      automation.
 actions:
   - action: persistent_notification.create
     data:
       title: "New SMS from {{ trigger.event.data.phone }}"
       message: "{{ trigger.event.data.content }}"
     note: |
-      The event payload carries phone, content, date and index. Use index with the
-      delete_sms action if you want to remove the message after handling it.
+      The event payload carries phone, content, date and index. Use
+      index with the delete_sms action if you want to remove the
+      message after handling it.
 ```
 
 > [!NOTE]
 >
-> `mode: queued` matters here — several messages can arrive in one poll cycle, and the default `single` mode would silently drop all but the first.
+> `mode: queued` — several messages can arrive in one poll cycle, and the default `single` mode could silently drop all but the first.
 
 ---
 
@@ -880,10 +902,11 @@ actions:
     data:
       keep_last: 5
     note: |
-      keep_last preserves the newest N messages. Set it to 0 to clear the inbox
-      entirely. The action refreshes the coordinator afterwards, so the SMS counters
-      update immediately rather than at the next scheduled poll - and it does so even
-      if Pause Polling is on.
+      keep_last preserves the newest N messages. Set it to 0 to clear
+      the inbox entirely. The action refreshes the coordinator
+      afterwards, so the SMS counters update immediately rather than
+      at the next scheduled poll - and it does so even if Pause
+      Polling is on.
 ```
 
 ---
@@ -915,17 +938,19 @@ actions:
       count: 50
     response_variable: inbox
     note: |
-      This action performs its own fetch rather than reading the Recent Msg sensor, so
-      it keeps working even if the SMS entities are disabled - and it returns the full
-      message list, which is far too bulky to hold as a sensor attribute.
+      This action performs its own fetch rather than reading the
+      Recent Msg sensor, so it keeps working even if the SMS entities
+      are disabled - and it returns the full message list, which is
+      far too bulky to hold as a sensor attribute.
   - action: notify.persistent_notification
     data:
       message: |
         You have {{ inbox.messages | selectattr('phone', 'search', 'MY_BANK') |
         list | count }} messages from your bank in the inbox.
     note: |
-      Each entry in inbox.messages has index, phone, content, date and read. Filter on
-      any of them; use index to feed the delete_sms action.
+      Each entry in inbox.messages has index, phone, content, date and
+      read. Filter on any of them; use index to feed the delete_sms
+      action.
 ```
 
 ---
@@ -959,17 +984,20 @@ triggers:
       - "unavailable"
     for: "00:05:00"
     note: |
-      The 5 minute hold matters. The integration already holds last-known values for
-      three consecutive failed polls before reporting anything, so a value that has
-      stayed "disconnected" for five minutes is a real outage rather than a blip.
-      not_from suppresses transitions coming directly out of unknown or unavailable states.
+      The 5 minute hold matters. The integration already holds
+      last-known values for three consecutive failed polls before
+      reporting anything, so a value that has stayed "disconnected"
+      for five minutes is a real outage rather than a blip. not_from
+      suppresses transitions coming directly out of unknown or
+      unavailable states.
 conditions:
   - condition: state
     entity_id: select.zte_5g_signal_apn_profile
     state: "primary_apn"
     note: |
-      Only fail over from the primary. Without this the automation would flap back and
-      forth every time the backup APN also dropped.
+      Only fail over from the primary. Without this the automation
+      would flap back and forth every time the backup APN also
+      dropped.
 actions:
   - action: select.select_option
     target:
@@ -977,9 +1005,10 @@ actions:
     data:
       option: "backup_apn"
     note: |
-      Replace both profile names with values from your own router - the options come
-      from the APN profiles it actually has configured. Selecting an option forces an
-      immediate poll, so the change is reflected in Home Assistant right away.
+      Replace both profile names with values from your own router -
+      the options come from the APN profiles it actually has
+      configured. Selecting an option forces an immediate poll, so the
+      change is reflected in Home Assistant right away.
 ```
 
 ---
@@ -1005,8 +1034,9 @@ triggers:
     entity_id: sensor.zte_5g_data_monthly_total
     above: 500
     note: |
-      This assumes the data sensors display in GB which is the default.
-      If you have changed the display units, adjust the threshold.
+      This assumes the data sensors display in GB which is the
+      default. If you have changed the display units, adjust the
+      threshold.
 actions:
   - action: persistent_notification.create
     data:
@@ -1016,9 +1046,10 @@ actions:
         {{ states('sensor.zte_5g_data_monthly_total') | float(0) | round(0) }}
         {{ state_attr('sensor.zte_5g_data_monthly_total', 'unit_of_measurement') }}.
     note: |
-      Reading the unit from the entity keeps the message correct whether you are
-      displaying GB, MB or bytes. A numeric_state trigger fires only on the crossing,
-      so this notifies once rather than on every poll above the threshold.
+      Reading the unit from the entity keeps the message correct
+      whether you are displaying GB, MB or bytes. A numeric_state
+      trigger fires only on the crossing, so this notifies once rather
+      than on every poll above the threshold.
 ```
 
 ---
@@ -1046,15 +1077,16 @@ triggers:
     for:
       hours: 2
     note: |
-      The threshold follows the router's own cap rather than a fixed number.
-      The two-hour window rides out short swings in the projection.
+      The threshold follows the router's own cap rather than a fixed
+      number. The two-hour window rides out short swings in the
+      projection.
 conditions:
   - condition: template
     value_template: |
       {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'confidence') != 'low' }}
     note: |
-      Skips the first days of a cycle, when the projection is working from very
-      little usage and swings widely.
+      Skips the first days of a cycle, when the projection is working
+      from very little usage and swings widely.
 actions:
   - action: persistent_notification.create
     data:
@@ -1063,8 +1095,8 @@ actions:
         On current usage this cycle is projected to finish at {{ states('sensor.zte_5g_data_projected_cycle_usage') | float(0) | round(0) }} {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'unit_of_measurement') }}
         - day {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') }}, confidence {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'confidence') }}.
     note: |
-      Including the cycle day and confidence in the message tells you how much
-      weight to give the warning without opening the entity.
+      Including the cycle day and confidence in the message tells you
+      how much weight to give the warning without opening the entity.
 ```
 
 ---
@@ -1091,8 +1123,8 @@ triggers:
     from: "on"
     for: "00:05:00"
     note: |
-      Best Connection is on only when the router has BOTH 5G ENDC and LTE carrier
-      aggregation active.
+      Best Connection is on only when the router has BOTH 5G ENDC and
+      LTE carrier aggregation active.
   - trigger: state
     entity_id:
       - sensor.zte_5g_signal_network_type
@@ -1102,8 +1134,9 @@ triggers:
       - "unavailable"
     for: "00:05:00"
     note: |
-      Dropped off 5G NSA entirely. Ignores unknown and unavailable states so reboots
-      or transient polling failures do not trigger false alerts.
+      Dropped off 5G NSA entirely. Ignores unknown and unavailable
+      states so reboots or transient polling failures do not trigger
+      false alerts.
   - trigger: state
     entity_id:
       - sensor.zte_5g_signal_carrier_aggregation
@@ -1113,23 +1146,25 @@ triggers:
       - "unavailable"
     for: "00:05:00"
     note: |
-      Lost LTE carrier aggregation. Ignores unknown and unavailable states so reboots
-      or transient polling failures do not trigger false alerts.
+      Lost LTE carrier aggregation. Ignores unknown and unavailable
+      states so reboots or transient polling failures do not trigger
+      false alerts.
   - trigger: numeric_state
     entity_id:
       - sensor.zte_5g_signal_signal_bars
     below: 4
     for: "00:05:00"
     note: |
-      Signal bars is the router's own 0-5 summary. Prefer RSRP or SNR if you want a
-      physically meaningful threshold; bars is coarse but matches what the router's
-      own UI shows.
+      Signal bars is the router's own 0-5 summary. Prefer RSRP or SNR
+      if you want a physically meaningful threshold; bars is coarse
+      but matches what the router's own UI shows.
 conditions:
   - condition: template
     value_template: "{{ states('sensor.zte_5g_signal_network_type') not in ['unknown', 'unavailable'] }}"
     note: |
-      Ensures the network state is valid before checking degradation conditions, preventing
-      false evaluation when entities are temporarily unavailable.
+      Ensures the network state is valid before checking degradation
+      conditions, preventing false evaluation when entities are
+      temporarily unavailable.
   - condition: or
     conditions:
       - condition: numeric_state
@@ -1152,9 +1187,9 @@ conditions:
             state:
               - ENDC
     note: |
-      Re-checking the same four measures as conditions means the notification only
-      fires if the degradation is still true when the action runs, not merely when
-      one of them briefly flickered.
+      Re-checking the same four measures as conditions means the
+      notification only fires if the degradation is still true when
+      the action runs, not merely when one of them briefly flickered.
 actions:
   - action: persistent_notification.create
     data:
@@ -1166,8 +1201,9 @@ actions:
         - Signal Bars: {{ states('sensor.zte_5g_signal_signal_bars') }}
         - CA: {{ states('sensor.zte_5g_signal_carrier_aggregation') }}
     note: |
-      Reporting all four values together tells you which one actually degraded, which
-      is what you need to decide whether to reposition the router or just wait it out.
+      Reporting all four values together tells you which one actually
+      degraded, which is what you need to decide whether to reposition
+      the router or just wait it out.
 ```
 
 ---
@@ -1197,9 +1233,10 @@ triggers:
     for:
       minutes: 10
     note: |
-      The 10 minute duration is deliberate. A brief outage can set the sensor and clear
-      it on the next cycle; this reports only problems that persist. Shorten it if you
-      would rather hear about transient faults too.
+      The 10 minute duration is deliberate. A brief outage can set the
+      sensor and clear it on the next cycle; this reports only
+      problems that persist. Shorten it if you would rather hear about
+      transient faults too.
 actions:
   - action: persistent_notification.create
     data:
@@ -1209,11 +1246,12 @@ actions:
            | join(', ') }}
         Last good update: {{ state_attr('binary_sensor.zte_5g_system_integration_health', 'last_good_update') }}
     note: |
-      issues is a list of human-readable problem descriptions. The sensor also carries
-      severity (ok / degraded / warning / error), degraded_capabilities (names of failed
-      endpoints), drift (contract-drift findings, empty unless the firmware appears to
-      have changed its API), repairs (the repair issues currently raised), and
-      consecutive_failures.
+      issues is a list of human-readable problem descriptions. The
+      sensor also carries severity (ok / degraded / warning / error),
+      degraded_capabilities (names of failed endpoints), drift
+      (contract-drift findings, empty unless the firmware appears to
+      have changed its API), repairs (the repair issues currently
+      raised), and consecutive_failures.
 ```
 
 > [!TIP]
@@ -1246,7 +1284,8 @@ triggers:
       - unknown
       - unavailable
     note: |
-      Triggers after a reboot but avoids alerts due to availability glitches
+      Triggers after a reboot but avoids alerts due to availability
+      glitches
 actions:
   - action: persistent_notification.create
     data:
@@ -1286,18 +1325,21 @@ triggers:
     for:
       minutes: 30
     note: |
-      Deliberately long. Mobile networks drop and re-establish routinely, and a reboot
-      costs several minutes of downtime - so this should only fire for an outage that
-      has clearly stopped resolving itself. not_from suppresses transitions from unknown or unavailable.
+      Deliberately long. Mobile networks drop and re-establish
+      routinely, and a reboot costs several minutes of downtime - so
+      this should only fire for an outage that has clearly stopped
+      resolving itself. not_from suppresses transitions from unknown
+      or unavailable.
 conditions:
   - condition: state
     entity_id: binary_sensor.zte_5g_system_integration_health
     state: "off"
     note: |
-      Cross-check against the integration's own health verdict. Health being off means
-      polling is succeeding, so "disconnected" is trustworthy live data rather than a
-      stale value being held while fetches fail - in which case rebooting would be
-      treating the wrong problem.
+      Cross-check against the integration's own health verdict. Health
+      being off means polling is succeeding, so "disconnected" is
+      trustworthy live data rather than a stale value being held while
+      fetches fail - in which case rebooting would be treating the
+      wrong problem.
 actions:
   - action: button.press
     target:
@@ -1306,8 +1348,9 @@ actions:
   - delay:
       minutes: 10
     note: |
-      Holding the automation open for 10 minutes with mode:single means it cannot
-      re-trigger while the router is still coming back up.
+      Holding the automation open for 10 minutes with mode:single
+      means it cannot re-trigger while the router is still coming back
+      up.
   - action: persistent_notification.create
     data:
       title: "ZTE Router Rebooted Automatically"
@@ -1329,7 +1372,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE Tower: Serving Cell Changed"
+alias: "ZTE Signal: Serving Cell Changed"
 description: "Notifies when the router attaches to a different cell tower"
 mode: single
 triggers:
@@ -1342,8 +1385,9 @@ triggers:
       - "unknown"
       - "unavailable"
     note: |
-      Fires only when the serving cell ID changes to another valid cell ID, ignoring
-      unknown or unavailable transitions during restarts or connection blips.
+      Fires only when the serving cell ID changes to another valid
+      cell ID, ignoring unknown or unavailable transitions during
+      restarts or connection blips.
 actions:
   - action: persistent_notification.create
     data:
@@ -1353,8 +1397,9 @@ actions:
         Band: {{ states('sensor.zte_5g_signal_lte_active_band') }}
         RSRP: {{ states('sensor.zte_5g_signal_lte_rsrp') | float(0) | round(0) }} dBm
     note: |
-      Reporting the new band and signal alongside the change is what makes this useful
-      - a tower change with worse RSRP is the usual explanation for a sudden slowdown.
+      Reporting the new band and signal alongside the change is what
+      makes this useful - a tower change with worse RSRP is the usual
+      explanation for a sudden slowdown.
 ```
 
 ---
@@ -1385,8 +1430,9 @@ triggers:
       - "unknown"
       - "unavailable"
     note: |
-      Ignoring transitions to and from unknown or unavailable means a Home
-      Assistant restart or a missed poll does not read as a version change.
+      Ignoring transitions to and from unknown or unavailable means a
+      Home Assistant restart or a missed poll does not read as a
+      version change.
 actions:
   - action: persistent_notification.create
     data:
@@ -1419,15 +1465,16 @@ triggers:
     to: "on"
     for: "01:00:00"
     note: |
-      Pausing frees the router's single login session so you can use its web UI. This
-      is the safety net for forgetting to switch it back.
+      Pausing frees the router's single login session so you can use
+      its web UI. This is the safety net for forgetting to switch it
+      back.
 actions:
   - action: switch.turn_off
     target:
       entity_id: switch.zte_5g_system_pause_polling
     note: |
-      Resuming triggers an immediate fetch, so the entities catch up straight away
-      rather than waiting for the next scheduled poll.
+      Resuming triggers an immediate fetch, so the entities catch up
+      straight away rather than waiting for the next scheduled poll.
 ```
 
 ---
@@ -1467,9 +1514,9 @@ actions:
             data:
               value: 60
             note: |
-              Poll every 60 seconds. Changing the interval applies immediately without
-              reloading the integration, so no entity becomes briefly unavailable - and
-              it also forces one fetch straight away.
+              Poll every 60 seconds. Changing the interval applies immediately
+              without reloading the integration, so no entity becomes briefly
+              unavailable - and it also forces one fetch straight away.
       - conditions:
           - condition: trigger
             id: "night"
@@ -1480,8 +1527,8 @@ actions:
             data:
               value: 900
             note: |
-              Poll every 15 minutes. Use the Pause Polling switch instead if you want
-              no polling at all rather than less of it.
+              Poll every 15 minutes. Use the Pause Polling switch instead if
+              you want no polling at all rather than less of it.
 ```
 
 ---
@@ -1508,13 +1555,15 @@ actions:
     target:
       entity_id: button.zte_5g_system_refresh_now
     note: |
-      Refresh Now fetches immediately even if Pause Polling is on - explicit user
-      actions always reach the router, only scheduled polls respect the pause.
+      Refresh Now fetches immediately even if Pause Polling is on -
+      explicit user actions always reach the router, only scheduled
+      polls respect the pause.
   - delay:
       seconds: 15
     note: |
-      Give the fetch time to complete and the entities time to update before reading
-      them. 15s is comfortable; the coordinator's own timeout is 30s.
+      Give the fetch time to complete and the entities time to update
+      before reading them. 15s is comfortable; the coordinator's own
+      timeout is 30s.
   - action: persistent_notification.create
     data:
       title: "ZTE Morning Signal Report"
@@ -1526,8 +1575,9 @@ actions:
         Monthly data: {{ states('sensor.zte_5g_data_monthly_total') | float(0) | round(0) }} {{ state_attr('sensor.zte_5g_data_monthly_total', 'unit_of_measurement') }}
         Reading taken: {{ states('sensor.zte_5g_system_last_updated') }}
     note: |
-      Including Last Updated proves the report is fresh - if it does not move, the
-      forced fetch did not land and the numbers above are stale.
+      Including Last Updated proves the report is fresh - if it does
+      not move, the forced fetch did not land and the numbers above
+      are stale.
 ```
 
 ---
