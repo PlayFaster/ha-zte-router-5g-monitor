@@ -1078,8 +1078,9 @@ triggers:
       hours: 2
     note: |
       The threshold follows the router's own cap rather than a fixed
-      number. The two-hour window rides out short swings in the
-      projection.
+      number. If you do not have this set on the router, then use a
+      fixed number here instead. The two-hour window rides out short
+      swings in the projection.
 conditions:
   - condition: template
     value_template: |
@@ -1092,8 +1093,11 @@ actions:
     data:
       title: "ZTE Data: projected to exceed allowance"
       message: |
-        On current usage this cycle is projected to finish at {{ states('sensor.zte_5g_data_projected_cycle_usage') | float(0) | round(0) }} {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'unit_of_measurement') }}
-        - day {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') }}, confidence {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'confidence') }}.
+        On current usage this cycle is projected to finish at 
+        {{ states('sensor.zte_5g_data_projected_cycle_usage') | float(0) | round(0) }} 
+        {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'unit_of_measurement') }} 
+        - day {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'cycle_day') }}, 
+        confidence {{ state_attr('sensor.zte_5g_data_projected_cycle_usage', 'confidence') }}.
     note: |
       Including the cycle day and confidence in the message tells you
       how much weight to give the warning without opening the entity.
@@ -1283,9 +1287,7 @@ triggers:
     not_to:
       - unknown
       - unavailable
-    note: |
-      Triggers after a reboot but avoids alerts due to availability
-      glitches
+    note: "Triggers after a reboot but avoids alerts due to availability glitches"
 actions:
   - action: persistent_notification.create
     data:
@@ -1773,7 +1775,7 @@ Some problems need you to do something, so they are also raised in Home Assistan
 
 ### 🔐 Session Handling
 
-The router permits only **one login session at a time**. The integration releases its session when the config entry is unloaded, reloaded or removed, so the router's web UI is available again immediately rather than after the session times out.
+The router permits only **one login session at a time**, and the most recent login terminates other active sessions. The integration releases its session when the config entry is unloaded, reloaded or removed.
 
 <details>
 
@@ -1808,6 +1810,12 @@ The router permits only **one login session at a time**. The integration release
 - **Both Available**: The integration provides dynamic polling controls, to pause polling or change polling interval. It also functions normally with the standard Home Assistant **System options** > **Enable polling for changes** toggle.
 
 ## ❓ FAQ & Troubleshooting
+
+> [!TIP]
+>
+> The entries below cover the problems that come up most often. If you are working through one and not getting to a resolution, remember that "turning it off and on again" is a cliché for a reason.
+>
+> **Reboot the router, and restart Home Assistant, before declaring failure or seeking help.** Neither is guaranteed to fix your issue, and both are surprisingly effective.
 
 ### 🔌 Connection & Authentication
 
@@ -1861,6 +1869,7 @@ The router permits only **one login session at a time**. The integration release
   - The integration fetches everything it can from the router.
   - Not every metric is provided by every ISP or firmware version.
   - 5G NR sensors will show "Unknown" when the router is operating in LTE-only mode.
+  - Multiple (disabled-by-default) temperature elements are fetched, but no router uses _all_ of them. Some will always be unknown.
 
 ---
 
@@ -1874,7 +1883,7 @@ The router permits only **one login session at a time**. The integration release
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-- This means the integration failed to reach the router **10 times in a row**, so the problem is not resolving on its own. A reboot or a brief glitch will never raise it.
+- This means the integration failed to reach the router **10 times in a row**, so the problem is not resolving on its own. This is not due to a reboot or a brief glitch.
 - Work through the checks in the Repair itself, in order: power-cycle the router; check whether its IP address has changed (the Repair names the address currently configured, so you can compare); check whether the router's password was changed; check the network path between Home Assistant and the router.
 - If the address or the password has changed, use **Reconfigure** on the integration to update it. A static DHCP reservation for the router prevents the address changing again.
 - The Repair clears itself as soon as the router answers.
@@ -1993,10 +2002,22 @@ One footnote for completeness: an entity ID is reused unless a **different, stil
 
 ## ❗ Known Limitations /❔ What's Missing?
 
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
 - **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
-- **Non-Bridge-Mode Features**: The integration was developed on and has only been tested with the MC7010 which is an outdoor bridge-mode only device without WiFi. This means the integration does not have:
+- **Non-Bridge-Mode Features**: The integration was developed on and has only been tested with the MC7010, an outdoor CPE without WiFi. It has only been tested in router bridge mode. This means the integration does not have:
   - **Client Tracking**: No tracking of connected clients.
   - **WiFi Monitoring**: There are no WiFi features.
+
+---
+
+</details>
+
+<br>
 
 ## ❌ Removal
 
