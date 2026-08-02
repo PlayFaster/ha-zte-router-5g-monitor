@@ -38,12 +38,12 @@ Checked 2026-08-01, so it does not need re-searching. **Home Assistant has nothi
 
 What the community does instead, none of it a clean fit:
 
-| Approach                                                                          | Why it does not settle this                                                                                                                                                                                                                                             |
-| :-------------------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **External time-series database** — InfluxDB, Prometheus, long-retention MariaDB  | The usual answer, and it does keep strings. The data leaves Home Assistant's own history UI, which is where a user would look.                                                                                                                                          |
-| **Raise `purge_keep_days` globally**                                              | Grows the whole database to preserve one string.                                                                                                                                                                                                                        |
+| Approach | Why it does not settle this |
+| :-- | :-- |
+| **External time-series database** — InfluxDB, Prometheus, long-retention MariaDB | The usual answer, and it does keep strings. The data leaves Home Assistant's own history UI, which is where a user would look. |
+| **Raise `purge_keep_days` globally** | Grows the whole database to preserve one string. |
 | **A helper written by an automation** (`input_text`, `input_datetime`, `counter`) | Closest native option, with a nuance that matters: the helper's **current value** persists in `.storage` indefinitely and survives restarts, but its **state history** is purged like anything else. Good for "the last change and when"; no use for a multi-year list. |
-| **`homeassistant-historical-sensor`**                                             | A custom component that writes directly into the statistics tables. Real precedent for the idea, but built for numeric series.                                                                                                                                          |
+| **`homeassistant-historical-sensor`** | A custom component that writes directly into the statistics tables. Real precedent for the idea, but built for numeric series. |
 
 Two notes on confidence. The **monotonic counter** described above is reasoning from how LTS works, **not an observed community pattern** — no evidence was found of anyone doing it, so treat it as untested. And Home Assistant's **`update` entity domain** models `installed_version` / `latest_version`, which is the nearest core concept to firmware tracking; it carries no history either, so it does not solve this, but it is the domain core would expect if firmware ever became a first-class concern here.
 
@@ -196,13 +196,13 @@ Forward work only. Declined and Revisit items are recorded above and are not wor
 
 Items that were on this roadmap and have since been built. Detail is in `CHANGELOG.md` and `docs/changelog_local.md`; this records only that the roadmap item was met.
 
-| Item                                | Origin           | Where it landed                                                                                                                                                                                                                           |
-| :---------------------------------- | :--------------- | :---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **SMS management**                  | Original item    | Four actions ship: `send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`. Encoding is chosen per message — GSM-7 to 765 characters, Unicode to 335.                                                                                  |
-| **Carrier aggregation metrics**     | Original item    | `wan_lte_ca`, `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth`, `nr5g_action_channel`. Shipped as a sensor, not the proposed binary sensor — the router reports the aggregation _configuration_, and an on/off would have discarded it. |
-| **Data-usage projection**           | Added 2026-07-29 | `Projected Cycle Usage` and `Reset Day` on the Data sub-device, cycle-relative rather than calendar-relative — the router's counters reset on its own billing day.                                                                        |
-| **Immediate refresh after a write** | Original item    | Every write action routes through `async_force_refresh()`. The originally proposed `async_request_refresh()` would have been wrong: it is silently swallowed while Pause Polling is on.                                                   |
-| **Band lock — read side**           | Original item    | `LTE Band Lock Mask` (`lte_band_lock`), disabled by default. `Network Mode Selection` covers the adjacent bearer preference. The write side is declined — see below.                                                                      |
+| Item | Origin | Where it landed |
+| :-- | :-- | :-- |
+| **SMS management** | Original item | Four actions ship: `send_sms`, `delete_sms`, `delete_all_sms`, `get_sms_list`. Encoding is chosen per message — GSM-7 to 765 characters, Unicode to 335. |
+| **Carrier aggregation metrics** | Original item | `wan_lte_ca`, `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth`, `nr5g_action_channel`. Shipped as a sensor, not the proposed binary sensor — the router reports the aggregation _configuration_, and an on/off would have discarded it. |
+| **Data-usage projection** | Added 2026-07-29 | `Projected Cycle Usage` and `Reset Day` on the Data sub-device, cycle-relative rather than calendar-relative — the router's counters reset on its own billing day. |
+| **Immediate refresh after a write** | Original item | Every write action routes through `async_force_refresh()`. The originally proposed `async_request_refresh()` would have been wrong: it is silently swallowed while Pause Polling is on. |
+| **Band lock — read side** | Original item | `LTE Band Lock Mask` (`lte_band_lock`), disabled by default. `Network Mode Selection` covers the adjacent bearer preference. The write side is declined — see below. |
 
 ---
 

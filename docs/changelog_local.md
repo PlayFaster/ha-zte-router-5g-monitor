@@ -45,7 +45,7 @@ All notable changes to this project will be documented in this file.
   - [\[3.3.0-rc4\] - 2026-07-28 - Automation Example Glitch Guards \& Float Rounding in README](#330-rc4---2026-07-28---automation-example-glitch-guards--float-rounding-in-readme)
   - [\[3.3.0-rc3\] - 2026-07-28 - `about` Notes on 63 Entities](#330-rc3---2026-07-28---about-notes-on-63-entities)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage](#330-rc2---2026-07-28---external-code-review-triage)
-  - [\[3.3.0-dev14\] - 2026-07-27 - doc\_update Reconciliation Pass](#330-dev14---2026-07-27---doc_update-reconciliation-pass)
+  - [\[3.3.0-dev14\] - 2026-07-27 - doc_update Reconciliation Pass](#330-dev14---2026-07-27---doc_update-reconciliation-pass)
   - [\[3.3.0-dev13\] - 2026-07-27 - Records Caught Up After a Long Session](#330-dev13---2026-07-27---records-caught-up-after-a-long-session)
   - [\[3.3.0-dev12\] - 2026-07-27 - Expired Session Returned "No SMS"](#330-dev12---2026-07-27---expired-session-returned-no-sms)
   - [\[3.3.0-dev11\] - 2026-07-27 - Device-Registry Record Cross-Referenced](#330-dev11---2026-07-27---device-registry-record-cross-referenced)
@@ -58,7 +58,7 @@ All notable changes to this project will be documented in this file.
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Alignment](#330-dev4---2026-07-27---cross-project-alignment)
   - [\[3.3.0-dev3\] - 2026-07-27 - Unreachable Repair \& Record Corrections](#330-dev3---2026-07-27---unreachable-repair--record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - IQS Compliance Pass](#330-dev2---2026-07-27---iqs-compliance-pass)
-  - [\[3.3.0-dev1\] - 2026-07-27 - dev\_standards Conformance Pass](#330-dev1---2026-07-27---dev_standards-conformance-pass)
+  - [\[3.3.0-dev1\] - 2026-07-27 - dev_standards Conformance Pass](#330-dev1---2026-07-27---dev_standards-conformance-pass)
   - [\[3.2.6-dev8\] - 2026-07-26 - Icons \& Branding Refresh; AGENTS.md Restructured](#326-dev8---2026-07-26---icons--branding-refresh-agentsmd-restructured)
   - [\[3.2.6-dev7\] - 2026-07-12 - PyTest Coverage to 100%; Codespell Alignment](#326-dev7---2026-07-12---pytest-coverage-to-100-codespell-alignment)
   - [\[3.2.6-dev6\] - 2026-07-12 - PHACC Bump; README Device-vs-Entity Clarification](#326-dev6---2026-07-12---phacc-bump-readme-device-vs-entity-clarification)
@@ -241,9 +241,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Changed
 
-**`changelog_local` ToC**: Added Table of Contents to `changelog_local` (top-of-file) and to end of `CHANGELOG`.
-**Sensor Docs**: Updated `all_sensors`, `value_min_max`, and `about_attributes_list` documents.
-**`README`**: On-going updates.
+**`changelog_local` ToC**: Added Table of Contents to `changelog_local` (top-of-file) and to end of `CHANGELOG`. **Sensor Docs**: Updated `all_sensors`, `value_min_max`, and `about_attributes_list` documents. **`README`**: On-going updates.
 
 ## [3.3.2-rc14] - 2026-08-01 - README Review; SMS Action Documentation Corrected
 
@@ -402,12 +400,12 @@ The same three keys had also disabled `_check_contract_drift`: `wa_inner_version
 
 `_classify_session` reads a `200 OK` response as two classes of key and returns one of four verdicts:
 
-| verdict       | condition                                          | response                                      |
-| ------------- | -------------------------------------------------- | --------------------------------------------- |
-| `live`        | any authenticated key populated                    | proceed                                       |
-| `expired`     | authenticated all blank, unauthenticated populated | re-login and retry                            |
-| `not_ready`   | everything blank                                   | `ZTEConnectionError` — hold last known values |
-| `undecidable` | no unauthenticated key requested                   | fall back to the previous all-empty rule      |
+| verdict | condition | response |
+| --- | --- | --- |
+| `live` | any authenticated key populated | proceed |
+| `expired` | authenticated all blank, unauthenticated populated | re-login and retry |
+| `not_ready` | everything blank | `ZTEConnectionError` — hold last known values |
+| `undecidable` | no unauthenticated key requested | fall back to the previous all-empty rule |
 
 `not_ready` is new and matters: a router that is answering but has nothing to report yet is booting, not expired. Re-logging in would not help, so it takes the reachability path instead of burning a login and heading toward a reauth prompt.
 
@@ -1302,12 +1300,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request                     | Live session       | Dead session                                         |
-  | :-------------------------- | :----------------- | :--------------------------------------------------- |
-  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
-  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
-  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
+  | Request | Live session | Dead session |
+  | :-- | :-- | :-- |
+  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
+  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
+  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -1699,16 +1697,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category                                   | Count       | Fix                                                                        |
-| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
-| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
-| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
-| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
-| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
-| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
-| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
-| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
+| Category | Count | Fix |
+| :-- | :-- | :-- |
+| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
+| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
+| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
+| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
+| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
+| **Indentation error** | 1 test | Fixed broken indent |
+| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
 
 ### Files modified
 
