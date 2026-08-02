@@ -280,6 +280,30 @@ The real argument in favour is insurance — Refresh Now is what a user presses 
 
 If a silent logged-out fault is ever observed again, this decision is the first thing to revisit — see `docs/ROADMAP.md` § Revisit.
 
+### A document that describes code needs a test, not a review
+
+**`docs/value_min_max.md` specified guard bands for five sensors that had none.** `Signal Bar`, the three monthly byte counters and `Total Count` were all documented with bounds the code never applied. The document told a reader that impossible values were rejected on those sensors. They were not, and a negative monthly total would have been written into long-term statistics permanently.
+
+Two things made it survive.
+
+**The mechanism was tested; the coverage was not.** `test_sensor_guard_band_min` and its three siblings have passed for months, using synthetic descriptions. They prove the guard-band code works. They say nothing about whether any real sensor uses it — and ten did not.
+
+**`sensor_review` could not have found it.** A guard band is a property of the entity description. It is never published as a state or an attribute, so no live query can observe one, and enabling every disabled entity does not help. Category E only asked whether the documented _entities_ still existed; they all did, so the file read clean. The five were found by reading the source, which the prompt did not ask for.
+
+This is the third time in one release that an invariant stopped being true without anything noticing:
+
+| Invariant | Broken by | Found by |
+| :-- | :-- | :-- |
+| Expiry detection needs an all-blank response | Identity keys added to the batch | Instrumented reboot on hardware |
+| Drift detection needs every `CORE_KEY` blank | `wa_inner_version` added to `CORE_KEYS` | Reading the code |
+| Guard bands documented in `value_min_max.md` | Five never existed | Reading the code |
+
+Three rules follow.
+
+- **Test coverage, not just mechanism.** "The feature works" and "the feature is used everywhere it should be" are different claims, and only the second one drifts. `test_every_numeric_sensor_has_a_guard_band` asserts the second, with `_UNGUARDED_BY_DESIGN` naming the two deliberate exemptions so an omission has to be argued for rather than merely happen.
+- **Name exemptions, and test the names.** An allowlist rots as fast as the thing it exempts. `test_unguarded_allowlist_has_no_dead_entries` fails when an exemption outlives its sensor, because a stale exemption hides the next real gap.
+- **A reconciliation prompt cannot check what the running instance does not publish.** Where a document describes code rather than behavior, the check must read source. `sensor_review.md` v2.10.0 now says so in Category E; the same blind spot applies to any future document of this kind.
+
 ### Debounce the slider, never the switch
 
 **Only the Polling Interval number is debounced.** Every switch, select and button sends its command immediately. That split is deliberate and matches Home Assistant core practice.
@@ -351,6 +375,7 @@ Before adding any of this later: **debounce** when the input generates values th
 - **v3.3.0-dev3** (2026-07-27) — IQS pass and follow-up. Added success patterns for translated exceptions (`translation_domain` + `translation_key`, and the `ServiceValidationError` vs `HomeAssistantError` choice) and for the Repair selection rule (persistence **plus** agency, and why `router_unreachable` waits 10 failures rather than 3). Added two pitfalls: translated exceptions breaking `pytest.raises(..., match=...)` under a mocked hass, and `": "` inside a folded YAML comment breaking `quality_scale.yaml`. Added §15 SMS feature-group toggle and the deferred custom-trigger work to Technical Debt.
 - **v3.3.1** (2026-07-29) — Cross-model compatibility expansion. Documented the new `helpers.py` utilities (`is_gsm7`, `earfcn_to_band`, `arfcn_to_band`) under Core Files. Added two Technical Debt items: cross-model support is inferred from other projects rather than tested on hardware (including the three speculative alias spellings and the login fallback that never fires on an MC7010), and no model is yet confirmed to populate any of the five thermal keys — with the condition under which they should be removed rather than left indefinitely.
 - **v3.3.0-dev1** (2026-07-27) — `dev_standards` conformance pass. Added success patterns for force-refresh-bypasses-pause, per-endpoint strike budgets, the health snapshot held outside `coordinator.data`, the always-available health sensor, reload-by-default options with a live-apply allow-list, layered diagnostics sanitization, and per-attribute recorder evaluation. Added four pitfalls: `goformId=LOGOUT` needs an `AD` token (and why the obvious web-UI verification cannot detect it), Refresh Now silently swallowed while paused, the options flow changing credentials without applying them, and diagnostics leaking SMS content and cell location. Recorded the §3 root-identity deviation and the config-entry migration-handler constraint under Technical Debt.
+- **v3.3.10** (2026-08-01) — Added the pitfall that a document describing code needs a test rather than a review, after `value_min_max.md` was found specifying guard bands for five sensors that had none and ten numeric sensors were found with no bounds at all. Records why the existing guard-band tests did not catch it (they test the mechanism with synthetic descriptions, never the coverage) and why `sensor_review` structurally could not (a guard band is never published as state or attribute, so no live query can see one). Tabulates this as the third invariant in one release to stop being true unnoticed, and states the three rules that follow: test coverage rather than mechanism, name exemptions and test the names, and read source where a document describes code.
 - **v3.3.9** (2026-08-01) — Recorded that drift can only fire on a router that previously reported the core keys, why the implicit empty-set baseline carries that guarantee, and the test that now pins it. Notes the repair retitle to "ZTE router data has changed unexpectedly" and why the `issue_id` must stay `firmware_contract_drift`.
 - **v3.3.8** (2026-08-01) — Added the pitfall on where debouncing belongs: the slider is debounced, switches and selects are not, and the test is whether intermediate values are artifacts of the input device or intentions of the user. Records the core-practice measurement (106 integrations import `Debouncer`; 68 for coordinator refresh; exactly one for an entity command, a Number), the distinction between the command debounce, the refresh debouncer and `PARALLEL_UPDATES`, and two rejected proposals — throttling the APN selects, and skipping a write that matches the last known state.
 - **v3.3.7** (2026-08-01) — Reference updates only. `docs/Future.md` renamed to `docs/ROADMAP.md` and restructured to the new shared standard at `.shared/dev_std/roadmap_format.md`; the two live pointers here now name the file and the section rather than an item number that no longer exists. Earlier Version Control entries naming `Future.md` are left as written — they record what was true at the time.

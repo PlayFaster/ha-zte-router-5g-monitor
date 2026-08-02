@@ -204,14 +204,14 @@ Send an SMS message via the router.
 - **Fields:**
   - `entry_id` (optional): The router config entry ID to use (optional if only one exists).
   - `target` (required): List of phone numbers/targets to send the message to.
-  - `message` (required): Message content (up to 160 characters).
+  - `message` (required): Message content. Up to **765** characters of standard text, or **335** if it contains an emoji or other special character - the encoding is chosen per message.
 
 ### `delete_sms`
 
 Delete a specific SMS message by its index.
 
 - **Fields:**
-  - `entry_id` (required): The router config entry ID.
+  - `entry_id` (optional): The router config entry ID (optional if only one exists).
   - `index` (required): The index of the message to delete.
 
 ### `delete_all_sms`
@@ -219,18 +219,18 @@ Delete a specific SMS message by its index.
 Delete all SMS messages from the router inbox.
 
 - **Fields:**
-  - `entry_id` (required): The router config entry ID.
-  - `keep_last` (optional): Number of most recent messages to keep (default: 0, which deletes all).
+  - `entry_id` (optional): The router config entry ID (optional if only one exists).
+  - `keep_last` (optional): Number of most recent messages to keep (default: 0, which deletes all; range 0-50).
 
 ### `get_sms_list`
 
 Fetch a list of SMS messages from the router. This service returns a response payload.
 
 - **Fields:**
-  - `entry_id` (required): The router config entry ID.
-  - `page` (optional): Page number (default: 1).
-  - `count` (optional): Messages per page (default: 20).
-  - `box_type` (optional): Box to read from (default: 1 = Local Inbox. Other options: 2=Local Sent, 3=Local Draft, 4=Local Trash, 5=SIM Inbox, 6=SIM Sent, 7=SIM Draft, 8=Mix Inbox, 9=Mix Sent, 10=Mix Draft).
+  - `entry_id` (optional): The router config entry ID (optional if only one exists).
+  - `page` (optional): Page number (default: 1; range 1-100).
+  - `count` (optional): Messages per page (default: 20; range 1-50).
+  - `box_type` (optional): Box to read from. **Default 0 = All Boxes.** Other options: 1=Local Inbox, 2=Local Sent, 3=Local Draft, 5=SIM Inbox, 6=SIM Sent, 7=SIM Draft, 8=Mix Inbox, 9=Mix Sent, 10=Mix Draft. The schema rejects any other value.
 - **Response Schema:**
   - Returns a dictionary containing a list of `messages` with `index`, `phone`, `content`, `date`, and `read` status.
 
