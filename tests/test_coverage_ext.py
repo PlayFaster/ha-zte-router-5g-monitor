@@ -164,15 +164,28 @@ async def test_api_delete_all_exception(mock_aiohttp_client):
 
 
 @pytest.mark.asyncio
-async def test_api_get_ad_empty_version(mock_aiohttp_client):
-    """Test get_ad when version is empty."""
+async def test_api_get_ad_raises_when_the_version_is_unavailable(
+    mock_aiohttp_client,
+):
+    """No version means no token, and no command may be sent.
+
+    This asserted `ad == ""`, so the caller went on to send a write carrying an
+    empty token. The router answers `{"result":"failure"}`, which reached the
+    user as "Router rejected REBOOT_DEVICE" — blaming the device for refusing
+    a command it had never received, when in fact it could not be reached.
+
+    The distinction being pinned is between *refused* and *never sent*.
+    Returning a falsy token collapses the two; raising keeps them apart, and
+    satisfies the dead-session sweep's rule that a method does the thing or
+    raises, never both nothing and success.
+    """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     with (
         patch.object(api, "_ensure_session", AsyncMock()),
         patch.object(api, "get_version", return_value=""),
+        pytest.raises(ZTEConnectionError, match="did not return its firmware"),
     ):
-        ad = await api.get_ad()
-        assert ad == ""
+        await api.get_ad()
 
 
 @pytest.mark.asyncio

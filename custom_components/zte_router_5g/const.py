@@ -68,17 +68,6 @@ UNREACHABLE_STRIKE_LIMIT = 10
 # `test_batch_poll_url_stays_within_the_router_budget`.
 APN_PROFILE_SLOTS = 10
 
-# SMS length ceilings, by the encoding the message forces.
-#
-# A single SMS carries 160 GSM 03.38 septets, or 70 UCS-2 characters. Longer
-# messages are split into concatenated segments, and each segment gives up
-# space to a header: 153 septets or 67 characters. The MC7010 web UI advertises
-# 765 for plain text, which is exactly 5 x 153 — so the router accepts at most
-# five segments, and the Unicode equivalent is 5 x 67.
-#
-# Enforced in `async_send_sms` rather than the service schema, because which
-# limit applies depends on the message content. Behavior past five segments is
-# untested on hardware; these ceilings keep callers out of that zone.
 # Targeted write confirmation (switch platform).
 #
 # A control's position is read back from the router straight after the write,
@@ -120,6 +109,18 @@ PROJECTION_CREDIBILITY_DAYS = 3.0
 # the state.
 PROJECTION_CONFIDENCE_LOW = 0.4
 PROJECTION_CONFIDENCE_MEDIUM = 0.75
+
+# SMS length ceilings, by the encoding the message forces.
+#
+# A single SMS carries 160 GSM 03.38 septets, or 70 UCS-2 characters. Longer
+# messages are split into concatenated segments, and each segment gives up
+# space to a header: 153 septets or 67 characters. The MC7010 web UI advertises
+# 765 for plain text, which is exactly 5 x 153 — so the router accepts at most
+# five segments, and the Unicode equivalent is 5 x 67.
+#
+# Enforced in `async_send_sms` rather than the service schema, because which
+# limit applies depends on the message content. Behavior past five segments is
+# untested on hardware; these ceilings keep callers out of that zone.
 
 SMS_SEGMENTS_MAX = 5
 SMS_MAX_CHARS_GSM7 = 765

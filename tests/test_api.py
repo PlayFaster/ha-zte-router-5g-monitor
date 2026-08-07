@@ -1821,3 +1821,64 @@ def test_manual_apn_with_an_unknown_index_resolves_to_nothing():
         "0",
         "IP",
     )
+
+
+# ---------------------------------------------------------------------------
+# Hex decoding — UTF-16BE, whole-string. See `_hex_decode`.
+# ---------------------------------------------------------------------------
+
+
+def _utf16_hex(text: str) -> str:
+    """Encode as the router does, so the fixture cannot drift from the format."""
+    return text.encode("utf-16-be").hex()
+
+
+def test_an_emoji_survives_the_round_trip():
+    """A non-BMP character must decode to itself, not to two lone surrogates.
+
+    The distinction this pins is not "the text looks wrong". Decoding a
+    surrogate pair one code unit at a time produces a string that **cannot be
+    encoded to UTF-8 at all**, so the recorder, a webhook or a file log handler
+    raises `UnicodeEncodeError` on a message the user cannot identify. The
+    integration sends emoji deliberately, so reading one back is a real path.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    text = "Signal restored \U0001f4f6"
+
+    decoded = api._hex_decode(_utf16_hex(text))
+
+    assert decoded == text
+    # The half that a length or content assertion alone would miss.
+    decoded.encode("utf-8")
+
+
+def test_hex_decoding_handles_the_whole_bmp_range():
+    """Plain, accented and CJK text all still decode — the fix is not emoji-only."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    for text in ("Hello", "Café £5 à Ωmega", "テスト", "1234567890"):
+        assert api._hex_decode(_utf16_hex(text)) == text
+
+
+def test_truncated_hex_is_reported_not_half_decoded():
+    """An odd-length payload is a decode failure, not a partial message.
+
+    The previous loop consumed four characters at a time and silently dropped
+    whatever did not fit, so `"0041 00"` rendered as `"A"` — a message the user
+    would read as complete. A truncated payload is not something to half-render.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode("004100") == "[Decoding Error]"
+    assert api._hex_decode("004") == "[Decoding Error]"
+
+
+def test_undecodable_hex_is_reported():
+    """Non-hex input, and a lone surrogate the router should never send."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode("zzzz") == "[Decoding Error]"
+    assert api._hex_decode("d83d") == "[Decoding Error]"
+
+
+def test_empty_hex_is_empty_not_an_error():
+    """An absent field is not a failure — it is an empty message body."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode("") == ""

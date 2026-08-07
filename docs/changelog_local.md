@@ -5,6 +5,10 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.3-dev11\] - 2026-08-07 - Low Findings From Both Reviews](#333-dev11---2026-08-07---low-findings-from-both-reviews)
+  - [\[3.3.3-dev10\] - 2026-08-07 - Write Actions Reported Failures They Had Not Had](#333-dev10---2026-08-07---write-actions-reported-failures-they-had-not-had)
+  - [\[3.3.3-dev9\] - 2026-08-07 - An SMS Containing an Emoji Could Not Be Read Back](#333-dev9---2026-08-07---an-sms-containing-an-emoji-could-not-be-read-back)
+  - [\[3.3.3-dev8\] - 2026-08-07 - Two Data Sensors Hid Fresh Values; Four Unpinned Test Gaps](#333-dev8---2026-08-07---two-data-sensors-hid-fresh-values-four-unpinned-test-gaps)
   - [\[3.3.3-dev7\] - 2026-08-07 - First Mutation Run: 94.7% Kill Rate, Survivors Triaged](#333-dev7---2026-08-07---first-mutation-run-947-kill-rate-survivors-triaged)
   - [\[3.3.3-dev6\] - 2026-08-07 - Tests That Will Stop You; Mutation Scope Decided](#333-dev6---2026-08-07---tests-that-will-stop-you-mutation-scope-decided)
   - [\[3.3.3-dev5\] - 2026-08-07 - Repair Lifecycle: Scoped, Cleared On Unload And Removal](#333-dev5---2026-08-07---repair-lifecycle-scoped-cleared-on-unload-and-removal)
@@ -162,6 +166,150 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
 
 ---
+
+## [3.3.3-dev11] - 2026-08-07 - Low Findings From Both Reviews
+
+### Summary
+
+Group D, the last of the review sweep. Five small changes, none altering behaviour a user can observe, plus one test for a path that had none.
+
+### Changed
+
+- **`api.py` — the swallow is now the explicit case, not the fallthrough.** `get_sms_capacity` and `get_rd` caught `Exception` and re-raised the two domain errors via an `isinstance` check inside the handler. Correct today, only because `ZTECredentialsError` subclasses `ZTEAuthError` — but the _default_ was to swallow, so any future domain exception outside that pair would silently have become `{}` or `""`. That is the masked-error class this project has already shipped once, where an expired session surfaced as "no SMS" rather than an error. `except (ZTEAuthError, ZTEConnectionError): raise` now comes first. Behaviour is unchanged.
+
+- **`coordinator.py` — `async_force_refresh` clears its flag on the error path.** The one-shot flag is consumed at the top of `_async_update_data`, so if `async_request_refresh()` raised, no update ran, the flag survived, and the next **scheduled** poll fetched despite Pause Polling. Self-correcting after one cycle, but Section 13 asks that every path out clears it.
+
+- **`switch.py` — removed a dead `_attr_is_on` assignment.** `ZTEPausePollingSwitch.__init__` set it, while the class also defines `is_on` as a property reading `entry.options`, which shadows the attribute entirely. It looked like it seeded the initial state and never did.
+
+- **`api.py` — `import urllib.parse` moved to the module header** from inside `send_sms`.
+
+- **`const.py` — the SMS ceiling comment sits with the constants it explains.** The block describing GSM-7 septets, UCS-2 segments and the 5 × 153 ceiling had drifted about forty lines from `SMS_SEGMENTS_MAX` and `SMS_MAX_CHARS_*`, with the write-confirmation and projection constants in between — so anyone editing the ceilings would not have seen the reasoning behind them. Comment moved; no value changed.
+
+### Added
+
+- **`test_force_refresh_clears_its_flag_when_the_request_raises`** — the error path above had no coverage at all, which is why it went unnoticed.
+
+### Added — from the mutation re-run
+
+The re-run over `helpers.py`, `diagnostics.py` and `sensor.py` after this sweep found **a gap in `[3.3.3-dev8]`'s own fix**, which is recorded rather than quietly absorbed:
+
+- **`test_total_sms_treats_an_empty_bank_as_zero_not_as_a_failure`** — `dev8` changed `_get_total_sms` so a bank reporting `""` counts as zero instead of blanking the sensor, and shipped **with no test for it**. The existing test covers a _missing_ key, which is a different case, so reverting the guard left the suite green. Mutation caught exactly what a coverage number could not: the line ran, and nothing checked what it did.
+- **`test_total_sms_counts_every_one_of_the_six_banks`** — every case populated a subset, so a mistyped key name simply contributed 0 and went unnoticed. Six distinct powers of two make the total name the missing bank.
+
+### Notes
+
+- Suite 865 passed (was 862). Line and branch coverage both 100%, 0 partials. Assertion audit passes (2 of 575, both allow-listed). `mypy --strict`, `ruff` and `ruff format` clean.
+- **Mutation re-run after the sweep: 1,256 mutants, 43 survivors — a 96.6% kill rate**, up from 45 of 1,260 before this work. All three `_get_total_sms` survivors are now killed, including the two key-name literals that had looked like noise: six distinct values in the new test make the total identify which bank was dropped. The remaining 43 are the triaged classes — string literals, `cast()` mutants that are no-ops at runtime, and paths an existing guard excludes.
+- **Two Low findings were deliberately not actioned**, both recorded in `.notes/code_review/code_review_20260807_1330_part2.md`: the unquoted router-supplied `pdp_type` in a form body is defensive only, since `vol.Coerce(int)` closes the service-reachable path; and the truncated-hex handling was already changed as a consequence of `[3.3.3-dev9]` rather than separately.
+
+## [3.3.3-dev10] - 2026-08-07 - Write Actions Reported Failures They Had Not Had
+
+### Summary
+
+Group C, the write-path group. Four fixes, all about what the user is told after a command. **No command, payload or `goformId` changes** — the wire traffic is identical.
+
+### Fixed
+
+- **A sent SMS was reported as failed if the follow-up refresh failed.** All three write services placed `async_force_refresh()` **inside** the `try` whose `except` raises the "failed" error. That refresh is cosmetic — without it the SMS counters and Recent Message sit frozen until the next poll — but it touches the router again and can fail on its own: a session blip, a timeout, a router briefly busy just after accepting a command.
+
+  So the message went out and the user was told it had not. The obvious response is to send again, and `send_sms` reaches a third party and costs money. `dev_standards` Section 22 states the rule: unverified is not failed, and a write with real-world effect is never retried on an ambiguous outcome. The refresh now runs after the boundary through `_async_refresh_after_write()`, which logs a warning and leaves the values to the next poll.
+
+- **A partially completed multi-target send looked like a total failure.** Sending to three numbers and failing on the second left the first sent and the third unattempted, and the caller got one undifferentiated `send_sms_failed`. Retrying re-sent to whoever had already received it. The error now names them: _"Already sent to: 111. Retrying will send again to those recipients."_
+
+  **The loop still stops at the first failure.** Continuing would send messages this call would not otherwise have sent, which is a behaviour change on a charged path and not one to make while fixing an error message.
+
+- **An unreachable router was reported as _"Router rejected REBOOT_DEVICE"_.** `get_version` swallows its connection error and returns `None`; `get_ad` saw a falsy version and returned `""`; the write then went out carrying an empty token, and the router answered `{"result":"failure"}`. The user was told the device had refused a command it had never received. `get_ad` now raises `ZTEConnectionError` naming the real cause, which also satisfies the dead-session sweep's rule — do the thing, or raise, never report a success-shaped result having done nothing.
+
+- **`delete_all` with `keep_last` crashed on a record with no id.** `m["id"]` raised a bare `KeyError`, so the whole operation failed and nothing was deleted.
+
+  A record with no id came that way from the router — this integration never strips one — and **it cannot be deleted by any route, since deletion targets ids.** Refusing the whole operation would therefore not spare it; it would simply leave every other message in place too. The identifiable messages are now deleted and the skipped count is logged. **A guard stops an empty id list ever reaching the router**: `";".join([])` is `""`, and what a blank `delete_sms` does is unknown — not a risk worth taking on a command that cannot be undone.
+
+### Added
+
+Six tests in `tests/test_init.py` and one rewritten in `tests/test_coverage_ext.py`:
+
+- `test_a_sent_sms_is_not_reported_as_failed_when_the_refresh_fails`
+- `test_a_partial_send_names_the_recipients_already_reached` — also asserts the third recipient was **not** attempted, pinning fail-fast against a future "continue on error" change
+- `test_a_send_that_reaches_nobody_says_so`
+- `test_delete_all_removes_what_it_can_when_a_record_has_no_id`
+- `test_delete_all_sends_nothing_when_no_record_has_an_id`
+- `test_api_get_ad_raises_when_the_version_is_unavailable` — replaces `test_api_get_ad_empty_version`, which asserted `ad == ""` and so **pinned the defect**
+
+### Notes
+
+- **Mutation-verified.** Putting the refresh back inside the boundary fails the first test; removing the id filter fails both delete tests. Source restored by file copy and confirmed with `sha256sum -c`; no git command used.
+- Suite 862 passed (was 857). Line and branch coverage both 100%, 0 partials. `mypy --strict`, `ruff` and `ruff format` clean.
+- `send_sms_failed` gained a `{sent}` placeholder in `strings.json` and `translations/en.json`.
+- **Wants an attended hardware run.** `send_sms`, `delete_sms` and `delete_all` are all `ATTENDED` in `scripts/write_classification.py`. Nothing here changes a command, so the risk is low — but the delete-filtering change alters _which_ messages are targeted, and that is worth confirming against the device.
+
+## [3.3.3-dev9] - 2026-08-07 - An SMS Containing an Emoji Could Not Be Read Back
+
+### Summary
+
+Group B. One fix, in the function that turns the router's hex into text.
+
+### Fixed
+
+- **Any SMS containing an emoji decoded to broken text that could not be logged or recorded.** `_hex_decode` built its result with `chr()` per four hex digits. That is correct only inside the Basic Multilingual Plane; every emoji arrives as a UTF-16 **surrogate pair**, and taking each half separately yields two lone surrogates instead of one character.
+
+  The visible symptom is wrong text. The consequential one is that **a string holding lone surrogates cannot be encoded to UTF-8 at all** — so the recorder, a webhook or a file log handler raises `UnicodeEncodeError` on a message the user has no way to identify. The integration has always _sent_ emoji deliberately (`encode_type=UNICODE`, `SMS_MAX_CHARS_UNICODE`); it could not read one back.
+
+  It now decodes the whole string in one step, `bytes.fromhex(...).decode("utf-16-be")`.
+
+### Changed
+
+- **Truncated hex is reported rather than half-decoded.** `bytes.fromhex` rejects an odd-length string, where the old loop consumed four characters at a time and silently dropped whatever did not fit — so `"004100"` rendered as `"A"`, a message a user would read as complete. It now returns the existing `[Decoding Error]` marker. This closes a separate Low finding from the same review; it is a deliberate consequence of the fix above, not a side effect.
+
+### Added
+
+Five tests in `tests/test_api.py`, with the fixture text encoded by `_utf16_hex()` so it cannot drift from the format it claims to represent:
+
+- **`test_an_emoji_survives_the_round_trip`** — asserts the text is correct **and** that the result encodes to UTF-8. The second assertion is the one that matters: a length or content check alone passes on a string that later crashes the recorder.
+- **`test_hex_decoding_handles_the_whole_bmp_range`** — plain, accented and CJK text, so the change is not read as emoji-only.
+- **`test_truncated_hex_is_reported_not_half_decoded`**
+- **`test_undecodable_hex_is_reported`** — non-hex input, and a lone surrogate the router should never send.
+- **`test_empty_hex_is_empty_not_an_error`** — an absent field is an empty body, not a failure.
+
+### Notes
+
+- **Verified against the old implementation**, not only the new one: restoring the per-code-unit form fails `test_an_emoji_survives_the_round_trip` and `test_truncated_hex_is_reported_not_half_decoded`. Source restored by file copy and confirmed with `sha256sum -c`; no git command used.
+- Suite 857 passed (was 852). Line and branch coverage both 100%, 0 partials. `mypy --strict`, `ruff` and `ruff format` clean.
+- **Still wants a hardware check.** Mocks confirm the code agrees with the UTF-16 spec; only a real emoji SMS arriving at the router confirms the router agrees. `send_sms` and the SMS reads are `ATTENDED` in `scripts/write_classification.py`, so this belongs in an attended run, not an unattended one.
+
+## [3.3.3-dev8] - 2026-08-07 - Two Data Sensors Hid Fresh Values; Four Unpinned Test Gaps
+
+### Summary
+
+Group A of the review sweep. One user-visible fix, one read-path correction, and four gaps where the suite executed a behaviour without checking it.
+
+### Fixed
+
+- **`Allowance` and `Alert Threshold` went unavailable while their data was fresh.** Both declared `source=ENDPOINT_EXTENDED`, which makes an entity follow the optional batch down once it exhausts its strike budget — but their keys (`data_volume_limit_size`, `data_volume_alert_percent`) are in `_CORE_PARAMS` and appear nowhere in `_EXTENDED_PARAMS`. So after four optional-batch failures both entities hid a value the mandatory poll had just refreshed. `Allowance` is the threshold `Projected Cycle Usage` is measured against, so the projection lost its reference exactly when the router was already misbehaving. The `source=` is removed from both.
+
+- **One empty storage bank blanked `Total Messages` entirely.** `_get_total_sms` ran `int()` over all six banks, so a router reporting one as `""` raised `ValueError` and the whole sensor went `unknown`, taking its attribute breakdown with it — which reads as "no messages", the opposite of what an unreadable bank means. Present-but-empty is now treated as absent, the same rule `_get_first` applies everywhere else in the module. A genuinely unparsable value still returns `None`.
+
+### Added
+
+- **`test_no_sensor_declares_a_source_its_data_does_not_come_from`** — the sensor-side counterpart of `test_no_switch_reads_from_a_degradable_endpoint`, whose absence is the entire reason the defect above shipped. It resolves each description's router keys through the indirection they actually use — inline literals, module-level helper functions, and alias tuples — then asserts no `ENDPOINT_EXTENDED` sensor is fed by a `_CORE_PARAMS`-only key.
+
+  **The first version of this sweep was hollow and is recorded because it passed.** It scanned only the description text, so it saw no keys at all for `data_allowance` — whose keys live inside `_data_allowance_bytes` — and therefore stayed green with the defect deliberately reintroduced. The rewrite follows one level of indirection and carries a floor assertion (`resolved >= 15`), so a future drift in that resolution fails the test rather than quietly emptying it.
+
+- **`test_get_sms_list_page_two_returns_the_second_slice`** — every existing call passed `page: 1`, where `(page - 1) * count` is `0` for any `count`, so the slice arithmetic executed without ever being distinguished. Three pages are now asserted; a regression to `page * count` or a dropped `- 1` drops or repeats a page of a published response.
+
+- **`test_get_sms_list_reports_a_missing_date_as_empty_not_null`** — `date` is one of five fields in a published service response and was asserted **nowhere** in the suite. Dropping its `""` default puts `null` into that field with the suite still green.
+
+### Changed
+
+- **`test_drift_can_now_fire` pins the whole verdict sequence**, not just the firing edge. It asserted `verdicts[-1] is True`, which `>= 1`, `> 0` and `>= FETCH_STRIKE_LIMIT - 2` all satisfy — so a WARNING-severity, non-fixable Repair could have started appearing on the **first** odd response, which is the false-alarm class a Repair's "persistence plus agency" bar exists to prevent.
+
+- **`test_write_the_router_did_not_apply_is_reported` asserts the two side effects a refusal must suppress.** It checked the raise, the read count and `is_on`, but `is_on is False` is weaker than it looks — `_last_known` starts `False` from the fixture, so it passed whether the code left it alone or wrote and something reset it. It now pins `async_write_ha_state` not called and `async_force_refresh` not called, so a refused command cannot go on to poll the session that just declined it.
+
+- **`test_data_allowance_sensor_is_guard_banded_and_enabled` corrected.** It asserted `source == ENDPOINT_EXTENDED`, so the suite **enforced** the defect: applying the fix failed the test.
+
+### Notes
+
+- Suite 852 passed (was 849). Line and branch coverage both 100%, 0 partials. `mypy --strict`, `ruff` and `ruff format` clean.
+- Both new guards were verified by reintroducing the defect: the sensor sweep fails on a restored `source=`, and the drift and refusal tests were mutation-checked in the review that raised them. Source restored by file copy and confirmed with `sha256sum -c` each time; no git command was used.
 
 ## [3.3.3-dev7] - 2026-08-07 - First Mutation Run: 94.7% Kill Rate, Survivors Triaged
 
@@ -368,7 +516,8 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Changed
 
-**`changelog_local` ToC**: Added Table of Contents to `changelog_local` (top-of-file) and to end of `CHANGELOG`. **Sensor Docs**: Updated `all_sensors`, `value_min_max`, and `about_attributes_list` documents. **`README`**: On-going updates.
+- **`changelog_local` ToC**: Added Table of Contents to `changelog_local` (top-of-file) and to end of `CHANGELOG`.
+- **Sensor Docs**: Updated `all_sensors`, `value_min_max`, and `about_attributes_list` documents. **`README`**: On-going updates.
 
 ## [3.3.2-rc14] - 2026-08-01 - README Review; SMS Action Documentation Corrected
 

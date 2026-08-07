@@ -356,7 +356,11 @@ class ZTEPausePollingSwitch(
 
         # Registry identification
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
-        self._attr_is_on = initial_state
+        # No `_attr_is_on`: `is_on` is a property reading `entry.options`, which
+        # shadows the attribute entirely. Assigning it looked like it seeded the
+        # initial state and never did. `initial_state` is read by the caller
+        # from the same options, so the position is correct from construction.
+        del initial_state
 
     @property
     def is_on(self) -> bool:

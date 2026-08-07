@@ -215,7 +215,15 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         (dev_standards Section 13). Scheduled polls still respect the pause.
         """
         self._force_refresh_once = True
-        await self.async_request_refresh()
+        try:
+            await self.async_request_refresh()
+        except Exception:
+            # The flag is consumed at the top of `_async_update_data`, so an
+            # update that never runs leaves it set — and the next *scheduled*
+            # poll would then fetch despite the pause. Self-correcting after one
+            # cycle, but §13's flag lifecycle asks that every path out clears it.
+            self._force_refresh_once = False
+            raise
 
     @property
     def endpoint_failures(self) -> dict[str, int]:

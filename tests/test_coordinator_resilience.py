@@ -660,3 +660,19 @@ async def test_removal_clears_repairs_left_by_a_failed_unload(
 
     remaining = [i for (d, i) in ir.async_get(hass).issues if d == DOMAIN]
     assert remaining == []
+
+
+async def test_force_refresh_clears_its_flag_when_the_request_raises(coordinator):
+    """Every path out of `async_force_refresh` must leave the flag clear.
+
+    The flag is consumed at the top of `_async_update_data`, so if the refresh
+    request never runs an update, a set flag survives to the next **scheduled**
+    poll — which then fetches despite Pause Polling being on. Self-correcting
+    after one cycle, but Section 13 asks that the one-shot really be one-shot.
+    """
+    coordinator.async_request_refresh = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with pytest.raises(RuntimeError):
+        await coordinator.async_force_refresh()
+
+    assert coordinator._force_refresh_once is False

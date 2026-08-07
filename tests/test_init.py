@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import ServiceCall
-from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceValidationError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    HomeAssistantError,
+    ServiceValidationError,
+)
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.zte_router_5g import (
@@ -13,7 +17,11 @@ from custom_components.zte_router_5g import (
     async_setup_entry,
     async_unload_entry,
 )
-from custom_components.zte_router_5g.api import ZTEAuthError, ZTECredentialsError
+from custom_components.zte_router_5g.api import (
+    ZTEAuthError,
+    ZTEConnectionError,
+    ZTECredentialsError,
+)
 from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
     SMS_MAX_CHARS_GSM7,
@@ -461,6 +469,93 @@ async def test_service_get_sms_list(mock_hass, mock_config_entry):
     assert messages[1]["phone"] == "456"
     assert messages[1]["content"] == "text2"
     assert messages[1]["read"] is True
+
+    # `date` is the fifth field of a published response and was asserted
+    # nowhere in the suite. It is also the one field that is not a straight
+    # copy — it comes from `_parse_date`, which returns the router's raw string
+    # unchanged when it cannot parse it.
+    assert messages[0]["date"] == "2026-05-23T01:27:08"
+    assert messages[1]["date"] == "2026-05-23T01:25:08"
+
+
+@pytest.mark.asyncio
+async def test_get_sms_list_reports_a_missing_date_as_empty_not_null(
+    mock_hass, mock_config_entry, mock_coordinator
+):
+    """A record with no date must return "", never None.
+
+    The distinction a template author needs: `""` means the router reported no
+    date, and it is a string like every other value in the response. Changing
+    the `.get("date_decoded", "")` default to `.get("date_decoded")` puts
+    `null` into a published field, which is otherwise invisible — nothing
+    asserted this field at all.
+    """
+    from custom_components.zte_router_5g import async_get_sms_list
+
+    mock_api = AsyncMock()
+    mock_api.get_sms_messages.return_value = [
+        {
+            "id": "2",
+            "number_decoded": "1",
+            "content_decoded": "a",
+            "date_decoded": "2026-05-23T01:00:00",
+            "tag": "1",
+        },
+        {"id": "1", "number_decoded": "2", "content_decoded": "b", "tag": "1"},
+    ]
+    mock_coordinator.api = mock_api
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"page": 1, "count": 10, "box_type": 1}
+
+    messages = (await async_get_sms_list(mock_hass, call))["messages"]
+
+    assert messages[0]["date"] == "2026-05-23T01:00:00"
+    assert messages[1]["date"] == ""
+
+
+@pytest.mark.asyncio
+async def test_get_sms_list_page_two_returns_the_second_slice(
+    mock_hass, mock_config_entry, mock_coordinator
+):
+    """Pagination is only ever exercised on page 1, where the maths cannot fail.
+
+    `(page - 1) * count` is `0` for any `count` when `page` is 1, so every
+    existing call executes the slice without distinguishing it. A regression to
+    `page * count`, or a dropped `- 1`, silently drops or repeats a whole page
+    of a documented service response.
+    """
+    from custom_components.zte_router_5g import async_get_sms_list
+
+    mock_api = AsyncMock()
+    mock_api.get_sms_messages.return_value = [
+        {
+            "id": str(i),
+            "number_decoded": "1",
+            "content_decoded": f"m{i}",
+            "date_decoded": f"2026-05-23T01:0{i}:00",
+            "tag": "1",
+        }
+        for i in range(5, 0, -1)
+    ]
+    mock_coordinator.api = mock_api
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    def page(n):
+        call = MagicMock(spec=ServiceCall)
+        call.data = {"page": n, "count": 2, "box_type": 1}
+        return call
+
+    first = (await async_get_sms_list(mock_hass, page(1)))["messages"]
+    second = (await async_get_sms_list(mock_hass, page(2)))["messages"]
+    third = (await async_get_sms_list(mock_hass, page(3)))["messages"]
+
+    assert [m["index"] for m in first] == [5, 4]
+    assert [m["index"] for m in second] == [3, 2]
+    assert [m["index"] for m in third] == [1]
 
 
 @pytest.mark.asyncio
@@ -1245,3 +1340,151 @@ async def test_unload_succeeds_when_setup_never_stored_a_coordinator(
     object.__setattr__(mock_config_entry, "runtime_data", None)
 
     assert await async_unload_entry(mock_hass, mock_config_entry) is True
+
+
+# ---------------------------------------------------------------------------
+# Write services — a successful write must never be reported as a failure.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_sent_sms_is_not_reported_as_failed_when_the_refresh_fails(
+    mock_hass, mock_config_entry, mock_coordinator
+):
+    """The refresh is cosmetic. Its failure must not become the write's.
+
+    This is the distinction that matters on a charged path: the message went
+    out, so telling the user it did not invites a retry, and the retry sends a
+    second one. Section 22 — unverified is not failed, and a write with
+    real-world effect is never retried on an ambiguous outcome.
+    """
+    from custom_components.zte_router_5g import async_send_sms
+
+    mock_coordinator.api = AsyncMock()
+    mock_coordinator.async_force_refresh = AsyncMock(
+        side_effect=ZTEConnectionError("router busy right after the write")
+    )
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"target": ["07700900000"], "message": "hello"}
+
+    # Must not raise.
+    await async_send_sms(mock_hass, call)
+
+    mock_coordinator.api.send_sms.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_partial_send_names_the_recipients_already_reached(
+    mock_hass, mock_config_entry, mock_coordinator
+):
+    """Stopping at the first failure is deliberate; hiding it is not.
+
+    Sending to three numbers and failing on the second leaves the first sent
+    and the third unattempted. A bare "failed" cannot be told from a total
+    failure, so a caller retries and re-sends to whoever already received it.
+    The error names them; the loop still stops, because continuing would send
+    messages this call would not otherwise have sent.
+    """
+    from custom_components.zte_router_5g import async_send_sms
+
+    mock_coordinator.api = AsyncMock()
+    mock_coordinator.api.send_sms = AsyncMock(
+        side_effect=[None, ZTEConnectionError("second recipient failed")]
+    )
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"target": ["111", "222", "333"], "message": "hello"}
+
+    with pytest.raises(HomeAssistantError) as err:
+        await async_send_sms(mock_hass, call)
+
+    assert err.value.translation_key == "send_sms_failed"
+    assert err.value.translation_placeholders["sent"] == "111"
+    # The third was never attempted — two calls, not three.
+    assert mock_coordinator.api.send_sms.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_a_send_that_reaches_nobody_says_so(
+    mock_hass, mock_config_entry, mock_coordinator
+):
+    """Reports `none`, not an empty string, so the message reads correctly."""
+    from custom_components.zte_router_5g import async_send_sms
+
+    mock_coordinator.api = AsyncMock()
+    mock_coordinator.api.send_sms = AsyncMock(side_effect=ZTEConnectionError("down"))
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"target": ["111"], "message": "hello"}
+
+    with pytest.raises(HomeAssistantError) as err:
+        await async_send_sms(mock_hass, call)
+
+    assert err.value.translation_placeholders["sent"] == "none"
+
+
+@pytest.mark.asyncio
+async def test_delete_all_removes_what_it_can_when_a_record_has_no_id(
+    mock_hass, mock_config_entry, mock_coordinator
+):
+    """A message with no id came that way from the router and cannot be deleted.
+
+    Deletion targets ids, so refusing the whole operation would not spare that
+    record — it would simply leave every other message in place as well. The
+    identifiable ones are removed and the skipped count is logged.
+    """
+    from custom_components.zte_router_5g import async_delete_all_sms
+
+    mock_coordinator.api = AsyncMock()
+    mock_coordinator.api.get_sms_messages = AsyncMock(
+        return_value=[
+            {"id": "3", "date_decoded": "c"},
+            {"id": "2", "date_decoded": "b"},
+            {"date_decoded": "a"},  # router sent no id
+        ]
+    )
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"keep_last": 1}
+
+    await async_delete_all_sms(mock_hass, call)
+
+    # Kept the newest; deleted the one identifiable remainder; skipped the
+    # id-less record rather than crashing on it or deleting nothing.
+    mock_coordinator.api.delete_sms.assert_awaited_once_with("2")
+
+
+@pytest.mark.asyncio
+async def test_delete_all_sends_nothing_when_no_record_has_an_id(
+    mock_hass, mock_config_entry, mock_coordinator
+):
+    """An empty target list must never reach a destructive command.
+
+    `";".join([])` is `""`, and what the router does with a blank `delete_sms`
+    is unknown. On a command that cannot be undone, "unknown" is not a risk
+    worth taking to save one call.
+    """
+    from custom_components.zte_router_5g import async_delete_all_sms
+
+    mock_coordinator.api = AsyncMock()
+    mock_coordinator.api.get_sms_messages = AsyncMock(
+        return_value=[{"date_decoded": "b"}, {"date_decoded": "a"}]
+    )
+    mock_config_entry.runtime_data = mock_coordinator
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    call = MagicMock(spec=ServiceCall)
+    call.data = {"keep_last": 1}
+
+    await async_delete_all_sms(mock_hass, call)
+
+    mock_coordinator.api.delete_sms.assert_not_awaited()

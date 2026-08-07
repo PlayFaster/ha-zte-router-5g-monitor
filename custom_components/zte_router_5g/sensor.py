@@ -101,7 +101,12 @@ def _get_total_sms(data: Any) -> int | None:
         "sms_sim_draftbox_total",
     ]
     try:
-        return sum(int(data.get(k, 0)) for k in keys)
+        # Present-but-empty is absent, the same rule `_get_first` applies. A
+        # router that reports one bank as `""` was otherwise blanking the whole
+        # sensor and its attribute breakdown, which reads as "no messages" —
+        # the opposite of what an unreadable bank means. A genuinely
+        # unparsable value still returns None.
+        return sum(int(raw) for k in keys if (raw := data.get(k)) not in (None, ""))
     except (ValueError, TypeError):
         return None
 
@@ -1337,7 +1342,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         # 1 PiB. The encoding is inferred from a single sample, so a guard band
         # keeps a misparse out of the statistics rather than trusting it.
         max_limit=1125899906842624,
-        source=ENDPOINT_EXTENDED,
         group="data",
         value_fn=_data_allowance_bytes,
     ),
@@ -1359,7 +1363,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=0,
         max_limit=100,
         group="data",
-        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_int(data.get("data_volume_alert_percent")),
     ),
     ZTESensorEntityDescription(

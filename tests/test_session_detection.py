@@ -301,4 +301,12 @@ async def test_drift_can_now_fire(coordinator) -> None:
 
     verdicts = [coordinator._check_contract_drift(drifted) for _ in range(3)]
 
-    assert verdicts[-1] is True, "drift never fires — an inert detector"
+    # Pin the whole sequence, not just the firing edge. Asserting only the last
+    # verdict leaves the persistence requirement unguarded: `>= 1`, `> 0` and
+    # `>= FETCH_STRIKE_LIMIT - 2` all satisfy it, and under any of them a
+    # WARNING-severity, non-fixable Repair appears on the *first* odd response
+    # — the false-alarm class a Repair's "persistence plus agency" bar exists
+    # to prevent, on a router that demonstrably produces odd single responses.
+    assert verdicts == [False, False, True], (
+        "drift must require FETCH_STRIKE_LIMIT consecutive bad polls, not one"
+    )
