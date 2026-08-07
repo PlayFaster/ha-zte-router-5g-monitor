@@ -127,7 +127,7 @@ def diagnostics_entry(mock_config_entry):
     coordinator.last_update_success_time = None
     coordinator.update_interval = None
     coordinator.health_snapshot = {"problem": False, "issues": [], "severity": "ok"}
-    coordinator._endpoint_failures = {}
+    coordinator.endpoint_failures = {}
     mock_config_entry.runtime_data = coordinator
 
     object.__setattr__(
@@ -279,7 +279,7 @@ async def test_handles_an_empty_payload(mock_config_entry) -> None:
     coordinator.last_update_success_time = None
     coordinator.update_interval = None
     coordinator.health_snapshot = {"problem": True, "issues": ["no data"]}
-    coordinator._endpoint_failures = {}
+    coordinator.endpoint_failures = {}
     mock_config_entry.runtime_data = coordinator
 
     result = await async_get_config_entry_diagnostics(None, mock_config_entry)

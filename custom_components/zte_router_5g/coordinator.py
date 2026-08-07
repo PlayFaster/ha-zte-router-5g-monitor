@@ -179,6 +179,15 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._force_refresh_once = True
         await self.async_request_refresh()
 
+    @property
+    def endpoint_failures(self) -> dict[str, int]:
+        """Return the per-endpoint strike counts, as a copy.
+
+        Read by `diagnostics.py`, which must never be able to mutate coordinator
+        state — it is a read path (Section 20).
+        """
+        return dict(self._endpoint_failures)
+
     def endpoint_available(self, source: str) -> bool:
         """Return whether an optional endpoint is still serving usable data.
 

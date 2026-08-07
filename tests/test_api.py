@@ -1513,7 +1513,7 @@ def test_every_data_volume_field_is_polled():
     always raises "the last poll did not supply it".
     """
     polled = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
-    for aliases in ZTERouterAPI._DATA_VOLUME_FIELDS.values():
+    for aliases in ZTERouterAPI.DATA_VOLUME_FIELDS.values():
         assert polled.intersection(aliases), (
             f"none of {aliases} is requested by either batch"
         )

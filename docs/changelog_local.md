@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.3-dev3\] - 2026-08-07 - Widened Ruff Rule Set Satisfied Without Suppressions](#333-dev3---2026-08-07---widened-ruff-rule-set-satisfied-without-suppressions)
   - [\[3.3.3-dev1\] - 2026-08-07 - CI Bumps; Github Zipfile; PyTest Branch \& Mutation Testing](#333-dev1---2026-08-07---ci-bumps-github-zipfile-pytest-branch--mutation-testing)
   - [\[3.3.2\] - 2026-08-02 - Release - Wider Model Support. Better Data Use Tracking. Longer SMS Messages. About: Attributes. Fixes](#332---2026-08-02---release---wider-model-support-better-data-use-tracking-longer-sms-messages-about-attributes-fixes)
   - [\[3.3.2-rc15\] - 2026-08-02 - Bump Shared CI to v2.0.9](#332-rc15---2026-08-02---bump-shared-ci-to-v209)
@@ -46,7 +47,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc4\] - 2026-07-28 - Automation Example Glitch Guards \& Float Rounding in README](#330-rc4---2026-07-28---automation-example-glitch-guards--float-rounding-in-readme)
   - [\[3.3.0-rc3\] - 2026-07-28 - `about` Notes on 63 Entities](#330-rc3---2026-07-28---about-notes-on-63-entities)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage](#330-rc2---2026-07-28---external-code-review-triage)
-  - [\[3.3.0-dev14\] - 2026-07-27 - doc\_update Reconciliation Pass](#330-dev14---2026-07-27---doc_update-reconciliation-pass)
+  - [\[3.3.0-dev14\] - 2026-07-27 - doc_update Reconciliation Pass](#330-dev14---2026-07-27---doc_update-reconciliation-pass)
   - [\[3.3.0-dev13\] - 2026-07-27 - Records Caught Up After a Long Session](#330-dev13---2026-07-27---records-caught-up-after-a-long-session)
   - [\[3.3.0-dev12\] - 2026-07-27 - Expired Session Returned "No SMS"](#330-dev12---2026-07-27---expired-session-returned-no-sms)
   - [\[3.3.0-dev11\] - 2026-07-27 - Device-Registry Record Cross-Referenced](#330-dev11---2026-07-27---device-registry-record-cross-referenced)
@@ -59,7 +60,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Alignment](#330-dev4---2026-07-27---cross-project-alignment)
   - [\[3.3.0-dev3\] - 2026-07-27 - Unreachable Repair \& Record Corrections](#330-dev3---2026-07-27---unreachable-repair--record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - IQS Compliance Pass](#330-dev2---2026-07-27---iqs-compliance-pass)
-  - [\[3.3.0-dev1\] - 2026-07-27 - dev\_standards Conformance Pass](#330-dev1---2026-07-27---dev_standards-conformance-pass)
+  - [\[3.3.0-dev1\] - 2026-07-27 - dev_standards Conformance Pass](#330-dev1---2026-07-27---dev_standards-conformance-pass)
   - [\[3.2.6-dev8\] - 2026-07-26 - Icons \& Branding Refresh; AGENTS.md Restructured](#326-dev8---2026-07-26---icons--branding-refresh-agentsmd-restructured)
   - [\[3.2.6-dev7\] - 2026-07-12 - PyTest Coverage to 100%; Codespell Alignment](#326-dev7---2026-07-12---pytest-coverage-to-100-codespell-alignment)
   - [\[3.2.6-dev6\] - 2026-07-12 - PHACC Bump; README Device-vs-Entity Clarification](#326-dev6---2026-07-12---phacc-bump-readme-device-vs-entity-clarification)
@@ -157,6 +158,29 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
 
 ---
+
+## [3.3.3-dev3] - 2026-08-07 - Widened Ruff Rule Set Satisfied Without Suppressions
+
+### Summary
+
+The shared `ruff` rule set widened (`SLF`, `INP`, `PTH` and others), surfacing 12 errors. Eleven are fixed rather than suppressed; the twelfth case is a single file-level exemption with the reasoning recorded at the site.
+
+### Changed
+
+- **`coordinator.py`**: Added a public `endpoint_failures` property returning a **copy** of the per-endpoint strike counts. `diagnostics.py` previously reached into `_endpoint_failures` directly, which `SLF001` flagged and which let a read path hold a mutable reference to coordinator state (Section 20 requires diagnostics never mutate live data).
+- **`api.py`**: `_DATA_VOLUME_FIELDS` → `DATA_VOLUME_FIELDS`. It describes the all-or-nothing `DATA_LIMIT_SETTING` form the router demands — a protocol constant with a legitimate external reader in `scripts/hardware_check.py`, not internal state. Call sites in `tests/test_api.py` and `scripts/hardware_check.py` updated.
+- **`scripts/__init__.py`**: Added. `tests/test_write_classification.py` already imports `scripts.write_classification`, so the folder was an implicit namespace package (`INP001`); this makes it explicit. Not shipped — HACS packages `custom_components/` only.
+- **`scripts/hardware_check.py`**: `CONFIG_ENTRIES` is now a `pathlib.Path`, so the credentials read uses `Path.open()` (`PTH123`).
+
+### Added
+
+- **`test_endpoint_failures_reports_counts_without_exposing_state`**: Covers the new property and asserts the distinction that matters — mutating the returned dict must not reach the coordinator. Mutation-verified: returning `self._endpoint_failures` directly satisfies the count assertion and fails the isolation one.
+
+### Notes
+
+- **One suppression, deliberate.** `scripts/hardware_check.py` carries a file-level `# ruff: noqa: SLF001` for five calls to `api._request(..., _retry=False)`. `_request` transparently re-logs-in once on an expired session, which is the exact behavior those probes exist to observe, so no public method can serve them. A public wrapper was considered and rejected: it adds shipped API surface for a script HACS never ships, and `test_every_public_method_is_covered_by_the_sweep` would then require it in `_CALLS`, where the sweep asserts a method "does the thing or raises" — the opposite of a probe built to watch one fail. The reasoning is recorded at the site, not only here.
+- **No project-local lint config was touched.** `pyproject.toml` and `.validate/pyproject_common.toml` are synced copies; an exemption added there is erased by the next sync, as happened on `ha-wifi-ssid-monitor` on 2026-08-03.
+- Suite 822 passed (was 821), line coverage 100%, 11 partial branches unchanged, `mypy --strict` clean, `ruff format` clean.
 
 ## [3.3.3-dev1] - 2026-08-07 - CI Bumps; Github Zipfile; PyTest Branch & Mutation Testing
 

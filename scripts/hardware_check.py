@@ -56,8 +56,18 @@ before anything is written.
 
 # The console report is this script's entire output — there is no logger to
 # route it through, and a caller reading `.reports/hardware_check.txt` is the
-# point. This is the only rule the file cannot satisfy on its own terms.
+# point.
 # ruff: noqa: T201
+
+# The session probes call `api._request(..., _retry=False)` directly, and must.
+# `_request` transparently re-logs-in once on an expired session — which is the
+# behavior these checks exist to observe, so every public method routes around
+# what they are measuring. A public wrapper was considered and rejected: it adds
+# shipped API surface for a script HACS never ships, and
+# `test_every_public_method_is_covered_by_the_sweep` would then require it in
+# `_CALLS`, where the sweep asserts a method "does the thing or raises" — the
+# opposite of a probe built to watch one fail.
+# ruff: noqa: SLF001
 
 from __future__ import annotations
 
@@ -88,7 +98,7 @@ except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
         "`uv run` and the project .venv do not carry those dependencies."
     ) from err
 
-CONFIG_ENTRIES = "/config/.storage/core.config_entries"
+CONFIG_ENTRIES = pathlib.Path("/config/.storage/core.config_entries")
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent / "tests" / "fixtures"
 INVALID_STOK = "stok=0000000000000000000000000000000f"
 
@@ -181,7 +191,7 @@ class Report:
 
 def _credentials() -> dict[str, str]:
     """Read the router credentials from the configured Home Assistant entry."""
-    with open(CONFIG_ENTRIES) as handle:
+    with CONFIG_ENTRIES.open() as handle:
         data = json.load(handle)
     for entry in data["data"]["entries"]:
         if entry["domain"] == "zte_router_5g":
@@ -305,7 +315,7 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
     """
     print(_cyan("\n[4] The data-volume form (alert percentage only)"))
 
-    current = await api.get_params(list(api._DATA_VOLUME_FIELDS))
+    current = await api.get_params(list(api.DATA_VOLUME_FIELDS))
     original = current.get("data_volume_alert_percent")
     if original is None or not str(original).strip():
         report.record(
@@ -360,7 +370,7 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
     # so nothing escapes before this point — a `finally` here would imply a
     # `try` that no longer exists.
     with contextlib.suppress(Exception):
-        latest = await api.get_params(list(api._DATA_VOLUME_FIELDS))
+        latest = await api.get_params(list(api.DATA_VOLUME_FIELDS))
         if str(latest.get("data_volume_alert_percent")) != str(original):
             await api.set_data_volume_settings(
                 latest, data_volume_alert_percent=str(original)
@@ -677,7 +687,7 @@ async def check_data_limit_switch(api: ZTERouterAPI, report: Report) -> None:
     """
     print(_cyan("\n[C] Data limit switch round trip"))
 
-    fields = list(api._DATA_VOLUME_FIELDS)
+    fields = list(api.DATA_VOLUME_FIELDS)
     current = await api.get_params(fields)
     original = str(current.get("data_volume_limit_switch") or "")
 

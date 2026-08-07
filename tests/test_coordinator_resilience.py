@@ -164,6 +164,27 @@ async def test_endpoint_holds_last_good_within_budget(coordinator) -> None:
     assert coordinator.endpoint_available(ENDPOINT_SMS_MESSAGES) is True
 
 
+async def test_endpoint_failures_reports_counts_without_exposing_state(
+    coordinator,
+) -> None:
+    """The diagnostics accessor reports strike counts but cannot be used to set them.
+
+    `diagnostics.py` is a read path (Section 20), so the distinction that earns
+    this test is the copy: mutating what the property hands back must not reach
+    the coordinator. Returning `self._endpoint_failures` directly would satisfy
+    the count assertion and fail the second one.
+    """
+    coordinator.api.get_sms_messages = AsyncMock(side_effect=ZTEConnectionError("down"))
+    await coordinator._async_update_data()
+
+    reported = coordinator.endpoint_failures
+    assert reported[ENDPOINT_SMS_MESSAGES] == 1
+
+    reported[ENDPOINT_SMS_MESSAGES] = 99
+    assert coordinator.endpoint_failures[ENDPOINT_SMS_MESSAGES] == 1
+    assert coordinator.endpoint_available(ENDPOINT_SMS_MESSAGES) is True
+
+
 async def test_endpoint_recovers(coordinator) -> None:
     """A success resets the endpoint's strike count."""
     coordinator.api.get_sms_messages = AsyncMock(side_effect=ZTEConnectionError("down"))

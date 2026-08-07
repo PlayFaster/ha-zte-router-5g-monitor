@@ -1314,7 +1314,7 @@ class ZTERouterAPI:
 
     # Every field `DATA_LIMIT_SETTING` expects, and the response key each is
     # read back from. The router refuses a payload missing any of them.
-    _DATA_VOLUME_FIELDS: dict[str, tuple[str, ...]] = {
+    DATA_VOLUME_FIELDS: dict[str, tuple[str, ...]] = {
         "data_volume_limit_switch": ("data_volume_limit_switch",),
         "data_volume_limit_unit": ("data_volume_limit_unit",),
         "data_volume_limit_size": ("data_volume_limit_size",),
@@ -1352,7 +1352,7 @@ class ZTERouterAPI:
         payload_fields: dict[str, str] = {}
         missing: list[str] = []
 
-        for field, aliases in self._DATA_VOLUME_FIELDS.items():
+        for field, aliases in self.DATA_VOLUME_FIELDS.items():
             if field in changes:
                 payload_fields[field] = str(changes[field])
                 continue
@@ -1377,7 +1377,7 @@ class ZTERouterAPI:
                 "the router. Refresh and retry."
             )
 
-        unknown = set(changes) - set(self._DATA_VOLUME_FIELDS)
+        unknown = set(changes) - set(self.DATA_VOLUME_FIELDS)
         if unknown:  # pragma: no cover - guards a programming error, not input
             raise ValueError(f"Unknown data-volume field(s): {sorted(unknown)}")
 
