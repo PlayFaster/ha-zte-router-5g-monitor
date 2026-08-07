@@ -4,45 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.3] - 2026-08-08 - Release
+## [3.3.3] - 2026-08-08 - Release - SMS Bugfix
 
 ### Summary
 
-A fixes release. No new entities and no settings to change — the SMS actions, two Data sensors and the Repairs panel all behave the way they were meant to in 3.3.2.
-
-- **SMS messages containing emoji can be read again.** Any message with an emoji in it made the **Get SMS List** action fail outright — not just that message, the whole list.
-
-- **Sending an SMS no longer reports failure after it has already sent.** The message went out, the action said it had not, and sending again cost you a second message.
-
-- **Allowance and Alert Threshold stop disappearing** while the router is still reporting them.
-
-- **Repairs no longer outlive the integration.** Deleting the integration with a repair showing left it in the Repairs panel permanently, with nothing left that could clear it.
+A Send SMS fix, plus several resilience and robustness changes for edge case behavior.
 
 ### Fixed
 
-- **An SMS containing an emoji broke the Get SMS List action.** Any emoji — or any character outside the basic set — in **any** message made the action fail with an internal error, so the whole list was unreadable rather than the one message. Sending emoji was never affected. Verified against hardware: four messages, two with emoji, now all return correctly.
-
-- **A sent SMS could be reported as failed.** The **Send SMS** action tells the router to send, then refreshes the SMS counters. If that refresh failed — a momentary blip, the router briefly busy — the action reported the send as failed even though the message had gone. The natural response is to send again, which costs a second message. The refresh no longer decides whether the send succeeded.
-
-- **Sending to several numbers now says how far it got.** If the second of three recipients failed, the first had already been sent and the third was never attempted, but the error said only "failed". It now names who was already reached, so a retry is an informed choice.
-
-- **Delete All Messages no longer fails outright over one unreadable message.** If the router returned a message without an identifier, the whole operation stopped and nothing was deleted. It now removes everything it can identify and logs what it skipped — a message with no identifier cannot be deleted by any means, so refusing the rest achieved nothing.
-
-- **Allowance and Alert Threshold went unavailable while their data was fresh.** Both were tied to the optional half of the router poll, which they are not fed by. If that half failed a few times in a row, both entities disappeared despite the router still reporting them — and **Allowance** is the figure **Projected Cycle Usage** is measured against, so the projection lost its reference at the worst moment.
-
-- **Total Messages went blank if one storage area reported nothing.** A single empty value from the router emptied the whole sensor and its breakdown, which reads as "no messages" — the opposite of "one area could not be read".
-
-- **Repairs stayed in the Repairs panel after the integration was removed.** They could not be dismissed, because these repairs are cleared by the integration and it was gone. They are now cleared on reload and on removal. Repairs are also now tied to the specific router that raised them, so two ZTE routers no longer overwrite each other's.
-
-- **A router that could not be reached was reported as having refused the command.** Pressing **Reboot** on an unreachable router said the router rejected it. It had not — it never received it. The error now says what actually happened, on all router commands rather than just reboot.
-
-- **Projected Cycle Usage ignored some ways of switching the router's counter reset off.** Only one spelling of "off" was recognized, so with any other the projection kept measuring against a cycle the router was not keeping.
-
-- **A change to the polling interval could be lost.** Moving the slider and then reloading the integration within a couple of seconds discarded the new value with no indication.
+- **Get SMS List Action now reads Emoji Messages.** Any emoji, or character outside the basic set, made the `get_sms_list` action fail with an internal error, making the whole list was unreadable rather than the one message.
 
 ### Changed
 
-- **Release downloads now include a zip file**, attached automatically to each GitHub release.
+- **Send SMS resilience**: The action now handles transient counter refresh failures without reporting the send itself as failed.
+
+- **Multi-recipient SMS error reporting**: When sending SMS to multiple recipients fails midway, the error message now specifies which numbers were successfully reached.
+
+- **Delete All Messages resilience**: The action now skips and logs messages with missing identifiers, allowing the deletion of remaining messages to complete.
+
+- **Data entities polling resilience**: Decoupled `Allowance` and `Alert Threshold` from secondary poll status to prevent them from going unavailable during transient secondary failures.
+
+- **Total Messages robust handling**: The sensor now handles empty responses from individual message storage areas without blanking out the entire count.
+
+- **Repairs lifecycle cleanup**: Repairs are now automatically cleared when the integration is reloaded or removed, and are isolated per-device.
+
+- **Command error description**: Unreachable routers are now reported as communication failures rather than command rejections across all commands.
+
+- **Projected Cycle Usage edge cases**: Handled additional string representations of "off" from the router to accurately detect when the billing cycle counter is disabled.
+
+- **Polling interval updates**: Ensured rapid polling interval changes are preserved even if the integration is reloaded immediately after.
 
 ---
 
@@ -362,6 +352,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
   - [\[3.3.2\] - 2026-08-02 - Release](#332---2026-08-02---release)
   - [\[3.2.5\] - 2026-07-03 - Release](#325---2026-07-03---release)
   - [\[3.2.4\] - 2026-06-15 - Release](#324---2026-06-15---release)
