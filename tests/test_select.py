@@ -395,3 +395,38 @@ def test_manual_mode_still_trusts_the_index():
     """
     data = {**_PROFILES, "apn_mode": "manual", "apn_index": "0", "wan_apn": ""}
     assert _get_current_apn_profile(data) == "Default"
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage — partial branches recorded 2026-08-05. Both concern an
+# occupied APN slot whose name field is empty, which the MC7010 reports for a
+# profile created without one.
+# ---------------------------------------------------------------------------
+
+
+def test_a_slot_with_no_profile_name_is_skipped_not_listed_blank():
+    """An occupied slot with an empty name must not become a nameless option.
+
+    The distinction: an empty slot and a slot whose name field is blank both
+    reach the loop, and only the first is obviously absent. Listing the second
+    puts an unselectable blank row in the dropdown, and selecting it would
+    resolve to no index at all.
+    """
+    data = {
+        "APN_config0": "($)three.ie($)($)($)($)($)($)IP",
+        "APN_config1": "home($)home.apn($)($)($)($)($)($)IP",
+    }
+
+    assert _get_apn_profiles(data) == [(1, "home", "IP")]
+
+
+def test_current_profile_is_unknown_when_the_active_slot_has_no_name():
+    """A named-but-blank active slot yields `None`, not an empty string.
+
+    §18: a value that cannot be read is `unknown`, never an affirmative empty
+    placeholder. An empty string here would render as a selected-but-blank
+    option, which reads as a working control pointing at nothing.
+    """
+    data = {"apn_index": "0", "APN_config0": "($)three.ie($)($)($)($)($)($)IP"}
+
+    assert _get_current_apn_profile(data) is None

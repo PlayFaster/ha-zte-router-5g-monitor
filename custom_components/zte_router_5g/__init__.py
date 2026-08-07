@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -24,7 +25,7 @@ from .const import (
     SMS_MAX_CHARS_UNICODE,
     SMS_SEGMENTS_MAX,
 )
-from .coordinator import ZTERouterDataUpdateCoordinator
+from .coordinator import REPAIR_NAMES, ZTERouterDataUpdateCoordinator
 from .helpers import is_gsm7
 
 _LOGGER = logging.getLogger(__name__)
@@ -389,6 +390,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator.reload_signature = _reload_signature(entry.options)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
+    # Repairs raised before the ids were entry-scoped have no code left that
+    # can clear them. Sweep them once, here, so the rename cannot orphan one.
+    coordinator.clear_legacy_repairs()
+
     # Register the System root device early to prevent via_device warnings in platforms
     device_registry = dr.async_get(hass)
     host = entry.options[CONF_HOST]
@@ -451,5 +456,27 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry, "runtime_data", None
         )
         if coordinator is not None:
+            # Clear this entry's repairs before the code that could clear them
+            # goes away. They are all `is_fixable=False`, so a repair left
+            # showing after an unload has no route out of the panel at all.
+            coordinator.clear_repairs()
             await coordinator.api.logout()
     return unload_ok if isinstance(unload_ok, bool) else False
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clear anything this entry leaves behind in Home Assistant.
+
+    Unload already clears the repairs on the ordinary path, but removal can
+    follow an unload that failed — and an entry removed while a repair is
+    showing would otherwise leave permanent, unfixable litter in the Repairs
+    panel with the integration that owns it gone.
+
+    Rebuilt from `entry.entry_id` rather than read from the coordinator:
+    `runtime_data` is already gone by the time HA calls this.
+    """
+    for name in REPAIR_NAMES:
+        ir.async_delete_issue(hass, DOMAIN, f"{entry.entry_id}_{name}")
+        # The pre-scoping spelling, for an entry removed before ever being
+        # set up again under the new ids.
+        ir.async_delete_issue(hass, DOMAIN, name)

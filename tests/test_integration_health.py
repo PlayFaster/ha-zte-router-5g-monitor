@@ -163,7 +163,12 @@ async def test_drift_raises_and_clears_a_repair_issue(
 
     assert health.is_on is True
     assert "firmware_contract_drift" in health.extra_state_attributes["repairs"]
-    assert registry.async_get_issue(DOMAIN, "firmware_contract_drift") is not None
+    assert (
+        registry.async_get_issue(
+            DOMAIN, coordinator._repair_ids["firmware_contract_drift"]
+        )
+        is not None
+    )
 
     # The repair is the actionable signal; `drift` is the published detail a
     # template can read. Both must be set, or the sensor raises an alarm it
@@ -173,7 +178,12 @@ async def test_drift_raises_and_clears_a_repair_issue(
     coordinator.api.get_all_data = AsyncMock(return_value=dict(GOOD_DATA))
     await coordinator._async_update_data()
 
-    assert registry.async_get_issue(DOMAIN, "firmware_contract_drift") is None
+    assert (
+        registry.async_get_issue(
+            DOMAIN, coordinator._repair_ids["firmware_contract_drift"]
+        )
+        is None
+    )
     assert health.extra_state_attributes["repairs"] == []
     assert health.extra_state_attributes["drift"] == []
 

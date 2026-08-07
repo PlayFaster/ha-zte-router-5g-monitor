@@ -29,6 +29,7 @@ from custom_components.zte_router_5g.sensor import (
     _clear_day,
     _data_allowance_bytes,
     _get_first,
+    _get_total_sms,
     _projected_bytes,
     _projection,
     async_setup_entry,
@@ -1063,3 +1064,76 @@ def test_data_allowance_sensor_is_guard_banded_and_enabled():
     assert description.source == ENDPOINT_EXTENDED
     assert description.group == "data"
     assert description.about
+
+
+# ---------------------------------------------------------------------------
+# Mutation survivors, 2026-08-07. Boundary and missing-key mutants.
+# ---------------------------------------------------------------------------
+
+
+def test_the_31st_is_a_valid_reset_day():
+    """`1 <= day <= 31`, inclusive at both ends.
+
+    Separates a closed range from a half-open one. A router set to reset on
+    the 31st is the single most likely value to be configured and the single
+    most likely to be dropped by an off-by-one — and the failure is silent:
+    `_clear_day` returns `None`, the projection falls back to the calendar
+    month and publishes `cycle_source: calendar_assumed`, which looks like the
+    router simply never reported a reset day.
+    """
+    assert _clear_day({"traffic_clear_date": "31"}) == 31
+    assert _clear_day({"traffic_clear_date": "1"}) == 1
+    # Both sides of each edge, so the test pins the range rather than a value.
+    assert _clear_day({"traffic_clear_date": "32"}) is None
+    assert _clear_day({"traffic_clear_date": "0"}) is None
+
+
+def test_a_zero_data_cap_is_rejected_but_one_is_kept():
+    """The guard is `<= 0`, not `<= 1`.
+
+    A cap of zero means "no cap configured" and must not become an allowance;
+    a cap of one unit is a real, if small, setting. Testing only a
+    comfortably-large value cannot separate the two, and the consequence of
+    getting it wrong is a Projected Cycle Usage measured against a limit the
+    user never set.
+    """
+    assert _data_allowance_bytes({"data_volume_limit_size": "0_1048576"}) is None
+    assert _data_allowance_bytes({"data_volume_limit_size": "2_0"}) is None
+
+    one_mib_unit = _data_allowance_bytes({"data_volume_limit_size": "1_1"})
+    assert one_mib_unit is not None
+    assert one_mib_unit > 0
+
+
+def test_total_sms_treats_a_missing_bank_as_zero():
+    """A router reporting only some storage banks must still total correctly.
+
+    The distinction is between an absent key and a key reading zero. The
+    fallback in `data.get(k, 0)` is only reachable on hardware that omits a
+    bank — every fixture populates all six, so nothing exercised it. With the
+    fallback at `1`, a model reporting four banks silently reads two messages
+    higher than it holds.
+    """
+    partial = {"sms_nv_rev_total": "3", "sms_sim_rev_total": "2"}
+
+    assert _get_total_sms(partial) == 5
+    assert _get_total_sms({}) == 0
+
+
+def test_every_sensor_carries_a_stable_unique_id(mock_coordinator, mock_config_entry):
+    """A sensor with no `unique_id` cannot be renamed, hidden or customized.
+
+    Home Assistant silently declines to register such an entity in the entity
+    registry — it still appears and still reports a value, so nothing looks
+    broken, while every user customization is discarded on restart. The id
+    must also be derived from the description key, or two sensors collide and
+    only one survives.
+    """
+    seen = {
+        ZTERouterSensor(mock_coordinator, mock_config_entry, desc).unique_id
+        for desc in SENSOR_TYPES
+    }
+
+    assert None not in seen
+    assert len(seen) == len(SENSOR_TYPES), "two sensors share a unique_id"
+    assert all(uid.startswith(f"{mock_config_entry.unique_id}_") for uid in seen)

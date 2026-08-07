@@ -352,7 +352,13 @@ async def test_coordinator_timeout_resilience(
 async def test_init_background_setup_success(
     hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
 ):
-    """Test background setup success path in __init__."""
+    """The background task runs to completion against a real `hass`.
+
+    The sibling in `test_init.py` covers the same path against a mock `hass`;
+    this one exists because `async_forward_entry_setups` and the entity
+    platforms are real here, so it separates "the coroutine completed" from
+    "it completed with platforms actually set up underneath it".
+    """
     mock_config_entry.add_to_hass(hass)
 
     with (
@@ -374,11 +380,18 @@ async def test_init_background_setup_success(
 
         mock_config_entry.async_create_background_task = mock_capture_task
 
-        # Trigger setup
-        await async_setup_entry(hass, mock_config_entry)
+        mock_api.get_all_data = AsyncMock(return_value={"network_type": "ENDC"})
 
-        if background_coro:
-            await background_coro
+        # Trigger setup
+        assert await async_setup_entry(hass, mock_config_entry) is True
+
+        assert background_coro is not None, "setup created no background task"
+        await background_coro
+        await hass.async_block_till_done()
+
+        mock_api.login.assert_awaited_once_with(5)
+        assert mock_config_entry.runtime_data.data["network_type"] == "ENDC"
+        assert mock_config_entry.runtime_data.last_update_success is True
 
 
 @pytest.mark.asyncio
@@ -581,7 +594,10 @@ async def test_coordinator_sms_storage_full_creates_issue(
         await coordinator._async_update_data()
         mock_create.assert_called_once()
         call_kwargs = mock_create.call_args
-        assert call_kwargs.args[2] == "sms_storage_full"
+        # Entry-scoped id, bare translation_key — the two are deliberately
+        # different: the registry needs uniqueness, the user-facing text does not.
+        assert call_kwargs.args[2] == coordinator._repair_ids["sms_storage_full"]
+        assert call_kwargs.kwargs["translation_key"] == "sms_storage_full"
 
 
 @pytest.mark.asyncio
@@ -611,7 +627,9 @@ async def test_coordinator_sms_storage_not_full_deletes_issue(
         ) as mock_delete,
     ):
         await coordinator._async_update_data()
-        mock_delete.assert_called_once_with(hass, "zte_router_5g", "sms_storage_full")
+        mock_delete.assert_called_once_with(
+            hass, "zte_router_5g", coordinator._repair_ids["sms_storage_full"]
+        )
 
 
 # ---------------------------------------------------------------------------

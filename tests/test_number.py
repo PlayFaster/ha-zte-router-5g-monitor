@@ -123,13 +123,23 @@ async def test_async_will_remove_from_hass_pending_task(
 
 @pytest.mark.asyncio
 async def test_async_will_remove_from_hass_no_task(mock_coordinator, mock_config_entry):
-    """Test that async_will_remove_from_hass handles no refresh task."""
+    """Removal with nothing pending must write nothing and cancel nothing.
+
+    The distinction is against the flush path: an entity removed without the
+    user having touched the slider has no value to commit, so teardown must
+    not write options — a spurious `async_update_entry` here would schedule a
+    reload of the entry that is already being torn down.
+    """
     number = ZTEPollingInterval(
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
     )
     number.hass = MagicMock()
     number._refresh_task = None
+
     await number.async_will_remove_from_hass()
+
+    number.hass.config_entries.async_update_entry.assert_not_called()
+    mock_coordinator.async_force_refresh.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -209,3 +219,36 @@ async def test_device_info_no_mac(mock_coordinator, mock_config_entry):
 
     info = number.device_info
     assert info["identifiers"] == {(DOMAIN, "host_192.168.0.1_system")}
+
+
+@pytest.mark.asyncio
+async def test_a_pending_interval_change_is_flushed_on_removal(
+    mock_coordinator, mock_config_entry
+):
+    """A value set inside the debounce window must survive a reload.
+
+    The slider writes optimistically and commits after 2 s. An options change
+    — or any reload — removes the entity inside that window, and cancelling
+    the task discards the write: the number snaps back to its old value with
+    no explanation, which reads as the control not working. Teardown must
+    commit the pending value rather than drop it.
+    """
+    number = ZTEPollingInterval(
+        mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
+    )
+    number.hass = _mock_hass_with_async_create_task()
+    number.async_write_ha_state = MagicMock()
+
+    # No `asyncio.sleep` patch here: the point is that removal arrives while
+    # the debounce is still waiting.
+    await number.async_set_native_value(300)
+    assert number._refresh_task is not None
+    assert not number._refresh_task.done()
+
+    await number.async_will_remove_from_hass()
+    with suppress(asyncio.CancelledError):
+        await number._refresh_task
+
+    number.hass.config_entries.async_update_entry.assert_called_once()
+    options = number.hass.config_entries.async_update_entry.call_args.kwargs["options"]
+    assert options[CONF_SCAN_INTERVAL] == 300

@@ -5,6 +5,10 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.3-dev7\] - 2026-08-07 - First Mutation Run: 94.7% Kill Rate, Survivors Triaged](#333-dev7---2026-08-07---first-mutation-run-947-kill-rate-survivors-triaged)
+  - [\[3.3.3-dev6\] - 2026-08-07 - Tests That Will Stop You; Mutation Scope Decided](#333-dev6---2026-08-07---tests-that-will-stop-you-mutation-scope-decided)
+  - [\[3.3.3-dev5\] - 2026-08-07 - Repair Lifecycle: Scoped, Cleared On Unload And Removal](#333-dev5---2026-08-07---repair-lifecycle-scoped-cleared-on-unload-and-removal)
+  - [\[3.3.3-dev4\] - 2026-08-07 - Test Baseline: Zero Partial Branches, Zero Unaccounted Assertions](#333-dev4---2026-08-07---test-baseline-zero-partial-branches-zero-unaccounted-assertions)
   - [\[3.3.3-dev3\] - 2026-08-07 - Widened Ruff Rule Set Satisfied Without Suppressions](#333-dev3---2026-08-07---widened-ruff-rule-set-satisfied-without-suppressions)
   - [\[3.3.3-dev1\] - 2026-08-07 - CI Bumps; Github Zipfile; PyTest Branch \& Mutation Testing](#333-dev1---2026-08-07---ci-bumps-github-zipfile-pytest-branch--mutation-testing)
   - [\[3.3.2\] - 2026-08-02 - Release - Wider Model Support. Better Data Use Tracking. Longer SMS Messages. About: Attributes. Fixes](#332---2026-08-02---release---wider-model-support-better-data-use-tracking-longer-sms-messages-about-attributes-fixes)
@@ -158,6 +162,84 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
 
 ---
+
+## [3.3.3-dev7] - 2026-08-07 - First Mutation Run: 94.7% Kill Rate, Survivors Triaged
+
+### Summary
+
+The first mutation run this project has ever had. **1,260 mutants across the three scoped modules, 67 survivors — a 94.7% kill rate**, taken to **45 survivors / 96.4%** by the tests below. Scoping worked: zero mutants were generated outside the chosen modules, which is the check that matters, since a comma-separated `only_mutate` silently generates nothing while reporting success.
+
+### Added
+
+Twelve tests, targeting the survivors with real consequence. The `wifi_ssid_monitor` noise estimate held almost exactly — roughly 28 of 67 were string-literal or case mutations, 3 were `cast()` type-argument mutations that are equivalent by construction (`cast` is a no-op at runtime), and about 4 were unreachable given a guard already excluding the path. The boundary, comparison and arithmetic survivors are where the work went.
+
+- **`cycle_bounds` at the exact reset instant.** `start > now` against `>=`: called precisely at midnight on the clear day, the `>=` form steps back a whole month and the projection reads about 30x low for one poll. Only an exact-boundary call separates them.
+- **`cycle_bounds` starts at midnight**, not at whatever time the poll happened to run.
+- **`project_cycle_usage` blend weight** is `elapsed / (elapsed + credibility_days)`. With a minus the denominator shrinks toward zero and then goes negative, so the prior's influence _grows_ as evidence accumulates and inverts past the credibility horizon — the opposite of what the blend is for. Asserted as a direction across two points; a single mid-cycle value cannot see it.
+- **`_clear_day` accepts 31.** The closed range against a half-open one. A reset day of 31 is both the most likely value to be configured and the most likely to be lost to an off-by-one, and it fails silently — the projection falls back to `cycle_source: calendar_assumed`, which looks like the router never reported a reset day.
+- **`_data_allowance_bytes` rejects a cap of 0 but keeps 1.** Zero means "no cap configured"; testing only a comfortably-large value cannot separate `<= 0` from `<= 1`.
+- **`_get_total_sms` treats a missing storage bank as zero.** Only reachable on hardware that omits a bank — every fixture populates all six, so the fallback had never run.
+- **Two distinct identifiers get two distinct tokens.** A tokenizer fed a constant rather than the value satisfies every "no raw identifier survives" property while merging every entity into `cell-1`: the file looks correctly sanitized and reads as though the router only ever saw one cell.
+- **A sender known only by its decoded form still gets a token** (`number_decoded or number`, not `and`).
+- **Only the `last_sms` block is sanitized as an SMS.** With `or` instead of `and`, every dict-valued key runs through the SMS summarizer and the diagnostic substance Section 20 requires to survive is destroyed wholesale — over-redaction passes every leak test by construction.
+
+- **`project_cycle_usage` pinned by value, not by trend.** The first version of this test asserted only that the prior's pull shrinks as the cycle progresses — and the mutant survived it, because `elapsed - credibility_days` also produces a decreasing pull over that range. Only exact values separate the two forms (day 2 → 2100, day 20 → 480). This is the mutation run earning its keep: the trend test looked reasonable, passed, and guarded nothing.
+- **Two MACs in one value get two tokens.** The same failure as the cell case, one layer down — `_MAC_RE.sub` fed a constant rewrites every address to `mac-1`, leaking nothing while showing one device where the router reported two.
+- **Every sensor carries a unique `unique_id`.** Nothing asserted this. Home Assistant silently declines to register an entity without one, so it still appears and still reports a value while every user customization is discarded on restart.
+
+### Notes
+
+- **One test was written, failed, and was corrected rather than kept.** The first version invented a `second_sms` key to get two senders into one payload. It failed for a real reason — the sanitizer keys on the literal `last_sms` — but the router sends no such key, and Section 20 explicitly prescribes sanitizing vendor subtrees **by their schema's block names**. Keying on the known name is conformant, not a gap. The assertion moved to the cell identifiers, which genuinely co-occur.
+- **`mutants/` was never deleted.** It is the incremental cache and the results store. Its non-Python assets were stale (a `strings.json` with 67 sensor keys against the live 75, which failed an unrelated-looking test inside the sandbox); they were refreshed in place.
+
+## [3.3.3-dev6] - 2026-08-07 - Tests That Will Stop You; Mutation Scope Decided
+
+### Added
+
+- **`AGENTS.md` → "Tests that will stop you, and why they exist"**: sixteen rows covering all 23 sweep tests, in the form _add or change this → this fails → do this_. This project has more sweep tests than any other in the family, so it has the most to explain. A sweep fails when a **set grows**, which makes the failure look unrelated to the change that caused it — the standing direction is that a failure means the test found something, and the allow-list is the last resort.
+- **`.validate/mutmut_modules.txt`**: `helpers.py`, `diagnostics.py`, `sensor.py`. Decided by measuring mock usage in each module's own test file, not by argument. `api.py`, `coordinator.py`, `switch.py` and `select.py` are excluded as mocked boundaries — a mutation of a call into a mock cannot be detected by any test, so each one becomes a survivor to read and discard. The file records the reasoning for every module, in and out.
+
+### Notes
+
+- The table is placed **after** the test work rather than before it: the repair-lifecycle change added `REPAIR_NAMES` as a new thing that will stop you, and the branch-coverage and assertion rows now cite this project's own measured numbers.
+- `scripts/write_classification.py` cannot be mutated at all — the base `setup.cfg` sets `source_paths=custom_components`.
+
+## [3.3.3-dev5] - 2026-08-07 - Repair Lifecycle: Scoped, Cleared On Unload And Removal
+
+### Fixed
+
+- **Repairs were never cleared on unload or removal.** `async_unload_entry` made no issue-registry call and there was **no `async_remove_entry` at all**, so deleting the integration while a repair was showing left it in the Repairs panel permanently — every one is `is_fixable=False`, and the code that could clear it was gone. Both paths now clear. Removal rebuilds the ids from `entry.entry_id` rather than reading the coordinator, because HA has already discarded `runtime_data` by then.
+- **Repair issue IDs were not scoped to the config entry.** The issue registry keys on `(domain, issue_id)`, so three bare ids gave every entry the same row: with two routers and one failing, the healthy one's next successful poll deleted the failing one's repair. Ids are now `{entry_id}_{name}`, built once from a new `REPAIR_NAMES` tuple.
+- **A pending polling-interval change was cancelled rather than flushed on removal.** The slider writes optimistically and commits after a 2 s debounce; an options change reloads the entry inside that window, and teardown discarded the write, so the value snapped back with no explanation. `async_will_remove_from_hass` now commits it.
+
+### Changed
+
+- **`translation_key` stays bare while the registry id carries the entry.** The registry needs uniqueness; the user-facing text does not. A test pins that the two differ deliberately.
+- **`clear_legacy_repairs()` runs once at setup**, deleting the three pre-scoping ids. `ir.async_delete_issue` looks up by id, so the rename would otherwise orphan any live repair with no UI path out. Deleting a non-existent issue is a no-op, so this is safe to keep indefinitely; `async_remove_entry` sweeps both spellings for the same reason.
+- **`number.py`** gained `_persist_interval()`, shared by the debounce and the removal flush, so a value committed at teardown lands exactly where a committed one would. Kept synchronous — awaiting a refresh during teardown is neither wanted nor safe.
+- Five existing tests asserted the old bare ids and now assert the scoped ones. `health_snapshot["repairs"]` still publishes the **bare names**: that is a §19 published attribute and must stay stable.
+
+### Notes
+
+- Mutation-verified, file-copy procedure with checksummed restores: removing the flush fails the flush test; removing `clear_repairs()` from unload fails the unload test.
+- Closes `x_proj_checks_20260802` §3.8a, §3.8b and §3.9b for this project. §3.8c and §3.9a were checked and found **not to apply** — cold start already flags on the first failure, and the Refresh button never reads `last_update_success`.
+
+## [3.3.3-dev4] - 2026-08-07 - Test Baseline: Zero Partial Branches, Zero Unaccounted Assertions
+
+### Summary
+
+The two measurements added in `dev_standards` 1.22.0 are now clean. Eleven partial branches closed and ten zero-assertion tests resolved — the prerequisite for mutation testing and for any deeper review to mean anything.
+
+### Added
+
+- **Eleven tests, one per partial branch.** All eleven were **missing tests; none was dead code**, which independently confirms the finding from `wifi_ssid_monitor` (12 of 12). No `# pragma: no cover` was added — the exclusion count stays at four. Branch coverage is now **100%**, 442 branches, 0 partials.
+- Two of the eleven are more than bookkeeping. `_get_coordinator` never tested an `entry_id` belonging to **another integration** — the id is caller-supplied and `async_get_entry` is not domain-scoped, so the guard is what stops a service call handing back another integration's `runtime_data`. And the diagnostics sanitizer never tested an SMS with no sender: a carrier notice has no number, and minting a `phone-1` token there invents a correspondent the payload never contained, which is the over-redaction §20 names as a defect in its own right.
+- **`tests/zero_assertion_allowlist.txt`**, with the reasoning inline.
+
+### Changed
+
+- **Eight zero-assertion tests rewritten to assert an observable outcome.** `test_write_commands_accept_success` was named for a result it never inspected (§11 rule 3) and now checks that the command was posted, carried its `AD` token, and returned the router's answer. `test_check_sms_storage_handles_type_error` was a `try/except pytest.fail` and now asserts the distinction that matters — an unreadable capacity reading must not be treated as "not full", or one garbled poll deletes a live repair. The background-setup pair now pins the short **5 s** §1 probe budget explicitly, since reusing the client's 10–15 s default is the trap that section names.
+- **Two allow-listed with reasons.** `_validate_sms_length` returns `None` and raises on rejection, so acceptance has no observable form and the only available assertion is the trivial bolt-on §11 forbids. Each is paired with a rejection test one character further on.
 
 ## [3.3.3-dev3] - 2026-08-07 - Widened Ruff Rule Set Satisfied Without Suppressions
 

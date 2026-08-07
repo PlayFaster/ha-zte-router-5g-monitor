@@ -640,3 +640,35 @@ def test_no_field_leaks_the_stored_secret(build) -> None:
         repr(_resolved_default(m)) for m in _markers(build(_STORED_ENTRY))
     )
     assert _STORED_SECRET not in rendered
+
+
+@pytest.mark.asyncio
+async def test_options_flow_does_not_retitle_when_the_name_is_unchanged():
+    """Submitting the options form without renaming must not touch the entry title.
+
+    The distinction is between a no-op and a write. `async_update_entry` on the
+    title triggers a registry write and a UI refresh, so firing it on every
+    options save — the common case, where only an interval changed — is churn
+    the user sees. Guards the `!=` rather than the assignment: deleting the
+    condition leaves the happy-path rename test green.
+    """
+    entry = MagicMock()
+    entry.title = "Upstairs Router"
+    entry.options = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "p"}
+    flow = ZTEOptionsFlow(entry)
+    flow.hass = MagicMock()
+
+    user_input = {
+        CONF_HOST: "192.168.0.1",
+        CONF_PASSWORD: "p",
+        CONF_NAME: "Upstairs Router",
+    }
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        return_value=None,
+    ):
+        result = await flow.async_step_init(user_input)
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    flow.hass.config_entries.async_update_entry.assert_not_called()

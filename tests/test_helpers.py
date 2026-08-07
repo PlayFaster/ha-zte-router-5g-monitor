@@ -303,3 +303,81 @@ def test_projection_never_goes_backwards_past_the_cycle_end():
         credibility_days=3.0,
     )
     assert projected == pytest.approx(90.0)
+
+
+# ---------------------------------------------------------------------------
+# Mutation survivors, 2026-08-07. Boundary and arithmetic mutants — the ~17%
+# category worth the time; string-literal survivors were triaged as noise.
+# ---------------------------------------------------------------------------
+
+
+def test_cycle_bounds_treats_the_reset_instant_as_the_new_cycle():
+    """At exactly the reset moment the cycle has started, not ended.
+
+    Separates `start > now` from `start >= now`. Called precisely at midnight
+    on the clear day, the `>=` form steps back a whole month, so the
+    projection divides a few seconds of usage by a nearly complete cycle and
+    reports a figure ~30x too low for one poll. Only an exact-boundary call
+    can tell the two apart.
+    """
+    tz = ZoneInfo("UTC")
+    now = datetime(2026, 8, 15, 0, 0, 0, tzinfo=tz)
+
+    start, end, length = cycle_bounds(15, now)
+
+    assert start == datetime(2026, 8, 15, 0, 0, 0, tzinfo=tz)
+    assert end == datetime(2026, 9, 15, 0, 0, 0, tzinfo=tz)
+    assert length == 31
+    # A second earlier is still the previous cycle — the other side of the edge.
+    prev_start, _, _ = cycle_bounds(15, now.replace(day=14, hour=23, minute=59))
+    assert prev_start == datetime(2026, 7, 15, 0, 0, 0, tzinfo=tz)
+
+
+def test_cycle_bounds_starts_at_midnight_exactly():
+    """The cycle boundary is a date, not the time of day it was computed at.
+
+    `cycle_bounds` derives its start from `now`, so dropping the second and
+    microsecond resets would carry the current clock into the boundary and
+    make the cycle length depend on when the poll happened to run.
+    """
+    now = datetime(2026, 8, 20, 13, 47, 29, 123456, tzinfo=ZoneInfo("UTC"))
+
+    start, end, _ = cycle_bounds(15, now)
+
+    assert (start.hour, start.minute, start.second, start.microsecond) == (0, 0, 0, 0)
+    assert (end.hour, end.minute, end.second, end.microsecond) == (0, 0, 0, 0)
+
+
+def test_prior_rate_weight_decays_as_the_cycle_progresses():
+    """The blend weight is `elapsed / (elapsed + credibility)`, not a difference.
+
+    The distinction: with `-` the denominator shrinks toward zero and then goes
+    negative, so the prior's influence *grows* as evidence accumulates and
+    inverts past the credibility horizon — the opposite of what the blend is
+    for. A single mid-cycle assertion cannot see that; two points and a
+    direction can.
+    """
+    common = dict(cycle_length_days=30, prior_rate=10.0, credibility_days=5.0)
+
+    early = project_cycle_usage(used=20.0, elapsed_days=2.0, **common)
+    late = project_cycle_usage(used=200.0, elapsed_days=20.0, **common)
+
+    # At a steady 10/day the prior agrees with observation, so both land near
+    # the same place; the point is that neither is dominated by the prior.
+    assert early == pytest.approx(300.0, rel=0.05)
+    assert late == pytest.approx(300.0, rel=0.05)
+
+    # With the prior disagreeing, pin the arithmetic itself at two points. A
+    # trend assertion is not enough here — `elapsed - credibility` also yields
+    # a decreasing pull, so only the values separate the two forms.
+    #
+    #   day 2:  weight = 2/(2+5)   = 0.2857 -> rate 74.29 -> 20 + 28 * 74.29
+    #   day 20: weight = 20/(20+5) = 0.8    -> rate 28.00 -> 200 + 10 * 28.00
+    common_hi = dict(cycle_length_days=30, prior_rate=100.0, credibility_days=5.0)
+
+    assert project_cycle_usage(
+        used=20.0, elapsed_days=2.0, **common_hi
+    ) == pytest.approx(2100.0, rel=1e-3)
+    assert project_cycle_usage(
+        used=200.0, elapsed_days=20.0, **common_hi
+    ) == pytest.approx(480.0, rel=1e-3)

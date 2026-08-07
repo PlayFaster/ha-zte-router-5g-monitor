@@ -181,7 +181,14 @@ async def test_async_update_data_resilience(mock_hass, mock_config_entry):
 
 @pytest.mark.asyncio
 async def test_background_setup_failure(mock_hass, mock_config_entry):
-    """Test that background setup failure is handled gracefully."""
+    """A background startup failure must not escape, and must stop before login.
+
+    §1's accepted trade: setup has already returned True and the platforms are
+    forwarded, so the background task raising would surface as an unhandled
+    task exception rather than a retry. The distinction from the success case
+    is that the chain stops at the protocol probe — attempting a login against
+    a router that never answered is what counts against a lockout.
+    """
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
         patch("custom_components.zte_router_5g.async_get_clientsession"),
@@ -191,6 +198,7 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
         mock_api.try_set_protocol = AsyncMock(
             side_effect=TimeoutError("Background Fail")
         )
+        mock_api.login = AsyncMock()
 
         background_coro = None
 
@@ -201,15 +209,24 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
 
         mock_config_entry.async_create_background_task = mock_capture_task
 
-        await async_setup_entry(mock_hass, mock_config_entry)
+        assert await async_setup_entry(mock_hass, mock_config_entry) is True
 
-        if background_coro:
-            await background_coro
+        assert background_coro is not None, "setup created no background task"
+        await background_coro
+
+        mock_api.try_set_protocol.assert_awaited_once()
+        mock_api.login.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_background_setup_success(mock_hass, mock_config_entry):
-    """Test that background setup success path is covered."""
+    """The offloaded task probes the protocol, logs in, and stores the session.
+
+    Separates "the task ran" from "the task did its job". The order matters:
+    `login()` builds its URL from the protocol the probe resolves, so a login
+    awaited before the probe would go to the wrong scheme and still look fine
+    against a mock that answers either way.
+    """
     with (
         patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
         patch("custom_components.zte_router_5g.async_get_clientsession"),
@@ -218,6 +235,7 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
         mock_api = mock_api_class.return_value
         mock_api.try_set_protocol = AsyncMock(return_value=None)
         mock_api.login = AsyncMock(return_value="stok=test")
+        mock_api.get_all_data = AsyncMock(return_value={"network_type": "ENDC"})
 
         background_coro = None
 
@@ -228,10 +246,17 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
 
         mock_config_entry.async_create_background_task = mock_capture_task
 
-        await async_setup_entry(mock_hass, mock_config_entry)
+        assert await async_setup_entry(mock_hass, mock_config_entry) is True
 
-        if background_coro:
-            await background_coro
+        assert background_coro is not None, "setup created no background task"
+        await background_coro
+
+        # Both carry the short §1 probe budget explicitly. Reusing the client
+        # default (10-15 s) is the trap that section names: it blocks startup
+        # long enough to trip the very warning the offload exists to prevent.
+        mock_api.try_set_protocol.assert_awaited_once_with(5)
+        mock_api.login.assert_awaited_once_with(5)
+        mock_api.get_all_data.assert_awaited()
 
 
 @pytest.mark.asyncio
@@ -1063,15 +1088,23 @@ async def test_delete_all_sms_keep_last_gte_total_deletes_nothing(
 
 
 def test_check_sms_storage_handles_type_error(coordinator_fixture):
-    """3A: _check_sms_storage must not propagate TypeError."""
+    """An unreadable capacity reading leaves the previous verdict standing.
+
+    Two distinctions, and the second is the one that matters. It must not
+    raise — the bare-tuple `except` bug made it propagate `TypeError` and take
+    the whole poll down. And it must not treat "cannot tell" as "not full":
+    falling through would delete a live repair on one garbled reading, so the
+    early return has to leave both the flag and the issue registry untouched.
+    """
+    coordinator_fixture._sms_storage_full = True
     data = {"nv_sms_able": ["not", "an", "int"], "sms_nv_total": "5"}
-    try:
+
+    with patch("custom_components.zte_router_5g.coordinator.ir") as mock_ir:
         coordinator_fixture._check_sms_storage(data)
-    except TypeError as exc:
-        pytest.fail(
-            "_check_sms_storage raised TypeError (bare-tuple bug"
-            " at coordinator.py:281): " + str(exc)
-        )
+
+    assert coordinator_fixture._sms_storage_full is True
+    mock_ir.async_create_issue.assert_not_called()
+    mock_ir.async_delete_issue.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -1143,3 +1176,72 @@ def test_a_message_between_the_two_limits_turns_on_content_alone():
     _validate_sms_length("A" * length)
     with pytest.raises(ServiceValidationError):
         _validate_sms_length("\U0001f4f6" + "A" * (length - 1))
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage — partial branches recorded 2026-08-05. Each was a missing
+# test rather than dead code.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_get_coordinator_ignores_an_entry_id_from_another_integration(
+    mock_hass, mock_config_entry
+):
+    """An `entry_id` naming a foreign entry falls through to auto-selection.
+
+    The distinction: "no entry_id given" and "an entry_id that is not ours"
+    must reach the same place. Trusting the lookup blindly would hand back
+    another integration's `runtime_data` — the id is caller-supplied, and
+    `async_get_entry` is not scoped to this domain.
+    """
+    from custom_components.zte_router_5g import _get_coordinator
+
+    foreign = MagicMock()
+    foreign.domain = "some_other_integration"
+    foreign.runtime_data = MagicMock()
+    mock_hass.config_entries.async_get_entry.return_value = foreign
+
+    ours = MagicMock()
+    mock_config_entry.runtime_data = ours
+    mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
+
+    assert _get_coordinator(mock_hass, {"entry_id": "not_ours"}) is ours
+
+
+@pytest.mark.asyncio
+async def test_unload_leaves_the_session_open_when_platforms_refuse_to_unload(
+    mock_hass, mock_config_entry
+):
+    """A failed platform unload must not log the router out.
+
+    Separates "unloading" from "unloaded". HA keeps the entry loaded when
+    `async_unload_platforms` returns False, so entities are still live and
+    still need the session — ending it here would leave a loaded integration
+    with no way to talk to the device.
+    """
+    coordinator = MagicMock()
+    coordinator.api.logout = AsyncMock()
+    mock_config_entry.runtime_data = coordinator
+    mock_hass.config_entries.async_unload_platforms = AsyncMock(return_value=False)
+
+    assert await async_unload_entry(mock_hass, mock_config_entry) is False
+    coordinator.api.logout.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_unload_succeeds_when_setup_never_stored_a_coordinator(
+    mock_hass, mock_config_entry
+):
+    """Unloading an entry that failed early must not raise.
+
+    `runtime_data` is unset when setup raised before the coordinator was
+    built. The distinction from the success case is that there is no session
+    to release and the unload must still report True — an exception here
+    leaves HA unable to remove a half-set-up entry.
+    """
+    if hasattr(mock_config_entry, "runtime_data"):
+        delattr(type(mock_config_entry), "runtime_data")
+    object.__setattr__(mock_config_entry, "runtime_data", None)
+
+    assert await async_unload_entry(mock_hass, mock_config_entry) is True

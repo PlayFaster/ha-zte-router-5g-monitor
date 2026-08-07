@@ -87,6 +87,35 @@ Read credentials from `entry.options`, not `entry.data`. The config flow is `VER
 
 There is **no** `async_migrate_entry`, which is safe only because the first public release (2.0.1) already shipped the v2 schema — no v1 entry exists in the wild. Bumping `VERSION` to 3 makes a migration handler mandatory. In tests, `MockConfigEntry` defaults to `version=1`, so pass `version=2` explicitly or setup fails with "Migration handler not found".
 
+## Tests that will stop you, and why they exist
+
+This project has **more sweep tests than any other in the family** — a consequence of §2.1, §2.2, §2.5, §12 and §22 all landing here first. A sweep asserts that every member of a **set** is covered, so it fails when the set _grows_, not when a known member breaks. The failure therefore looks unrelated to whatever you just changed, and the reflex is to suppress it.
+
+**If one of these fails, it has found something. The allow-list is the last resort, not the first move.**
+
+| Add or change this | This fails | Do this |
+| :-- | :-- | :-- |
+| A sensor with a unit or `state_class` | `test_every_numeric_sensor_has_a_guard_band` | Declare `min_limit` / `max_limit`, or add the key to the unguarded allow-list **with a reason**. Then update `docs/value_min_max.md` — §6 requires it to match the code in both directions. `test_unguarded_allowlist_has_no_dead_entries` fails if an exemption outlives its sensor. |
+| Any sensor at all | `test_no_sensor_uses_the_total_state_class` | Use `TOTAL_INCREASING`. `ALLOWED_TOTAL_STATE_CLASS` is deliberately **empty**, so adding an entry is a reviewable act rather than a typo. Plain `TOTAL` walks long-term statistics backwards on every billing rollover. |
+| Any entity | `test_every_live_entity_has_an_icon_or_a_device_class` | Add an `icons.json` entry **under that entity's own platform**, unless it carries a `device_class`. A live sweep, because descriptions live in a mix of tuples and module-level singletons. |
+| Any action | the action half of `test_entity_hygiene.py` | Add a `services` entry in the nested `{"service": "mdi:..."}` form. Checked in both directions — every action has an icon, every icon names a real action. |
+| An entity attribute | `test_no_entity_publishes_a_recorded_attribute` | Add the key to that class's `_unrecorded_attributes`. **Repeat `"about"` if the class declares its own set** — HA does not merge this across the class hierarchy, so a subclass assignment shadows the mixin's entirely. |
+| A raised exception, or a repair | `test_every_raised_exception_has_translated_text`, `test_every_repair_issue_has_translated_text` | Add the key to the `exceptions` / `issues` block in **both** `strings.json` and `translations/en.json`. |
+| A new API method | `test_every_public_method_is_covered_by_the_sweep` | Add it to `_CALLS` in `test_dead_session_sweep.py`. The property it must satisfy: **a method either does the thing or raises — it may never return a success-shaped result having done nothing.** |
+| A new write command | `test_every_write_command_is_in_the_refusal_sweep`, `test_every_write_is_classified`, `test_every_classification_carries_a_reason` | Add it to `scripts/write_classification.py` as `SAFE`, `ATTENDED` or `NEVER_AUTOMATED`, **with a written reason**. If you classify it `SAFE`, `test_every_safe_write_is_exercised_by_the_hardware_check` also requires `scripts/hardware_check.py` to actually send it. |
+| A write payload | `test_every_write_command_has_a_locked_shape` | The shape is pinned. `DATA_LIMIT_SETTING` is all-or-nothing: the router answers `{"result":"failure"}` for a payload missing any field. |
+| A key in the batch poll | `test_every_batch_carries_both_classes`, `test_batch_poll_urls_stay_within_the_router_budget` | Every batch needs one authenticated and one unauthenticated key, or the dead-session rule cannot fire on it. And the URL is bounded at ~2048 characters — a **length** budget, not a name count. |
+| A sensor key alias | `test_every_aliased_key_is_requested_by_the_batch_poll` | Add the spelling to the cross-model block in `api.py`, or the alias names a key never requested. |
+| A thermal sensor | `test_thermal_sensor_set_matches_the_descriptions` | The five `pm_*` entities are a defined set, not a subset. Add the test and the description together. |
+| A switch fed from the extended poll | `test_no_switch_reads_from_a_degradable_endpoint` | Move the key to `_CORE_PARAMS`. §22: a stale diagnostic is cosmetic, a stale **control** position invites a write composed from a reading that is no longer true. |
+| A repair issue | `REPAIR_NAMES` in `coordinator.py` | Add it there, or unload and removal will not clear it and it becomes permanent unfixable litter in the Repairs panel. Registry ids carry the entry id; `translation_key` stays bare. **Never rename a live `issue_id`** — `ir.async_delete_issue` looks up by id, so a rename orphans a raised repair with no UI path out. |
+| A condition only ever exercised one way | `Pytest: Check Test Coverage` reports a partial branch (`123->126` in the `Missing` column) | **Write the test.** All eleven found here were missing tests; none was dead code, matching WiFi's 12 of 12. Delete a guard only where the type system or the immediate caller already prevents the case — never in code consuming held or stored state, where the "impossible" shape arrives exactly when something upstream has already failed. `# pragma: no cover` changes the denominator, so it raises the percentage without testing anything. |
+| A test that runs code without checking it | `Tests: Assertion Audit` | Assert the **observable outcome**. Where "this must not raise" is the real contract, assert what that implies — nothing cancelled, no task created, exactly one event on the bus. Adding a trivial assertion to clear the count is a defect, not a fix. Last resort: `tests/zero_assertion_allowlist.txt`, with a reason. |
+
+- **Mutation testing is scoped by `.validate/mutmut_modules.txt`** — currently `*/helpers.py`, `*/diagnostics.py`, `*/sensor.py`, chosen by measurement because their tests exercise real code. `api.py`, `coordinator.py`, `switch.py` and `select.py` are excluded: their tests mock the thing being mutated, so every mutation of a call into that mock survives and none is a findable defect. Run it with the **Tests: Mutation Check** task — not part of `Validate All`, because survivors need judging rather than counting. **Never delete `mutants/`**: it is the incremental cache _and_ the results store, and changing the module list does not require it.
+
+- **`only_mutate` must be an indented newline list.** The comma-separated form shown in the mutmut docs silently generates **zero mutants and reports no error** — a run configured that way passes completely and proves nothing.
+
 ## Key Patterns & Conventions
 
 Shared conventions (ruff/mypy strictness, `_LOGGER` prefixing, `PARALLEL_UPDATES`, `translation_key`, icons, exception tuple syntax, markdown emoji rules) are in [shared conventions §4–5](.shared/dev_std/agent_conventions.md). Nothing in this project deviates.
