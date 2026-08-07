@@ -5,6 +5,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import voluptuous as vol
+from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.data_entry_flow import AbortFlow, FlowResultType
+
 from custom_components.zte_router_5g.api import ZTEAuthError, ZTEConnectionError
 from custom_components.zte_router_5g.config_flow import (
     ZTEConfigFlow,
@@ -16,8 +19,6 @@ from custom_components.zte_router_5g.config_flow import (
     _validate_credentials,
 )
 from custom_components.zte_router_5g.const import DEFAULT_NAME
-from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.data_entry_flow import AbortFlow, FlowResultType
 
 
 @pytest.mark.parametrize(

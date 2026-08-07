@@ -76,6 +76,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 try:
     import aiohttp
+
     from custom_components.zte_router_5g.api import ZTEAuthError, ZTERouterAPI
     from custom_components.zte_router_5g.const import APN_PROFILE_SLOTS
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics

@@ -5,6 +5,15 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfDataRate,
+    UnitOfInformation,
+    UnitOfTime,
+)
+from homeassistant.util import dt as dt_util
+
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.coordinator import ENDPOINT_EXTENDED
 from custom_components.zte_router_5g.sensor import (
@@ -24,14 +33,6 @@ from custom_components.zte_router_5g.sensor import (
     _projection,
     async_setup_entry,
 )
-from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.const import (
-    EntityCategory,
-    UnitOfDataRate,
-    UnitOfInformation,
-    UnitOfTime,
-)
-from homeassistant.util import dt as dt_util
 
 from .conftest import assert_is_root, assert_links_to_parent
 
