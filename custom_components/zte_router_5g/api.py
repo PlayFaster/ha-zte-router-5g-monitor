@@ -1184,6 +1184,17 @@ class ZTERouterAPI:
         )
         a = hash_func(version)
         rd = await self.get_rd(timeout_sec=timeout_sec)
+        if not rd:
+            # The other half of the check above, missed when it was added.
+            # `get_rd` returns "" when the RD key is absent from an otherwise
+            # valid response, and hashing that produces a **well-formed but
+            # wrong** token: the write goes out, the router refuses it, and the
+            # user is told the device rejected a command it never had a chance
+            # to accept. Same failure the version check exists to prevent.
+            raise ZTEConnectionError(
+                "Cannot derive the AD token: the router did not return RD. "
+                "The command was not sent."
+            )
         return hash_func(a + rd)
 
     async def get_rd(self, timeout_sec: int | None = None) -> str:

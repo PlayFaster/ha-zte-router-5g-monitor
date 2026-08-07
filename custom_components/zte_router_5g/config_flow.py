@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any
 
@@ -100,9 +101,19 @@ async def _validate_credentials(
         user_input[CONF_PASSWORD],
     )
     # Fully async validation
-    await api.try_set_protocol(5)
-    await api.login(5)
-    data = await api.get_all_data()
+    try:
+        await api.try_set_protocol(5)
+        await api.login(5)
+        data = await api.get_all_data()
+    finally:
+        # Release the session, as unload does. This router takes the most recent
+        # login and drops the previous one, so an abandoned session blocks
+        # nothing — but validating is not a reason to leave one open, and the
+        # running coordinator gets its slot back immediately rather than at its
+        # next poll. `logout()` swallows its own errors, so it cannot mask a
+        # validation failure.
+        with contextlib.suppress(Exception):
+            await api.logout()
 
     return {
         "model": get_router_model(data),
@@ -196,7 +207,10 @@ class ZTEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Perform reauthentication when the router password changes."""
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
         if entry is None:
-            return self.async_abort(reason="reauth_successful")
+            # Nothing left to reauthenticate. Say so — `reauth_successful` would
+            # report the opposite of what happened, and it is the string the
+            # user sees.
+            return self.async_abort(reason="entry_not_found")
         return await self.async_step_reauth_confirm()
 
     async def async_step_reauth_confirm(

@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.3-dev12\] - 2026-08-07 - Remaining Review Findings; Timeouts Measured Rather Than Guessed](#333-dev12---2026-08-07---remaining-review-findings-timeouts-measured-rather-than-guessed)
   - [\[3.3.3-dev11\] - 2026-08-07 - Low Findings From Both Reviews](#333-dev11---2026-08-07---low-findings-from-both-reviews)
   - [\[3.3.3-dev10\] - 2026-08-07 - Write Actions Reported Failures They Had Not Had](#333-dev10---2026-08-07---write-actions-reported-failures-they-had-not-had)
   - [\[3.3.3-dev9\] - 2026-08-07 - An SMS Containing an Emoji Could Not Be Read Back](#333-dev9---2026-08-07---an-sms-containing-an-emoji-could-not-be-read-back)
@@ -166,6 +167,63 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
 
 ---
+
+## [3.3.3-dev12] - 2026-08-07 - Remaining Review Findings; Timeouts Measured Rather Than Guessed
+
+### Summary
+
+Closes the code review. Part 3 covered `coordinator.py` and `config_flow.py` — the two files the first pass read only in part — so **every source file and every test file has now been read in full**. One new defect came out of measuring the router rather than reading it.
+
+### Fixed
+
+- **`get_ad` validated the firmware version but not RD, so a write could go out with a wrong token.** `[3.3.3-dev10]` made `get_ad` raise when the version is unavailable, and stopped there. `get_rd` returns `""` when the RD key is absent from an otherwise valid response, and hashing that produces a **well-formed but wrong** `AD`: the command is sent, the router refuses it, and the user is told the device rejected something it never had a chance to accept — the exact misleading outcome the version check was added to remove. Both halves now raise. **Affects all eleven write commands**, which each derive a token before sending.
+
+- **The billing-cycle projection only recognised one spelling of "disabled".** `_projection` tested `== "off"` exactly, so `"0"`, `"OFF"` or any other disabled form read as **enabled** and the projection measured against a cycle the router is not keeping. The sibling switches in this API use `"0"`/`"1"` and casing is not guaranteed anywhere, so the guard is now normalised and case-insensitive.
+
+- **Config-flow validation left a session open on the router.** All four steps — user, reconfigure, reauth, options — logged in and never logged out. Released in a `finally`, so a rejected password frees the slot too; without that, a user retrying a wrong password stranded a session per attempt. **Deliberately recorded as low impact**: this router hands its session to whoever logged in last, so an abandoned one blocks nothing. The reason to fix it is that unload already treats releasing a session as the integration's job (Section 10), not that it was causing harm.
+
+- **A vanished entry aborted reauth as `reauth_successful`.** Nothing had been reauthenticated — there was nothing left to reauthenticate. Now `entry_not_found`, with text in `strings.json` and `translations/en.json`.
+
+### Changed
+
+- **`data_volume_alert_percent` uses the `PERCENTAGE` constant** instead of a `"%"` literal. The constant was already imported and used by every other percentage sensor.
+- **`_check_sms_storage` evaluates its condition once** instead of computing the flag and then repeating the expression verbatim.
+- **`_record_health_failure` writes a fallback snapshot** in its defensive `except`, as `_record_health_success` already did. Without it the failure path left the previous verdict standing — a snapshot describing a cycle that is over, which is the one thing Section 19 says a health verdict must never be.
+
+### Measured — the timeout values, finally chosen from data
+
+`asyncio.timeout(30)` per poll and `ClientTimeout(total=15)` per request were picked independently and never reconciled: a poll makes **four sequential requests**, so the per-request budget sums to 60 s inside a 30 s ceiling, and an auth retry repeats the whole set inside the same ceiling.
+
+Measured against an MC7010 (firmware V1.0.0B03) with polling paused everywhere, 50 rounds:
+
+| Call                           |  median |   worst |
+| :----------------------------- | ------: | ------: |
+| `login`                        | 0.090 s | 1.041 s |
+| `get_all_data`                 | 0.028 s | 0.052 s |
+| `get_extended_data`            | 0.015 s | 0.951 s |
+| `get_sms_capacity`             | 0.037 s | 0.981 s |
+| `get_sms_messages`             | 0.016 s | 0.027 s |
+| `get_ad` (write pre-flight)    | 0.043 s | 0.965 s |
+| `get_params` (write read-back) | 0.015 s | 0.111 s |
+
+**Full poll: 0.100 s median, 1.058 s worst. The retry path needs ~2.2 s against a 30 s ceiling — 14x headroom. No value changes.**
+
+Three things the measurement settled that reading could not:
+
+- **The 60-in-30 mismatch is arithmetic, not a defect.** It bites only if the router slows by roughly two orders of magnitude, at which point the timeout is not the problem.
+- **The ~1 s stalls are the router, not a slow call.** They land on `login`, `get_extended_data`, `get_sms_capacity` and `get_ad` alike — whatever is in flight. A 12-round sample had shown them only on `get_ad` and suggested a write-path problem that does not exist.
+- **The 15 s per-request timeout is reachable.** One `get_ad` in 50 rounds hit it exactly and failed. So it is doing real work, and `WRITE_VERIFY_TIMEOUT` at 3 s against a 0.111 s worst read-back has ample room.
+
+The probe is kept at `.notes/local_only/timing_probe.py` (gitignored, read-only, no identifiers recorded).
+
+### Added
+
+Six tests. The three behavioural fixes were each verified by removing the fix and confirming the test goes red — `get_ad`'s RD guard, the projection's disabled-spelling guard, and the config-flow release (both the success and the rejected-password path). Source restored by file copy and confirmed with `sha256sum -c` each time; no git command used.
+
+### Notes
+
+- Suite 868 passed (was 862). Line and branch coverage both 100%, 0 partials. `mypy --strict`, `ruff`, `ruff format` clean.
+- **Two findings were deliberately not actioned.** The four exception handlers reachable only by patching `_request` stay as they are — the fix would be deleting error handling or adding a `pragma` to move a coverage number, which Section 11 rule 6 rules out. And setup still validates before checking for a duplicate: the IMEI that forms the unique id **comes from** that fetch, so reordering risks the dedup logic to save one round trip.
 
 ## [3.3.3-dev11] - 2026-08-07 - Low Findings From Both Reviews
 

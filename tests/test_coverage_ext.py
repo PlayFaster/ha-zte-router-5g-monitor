@@ -189,6 +189,27 @@ async def test_api_get_ad_raises_when_the_version_is_unavailable(
 
 
 @pytest.mark.asyncio
+async def test_api_get_ad_raises_when_rd_is_unavailable(mock_aiohttp_client):
+    """No RD means no token either — the other half of the version check.
+
+    `get_rd` returns `""` when the RD key is absent from an otherwise valid
+    response. Hashing that produces a **well-formed but wrong** token: the
+    write goes out, the router refuses it, and the user is told the device
+    rejected a command it never had a chance to accept. That is the same
+    misleading outcome the version check was added to prevent, and it was
+    missed when only the version half was fixed.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    with (
+        patch.object(api, "_ensure_session", AsyncMock()),
+        patch.object(api, "get_version", return_value="MC7010_V1"),
+        patch.object(api, "get_rd", return_value=""),
+        pytest.raises(ZTEConnectionError, match="did not return RD"),
+    ):
+        await api.get_ad()
+
+
+@pytest.mark.asyncio
 async def test_api_get_rd_success(mock_aiohttp_client):
     """Test get_rd success path."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")

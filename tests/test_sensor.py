@@ -1288,3 +1288,30 @@ def test_no_sensor_declares_a_source_its_data_does_not_come_from():
         f"{offenders}. Drop the `source=` — the data is never stale, so the "
         "entity must not go unavailable with the optional fetch."
     )
+
+
+def test_projection_treats_every_disabled_spelling_as_off():
+    """The auto-clear switch is not guaranteed to say exactly "off".
+
+    An exact match on one spelling silently treats every other disabled form
+    as enabled, and the projection then measures against a cycle the router is
+    not keeping. The sibling switches in this API use `"0"`/`"1"`, and casing
+    is not guaranteed anywhere, so the guard is normalised.
+    """
+    base = {
+        "traffic_clear_date": "15",
+        "monthly_rx_bytes": "1",
+        "monthly_tx_bytes": "1",
+    }
+
+    for disabled in ("off", "OFF", "Off", "0", "false", " off "):
+        assert (
+            _projection({**base, "wan_auto_clear_flow_data_switch": disabled}) is None
+        ), f"{disabled!r} must read as disabled"
+
+    # And the enabled spellings must still project.
+    for enabled in ("on", "1", ""):
+        assert (
+            _projection({**base, "wan_auto_clear_flow_data_switch": enabled})
+            is not None
+        ), f"{enabled!r} must not read as disabled"

@@ -811,6 +811,20 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 self.entry.title,
                 exc_info=True,
             )
+            # Write a snapshot rather than leaving the last one standing. The
+            # success path already does this; without it the failure path holds
+            # a verdict describing a cycle that is over, which is the one thing
+            # Section 19 says a health verdict must never do.
+            self.health_snapshot = {
+                "problem": False,
+                "issues": [],
+                "severity": "unknown",
+                "degraded_capabilities": [],
+                "drift": [],
+                "repairs": [],
+                "last_good_update": None,
+                "consecutive_failures": self.consecutive_failures,
+            }
 
     def _check_sms_storage(self, data: dict[str, Any]) -> None:
         """Create or clear the SMS storage full repair issue."""
@@ -820,7 +834,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         except (ValueError, TypeError):
             return
         self._sms_storage_full = nv_able > 0 and nv_total >= nv_able
-        if nv_able > 0 and nv_total >= nv_able:
+        if self._sms_storage_full:
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,

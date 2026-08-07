@@ -47,6 +47,7 @@
     },
     "abort": {
       "already_configured": "Device is already configured",
+      "entry_not_found": "This integration entry no longer exists, so there is nothing to reauthenticate. It was most likely removed while the dialog was open.",
       "reauth_successful": "Re-authentication was successful"
     }
   },

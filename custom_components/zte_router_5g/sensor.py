@@ -283,7 +283,15 @@ def _projection(data: dict[str, Any]) -> _Projection | None:
     that never clears is worse than both. The assumption is published as
     `cycle_source` so it is visible rather than hidden in the arithmetic.
     """
-    if data.get("wan_auto_clear_flow_data_switch") == "off":
+    # The router has been seen to report this as "off"; the sibling switches
+    # in this API use "0"/"1", and casing is not guaranteed. An exact match on
+    # one spelling silently treats every other "disabled" form as enabled and
+    # projects against a cycle the router is not keeping.
+    if str(data.get("wan_auto_clear_flow_data_switch", "")).strip().lower() in (
+        "off",
+        "0",
+        "false",
+    ):
         return None
 
     clear_day = _clear_day(data)
@@ -1354,7 +1362,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "in Home Assistant."
         ),
         translation_key="data_volume_alert_percent",
-        native_unit_of_measurement="%",
+        native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
         # Deliberately no `state_class`: a configured threshold changes at most
         # a handful of times in the life of an install, so a trend line of it
