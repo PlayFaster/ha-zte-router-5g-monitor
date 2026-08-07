@@ -1,16 +1,12 @@
 """Options reload-vs-live-apply, and session release on unload.
 
-Both behaviours only exist through the real config-entry pipeline, so every
+Both behaviors only exist through the real config-entry pipeline, so every
 test drives a real ``hass`` and blocks on the loop after the change.
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.zte_router_5g import _async_options_updated
 from custom_components.zte_router_5g.api import ZTEConnectionError, ZTERouterAPI
 from custom_components.zte_router_5g.const import (
@@ -19,6 +15,9 @@ from custom_components.zte_router_5g.const import (
     DOMAIN,
     LIVE_OPTION_KEYS,
 )
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 ROUTER_DATA = {
     "network_type": "ENDC",

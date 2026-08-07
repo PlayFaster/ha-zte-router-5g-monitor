@@ -925,7 +925,7 @@ async def test_persistently_dead_session_raises_instead_of_returning_empty(
 async def test_missing_contract_key_raises_even_if_expiry_undetected(
     mock_aiohttp_client,
 ):
-    """Second line of defence, independent of the expiry detector.
+    """Second line of defense, independent of the expiry detector.
 
     If the router ever answers with a shape the detector does not recognise,
     the endpoint contract must still refuse to report it as "no messages".

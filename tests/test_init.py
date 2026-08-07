@@ -4,10 +4,6 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.core import ServiceCall
-from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceValidationError
-from homeassistant.helpers.update_coordinator import UpdateFailed
-
 from custom_components.zte_router_5g import (
     _validate_sms_length,
     async_setup_entry,
@@ -22,6 +18,9 @@ from custom_components.zte_router_5g.const import (
 from custom_components.zte_router_5g.coordinator import (
     ZTERouterDataUpdateCoordinator,
 )
+from homeassistant.core import ServiceCall
+from homeassistant.exceptions import ConfigEntryAuthFailed, ServiceValidationError
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 
 @pytest.fixture(autouse=True)
@@ -455,9 +454,8 @@ async def test_get_coordinator_with_entry_id(mock_hass, mock_config_entry):
 @pytest.mark.asyncio
 async def test_get_coordinator_with_entry_id_not_ready(mock_hass, mock_config_entry):
     """Test _get_coordinator with entry_id but entry not ready (__init__.py:82)."""
-    from homeassistant.exceptions import HomeAssistantError
-
     from custom_components.zte_router_5g import _get_coordinator
+    from homeassistant.exceptions import HomeAssistantError
 
     mock_config_entry.runtime_data = None
     mock_hass.config_entries.async_get_entry.return_value = mock_config_entry
@@ -471,9 +469,8 @@ async def test_get_coordinator_with_entry_id_not_ready(mock_hass, mock_config_en
 @pytest.mark.asyncio
 async def test_get_coordinator_no_entries(mock_hass):
     """Test _get_coordinator when no entries exist (__init__.py:90)."""
-    from homeassistant.exceptions import HomeAssistantError
-
     from custom_components.zte_router_5g import _get_coordinator
+    from homeassistant.exceptions import HomeAssistantError
 
     mock_hass.config_entries.async_entries.return_value = []
 
@@ -500,9 +497,8 @@ async def test_get_coordinator_single_entry_fallback(mock_hass, mock_config_entr
 @pytest.mark.asyncio
 async def test_get_coordinator_multiple_entries(mock_hass):
     """Test _get_coordinator requires entry_id when more than one router is loaded."""
-    from homeassistant.exceptions import ServiceValidationError
-
     from custom_components.zte_router_5g import _get_coordinator
+    from homeassistant.exceptions import ServiceValidationError
 
     entry_a = MagicMock()
     entry_a.runtime_data = MagicMock()
@@ -522,9 +518,8 @@ async def test_get_coordinator_multiple_entries(mock_hass):
 @pytest.mark.asyncio
 async def test_service_send_sms_exception(mock_hass, mock_config_entry):
     """Test send_sms service exception handling (__init__.py:102-103)."""
-    from homeassistant.exceptions import HomeAssistantError
-
     from custom_components.zte_router_5g import async_send_sms
+    from homeassistant.exceptions import HomeAssistantError
 
     mock_api = AsyncMock()
     mock_api.send_sms.side_effect = RuntimeError("Send failed")
@@ -546,9 +541,8 @@ async def test_service_send_sms_exception(mock_hass, mock_config_entry):
 @pytest.mark.asyncio
 async def test_service_delete_sms_exception(mock_hass, mock_config_entry):
     """Test delete_sms service exception handling (__init__.py:114-115)."""
-    from homeassistant.exceptions import HomeAssistantError
-
     from custom_components.zte_router_5g import async_delete_sms
+    from homeassistant.exceptions import HomeAssistantError
 
     mock_api = AsyncMock()
     mock_api.delete_sms.side_effect = RuntimeError("Delete failed")
@@ -570,9 +564,8 @@ async def test_service_delete_sms_exception(mock_hass, mock_config_entry):
 @pytest.mark.asyncio
 async def test_service_delete_all_sms_exception(mock_hass, mock_config_entry):
     """Test delete_all_sms service exception handling (__init__.py:135-136)."""
-    from homeassistant.exceptions import HomeAssistantError
-
     from custom_components.zte_router_5g import async_delete_all_sms
+    from homeassistant.exceptions import HomeAssistantError
 
     mock_api = AsyncMock()
     mock_api.delete_all.side_effect = RuntimeError("Delete all failed")
@@ -635,9 +628,8 @@ async def test_service_get_sms_list_mix_box_type(mock_hass, mock_config_entry):
 @pytest.mark.asyncio
 async def test_service_get_sms_list_exception(mock_hass, mock_config_entry):
     """Test get_sms_list service exception handling (__init__.py:188-189)."""
-    from homeassistant.exceptions import HomeAssistantError
-
     from custom_components.zte_router_5g import async_get_sms_list
+    from homeassistant.exceptions import HomeAssistantError
 
     mock_api = AsyncMock()
     mock_api.get_sms_messages.side_effect = RuntimeError("List failed")
@@ -1113,7 +1105,7 @@ def test_plain_text_may_use_the_full_gsm7_length():
 
 
 def test_plain_text_is_rejected_past_the_gsm7_limit():
-    """Beyond five segments the router's behaviour is untested; stay out of it."""
+    """Beyond five segments the router's behavior is untested; stay out of it."""
     with pytest.raises(ServiceValidationError) as err:
         _validate_sms_length("A" * (SMS_MAX_CHARS_GSM7 + 1))
     assert err.value.translation_key == "sms_too_long"

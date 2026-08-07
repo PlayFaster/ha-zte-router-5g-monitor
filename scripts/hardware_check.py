@@ -76,7 +76,6 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 try:
     import aiohttp
-
     from custom_components.zte_router_5g.api import ZTEAuthError, ZTERouterAPI
     from custom_components.zte_router_5g.const import APN_PROFILE_SLOTS
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
@@ -120,9 +119,9 @@ SMS_SETTLE = 3.0
 REBOOT_TIMEOUT = 240.0
 REBOOT_POLL = 15.0
 
-# Colour is emitted unconditionally, the way `pytest --color=yes` is used by the
+# Color is emitted unconditionally, the way `pytest --color=yes` is used by the
 # sibling tasks: stdout here is a pipe into `tee`, so auto-detection would strip
-# it exactly when it is wanted. The VS Code task sends the coloured stream to the
+# it exactly when it is wanted. The VS Code task sends the colored stream to the
 # terminal and a `sed`-stripped copy to `.reports/`, so the log stays plain text.
 # `NO_COLOR` (https://no-color.org) and `--no-color` both turn it off.
 _COLOUR = os.environ.get("NO_COLOR") is None
@@ -462,7 +461,7 @@ async def _write_through_reconnect(
 
     Safe to retry *these* commands specifically: they are idempotent settings
     changes, and the value is read back afterwards. This is not a general
-    licence to retry writes — see `write_classification.py`.
+    license to retry writes — see `write_classification.py`.
     """
     last: str | None = None
     for attempt in range(tries):

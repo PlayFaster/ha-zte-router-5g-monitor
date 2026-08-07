@@ -104,7 +104,7 @@ On any of the three signatures, the client re-logs in and retries **once** (`_re
 
 `ZTECredentialsError` subclasses `ZTEAuthError` and is raised **only** when the router rejects the password. It is the only condition that reaches `ConfigEntryAuthFailed`; a lapsed session raises `UpdateFailed` instead.
 
-The distinction is not cosmetic. Prompting a user to re-enter a password that was never wrong sends them somewhere that cannot help. It is also safe to be strict here because of a router behaviour worth stating plainly: **the most recent login wins.** Home Assistant logging in takes the session back from the web GUI — which then shows "your session was terminated" — so there is no state in which HA is reachable but permanently unable to authenticate.
+The distinction is not cosmetic. Prompting a user to re-enter a password that was never wrong sends them somewhere that cannot help. It is also safe to be strict here because of a router behavior worth stating plainly: **the most recent login wins.** Home Assistant logging in takes the session back from the web GUI — which then shows "your session was terminated" — so there is no state in which HA is reachable but permanently unable to authenticate.
 
 On any of the three, the client re-logs in and retries **once** (`_retry=False` on the retry, so a genuinely rejected credential surfaces as `ZTEAuthError` rather than looping).
 
@@ -492,7 +492,7 @@ Twenty-six write actions were recovered from the router's own `js/service.js` bu
 | `QUICK_SETUP` / `QUICK_SETUP_EX` | Not used | First-run wizard. |
 | `SET_NV` | Not used | Raw NV-item write. Unbounded and undocumented; nothing good comes of calling it blind. |
 | `SET_UPGRADE_NOTICE` | Not used | Firmware-update prompt suppression. |
-| `REDIRECT_REDIRECT_OFF` | Not used | Web UI redirect behaviour. |
+| `REDIRECT_REDIRECT_OFF` | Not used | Web UI redirect behavior. |
 
 ### Why the declined rows are declined
 
@@ -643,7 +643,7 @@ What it does change is how the router counts segments:
 
 Concatenated segments give up 7 bytes each to a header, which is why the per-segment figure is lower than the single-message one. The MC7010 web UI advertises `(765) (1/5)` for plain text — exactly 5 x 153, confirming the five-segment ceiling.
 
-Pick the type from the message content: if every character is in the GSM 03.38 alphabet, `GSM7_default`; otherwise `UNICODE`. **One out-of-alphabet character changes the encoding for the entire message**, so a single emoji cuts the ceiling from 765 to 335. Behaviour past five segments is untested — `async_send_sms` rejects it rather than finding out.
+Pick the type from the message content: if every character is in the GSM 03.38 alphabet, `GSM7_default`; otherwise `UNICODE`. **One out-of-alphabet character changes the encoding for the entire message**, so a single emoji cuts the ceiling from 765 to 335. Behavior past five segments is untested — `async_send_sms` rejects it rather than finding out.
 
 Confirmed on hardware (2026-07-29): a 159-character plain message and an 80-character message with three emoji both arrived as **one** message on the handset, so the router segments and the phone reassembles. Nothing is truncated.
 

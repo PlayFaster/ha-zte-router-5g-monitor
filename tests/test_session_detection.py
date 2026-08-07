@@ -1,7 +1,7 @@
 """How an expired session is told apart from a router with nothing to say.
 
 This router never reports an ended session as an error. It answers `200 OK`
-with the authenticated values echoed back blank, so the only defence is reading
+with the authenticated values echoed back blank, so the only defense is reading
 the response correctly. Getting that wrong has now failed twice, both times the
 same way, and both times silently:
 
@@ -24,11 +24,6 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers.update_coordinator import UpdateFailed
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.zte_router_5g.api import (
     _CORE_PARAMS,
     _EXTENDED_PARAMS,
@@ -44,6 +39,10 @@ from custom_components.zte_router_5g.coordinator import (
     CORE_KEYS,
     ZTERouterDataUpdateCoordinator,
 )
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers.update_coordinator import UpdateFailed
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from .conftest import MockResponse
 
@@ -159,7 +158,7 @@ def test_a_response_of_only_unauthenticated_keys_is_undecidable() -> None:
 
 
 # ---------------------------------------------------------------------------
-# The behaviour those classifications drive
+# The behavior those classifications drive
 # ---------------------------------------------------------------------------
 
 

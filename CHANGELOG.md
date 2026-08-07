@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.2] - 2026-08-01 - Release
+## [3.3.2] - 2026-08-02 - Release
 
 ### Summary
 
@@ -45,7 +45,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 - **Wider ZTE model support**: signal and data-usage sensors now recognize the alternative field names used by other `goform` routers, the login falls back to the other form when a model rejects the first, and the LTE/5G band name is worked out from the channel number when the router leaves it blank.
 
-- **Attributes are not written to history**: no entity in this integration records any attribute to the database — only its state. The current state of all Attributes stay visible in the More Info dialog, Developer Tools and templates.
+- **Attributes are not written to history**: no entity in this integration records any attribute to the database — only its state. The current state of all Attributes stay visible in the More Info dialog, Tools and templates.
 
 - **Documentation**: the README's example automations now ignore `unknown` and `unavailable` states, to avoid false alerts from a HA restart or router reboot.
 
@@ -320,7 +320,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
-  - [\[3.3.2\] - 2026-08-01 - Release](#332---2026-08-01---release)
+  - [\[3.3.2\] - 2026-08-02 - Release](#332---2026-08-02---release)
   - [\[3.2.5\] - 2026-07-03 - Release](#325---2026-07-03---release)
   - [\[3.2.4\] - 2026-06-15 - Release](#324---2026-06-15---release)
   - [\[3.2.3\] - 2026-06-14](#323---2026-06-14)
