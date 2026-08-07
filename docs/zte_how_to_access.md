@@ -153,6 +153,8 @@ This is the second model-dependent branch in the protocol. MD5 here is a vendor 
 
 **`RD` is a static per-device seed, so `AD` is _not_ single-use.** Measured on MC7010 firmware `V1.0.0B03` (2026-07-29): `cmd=RD` returned the identical value across logins and across a deliberately invalidated session. Since `AD = H(H(version + cr_version) + RD)` and both inputs are fixed for a given device, **the token is constant per router** — which is why `_request` can replay a write payload verbatim after a re-login without the embedded `AD` going stale. An earlier revision of this document claimed the opposite ("fetched fresh for every write, so `AD` is single-use"); that was an assumption, and the measurement contradicts it. Do not build a retry or caching decision on the single-use reading.
 
+**Both inputs are required, and an absent one must raise rather than hash to a token.** `AD = H(H(version) + RD)`, so a missing `wa_inner_version` **or** a missing `RD` yields a well-formed but wrong token. Sent, it draws `{"result":"failure"}` — which reads to the user as the router refusing a command it never had a chance to accept. `get_ad` raises `ZTEConnectionError` on either, naming the real cause.
+
 ---
 
 ## 📥 Read commands (`goform_get_cmd_process`)
@@ -364,6 +366,8 @@ Full probe results, and the router-facing agent's answers on encodings and write
 - **Note the shape**: `order_by` takes a **literal SQL fragment**. This is the vendor's interface, passed through as-is; it is not constructed from user input anywhere in this integration and must not be.
 - **`mem_store`**: `1` = router storage, `0` = SIM storage. `tags=10` selects received messages.
 - **Implementation**: `get_sms_messages`, `api.py:663`. `get_last_sms_content` (`api.py:552`) is the same call with `data_per_page=1`.
+
+**Decode the hex whole, not four characters at a time.** `bytes.fromhex(s).decode("utf-16-be")`. A per-code-unit loop is correct only inside the BMP — anything above it (every emoji) is a **surrogate pair**, and splitting it yields lone surrogates that cannot be encoded to UTF-8 at all, so the failure surfaces downstream in the recorder or a log handler rather than here. Confirmed on hardware 2026-08-07: `✈️` survived a per-unit decode and `🏌` did not, which is the BMP boundary and the signature of this mistake.
 
 **Fields arrive hex-encoded.** `content` and `number` are UTF-16BE hex strings; `date` is a comma-separated `yy,mm,dd,HH,MM,SS` list. The client decodes each into a parallel `*_decoded` key (`content_decoded`, `number_decoded`, `date_decoded`) and leaves the raw value in place. A decode failure yields the literal `[Decoding Error]` rather than raising — a malformed message must not take down the poll.
 

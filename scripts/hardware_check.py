@@ -122,6 +122,27 @@ RECONNECT_SETTLE = 12.0
 # write causes routinely outlasts a single request timeout.
 RECONNECT_RETRY = 8.0
 
+# NR5G keys the router populates only while registered on 5G. Absent on a 4G
+# return, which is a network state rather than the blanked-payload fault the
+# reboot check is looking for.
+_NR5G_KEYS = frozenset(
+    {
+        "Z5g_SINR",
+        "Z5g_rsrp",
+        "Z5g_rsrq",
+        "Z5g_rssi",
+        "nr5g_action_band",
+        "nr5g_action_channel",
+        "nr5g_pci",
+        "Z5g_CELL_ID",
+        "Z5g_snr",
+        "5g_rsrp",
+        "5g_sinr",
+        "nr5g_rsrp",
+        "nr5g_sinr",
+    }
+)
+
 # The router updates its SMS counters a moment after accepting a write.
 SMS_SETTLE = 3.0
 
@@ -607,6 +628,17 @@ async def check_apn_profile(api: ZTERouterAPI, report: Report) -> None:
     origin = next((p for p in profiles if p[1].strip().lower() == active_apn), None)
     other = next((p for p in profiles if p is not origin), None)
 
+    if not profiles:
+        # A router left on the carrier default stores no APN in any slot. That
+        # is a normal configuration, not a fault, and the SMS checks already
+        # treat "nothing to work with" as a skip rather than a failure.
+        report.record(
+            True,
+            "APN profile: skipped, no profile configured",
+            "router is on the carrier default; there is no profile to round-trip",
+        )
+        return
+
     if origin is None or other is None:
         report.record(
             False,
@@ -1030,9 +1062,26 @@ async def _watch_recovery(
             print(_dim("      still down…"))
             continue
 
-        lost = sorted(baseline & {k for k, v in payload.items() if v in (None, "")})
+        blank = {k for k, v in payload.items() if v in (None, "")}
+        # A router that re-registers on 4G reports no NR5G keys at all. That is
+        # the network, not a stripped payload — and this check exists to catch
+        # the latter. Excluding them when the radio is demonstrably not on 5G
+        # keeps the check pointed at what it is for; leaving them in reported a
+        # clean reboot as a failure on 2026-08-07.
+        on_5g = str(payload.get("network_type") or "").upper() in ("ENDC", "NR5G", "NR")
+        if not on_5g:
+            blank -= _NR5G_KEYS
+        lost = sorted(baseline & blank)
         if not lost:
             recovered = True
+            if not on_5g:
+                print(
+                    _dim(
+                        "      back on "
+                        f"{payload.get('network_type') or 'an unknown bearer'} — "
+                        "NR5G keys excluded, they are absent by network state"
+                    )
+                )
             break
         silent_success += 1
         print(

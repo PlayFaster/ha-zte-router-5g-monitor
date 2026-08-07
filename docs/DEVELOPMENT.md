@@ -324,6 +324,53 @@ Three mechanisms sit near this and only the first delays a command. The coordina
 
 Before adding any of this later: **debounce** when the input generates values the user did not intend; **throttle** when the vendor publishes a rate limit; **guard** when a repeat is both expensive and silent. Repeats here are either cheap (a targeted read-back costs ~16 ms) or loud (an error reaches the user), so none currently applies.
 
+### 5.x A read path that could not be read back — surrogate pairs, 2026-08-07
+
+`_hex_decode` built its result with `chr()` per four hex digits. Correct inside the Basic Multilingual Plane, wrong above it: every emoji is a UTF-16 **surrogate pair**, and taking each half separately produces two lone surrogates.
+
+**The damage was not mangled text.** A string holding lone surrogates cannot be encoded to UTF-8 at all. `get_sms_list` is a **response service**, so Home Assistant tried to serialize the payload, failed, and returned a 500 — the whole action died. An ordinary sensor would have shown nonsense and kept working; the service surface is what turned a display bug into a total failure.
+
+Three things about how it was found are worth keeping:
+
+- **The error named the wrong component.** The user saw _"Invalid JSON in response"_, which is HA's serializer. That string does not exist anywhere in this integration, and chasing it as a parse failure would have led into `_request`'s dead-session detection, which was working perfectly.
+- **The router was never at fault.** A raw-response probe found valid JSON, valid UTF-8 and pure hex content at every page size and in both memory stores. Measuring the device first is what stopped a day being spent on the parser.
+- **`✈️` survived and `🏌` did not.** That split is the BMP boundary, and it identifies this defect on sight.
+
+Sending was verified separately and was never broken — `encode_type` selection and the UTF-16BE body are confirmed against hardware.
+
+### 5.y Timeout values, measured rather than argued — 2026-08-07
+
+`asyncio.timeout(30)` per poll and `ClientTimeout(total=15)` per request were chosen independently and never reconciled. A poll makes four sequential requests, so the per-request budget sums to 60 s inside a 30 s ceiling, and an auth retry repeats the whole set inside the same ceiling.
+
+Measured against an MC7010 (V1.0.0B03), 50 rounds, polling paused everywhere:
+
+|                                |  median |   worst |
+| :----------------------------- | ------: | ------: |
+| Full poll (4 calls)            | 0.100 s | 1.058 s |
+| `login`                        | 0.090 s | 1.041 s |
+| `get_ad` (write pre-flight)    | 0.043 s | 0.965 s |
+| `get_params` (write read-back) | 0.015 s | 0.111 s |
+
+**No value changed.** The retry path needs ~2.2 s against 30 s — 14x headroom. The mismatch is arithmetic, not a defect: it bites only if the router slows by about two orders of magnitude.
+
+Three things measurement settled that reading could not:
+
+- **The ~1 s stalls are the router, not a slow call.** They land on `login`, `get_extended_data`, `get_sms_capacity` and `get_ad` alike — whatever is in flight. A 12-round sample had shown them only on `get_ad` and suggested a write-path problem that does not exist. The larger sample killed the hypothesis.
+- **The 15 s per-request timeout is reachable.** One `get_ad` in 50 rounds hit it exactly and failed, so it is doing real work rather than sitting unreachably high.
+- **`WRITE_VERIFY_TIMEOUT` at 3 s** against a 0.111 s worst read-back has ample room.
+
+Probe kept at `.notes/local_only/timing_probe.py`. Re-run it before changing any of the three values.
+
+### 5.z The router hands its session to whoever logged in last
+
+Not a defect, but it shapes every measurement taken against this device. There is no lock and no queue: a new login silently invalidates the previous one.
+
+Consequences worth remembering:
+
+- **An abandoned session blocks nothing.** This is why the config-flow validation leak was low impact — the next login simply takes the slot back.
+- **A competing client makes results unattributable.** A production Home Assistant polling every three minutes will interrupt any step spanning three minutes, on a fixed cadence. On 2026-08-07 that presented as a `delete_sms` timeout that looked like a defect and was not; a clean re-run passed.
+- `hardware_check.py` warns about this at start-up for exactly that reason. It steals its own session on purpose at a known point; an outside competitor steals it at an arbitrary one, and the two cannot be told apart after the fact.
+
 ---
 
 ## 6. Environment Constraints
@@ -333,6 +380,9 @@ Before adding any of this later: **debounce** when the input generates values th
 - **Shared Session**: The integration uses `async_get_clientsession(hass)` to leverage Home Assistant's optimized, shared connection pool.
 
 ## 7. Technical Debt & Future Work
+
+- **Deliberately not fixed, from the 2026-08-07 code review.** Four exception handlers in `api.py` are reachable only by patching `_request`, so they read as uncovered. The available "fixes" are deleting the error handling or adding a `# pragma: no cover` — both suppress a real guard to move a coverage number, which `dev_standards` §11 rule 6 rules out. Left as they are, on purpose. Likewise, `async_step_user` validates credentials **before** checking for a duplicate entry: the IMEI that forms the unique id comes from that very fetch, so reordering would risk the dedup logic to save one round trip on a path taken once per install.
+- **The `testing_deeper_lev1_review` pass is partial.** Its first run was narrowed by the operator rather than by the prompt, so the six analysis strategies were not applied evenly; an unbiased re-run produced no output and was abandoned. Four of its six findings were verified and fixed, one was **disproved** on checking, and one area of the project remains unexamined at depth. Recorded in `.notes/info/updates_202608/status_plan.md` §O.
 
 - **Token Persistence**: Currently, the `stok` (Session Token) is stored in memory. A fresh login is required on every integration restart.
 - **Translation-Key Naming**: When migrating from `name="..."` to `translation_key="..."`, both `strings.json` and `translations/en.json` must be kept in sync. `strings.json` is the authoritative source; `translations/en.json` is the runtime-loaded file. Adding a sensor requires adding entries to both files, not just the Python code.

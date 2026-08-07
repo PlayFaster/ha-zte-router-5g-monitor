@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.3] - 2026-08-08 - Release
+
+### Summary
+
+A fixes release. No new entities and no settings to change — the SMS actions, two Data sensors and the Repairs panel all behave the way they were meant to in 3.3.2.
+
+- **SMS messages containing emoji can be read again.** Any message with an emoji in it made the **Get SMS List** action fail outright — not just that message, the whole list.
+
+- **Sending an SMS no longer reports failure after it has already sent.** The message went out, the action said it had not, and sending again cost you a second message.
+
+- **Allowance and Alert Threshold stop disappearing** while the router is still reporting them.
+
+- **Repairs no longer outlive the integration.** Deleting the integration with a repair showing left it in the Repairs panel permanently, with nothing left that could clear it.
+
+### Fixed
+
+- **An SMS containing an emoji broke the Get SMS List action.** Any emoji — or any character outside the basic set — in **any** message made the action fail with an internal error, so the whole list was unreadable rather than the one message. Sending emoji was never affected. Verified against hardware: four messages, two with emoji, now all return correctly.
+
+- **A sent SMS could be reported as failed.** The **Send SMS** action tells the router to send, then refreshes the SMS counters. If that refresh failed — a momentary blip, the router briefly busy — the action reported the send as failed even though the message had gone. The natural response is to send again, which costs a second message. The refresh no longer decides whether the send succeeded.
+
+- **Sending to several numbers now says how far it got.** If the second of three recipients failed, the first had already been sent and the third was never attempted, but the error said only "failed". It now names who was already reached, so a retry is an informed choice.
+
+- **Delete All Messages no longer fails outright over one unreadable message.** If the router returned a message without an identifier, the whole operation stopped and nothing was deleted. It now removes everything it can identify and logs what it skipped — a message with no identifier cannot be deleted by any means, so refusing the rest achieved nothing.
+
+- **Allowance and Alert Threshold went unavailable while their data was fresh.** Both were tied to the optional half of the router poll, which they are not fed by. If that half failed a few times in a row, both entities disappeared despite the router still reporting them — and **Allowance** is the figure **Projected Cycle Usage** is measured against, so the projection lost its reference at the worst moment.
+
+- **Total Messages went blank if one storage area reported nothing.** A single empty value from the router emptied the whole sensor and its breakdown, which reads as "no messages" — the opposite of "one area could not be read".
+
+- **Repairs stayed in the Repairs panel after the integration was removed.** They could not be dismissed, because these repairs are cleared by the integration and it was gone. They are now cleared on reload and on removal. Repairs are also now tied to the specific router that raised them, so two ZTE routers no longer overwrite each other's.
+
+- **A router that could not be reached was reported as having refused the command.** Pressing **Reboot** on an unreachable router said the router rejected it. It had not — it never received it. The error now says what actually happened, on all router commands rather than just reboot.
+
+- **Projected Cycle Usage ignored some ways of switching the router's counter reset off.** Only one spelling of "off" was recognized, so with any other the projection kept measuring against a cycle the router was not keeping.
+
+- **A change to the polling interval could be lost.** Moving the slider and then reloading the integration within a couple of seconds discarded the new value with no indication.
+
+### Changed
+
+- **Release downloads now include a zip file**, attached automatically to each GitHub release.
+
+---
+
 ## [3.3.2] - 2026-08-02 - Release
 
 ### Summary
