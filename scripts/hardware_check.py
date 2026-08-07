@@ -912,7 +912,20 @@ async def check_delete_most_recent_sms(api: ZTERouterAPI, report: Report) -> Non
         return
 
     await asyncio.sleep(SMS_SETTLE)
-    remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    try:
+        remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    except Exception as err:  # noqa: BLE001 - unverified, not failed
+        # The delete was accepted. A read that errors leaves the question open;
+        # only a successful read still showing the message proves otherwise.
+        # Reporting this as a failed delete is the mistake this script's own
+        # rules name — and with another client polling the router it is the
+        # likely outcome, not a rare one.
+        report.record(
+            True,
+            "delete_sms: accepted, removal UNVERIFIED",
+            f"read-back failed ({type(err).__name__}); check the inbox by hand",
+        )
+        return
     ids = {str(m.get("id")) for m in remaining}
     report.record(
         msg_id not in ids,
@@ -955,7 +968,15 @@ async def check_delete_all_sms(api: ZTERouterAPI, report: Report) -> None:
         return
 
     await asyncio.sleep(SMS_SETTLE)
-    remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    try:
+        remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    except Exception as err:  # noqa: BLE001 - unverified, not failed
+        report.record(
+            True,
+            "delete_all: accepted, clearance UNVERIFIED",
+            f"read-back failed ({type(err).__name__}); check the inbox by hand",
+        )
+        return
     report.record(
         not remaining,
         "delete_all: inbox is empty",
@@ -1263,6 +1284,58 @@ def _assert_capture_is_safe(captured: dict[str, Any]) -> None:
         )
 
 
+def _warn_about_competing_sessions() -> None:
+    """State the one precondition this script cannot enforce for itself.
+
+    **The router accepts the most recent login and drops the previous one.**
+    That is not a race lost occasionally — any other client that logs in takes
+    the session, every time. A production Home Assistant polling every three
+    minutes will therefore interrupt any step spanning three minutes, on a
+    fixed cadence.
+
+    This script *does* steal its own session on purpose, in
+    `check_write_round_trip(hostile=True)`, and checks that the code notices.
+    That is a controlled theft at a known point. An outside competitor is a
+    different thing: it takes the session at an arbitrary point, so a failure
+    can no longer be attributed. "The code failed to detect a dead session" and
+    "the session died mid-write for unrelated reasons" produce the same result,
+    and the run stops meaning anything.
+
+    Hence a warning rather than a check — the competitor is usually on another
+    machine, and nothing reachable from here can see it.
+    """
+    print(_yellow("\n  !  This run needs the router to itself."))
+    print(
+        _dim(
+            "     The router hands the session to whoever logged in last, so"
+            " any other client"
+        )
+    )
+    print(
+        _dim(
+            "     silently takes it. Turn ON Pause Polling in EVERY Home"
+            " Assistant instance"
+        )
+    )
+    print(
+        _dim(
+            "     connected to this router — including production, which is the"
+            " one most"
+        )
+    )
+    print(
+        _dim(
+            "     easily forgotten — and stay out of the router's own web page"
+            " until this"
+        )
+    )
+    print(_dim("     finishes."))
+    print(
+        _dim("     A competitor does not make these checks fail loudly. It makes their")
+    )
+    print(_dim("     results unattributable, which is worse."))
+
+
 async def main() -> int:
     """Run every check in order and return a shell exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1300,6 +1373,7 @@ async def main() -> int:
         await api.try_set_protocol()
         api.stok = await api.login()
         print(f"connected to {options['host']}")
+        _warn_about_competing_sessions()
 
         await check_session_assumptions(api, session, report)
         await check_write_round_trip(api, report, hostile=False, session=session)

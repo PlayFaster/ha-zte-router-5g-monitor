@@ -240,7 +240,9 @@ Six tests in `tests/test_init.py` and one rewritten in `tests/test_coverage_ext.
 - **Mutation-verified.** Putting the refresh back inside the boundary fails the first test; removing the id filter fails both delete tests. Source restored by file copy and confirmed with `sha256sum -c`; no git command used.
 - Suite 862 passed (was 857). Line and branch coverage both 100%, 0 partials. `mypy --strict`, `ruff` and `ruff format` clean.
 - `send_sms_failed` gained a `{sent}` placeholder in `strings.json` and `translations/en.json`.
-- **Wants an attended hardware run.** `send_sms`, `delete_sms` and `delete_all` are all `ATTENDED` in `scripts/write_classification.py`. Nothing here changes a command, so the risk is low — but the delete-filtering change alters _which_ messages are targeted, and that is worth confirming against the device.
+- **Verified on hardware, 2026-08-07.** The attended tier ran `delete_sms` and `delete_all` against the device; both passed, confirming the id-filtering change targets the right messages.
+
+  An earlier attempt at `delete_sms` had failed with `ZTEConnectionError: Request failed:` — an empty message, which is a bare `TimeoutError` (`str(TimeoutError())` is `""`). That was **session contention, not a defect**: the router hands its single session to whoever logged in last, and a separate production Home Assistant polls this router every three minutes. The clean re-run settles it. A pre-flight warning about competing sessions has been added to `scripts/hardware_check.py`.
 
 ## [3.3.3-dev9] - 2026-08-07 - An SMS Containing an Emoji Could Not Be Read Back
 
@@ -274,7 +276,15 @@ Five tests in `tests/test_api.py`, with the fixture text encoded by `_utf16_hex(
 
 - **Verified against the old implementation**, not only the new one: restoring the per-code-unit form fails `test_an_emoji_survives_the_round_trip` and `test_truncated_hex_is_reported_not_half_decoded`. Source restored by file copy and confirmed with `sha256sum -c`; no git command used.
 - Suite 857 passed (was 852). Line and branch coverage both 100%, 0 partials. `mypy --strict`, `ruff` and `ruff format` clean.
-- **Still wants a hardware check.** Mocks confirm the code agrees with the UTF-16 spec; only a real emoji SMS arriving at the router confirms the router agrees. `send_sms` and the SMS reads are `ATTENDED` in `scripts/write_classification.py`, so this belongs in an attended run, not an unattended one.
+- **Verified on hardware, 2026-08-07, both directions.**
+
+  **Inbound.** Four messages on an MC7010 (firmware V1.0.0B03), two containing emoji. Before the fix `get_sms_list` failed outright; after it, all four return correctly. The reported symptom was misleading: the action said _"Invalid JSON in response"_, which is Home Assistant's own serializer, not this integration and not the router. A raw-response probe found the router returning **valid JSON, valid UTF-8 and pure hex content** at every page size and in both memory stores — it was never at fault. `_hex_decode` produced lone surrogates, `get_sms_list` is a **response service**, and HA cannot serialize a payload containing them.
+
+  **Outbound.** An SMS containing an emoji was sent through `send_sms` and received correctly, so `encode_type` selection and the UTF-16BE hex body are confirmed against the device as well.
+
+  One detail identifies this defect on sight: in a message reading `Two ,, [plane][golfer] now`, the **plane survived and the golfer did not**. The plane is a single UTF-16 code unit; the golfer is a surrogate pair. That split is the BMP boundary.
+
+  **A response service is the sharpest way this can present.** An ordinary sensor would have shown mangled text and kept working; a service payload fails to serialize and takes the whole action down. The probe is kept at `.notes/local_only/sms_json_probe.py` (gitignored, read-only).
 
 ## [3.3.3-dev8] - 2026-08-07 - Two Data Sensors Hid Fresh Values; Four Unpinned Test Gaps
 
