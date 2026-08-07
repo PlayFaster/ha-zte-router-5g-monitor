@@ -5,7 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.3-dev1\] - 2026-08-07 -](#333-dev1---2026-08-07--)
+  - [\[3.3.3-dev1\] - 2026-08-07 - CI Bumps; Github Zipfile; PyTest Branch \& Mutation Testing](#333-dev1---2026-08-07---ci-bumps-github-zipfile-pytest-branch--mutation-testing)
   - [\[3.3.2\] - 2026-08-02 - Release - Wider Model Support. Better Data Use Tracking. Longer SMS Messages. About: Attributes. Fixes](#332---2026-08-02---release---wider-model-support-better-data-use-tracking-longer-sms-messages-about-attributes-fixes)
   - [\[3.3.2-rc15\] - 2026-08-02 - Bump Shared CI to v2.0.9](#332-rc15---2026-08-02---bump-shared-ci-to-v209)
   - [\[3.3.2-rc14\] - 2026-08-01 - README Review; SMS Action Documentation Corrected](#332-rc14---2026-08-01---readme-review-sms-action-documentation-corrected)
@@ -158,7 +158,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.3-dev1] - 2026-08-07 - 
+## [3.3.3-dev1] - 2026-08-07 - CI Bumps; Github Zipfile; PyTest Branch & Mutation Testing
 
 ### Bumps
 
