@@ -3,6 +3,7 @@
 import contextlib
 import hashlib
 import logging
+import urllib.parse
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, NamedTuple, cast
@@ -343,16 +344,32 @@ class ZTERouterAPI:
         return hashlib.sha256(val.encode()).hexdigest()
 
     def _hex_decode(self, hex_str: str) -> str:
+        """Decode the router's UTF-16BE hex into text.
+
+        **Decode the whole string at once, never code unit by code unit.** The
+        previous form built the result with `chr()` per 4 hex digits, which is
+        correct only inside the Basic Multilingual Plane. Anything above it —
+        every emoji — arrives as a UTF-16 *surrogate pair*, and taking each
+        half separately yields two lone surrogates rather than one character.
+        The damage is worse than wrong text: a string holding lone surrogates
+        **cannot be encoded to UTF-8 at all**, so the recorder, a webhook or a
+        file log handler raises `UnicodeEncodeError` on a message the user
+        cannot identify. This integration deliberately *sends* emoji
+        (`encode_type=UNICODE`, `SMS_MAX_CHARS_UNICODE`) and until now could
+        not read one back.
+
+        `bytes.fromhex` also rejects an odd-length string, where the old loop
+        silently decoded the remainder and dropped the rest. Reporting that as
+        a decode failure is the better answer: a truncated payload is not
+        something to half-render.
+        """
         if not hex_str:
             return ""
-        decoded = ""
         try:
-            for i in range(0, len(hex_str), 4):
-                decoded += chr(int(hex_str[i : i + 4], 16))
-        except (ValueError, IndexError):
+            return bytes.fromhex(hex_str).decode("utf-16-be")
+        except (ValueError, UnicodeDecodeError):
             _LOGGER.debug("Failed to decode hex string '%s'", hex_str)
             return "[Decoding Error]"
-        return decoded
 
     def _require_contract(self, data: Any, key: str, cmd: str) -> None:
         """Fail loudly when a response is missing the key it must carry.
@@ -964,9 +981,14 @@ class ZTERouterAPI:
             data = await self._request("GET", path, timeout_sec=timeout_sec)
             self._require_contract(data, "sms_nv_total", "sms_capacity_info")
             return cast(dict[str, Any], data)
-        except Exception as e:
-            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
-                raise
+        except (ZTEAuthError, ZTEConnectionError):
+            # Named first so the swallow below is the explicit exception rather
+            # than the fallthrough. Under the previous `except Exception` plus
+            # an isinstance re-raise, a future domain exception outside this
+            # pair would silently become {} — the masked-error class this
+            # project has already shipped once.
+            raise
+        except Exception as e:  # noqa: BLE001 - optional endpoint, degrade quietly
             _LOGGER.debug("Failed to get SMS capacity: %s", e)
             return {}
 
@@ -1084,10 +1106,8 @@ class ZTERouterAPI:
         now = datetime.now(UTC)
         sms_time = now.strftime("%y;%m;%d;%H;%M;%S;+0")
 
-        # URL encode is handled by aiohttp when using dict data,
-        # but to keep it safe and exactly matched with standard ZTE request:
-        import urllib.parse
-
+        # URL-encoded to match the standard ZTE request exactly, rather than
+        # relying on aiohttp's dict-form encoding.
         escaped_number = urllib.parse.quote_plus(number)
 
         payload = (
@@ -1144,7 +1164,17 @@ class ZTERouterAPI:
         await self._ensure_session(timeout_sec=timeout_sec)
         version = await self.get_version(timeout_sec=timeout_sec)
         if not version:
-            return ""
+            # Do not return "" and let the caller send a command with an empty
+            # token. The router answers `{"result":"failure"}`, which surfaces
+            # as "Router rejected REBOOT_DEVICE" — blaming the device for
+            # refusing a command it never received, when the truth is that it
+            # could not be reached at all. Raising here keeps the two apart,
+            # and matches the dead-session sweep's rule: do the thing, or
+            # raise; never report a success-shaped result having done nothing.
+            raise ZTEConnectionError(
+                "Cannot derive the AD token: the router did not return its "
+                "firmware version. The command was not sent."
+            )
         is_new_gen = any(m in version for m in ["MC888", "MC889"])
         hash_func: Callable[[str], str] = (
             (lambda s: hashlib.sha256(s.encode()).hexdigest().upper())
@@ -1154,6 +1184,17 @@ class ZTERouterAPI:
         )
         a = hash_func(version)
         rd = await self.get_rd(timeout_sec=timeout_sec)
+        if not rd:
+            # The other half of the check above, missed when it was added.
+            # `get_rd` returns "" when the RD key is absent from an otherwise
+            # valid response, and hashing that produces a **well-formed but
+            # wrong** token: the write goes out, the router refuses it, and the
+            # user is told the device rejected a command it never had a chance
+            # to accept. Same failure the version check exists to prevent.
+            raise ZTEConnectionError(
+                "Cannot derive the AD token: the router did not return RD. "
+                "The command was not sent."
+            )
         return hash_func(a + rd)
 
     async def get_rd(self, timeout_sec: int | None = None) -> str:
@@ -1162,9 +1203,14 @@ class ZTERouterAPI:
         try:
             data = await self._request("GET", path, timeout_sec=timeout_sec)
             return cast(str, data.get("RD", ""))
-        except Exception as e:
-            if isinstance(e, (ZTEAuthError, ZTEConnectionError)):
-                raise
+        except (ZTEAuthError, ZTEConnectionError):
+            # Named first so the swallow below is the explicit exception rather
+            # than the fallthrough. Under the previous `except Exception` plus
+            # an isinstance re-raise, a future domain exception outside this
+            # pair would silently become "" — the masked-error class this
+            # project has already shipped once.
+            raise
+        except Exception as e:  # noqa: BLE001 - optional endpoint, degrade quietly
             _LOGGER.debug("Failed to get RD: %s", e)
             return ""
 
@@ -1314,7 +1360,7 @@ class ZTERouterAPI:
 
     # Every field `DATA_LIMIT_SETTING` expects, and the response key each is
     # read back from. The router refuses a payload missing any of them.
-    _DATA_VOLUME_FIELDS: dict[str, tuple[str, ...]] = {
+    DATA_VOLUME_FIELDS: dict[str, tuple[str, ...]] = {
         "data_volume_limit_switch": ("data_volume_limit_switch",),
         "data_volume_limit_unit": ("data_volume_limit_unit",),
         "data_volume_limit_size": ("data_volume_limit_size",),
@@ -1352,7 +1398,7 @@ class ZTERouterAPI:
         payload_fields: dict[str, str] = {}
         missing: list[str] = []
 
-        for field, aliases in self._DATA_VOLUME_FIELDS.items():
+        for field, aliases in self.DATA_VOLUME_FIELDS.items():
             if field in changes:
                 payload_fields[field] = str(changes[field])
                 continue
@@ -1377,7 +1423,7 @@ class ZTERouterAPI:
                 "the router. Refresh and retry."
             )
 
-        unknown = set(changes) - set(self._DATA_VOLUME_FIELDS)
+        unknown = set(changes) - set(self.DATA_VOLUME_FIELDS)
         if unknown:  # pragma: no cover - guards a programming error, not input
             raise ValueError(f"Unknown data-volume field(s): {sorted(unknown)}")
 

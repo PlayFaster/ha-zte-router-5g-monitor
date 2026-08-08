@@ -368,6 +368,15 @@ async def test_write_the_router_did_not_apply_is_reported(
     # Read twice: the second attempt is the leeway for a slower model.
     assert mock_coordinator.api.get_params.await_count == 2
     assert switch.is_on is False
+    # The two things a refusal must NOT do. `is_on is False` is weaker than it
+    # looks — `_last_known` starts False from the "0" payload, so it passes
+    # whether the code left it alone or wrote and something reset it. These
+    # separate "did not publish" from "happened to hold the same value", and
+    # pin that a refused command does not go on to poll the session that just
+    # declined it. Hoisting async_force_refresh above _async_confirm passes
+    # without them.
+    switch.async_write_ha_state.assert_not_called()
+    mock_coordinator.async_force_refresh.assert_not_called()
 
 
 @pytest.mark.asyncio

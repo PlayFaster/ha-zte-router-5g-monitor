@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import UpdateFailed
@@ -24,7 +25,7 @@ from .const import (
     SMS_MAX_CHARS_UNICODE,
     SMS_SEGMENTS_MAX,
 )
-from .coordinator import ZTERouterDataUpdateCoordinator
+from .coordinator import REPAIR_NAMES, ZTERouterDataUpdateCoordinator
 from .helpers import is_gsm7
 
 _LOGGER = logging.getLogger(__name__)
@@ -153,6 +154,35 @@ def _validate_sms_length(message: str) -> None:
     )
 
 
+async def _async_refresh_after_write(
+    coordinator: ZTERouterDataUpdateCoordinator, action: str
+) -> None:
+    """Refresh after a write that has already succeeded.
+
+    The refresh is cosmetic: without it the SMS counters and Recent Message sit
+    frozen until the next poll, and forever while Pause Polling is on.
+    `async_force_refresh` is the variant that bypasses the pause.
+
+    **It must not sit inside the action's error boundary.** It touches the
+    router again, so it can fail on its own — and reporting that as a failed
+    *write* tells the user a message was not sent when it was. The obvious
+    response is to send again, which for `send_sms` means a second charged
+    message to a third party. `dev_standards` Section 22 states the rule
+    directly: unverified is not failed, and a write with real-world effect must
+    never be retried on an ambiguous outcome.
+    """
+    try:
+        await coordinator.async_force_refresh()
+    except Exception as err:  # noqa: BLE001 - the write landed; this is cosmetic
+        _LOGGER.warning(
+            "%s: %s succeeded but the follow-up refresh failed, so entity "
+            "values stay stale until the next poll: %s",
+            coordinator.entry.title,
+            action,
+            err,
+        )
+
+
 async def async_send_sms(hass: HomeAssistant, call: ServiceCall) -> None:
     """Service to send an SMS."""
     coordinator = _get_coordinator(hass, call.data)
@@ -160,19 +190,27 @@ async def async_send_sms(hass: HomeAssistant, call: ServiceCall) -> None:
     message = call.data["message"]
     _validate_sms_length(message)
 
+    sent: list[str] = []
     try:
         for num in target:
             await coordinator.api.send_sms(num, message)
-        # Every write action refreshes, or the SMS counters and Recent Message
-        # stay frozen until the next poll — and never, while Pause Polling is
-        # on. `async_force_refresh` is the variant that bypasses the pause.
-        await coordinator.async_force_refresh()
+            sent.append(num)
     except Exception as err:
+        # Name what already went out. Stopping at the first failure is
+        # deliberate — continuing would send messages this call would not
+        # otherwise have sent — but a caller told only "failed" cannot tell a
+        # total failure from a partial one, and retrying re-sends to everyone
+        # already reached.
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="send_sms_failed",
-            translation_placeholders={"error": str(err)},
+            translation_placeholders={
+                "error": str(err),
+                "sent": ", ".join(sent) if sent else "none",
+            },
         ) from err
+
+    await _async_refresh_after_write(coordinator, "send_sms")
 
 
 async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -182,13 +220,14 @@ async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
 
     try:
         await coordinator.api.delete_sms(str(index))
-        await coordinator.async_force_refresh()
     except Exception as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="delete_sms_failed",
             translation_placeholders={"error": str(err)},
         ) from err
+
+    await _async_refresh_after_write(coordinator, "delete_sms")
 
 
 async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -203,17 +242,33 @@ async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
             messages = await coordinator.api.get_sms_messages(mem_store="1")
             messages.sort(key=lambda x: int(x.get("id", 0)), reverse=True)
             to_delete = messages[keep_last:] if keep_last < len(messages) else []
-            if to_delete:
-                ids = [m["id"] for m in to_delete]
+            # A record with no `id` came that way from the router — this
+            # integration never strips one. It cannot be deleted by any route,
+            # since deletion targets ids, so refusing the whole operation would
+            # spare it nothing and leave every other message in place too.
+            # Delete what is identifiable and say what was skipped.
+            ids = [m["id"] for m in to_delete if m.get("id")]
+            skipped = len(to_delete) - len(ids)
+            if skipped:
+                _LOGGER.warning(
+                    "%s: %d message(s) had no id and cannot be deleted; "
+                    "removing the remaining %d",
+                    coordinator.entry.title,
+                    skipped,
+                    len(ids),
+                )
+            # Never send an empty target list: the router's behaviour for a
+            # blank `delete_sms` is unknown, and this is a destructive command.
+            if ids:
                 await coordinator.api.delete_sms(";".join(ids))
-
-        await coordinator.async_force_refresh()
     except Exception as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="delete_all_sms_failed",
             translation_placeholders={"error": str(err)},
         ) from err
+
+    await _async_refresh_after_write(coordinator, "delete_all_sms")
 
 
 async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str, Any]:
@@ -389,6 +444,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator.reload_signature = _reload_signature(entry.options)
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
 
+    # Repairs raised before the ids were entry-scoped have no code left that
+    # can clear them. Sweep them once, here, so the rename cannot orphan one.
+    coordinator.clear_legacy_repairs()
+
     # Register the System root device early to prevent via_device warnings in platforms
     device_registry = dr.async_get(hass)
     host = entry.options[CONF_HOST]
@@ -451,5 +510,27 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             entry, "runtime_data", None
         )
         if coordinator is not None:
+            # Clear this entry's repairs before the code that could clear them
+            # goes away. They are all `is_fixable=False`, so a repair left
+            # showing after an unload has no route out of the panel at all.
+            coordinator.clear_repairs()
             await coordinator.api.logout()
     return unload_ok if isinstance(unload_ok, bool) else False
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clear anything this entry leaves behind in Home Assistant.
+
+    Unload already clears the repairs on the ordinary path, but removal can
+    follow an unload that failed — and an entry removed while a repair is
+    showing would otherwise leave permanent, unfixable litter in the Repairs
+    panel with the integration that owns it gone.
+
+    Rebuilt from `entry.entry_id` rather than read from the coordinator:
+    `runtime_data` is already gone by the time HA calls this.
+    """
+    for name in REPAIR_NAMES:
+        ir.async_delete_issue(hass, DOMAIN, f"{entry.entry_id}_{name}")
+        # The pre-scoping spelling, for an entry removed before ever being
+        # set up again under the new ids.
+        ir.async_delete_issue(hass, DOMAIN, name)

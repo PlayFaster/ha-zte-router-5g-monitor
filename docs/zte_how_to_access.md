@@ -104,7 +104,7 @@ On any of the three signatures, the client re-logs in and retries **once** (`_re
 
 `ZTECredentialsError` subclasses `ZTEAuthError` and is raised **only** when the router rejects the password. It is the only condition that reaches `ConfigEntryAuthFailed`; a lapsed session raises `UpdateFailed` instead.
 
-The distinction is not cosmetic. Prompting a user to re-enter a password that was never wrong sends them somewhere that cannot help. It is also safe to be strict here because of a router behaviour worth stating plainly: **the most recent login wins.** Home Assistant logging in takes the session back from the web GUI — which then shows "your session was terminated" — so there is no state in which HA is reachable but permanently unable to authenticate.
+The distinction is not cosmetic. Prompting a user to re-enter a password that was never wrong sends them somewhere that cannot help. It is also safe to be strict here because of a router behavior worth stating plainly: **the most recent login wins.** Home Assistant logging in takes the session back from the web GUI — which then shows "your session was terminated" — so there is no state in which HA is reachable but permanently unable to authenticate.
 
 On any of the three, the client re-logs in and retries **once** (`_retry=False` on the retry, so a genuinely rejected credential surfaces as `ZTEAuthError` rather than looping).
 
@@ -152,6 +152,8 @@ This is the second model-dependent branch in the protocol. MD5 here is a vendor 
 **Client-side enforcement**: `api.py:_require_success()` is called on the result of every write command and raises `ZTEConnectionError` on an explicit non-success `result`. Before it existed, a refused write was reported to the user as a successful action — a user watched an SMS action succeed with no message sent. It raises only on an explicit non-success value; a response carrying no `result` key is left alone, because not every `goformId` returns one.
 
 **`RD` is a static per-device seed, so `AD` is _not_ single-use.** Measured on MC7010 firmware `V1.0.0B03` (2026-07-29): `cmd=RD` returned the identical value across logins and across a deliberately invalidated session. Since `AD = H(H(version + cr_version) + RD)` and both inputs are fixed for a given device, **the token is constant per router** — which is why `_request` can replay a write payload verbatim after a re-login without the embedded `AD` going stale. An earlier revision of this document claimed the opposite ("fetched fresh for every write, so `AD` is single-use"); that was an assumption, and the measurement contradicts it. Do not build a retry or caching decision on the single-use reading.
+
+**Both inputs are required, and an absent one must raise rather than hash to a token.** `AD = H(H(version) + RD)`, so a missing `wa_inner_version` **or** a missing `RD` yields a well-formed but wrong token. Sent, it draws `{"result":"failure"}` — which reads to the user as the router refusing a command it never had a chance to accept. `get_ad` raises `ZTEConnectionError` on either, naming the real cause.
 
 ---
 
@@ -365,6 +367,8 @@ Full probe results, and the router-facing agent's answers on encodings and write
 - **`mem_store`**: `1` = router storage, `0` = SIM storage. `tags=10` selects received messages.
 - **Implementation**: `get_sms_messages`, `api.py:663`. `get_last_sms_content` (`api.py:552`) is the same call with `data_per_page=1`.
 
+**Decode the hex whole, not four characters at a time.** `bytes.fromhex(s).decode("utf-16-be")`. A per-code-unit loop is correct only inside the BMP — anything above it (every emoji) is a **surrogate pair**, and splitting it yields lone surrogates that cannot be encoded to UTF-8 at all, so the failure surfaces downstream in the recorder or a log handler rather than here. Confirmed on hardware 2026-08-07: `✈️` survived a per-unit decode and `🏌` did not, which is the BMP boundary and the signature of this mistake.
+
 **Fields arrive hex-encoded.** `content` and `number` are UTF-16BE hex strings; `date` is a comma-separated `yy,mm,dd,HH,MM,SS` list. The client decodes each into a parallel `*_decoded` key (`content_decoded`, `number_decoded`, `date_decoded`) and leaves the raw value in place. A decode failure yields the literal `[Decoding Error]` rather than raising — a malformed message must not take down the poll.
 
 ### `cmd=LD`, `cmd=RD`, `cmd=wa_inner_version`
@@ -492,7 +496,7 @@ Twenty-six write actions were recovered from the router's own `js/service.js` bu
 | `QUICK_SETUP` / `QUICK_SETUP_EX` | Not used | First-run wizard. |
 | `SET_NV` | Not used | Raw NV-item write. Unbounded and undocumented; nothing good comes of calling it blind. |
 | `SET_UPGRADE_NOTICE` | Not used | Firmware-update prompt suppression. |
-| `REDIRECT_REDIRECT_OFF` | Not used | Web UI redirect behaviour. |
+| `REDIRECT_REDIRECT_OFF` | Not used | Web UI redirect behavior. |
 
 ### Why the declined rows are declined
 
@@ -643,7 +647,7 @@ What it does change is how the router counts segments:
 
 Concatenated segments give up 7 bytes each to a header, which is why the per-segment figure is lower than the single-message one. The MC7010 web UI advertises `(765) (1/5)` for plain text — exactly 5 x 153, confirming the five-segment ceiling.
 
-Pick the type from the message content: if every character is in the GSM 03.38 alphabet, `GSM7_default`; otherwise `UNICODE`. **One out-of-alphabet character changes the encoding for the entire message**, so a single emoji cuts the ceiling from 765 to 335. Behaviour past five segments is untested — `async_send_sms` rejects it rather than finding out.
+Pick the type from the message content: if every character is in the GSM 03.38 alphabet, `GSM7_default`; otherwise `UNICODE`. **One out-of-alphabet character changes the encoding for the entire message**, so a single emoji cuts the ceiling from 765 to 335. Behavior past five segments is untested — `async_send_sms` rejects it rather than finding out.
 
 Confirmed on hardware (2026-07-29): a 159-character plain message and an 80-character message with three emoji both arrived as **one** message on the handset, so the router segments and the phone reassembles. Nothing is truncated.
 

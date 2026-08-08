@@ -4,7 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.2] - 2026-08-01 - Release
+## [3.3.3] - 2026-08-08 - Release - SMS Bugfix
+
+### Summary
+
+A Send SMS fix, plus several resilience and robustness changes for edge case behavior.
+
+### Fixed
+
+- **Get SMS List Action now reads Emoji Messages.** Any emoji, or character outside the basic set, made the `get_sms_list` action fail with an internal error, making the whole list was unreadable rather than the one message.
+
+### Changed
+
+- **Send SMS resilience**: The action now handles transient counter refresh failures without reporting the send itself as failed.
+
+- **Multi-recipient SMS error reporting**: When sending SMS to multiple recipients fails midway, the error message now specifies which numbers were successfully reached.
+
+- **Delete All Messages resilience**: The action now skips and logs messages with missing identifiers, allowing the deletion of remaining messages to complete.
+
+- **Data entities polling resilience**: Decoupled `Allowance` and `Alert Threshold` from secondary poll status to prevent them from going unavailable during transient secondary failures.
+
+- **Total Messages robust handling**: The sensor now handles empty responses from individual message storage areas without blanking out the entire count.
+
+- **Repairs lifecycle cleanup**: Repairs are now automatically cleared when the integration is reloaded or removed, and are isolated per-device.
+
+- **Command error description**: Unreachable routers are now reported as communication failures rather than command rejections across all commands.
+
+- **Projected Cycle Usage edge cases**: Handled additional string representations of "off" from the router to accurately detect when the billing cycle counter is disabled.
+
+- **Polling interval updates**: Ensured rapid polling interval changes are preserved even if the integration is reloaded immediately after.
+
+---
+
+## [3.3.2] - 2026-08-02 - Release
 
 ### Summary
 
@@ -45,7 +77,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 - **Wider ZTE model support**: signal and data-usage sensors now recognize the alternative field names used by other `goform` routers, the login falls back to the other form when a model rejects the first, and the LTE/5G band name is worked out from the channel number when the router leaves it blank.
 
-- **Attributes are not written to history**: no entity in this integration records any attribute to the database — only its state. The current state of all Attributes stay visible in the More Info dialog, Developer Tools and templates.
+- **Attributes are not written to history**: no entity in this integration records any attribute to the database — only its state. The current state of all Attributes stay visible in the More Info dialog, Tools and templates.
 
 - **Documentation**: the README's example automations now ignore `unknown` and `unavailable` states, to avoid false alerts from a HA restart or router reboot.
 
@@ -320,7 +352,8 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
-  - [\[3.3.2\] - 2026-08-01 - Release](#332---2026-08-01---release)
+  - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
+  - [\[3.3.2\] - 2026-08-02 - Release](#332---2026-08-02---release)
   - [\[3.2.5\] - 2026-07-03 - Release](#325---2026-07-03---release)
   - [\[3.2.4\] - 2026-06-15 - Release](#324---2026-06-15---release)
   - [\[3.2.3\] - 2026-06-14](#323---2026-06-14)

@@ -47,6 +47,7 @@
     },
     "abort": {
       "already_configured": "Device is already configured",
+      "entry_not_found": "This integration entry no longer exists, so there is nothing to reauthenticate. It was most likely removed while the dialog was open.",
       "reauth_successful": "Re-authentication was successful"
     }
   },
@@ -354,7 +355,7 @@
       "message": "The message is {length} characters, but this router accepts at most {limit} when the text needs {encoding} encoding ({segments} segments). Shorten it, or remove any emoji and special characters to get the longer GSM-7 limit."
     },
     "send_sms_failed": {
-      "message": "Failed to send the SMS: {error}"
+      "message": "Failed to send the SMS: {error}. Already sent to: {sent}. Retrying will send again to those recipients."
     },
     "delete_sms_failed": {
       "message": "Failed to delete the SMS: {error}"

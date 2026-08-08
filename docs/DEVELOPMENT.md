@@ -95,8 +95,8 @@ To reach its current "modern" state, the project underwent several major refacto
   - _Fix_: Standardized all platforms to initialize from `entry.data`. Hardware metadata changes detected mid-poll are propagated via the device registry (`device_registry.async_update_device`) rather than rewriting `entry.data`, avoiding unnecessary disk writes and maintaining the principle that `entry.data` is immutable after initial setup.
 - **MockConfigEntry Immutability**: In Home Assistant tests, `MockConfigEntry.options` is a frozen property. Attempting to update it directly via `entry.options = {...}` fails with an `AttributeError`.
   - _Fix_: Use `object.__setattr__(entry, "options", new_options)` in test code to bypass the frozen attribute restriction.
-- **Expired Session Returned an Empty SMS List (2026-07-27)**: `get_sms_list` reported "no messages" while SMS were present; Refresh Now then made it work. The router answers an authenticated request on a **dead session** with `200 OK` and the requested keys echoed back empty — `{"sms_data_total":""}` — never an error or a redirect. The expiry detector in `_request` tested two **named** keys (`network_type`, `signalbar`) that exist only in the batch-poll response, so on an SMS response `.get()` returned `None`, `None == ""` was `False`, and the dead body was passed through as an empty inbox. Refresh Now worked precisely because the batch poll's keys _were_ recognised.
-  - _Fix_: the detector now tests **"every value is an empty string"**, which covers all observed dead shapes; and `_require_contract()` makes each SMS call assert the key it must receive (`messages`, `sms_nv_total`) and raise rather than fall back to `[]`. Two independent defences, each mutation-proved. **An empty inbox returns `{"messages":[]}` — the key is present — which is what keeps "no messages" distinguishable from "no session".** Never narrow the detector back to named keys. Full signature table in `docs/zte_how_to_access.md`.
+- **Expired Session Returned an Empty SMS List (2026-07-27)**: `get_sms_list` reported "no messages" while SMS were present; Refresh Now then made it work. The router answers an authenticated request on a **dead session** with `200 OK` and the requested keys echoed back empty — `{"sms_data_total":""}` — never an error or a redirect. The expiry detector in `_request` tested two **named** keys (`network_type`, `signalbar`) that exist only in the batch-poll response, so on an SMS response `.get()` returned `None`, `None == ""` was `False`, and the dead body was passed through as an empty inbox. Refresh Now worked precisely because the batch poll's keys _were_ recognized.
+  - _Fix_: the detector now tests **"every value is an empty string"**, which covers all observed dead shapes; and `_require_contract()` makes each SMS call assert the key it must receive (`messages`, `sms_nv_total`) and raise rather than fall back to `[]`. Two independent defenses, each mutation-proved. **An empty inbox returns `{"messages":[]}` — the key is present — which is what keeps "no messages" distinguishable from "no session".** Never narrow the detector back to named keys. Full signature table in `docs/zte_how_to_access.md`.
 - **Actions Silently Failed on an Expired Session (2026-07-29)**: the sibling of the 2026-07-27 pitfall above, and it survived that fix. With Pause Polling on, `send_sms` reported success and no message arrived; turning polling off and resending worked. Two independent causes. **First**, `_request` stamped `last_activity` on _every_ successful call including unauthenticated ones — and every write begins `get_ad()` → `get_version()`, which is unauthenticated. That reset the idle clock immediately before the authenticated call that depended on it, so the 150-second check saw a session idle for hours as "active 0 seconds ago" and kept the dead `stok`. **Second**, no write command checked the router's reply; this API answers `200 OK` with `{"result":"failure"}` for a refused command, so the rejection surfaced to the user as a green action. Fixes: gate the `last_activity` update on `authenticated`, and `_require_success()` on all eight writes. The general lesson is the one the 2026-07-27 entry also carries — **on this API a 200 means nothing; check the body, and be sure the thing you are checking actually proves what you think it proves.** An unauthenticated call succeeding proves the router is reachable, not that the session is alive.
 - **Background Task Mocking**: When `hass.async_create_task` is mocked, tasks created via `entry.async_create_background_task` may not execute, leading to `RuntimeWarning: coroutine was never awaited`.
   - _Fix_: In `conftest.py`, ensure the background task mock explicitly schedules the coroutine via `asyncio.create_task` and that the test awaits `hass.async_block_till_done()`.
@@ -180,7 +180,7 @@ The general lesson is the one this API keeps teaching: a write that is refused l
 
 The cost of getting this wrong is not a wrong label. A fix that built the switch-to-manual payload from `apn_index` would have **activated a different APN than the one working** — a worse outcome than the refusal it was written to cure. It shipped in that state for about an hour, and was caught by the project owner describing how the router actually behaves, not by any test: every test agreed with the wrong model, because the model came from the same place the code did.
 
-Three rules follow, and they generalise beyond APNs:
+Three rules follow, and they generalize beyond APNs:
 
 - **Ask what a field is _for_, not what it appears to describe.** An index is a stored preference; a reported value is a fact. When the two can disagree, the fact wins.
 - **Where the authoritative value cannot be resolved, refuse rather than guess.** In auto mode the network default need not exist in the stored profile list at all — on the reference device it does only because a duplicate profile was added by hand. There is no correct automatic answer, so `set_apn_mode()` refuses and names the route that works (choosing an APN Profile, which sets mode and profile together).
@@ -324,6 +324,53 @@ Three mechanisms sit near this and only the first delays a command. The coordina
 
 Before adding any of this later: **debounce** when the input generates values the user did not intend; **throttle** when the vendor publishes a rate limit; **guard** when a repeat is both expensive and silent. Repeats here are either cheap (a targeted read-back costs ~16 ms) or loud (an error reaches the user), so none currently applies.
 
+### 5.x A read path that could not be read back — surrogate pairs, 2026-08-07
+
+`_hex_decode` built its result with `chr()` per four hex digits. Correct inside the Basic Multilingual Plane, wrong above it: every emoji is a UTF-16 **surrogate pair**, and taking each half separately produces two lone surrogates.
+
+**The damage was not mangled text.** A string holding lone surrogates cannot be encoded to UTF-8 at all. `get_sms_list` is a **response service**, so Home Assistant tried to serialize the payload, failed, and returned a 500 — the whole action died. An ordinary sensor would have shown nonsense and kept working; the service surface is what turned a display bug into a total failure.
+
+Three things about how it was found are worth keeping:
+
+- **The error named the wrong component.** The user saw _"Invalid JSON in response"_, which is HA's serializer. That string does not exist anywhere in this integration, and chasing it as a parse failure would have led into `_request`'s dead-session detection, which was working perfectly.
+- **The router was never at fault.** A raw-response probe found valid JSON, valid UTF-8 and pure hex content at every page size and in both memory stores. Measuring the device first is what stopped a day being spent on the parser.
+- **`✈️` survived and `🏌` did not.** That split is the BMP boundary, and it identifies this defect on sight.
+
+Sending was verified separately and was never broken — `encode_type` selection and the UTF-16BE body are confirmed against hardware.
+
+### 5.y Timeout values, measured rather than argued — 2026-08-07
+
+`asyncio.timeout(30)` per poll and `ClientTimeout(total=15)` per request were chosen independently and never reconciled. A poll makes four sequential requests, so the per-request budget sums to 60 s inside a 30 s ceiling, and an auth retry repeats the whole set inside the same ceiling.
+
+Measured against an MC7010 (V1.0.0B03), 50 rounds, polling paused everywhere:
+
+|                                |  median |   worst |
+| :----------------------------- | ------: | ------: |
+| Full poll (4 calls)            | 0.100 s | 1.058 s |
+| `login`                        | 0.090 s | 1.041 s |
+| `get_ad` (write pre-flight)    | 0.043 s | 0.965 s |
+| `get_params` (write read-back) | 0.015 s | 0.111 s |
+
+**No value changed.** The retry path needs ~2.2 s against 30 s — 14x headroom. The mismatch is arithmetic, not a defect: it bites only if the router slows by about two orders of magnitude.
+
+Three things measurement settled that reading could not:
+
+- **The ~1 s stalls are the router, not a slow call.** They land on `login`, `get_extended_data`, `get_sms_capacity` and `get_ad` alike — whatever is in flight. A 12-round sample had shown them only on `get_ad` and suggested a write-path problem that does not exist. The larger sample killed the hypothesis.
+- **The 15 s per-request timeout is reachable.** One `get_ad` in 50 rounds hit it exactly and failed, so it is doing real work rather than sitting unreachably high.
+- **`WRITE_VERIFY_TIMEOUT` at 3 s** against a 0.111 s worst read-back has ample room.
+
+Probe kept at `.notes/local_only/timing_probe.py`. Re-run it before changing any of the three values.
+
+### 5.z The router hands its session to whoever logged in last
+
+Not a defect, but it shapes every measurement taken against this device. There is no lock and no queue: a new login silently invalidates the previous one.
+
+Consequences worth remembering:
+
+- **An abandoned session blocks nothing.** This is why the config-flow validation leak was low impact — the next login simply takes the slot back.
+- **A competing client makes results unattributable.** A production Home Assistant polling every three minutes will interrupt any step spanning three minutes, on a fixed cadence. On 2026-08-07 that presented as a `delete_sms` timeout that looked like a defect and was not; a clean re-run passed.
+- `hardware_check.py` warns about this at start-up for exactly that reason. It steals its own session on purpose at a known point; an outside competitor steals it at an arbitrary one, and the two cannot be told apart after the fact.
+
 ---
 
 ## 6. Environment Constraints
@@ -333,6 +380,9 @@ Before adding any of this later: **debounce** when the input generates values th
 - **Shared Session**: The integration uses `async_get_clientsession(hass)` to leverage Home Assistant's optimized, shared connection pool.
 
 ## 7. Technical Debt & Future Work
+
+- **Deliberately not fixed, from the 2026-08-07 code review.** Four exception handlers in `api.py` are reachable only by patching `_request`, so they read as uncovered. The available "fixes" are deleting the error handling or adding a `# pragma: no cover` — both suppress a real guard to move a coverage number, which `dev_standards` §11 rule 6 rules out. Left as they are, on purpose. Likewise, `async_step_user` validates credentials **before** checking for a duplicate entry: the IMEI that forms the unique id comes from that very fetch, so reordering would risk the dedup logic to save one round trip on a path taken once per install.
+- **The `testing_deeper_lev1_review` pass is partial.** Its first run was narrowed by the operator rather than by the prompt, so the six analysis strategies were not applied evenly; an unbiased re-run produced no output and was abandoned. Four of its six findings were verified and fixed, one was **disproved** on checking, and one area of the project remains unexamined at depth. Recorded in `.notes/info/updates_202608/status_plan.md` §O.
 
 - **Token Persistence**: Currently, the `stok` (Session Token) is stored in memory. A fresh login is required on every integration restart.
 - **Translation-Key Naming**: When migrating from `name="..."` to `translation_key="..."`, both `strings.json` and `translations/en.json` must be kept in sync. `strings.json` is the authoritative source; `translations/en.json` is the runtime-loaded file. Adding a sensor requires adding entries to both files, not just the Python code.

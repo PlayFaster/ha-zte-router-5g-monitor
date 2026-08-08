@@ -1,6 +1,6 @@
 """Options reload-vs-live-apply, and session release on unload.
 
-Both behaviours only exist through the real config-entry pipeline, so every
+Both behaviors only exist through the real config-entry pipeline, so every
 test drives a real ``hass`` and blocks on the loop after the change.
 """
 

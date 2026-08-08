@@ -1,0 +1,18 @@
+# Modules worth mutating in this project, one glob per line.
+#
+# The sync appends these under `only_mutate=` in setup.cfg, indented. Do not
+# indent them here and do not use commas — see the notes in setup.cfg.
+#
+# Include a module when its tests exercise real code. Leave it out when the
+# tests mock its collaborator: a mutation of a call into a mock cannot be
+# detected by any test, so it becomes a survivor you read and discard.
+#
+# Assessed by measurement on 2026-08-07. Left out as mocked boundaries:
+# api.py, coordinator.py, select.py, switch.py, binary_sensor.py, button.py,
+# number.py, config_flow.py; and _compat.py, whose 14 statements mock the
+# device registry. scripts/write_classification.py is unreachable — setup.cfg
+# sets source_paths=custom_components.
+
+*/helpers.py
+*/diagnostics.py
+*/sensor.py

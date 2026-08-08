@@ -46,6 +46,11 @@ ENDPOINT_SMS_MESSAGES = "sms_messages"
 # disabled-by-default entities, so a failure must not blank Signal and Data.
 ENDPOINT_EXTENDED = "extended_data"
 
+# Every repair this integration can raise. The names double as `translation_key`
+# values, which stay bare; only the registry **id** carries the entry (see
+# `_repair_ids`). Adding one means adding it here, or unload will not clear it.
+REPAIR_NAMES = ("router_unreachable", "firmware_contract_drift", "sms_storage_full")
+
 # Keys the router is expected to return on every successful poll. Used only for
 # the Section 19 contract-drift check: a non-empty response in which none of
 # these resolve means the upstream schema changed underneath a "successful"
@@ -95,6 +100,12 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # One-shot flag set by async_force_refresh so an explicit user action
         # fetches even while polling is paused (Section 13).
         self._force_refresh_once = False
+
+        # Repair ids are scoped to the entry. The issue registry keys on
+        # `(domain, issue_id)`, so a bare id gives every config entry the same
+        # row — with two routers and one failing, the healthy one's next
+        # successful poll deletes the failing one's repair.
+        self._repair_ids = {name: f"{entry.entry_id}_{name}" for name in REPAIR_NAMES}
 
         # Per-endpoint resilience state (Section 8).
         self._endpoint_failures: dict[str, int] = {}
@@ -149,6 +160,33 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=timedelta(seconds=scan_interval),
         )
 
+    def clear_legacy_repairs(self) -> None:
+        """Delete repairs raised under the old unscoped ids.
+
+        Before the ids carried the entry, all three were raised under their
+        bare names. `ir.async_delete_issue` looks up by id, so a repair still
+        live under an old name has no code left that can clear it and no UI
+        path either — they are all `is_fixable=False`. Called once at setup, so
+        the rename cannot strand one. Safe to keep indefinitely: deleting an
+        issue that does not exist is a no-op.
+        """
+        for name in REPAIR_NAMES:
+            ir.async_delete_issue(self.hass, DOMAIN, name)
+
+    def clear_repairs(self) -> None:
+        """Clear every repair this entry raised.
+
+        Called on unload **and** on removal. Without it a user who deletes the
+        integration while a repair is showing keeps it in the Repairs panel
+        permanently: `is_fixable=False`, and the integration that would clear
+        it is gone.
+        """
+        for issue_id in self._repair_ids.values():
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+        self._drift_repair_raised = False
+        self._unreachable_repair_raised = False
+        self._sms_storage_full = False
+
     def apply_live_options(self) -> None:
         """Apply the options that change without a reload.
 
@@ -177,7 +215,24 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         (dev_standards Section 13). Scheduled polls still respect the pause.
         """
         self._force_refresh_once = True
-        await self.async_request_refresh()
+        try:
+            await self.async_request_refresh()
+        except Exception:
+            # The flag is consumed at the top of `_async_update_data`, so an
+            # update that never runs leaves it set — and the next *scheduled*
+            # poll would then fetch despite the pause. Self-correcting after one
+            # cycle, but §13's flag lifecycle asks that every path out clears it.
+            self._force_refresh_once = False
+            raise
+
+    @property
+    def endpoint_failures(self) -> dict[str, int]:
+        """Return the per-endpoint strike counts, as a copy.
+
+        Read by `diagnostics.py`, which must never be able to mutate coordinator
+        state — it is a read path (Section 20).
+        """
+        return dict(self._endpoint_failures)
 
     def endpoint_available(self, source: str) -> bool:
         """Return whether an optional endpoint is still serving usable data.
@@ -564,7 +619,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
-                "router_unreachable",
+                self._repair_ids["router_unreachable"],
                 is_fixable=False,
                 severity=ir.IssueSeverity.ERROR,
                 translation_key="router_unreachable",
@@ -575,7 +630,9 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 },
             )
         else:
-            ir.async_delete_issue(self.hass, DOMAIN, "router_unreachable")
+            ir.async_delete_issue(
+                self.hass, DOMAIN, self._repair_ids["router_unreachable"]
+            )
         self._unreachable_repair_raised = unreachable
 
     def _set_drift_repair(self, drift: bool) -> None:
@@ -594,14 +651,16 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
-                "firmware_contract_drift",
+                self._repair_ids["firmware_contract_drift"],
                 is_fixable=False,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="firmware_contract_drift",
                 translation_placeholders={"name": self.entry.title},
             )
         else:
-            ir.async_delete_issue(self.hass, DOMAIN, "firmware_contract_drift")
+            ir.async_delete_issue(
+                self.hass, DOMAIN, self._repair_ids["firmware_contract_drift"]
+            )
         self._drift_repair_raised = drift
 
     def _check_contract_drift(self, data: dict[str, Any]) -> bool:
@@ -752,6 +811,20 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 self.entry.title,
                 exc_info=True,
             )
+            # Write a snapshot rather than leaving the last one standing. The
+            # success path already does this; without it the failure path holds
+            # a verdict describing a cycle that is over, which is the one thing
+            # Section 19 says a health verdict must never do.
+            self.health_snapshot = {
+                "problem": False,
+                "issues": [],
+                "severity": "unknown",
+                "degraded_capabilities": [],
+                "drift": [],
+                "repairs": [],
+                "last_good_update": None,
+                "consecutive_failures": self.consecutive_failures,
+            }
 
     def _check_sms_storage(self, data: dict[str, Any]) -> None:
         """Create or clear the SMS storage full repair issue."""
@@ -761,11 +834,11 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         except (ValueError, TypeError):
             return
         self._sms_storage_full = nv_able > 0 and nv_total >= nv_able
-        if nv_able > 0 and nv_total >= nv_able:
+        if self._sms_storage_full:
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
-                "sms_storage_full",
+                self._repair_ids["sms_storage_full"],
                 is_fixable=False,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="sms_storage_full",
@@ -775,7 +848,9 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 },
             )
         else:
-            ir.async_delete_issue(self.hass, DOMAIN, "sms_storage_full")
+            ir.async_delete_issue(
+                self.hass, DOMAIN, self._repair_ids["sms_storage_full"]
+            )
 
     def _check_new_sms(self, messages: list[dict[str, Any]]) -> None:
         """Check for new SMS messages and fire events."""

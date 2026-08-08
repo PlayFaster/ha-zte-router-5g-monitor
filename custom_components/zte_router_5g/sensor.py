@@ -101,7 +101,12 @@ def _get_total_sms(data: Any) -> int | None:
         "sms_sim_draftbox_total",
     ]
     try:
-        return sum(int(data.get(k, 0)) for k in keys)
+        # Present-but-empty is absent, the same rule `_get_first` applies. A
+        # router that reports one bank as `""` was otherwise blanking the whole
+        # sensor and its attribute breakdown, which reads as "no messages" —
+        # the opposite of what an unreadable bank means. A genuinely
+        # unparsable value still returns None.
+        return sum(int(raw) for k in keys if (raw := data.get(k)) not in (None, ""))
     except (ValueError, TypeError):
         return None
 
@@ -278,7 +283,15 @@ def _projection(data: dict[str, Any]) -> _Projection | None:
     that never clears is worse than both. The assumption is published as
     `cycle_source` so it is visible rather than hidden in the arithmetic.
     """
-    if data.get("wan_auto_clear_flow_data_switch") == "off":
+    # The router has been seen to report this as "off"; the sibling switches
+    # in this API use "0"/"1", and casing is not guaranteed. An exact match on
+    # one spelling silently treats every other "disabled" form as enabled and
+    # projects against a cycle the router is not keeping.
+    if str(data.get("wan_auto_clear_flow_data_switch", "")).strip().lower() in (
+        "off",
+        "0",
+        "false",
+    ):
         return None
 
     clear_day = _clear_day(data)
@@ -1337,7 +1350,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         # 1 PiB. The encoding is inferred from a single sample, so a guard band
         # keeps a misparse out of the statistics rather than trusting it.
         max_limit=1125899906842624,
-        source=ENDPOINT_EXTENDED,
         group="data",
         value_fn=_data_allowance_bytes,
     ),
@@ -1350,7 +1362,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "in Home Assistant."
         ),
         translation_key="data_volume_alert_percent",
-        native_unit_of_measurement="%",
+        native_unit_of_measurement=PERCENTAGE,
         entity_category=EntityCategory.DIAGNOSTIC,
         # Deliberately no `state_class`: a configured threshold changes at most
         # a handful of times in the life of an install, so a trend line of it
@@ -1359,7 +1371,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=0,
         max_limit=100,
         group="data",
-        source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_int(data.get("data_volume_alert_percent")),
     ),
     ZTESensorEntityDescription(

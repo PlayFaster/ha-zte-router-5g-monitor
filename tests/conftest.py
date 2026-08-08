@@ -97,7 +97,6 @@ class MockResponse:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Exit the context manager."""
-        pass
 
 
 @pytest.fixture
@@ -110,7 +109,7 @@ def mock_aiohttp_client():
     def _request_side_effect(method, *args, **kwargs):
         if method.upper() == "GET":
             return session.get(*args, **kwargs)
-        elif method.upper() == "POST":
+        if method.upper() == "POST":
             return session.post(*args, **kwargs)
         return MagicMock()
 

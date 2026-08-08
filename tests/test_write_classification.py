@@ -5,12 +5,12 @@ shipped broken in every release for weeks; the ODU LED switch was erratic for
 just as long. Neither was a subtle bug — both failed on the first attempt. They
 survived because **nobody used those entities**, so nobody tried.
 
-No behavioural test catches that, because the missing thing is not an assertion,
+No behavioral test catches that, because the missing thing is not an assertion,
 it is the decision to look. What this file enforces instead is a decision:
 adding a command to `api.py` without recording whether a script may exercise it
 fails the suite.
 
-Deliberately not a behavioural test — it never touches a router, and it proves
+Deliberately not a behavioral test — it never touches a router, and it proves
 nothing about whether any write works. It proves only that none was added in
 silence.
 """

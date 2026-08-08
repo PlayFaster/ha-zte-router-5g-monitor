@@ -164,15 +164,49 @@ async def test_api_delete_all_exception(mock_aiohttp_client):
 
 
 @pytest.mark.asyncio
-async def test_api_get_ad_empty_version(mock_aiohttp_client):
-    """Test get_ad when version is empty."""
+async def test_api_get_ad_raises_when_the_version_is_unavailable(
+    mock_aiohttp_client,
+):
+    """No version means no token, and no command may be sent.
+
+    This asserted `ad == ""`, so the caller went on to send a write carrying an
+    empty token. The router answers `{"result":"failure"}`, which reached the
+    user as "Router rejected REBOOT_DEVICE" — blaming the device for refusing
+    a command it had never received, when in fact it could not be reached.
+
+    The distinction being pinned is between *refused* and *never sent*.
+    Returning a falsy token collapses the two; raising keeps them apart, and
+    satisfies the dead-session sweep's rule that a method does the thing or
+    raises, never both nothing and success.
+    """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     with (
         patch.object(api, "_ensure_session", AsyncMock()),
         patch.object(api, "get_version", return_value=""),
+        pytest.raises(ZTEConnectionError, match="did not return its firmware"),
     ):
-        ad = await api.get_ad()
-        assert ad == ""
+        await api.get_ad()
+
+
+@pytest.mark.asyncio
+async def test_api_get_ad_raises_when_rd_is_unavailable(mock_aiohttp_client):
+    """No RD means no token either — the other half of the version check.
+
+    `get_rd` returns `""` when the RD key is absent from an otherwise valid
+    response. Hashing that produces a **well-formed but wrong** token: the
+    write goes out, the router refuses it, and the user is told the device
+    rejected a command it never had a chance to accept. That is the same
+    misleading outcome the version check was added to prevent, and it was
+    missed when only the version half was fixed.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    with (
+        patch.object(api, "_ensure_session", AsyncMock()),
+        patch.object(api, "get_version", return_value="MC7010_V1"),
+        patch.object(api, "get_rd", return_value=""),
+        pytest.raises(ZTEConnectionError, match="did not return RD"),
+    ):
+        await api.get_ad()
 
 
 @pytest.mark.asyncio
@@ -352,7 +386,13 @@ async def test_coordinator_timeout_resilience(
 async def test_init_background_setup_success(
     hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
 ):
-    """Test background setup success path in __init__."""
+    """The background task runs to completion against a real `hass`.
+
+    The sibling in `test_init.py` covers the same path against a mock `hass`;
+    this one exists because `async_forward_entry_setups` and the entity
+    platforms are real here, so it separates "the coroutine completed" from
+    "it completed with platforms actually set up underneath it".
+    """
     mock_config_entry.add_to_hass(hass)
 
     with (
@@ -374,11 +414,18 @@ async def test_init_background_setup_success(
 
         mock_config_entry.async_create_background_task = mock_capture_task
 
-        # Trigger setup
-        await async_setup_entry(hass, mock_config_entry)
+        mock_api.get_all_data = AsyncMock(return_value={"network_type": "ENDC"})
 
-        if background_coro:
-            await background_coro
+        # Trigger setup
+        assert await async_setup_entry(hass, mock_config_entry) is True
+
+        assert background_coro is not None, "setup created no background task"
+        await background_coro
+        await hass.async_block_till_done()
+
+        mock_api.login.assert_awaited_once_with(5)
+        assert mock_config_entry.runtime_data.data["network_type"] == "ENDC"
+        assert mock_config_entry.runtime_data.last_update_success is True
 
 
 @pytest.mark.asyncio
@@ -581,7 +628,10 @@ async def test_coordinator_sms_storage_full_creates_issue(
         await coordinator._async_update_data()
         mock_create.assert_called_once()
         call_kwargs = mock_create.call_args
-        assert call_kwargs.args[2] == "sms_storage_full"
+        # Entry-scoped id, bare translation_key — the two are deliberately
+        # different: the registry needs uniqueness, the user-facing text does not.
+        assert call_kwargs.args[2] == coordinator._repair_ids["sms_storage_full"]
+        assert call_kwargs.kwargs["translation_key"] == "sms_storage_full"
 
 
 @pytest.mark.asyncio
@@ -611,7 +661,9 @@ async def test_coordinator_sms_storage_not_full_deletes_issue(
         ) as mock_delete,
     ):
         await coordinator._async_update_data()
-        mock_delete.assert_called_once_with(hass, "zte_router_5g", "sms_storage_full")
+        mock_delete.assert_called_once_with(
+            hass, "zte_router_5g", coordinator._repair_ids["sms_storage_full"]
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -106,17 +106,45 @@ class ZTEPollingInterval(
         # Local state
         self._attr_native_value = initial_value
         self._refresh_task: asyncio.Task[Any] | None = None
+        # The value the debounce is waiting to commit, so removal can flush it.
+        self._pending_value: float | None = None
 
     async def async_will_remove_from_hass(self) -> None:
-        """Cancel any pending debounce task on removal."""
+        """Commit a pending slider value on removal, rather than discarding it.
+
+        The slider is optimistic: it shows the new value at once and writes it
+        after a 2 s debounce. An options change reloads the entry, which
+        removes this entity — and a removal inside that window used to cancel
+        the task without writing, so the value snapped back with no
+        explanation. Cancel the timer, then apply what it was waiting to do.
+        """
         if self._refresh_task and not self._refresh_task.done():
             self._refresh_task.cancel()
+            if self._pending_value is not None:
+                self._persist_interval(self._pending_value)
+
+    def _persist_interval(self, value: float) -> None:
+        """Apply the interval to the coordinator and write it to the entry.
+
+        Shared by the debounced apply and the removal flush, so a value
+        committed at teardown lands exactly where a committed one would. Kept
+        synchronous deliberately — `async_will_remove_from_hass` runs during
+        teardown, where awaiting a refresh is neither wanted nor safe.
+        """
+        val_int = int(value)
+        self.coordinator.update_interval = timedelta(seconds=val_int)
+        new_options = dict(self._entry.options)
+        new_options[CONF_SCAN_INTERVAL] = val_int
+        self.hass.config_entries.async_update_entry(self._entry, options=new_options)
 
     async def async_set_native_value(self, value: float) -> None:
         """Handle the UI slider change."""
         # Update local UI state immediately for responsiveness
         self._attr_native_value = value
         self.async_write_ha_state()
+
+        # Held so a removal inside the debounce window can still commit it.
+        self._pending_value = value
 
         # Cancel any pending update task to reset the debounce timer
         if self._refresh_task:
@@ -132,22 +160,15 @@ class ZTEPollingInterval(
         try:
             # Wait for 2 seconds of inactivity before committing
             await asyncio.sleep(2)
-            val_int = int(value)
 
-            _LOGGER.debug("Applying new polling interval: %s seconds", val_int)
+            _LOGGER.debug("Applying new polling interval: %s seconds", int(value))
 
-            # 1. Update the coordinator's actual update interval
-            self.coordinator.update_interval = timedelta(seconds=val_int)
+            # Coordinator interval + persistence to ConfigEntry Options, so the
+            # setting survives a Home Assistant restart.
+            self._persist_interval(value)
+            self._pending_value = None
 
-            # 2. Persist to ConfigEntry Options (saves to .storage/core.config_entries)
-            # This ensures the setting survives a Home Assistant restart.
-            new_options = dict(self._entry.options)
-            new_options[CONF_SCAN_INTERVAL] = val_int
-            self.hass.config_entries.async_update_entry(
-                self._entry, options=new_options
-            )
-
-            # 3. Trigger an immediate refresh using the new interval
+            # Trigger an immediate refresh using the new interval
             await self.coordinator.async_force_refresh()
 
         except asyncio.CancelledError:

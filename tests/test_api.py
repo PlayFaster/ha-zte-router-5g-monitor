@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
+from urllib.parse import parse_qsl
 
 import aiohttp
 import pytest
@@ -925,7 +926,7 @@ async def test_persistently_dead_session_raises_instead_of_returning_empty(
 async def test_missing_contract_key_raises_even_if_expiry_undetected(
     mock_aiohttp_client,
 ):
-    """Second line of defence, independent of the expiry detector.
+    """Second line of defense, independent of the expiry detector.
 
     If the router ever answers with a shape the detector does not recognise,
     the endpoint contract must still refuse to report it as "no messages".
@@ -1313,7 +1314,15 @@ async def test_write_commands_raise_when_the_router_refuses(
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("method", "args"), _WRITE_CALLS)
 async def test_write_commands_accept_success(mock_aiohttp_client, method, args):
-    """The happy path must stay quiet."""
+    """An accepted write reaches the router and reports what it answered.
+
+    The name is a promise (§11 rule 3), so this checks acceptance rather than
+    merely that nothing raised: the command was actually posted, it carried the
+    `AD` token every state-changing `goform` call needs, and the router's own
+    answer came back to the caller. A `_require_success` widened to raise on
+    everything would pass a bare "it did not raise" test only by never being
+    reached.
+    """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
     api.last_activity = datetime.now(UTC)
@@ -1322,21 +1331,48 @@ async def test_write_commands_accept_success(mock_aiohttp_client, method, args):
         mock_aiohttp_client.post.return_value = MockResponse(
             json_data={"result": "success"}, status=200
         )
-        await getattr(api, method)(*args)
+        result = await getattr(api, method)(*args)
+
+    # Two return contracts: the SMS commands answer with a status code, the
+    # rest hand back the router's body. Neither may come back `None`, which is
+    # what a write that silently stopped reporting would look like.
+    assert result in ({"result": "success"}, 200)
+    mock_aiohttp_client.post.assert_called_once()
+    # Some commands post a dict and some a pre-encoded body (SMS has to, to
+    # keep its hex payload intact), so read whichever form was sent.
+    sent = mock_aiohttp_client.post.call_args.kwargs["data"]
+    payload = sent if isinstance(sent, dict) else dict(parse_qsl(sent))
+    assert payload["goformId"]
+    assert payload["AD"] == "ad"
 
 
 def test_require_success_ignores_a_non_dict_response():
-    """Some endpoints answer with a list; there is no result to check."""
+    """A body with no `result` to read is passed over; an explicit refusal is not.
+
+    "It must not raise" is the contract, and the way to make that checkable is
+    to assert the distinction rather than the silence: the same helper must
+    still raise on the one shape it exists to catch. A `_require_success`
+    stubbed out entirely satisfies the first two lines and fails the third.
+    """
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
-    api._require_success(["not", "a", "dict"], "SOME_CMD")
-    api._require_success(None, "SOME_CMD")
+
+    assert api._require_success(["not", "a", "dict"], "SOME_CMD") is None
+    assert api._require_success(None, "SOME_CMD") is None
+
+    with pytest.raises(ZTEConnectionError, match="rejected"):
+        api._require_success({"result": "failure"}, "SOME_CMD")
 
 
 @pytest.mark.asyncio
 async def test_write_commands_tolerate_a_response_with_no_result_key(
     mock_aiohttp_client,
 ):
-    """Not every goformId returns `result`; absence must not become an error."""
+    """Not every goformId returns `result`; absence must not become an error.
+
+    The distinction is between "no verdict given" and "a verdict of failure".
+    Treating a missing key as refusal would turn every one of these commands
+    into a permanent error, so the body must come back to the caller intact.
+    """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
     api.last_activity = datetime.now(UTC)
@@ -1345,7 +1381,9 @@ async def test_write_commands_tolerate_a_response_with_no_result_key(
         mock_aiohttp_client.post.return_value = MockResponse(
             json_data={"apn_mode": "auto"}, status=200
         )
-        await api.set_apn_mode("auto")
+        result = await api.set_apn_mode("auto")
+
+    assert result == {"apn_mode": "auto"}
 
 
 # --- Reboot ----------------------------------------------------------------
@@ -1513,7 +1551,7 @@ def test_every_data_volume_field_is_polled():
     always raises "the last poll did not supply it".
     """
     polled = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
-    for aliases in ZTERouterAPI._DATA_VOLUME_FIELDS.values():
+    for aliases in ZTERouterAPI.DATA_VOLUME_FIELDS.values():
         assert polled.intersection(aliases), (
             f"none of {aliases} is requested by either batch"
         )
@@ -1689,3 +1727,158 @@ async def test_a_genuinely_dead_session_is_still_detected(mock_aiohttp_client):
         pytest.raises(ZTEAuthError),
     ):
         await api.get_params(["ODU_led_switch"])
+
+
+# ---------------------------------------------------------------------------
+# Branch coverage — each of these closes a partial branch recorded on
+# 2026-08-05. All four were missing tests; none was dead code.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_non_dict_json_body_skips_the_session_check(mock_aiohttp_client):
+    """A JSON list is returned as-is rather than tripping the expiry rule.
+
+    The dead-session rule reads "every value is empty", which is only
+    answerable for a mapping. The distinction that earns this test: a list
+    body must reach the caller untouched, not be mistaken for a dead session
+    and not raise on the `.values()` the dict path would call.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.stok = "stok=live"
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=[])
+
+    assert await api._request("GET", "goform/anything") == []
+
+
+@pytest.mark.asyncio
+async def test_protocol_detection_falls_through_to_https(mock_aiohttp_client):
+    """An http port answering 4xx is not a usable protocol — try https.
+
+    Separates "the port answered" from "the router is served here". A router
+    refusing plain http returns a status, not an error, so a check that only
+    catches exceptions would settle on http and every later request would fail.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(status=404),
+        MockResponse(status=200),
+    ]
+
+    await api.try_set_protocol()
+
+    assert api.protocol == "https"
+    assert api.referer == "https://192.168.0.1/"
+
+
+@pytest.mark.asyncio
+async def test_login_omits_the_username_field_when_none_is_configured(
+    mock_aiohttp_client,
+):
+    """Password-only routers must not receive an empty `username` key.
+
+    The distinction is the key's presence, not its value: several models in
+    this family reject a form carrying a field they do not expect, so sending
+    `username=""` is not the same as sending nothing.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "", "password")
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "test_ld"}),
+        MockResponse(json_data={"wa_inner_version": "test_v"}),
+        MockResponse(json_data={"wa_inner_version": "test_v"}),
+    ]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "0"}, cookies={"stok": MagicMock(value="abc")}
+    )
+
+    await api.login()
+
+    payload = mock_aiohttp_client.post.call_args.kwargs["data"]
+    assert "username" not in payload
+    assert payload["password"]
+
+
+def test_manual_apn_with_an_unknown_index_resolves_to_nothing():
+    """An `apn_index` naming a slot the router did not report yields `None`.
+
+    Separates "manual mode, profile found" from "manual mode, profile gone".
+    Returning a stale or arbitrary profile here would let a control publish a
+    position the router never reported — §22's "never render a missing key as
+    a confident position", one level up.
+    """
+    current = {
+        "apn_mode": "manual",
+        "apn_index": "7",
+        "wan_apn": "",
+        "APN_config0": "home($)three.ie",
+    }
+
+    assert ZTERouterAPI._resolve_apn_profile(current) is None
+    # And the same input with an index the router did report resolves, so the
+    # `None` above is the missing slot rather than the method never matching.
+    assert ZTERouterAPI._resolve_apn_profile({**current, "apn_index": "0"}) == (
+        "0",
+        "IP",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Hex decoding — UTF-16BE, whole-string. See `_hex_decode`.
+# ---------------------------------------------------------------------------
+
+
+def _utf16_hex(text: str) -> str:
+    """Encode as the router does, so the fixture cannot drift from the format."""
+    return text.encode("utf-16-be").hex()
+
+
+def test_an_emoji_survives_the_round_trip():
+    """A non-BMP character must decode to itself, not to two lone surrogates.
+
+    The distinction this pins is not "the text looks wrong". Decoding a
+    surrogate pair one code unit at a time produces a string that **cannot be
+    encoded to UTF-8 at all**, so the recorder, a webhook or a file log handler
+    raises `UnicodeEncodeError` on a message the user cannot identify. The
+    integration sends emoji deliberately, so reading one back is a real path.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    text = "Signal restored \U0001f4f6"
+
+    decoded = api._hex_decode(_utf16_hex(text))
+
+    assert decoded == text
+    # The half that a length or content assertion alone would miss.
+    decoded.encode("utf-8")
+
+
+def test_hex_decoding_handles_the_whole_bmp_range():
+    """Plain, accented and CJK text all still decode — the fix is not emoji-only."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    for text in ("Hello", "Café £5 à Ωmega", "テスト", "1234567890"):
+        assert api._hex_decode(_utf16_hex(text)) == text
+
+
+def test_truncated_hex_is_reported_not_half_decoded():
+    """An odd-length payload is a decode failure, not a partial message.
+
+    The previous loop consumed four characters at a time and silently dropped
+    whatever did not fit, so `"0041 00"` rendered as `"A"` — a message the user
+    would read as complete. A truncated payload is not something to half-render.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode("004100") == "[Decoding Error]"
+    assert api._hex_decode("004") == "[Decoding Error]"
+
+
+def test_undecodable_hex_is_reported():
+    """Non-hex input, and a lone surrogate the router should never send."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode("zzzz") == "[Decoding Error]"
+    assert api._hex_decode("d83d") == "[Decoding Error]"
+
+
+def test_empty_hex_is_empty_not_an_error():
+    """An absent field is not a failure — it is an empty message body."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode("") == ""

@@ -164,6 +164,27 @@ async def test_endpoint_holds_last_good_within_budget(coordinator) -> None:
     assert coordinator.endpoint_available(ENDPOINT_SMS_MESSAGES) is True
 
 
+async def test_endpoint_failures_reports_counts_without_exposing_state(
+    coordinator,
+) -> None:
+    """The diagnostics accessor reports strike counts but cannot be used to set them.
+
+    `diagnostics.py` is a read path (Section 20), so the distinction that earns
+    this test is the copy: mutating what the property hands back must not reach
+    the coordinator. Returning `self._endpoint_failures` directly would satisfy
+    the count assertion and fail the second one.
+    """
+    coordinator.api.get_sms_messages = AsyncMock(side_effect=ZTEConnectionError("down"))
+    await coordinator._async_update_data()
+
+    reported = coordinator.endpoint_failures
+    assert reported[ENDPOINT_SMS_MESSAGES] == 1
+
+    reported[ENDPOINT_SMS_MESSAGES] = 99
+    assert coordinator.endpoint_failures[ENDPOINT_SMS_MESSAGES] == 1
+    assert coordinator.endpoint_available(ENDPOINT_SMS_MESSAGES) is True
+
+
 async def test_endpoint_recovers(coordinator) -> None:
     """A success resets the endpoint's strike count."""
     coordinator.api.get_sms_messages = AsyncMock(side_effect=ZTEConnectionError("down"))
@@ -349,7 +370,10 @@ async def test_unreachable_repair_waits_out_a_reboot(coordinator, hass) -> None:
             await coordinator._async_update_data()
 
     assert coordinator.health_snapshot["problem"] is True
-    assert registry.async_get_issue(DOMAIN, "router_unreachable") is None
+    assert (
+        registry.async_get_issue(DOMAIN, coordinator._repair_ids["router_unreachable"])
+        is None
+    )
 
 
 async def test_unreachable_repair_raised_after_sustained_failure(
@@ -365,7 +389,9 @@ async def test_unreachable_repair_raised_after_sustained_failure(
         with suppress(UpdateFailed):
             await coordinator._async_update_data()
 
-    issue = registry.async_get_issue(DOMAIN, "router_unreachable")
+    issue = registry.async_get_issue(
+        DOMAIN, coordinator._repair_ids["router_unreachable"]
+    )
     assert issue is not None
     assert issue.severity is ir.IssueSeverity.ERROR
     # The text names the host so the user can compare it against the router's
@@ -383,12 +409,18 @@ async def test_unreachable_repair_clears_on_recovery(coordinator, hass) -> None:
     for _ in range(UNREACHABLE_STRIKE_LIMIT):
         with suppress(UpdateFailed):
             await coordinator._async_update_data()
-    assert registry.async_get_issue(DOMAIN, "router_unreachable") is not None
+    assert (
+        registry.async_get_issue(DOMAIN, coordinator._repair_ids["router_unreachable"])
+        is not None
+    )
 
     coordinator.api.get_all_data = AsyncMock(return_value=dict(GOOD_DATA))
     await coordinator._async_update_data()
 
-    assert registry.async_get_issue(DOMAIN, "router_unreachable") is None
+    assert (
+        registry.async_get_issue(DOMAIN, coordinator._repair_ids["router_unreachable"])
+        is None
+    )
     assert coordinator.health_snapshot["repairs"] == []
 
 
@@ -512,3 +544,135 @@ async def test_degraded_extended_fetch_is_named_in_health(coordinator) -> None:
     assert (
         "Extended diagnostics" in coordinator.health_snapshot["degraded_capabilities"]
     )
+
+
+# --------------------------------------------------------------------------
+# Repair lifecycle — x_proj_checks_20260802 §3.8a/b
+# --------------------------------------------------------------------------
+
+
+async def test_repair_ids_are_scoped_to_the_config_entry(coordinator, hass) -> None:
+    """Two routers must not share one slot in the issue registry.
+
+    The registry keys on `(domain, issue_id)`, so a bare id gives every entry
+    the same row: with two routers and one failing, the healthy one's next
+    successful poll deletes the failing one's repair. The distinction this
+    asserts is that the id carries the entry, not merely that a repair is
+    raised at all.
+    """
+    coordinator.api.get_all_data = AsyncMock(
+        side_effect=ZTEConnectionError("router gone")
+    )
+    for _ in range(UNREACHABLE_STRIKE_LIMIT + 1):
+        with suppress(UpdateFailed):
+            await coordinator._async_update_data()
+
+    issues = ir.async_get(hass).issues
+    raised = [issue_id for (domain, issue_id) in issues if domain == DOMAIN]
+
+    assert raised, "no repair was raised at all"
+    assert all(coordinator.entry.entry_id in issue_id for issue_id in raised), (
+        f"repair ids are not entry-scoped: {raised}"
+    )
+
+
+async def test_a_legacy_unscoped_repair_is_cleared_on_setup(coordinator, hass) -> None:
+    """An id raised by an earlier version must not be orphaned by the rename.
+
+    `ir.async_delete_issue` looks up by id, so a repair live under the old bare
+    id has no code left that can clear it once the ids are scoped, and no UI
+    path either — `is_fixable=False`. Startup deletes the legacy ids so the
+    rename cannot strand one.
+    """
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        "sms_storage_full",
+        is_fixable=False,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key="sms_storage_full",
+        translation_placeholders={"nv_total": "1", "nv_able": "1"},
+    )
+    assert (DOMAIN, "sms_storage_full") in ir.async_get(hass).issues
+
+    coordinator.clear_legacy_repairs()
+
+    assert (DOMAIN, "sms_storage_full") not in ir.async_get(hass).issues
+
+
+async def test_unload_clears_the_repairs_this_entry_raised(
+    hass: HomeAssistant, entry
+) -> None:
+    """A repair must not outlive the code that can clear it.
+
+    Every repair here is `is_fixable=False`, so the only route out of the
+    Repairs panel is this integration deleting it. Unloading — or deleting the
+    integration outright — while one is showing would otherwise leave it there
+    permanently, with nothing left that could ever remove it.
+    """
+    from custom_components.zte_router_5g import async_unload_entry
+
+    entry.add_to_hass(hass)
+    api = MagicMock(spec=ZTERouterAPI)
+    api.logout = AsyncMock()
+    coordinator = ZTERouterDataUpdateCoordinator(hass, entry, api)
+    entry.runtime_data = coordinator
+
+    coordinator._set_unreachable_repair(True)
+    assert (DOMAIN, f"{entry.entry_id}_router_unreachable") in ir.async_get(hass).issues
+
+    with patch.object(
+        hass.config_entries, "async_unload_platforms", AsyncMock(return_value=True)
+    ):
+        assert await async_unload_entry(hass, entry) is True
+
+    assert (
+        DOMAIN,
+        f"{entry.entry_id}_router_unreachable",
+    ) not in ir.async_get(hass).issues
+
+
+async def test_removal_clears_repairs_left_by_a_failed_unload(
+    hass: HomeAssistant, entry
+) -> None:
+    """Removal is the last chance, and it cannot read `runtime_data`.
+
+    HA has already discarded `runtime_data` by the time `async_remove_entry`
+    runs, so the ids have to be rebuilt from `entry_id`. The distinction from
+    the unload test: this path must work with no coordinator in existence at
+    all, which is exactly the case where a repair would otherwise be stranded.
+    """
+    from custom_components.zte_router_5g import async_remove_entry
+
+    entry.add_to_hass(hass)
+    for name in ("router_unreachable", "sms_storage_full"):
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            f"{entry.entry_id}_{name}",
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key=name,
+            translation_placeholders={},
+        )
+
+    await async_remove_entry(hass, entry)
+
+    remaining = [i for (d, i) in ir.async_get(hass).issues if d == DOMAIN]
+    assert remaining == []
+
+
+async def test_force_refresh_clears_its_flag_when_the_request_raises(coordinator):
+    """Every path out of `async_force_refresh` must leave the flag clear.
+
+    The flag is consumed at the top of `_async_update_data`, so if the refresh
+    request never runs an update, a set flag survives to the next **scheduled**
+    poll — which then fetches despite Pause Polling being on. Self-correcting
+    after one cycle, but Section 13 asks that the one-shot really be one-shot.
+    """
+    coordinator.async_request_refresh = AsyncMock(side_effect=RuntimeError("boom"))
+
+    with pytest.raises(RuntimeError):
+        await coordinator.async_force_refresh()
+
+    assert coordinator._force_refresh_once is False

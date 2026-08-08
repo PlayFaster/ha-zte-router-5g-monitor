@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import voluptuous as vol
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import AbortFlow, FlowResultType
 
 from custom_components.zte_router_5g.api import ZTEAuthError, ZTEConnectionError
@@ -32,7 +33,7 @@ from custom_components.zte_router_5g.const import DEFAULT_NAME
     ],
 )
 def test_clean_host(raw, expected):
-    """Test that host entries are normalised to a bare host."""
+    """Test that host entries are normalized to a bare host."""
     assert _clean_host(raw) == expected
 
 
@@ -370,7 +371,12 @@ async def test_reauth_confirm_entry_gone():
 
 @pytest.mark.asyncio
 async def test_reauth_flow_no_entry():
-    """Test reauth aborts when entry is missing."""
+    """A vanished entry aborts honestly, not as a success.
+
+    This asserted `reauth_successful`, which says the opposite of what
+    happened — nothing was reauthenticated, because there was nothing left to
+    reauthenticate. The reason string is what the user sees.
+    """
     flow = ZTEConfigFlow()
     flow.hass = MagicMock()
     flow.context = {"entry_id": "test_entry"}
@@ -379,7 +385,7 @@ async def test_reauth_flow_no_entry():
     result = await flow.async_step_reauth()
 
     assert result["type"] == FlowResultType.ABORT
-    assert result["reason"] == "reauth_successful"
+    assert result["reason"] == "entry_not_found"
 
 
 @pytest.mark.asyncio
@@ -497,7 +503,7 @@ async def test_reconfigure_unknown_error():
 
 @pytest.mark.asyncio
 async def test_user_step_strips_url_host():
-    """Test that a URL entered as host is normalised before being stored."""
+    """Test that a URL entered as host is normalized before being stored."""
     flow = ZTEConfigFlow()
     flow.hass = MagicMock()
     flow.context = {}
@@ -640,3 +646,83 @@ def test_no_field_leaks_the_stored_secret(build) -> None:
         repr(_resolved_default(m)) for m in _markers(build(_STORED_ENTRY))
     )
     assert _STORED_SECRET not in rendered
+
+
+@pytest.mark.asyncio
+async def test_options_flow_does_not_retitle_when_the_name_is_unchanged():
+    """Submitting the options form without renaming must not touch the entry title.
+
+    The distinction is between a no-op and a write. `async_update_entry` on the
+    title triggers a registry write and a UI refresh, so firing it on every
+    options save — the common case, where only an interval changed — is churn
+    the user sees. Guards the `!=` rather than the assignment: deleting the
+    condition leaves the happy-path rename test green.
+    """
+    entry = MagicMock()
+    entry.title = "Upstairs Router"
+    entry.options = {CONF_HOST: "192.168.0.1", CONF_PASSWORD: "p"}
+    flow = ZTEOptionsFlow(entry)
+    flow.hass = MagicMock()
+
+    user_input = {
+        CONF_HOST: "192.168.0.1",
+        CONF_PASSWORD: "p",
+        CONF_NAME: "Upstairs Router",
+    }
+
+    with patch(
+        "custom_components.zte_router_5g.config_flow._validate_credentials",
+        return_value=None,
+    ):
+        result = await flow.async_step_init(user_input)
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    flow.hass.config_entries.async_update_entry.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_validation_releases_the_router_session(hass: HomeAssistant):
+    """Validating credentials must not leave a session open on the router.
+
+    The device takes the most recent login and drops the previous one, so an
+    abandoned session blocks nothing — but the running coordinator gets its
+    slot back at the next poll rather than immediately, and unload already
+    treats releasing a session as the integration's job (Section 10).
+    """
+    from custom_components.zte_router_5g.config_flow import _validate_credentials
+
+    with patch("custom_components.zte_router_5g.config_flow.ZTERouterAPI") as api_cls:
+        api = api_cls.return_value
+        api.try_set_protocol = AsyncMock()
+        api.login = AsyncMock(return_value="stok=x")
+        api.get_all_data = AsyncMock(return_value={"imei": "1", "model_name": "MC7010"})
+        api.logout = AsyncMock()
+
+        await _validate_credentials(
+            hass, {CONF_HOST: "1.2.3.4", CONF_USERNAME: "a", CONF_PASSWORD: "b"}
+        )
+
+    api.logout.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_validation_releases_the_session_even_when_it_fails(hass: HomeAssistant):
+    """The release is in a `finally` — a rejected password still frees the slot.
+
+    The failing case is the one that matters: a user retrying a wrong password
+    would otherwise strand a session per attempt.
+    """
+    from custom_components.zte_router_5g.config_flow import _validate_credentials
+
+    with patch("custom_components.zte_router_5g.config_flow.ZTERouterAPI") as api_cls:
+        api = api_cls.return_value
+        api.try_set_protocol = AsyncMock()
+        api.login = AsyncMock(side_effect=ZTEAuthError("bad password"))
+        api.logout = AsyncMock()
+
+        with pytest.raises(ZTEAuthError):
+            await _validate_credentials(
+                hass, {CONF_HOST: "1.2.3.4", CONF_USERNAME: "a", CONF_PASSWORD: "b"}
+            )
+
+    api.logout.assert_awaited_once()

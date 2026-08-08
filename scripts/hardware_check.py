@@ -56,8 +56,18 @@ before anything is written.
 
 # The console report is this script's entire output — there is no logger to
 # route it through, and a caller reading `.reports/hardware_check.txt` is the
-# point. This is the only rule the file cannot satisfy on its own terms.
+# point.
 # ruff: noqa: T201
+
+# The session probes call `api._request(..., _retry=False)` directly, and must.
+# `_request` transparently re-logs-in once on an expired session — which is the
+# behavior these checks exist to observe, so every public method routes around
+# what they are measuring. A public wrapper was considered and rejected: it adds
+# shipped API surface for a script HACS never ships, and
+# `test_every_public_method_is_covered_by_the_sweep` would then require it in
+# `_CALLS`, where the sweep asserts a method "does the thing or raises" — the
+# opposite of a probe built to watch one fail.
+# ruff: noqa: SLF001
 
 from __future__ import annotations
 
@@ -88,7 +98,7 @@ except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
         "`uv run` and the project .venv do not carry those dependencies."
     ) from err
 
-CONFIG_ENTRIES = "/config/.storage/core.config_entries"
+CONFIG_ENTRIES = pathlib.Path("/config/.storage/core.config_entries")
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent / "tests" / "fixtures"
 INVALID_STOK = "stok=0000000000000000000000000000000f"
 
@@ -112,6 +122,27 @@ RECONNECT_SETTLE = 12.0
 # write causes routinely outlasts a single request timeout.
 RECONNECT_RETRY = 8.0
 
+# NR5G keys the router populates only while registered on 5G. Absent on a 4G
+# return, which is a network state rather than the blanked-payload fault the
+# reboot check is looking for.
+_NR5G_KEYS = frozenset(
+    {
+        "Z5g_SINR",
+        "Z5g_rsrp",
+        "Z5g_rsrq",
+        "Z5g_rssi",
+        "nr5g_action_band",
+        "nr5g_action_channel",
+        "nr5g_pci",
+        "Z5g_CELL_ID",
+        "Z5g_snr",
+        "5g_rsrp",
+        "5g_sinr",
+        "nr5g_rsrp",
+        "nr5g_sinr",
+    }
+)
+
 # The router updates its SMS counters a moment after accepting a write.
 SMS_SETTLE = 3.0
 
@@ -120,9 +151,9 @@ SMS_SETTLE = 3.0
 REBOOT_TIMEOUT = 240.0
 REBOOT_POLL = 15.0
 
-# Colour is emitted unconditionally, the way `pytest --color=yes` is used by the
+# Color is emitted unconditionally, the way `pytest --color=yes` is used by the
 # sibling tasks: stdout here is a pipe into `tee`, so auto-detection would strip
-# it exactly when it is wanted. The VS Code task sends the coloured stream to the
+# it exactly when it is wanted. The VS Code task sends the colored stream to the
 # terminal and a `sed`-stripped copy to `.reports/`, so the log stays plain text.
 # `NO_COLOR` (https://no-color.org) and `--no-color` both turn it off.
 _COLOUR = os.environ.get("NO_COLOR") is None
@@ -181,7 +212,7 @@ class Report:
 
 def _credentials() -> dict[str, str]:
     """Read the router credentials from the configured Home Assistant entry."""
-    with open(CONFIG_ENTRIES) as handle:
+    with CONFIG_ENTRIES.open() as handle:
         data = json.load(handle)
     for entry in data["data"]["entries"]:
         if entry["domain"] == "zte_router_5g":
@@ -305,7 +336,7 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
     """
     print(_cyan("\n[4] The data-volume form (alert percentage only)"))
 
-    current = await api.get_params(list(api._DATA_VOLUME_FIELDS))
+    current = await api.get_params(list(api.DATA_VOLUME_FIELDS))
     original = current.get("data_volume_alert_percent")
     if original is None or not str(original).strip():
         report.record(
@@ -360,7 +391,7 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
     # so nothing escapes before this point — a `finally` here would imply a
     # `try` that no longer exists.
     with contextlib.suppress(Exception):
-        latest = await api.get_params(list(api._DATA_VOLUME_FIELDS))
+        latest = await api.get_params(list(api.DATA_VOLUME_FIELDS))
         if str(latest.get("data_volume_alert_percent")) != str(original):
             await api.set_data_volume_settings(
                 latest, data_volume_alert_percent=str(original)
@@ -462,7 +493,7 @@ async def _write_through_reconnect(
 
     Safe to retry *these* commands specifically: they are idempotent settings
     changes, and the value is read back afterwards. This is not a general
-    licence to retry writes — see `write_classification.py`.
+    license to retry writes — see `write_classification.py`.
     """
     last: str | None = None
     for attempt in range(tries):
@@ -597,6 +628,17 @@ async def check_apn_profile(api: ZTERouterAPI, report: Report) -> None:
     origin = next((p for p in profiles if p[1].strip().lower() == active_apn), None)
     other = next((p for p in profiles if p is not origin), None)
 
+    if not profiles:
+        # A router left on the carrier default stores no APN in any slot. That
+        # is a normal configuration, not a fault, and the SMS checks already
+        # treat "nothing to work with" as a skip rather than a failure.
+        report.record(
+            True,
+            "APN profile: skipped, no profile configured",
+            "router is on the carrier default; there is no profile to round-trip",
+        )
+        return
+
     if origin is None or other is None:
         report.record(
             False,
@@ -677,7 +719,7 @@ async def check_data_limit_switch(api: ZTERouterAPI, report: Report) -> None:
     """
     print(_cyan("\n[C] Data limit switch round trip"))
 
-    fields = list(api._DATA_VOLUME_FIELDS)
+    fields = list(api.DATA_VOLUME_FIELDS)
     current = await api.get_params(fields)
     original = str(current.get("data_volume_limit_switch") or "")
 
@@ -902,7 +944,20 @@ async def check_delete_most_recent_sms(api: ZTERouterAPI, report: Report) -> Non
         return
 
     await asyncio.sleep(SMS_SETTLE)
-    remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    try:
+        remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    except Exception as err:  # noqa: BLE001 - unverified, not failed
+        # The delete was accepted. A read that errors leaves the question open;
+        # only a successful read still showing the message proves otherwise.
+        # Reporting this as a failed delete is the mistake this script's own
+        # rules name — and with another client polling the router it is the
+        # likely outcome, not a rare one.
+        report.record(
+            True,
+            "delete_sms: accepted, removal UNVERIFIED",
+            f"read-back failed ({type(err).__name__}); check the inbox by hand",
+        )
+        return
     ids = {str(m.get("id")) for m in remaining}
     report.record(
         msg_id not in ids,
@@ -945,7 +1000,15 @@ async def check_delete_all_sms(api: ZTERouterAPI, report: Report) -> None:
         return
 
     await asyncio.sleep(SMS_SETTLE)
-    remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    try:
+        remaining = await api.get_sms_messages(mem_store="1", tags="10")
+    except Exception as err:  # noqa: BLE001 - unverified, not failed
+        report.record(
+            True,
+            "delete_all: accepted, clearance UNVERIFIED",
+            f"read-back failed ({type(err).__name__}); check the inbox by hand",
+        )
+        return
     report.record(
         not remaining,
         "delete_all: inbox is empty",
@@ -999,9 +1062,26 @@ async def _watch_recovery(
             print(_dim("      still down…"))
             continue
 
-        lost = sorted(baseline & {k for k, v in payload.items() if v in (None, "")})
+        blank = {k for k, v in payload.items() if v in (None, "")}
+        # A router that re-registers on 4G reports no NR5G keys at all. That is
+        # the network, not a stripped payload — and this check exists to catch
+        # the latter. Excluding them when the radio is demonstrably not on 5G
+        # keeps the check pointed at what it is for; leaving them in reported a
+        # clean reboot as a failure on 2026-08-07.
+        on_5g = str(payload.get("network_type") or "").upper() in ("ENDC", "NR5G", "NR")
+        if not on_5g:
+            blank -= _NR5G_KEYS
+        lost = sorted(baseline & blank)
         if not lost:
             recovered = True
+            if not on_5g:
+                print(
+                    _dim(
+                        "      back on "
+                        f"{payload.get('network_type') or 'an unknown bearer'} — "
+                        "NR5G keys excluded, they are absent by network state"
+                    )
+                )
             break
         silent_success += 1
         print(
@@ -1253,6 +1333,58 @@ def _assert_capture_is_safe(captured: dict[str, Any]) -> None:
         )
 
 
+def _warn_about_competing_sessions() -> None:
+    """State the one precondition this script cannot enforce for itself.
+
+    **The router accepts the most recent login and drops the previous one.**
+    That is not a race lost occasionally — any other client that logs in takes
+    the session, every time. A production Home Assistant polling every three
+    minutes will therefore interrupt any step spanning three minutes, on a
+    fixed cadence.
+
+    This script *does* steal its own session on purpose, in
+    `check_write_round_trip(hostile=True)`, and checks that the code notices.
+    That is a controlled theft at a known point. An outside competitor is a
+    different thing: it takes the session at an arbitrary point, so a failure
+    can no longer be attributed. "The code failed to detect a dead session" and
+    "the session died mid-write for unrelated reasons" produce the same result,
+    and the run stops meaning anything.
+
+    Hence a warning rather than a check — the competitor is usually on another
+    machine, and nothing reachable from here can see it.
+    """
+    print(_yellow("\n  !  This run needs the router to itself."))
+    print(
+        _dim(
+            "     The router hands the session to whoever logged in last, so"
+            " any other client"
+        )
+    )
+    print(
+        _dim(
+            "     silently takes it. Turn ON Pause Polling in EVERY Home"
+            " Assistant instance"
+        )
+    )
+    print(
+        _dim(
+            "     connected to this router — including production, which is the"
+            " one most"
+        )
+    )
+    print(
+        _dim(
+            "     easily forgotten — and stay out of the router's own web page"
+            " until this"
+        )
+    )
+    print(_dim("     finishes."))
+    print(
+        _dim("     A competitor does not make these checks fail loudly. It makes their")
+    )
+    print(_dim("     results unattributable, which is worse."))
+
+
 async def main() -> int:
     """Run every check in order and return a shell exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1290,6 +1422,7 @@ async def main() -> int:
         await api.try_set_protocol()
         api.stok = await api.login()
         print(f"connected to {options['host']}")
+        _warn_about_competing_sessions()
 
         await check_session_assumptions(api, session, report)
         await check_write_round_trip(api, report, hostile=False, session=session)

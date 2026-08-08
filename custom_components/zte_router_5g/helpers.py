@@ -230,7 +230,7 @@ class ZTEAboutEntity:
     Ported from ``unifi_network_monitor`` / ``wifi_ssid_monitor``; keep the three
     implementations interchangeable. Set the text via ``_attr_about`` (class-level,
     for single-instance entities) or an ``about`` field on the entity description
-    (for description-driven ones). The note shows in Developer Tools and the More
+    (for description-driven ones). The note shows in Tools and the More
     Info dialog but is listed in ``_unrecorded_attributes``, so the recorder never
     writes it to history — zero storage cost however often the state changes
     (dev_standards Section 14).

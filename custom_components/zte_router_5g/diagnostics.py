@@ -226,7 +226,7 @@ async def async_get_config_entry_diagnostics(
             # Section 19 state: the most useful thing in the file when the
             # complaint is "it stopped working and I don't know why".
             "health": deepcopy(coordinator.health_snapshot),
-            "endpoint_failures": dict(coordinator._endpoint_failures),
+            "endpoint_failures": coordinator.endpoint_failures,
         },
         "data": payload,
     }

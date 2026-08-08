@@ -127,7 +127,7 @@ def diagnostics_entry(mock_config_entry):
     coordinator.last_update_success_time = None
     coordinator.update_interval = None
     coordinator.health_snapshot = {"problem": False, "issues": [], "severity": "ok"}
-    coordinator._endpoint_failures = {}
+    coordinator.endpoint_failures = {}
     mock_config_entry.runtime_data = coordinator
 
     object.__setattr__(
@@ -279,10 +279,135 @@ async def test_handles_an_empty_payload(mock_config_entry) -> None:
     coordinator.last_update_success_time = None
     coordinator.update_interval = None
     coordinator.health_snapshot = {"problem": True, "issues": ["no data"]}
-    coordinator._endpoint_failures = {}
+    coordinator.endpoint_failures = {}
     mock_config_entry.runtime_data = coordinator
 
     result = await async_get_config_entry_diagnostics(None, mock_config_entry)
 
     assert result["data"] == {}
     assert result["coordinator"]["health"]["problem"] is True
+
+
+async def test_an_sms_with_no_sender_is_not_given_a_phone_token(
+    diagnostics_entry,
+) -> None:
+    """A message carrying no number must not mint a pseudonym for one.
+
+    The distinction is between "sender withheld" and "sender redacted". A
+    network-originated message (a carrier notice, a cell broadcast) has no
+    number at all, and emitting `phone-1` there invents a correspondent the
+    payload never contained — the over-redaction §20 names as a defect in its
+    own right, and misleading in the one direction a maintainer cannot check.
+    """
+    payload = dict(ROUTER_PAYLOAD)
+    stripped = {
+        key: value
+        for key, value in payload["last_sms"].items()
+        if key not in ("number", "number_decoded")
+    }
+    payload["last_sms"] = stripped
+    diagnostics_entry.runtime_data.data = payload
+
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+    sms = result["data"]["last_sms"]
+
+    assert "number" not in sms
+    assert "number_decoded" not in sms
+    assert "phone-" not in json.dumps(result)
+    # The rest of the block still sanitizes, so the absent token above is the
+    # missing sender rather than the whole path having been skipped.
+    assert str(len(FAKE_SMS_BODY)) in sms["content_decoded"]
+
+
+async def test_two_different_identifiers_get_two_different_tokens(
+    diagnostics_entry,
+) -> None:
+    """A pseudonym identifies an entity; collapsing two into one destroys that.
+
+    §20 asks for **stable** tokens precisely so a reader can follow one entity
+    through the file. A tokenizer fed a constant instead of the value
+    satisfies every "no raw identifier survives" property while merging every
+    distinct entity into `cell-1` — the file looks correctly sanitized and
+    reads as though the router only ever saw one cell.
+
+    Asserted on the cell identifiers because they are the pair that genuinely
+    co-occurs in one payload. The sender is a single value per SMS block, so
+    two phone tokens cannot arise from any response this router produces.
+    """
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+    rendered = json.dumps(result)
+    data = result["data"]
+
+    assert FAKE_CELL_ID not in rendered
+    assert FAKE_ENODEB not in rendered
+    assert data["cell_id"].startswith("cell-")
+    assert data["enodeb_id"].startswith("cell-")
+    assert data["cell_id"] != data["enodeb_id"], (
+        "two distinct identifiers collapsed into one pseudonym"
+    )
+
+
+async def test_a_sender_known_only_by_its_decoded_form_still_gets_a_token(
+    diagnostics_entry,
+) -> None:
+    """`number_decoded or number` — either alone is enough to mint a token.
+
+    Separates `or` from `and`. With `and`, a block carrying only the decoded
+    form yields no token at all and the sender is blanked instead of
+    pseudonymized: safe, but the cross-reference §20 exists to preserve is
+    gone, and the loss is invisible against a "nothing leaked" assertion.
+    """
+    payload = dict(ROUTER_PAYLOAD)
+    payload["last_sms"] = {
+        k: v for k, v in payload["last_sms"].items() if k != "number"
+    }
+    payload["last_sms"]["number_decoded"] = FAKE_SENDER
+    diagnostics_entry.runtime_data.data = payload
+
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+
+    assert FAKE_SENDER not in json.dumps(result)
+    assert result["data"]["last_sms"]["number_decoded"].startswith("phone-")
+
+
+async def test_only_the_sms_block_is_sanitized_as_an_sms(diagnostics_entry) -> None:
+    """`key == "last_sms" and isinstance(value, dict)` — both halves required.
+
+    With `or`, every dict-valued key in the payload is run through the SMS
+    sanitizer, which replaces text fields with `<key: N chars>` summaries. The
+    diagnostic substance §20 requires to survive would be destroyed wholesale,
+    and no "nothing leaked" property can see it — over-redaction passes every
+    leak test by construction.
+    """
+    payload = dict(ROUTER_PAYLOAD)
+    payload["some_nested_block"] = {"content": "a plain diagnostic value", "n": 4}
+    diagnostics_entry.runtime_data.data = payload
+
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+    nested = result["data"]["some_nested_block"]
+
+    assert nested["content"] == "a plain diagnostic value"
+    assert nested["n"] == 4
+
+
+async def test_two_macs_in_one_value_get_two_tokens(diagnostics_entry) -> None:
+    """The structural sweep pseudonymizes each MAC, not "a MAC".
+
+    Same failure as the cell-token case, one layer down: `_MAC_RE.sub` fed a
+    constant instead of the matched text rewrites every address to `mac-1`.
+    Nothing leaks, so the existing single-MAC assertion still passes — but a
+    maintainer reading the file sees one device where the router reported two,
+    which is the cross-reference §20 keeps tokens for in the first place.
+    """
+    payload = dict(ROUTER_PAYLOAD)
+    payload["some_unknown_future_key"] = (
+        f"peer {FAKE_MAC} talking to aa:bb:cc:dd:ee:ff on {FAKE_WAN_IP}"
+    )
+    diagnostics_entry.runtime_data.data = payload
+
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+    swept = result["data"]["some_unknown_future_key"]
+
+    assert FAKE_MAC not in swept
+    assert "aa:bb:cc:dd:ee:ff" not in swept
+    assert "mac-1" in swept and "mac-2" in swept

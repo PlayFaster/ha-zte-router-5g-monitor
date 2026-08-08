@@ -15,7 +15,6 @@ from homeassistant.const import (
 from homeassistant.util import dt as dt_util
 
 from custom_components.zte_router_5g.const import DOMAIN
-from custom_components.zte_router_5g.coordinator import ENDPOINT_EXTENDED
 from custom_components.zte_router_5g.sensor import (
     _ALIAS_5G_PCI,
     _ALIAS_5G_RSRP,
@@ -29,6 +28,7 @@ from custom_components.zte_router_5g.sensor import (
     _clear_day,
     _data_allowance_bytes,
     _get_first,
+    _get_total_sms,
     _projected_bytes,
     _projection,
     async_setup_entry,
@@ -613,7 +613,7 @@ def test_5g_pci_reads_the_alternate_spelling():
 
 
 def test_the_primary_spelling_wins_when_both_are_present():
-    """Behaviour on the MC7010 must not change because an alias exists."""
+    """Behavior on the MC7010 must not change because an alias exists."""
     assert _value_for("z5g_rsrp", {"Z5g_rsrp": "-90", "nr5g_rsrp": "-70"}) == -90.0
 
 
@@ -1060,6 +1060,258 @@ def test_data_allowance_sensor_is_guard_banded_and_enabled():
     assert description.state_class is None
     assert description.min_limit == 0
     assert description.max_limit == 1024**5  # 1 PiB
-    assert description.source == ENDPOINT_EXTENDED
+    # No `source`: the keys are in _CORE_PARAMS, so this value is never
+    # stale and the entity must not follow the optional batch down.
+    assert description.source is None
     assert description.group == "data"
     assert description.about
+
+
+# ---------------------------------------------------------------------------
+# Mutation survivors, 2026-08-07. Boundary and missing-key mutants.
+# ---------------------------------------------------------------------------
+
+
+def test_the_31st_is_a_valid_reset_day():
+    """`1 <= day <= 31`, inclusive at both ends.
+
+    Separates a closed range from a half-open one. A router set to reset on
+    the 31st is the single most likely value to be configured and the single
+    most likely to be dropped by an off-by-one — and the failure is silent:
+    `_clear_day` returns `None`, the projection falls back to the calendar
+    month and publishes `cycle_source: calendar_assumed`, which looks like the
+    router simply never reported a reset day.
+    """
+    assert _clear_day({"traffic_clear_date": "31"}) == 31
+    assert _clear_day({"traffic_clear_date": "1"}) == 1
+    # Both sides of each edge, so the test pins the range rather than a value.
+    assert _clear_day({"traffic_clear_date": "32"}) is None
+    assert _clear_day({"traffic_clear_date": "0"}) is None
+
+
+def test_a_zero_data_cap_is_rejected_but_one_is_kept():
+    """The guard is `<= 0`, not `<= 1`.
+
+    A cap of zero means "no cap configured" and must not become an allowance;
+    a cap of one unit is a real, if small, setting. Testing only a
+    comfortably-large value cannot separate the two, and the consequence of
+    getting it wrong is a Projected Cycle Usage measured against a limit the
+    user never set.
+    """
+    assert _data_allowance_bytes({"data_volume_limit_size": "0_1048576"}) is None
+    assert _data_allowance_bytes({"data_volume_limit_size": "2_0"}) is None
+
+    one_mib_unit = _data_allowance_bytes({"data_volume_limit_size": "1_1"})
+    assert one_mib_unit is not None
+    assert one_mib_unit > 0
+
+
+def test_total_sms_treats_a_missing_bank_as_zero():
+    """A router reporting only some storage banks must still total correctly.
+
+    The distinction is between an absent key and a key reading zero. The
+    fallback in `data.get(k, 0)` is only reachable on hardware that omits a
+    bank — every fixture populates all six, so nothing exercised it. With the
+    fallback at `1`, a model reporting four banks silently reads two messages
+    higher than it holds.
+    """
+    partial = {"sms_nv_rev_total": "3", "sms_sim_rev_total": "2"}
+
+    assert _get_total_sms(partial) == 5
+    assert _get_total_sms({}) == 0
+
+
+def test_total_sms_treats_an_empty_bank_as_zero_not_as_a_failure():
+    """A bank reporting "" must count as zero, not blank the whole sensor.
+
+    `int("")` raises, so one empty bank sent the entire sensor to `unknown`
+    and took its attribute breakdown with it — which reads as "no messages",
+    the opposite of what an unreadable bank means. Present-but-empty is absent,
+    the rule `_get_first` applies everywhere else in this module.
+
+    Distinct from the missing-key case above: that exercises the key being
+    gone, this exercises the key being present and blank. Mutation testing
+    found this gap — the fix shipped in [3.3.3-dev8] with no test, so
+    reverting the guard left the suite green.
+    """
+    assert _get_total_sms({"sms_nv_rev_total": "3", "sms_sim_rev_total": ""}) == 3
+    assert (
+        _get_total_sms(
+            dict.fromkeys(
+                [
+                    "sms_nv_rev_total",
+                    "sms_nv_send_total",
+                    "sms_nv_draftbox_total",
+                    "sms_sim_rev_total",
+                    "sms_sim_send_total",
+                    "sms_sim_draftbox_total",
+                ],
+                "",
+            )
+        )
+        == 0
+    )
+    # Genuinely unparsable is still a failure, not a silent zero.
+    assert _get_total_sms({"sms_nv_rev_total": "not-a-number"}) is None
+
+
+def test_total_sms_counts_every_one_of_the_six_banks():
+    """All six keys must be summed — a mistyped key name reads as absent.
+
+    Every existing case populates a subset, so a corrupted key name simply
+    contributes 0 and goes unnoticed. Six distinct values make the total
+    identify which bank was dropped.
+    """
+    banks = {
+        "sms_nv_rev_total": "1",
+        "sms_nv_send_total": "2",
+        "sms_nv_draftbox_total": "4",
+        "sms_sim_rev_total": "8",
+        "sms_sim_send_total": "16",
+        "sms_sim_draftbox_total": "32",
+    }
+
+    assert _get_total_sms(banks) == 63
+
+
+def test_every_sensor_carries_a_stable_unique_id(mock_coordinator, mock_config_entry):
+    """A sensor with no `unique_id` cannot be renamed, hidden or customized.
+
+    Home Assistant silently declines to register such an entity in the entity
+    registry — it still appears and still reports a value, so nothing looks
+    broken, while every user customization is discarded on restart. The id
+    must also be derived from the description key, or two sensors collide and
+    only one survives.
+    """
+    seen = {
+        ZTERouterSensor(mock_coordinator, mock_config_entry, desc).unique_id
+        for desc in SENSOR_TYPES
+    }
+
+    assert None not in seen
+    assert len(seen) == len(SENSOR_TYPES), "two sensors share a unique_id"
+    assert all(uid.startswith(f"{mock_config_entry.unique_id}_") for uid in seen)
+
+
+def _router_keys_referenced(body: str, sensor_src: str) -> set[str]:
+    """Return every router key a description can reach, following indirection.
+
+    A description rarely names its keys inline. `value_fn` may be a lambda
+    calling `data.get("x")`, a module-level helper whose body holds the keys,
+    or `_get_first(data, _ALIAS_X)` where the names live in a tuple constant.
+    Scanning the description text alone sees only the first of those — which is
+    why the first version of this sweep passed while `data_allowance`, whose
+    keys sit inside `_data_allowance_bytes`, carried the very defect the sweep
+    was written to catch.
+    """
+    import re
+
+    keys = set(re.findall(r'"([a-zA-Z0-9_]+)"', body))
+
+    # Follow every module-level name the description mentions — helper
+    # functions and alias tuples alike — one level deep, which is as far as
+    # this module nests.
+    for name in set(re.findall(r"\b(_[a-zA-Z0-9_]+)\b", body)):
+        block = re.search(
+            rf"^(?:def {name}\(|{name}(?::[^=]+)? = )(.*?)(?=\n\S|\Z)",
+            sensor_src,
+            re.DOTALL | re.MULTILINE,
+        )
+        if block:
+            keys |= set(re.findall(r'"([a-zA-Z0-9_]+)"', block.group(1)))
+    return keys
+
+
+def test_no_sensor_declares_a_source_its_data_does_not_come_from():
+    """A sensor gated on the optional batch must actually be fed by it.
+
+    `source=ENDPOINT_EXTENDED` makes an entity go unavailable once the optional
+    fetch exhausts its strike budget. Declaring it on a sensor whose keys live
+    in `_CORE_PARAMS` is the worst of both: the value is fresh from the
+    mandatory poll, and the entity hides it anyway.
+
+    `Allowance` and `Alert Threshold` shipped that way. `Allowance` is the
+    threshold `Projected Cycle Usage` is judged against, so it disappeared
+    exactly when the projection most needed it — and a test asserted the wrong
+    `source`, so the suite enforced the defect rather than catching it. This is
+    the sensor-side counterpart of
+    `test_no_switch_reads_from_a_degradable_endpoint`, whose absence is why
+    nothing noticed.
+
+    Read from source because the keys reach a description through a lambda or
+    a helper, where no attribute inspection can see them — the same reason
+    `test_every_write_command_is_in_the_refusal_sweep` parses `api.py`.
+    """
+    import re
+
+    root = pathlib.Path(__file__).parent.parent
+    api_src = (root / "custom_components/zte_router_5g/api.py").read_text(
+        encoding="utf-8"
+    )
+    sensor_src = (root / "custom_components/zte_router_5g/sensor.py").read_text(
+        encoding="utf-8"
+    )
+
+    def batch(name: str) -> set[str]:
+        block = re.search(
+            rf"^{name}: list\[str\] = \[(.*?)^\]", api_src, re.DOTALL | re.MULTILINE
+        )
+        assert block, f"{name} not found — the batch lists were restructured"
+        return set(re.findall(r'"([^"]+)"', block.group(1)))
+
+    core, extended = batch("_CORE_PARAMS"), batch("_EXTENDED_PARAMS")
+    assert core and extended, "batch lists parsed empty — the regex has drifted"
+
+    offenders: dict[str, list[str]] = {}
+    resolved = 0
+    for chunk in re.split(r"ZTESensorEntityDescription\(", sensor_src)[1:]:
+        body = chunk.split("\n    ),")[0]
+        key = re.search(r'key="([^"]+)"', body)
+        if not key or "source=ENDPOINT_EXTENDED" not in body:
+            continue
+        referenced = _router_keys_referenced(body, sensor_src)
+        # A description whose keys cannot be resolved at all would pass this
+        # sweep vacuously, which is how the first version was hollow.
+        if referenced & (core | extended):
+            resolved += 1
+        core_only = sorted(r for r in referenced if r in core and r not in extended)
+        if core_only:
+            offenders[key.group(1)] = core_only
+
+    assert resolved >= 15, (
+        f"only {resolved} of the source-declaring sensors had their router keys "
+        "resolved — the indirection following has drifted and this sweep is "
+        "checking almost nothing"
+    )
+    assert not offenders, (
+        "sensors gated on the optional batch but fed by the mandatory one: "
+        f"{offenders}. Drop the `source=` — the data is never stale, so the "
+        "entity must not go unavailable with the optional fetch."
+    )
+
+
+def test_projection_treats_every_disabled_spelling_as_off():
+    """The auto-clear switch is not guaranteed to say exactly "off".
+
+    An exact match on one spelling silently treats every other disabled form
+    as enabled, and the projection then measures against a cycle the router is
+    not keeping. The sibling switches in this API use `"0"`/`"1"`, and casing
+    is not guaranteed anywhere, so the guard is normalised.
+    """
+    base = {
+        "traffic_clear_date": "15",
+        "monthly_rx_bytes": "1",
+        "monthly_tx_bytes": "1",
+    }
+
+    for disabled in ("off", "OFF", "Off", "0", "false", " off "):
+        assert (
+            _projection({**base, "wan_auto_clear_flow_data_switch": disabled}) is None
+        ), f"{disabled!r} must read as disabled"
+
+    # And the enabled spellings must still project.
+    for enabled in ("on", "1", ""):
+        assert (
+            _projection({**base, "wan_auto_clear_flow_data_switch": enabled})
+            is not None
+        ), f"{enabled!r} must not read as disabled"
