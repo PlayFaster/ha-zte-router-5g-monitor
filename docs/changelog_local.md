@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev1\] - 2026-08-08 - Tweaks and Spelling](#334-dev1---2026-08-08---tweaks-and-spelling)
   - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
   - [\[3.3.3-dev12\] - 2026-08-07 - Remaining Review Findings; Timeouts Measured Rather Than Guessed](#333-dev12---2026-08-07---remaining-review-findings-timeouts-measured-rather-than-guessed)
   - [\[3.3.3-dev11\] - 2026-08-07 - Low Findings From Both Reviews](#333-dev11---2026-08-07---low-findings-from-both-reviews)
@@ -57,7 +58,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc4\] - 2026-07-28 - Automation Example Glitch Guards \& Float Rounding in README](#330-rc4---2026-07-28---automation-example-glitch-guards--float-rounding-in-readme)
   - [\[3.3.0-rc3\] - 2026-07-28 - `about` Notes on 63 Entities](#330-rc3---2026-07-28---about-notes-on-63-entities)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage](#330-rc2---2026-07-28---external-code-review-triage)
-  - [\[3.3.0-dev14\] - 2026-07-27 - doc_update Reconciliation Pass](#330-dev14---2026-07-27---doc_update-reconciliation-pass)
+  - [\[3.3.0-dev14\] - 2026-07-27 - doc\_update Reconciliation Pass](#330-dev14---2026-07-27---doc_update-reconciliation-pass)
   - [\[3.3.0-dev13\] - 2026-07-27 - Records Caught Up After a Long Session](#330-dev13---2026-07-27---records-caught-up-after-a-long-session)
   - [\[3.3.0-dev12\] - 2026-07-27 - Expired Session Returned "No SMS"](#330-dev12---2026-07-27---expired-session-returned-no-sms)
   - [\[3.3.0-dev11\] - 2026-07-27 - Device-Registry Record Cross-Referenced](#330-dev11---2026-07-27---device-registry-record-cross-referenced)
@@ -70,7 +71,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Alignment](#330-dev4---2026-07-27---cross-project-alignment)
   - [\[3.3.0-dev3\] - 2026-07-27 - Unreachable Repair \& Record Corrections](#330-dev3---2026-07-27---unreachable-repair--record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - IQS Compliance Pass](#330-dev2---2026-07-27---iqs-compliance-pass)
-  - [\[3.3.0-dev1\] - 2026-07-27 - dev_standards Conformance Pass](#330-dev1---2026-07-27---dev_standards-conformance-pass)
+  - [\[3.3.0-dev1\] - 2026-07-27 - dev\_standards Conformance Pass](#330-dev1---2026-07-27---dev_standards-conformance-pass)
   - [\[3.2.6-dev8\] - 2026-07-26 - Icons \& Branding Refresh; AGENTS.md Restructured](#326-dev8---2026-07-26---icons--branding-refresh-agentsmd-restructured)
   - [\[3.2.6-dev7\] - 2026-07-12 - PyTest Coverage to 100%; Codespell Alignment](#326-dev7---2026-07-12---pytest-coverage-to-100-codespell-alignment)
   - [\[3.2.6-dev6\] - 2026-07-12 - PHACC Bump; README Device-vs-Entity Clarification](#326-dev6---2026-07-12---phacc-bump-readme-device-vs-entity-clarification)
@@ -169,6 +170,12 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.4-dev1] - 2026-08-08 - Tweaks and Spelling
+
+### Changed
+
+-**Changelog**: Minor tweaks to changelog(s) plus spelling fixes.
+
 ## [3.3.3] - 2026-08-08 - Release - SMS Bugfix
 
 ### Summary
@@ -209,7 +216,7 @@ Closes the code review. Part 3 covered `coordinator.py` and `config_flow.py` —
 
 - **`get_ad` validated the firmware version but not RD, so a write could go out with a wrong token.** `[3.3.3-dev10]` made `get_ad` raise when the version is unavailable, and stopped there. `get_rd` returns `""` when the RD key is absent from an otherwise valid response, and hashing that produces a **well-formed but wrong** `AD`: the command is sent, the router refuses it, and the user is told the device rejected something it never had a chance to accept — the exact misleading outcome the version check was added to remove. Both halves now raise. **Affects all eleven write commands**, which each derive a token before sending.
 
-- **The billing-cycle projection only recognised one spelling of "disabled".** `_projection` tested `== "off"` exactly, so `"0"`, `"OFF"` or any other disabled form read as **enabled** and the projection measured against a cycle the router is not keeping. The sibling switches in this API use `"0"`/`"1"` and casing is not guaranteed anywhere, so the guard is now normalised and case-insensitive.
+- **The billing-cycle projection only recognized one spelling of "disabled".** `_projection` tested `== "off"` exactly, so `"0"`, `"OFF"` or any other disabled form read as **enabled** and the projection measured against a cycle the router is not keeping. The sibling switches in this API use `"0"`/`"1"` and casing is not guaranteed anywhere, so the guard is now normalized and case-insensitive.
 
 - **Config-flow validation left a session open on the router.** All four steps — user, reconfigure, reauth, options — logged in and never logged out. Released in a `finally`, so a rejected password frees the slot too; without that, a user retrying a wrong password stranded a session per attempt. **Deliberately recorded as low impact**: this router hands its session to whoever logged in last, so an abandoned one blocks nothing. The reason to fix it is that unload already treats releasing a session as the integration's job (Section 10), not that it was causing harm.
 
@@ -249,7 +256,7 @@ The probe is kept at `.notes/local_only/timing_probe.py` (gitignored, read-only,
 
 ### Added
 
-Six tests. The three behavioural fixes were each verified by removing the fix and confirming the test goes red — `get_ad`'s RD guard, the projection's disabled-spelling guard, and the config-flow release (both the success and the rejected-password path). Source restored by file copy and confirmed with `sha256sum -c` each time; no git command used.
+Six tests. The three behavioral fixes were each verified by removing the fix and confirming the test goes red — `get_ad`'s RD guard, the projection's disabled-spelling guard, and the config-flow release (both the success and the rejected-password path). Source restored by file copy and confirmed with `sha256sum -c` each time; no git command used.
 
 ### Notes
 
@@ -260,11 +267,11 @@ Six tests. The three behavioural fixes were each verified by removing the fix an
 
 ### Summary
 
-Group D, the last of the review sweep. Five small changes, none altering behaviour a user can observe, plus one test for a path that had none.
+Group D, the last of the review sweep. Five small changes, none altering behavior a user can observe, plus one test for a path that had none.
 
 ### Changed
 
-- **`api.py` — the swallow is now the explicit case, not the fallthrough.** `get_sms_capacity` and `get_rd` caught `Exception` and re-raised the two domain errors via an `isinstance` check inside the handler. Correct today, only because `ZTECredentialsError` subclasses `ZTEAuthError` — but the _default_ was to swallow, so any future domain exception outside that pair would silently have become `{}` or `""`. That is the masked-error class this project has already shipped once, where an expired session surfaced as "no SMS" rather than an error. `except (ZTEAuthError, ZTEConnectionError): raise` now comes first. Behaviour is unchanged.
+- **`api.py` — the swallow is now the explicit case, not the fallthrough.** `get_sms_capacity` and `get_rd` caught `Exception` and re-raised the two domain errors via an `isinstance` check inside the handler. Correct today, only because `ZTECredentialsError` subclasses `ZTEAuthError` — but the _default_ was to swallow, so any future domain exception outside that pair would silently have become `{}` or `""`. That is the masked-error class this project has already shipped once, where an expired session surfaced as "no SMS" rather than an error. `except (ZTEAuthError, ZTEConnectionError): raise` now comes first. Behavior is unchanged.
 
 - **`coordinator.py` — `async_force_refresh` clears its flag on the error path.** The one-shot flag is consumed at the top of `_async_update_data`, so if `async_request_refresh()` raised, no update ran, the flag survived, and the next **scheduled** poll fetched despite Pause Polling. Self-correcting after one cycle, but Section 13 asks that every path out clears it.
 
@@ -305,7 +312,7 @@ Group C, the write-path group. Four fixes, all about what the user is told after
 
 - **A partially completed multi-target send looked like a total failure.** Sending to three numbers and failing on the second left the first sent and the third unattempted, and the caller got one undifferentiated `send_sms_failed`. Retrying re-sent to whoever had already received it. The error now names them: _"Already sent to: 111. Retrying will send again to those recipients."_
 
-  **The loop still stops at the first failure.** Continuing would send messages this call would not otherwise have sent, which is a behaviour change on a charged path and not one to make while fixing an error message.
+  **The loop still stops at the first failure.** Continuing would send messages this call would not otherwise have sent, which is a behavior change on a charged path and not one to make while fixing an error message.
 
 - **An unreachable router was reported as _"Router rejected REBOOT_DEVICE"_.** `get_version` swallows its connection error and returns `None`; `get_ad` saw a falsy version and returned `""`; the write then went out carrying an empty token, and the router answered `{"result":"failure"}`. The user was told the device had refused a command it had never received. `get_ad` now raises `ZTEConnectionError` naming the real cause, which also satisfies the dead-session sweep's rule — do the thing, or raise, never report a success-shaped result having done nothing.
 
@@ -379,7 +386,7 @@ Five tests in `tests/test_api.py`, with the fixture text encoded by `_utf16_hex(
 
 ### Summary
 
-Group A of the review sweep. One user-visible fix, one read-path correction, and four gaps where the suite executed a behaviour without checking it.
+Group A of the review sweep. One user-visible fix, one read-path correction, and four gaps where the suite executed a behavior without checking it.
 
 ### Fixed
 

@@ -12,7 +12,7 @@ A Send SMS fix, plus several resilience and robustness changes for edge case beh
 
 ### Fixed
 
-- **Get SMS List Action now reads Emoji Messages.** Any emoji, or character outside the basic set, made the `get_sms_list` action fail with an internal error, making the whole list was unreadable rather than the one message.
+- **Get SMS List Action now reads Emoji Messages.** Any emoji, or character outside the basic set, made the `get_sms_list` action fail with an internal error, making the whole list unreadable rather than just the affected message(s).
 
 ### Changed
 
