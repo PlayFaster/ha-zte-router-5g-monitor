@@ -3,6 +3,8 @@
 This file provides guidance to AI coding agents when working with code in this repository.
 
 > **Read the shared conventions first:** [`.shared/dev_std/agent_conventions.md`](.shared/dev_std/agent_conventions.md) — commands (tests, lint, mypy, validation), the Windows-host `docker exec` workflow, devcontainer access, HAB/MCP for interrogating the running HA instance, the post-modification SCOPE table, code conventions, and the markdown/Python rules. That file is the single source of truth for everything shared across the integration projects; this file covers only what is specific to **ha-zte-router-5g-monitor**.
+>
+> **[!] Note:** If you edit files inside directory junctions (`.notes/` or `.shared/`), do not run container validation on them. Validate them on the Windows host from the `shared/` folder.
 
 ---
 
@@ -163,6 +165,12 @@ raise HomeAssistantError(
 ### Editing `quality_scale.yaml`
 
 Comments are plain multi-line block scalars, so a `": "` sequence in prose is parsed as a mapping and breaks the file. Write `X — because Y`, not `X: because Y`. Check with `grep -nE '^      .*: ' custom_components/zte_router_5g/quality_scale.yaml` before committing.
+
+## Remaining Work (Future — Separate Session)
+
+**Forward work lives in [docs/ROADMAP.md](docs/ROADMAP.md)** — refer there for planned items, revisit parameters, and declined design decisions. Keep it there rather than here, so there is one place to look.
+
+---
 
 ## Development Environment
 

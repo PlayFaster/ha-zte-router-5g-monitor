@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev2\] - 2026-08-14 - CI Bumps Zizmor MyPy JSONSchema PHACC; AGENTS.md; CHANGELOG.md](#334-dev2---2026-08-14---ci-bumps-zizmor-mypy-jsonschema-phacc-agentsmd-changelogmd)
   - [\[3.3.4-dev1\] - 2026-08-08 - Tweaks and Spelling](#334-dev1---2026-08-08---tweaks-and-spelling)
   - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
   - [\[3.3.3-dev12\] - 2026-08-07 - Remaining Review Findings; Timeouts Measured Rather Than Guessed](#333-dev12---2026-08-07---remaining-review-findings-timeouts-measured-rather-than-guessed)
@@ -169,6 +170,20 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
 
 ---
+
+## [3.3.4-dev2] - 2026-08-14 - CI Bumps Zizmor MyPy JSONSchema PHACC; AGENTS.md; CHANGELOG.md
+
+### Bumps
+
+- **Validate Bump**: Update `zizmor` from 1.28.0 to 1.29.0
+- **Validate Bump**: Update `mypy` from 2.1.0 to 2.3.0
+- **Validate Bump**: Update `check-jsonschema` from 0.37.4 to 0.38.0
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.354 to 0.13.355
+
+### Changed
+
+- **`AGENTS.md`**: Added note about different linting for `.notes` and `.shared` and existence of `docs/ROADMAP.md`.
+- **`CHANGELOG.md`**: Rewrote some entries for clarity and tone.
 
 ## [3.3.4-dev1] - 2026-08-08 - Tweaks and Spelling
 

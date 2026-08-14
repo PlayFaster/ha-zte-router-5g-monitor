@@ -81,34 +81,21 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 - **Documentation**: the README's example automations now ignore `unknown` and `unavailable` states, to avoid false alerts from a HA restart or router reboot.
 
-- **Icons and branding** refreshed.
+- **Icons and branding refreshed**.
 
 ### Fixed
 
-- **APN Profile could show a profile that was not in use**: while APN Selection Mode is **Auto** the router uses the routers default APN — but the dropdown still displayed whichever profile was last chosen **manually**. It now shows the profile only when it genuinely matches the APN in use, and blank otherwise. The **Network APN** sensor remains the authoritative answer to which APN is in use.
+- **APN Profile display alignment**: Aligned the dropdown to display only the active profile in manual APN mode, returning a blank state under auto mode where the router's default is used.
 
-- **APN Selection Mode could not be set to Manual**: switching it to **Auto** worked, but switching back to **Manual** was silently rejected by the router.
-  - Both directions now work. Switching to **Manual** requires the router to be told _which_ stored profile to use, so if the APN currently in use is not one of your saved profiles, the integration asks you to choose one from **APN Profile** instead — which sets the mode and the profile together, in one step.
-  - The integration can only **select** among profiles already stored on the router. Creating, editing or deleting an APN profile is done on the router's own web page; a new one appears in the **APN Profile** dropdown at the next poll, or immediately if you press **Refresh Now**.
+- **APN Selection Mode toggling**: Ensured switching between automatic and manual APN modes is correctly registered and processed by the router.
 
-- **Settings & Actions did not check for login**: If the polling interval was long, Pause Polling was on or the web GUI was used, the integrations login to the router could get dropped.
-  - It re-establishes on every new read, but independent activities, e.g. changing settings or running actions, were not properly checking for an active login.
-  - This, coupled with problems with some of the setting writes, could result in silent failures and unpredictable behavior.
-  - This was also an issue immediately after Router reboot, as that also logged out active sessions.
-  - Now addressed across all Actions and Writes (Settings changes), and for Router reboots.
+- **Session handling on write actions**: Implemented proactive login and session checks across all configuration writes and actions to prevent dropped credentials from causing silent update failures.
 
-- **Actions Fixes**:
-  - re-login if the session has expired
-  - confirm the router's action response
-  - provide an error message if there is an error
-  - update the message counters on SMS send immediately
+- **Actions reliability**: Hardened action pipelines to confirm responses, propagate error messages, refresh counters immediately on send, and re-login proactively.
 
-- **Settings Fixes**:
-  - **Data Limit Switch**: This always read the correct state but could fail to set the state, now fixed.
-  - **ODU LED Switch**: Could show incorrect state and invalid toggles temporarily after trying to change. Now fixed.
-  - **APN Prole & Mode**: Also fixed, see above.
+- **Settings write stability**: Resolved state-setting errors on the **Data Limit Switch** and prevented temporary state desyncs on the **ODU LED Switch** after toggling.
 
-- **Monthly Data counters misclassified**: the monthly upload, download and total sensors were recorded state_class=TOTAL, which is incorrect and can cause issues on reset. This has now been corrected to TOTAL_INCREASING - a resetting counter.
+- **Monthly Data state classification**: Corrected monthly data sensors' state class from `TOTAL` to `TOTAL_INCREASING` to ensure correct long-term statistics tracking and reset behavior.
 
 ---
 
@@ -127,8 +114,8 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Password No Longer Pre-filled on Edit Screens**: On Reconfigure, Options, and Reauth, the password field is now masked and left blank — the stored value is never pre-filled or revealable. Leave it blank to keep the current password, or enter a new one to change it.
-- **Doubled Device URL**: A full URL or trailing slash entered in the Host field is now stripped before storage, preventing a malformed device link (e.g. `http://http://192.168.0.1`).
+- **Edit screen credential security**: Configured the password field on configuration screens to be masked and blank by default, preventing the stored password from being pre-filled or exposed.
+- **Host URL sanitization**: Host input is now automatically sanitized to strip redundant prefixes or trailing slashes, preventing malformed device links.
 
 ## [3.2.4] - 2026-06-15 - Release
 
@@ -172,7 +159,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Centralized Session Stability**: central request helper now resets expired tokens proactively, preventing transient authentication errors and empty sensor states.
+- **Centralized session stability**: The request helper now proactively detects and resets expired session tokens to prevent transient errors and empty sensor states.
 
 ## [3.1.0] - 2026-05-24
 
@@ -190,10 +177,10 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Stable Uptime Timestamp**: Boot time is now latched once and only re-derived when the router's uptime counter drops — the only reliable reboot signal. Bad or missing uptime readings leave the cached value untouched, eliminating timestamp drift caused by independently ticking clocks.
-- **Empty Sensor Values**: Sensors receiving an empty string from the router now correctly report **Unknown** state in HA instead of displaying a blank value.
-- **Spurious Reauthentication**: Transient connection drops and network errors no longer incorrectly trigger the reauthentication flow; reauth is reserved for explicit credential rejection from the router.
-- **Monthly Data (Legacy GB Sensors)**: Corrected unit calculation from binary gibibytes (GiB, 1,073,741,824 bytes) to decimal gigabytes (GB, 1,000,000,000 bytes).
+- **Uptime tracking stability**: Latched the boot time calculation to prevent timestamp drift from independently ticking clocks, updating it only when a physical reboot drops the counter.
+- **Empty value handling**: Standardized empty router responses to map to `Unknown` states in Home Assistant instead of displaying blank values.
+- **Reauthentication flow triggers**: Isolated the reauthentication flow to explicit router credential rejections, preventing transient network drops from triggering configuration prompts.
+- **Legacy data unit calculation**: Aligned legacy monthly data sensor conversions to standard decimal gigabytes (GB) instead of binary gibibytes (GiB).
 
 ## [3.0.1] - 2026-05-10
 
@@ -244,7 +231,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Unavailable Bug**: Fixed an issue where sensors would never go unavailable due to misconfigured grace period.
+- **Grace period error handling**: Adjusted grace period configuration to ensure sensors correctly transition to `Unavailable` when the router goes offline.
 
 ## [2.1.1] - 2026-03-29
 
@@ -268,7 +255,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Entity Naming**: Fixed entity sensor naming approach.
+- **Entity naming alignment**: Aligned and standardized the sensor naming scheme.
 
 ## [1.6.3] - 2026-03-28
 
@@ -284,7 +271,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Sub Device Sensors**: Properly align sub device (data, sms) sensor naming.
+- **Sub-device naming alignment**: Standardized sensor naming for secondary data and SMS entities.
 
 ## [1.5.1] - 2026-03-28
 
@@ -314,8 +301,8 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Startup Deadlock**: Implemented "Initial Bypass" logic to ensure entities load correctly on restart even if polling was previously paused.
-- **Boot Resilience**: Added a fail-safe to prevent the integration from becoming "Unavailable" if the router is unreachable during the initial Home Assistant startup sequence.
+- **Startup deadlock prevention**: Implemented initial bypass checks to ensure integration entities load successfully on Home Assistant restart when polling is paused.
+- **Boot-phase connection resilience**: Added a startup fail-safe to prevent entities from loading in an unavailable state when the router is temporarily unreachable at startup.
 
 ## [1.4.2] - 2026-03-27
 
