@@ -786,6 +786,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 "severity": "unknown",
                 "degraded_capabilities": [],
                 "drift": [],
+                "repairs": [],
                 "last_good_update": None,
                 "consecutive_failures": 0,
             }

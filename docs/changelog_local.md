@@ -5,27 +5,29 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.4-dev9\] - 2026-08-26 - Tests: Depth Check PASSED; Publish-Moment Captures, One Seam Removed](#334-dev9---2026-08-26---tests-depth-check-passed-publish-moment-captures-one-seam-removed)
-  - [\[3.3.4-dev8\] - 2026-08-25 - A Real HTTP Seam: Both Declared Outcomes Driven, Fault Injection Adopted](#334-dev8---2026-08-25---a-real-http-seam-both-declared-outcomes-driven-fault-injection-adopted)
-  - [\[3.3.4-dev7\] - 2026-08-25 - Repair Set Aligned To The Family; Unit Selector, Strike Split, SMS Logging](#334-dev7---2026-08-25---repair-set-aligned-to-the-family-unit-selector-strike-split-sms-logging)
-  - [\[3.3.4-dev6\] - 2026-08-25 - CI Bumps; Open Issues Queue; HA Min Ver; Sensor Manifest; Docs](#334-dev6---2026-08-25---ci-bumps-open-issues-queue-ha-min-ver-sensor-manifest-docs)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Chores: Six Chores Assessed and Closed](#334-dev5---2026-08-25---cross-project-chores-six-chores-assessed-and-closed)
-  - [\[3.3.4-dev4\] - 2026-08-24 - Notes: The Bridge-Mode Check Became A Task](#334-dev4---2026-08-24---notes-the-bridge-mode-check-became-a-task)
-  - [\[3.3.4-dev3\] - 2026-08-24 - Notes Queue: `.notes/tasks/` Created And Populated](#334-dev3---2026-08-24---notes-queue-notestasks-created-and-populated)
-  - [\[3.3.4-dev2\] - 2026-08-14 - CI Bumps Zizmor MyPy JSONSchema PHACC; AGENTS.md; CHANGELOG.md](#334-dev2---2026-08-14---ci-bumps-zizmor-mypy-jsonschema-phacc-agentsmd-changelogmd)
-  - [\[3.3.4-dev1\] - 2026-08-08 - Tweaks and Spelling](#334-dev1---2026-08-08---tweaks-and-spelling)
+  - [\[3.3.4-dev11\] - 2026-08-26 - Documentation Reconciled To The Repair-Set Change](#334-dev11---2026-08-26---documentation-reconciled-to-the-repair-set-change)
+  - [\[3.3.4-dev10\] - 2026-08-26 - Suppression Allow-List Sweep; Health & Repair Contract Tests; Silent-Failure Audit](#334-dev10---2026-08-26---suppression-allow-list-sweep-health--repair-contract-tests-silent-failure-audit)
+  - [\[3.3.4-dev9\] - 2026-08-26 - Publish-Moment State Capture Tests; Real APN Payloads in Select Tests](#334-dev9---2026-08-26---publish-moment-state-capture-tests-real-apn-payloads-in-select-tests)
+  - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
+  - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Reauth Repair Flow; Frequency Unit Selector; Separate Drift Strike Budget; SMS Log Privacy](#334-dev7---2026-08-25---interactive-reauth-repair-flow-frequency-unit-selector-separate-drift-strike-budget-sms-log-privacy)
+  - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Chore Verification: C-006, C-011, C-016, C-017, C-018, C-021](#334-dev5---2026-08-25---cross-project-chore-verification-c-006-c-011-c-016-c-017-c-018-c-021)
+  - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: Bridge-Mode Verification Task; APN Auto-Mode Analysis](#334-dev4---2026-08-24---documentation-bridge-mode-verification-task-apn-auto-mode-analysis)
+  - [\[3.3.4-dev3\] - 2026-08-24 - Documentation: Task Queue Organization; Roadmap Task Alignment](#334-dev3---2026-08-24---documentation-task-queue-organization-roadmap-task-alignment)
+  - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; Documentation Updates](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-documentation-updates)
+  - [\[3.3.4-dev1\] - 2026-08-08 - Documentation: Changelog Format Refinements; US Spelling Standardization](#334-dev1---2026-08-08---documentation-changelog-format-refinements-us-spelling-standardization)
   - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
-  - [\[3.3.3-dev12\] - 2026-08-07 - Remaining Review Findings; Timeouts Measured Rather Than Guessed](#333-dev12---2026-08-07---remaining-review-findings-timeouts-measured-rather-than-guessed)
-  - [\[3.3.3-dev11\] - 2026-08-07 - Low Findings From Both Reviews](#333-dev11---2026-08-07---low-findings-from-both-reviews)
-  - [\[3.3.3-dev10\] - 2026-08-07 - Write Actions Reported Failures They Had Not Had](#333-dev10---2026-08-07---write-actions-reported-failures-they-had-not-had)
-  - [\[3.3.3-dev9\] - 2026-08-07 - An SMS Containing an Emoji Could Not Be Read Back](#333-dev9---2026-08-07---an-sms-containing-an-emoji-could-not-be-read-back)
-  - [\[3.3.3-dev8\] - 2026-08-07 - Two Data Sensors Hid Fresh Values; Four Unpinned Test Gaps](#333-dev8---2026-08-07---two-data-sensors-hid-fresh-values-four-unpinned-test-gaps)
-  - [\[3.3.3-dev7\] - 2026-08-07 - First Mutation Run: 94.7% Kill Rate, Survivors Triaged](#333-dev7---2026-08-07---first-mutation-run-947-kill-rate-survivors-triaged)
-  - [\[3.3.3-dev6\] - 2026-08-07 - Tests That Will Stop You; Mutation Scope Decided](#333-dev6---2026-08-07---tests-that-will-stop-you-mutation-scope-decided)
-  - [\[3.3.3-dev5\] - 2026-08-07 - Repair Lifecycle: Scoped, Cleared On Unload And Removal](#333-dev5---2026-08-07---repair-lifecycle-scoped-cleared-on-unload-and-removal)
-  - [\[3.3.3-dev4\] - 2026-08-07 - Test Baseline: Zero Partial Branches, Zero Unaccounted Assertions](#333-dev4---2026-08-07---test-baseline-zero-partial-branches-zero-unaccounted-assertions)
-  - [\[3.3.3-dev3\] - 2026-08-07 - Widened Ruff Rule Set Satisfied Without Suppressions](#333-dev3---2026-08-07---widened-ruff-rule-set-satisfied-without-suppressions)
-  - [\[3.3.3-dev1\] - 2026-08-07 - CI Bumps; Github Zipfile; PyTest Branch \& Mutation Testing](#333-dev1---2026-08-07---ci-bumps-github-zipfile-pytest-branch--mutation-testing)
+  - [\[3.3.3-dev12\] - 2026-08-07 - Write Token Validation; Config-Flow Session Release; Timing Probe Measurements](#333-dev12---2026-08-07---write-token-validation-config-flow-session-release-timing-probe-measurements)
+  - [\[3.3.3-dev11\] - 2026-08-07 - API Domain Error Handling; Force-Refresh Flag Reset; SMS Bank Counter Tests](#333-dev11---2026-08-07---api-domain-error-handling-force-refresh-flag-reset-sms-bank-counter-tests)
+  - [\[3.3.3-dev10\] - 2026-08-07 - Write Action Error Isolation; Partial Multi-Recipient SMS Reporting; ID-Less Message Deletion Guard](#333-dev10---2026-08-07---write-action-error-isolation-partial-multi-recipient-sms-reporting-id-less-message-deletion-guard)
+  - [\[3.3.3-dev9\] - 2026-08-07 - SMS UTF-16BE Hex Decoding; Emoji Surrogate Pair Support](#333-dev9---2026-08-07---sms-utf-16be-hex-decoding-emoji-surrogate-pair-support)
+  - [\[3.3.3-dev8\] - 2026-08-07 - Data Allowance Sensor Availability; Empty SMS Bank Handling](#333-dev8---2026-08-07---data-allowance-sensor-availability-empty-sms-bank-handling)
+  - [\[3.3.3-dev7\] - 2026-08-07 - Mutation Test Baseline; Billing-Cycle Boundary and Diagnostics Sanitizer Tests](#333-dev7---2026-08-07---mutation-test-baseline-billing-cycle-boundary-and-diagnostics-sanitizer-tests)
+  - [\[3.3.3-dev6\] - 2026-08-07 - Sweep Test Documentation in AGENTS.md; Mutation Testing Scoping](#333-dev6---2026-08-07---sweep-test-documentation-in-agentsmd-mutation-testing-scoping)
+  - [\[3.3.3-dev5\] - 2026-08-07 - Entry-Scoped Repair IDs; Repair Cleanup on Unload and Removal](#333-dev5---2026-08-07---entry-scoped-repair-ids-repair-cleanup-on-unload-and-removal)
+  - [\[3.3.3-dev4\] - 2026-08-07 - Test Suite Baseline: 100% Branch Coverage and Zero Unaccounted Assertions](#333-dev4---2026-08-07---test-suite-baseline-100-branch-coverage-and-zero-unaccounted-assertions)
+  - [\[3.3.3-dev3\] - 2026-08-07 - Ruff Linting Compliance; Coordinator Endpoint Failure Isolation](#333-dev3---2026-08-07---ruff-linting-compliance-coordinator-endpoint-failure-isolation)
+  - [\[3.3.3-dev1\] - 2026-08-07 - Shared CI Bump to v2.0.10; Release Zip Asset Workflow; Branch Coverage Setup](#333-dev1---2026-08-07---shared-ci-bump-to-v2010-release-zip-asset-workflow-branch-coverage-setup)
   - [\[3.3.2\] - 2026-08-02 - Release - Wider Model Support. Better Data Use Tracking. Longer SMS Messages. About: Attributes. Fixes](#332---2026-08-02---release---wider-model-support-better-data-use-tracking-longer-sms-messages-about-attributes-fixes)
   - [\[3.3.2-rc15\] - 2026-08-02 - Bump Shared CI to v2.0.9](#332-rc15---2026-08-02---bump-shared-ci-to-v209)
   - [\[3.3.2-rc14\] - 2026-08-01 - README Review; SMS Action Documentation Corrected](#332-rc14---2026-08-01---readme-review-sms-action-documentation-corrected)
@@ -178,7 +180,64 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.4-dev9] - 2026-08-26 - Tests: Depth Check PASSED; Publish-Moment Captures, One Seam Removed
+## [3.3.4-dev11] - 2026-08-26 - Documentation Reconciled To The Repair-Set Change
+
+No code. The user-facing and contributor documents that described the old three-repair set, reconciled against what now ships.
+
+### Fixed
+
+- **`custom_components/zte_router_5g/quality_scale.yaml`** described `_set_drift_repair`, a function that no longer exists, and three repairs where there are two. This one is shipped and read by IQS review, so it was the most consequential of the stale documents. It now records both current repairs, the `repairs.py` requirement behind `is_fixable`, and the three conditions deliberately moved off the panel with where each went instead.
+- **`README.md` § Repairs** listed all three retired cards and none of the current ones. Rewritten: two rows, and a note explaining that three conditions were moved off the panel deliberately, where to watch for each instead, and that a card left over from an earlier version clears itself on the next start. The introduction no longer claims all repairs auto-clear — `auth_failed` does not, and that is the point of it.
+- **`README.md` automation example** told the reader that `severity == 'warning'` "is the condition that also raises a Repair". That became false when drift left the panel. It now says the opposite, and why the attribute is the way to catch it.
+- **`README.md` entity table**: the SMS sub-device gained `SMS Storage Full`, 4 entities to 5.
+- **`docs/DEVELOPMENT.md`** still explained the wording of a repair title that no longer exists. The drift section now records that the repair was retired and why; the re-authentication section gains the `ConfirmRepairFlow` trap and the reason `auth_failed` is the one repair that does not auto-clear.
+- **`docs/value_min_max.md`**: the two bandwidth rows now say **why** they must keep no `state_class` — a later "every numeric sensor should have a state class" tidy-up would silently remove the unit selector, which is exactly how `huawei_router_5g` arrived at the same defect.
+
+### Notes
+
+- **`CHANGELOG.md` is deliberately untouched.** This project writes the user-facing changelog at release; `3.3.4` has ten `-dev` entries here and no release section yet. The user-visible parts of this cycle — the repair set, the new binary sensor, the unit selector — need an entry when `3.3.4` ships.
+- **Cross-project notes were written for `unifi_network_monitor`**, which has the same chores open. They are in `x_proj_chores.md` under C-003, C-004, C-012, C-019, C-020 and C-022 step 8, and in `repair_set_alignment.md` §3.1, `fault_injection_options.md` §1 and `stubbed_publish_tests.md`.
+
+## [3.3.4-dev10] - 2026-08-26 - Suppression Allow-List Sweep; Health & Repair Contract Tests; Silent-Failure Audit
+
+Added test sweeps to enforce suppression justifications and verify health and repair contract invariants, followed by a full silent-failure audit across the codebase.
+
+Closes the last three cross-project chores on this project — **C-004**, **C-022** and **C-003**. With these the chore register carries no outstanding `zte_router_5g` cell.
+
+### Added
+
+- **A suppression allow-list sweep** (chore **C-004**), ported from `huawei_router_5g` into `tests/test_entity_hygiene.py` with all four of the points that chore names: comments found with `tokenize` rather than a regex, keyed on `(file, directive)` rather than line number so ordinary edits do not churn it, **three** tests rather than one, and `custom_components/`, `tests/` and `scripts/` all swept. `_shipped_root()` came with it so a `mutmut` run reads the shipped tree rather than several hundred mutated copies of the same comment.
+
+  The table started **empty**, as the chore requires — Huawei's entries describe Huawei's library and copying them would have meant nothing. Running the sweep found **14 `(file, directive)` pairs across 45 occurrences**, and each was given a written reason traced back to its site rather than to a guess. Every one already carried an inline justification; this makes the set unable to grow without someone writing another.
+
+  **Why ruff and mypy do not cover this**, which is worth restating: `RUF100` and `warn_unused_ignores` report a suppression that is _unnecessary_. They are silent on the dangerous case — one doing real work because the error is real. On `huawei_router_5g` both were clean while two calls to non-existent library methods sat behind `type: ignore`, so two controls had never worked.
+
+- **The six health and repair contract sweeps** (chore **C-022** step 8), in `tests/test_health_contract.py`. They appear in no report: `Tests: Depth Check` cannot see them, and a project can pass every other check while having none. Written against sources this project has, not ported — `wifi_ssid_monitor` is the only one in the family with a `health.py` and a `CHECKS` tuple, so sweeping `CHECKS` is not portable.
+
+### Fixed
+
+- **The success-path fallback health snapshot omitted `repairs`** while the other three snapshot assignments carried it. Found by sweep 8f, which is the shape check over every `health_snapshot` assignment. `binary_sensor.py` reads it through `.get("repairs", [])`, so nothing crashed — the attribute simply disappeared from the published set on that one path, and a template reading it got an empty value rather than an error. Exactly the class 8f exists for.
+- **`async_remove_entry` now sweeps the retired repair ids** as well as the current ones. `clear_legacy_repairs` only runs when an entry is set up again, so an installation upgraded and then deleted without a successful setup in between would have kept a card nothing could clear.
+
+### Changed
+
+- **`test_every_repair_issue_has_translated_text` is retired**, superseded by 8a. It asserted only that each raised key was _present_ in the `issues` block — a key with a title and no description passes that and renders a card with an empty body. 8a checks title and description, in `strings.json` and in every `translations/*.json`. A note at the old site records what replaced it.
+- **`AGENTS.md`**: the sweep table gains a row for suppressions and its repair row now points at the step-8 sweeps.
+
+### Notes
+
+- **8c was rewritten after a mutation exposed it.** The first version asserted that `__init__.py` _mentioned_ `REPAIR_NAMES` and `RETIRED_REPAIR_NAMES`; a mutation removing them from the removal loop still passed, because the import line matched. It now raises a card under every id the code knows about — current and retired, entry-scoped and bare — calls `async_remove_entry`, and asserts the registry empties. A source-reading assertion cannot be fooled the same way twice, but it could not have been trusted here.
+- **`masked_errors_check` (chore C-003) found nothing in any of the four classes**, and the report at `.notes/issues/masked_errors/masked_errors_20260826_0030.md` explains why that is evidence rather than absence of effort. The prompt allows a guard to narrow the audit only after it has been watched to fail; both narrowing guards were broken deliberately first. It ran **last** by design, after every source change had landed and with C-004 in place as the continuous guard that keeps its Class D result true.
+- **One accepted Class A exception is recorded, not fixed**: `switch.py:298` swallows a failed write read-back to debug, because a read that fails leaves the write _unverified_ rather than failed. The next poll surfaces the error normally, so nothing is masked beyond one cycle.
+
+### Verification
+
+- **908 tests** (900 → 908), 100% line and branch, 0 partial branches, assertion audit 2 of 614 allow-listed. `mypy` clean; `ruff` clean; markdown lint clean.
+- **Ten mutations verified**, each restored by checksum: three against the suppression sweep (an unlisted suppression, a dead entry, a token justification), six against the step-8 sweeps (a repair losing its description, retired text left behind, retired ids dropped from the removal list, a path ceasing to set a severity, a finding classified as both drift and capability, a snapshot omitting a contract key), and one re-run of the 8c rewrite.
+
+## [3.3.4-dev9] - 2026-08-26 - Publish-Moment State Capture Tests; Real APN Payloads in Select Tests
+
+Hardened write-entity tests to capture state at the exact moment of publishing (`async_write_ha_state`), and replaced synthetic mock patches in APN select tests with real router payload strings.
 
 Tests only; no shipped code changed. Closes chore **C-019** and the `x_project` issue _Tests that stub the publish_, and takes `Tests: Depth Check` from FAILED to **PASSED** — the third project in the family to reach it, after `wifi_ssid_monitor` and `huawei_router_5g`.
 
@@ -204,7 +263,9 @@ Tests only; no shipped code changed. Closes chore **C-019** and the `x_project` 
 - **Three publish/write inversions verified**, each restored by checksum: the router switch publishing before latching the confirmed value, the pause switch publishing before writing options, and the slider publishing before setting the new value. All three failed the capture tests.
 - `Tests: Depth Check`: **PASSED** — 2 of 2 outcomes driven, 0 stubbed publishes, 0 stubbed seams, 0 gates undriven, 0 orphanable, 0 self-healing.
 
-## [3.3.4-dev8] - 2026-08-25 - A Real HTTP Seam: Both Declared Outcomes Driven, Fault Injection Adopted
+## [3.3.4-dev8] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite
+
+Added an HTTP transport mocking harness (`tests/transport.py` using `aioclient_mock`) to drive API resilience and error handling end-to-end through real HTTP request flows.
 
 Tests and test tooling only; no shipped code changed. Closes the re-opened chore **C-021** and adopts `x_project`'s _Fault injection in tests_ on this project. `Tests: Depth Check` reports **2 of 2 declared outcomes driven** in `REACH mode: coverage contexts`, and — unlike the reading that closed C-021 in error on 2026-08-24 — the outcomes are now genuinely produced by `api.py` running over a faked transport.
 
@@ -232,9 +293,11 @@ Both were found because the mutation run reported them as uncaught. Neither woul
 - **Five `api.py` mutations verified**, each restored by checksum: the login stops reading the `stok` cookie; the dead-session rule weakened; HTML detection disabled on the content-type branch; `not_ready` collapsed into `expired`; and the classifier ignoring unauthenticated keys. **All five are inside `api.py`** — that is the point, because none of them would fail a suite built on an API-object mock.
 - `Tests: Depth Check`: 2 of 2 driven, `REACH mode: coverage contexts`, 0 gates undriven, 0 orphanable, 0 self-healing. **2 stubbed publishes and 2 seams remain** and are the next phase.
 
-## [3.3.4-dev7] - 2026-08-25 - Repair Set Aligned To The Family; Unit Selector, Strike Split, SMS Logging
+## [3.3.4-dev7] - 2026-08-25 - Interactive Reauth Repair Flow; Frequency Unit Selector; Separate Drift Strike Budget; SMS Log Privacy
 
-Four cross-project chores and one cross-project issue, worked as a single pass over the source so the tree is measured once rather than four times. **Every change below is behavioural**, and each carries a test verified to fail against the pre-change code.
+Aligned repair workflows, privacy standards, and entity configurations across four cross-project chores and one cross-project issue.
+
+Worked as a single pass over the source so the tree is measured once rather than four times. **Every change below is behavioural**, and each carries a test verified to fail against the pre-change code.
 
 ### Changed
 
@@ -265,7 +328,9 @@ Four cross-project chores and one cross-project issue, worked as a single pass o
 - **The ZTE repair id format stays `{entry_id}_{name}`** where Huawei uses `{name}_{entry_id}`. Deliberate: changing it would orphan every live card, which is the exact failure this entry is otherwise about.
 - **`api.py:594` logs a 300-character preview of an unexpected HTML body** at `ERROR`. Left as it is, and recorded as a judgment rather than a §20 breach: the preview is the only diagnostic for an unrecognised response, and it carries no identifier the standard names. The other 62 `_LOGGER` sites were read; `api.py:836` carries the router's `result` status string and `coordinator.py:428` model and firmware, neither of which is personal data.
 
-## [3.3.4-dev6] - 2026-08-25 - CI Bumps; Open Issues Queue; HA Min Ver; Sensor Manifest; Docs
+## [3.3.4-dev6] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation
+
+Tooling, dependencies, and documentation updates. Bumped shared CI and linters, established the official Home Assistant 2024.8.0 compatibility floor in `docs/ha_compatibility.md`, synced sensor documentation manifests, and enforced 100% pytest coverage.
 
 ### Bumps
 
@@ -296,7 +361,7 @@ Four cross-project chores and one cross-project issue, worked as a single pass o
 
 - **`python-typing-update`**: Dropped as HA has moved to enforcing these rules via `ruff`.
 
-## [3.3.4-dev5] - 2026-08-25 - Cross-Project Chores: Six Chores Assessed and Closed
+## [3.3.4-dev5] - 2026-08-25 - Cross-Project Chore Verification: C-006, C-011, C-016, C-017, C-018, C-021
 
 Documentation and issue tracking queue update. A second cross-project chore assessment pass completed against `x_proj_chores.md`, verifying the remaining unassessed chores against the ZTE codebase and test baseline.
 
@@ -309,7 +374,9 @@ Documentation and issue tracking queue update. A second cross-project chore asse
 - **`C-018` (Hardware check script output)**: Marked `DONE`. `scripts/hardware_check.py:59` outputs to console and tees to `.reports/hardware_check.txt`; supports `--capture` for sanitized payload inspection.
 - **`C-021` (Drive declared outcomes via transport mock)**: Marked `DONE`. Live `.workbench/check_test_depth.py` run confirms 3 of 3 declared outcomes driven through transport mocks (`test_coordinator_resilience.py`), with the deepest test driving 12 consecutive polls.
 
-## [3.3.4-dev4] - 2026-08-24 - Notes: The Bridge-Mode Check Became A Task
+## [3.3.4-dev4] - 2026-08-24 - Documentation: Bridge-Mode Verification Task; APN Auto-Mode Analysis
+
+Documentation update. Documented APN auto-mode profile resolution behavior in development notes, added a bridge-mode payload verification task for future hardware testing, and updated `.notes/` structure tracking.
 
 Documentation only. A second sweep over the `.notes/` folders the first migration run never enumerated. All are prompt-owned here except `errors/`, which is empty, so the sweep came down to the root `todo.md`.
 
@@ -320,7 +387,9 @@ Documentation only. A second sweep over the `.notes/` folders the first migratio
 - **The screenshots entry stays in `todo.md`.** A documentation chore with no exit criterion beyond doing it is what that list is for.
 - **`.notes/proj_structure.md` corrected** — `tasks/` added, `issues/` re-described, and `info/` updated after `expansion_plan_202607/` and `updates_202608/` moved to `tasks/closed/`.
 
-## [3.3.4-dev3] - 2026-08-24 - Notes Queue: `.notes/tasks/` Created And Populated
+## [3.3.4-dev3] - 2026-08-24 - Documentation: Task Queue Organization; Roadmap Task Alignment
+
+Documentation reorganization. Structured project internal notes under `.notes/tasks/`, archived completed July/August plans, and aligned billing-cycle tasks with `docs/ROADMAP.md`.
 
 Documentation only. `tasks_folder_migrate` run against this project, in two passes — `issues/` then `info/`.
 
@@ -343,7 +412,9 @@ Documentation only. `tasks_folder_migrate` run against this project, in two pass
 - **`expansion_plan_202607/`** — `Z5g_snr` and `Z5g_CELL_ID` are at `api.py:137-138`, and the six-call-site aliasing is `_get_first` in `sensor.py`.
 - **`updates_202608/status_plan.md`** — all six phases run and nine review findings implemented across `[3.3.3-dev8]`–`[3.3.3-dev11]`. Its Phase 5 is recorded `PARTIAL` and deliberately not to be re-run; the stamp says so, because "partial and closed" reads as unfinished.
 
-## [3.3.4-dev2] - 2026-08-14 - CI Bumps Zizmor MyPy JSONSchema PHACC; AGENTS.md; CHANGELOG.md
+## [3.3.4-dev2] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; Documentation Updates
+
+Tooling and documentation updates. Bumped validation dependencies (Zizmor, MyPy, JSONSchema, PHACC) and updated `AGENTS.md` and `CHANGELOG.md` for clarity and consistency.
 
 ### Bumps
 
@@ -357,7 +428,9 @@ Documentation only. `tasks_folder_migrate` run against this project, in two pass
 - **`AGENTS.md`**: Added note about different linting for `.notes` and `.shared` and existence of `docs/ROADMAP.md`.
 - **`CHANGELOG.md`**: Rewrote some entries for clarity and tone.
 
-## [3.3.4-dev1] - 2026-08-08 - Tweaks and Spelling
+## [3.3.4-dev1] - 2026-08-08 - Documentation: Changelog Format Refinements; US Spelling Standardization
+
+Documentation refinements. Minor changelog formatting fixes and US English spelling adjustments across documentation.
 
 ### Changed
 
@@ -393,9 +466,11 @@ A Send SMS fix, plus several resilience and robustness changes for edge case beh
 
 - **Polling interval updates**: Ensured rapid polling interval changes are preserved even if the integration is reloaded immediately after.
 
-## [3.3.3-dev12] - 2026-08-07 - Remaining Review Findings; Timeouts Measured Rather Than Guessed
+## [3.3.3-dev12] - 2026-08-07 - Write Token Validation; Config-Flow Session Release; Timing Probe Measurements
 
 ### Summary
+
+Code review completion and timing analysis. Hardened pre-write token validation to verify the RD seed, ensured config flows release sessions in `finally` blocks, improved disabled billing-cycle string matching, and measured 50 rounds of live hardware request timings to confirm timeout ceilings.
 
 Closes the code review. Part 3 covered `coordinator.py` and `config_flow.py` — the two files the first pass read only in part — so **every source file and every test file has now been read in full**. One new defect came out of measuring the router rather than reading it.
 
@@ -450,9 +525,11 @@ Six tests. The three behavioral fixes were each verified by removing the fix and
 - Suite 868 passed (was 862). Line and branch coverage both 100%, 0 partials. `mypy --strict`, `ruff`, `ruff format` clean.
 - **Two findings were deliberately not actioned.** The four exception handlers reachable only by patching `_request` stay as they are — the fix would be deleting error handling or adding a `pragma` to move a coverage number, which Section 11 rule 6 rules out. And setup still validates before checking for a duplicate: the IMEI that forms the unique id **comes from** that fetch, so reordering risks the dedup logic to save one round trip.
 
-## [3.3.3-dev11] - 2026-08-07 - Low Findings From Both Reviews
+## [3.3.3-dev11] - 2026-08-07 - API Domain Error Handling; Force-Refresh Flag Reset; SMS Bank Counter Tests
 
 ### Summary
+
+Robustness and test additions. Explicitly re-raised domain errors in optional API endpoints, ensured force-refresh flags clear on error, removed a shadowed property attribute in pause switch, and added tests for all six SMS storage banks.
 
 Group D, the last of the review sweep. Five small changes, none altering behavior a user can observe, plus one test for a path that had none.
 
@@ -485,9 +562,11 @@ The re-run over `helpers.py`, `diagnostics.py` and `sensor.py` after this sweep 
 - **Mutation re-run after the sweep: 1,256 mutants, 43 survivors — a 96.6% kill rate**, up from 45 of 1,260 before this work. All three `_get_total_sms` survivors are now killed, including the two key-name literals that had looked like noise: six distinct values in the new test make the total identify which bank was dropped. The remaining 43 are the triaged classes — string literals, `cast()` mutants that are no-ops at runtime, and paths an existing guard excludes.
 - **Two Low findings were deliberately not actioned**, both recorded in `.notes/code_review/code_review_20260807_1330_part2.md`: the unquoted router-supplied `pdp_type` in a form body is defensive only, since `vol.Coerce(int)` closes the service-reachable path; and the truncated-hex handling was already changed as a consequence of `[3.3.3-dev9]` rather than separately.
 
-## [3.3.3-dev10] - 2026-08-07 - Write Actions Reported Failures They Had Not Had
+## [3.3.3-dev10] - 2026-08-07 - Write Action Error Isolation; Partial Multi-Recipient SMS Reporting; ID-Less Message Deletion Guard
 
 ### Summary
+
+Write action error isolation and reporting. Isolated post-write coordinator refreshes so transient refresh blips do not misreport sent SMS messages as failed, added recipient tracking to partial multi-recipient sends, safely filtered ID-less SMS records, and ensured unreachable routers raise connection errors.
 
 Group C, the write-path group. Four fixes, all about what the user is told after a command. **No command, payload or `goformId` changes** — the wire traffic is identical.
 
@@ -527,9 +606,11 @@ Six tests in `tests/test_init.py` and one rewritten in `tests/test_coverage_ext.
 
   An earlier attempt at `delete_sms` had failed with `ZTEConnectionError: Request failed:` — an empty message, which is a bare `TimeoutError` (`str(TimeoutError())` is `""`). That was **session contention, not a defect**: the router hands its single session to whoever logged in last, and a separate production Home Assistant polls this router every three minutes. The clean re-run settles it. A pre-flight warning about competing sessions has been added to `scripts/hardware_check.py`.
 
-## [3.3.3-dev9] - 2026-08-07 - An SMS Containing an Emoji Could Not Be Read Back
+## [3.3.3-dev9] - 2026-08-07 - SMS UTF-16BE Hex Decoding; Emoji Surrogate Pair Support
 
 ### Summary
+
+SMS hex decoding fix. Replaced 4-hex-digit character decoding with `bytes.fromhex().decode("utf-16-be")`, correctly handling emoji surrogate pairs and preventing JSON serialization errors in SMS services and recorder history.
 
 Group B. One fix, in the function that turns the router's hex into text.
 
@@ -569,9 +650,11 @@ Five tests in `tests/test_api.py`, with the fixture text encoded by `_utf16_hex(
 
   **A response service is the sharpest way this can present.** An ordinary sensor would have shown mangled text and kept working; a service payload fails to serialize and takes the whole action down. The probe is kept at `.notes/local_only/sms_json_probe.py` (gitignored, read-only).
 
-## [3.3.3-dev8] - 2026-08-07 - Two Data Sensors Hid Fresh Values; Four Unpinned Test Gaps
+## [3.3.3-dev8] - 2026-08-07 - Data Allowance Sensor Availability; Empty SMS Bank Handling
 
 ### Summary
+
+Sensor availability and SMS parsing fixes. Removed secondary endpoint dependencies from the Allowance and Alert Threshold sensors so they remain available during optional endpoint degradation, and updated SMS bank counting to treat empty responses as zero instead of raising value errors.
 
 Group A of the review sweep. One user-visible fix, one read-path correction, and four gaps where the suite executed a behavior without checking it.
 
@@ -604,9 +687,11 @@ Group A of the review sweep. One user-visible fix, one read-path correction, and
 - Suite 852 passed (was 849). Line and branch coverage both 100%, 0 partials. `mypy --strict`, `ruff` and `ruff format` clean.
 - Both new guards were verified by reintroducing the defect: the sensor sweep fails on a restored `source=`, and the drift and refusal tests were mutation-checked in the review that raised them. Source restored by file copy and confirmed with `sha256sum -c` each time; no git command was used.
 
-## [3.3.3-dev7] - 2026-08-07 - First Mutation Run: 94.7% Kill Rate, Survivors Triaged
+## [3.3.3-dev7] - 2026-08-07 - Mutation Test Baseline; Billing-Cycle Boundary and Diagnostics Sanitizer Tests
 
 ### Summary
+
+Mutation testing baseline and test suite hardening. Ran the project's first mutation test sweep (1,260 mutants, 94.7% kill rate) and added 12 tests covering midnight billing cycle resets, projection weights, data allowance bounds, diagnostics tokenization, and entity unique IDs.
 
 The first mutation run this project has ever had. **1,260 mutants across the three scoped modules, 67 survivors — a 94.7% kill rate**, taken to **45 survivors / 96.4%** by the tests below. Scoping worked: zero mutants were generated outside the chosen modules, which is the check that matters, since a comma-separated `only_mutate` silently generates nothing while reporting success.
 
@@ -633,19 +718,27 @@ Twelve tests, targeting the survivors with real consequence. The `wifi_ssid_moni
 - **One test was written, failed, and was corrected rather than kept.** The first version invented a `second_sms` key to get two senders into one payload. It failed for a real reason — the sanitizer keys on the literal `last_sms` — but the router sends no such key, and Section 20 explicitly prescribes sanitizing vendor subtrees **by their schema's block names**. Keying on the known name is conformant, not a gap. The assertion moved to the cell identifiers, which genuinely co-occur.
 - **`mutants/` was never deleted.** It is the incremental cache and the results store. Its non-Python assets were stale (a `strings.json` with 67 sensor keys against the live 75, which failed an unrelated-looking test inside the sandbox); they were refreshed in place.
 
-## [3.3.3-dev6] - 2026-08-07 - Tests That Will Stop You; Mutation Scope Decided
+## [3.3.3-dev6] - 2026-08-07 - Sweep Test Documentation in AGENTS.md; Mutation Testing Scoping
+
+### Summary
+
+Testing documentation and mutation scoping. Documented 16 sweep test failure modes and remediation steps in `AGENTS.md`, and configured `.validate/mutmut_modules.txt` to scope mutation testing to `helpers.py`, `diagnostics.py`, and `sensor.py`.
 
 ### Added
 
-- **`AGENTS.md` → "Tests that will stop you, and why they exist"**: sixteen rows covering all 23 sweep tests, in the form _add or change this → this fails → do this_. This project has more sweep tests than any other in the family, so it has the most to explain. A sweep fails when a **set grows**, which makes the failure look unrelated to the change that caused it — the standing direction is that a failure means the test found something, and the allow-list is the last resort.
-- **`.validate/mutmut_modules.txt`**: `helpers.py`, `diagnostics.py`, `sensor.py`. Decided by measuring mock usage in each module's own test file, not by argument. `api.py`, `coordinator.py`, `switch.py` and `select.py` are excluded as mocked boundaries — a mutation of a call into a mock cannot be detected by any test, so each one becomes a survivor to read and discard. The file records the reasoning for every module, in and out.
+- **`AGENTS.md` gained a "Sweep and Audit Tests" reference section.** Sixteen failure modes documented with what they guard, how to remediate, and what each test looks like when it fails. A failure in an entity-hygiene sweep without documentation is indistinguishable from a broken environment.
+- **`.validate/mutmut_modules.txt` added.** Scopes mutation testing to `helpers.py`, `diagnostics.py`, and `sensor.py` — the three modules containing non-trivial pure logic where mutation testing provides the highest value.
 
 ### Notes
 
 - The table is placed **after** the test work rather than before it: the repair-lifecycle change added `REPAIR_NAMES` as a new thing that will stop you, and the branch-coverage and assertion rows now cite this project's own measured numbers.
 - `scripts/write_classification.py` cannot be mutated at all — the base `setup.cfg` sets `source_paths=custom_components`.
 
-## [3.3.3-dev5] - 2026-08-07 - Repair Lifecycle: Scoped, Cleared On Unload And Removal
+## [3.3.3-dev5] - 2026-08-07 - Entry-Scoped Repair IDs; Repair Cleanup on Unload and Removal
+
+### Summary
+
+Repair lifecycle and cleanup fixes. Scoped repair issue IDs to `{entry_id}_{name}` to prevent multi-entry collisions, added automated repair cleanup on unload and integration removal, and ensured pending polling-interval changes are flushed on removal.
 
 ### Fixed
 
@@ -665,9 +758,11 @@ Twelve tests, targeting the survivors with real consequence. The `wifi_ssid_moni
 - Mutation-verified, file-copy procedure with checksummed restores: removing the flush fails the flush test; removing `clear_repairs()` from unload fails the unload test.
 - Closes `x_proj_checks_20260802` §3.8a, §3.8b and §3.9b for this project. §3.8c and §3.9a were checked and found **not to apply** — cold start already flags on the first failure, and the Refresh button never reads `last_update_success`.
 
-## [3.3.3-dev4] - 2026-08-07 - Test Baseline: Zero Partial Branches, Zero Unaccounted Assertions
+## [3.3.3-dev4] - 2026-08-07 - Test Suite Baseline: 100% Branch Coverage and Zero Unaccounted Assertions
 
 ### Summary
+
+Branch coverage and assertion audit cleanup. Added tests to close all 11 partial branches (achieving 100% branch coverage), rewrote 8 zero-assertion tests to inspect observable outcomes, and created `tests/zero_assertion_allowlist.txt`.
 
 The two measurements added in `dev_standards` 1.22.0 are now clean. Eleven partial branches closed and ten zero-assertion tests resolved — the prerequisite for mutation testing and for any deeper review to mean anything.
 
@@ -682,9 +777,11 @@ The two measurements added in `dev_standards` 1.22.0 are now clean. Eleven parti
 - **Eight zero-assertion tests rewritten to assert an observable outcome.** `test_write_commands_accept_success` was named for a result it never inspected (§11 rule 3) and now checks that the command was posted, carried its `AD` token, and returned the router's answer. `test_check_sms_storage_handles_type_error` was a `try/except pytest.fail` and now asserts the distinction that matters — an unreadable capacity reading must not be treated as "not full", or one garbled poll deletes a live repair. The background-setup pair now pins the short **5 s** §1 probe budget explicitly, since reusing the client's 10–15 s default is the trap that section names.
 - **Two allow-listed with reasons.** `_validate_sms_length` returns `None` and raises on rejection, so acceptance has no observable form and the only available assertion is the trivial bolt-on §11 forbids. Each is paired with a rejection test one character further on.
 
-## [3.3.3-dev3] - 2026-08-07 - Widened Ruff Rule Set Satisfied Without Suppressions
+## [3.3.3-dev3] - 2026-08-07 - Ruff Linting Compliance; Coordinator Endpoint Failure Isolation
 
 ### Summary
+
+Ruff rule expansion and coordinator isolation. Resolved 11 ruff errors from expanded linting rules, exposed an isolated `endpoint_failures` copy property on the coordinator, made `DATA_VOLUME_FIELDS` public, and added `scripts/__init__.py`.
 
 The shared `ruff` rule set widened (`SLF`, `INP`, `PTH` and others), surfacing 12 errors. Eleven are fixed rather than suppressed; the twelfth case is a single file-level exemption with the reasoning recorded at the site.
 
@@ -705,13 +802,17 @@ The shared `ruff` rule set widened (`SLF`, `INP`, `PTH` and others), surfacing 1
 - **No project-local lint config was touched.** `pyproject.toml` and `.validate/pyproject_common.toml` are synced copies; an exemption added there is erased by the next sync, as happened on `ha-wifi-ssid-monitor` on 2026-08-03.
 - Suite 822 passed (was 821), line coverage 100%, 11 partial branches unchanged, `mypy --strict` clean, `ruff format` clean.
 
-## [3.3.3-dev1] - 2026-08-07 - CI Bumps; Github Zipfile; PyTest Branch & Mutation Testing
+## [3.3.3-dev1] - 2026-08-07 - Shared CI Bump to v2.0.10; Release Zip Asset Workflow; Branch Coverage Setup
+
+### Summary
+
+Shared CI bump and test infrastructure update. Updated shared CI validation to v2.0.10, added GitHub release zip asset generation, enabled pytest branch coverage measurement, added mutation testing tools, and standardized on US English spelling.
 
 ### Bumps
 
 - **Shared CI**: Bump `.github` Shared CI Validation via SHA from v2.0.9 to v2.0.10
 - **Validate Bump**: Update `ruff` from 0.16.0 to 0.16.1
-- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.351 to 0.13.354
+- **Validate Bump**: Bump PHACC `pytest-homeassistant-custom-component` from 0.13.351 to 0.13.354
 
 ### Changed
 
@@ -969,12 +1070,12 @@ The same three keys had also disabled `_check_contract_drift`: `wa_inner_version
 
 `_classify_session` reads a `200 OK` response as two classes of key and returns one of four verdicts:
 
-| verdict       | condition                                          | response                                      |
-| ------------- | -------------------------------------------------- | --------------------------------------------- |
-| `live`        | any authenticated key populated                    | proceed                                       |
-| `expired`     | authenticated all blank, unauthenticated populated | re-login and retry                            |
-| `not_ready`   | everything blank                                   | `ZTEConnectionError` — hold last known values |
-| `undecidable` | no unauthenticated key requested                   | fall back to the previous all-empty rule      |
+| verdict | condition | response |
+| --- | --- | --- |
+| `live` | any authenticated key populated | proceed |
+| `expired` | authenticated all blank, unauthenticated populated | re-login and retry |
+| `not_ready` | everything blank | `ZTEConnectionError` — hold last known values |
+| `undecidable` | no unauthenticated key requested | fall back to the previous all-empty rule |
 
 `not_ready` is new and matters: a router that is answering but has nothing to report yet is booting, not expired. Re-logging in would not help, so it takes the reachability path instead of burning a login and heading toward a reauth prompt.
 
@@ -1869,12 +1970,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request                     | Live session       | Dead session                                         |
-  | :-------------------------- | :----------------- | :--------------------------------------------------- |
-  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
-  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
-  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
+  | Request | Live session | Dead session |
+  | :-- | :-- | :-- |
+  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
+  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
+  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -2266,16 +2367,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category                                   | Count       | Fix                                                                        |
-| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
-| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
-| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
-| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
-| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
-| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
-| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
-| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
+| Category | Count | Fix |
+| :-- | :-- | :-- |
+| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
+| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
+| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
+| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
+| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
+| **Indentation error** | 1 test | Fixed broken indent |
+| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
 
 ### Files modified
 

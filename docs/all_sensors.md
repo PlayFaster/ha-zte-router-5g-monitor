@@ -16,116 +16,116 @@ A complete list of the static entities and service actions provided by the integ
 
 ## Data Sub-Device (15 Entities)
 
-| Name                  | Key                         | Type   | Unit | Category   | Notes                                            |
-| :-------------------- | :-------------------------- | :----- | :--- | :--------- | :----------------------------------------------- |
-| Allowance             | `data_allowance`            | Sensor | B    | Diagnostic | -                                                |
-| Reset Day             | `data_clear_day`            | Sensor | -    | Diagnostic | -                                                |
-| Projected Cycle Usage | `data_projection`           | Sensor | B    | -          | -                                                |
-| Alert Threshold       | `data_volume_alert_percent` | Sensor | %    | Diagnostic | -                                                |
-| Monthly Received GB   | `monthly_rx_bytes`          | Sensor | GB   | -          | **Disabled by default.** LTS: `total_increasing` |
-| Monthly Received      | `monthly_rx_bytes_raw`      | Sensor | B    | -          | LTS: `total_increasing`                          |
-| Monthly Total GB      | `monthly_total_bytes`       | Sensor | GB   | -          | **Disabled by default.** LTS: `total_increasing` |
-| Monthly Total         | `monthly_total_bytes_raw`   | Sensor | B    | -          | LTS: `total_increasing`                          |
-| Monthly Sent GB       | `monthly_tx_bytes`          | Sensor | GB   | -          | **Disabled by default.** LTS: `total_increasing` |
-| Monthly Sent          | `monthly_tx_bytes_raw`      | Sensor | B    | -          | LTS: `total_increasing`                          |
-| Session Received      | `realtime_rx_bytes`         | Sensor | B    | -          | -                                                |
-| Download Speed        | `realtime_rx_thrpt`         | Sensor | B/s  | -          | -                                                |
-| Session Sent          | `realtime_tx_bytes`         | Sensor | B    | -          | -                                                |
-| Upload Speed          | `realtime_tx_thrpt`         | Sensor | B/s  | -          | -                                                |
-| Data Limit Switch     | `data_limit_switch`         | Switch | -    | Config     | **Disabled by default.**                         |
+| Name | Key | Type | Unit | Category | Notes |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| Allowance | `data_allowance` | Sensor | B | Diagnostic | - |
+| Reset Day | `data_clear_day` | Sensor | - | Diagnostic | - |
+| Projected Cycle Usage | `data_projection` | Sensor | B | - | - |
+| Alert Threshold | `data_volume_alert_percent` | Sensor | % | Diagnostic | - |
+| Monthly Received GB | `monthly_rx_bytes` | Sensor | GB | - | **Disabled by default.** LTS: `total_increasing` |
+| Monthly Received | `monthly_rx_bytes_raw` | Sensor | B | - | LTS: `total_increasing` |
+| Monthly Total GB | `monthly_total_bytes` | Sensor | GB | - | **Disabled by default.** LTS: `total_increasing` |
+| Monthly Total | `monthly_total_bytes_raw` | Sensor | B | - | LTS: `total_increasing` |
+| Monthly Sent GB | `monthly_tx_bytes` | Sensor | GB | - | **Disabled by default.** LTS: `total_increasing` |
+| Monthly Sent | `monthly_tx_bytes_raw` | Sensor | B | - | LTS: `total_increasing` |
+| Session Received | `realtime_rx_bytes` | Sensor | B | - | - |
+| Download Speed | `realtime_rx_thrpt` | Sensor | B/s | - | - |
+| Session Sent | `realtime_tx_bytes` | Sensor | B | - | - |
+| Upload Speed | `realtime_tx_thrpt` | Sensor | B/s | - | - |
+| Data Limit Switch | `data_limit_switch` | Switch | - | Config | **Disabled by default.** |
 
 ## SMS Sub-Device (5 Entities)
 
-| Name             | Key                | Type          | Unit | Category   | Notes                    |
-| :--------------- | :----------------- | :------------ | :--- | :--------- | :----------------------- |
-| SMS Storage Full | `sms_storage_full` | Binary Sensor | -    | Diagnostic | **Disabled by default.** |
-| Delete All       | `delete_all`       | Button        | -    | -          | -                        |
-| Recent Msg       | `msg_recent`       | Sensor        | -    | -          | -                        |
-| Total Msg        | `msg_total`        | Sensor        | -    | -          | LTS: `measurement`       |
-| Unread Msg       | `sms_unread_num`   | Sensor        | -    | -          | LTS: `measurement`       |
+| Name | Key | Type | Unit | Category | Notes |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| SMS Storage Full | `sms_storage_full` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
+| Delete All | `delete_all` | Button | - | - | - |
+| Recent Msg | `msg_recent` | Sensor | - | - | - |
+| Total Msg | `msg_total` | Sensor | - | - | LTS: `measurement` |
+| Unread Msg | `sms_unread_num` | Sensor | - | - | LTS: `measurement` |
 
 ## Signal Sub-Device (40 Entities)
 
-| Name                                | Key                       | Type          | Unit | Category   | Notes                    |
-| :---------------------------------- | :------------------------ | :------------ | :--- | :--------- | :----------------------- |
-| Best Connection                     | `best_connection`         | Binary Sensor | -    | -          | -                        |
-| APN Selection Mode                  | `apn_mode`                | Select        | -    | Config     | -                        |
-| APN Profile                         | `apn_profile`             | Select        | -    | Config     | -                        |
-| Network Mode Selection              | `net_select`              | Select        | -    | Config     | -                        |
-| Cell ID                             | `cell_id`                 | Sensor        | -    | Diagnostic | -                        |
-| eNodeB ID                           | `enodeb_id`               | Sensor        | -    | Diagnostic | -                        |
-| LTE Band Lock Mask                  | `lte_band_lock`           | Sensor        | -    | Diagnostic | **Disabled by default.** |
-| LTE Primary Band                    | `lte_ca_pcell_band`       | Sensor        | -    | Diagnostic | -                        |
-| LTE Primary Bandwidth               | `lte_ca_pcell_bandwidth`  | Sensor        | MHz  | Diagnostic | -                        |
-| LTE Secondary Band                  | `lte_ca_scell_band`       | Sensor        | -    | Diagnostic | **Disabled by default.** |
-| LTE Secondary Bandwidth             | `lte_ca_scell_bandwidth`  | Sensor        | MHz  | Diagnostic | **Disabled by default.** |
-| Carrier Aggregation Secondary Cells | `lte_multi_ca_scell_info` | Sensor        | -    | Diagnostic | **Disabled by default.** |
-| LTE PCI                             | `lte_pci`                 | Sensor        | -    | Diagnostic | -                        |
-| LTE RSRP                            | `lte_rsrp`                | Sensor        | dBm  | -          | LTS: `measurement`       |
-| LTE RSRQ                            | `lte_rsrq`                | Sensor        | dB   | -          | LTS: `measurement`       |
-| LTE RSSI                            | `lte_rssi`                | Sensor        | dBm  | -          | LTS: `measurement`       |
-| LTE SNR                             | `lte_snr`                 | Sensor        | dB   | -          | LTS: `measurement`       |
-| MDM MCC                             | `mdm_mcc`                 | Sensor        | -    | Diagnostic | **Disabled by default.** |
-| MDM MNC                             | `mdm_mnc`                 | Sensor        | -    | Diagnostic | **Disabled by default.** |
-| Network Mode                        | `net_select`              | Sensor        | -    | Diagnostic | -                        |
-| Network Provider                    | `network_provider`        | Sensor        | -    | Diagnostic | -                        |
-| Network Type                        | `network_type`            | Sensor        | -    | -          | -                        |
-| 5G Active Band                      | `nr5g_action_band`        | Sensor        | -    | Diagnostic | -                        |
-| 5G Active Channel                   | `nr5g_action_channel`     | Sensor        | -    | Diagnostic | -                        |
-| 5G PCI                              | `nr5g_pci`                | Sensor        | -    | Diagnostic | -                        |
-| Bridge Mode                         | `ppp_status`              | Sensor        | -    | Diagnostic | -                        |
-| Roaming MCC                         | `rmcc`                    | Sensor        | -    | Diagnostic | **Disabled by default.** |
-| Roaming MNC                         | `rmnc`                    | Sensor        | -    | Diagnostic | **Disabled by default.** |
-| Legacy RSCP                         | `rscp`                    | Sensor        | dBm  | -          | **Disabled by default.** |
-| Legacy RSSI                         | `rssi`                    | Sensor        | dBm  | -          | **Disabled by default.** |
-| Signal Bars                         | `signalbar`               | Sensor        | -    | -          | LTS: `measurement`       |
-| LTE Active Band                     | `wan_active_band`         | Sensor        | -    | Diagnostic | -                        |
-| LTE Active Channel                  | `wan_active_channel`      | Sensor        | -    | Diagnostic | -                        |
-| Network APN                         | `wan_apn`                 | Sensor        | -    | Diagnostic | -                        |
-| WAN Connect Status                  | `wan_connect_status`      | Sensor        | -    | Diagnostic | -                        |
-| Carrier Aggregation                 | `wan_lte_ca`              | Sensor        | -    | -          | -                        |
-| 5G RSRP                             | `z5g_rsrp`                | Sensor        | dBm  | -          | LTS: `measurement`       |
-| 5G RSRQ                             | `z5g_rsrq`                | Sensor        | dB   | -          | LTS: `measurement`       |
-| 5G RSSI                             | `z5g_rssi`                | Sensor        | dBm  | -          | LTS: `measurement`       |
-| 5G SNR                              | `z5g_sinr`                | Sensor        | dB   | -          | LTS: `measurement`       |
+| Name | Key | Type | Unit | Category | Notes |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| Best Connection | `best_connection` | Binary Sensor | - | - | - |
+| APN Selection Mode | `apn_mode` | Select | - | Config | - |
+| APN Profile | `apn_profile` | Select | - | Config | - |
+| Network Mode Selection | `net_select` | Select | - | Config | - |
+| Cell ID | `cell_id` | Sensor | - | Diagnostic | - |
+| eNodeB ID | `enodeb_id` | Sensor | - | Diagnostic | - |
+| LTE Band Lock Mask | `lte_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
+| LTE Primary Band | `lte_ca_pcell_band` | Sensor | - | Diagnostic | - |
+| LTE Primary Bandwidth | `lte_ca_pcell_bandwidth` | Sensor | MHz | Diagnostic | - |
+| LTE Secondary Band | `lte_ca_scell_band` | Sensor | - | Diagnostic | **Disabled by default.** |
+| LTE Secondary Bandwidth | `lte_ca_scell_bandwidth` | Sensor | MHz | Diagnostic | **Disabled by default.** |
+| Carrier Aggregation Secondary Cells | `lte_multi_ca_scell_info` | Sensor | - | Diagnostic | **Disabled by default.** |
+| LTE PCI | `lte_pci` | Sensor | - | Diagnostic | - |
+| LTE RSRP | `lte_rsrp` | Sensor | dBm | - | LTS: `measurement` |
+| LTE RSRQ | `lte_rsrq` | Sensor | dB | - | LTS: `measurement` |
+| LTE RSSI | `lte_rssi` | Sensor | dBm | - | LTS: `measurement` |
+| LTE SNR | `lte_snr` | Sensor | dB | - | LTS: `measurement` |
+| MDM MCC | `mdm_mcc` | Sensor | - | Diagnostic | **Disabled by default.** |
+| MDM MNC | `mdm_mnc` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Network Mode | `net_select` | Sensor | - | Diagnostic | - |
+| Network Provider | `network_provider` | Sensor | - | Diagnostic | - |
+| Network Type | `network_type` | Sensor | - | - | - |
+| 5G Active Band | `nr5g_action_band` | Sensor | - | Diagnostic | - |
+| 5G Active Channel | `nr5g_action_channel` | Sensor | - | Diagnostic | - |
+| 5G PCI | `nr5g_pci` | Sensor | - | Diagnostic | - |
+| Bridge Mode | `ppp_status` | Sensor | - | Diagnostic | - |
+| Roaming MCC | `rmcc` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Roaming MNC | `rmnc` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Legacy RSCP | `rscp` | Sensor | dBm | - | **Disabled by default.** |
+| Legacy RSSI | `rssi` | Sensor | dBm | - | **Disabled by default.** |
+| Signal Bars | `signalbar` | Sensor | - | - | LTS: `measurement` |
+| LTE Active Band | `wan_active_band` | Sensor | - | Diagnostic | - |
+| LTE Active Channel | `wan_active_channel` | Sensor | - | Diagnostic | - |
+| Network APN | `wan_apn` | Sensor | - | Diagnostic | - |
+| WAN Connect Status | `wan_connect_status` | Sensor | - | Diagnostic | - |
+| Carrier Aggregation | `wan_lte_ca` | Sensor | - | - | - |
+| 5G RSRP | `z5g_rsrp` | Sensor | dBm | - | LTS: `measurement` |
+| 5G RSRQ | `z5g_rsrq` | Sensor | dB | - | LTS: `measurement` |
+| 5G RSSI | `z5g_rssi` | Sensor | dBm | - | LTS: `measurement` |
+| 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 
 ## System Sub-Device (33 Entities)
 
-| Name                        | Key                     | Type          | Unit | Category   | Notes                                       |
-| :-------------------------- | :---------------------- | :------------ | :--- | :--------- | :------------------------------------------ |
-| Integration Health          | `integration_health`    | Binary Sensor | -    | Diagnostic | -                                           |
-| Reboot Schedule             | `reboot_schedule`       | Binary Sensor | -    | Diagnostic | **Disabled by default.**                    |
-| SIP ALG Enabled             | `sip_alg_enabled`       | Binary Sensor | -    | Diagnostic | **Disabled by default.**                    |
-| UPnP Enabled                | `upnp_enabled`          | Binary Sensor | -    | Diagnostic | **Disabled by default.**                    |
-| Web Page Sleep              | `web_sleep`             | Binary Sensor | -    | Diagnostic | **Disabled by default.**                    |
-| Web Page Auto-Wake          | `web_wake`              | Binary Sensor | -    | Diagnostic | **Disabled by default.**                    |
-| Reboot                      | `reboot`                | Button        | -    | -          | -                                           |
-| Refresh Now                 | `refresh`               | Button        | -    | Config     | -                                           |
-| Polling Interval            | `polling_interval`      | Number        | s    | Config     | -                                           |
-| APN Interface Version       | `apn_interface_version` | Sensor        | -    | Diagnostic | **Disabled by default.**                    |
-| Battery                     | `battery_value`         | Sensor        | %    | -          | **Disabled by default.**                    |
-| Device Uptime               | `device_uptime`         | Sensor        | -    | -          | -                                           |
-| Hardware Version            | `hardware_version`      | Sensor        | -    | Diagnostic | -                                           |
-| IMEI                        | `imei`                  | Sensor        | -    | Diagnostic | **Disabled by default.**                    |
-| LAN IP Address              | `lan_ipaddr`            | Sensor        | -    | Diagnostic | -                                           |
-| Last Updated                | `last_updated`          | Sensor        | -    | -          | -                                           |
-| Model Name                  | `model_name`            | Sensor        | -    | Diagnostic | -                                           |
-| WAN Fallback Mode           | `opms_wan_auto_mode`    | Sensor        | -    | Diagnostic | **Disabled by default.**                    |
-| WAN Operating Mode          | `opms_wan_mode`         | Sensor        | -    | Diagnostic | **Disabled by default.**                    |
-| 5G Modem Temperature        | `pm_modem_5g`           | Sensor        | °C   | Diagnostic | **Disabled by default.** LTS: `measurement` |
-| 5G Radio Temperature        | `pm_sensor_5g`          | Sensor        | °C   | Diagnostic | **Disabled by default.** LTS: `measurement` |
-| Ambient Modem Temperature   | `pm_sensor_ambient`     | Sensor        | °C   | Diagnostic | **Disabled by default.** LTS: `measurement` |
-| Modem Temperature           | `pm_sensor_mdm`         | Sensor        | °C   | Diagnostic | **Disabled by default.** LTS: `measurement` |
-| Power Amplifier Temperature | `pm_sensor_pa1`         | Sensor        | °C   | Diagnostic | **Disabled by default.** LTS: `measurement` |
-| Uptime Duration             | `realtime_time`         | Sensor        | s    | -          | **Disabled by default.**                    |
-| SIM ICCID                   | `sim_iccid`             | Sensor        | -    | Diagnostic | **Disabled by default.**                    |
-| SIM IMSI                    | `sim_imsi`              | Sensor        | -    | Diagnostic | **Disabled by default.**                    |
-| Time Server (SNTP)          | `sntp_server`           | Sensor        | -    | Diagnostic | **Disabled by default.**                    |
-| Router Timezone             | `sntp_timezone`         | Sensor        | -    | Diagnostic | **Disabled by default.**                    |
-| Firmware Version            | `wa_inner_version`      | Sensor        | -    | Diagnostic | -                                           |
-| WAN IP Address              | `wan_ipaddr`            | Sensor        | -    | Diagnostic | -                                           |
-| ODU LED Switch              | `odu_led_switch`        | Switch        | -    | Config     | **Disabled by default.**                    |
-| Pause Polling               | `pause_polling`         | Switch        | -    | Config     | -                                           |
+| Name | Key | Type | Unit | Category | Notes |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| Integration Health | `integration_health` | Binary Sensor | - | Diagnostic | - |
+| Reboot Schedule | `reboot_schedule` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
+| SIP ALG Enabled | `sip_alg_enabled` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
+| UPnP Enabled | `upnp_enabled` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
+| Web Page Sleep | `web_sleep` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
+| Web Page Auto-Wake | `web_wake` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
+| Reboot | `reboot` | Button | - | - | - |
+| Refresh Now | `refresh` | Button | - | Config | - |
+| Polling Interval | `polling_interval` | Number | s | Config | - |
+| APN Interface Version | `apn_interface_version` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Battery | `battery_value` | Sensor | % | - | **Disabled by default.** |
+| Device Uptime | `device_uptime` | Sensor | - | - | - |
+| Hardware Version | `hardware_version` | Sensor | - | Diagnostic | - |
+| IMEI | `imei` | Sensor | - | Diagnostic | **Disabled by default.** |
+| LAN IP Address | `lan_ipaddr` | Sensor | - | Diagnostic | - |
+| Last Updated | `last_updated` | Sensor | - | - | - |
+| Model Name | `model_name` | Sensor | - | Diagnostic | - |
+| WAN Fallback Mode | `opms_wan_auto_mode` | Sensor | - | Diagnostic | **Disabled by default.** |
+| WAN Operating Mode | `opms_wan_mode` | Sensor | - | Diagnostic | **Disabled by default.** |
+| 5G Modem Temperature | `pm_modem_5g` | Sensor | °C | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| 5G Radio Temperature | `pm_sensor_5g` | Sensor | °C | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| Ambient Modem Temperature | `pm_sensor_ambient` | Sensor | °C | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| Modem Temperature | `pm_sensor_mdm` | Sensor | °C | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| Power Amplifier Temperature | `pm_sensor_pa1` | Sensor | °C | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| Uptime Duration | `realtime_time` | Sensor | s | - | **Disabled by default.** |
+| SIM ICCID | `sim_iccid` | Sensor | - | Diagnostic | **Disabled by default.** |
+| SIM IMSI | `sim_imsi` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Time Server (SNTP) | `sntp_server` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Router Timezone | `sntp_timezone` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Firmware Version | `wa_inner_version` | Sensor | - | Diagnostic | - |
+| WAN IP Address | `wan_ipaddr` | Sensor | - | Diagnostic | - |
+| ODU LED Switch | `odu_led_switch` | Switch | - | Config | **Disabled by default.** |
+| Pause Polling | `pause_polling` | Switch | - | Config | - |
 
 <!-- GENERATED:end -->
 
@@ -165,14 +165,14 @@ The `Recent Msg` sensor contains:
 
 Sensors are stored in their canonical **native** unit (so long-term statistics and guard bands are stable) but carry a display hint via `suggested_unit_of_measurement` / `suggested_display_precision`. The value shown in the UI can still be overridden per-entity.
 
-| Sensors                                                                   | Native | Suggested display | Precision |
-| :------------------------------------------------------------------------ | :----- | :---------------- | :-------- |
-| `monthly_tx_bytes_raw`, `monthly_rx_bytes_raw`, `monthly_total_bytes_raw` | Bytes  | GB                | 1         |
-| `realtime_tx_bytes`, `realtime_rx_bytes` (session)                        | Bytes  | GB                | 2         |
-| `realtime_tx_thrpt`, `realtime_rx_thrpt`                                  | B/s    | Mbit/s            | 2         |
-| `realtime_time` (Uptime Duration)                                         | s      | h                 | 1         |
-| `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth`                        | MHz    | MHz (unchanged)   | 0         |
-| `lte_rsrp`, `lte_rssi`, `z5g_rsrp`, `z5g_rssi`, `rssi`, `rscp`            | dBm    | dBm (unchanged)   | 0         |
+| Sensors | Native | Suggested display | Precision |
+| :-- | :-- | :-- | :-- |
+| `monthly_tx_bytes_raw`, `monthly_rx_bytes_raw`, `monthly_total_bytes_raw` | Bytes | GB | 1 |
+| `realtime_tx_bytes`, `realtime_rx_bytes` (session) | Bytes | GB | 2 |
+| `realtime_tx_thrpt`, `realtime_rx_thrpt` | B/s | Mbit/s | 2 |
+| `realtime_time` (Uptime Duration) | s | h | 1 |
+| `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth` | MHz | MHz (unchanged) | 0 |
+| `lte_rsrp`, `lte_rssi`, `z5g_rsrp`, `z5g_rssi`, `rssi`, `rscp` | dBm | dBm (unchanged) | 0 |
 
 > The legacy GB sensors (`monthly_tx_bytes`, `monthly_rx_bytes`, `monthly_total_bytes`) already report GB (disabled by default) and are intentionally left unchanged.
 
