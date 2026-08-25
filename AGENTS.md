@@ -14,11 +14,9 @@ This file provides guidance to AI coding agents when working with code in this r
 
 A Home Assistant custom integration (`zte_router_5g`) for ZTE 5G CPE routers (primarily the MC7010). It is a `local_polling` `hub` integration distributed via HACS. It talks to the router's undocumented `goform` HTTP API, exposing signal diagnostics, data usage, SMS, and reboot/polling controls. There are no external `requirements` — it relies only on `aiohttp` and Home Assistant core.
 
-> **Entity `about` notes are listed in [`docs/about_attribute_list.md`](docs/about_attribute_list.md), which is derived from source, not authored** - the note in the entity description or `_attr_about` is the original; that file records it. Change the code first, then bring the file into line. There is no generator script: it is refreshed by the `sensor_review` prompt, or by hand against the source when a change is small. Nothing tests the two for agreement, so an edit to a note that stops there will drift silently.
-
----
-
-> **Entity and service inventory lives in [`docs/all_sensors.md`](docs/all_sensors.md)** — it is authoritative and kept current against live HA by `sensor_review.md`. This file deliberately carries no entity counts or service descriptions.
+> **Entity `about` notes are listed in [`docs/about_attribute_list.md`](docs/about_attribute_list.md), which is derived from source, not authored** — the note in the entity description or `_attr_about` is the original; that file records it. Synchronize documentation automatically from code using `python .workbench/check_sensor_manifest.py --sync-docs`.
+>
+> **Entity and service inventory lives in [`docs/all_sensors.md`](docs/all_sensors.md)** — it is authoritative and synchronized from code descriptions via `python .workbench/check_sensor_manifest.py --sync-docs` (and validated against live HA via `--verify-ha`). This file deliberately carries no entity counts or service descriptions.
 
 ## Commands
 
@@ -175,3 +173,13 @@ Comments are plain multi-line block scalars, so a `": "` sequence in prose is pa
 ## Development Environment
 
 Standard for all integration projects — see [shared conventions §3](.shared/dev_std/agent_conventions.md). Nothing about this project's environment differs.
+
+## Known Open Issues
+
+**Nothing is recorded here, and nothing should be.** This project's open work lives in `.notes/todo.md`, `.notes/tasks/`, the cross-project chore register, the cross-project queue and [`docs/ROADMAP.md`](docs/ROADMAP.md). One command reads all of them, from `dev-workbench/`:
+
+```bash
+uv run python scripts/check_queue_format.py --open ha-zte-router-5g-monitor
+```
+
+**Which one a new item belongs in, and how to add, check and close it, is [`issue_tracking_workflow.md`](.shared/issues/issue_tracking_workflow.md)** — authoritative, with the summary at [shared conventions §8](.shared/dev_std/agent_conventions.md).

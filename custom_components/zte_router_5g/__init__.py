@@ -257,7 +257,7 @@ async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
                     skipped,
                     len(ids),
                 )
-            # Never send an empty target list: the router's behaviour for a
+            # Never send an empty target list: the router's behavior for a
             # blank `delete_sms` is unknown, and this is a destructive command.
             if ids:
                 await coordinator.api.delete_sms(";".join(ids))

@@ -5,6 +5,10 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev6\] - 2026-08-25 - CI Bumps; Open Issues Queue; HA Min Ver; Sensor Manifest; Docs](#334-dev6---2026-08-25---ci-bumps-open-issues-queue-ha-min-ver-sensor-manifest-docs)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Chores: Six Chores Assessed and Closed](#334-dev5---2026-08-25---cross-project-chores-six-chores-assessed-and-closed)
+  - [\[3.3.4-dev4\] - 2026-08-24 - Notes: The Bridge-Mode Check Became A Task](#334-dev4---2026-08-24---notes-the-bridge-mode-check-became-a-task)
+  - [\[3.3.4-dev3\] - 2026-08-24 - Notes Queue: `.notes/tasks/` Created And Populated](#334-dev3---2026-08-24---notes-queue-notestasks-created-and-populated)
   - [\[3.3.4-dev2\] - 2026-08-14 - CI Bumps Zizmor MyPy JSONSchema PHACC; AGENTS.md; CHANGELOG.md](#334-dev2---2026-08-14---ci-bumps-zizmor-mypy-jsonschema-phacc-agentsmd-changelogmd)
   - [\[3.3.4-dev1\] - 2026-08-08 - Tweaks and Spelling](#334-dev1---2026-08-08---tweaks-and-spelling)
   - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
@@ -59,7 +63,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc4\] - 2026-07-28 - Automation Example Glitch Guards \& Float Rounding in README](#330-rc4---2026-07-28---automation-example-glitch-guards--float-rounding-in-readme)
   - [\[3.3.0-rc3\] - 2026-07-28 - `about` Notes on 63 Entities](#330-rc3---2026-07-28---about-notes-on-63-entities)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage](#330-rc2---2026-07-28---external-code-review-triage)
-  - [\[3.3.0-dev14\] - 2026-07-27 - doc\_update Reconciliation Pass](#330-dev14---2026-07-27---doc_update-reconciliation-pass)
+  - [\[3.3.0-dev14\] - 2026-07-27 - doc_update Reconciliation Pass](#330-dev14---2026-07-27---doc_update-reconciliation-pass)
   - [\[3.3.0-dev13\] - 2026-07-27 - Records Caught Up After a Long Session](#330-dev13---2026-07-27---records-caught-up-after-a-long-session)
   - [\[3.3.0-dev12\] - 2026-07-27 - Expired Session Returned "No SMS"](#330-dev12---2026-07-27---expired-session-returned-no-sms)
   - [\[3.3.0-dev11\] - 2026-07-27 - Device-Registry Record Cross-Referenced](#330-dev11---2026-07-27---device-registry-record-cross-referenced)
@@ -72,7 +76,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Alignment](#330-dev4---2026-07-27---cross-project-alignment)
   - [\[3.3.0-dev3\] - 2026-07-27 - Unreachable Repair \& Record Corrections](#330-dev3---2026-07-27---unreachable-repair--record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - IQS Compliance Pass](#330-dev2---2026-07-27---iqs-compliance-pass)
-  - [\[3.3.0-dev1\] - 2026-07-27 - dev\_standards Conformance Pass](#330-dev1---2026-07-27---dev_standards-conformance-pass)
+  - [\[3.3.0-dev1\] - 2026-07-27 - dev_standards Conformance Pass](#330-dev1---2026-07-27---dev_standards-conformance-pass)
   - [\[3.2.6-dev8\] - 2026-07-26 - Icons \& Branding Refresh; AGENTS.md Restructured](#326-dev8---2026-07-26---icons--branding-refresh-agentsmd-restructured)
   - [\[3.2.6-dev7\] - 2026-07-12 - PyTest Coverage to 100%; Codespell Alignment](#326-dev7---2026-07-12---pytest-coverage-to-100-codespell-alignment)
   - [\[3.2.6-dev6\] - 2026-07-12 - PHACC Bump; README Device-vs-Entity Clarification](#326-dev6---2026-07-12---phacc-bump-readme-device-vs-entity-clarification)
@@ -170,6 +174,84 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
 
 ---
+
+## [3.3.4-dev6] - 2026-08-25 - CI Bumps; Open Issues Queue; HA Min Ver; Sensor Manifest; Docs
+
+### Bumps
+
+- **Shared CI**: Bump `.github` Shared CI Validation via SHA from v2.0.10 to v2.0.14
+- **Validate Bump**: Update `ruff` from 0.16.1 to 0.16.3
+- **Validate Bump**: Update `mypy` from 2.3.0 to 2.3.1
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.355 to 0.13.357
+
+### Changed
+
+- **HA Minimum Version**: Added `"homeassistant": "2024.8.0"` to `hacs.json` to bring it in line with `README.md`.
+- **HA Compatibility**: Added `docs/ha_compatibility.md`, in lne with other projects, detailing minimum HA version, reasons why and upcoming milestones.
+- **Sensor Audit Docs**: `all_sensors.md`, `value_min_max.md`, and `about_attribute_list.md`, all updated as part of new Sensor Manifest script. Also added tasks to `tasks.json`.
+- **Mutation Testing**: Additional set-up for `mutmut`mutation testing.
+- **PyTest 100%**: Added `fail_under = 100`to `pytest`to ensure full coverage is maintained / enforced.
+- **Tool Comments**: Reduced the level of commentary in shared sync tool set-up files.
+- **Remove UV Warnings**: Added `requires-python = ">=3.13"` to `pyproject.toml`to remove `uv` warnings.
+- **README**: Updated `README.md`for readability and alignment with Huawei README; Text, icons, automation examples etc.
+- **CHANGELOG**: Updated recent `CHANGELOG.md`entries for readability.
+- **Spelling**: Changed some UK to US spellings.
+- **.gitignore**: Added scratch files, `.mdbase/` folder (Obsidian).
+
+### Added
+
+- **Open Issues Queue**: Updated `AGENTS.md`to be aware of the Open Issues Queue workflow.
+
+### Removed
+
+- **`python-typing-update`**: Dropped as HA has moved to enforcing these rules via `ruff`.
+
+## [3.3.4-dev5] - 2026-08-25 - Cross-Project Chores: Six Chores Assessed and Closed
+
+Documentation and issue tracking queue update. A second cross-project chore assessment pass completed against `x_proj_chores.md`, verifying the remaining unassessed chores against the ZTE codebase and test baseline.
+
+### Closed by verification
+
+- **`C-006` (Re-assess IQS stale-devices / entity-cleanup)**: Marked `N/A`. The integration topology is static — one system device and three fixed sub-devices (`Signal`, `Data`, `SMS`) keyed by modem IMEI. No dynamic or transient client tracking entities exist.
+- **`C-011` (Schedule follow-up refresh after disruptive write)**: Marked `DONE`. Reboots (`button.py:100`), selects (`select.py:133`, `:168`), and switches (`switch.py:267`) call `self.coordinator.async_force_refresh()`. Targeted read-back verification in `switch.py:295` confirms switch positions prior to the debounced coordinator poll.
+- **`C-016` (Call API cleanup from timeout layer)**: Marked `N/A`. Stateless HTTP using Home Assistant's shared `aiohttp.ClientSession`. Inactivity auto-reset (`SESSION_IDLE_RESET_SECONDS = 150`) and token clearing on failure handle stale sessions; `login()` and unload cleanup sessions in `finally` blocks.
+- **`C-017` (Lock re-acquisition audit)**: Marked `N/A`. Audited `custom_components/zte_router_5g/` for lock primitives — zero `asyncio.Lock` or `threading.Lock` instances exist in the codebase. Concurrency is handled via debounced coordinator task dispatch.
+- **`C-018` (Hardware check script output)**: Marked `DONE`. `scripts/hardware_check.py:59` outputs to console and tees to `.reports/hardware_check.txt`; supports `--capture` for sanitized payload inspection.
+- **`C-021` (Drive declared outcomes via transport mock)**: Marked `DONE`. Live `.workbench/check_test_depth.py` run confirms 3 of 3 declared outcomes driven through transport mocks (`test_coordinator_resilience.py`), with the deepest test driving 12 consecutive polls.
+
+## [3.3.4-dev4] - 2026-08-24 - Notes: The Bridge-Mode Check Became A Task
+
+Documentation only. A second sweep over the `.notes/` folders the first migration run never enumerated. All are prompt-owned here except `errors/`, which is empty, so the sweep came down to the root `todo.md`.
+
+### Changed
+
+- **The APN reset check was done and documented, and had simply never been ticked.** `docs/DEVELOPMENT.md:186` records the finding: in auto mode the network default need not exist in the stored profile list at all, and on the reference device it does only because a duplicate profile was added by hand. The related fixes are already in this changelog.
+- **`tasks/bridge_mode_check.md` raised.** Every payload this integration was built and tested against was captured in bridge mode, and router mode has never been compared. Worth knowing because `CORE_KEYS` in `coordinator.py` drives the contract-drift check — a bridge-mode-specific core key would raise a drift repair on a healthy router-mode device. It needs attended access, which is why it sat unticked.
+- **The screenshots entry stays in `todo.md`.** A documentation chore with no exit criterion beyond doing it is what that list is for.
+- **`.notes/proj_structure.md` corrected** — `tasks/` added, `issues/` re-described, and `info/` updated after `expansion_plan_202607/` and `updates_202608/` moved to `tasks/closed/`.
+
+## [3.3.4-dev3] - 2026-08-24 - Notes Queue: `.notes/tasks/` Created And Populated
+
+Documentation only. `tasks_folder_migrate` run against this project, in two passes — `issues/` then `info/`.
+
+### Changed
+
+- **`issues/`, eight entries:** 1 to `tasks/`, 3 to `tasks/closed/`, 2 to `info/`, and 2 left where they are — a superseded changelog draft, and `testing_deeper/`, which a shared prompt writes to. Every moved file carries a note at the top saying where it came from, where it went and why. `check_queue_format.py --project ha-zte-router-5g-monitor` reports `PASSED`.
+- **`info/`, two folders moved to `tasks/closed/`:** `updates_202608/`, the August scoping prompt and its execution record, and `expansion_plan_202607/`, the July cross-model plan with its three review rounds.
+- **One task is open:** `data_cycle_and_projection_plan.md`. Phase 2's two write entities — the `data_auto_clear` switch and the writable `number` `data_clear_day` — are not built, `reboot_schedule_time` is absent, and nothing keeps the Phase 4 cycle history. Its own status line was accurate, which on the two projects migrated so far makes it the exception.
+
+### Changed — after the first report was read
+
+- **`data_cycle_and_projection_plan.md` moved from `tasks/` to `info/`.** Its work is owned by three `docs/ROADMAP.md` entries — **Billing-cycle write controls** (To Be Done), **Projection accuracy from cycle history** (Maybe), and the `.storage` note under **Long-term history for key text sensors** — and a roadmap item is not a task. All three now name the file as their design detail, and the file names all three, so neither half can drift without the other showing it. **This project has no open local task**; everything outstanding is cross-project or on the roadmap.
+- **Four cross-project chores closed on inspection**, all of which had sat unassessed while the evidence was one file away: `C-002` (`hacs.json` declares `2024.8.0`), `C-005` (`README.md:81` and `docs/ha_compatibility.md` agree), `C-007` (`pyproject.toml:93`), and `C-009`, which is `N/A` — `manifest.json` requirements is empty, so there is no library to check.
+- **Two more confirmed outstanding, with the evidence recorded** so nobody re-derives it. `C-012`: `lte_ca_pcell_bandwidth` and `lte_ca_scell_bandwidth` carry `native_unit_of_measurement="MHz"` as a raw string with no `device_class`, where Huawei uses `UnitOfFrequency.MEGAHERTZ` plus `SensorDeviceClass.FREQUENCY`. `C-015`: there is a strike split, but not this one — `coordinator.py:691` still compares `_drift_strikes` against `FETCH_STRIKE_LIMIT`.
+
+### Closed by verification
+
+- **`silent_login_fail.md`** — the manual boundary test was run: §8 carries a filled results table dated 2026-07-29 against firmware `IRL_H3G_MC7010DV1.0.0B03`, all three time boundaries passing. Its principal follow-on shipped as `[3.3.1-dev7]`, `tests/test_dead_session_sweep.py`.
+- **`sub_device_recommendations.md`** and **`refactor_guidance.md`** — both delivered by `[3.0.0]`. The 47 Ruff errors the second opens on were **not** re-counted; `ruff check` could not run against the project `.venv` on the day, so that closure rests on the changelog rather than a fresh lint.
+- **`expansion_plan_202607/`** — `Z5g_snr` and `Z5g_CELL_ID` are at `api.py:137-138`, and the six-call-site aliasing is `_get_first` in `sensor.py`.
+- **`updates_202608/status_plan.md`** — all six phases run and nine review findings implemented across `[3.3.3-dev8]`–`[3.3.3-dev11]`. Its Phase 5 is recorded `PARTIAL` and deliberately not to be re-run; the stamp says so, because "partial and closed" reads as unfinished.
 
 ## [3.3.4-dev2] - 2026-08-14 - CI Bumps Zizmor MyPy JSONSchema PHACC; AGENTS.md; CHANGELOG.md
 
@@ -1993,7 +2075,7 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
   - **Contract-drift detection.** If a non-empty response contains none of five core fields for 3 consecutive cycles, the sensor turns on and a `firmware_contract_drift` repair issue is raised (auto-clearing on recovery). Startup grace prevents a verdict before a baseline exists.
   - **Verdict stored outside `coordinator.data`.** `data` is `None` before the first success and frozen at last-good values during an outage, so a verdict held there could never describe the failure that stopped it updating. It lives in `coordinator.health_snapshot`, written on both the success and failure paths.
   - Detail is exposed as **unrecorded** attributes: `issues`, `severity`, `degraded`, `repairs`, `last_good_update`, `consecutive_failures`.
-- **Force Refresh** (§13): New `coordinator.async_force_refresh()` with a one-shot flag honoured before the pause check.
+- **Force Refresh** (§13): New `coordinator.async_force_refresh()` with a one-shot flag honored before the pause check.
 - **Per-Endpoint Resilience** (§8): The two optional SMS endpoints now hold their own last-good payload and strike count via `_fetch_optional()`, plus a `coordinator.endpoint_available(source)` check entities consult.
 - **Options Update Listener** (§9): `entry.add_update_listener` with a `LIVE_OPTION_KEYS` allow-list.
 - **`ZTERouterAPI.logout()`** (§10): Ends the router session on unload.

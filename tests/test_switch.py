@@ -473,7 +473,7 @@ def test_a_poll_omitting_the_key_holds_the_last_known_position(
 
     mock_coordinator.data = {"ODU_led_switch": "0"}
     switch._handle_coordinator_update()
-    assert switch.is_on is False, "a reported off must still be honoured"
+    assert switch.is_on is False, "a reported off must still be honored"
 
 
 @pytest.mark.asyncio

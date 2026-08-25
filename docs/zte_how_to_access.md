@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 -->
+
 # ZTE Router Access Reference 🔗
 
 This document details how this integration navigates the ZTE `goform` interface to fetch data and issue commands — the endpoints, the authentication chain, the commands used (and deliberately not used), and the behaviors of this API that are not obvious from the traffic.
