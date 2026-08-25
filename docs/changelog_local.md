@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev7\] - 2026-08-25 - Repair Set Aligned To The Family; Unit Selector, Strike Split, SMS Logging](#334-dev7---2026-08-25---repair-set-aligned-to-the-family-unit-selector-strike-split-sms-logging)
   - [\[3.3.4-dev6\] - 2026-08-25 - CI Bumps; Open Issues Queue; HA Min Ver; Sensor Manifest; Docs](#334-dev6---2026-08-25---ci-bumps-open-issues-queue-ha-min-ver-sensor-manifest-docs)
   - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Chores: Six Chores Assessed and Closed](#334-dev5---2026-08-25---cross-project-chores-six-chores-assessed-and-closed)
   - [\[3.3.4-dev4\] - 2026-08-24 - Notes: The Bridge-Mode Check Became A Task](#334-dev4---2026-08-24---notes-the-bridge-mode-check-became-a-task)
@@ -174,6 +175,39 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
 
 ---
+
+## [3.3.4-dev7] - 2026-08-25 - Repair Set Aligned To The Family; Unit Selector, Strike Split, SMS Logging
+
+Four cross-project chores and one cross-project issue, worked as a single pass over the source so the tree is measured once rather than four times. **Every change below is behavioural**, and each carries a test verified to fail against the pre-change code.
+
+### Changed
+
+- **The repair set is now the family's two keys** (`x_project` issue _Repair set alignment_, policy §2). `router_unreachable` becomes **`conn_error`**, keeping its text verbatim — the same condition under the canonical key. `firmware_contract_drift` and `sms_storage_full` leave the Repairs panel entirely. The rule they failed is _agency_: a schema change is not something a user can fix, and a full message store is an operational state to automate on. Both conditions are unchanged in substance — drift still publishes `severity: warning` and a `drift` finding on the Integration Health sensor, and storage still publishes a health finding.
+- **`HEALTH_DRIFT_STRIKE_LIMIT = 3`** in `const.py`, applied at `coordinator.py:691` (chore **C-015**). `FETCH_STRIKE_LIMIT` was serving both fetch failures and contract drift. Both budgets are 3 today and the value did not move; what changed is that moving one no longer silently moves the other. Matches `huawei_router_5g`, `wifi_ssid_monitor` and `unifi_network_monitor`. The test patches the drift budget to 5 and asserts drift stays quiet at 4 — with one shared constant that assertion cannot pass, which is the only way to tell a real split from a renamed one.
+- **The two bandwidth sensors offer Home Assistant's unit selector** (chore **C-012**). `native_unit_of_measurement="MHz"` as a raw string renders correctly and is inert: with no `device_class` there is no conversion table, so no dropdown. Now `UnitOfFrequency.MEGAHERTZ` plus `SensorDeviceClass.FREQUENCY`. **Neither carries a `state_class`, and the test asserts that** — `device_class=FREQUENCY` together with `state_class=MEASUREMENT` routes the entity through long-term statistics, which does not surface the selector either. That is the trap `huawei_router_5g` fell into and recorded; "add the device class" alone looks done and changes nothing.
+- **The SMS sender's number no longer reaches the log** (chore **C-020**, §20). `coordinator.py` logged it at `INFO` on every new message. The number still reaches automations on the `zte_router_5g_sms_received` bus event, which is scoped to the entry; the log is not, and is copied into every diagnostics download and issue report. The line now carries the message id, which is enough to correlate a log entry with an event.
+- **Three log lines hardcoded the strike budget as `/3`** while it is a constant, so they would have lied the moment it moved. They interpolate `FETCH_STRIKE_LIMIT`.
+
+### Added
+
+- **`repairs.py`, and it is not optional.** `auth_failed` is `is_fixable=True`, and Home Assistant substitutes `ConfirmRepairFlow` for a fixable issue whose integration ships no `repairs` platform — an empty confirm box whose Fix button **deletes the card without touching the credentials**. A user would press Fix, watch the problem vanish, and still be signed out. The flow here starts the reauth flow the card's text promises. Verified against `homeassistant/components/repairs/issue_handler.py` in the container rather than assumed, and `test_the_fix_flow_is_ours_not_the_confirm_fallback` fails if the module is removed.
+- **`auth_failed`**, fixable and persistent, raised only for `ZTECredentialsError` — a password the router actually refused. A session that merely lapsed is the integration's problem, and a repair sending the user to re-enter working credentials would point them at something that was never wrong.
+- **`binary_sensor.*_sms_storage_full`**, the surface the retired repair moved to. Ported from `huawei_router_5g` including its `about` note; diagnostic, disabled by default, on the SMS sub-device.
+- **`RETIRED_REPAIR_NAMES` and an extended `clear_legacy_repairs()`.** This is the whole risk in retiring or renaming a repair, and `AGENTS.md` already carried the rule from the last time: `ir.async_delete_issue` looks up by id, so a card live under a retired id has no code left that can clear it and no UI path either — every retired repair was `is_fixable=False`. Startup now sweeps three generations: the bare unscoped names, the retired bare names, and the retired **entry-scoped** ids, which is the generation actually live on an upgrading installation.
+- **`tests/test_repairs.py`**, 8 tests over the repair, the migration and the flow.
+- **Tests for three changes that had none.** The suite passed unchanged after the first three chores landed, which is itself the finding: nothing asserted the unit strings, the strike constant or the log contents.
+
+### Verification
+
+- **881 tests** (869 → 881), 100% line and branch, 0 partial branches, assertion audit 2 of 579 allow-listed. `mypy` clean over 15 files; `ruff` clean.
+- **Seven mutations verified**, each applied to a byte-identical copy and restored by checksum: `device_class` removed, `state_class` added back, the strike split undone, the phone number restored to the log, `is_fixable` flipped to `False`, the retired-id sweep dropped, and drift raising a card again. All seven failed the tests that guard them.
+- **`Tests: Depth Check` declared outcomes drop 3 → 2**, which is the rename landing. This is why the source pass ran before the transport work: REACH tests written first would have been written against keys that then changed.
+
+### Notes
+
+- **`huawei_router_5g` has the same `ConfirmRepairFlow` gap** — `auth_failed` fixable, no `repairs.py` — so its `repair_set_alignment.md` cell of `DONE` overstates. Recorded there rather than fixed here.
+- **The ZTE repair id format stays `{entry_id}_{name}`** where Huawei uses `{name}_{entry_id}`. Deliberate: changing it would orphan every live card, which is the exact failure this entry is otherwise about.
+- **`api.py:594` logs a 300-character preview of an unexpected HTML body** at `ERROR`. Left as it is, and recorded as a judgment rather than a §20 breach: the preview is the only diagnostic for an unrecognised response, and it carries no identifier the standard names. The other 62 `_LOGGER` sites were read; `api.py:836` carries the router's `result` status string and `coordinator.py:428` model and firmware, neither of which is personal data.
 
 ## [3.3.4-dev6] - 2026-08-25 - CI Bumps; Open Issues Queue; HA Min Ver; Sensor Manifest; Docs
 
@@ -879,12 +913,12 @@ The same three keys had also disabled `_check_contract_drift`: `wa_inner_version
 
 `_classify_session` reads a `200 OK` response as two classes of key and returns one of four verdicts:
 
-| verdict | condition | response |
-| --- | --- | --- |
-| `live` | any authenticated key populated | proceed |
-| `expired` | authenticated all blank, unauthenticated populated | re-login and retry |
-| `not_ready` | everything blank | `ZTEConnectionError` — hold last known values |
-| `undecidable` | no unauthenticated key requested | fall back to the previous all-empty rule |
+| verdict       | condition                                          | response                                      |
+| ------------- | -------------------------------------------------- | --------------------------------------------- |
+| `live`        | any authenticated key populated                    | proceed                                       |
+| `expired`     | authenticated all blank, unauthenticated populated | re-login and retry                            |
+| `not_ready`   | everything blank                                   | `ZTEConnectionError` — hold last known values |
+| `undecidable` | no unauthenticated key requested                   | fall back to the previous all-empty rule      |
 
 `not_ready` is new and matters: a router that is answering but has nothing to report yet is booting, not expired. Re-logging in would not help, so it takes the reachability path instead of burning a login and heading toward a reauth prompt.
 
@@ -1779,12 +1813,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request | Live session | Dead session |
-  | :-- | :-- | :-- |
-  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
-  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
-  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+  | Request                     | Live session       | Dead session                                         |
+  | :-------------------------- | :----------------- | :--------------------------------------------------- |
+  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
+  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
+  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -2176,16 +2210,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 

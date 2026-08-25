@@ -18,7 +18,11 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .coordinator import ENDPOINT_EXTENDED, ZTERouterDataUpdateCoordinator
+from .coordinator import (
+    ENDPOINT_EXTENDED,
+    ENDPOINT_SMS_CAPACITY,
+    ZTERouterDataUpdateCoordinator,
+)
 from .helpers import ZTEAboutEntity, build_device_info
 
 PARALLEL_UPDATES = 0
@@ -57,6 +61,29 @@ INTEGRATION_HEALTH_DESCRIPTION = ZTEBinarySensorEntityDescription(
 )
 
 BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
+    ZTEBinarySensorEntityDescription(
+        key="sms_storage_full",
+        source=ENDPOINT_SMS_CAPACITY,
+        about=(
+            "On when message storage has no room left. A full store makes the "
+            "network stop delivering new messages, and nothing else in the "
+            "integration reports that - which is the whole reason this entity "
+            "exists."
+        ),
+        translation_key="sms_storage_full",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="sms",
+        # `nv_able` is the capacity; a zero means the router did not report one,
+        # which is not the same as a store with no room. Mirrors the arithmetic
+        # in `coordinator._check_sms_storage`, which feeds the health finding.
+        value_fn=lambda data: bool(
+            data
+            and (int(data.get("nv_sms_able") or 0) > 0)
+            and int(data.get("sms_nv_total") or 0) >= int(data.get("nv_sms_able") or 0)
+        ),
+    ),
     ZTEBinarySensorEntityDescription(
         key="reboot_schedule",
         source=ENDPOINT_EXTENDED,

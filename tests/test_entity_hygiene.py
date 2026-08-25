@@ -57,6 +57,76 @@ def test_sms_sender_number_is_never_recorded() -> None:
     assert "number" in ZTERouterSensor._unrecorded_attributes
 
 
+def test_no_log_line_carries_the_sms_sender_number() -> None:
+    """Section 20: the log is a wider surface than the event bus.
+
+    The sender's number is third-party personal data, and it used to be
+    interpolated into an INFO line on every new message. The bus event still
+    carries it, scoped to this entry; the log is copied into every diagnostics
+    download, issue report and screenshot, and nothing redacts it there.
+
+    Asserted over the source rather than over captured output because the
+    interesting case is the line nobody wrote a test for. `%s` formatting means
+    the number never appears as a literal, so a search of `caplog.text` on the
+    one path a test happens to drive would pass while a second site leaked.
+    """
+    source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+
+    leaking = [
+        line.strip()
+        for line in source.splitlines()
+        if "number_decoded" in line and "_LOGGER" in line
+    ]
+    assert not leaking, f"phone number reaches a log line: {leaking}"
+
+    # The value is passed as an argument on the following lines, so the call has
+    # to be read as a block rather than a line.
+    for call in re.findall(r"_LOGGER\.\w+\((?:[^()]|\([^()]*\))*\)", source):
+        assert "number_decoded" not in call, f"phone number reaches a log call: {call}"
+
+
+async def test_a_new_sms_logs_nothing_that_identifies_the_sender(
+    hass: HomeAssistant, caplog
+) -> None:
+    """The runtime half of the check above, on the path that used to leak."""
+    import logging
+
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        title="ZTE 5G",
+        data={"imei": "864155042229309"},
+        options={
+            CONF_HOST: "192.168.0.1",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "password",
+        },
+    )
+    entry.add_to_hass(hass)
+    coordinator = ZTERouterDataUpdateCoordinator(hass, entry, AsyncMock())
+    coordinator.last_sms_timestamp = "20260101000000"
+
+    number = "+353871234567"
+    with caplog.at_level(logging.DEBUG):
+        coordinator._check_new_sms(
+            [
+                {
+                    "id": "7",
+                    "date_decoded": "20260102000000",
+                    "number_decoded": number,
+                    "content_decoded": "hello",
+                }
+            ]
+        )
+
+    assert number not in caplog.text
+    assert "New SMS received" in caplog.text
+
+
 def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
     """Section 14: the default is total — no attribute is recorded.
 

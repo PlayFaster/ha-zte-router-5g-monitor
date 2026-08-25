@@ -1315,3 +1315,33 @@ def test_projection_treats_every_disabled_spelling_as_off():
             _projection({**base, "wan_auto_clear_flow_data_switch": enabled})
             is not None
         ), f"{enabled!r} must not read as disabled"
+
+
+def test_bandwidth_sensors_offer_the_unit_selector() -> None:
+    """A raw unit string leaves Home Assistant with no unit selector.
+
+    `native_unit_of_measurement="MHz"` renders correctly and is inert: without
+    a `device_class` HA has no conversion table for the entity, so the unit
+    dropdown does not appear. Chore C-012.
+
+    The `state_class` assertion is the non-obvious half, and it is why Huawei's
+    first attempt at this failed. `device_class=FREQUENCY` together with
+    `state_class=MEASUREMENT` routes the entity through long-term statistics,
+    and that path does not surface the selector either — so "add the device
+    class" alone can look done and change nothing.
+    """
+    from homeassistant.components.sensor import SensorDeviceClass
+    from homeassistant.const import UnitOfFrequency
+
+    from custom_components.zte_router_5g.sensor import SENSOR_TYPES
+
+    bandwidth = [d for d in SENSOR_TYPES if d.key.endswith("_bandwidth")]
+    assert len(bandwidth) == 2, "expected the pcell and scell bandwidth sensors"
+
+    for description in bandwidth:
+        assert description.device_class == SensorDeviceClass.FREQUENCY
+        assert description.native_unit_of_measurement == UnitOfFrequency.MEGAHERTZ
+        assert description.state_class is None, (
+            f"{description.key}: a state class routes this through long-term "
+            "statistics, which suppresses the unit selector"
+        )

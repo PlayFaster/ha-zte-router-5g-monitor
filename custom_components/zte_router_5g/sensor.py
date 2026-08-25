@@ -20,6 +20,7 @@ from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
     UnitOfDataRate,
+    UnitOfFrequency,
     UnitOfInformation,
     UnitOfTemperature,
     UnitOfTime,
@@ -857,7 +858,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "MHz carries roughly four times the data of 5 MHz, all else being equal."
         ),
         translation_key="signal_lte_ca_pcell_bandwidth",
-        native_unit_of_measurement="MHz",
+        device_class=SensorDeviceClass.FREQUENCY,
+        native_unit_of_measurement=UnitOfFrequency.MEGAHERTZ,
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -883,7 +885,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "the primary band's capacity rather than replacing it."
         ),
         translation_key="signal_lte_ca_scell_bandwidth",
-        native_unit_of_measurement="MHz",
+        device_class=SensorDeviceClass.FREQUENCY,
+        native_unit_of_measurement=UnitOfFrequency.MEGAHERTZ,
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,

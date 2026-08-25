@@ -23,6 +23,9 @@ from .const import (
     CONF_STOP_POLLING,
     DOMAIN,
     FETCH_STRIKE_LIMIT,
+    HEALTH_DRIFT_STRIKE_LIMIT,
+    REPAIR_AUTH_FAILED,
+    REPAIR_CONN_ERROR,
     UNREACHABLE_STRIKE_LIMIT,
 )
 from .helpers import get_router_model
@@ -49,7 +52,24 @@ ENDPOINT_EXTENDED = "extended_data"
 # Every repair this integration can raise. The names double as `translation_key`
 # values, which stay bare; only the registry **id** carries the entry (see
 # `_repair_ids`). Adding one means adding it here, or unload will not clear it.
-REPAIR_NAMES = ("router_unreachable", "firmware_contract_drift", "sms_storage_full")
+REPAIR_NAMES = (REPAIR_AUTH_FAILED, REPAIR_CONN_ERROR)
+
+# Repairs this integration used to raise and no longer does. They are kept here
+# for one reason: `ir.async_delete_issue` looks up by id, so a card raised under
+# a retired name has no code left that can clear it and no UI path out — all
+# three were `is_fixable=False`. `clear_legacy_repairs` deletes them at every
+# setup, which is what makes retiring them safe.
+#
+# `router_unreachable` was renamed to `conn_error`; `firmware_contract_drift`
+# moved to the Integration Health sensor's `drift` attribute, and
+# `sms_storage_full` to a binary sensor. Neither condition is one the user can
+# act on in the Repairs panel, which is the test the family policy applies.
+# Deleting an entry from this tuple strands any card still live under it.
+RETIRED_REPAIR_NAMES = (
+    "router_unreachable",
+    "firmware_contract_drift",
+    "sms_storage_full",
+)
 
 # Keys the router is expected to return on every successful poll. Used only for
 # the Section 19 contract-drift check: a non-empty response in which none of
@@ -127,8 +147,8 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         }
         self._drift_baseline: set[str] = set()
         self._drift_strikes = 0
-        self._drift_repair_raised = False
         self._unreachable_repair_raised = False
+        self._auth_repair_raised = False
         self._sms_storage_full = False
 
         # Snapshot of the non-live options this entry was set up with; the
@@ -161,17 +181,28 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     def clear_legacy_repairs(self) -> None:
-        """Delete repairs raised under the old unscoped ids.
+        """Delete repairs raised under ids this integration no longer uses.
 
-        Before the ids carried the entry, all three were raised under their
-        bare names. `ir.async_delete_issue` looks up by id, so a repair still
-        live under an old name has no code left that can clear it and no UI
-        path either — they are all `is_fixable=False`. Called once at setup, so
-        the rename cannot strand one. Safe to keep indefinitely: deleting an
-        issue that does not exist is a no-op.
+        `ir.async_delete_issue` looks up by id, so a card still live under an
+        id nothing raises any more has no code left that can clear it and no UI
+        path either — every retired repair was `is_fixable=False`. Called once
+        at setup, so no rename can strand one. Safe to keep indefinitely:
+        deleting an issue that does not exist is a no-op.
+
+        Three generations are swept, and each is here because a card could
+        survive the change that retired it:
+
+        1. The bare, unscoped names, from before ids carried the entry id.
+        2. The retired names under their bare form.
+        3. The retired names under the entry-scoped form they were last raised
+           with — the generation created by the repair-set alignment, where
+           `router_unreachable` became `conn_error` and two others moved off
+           the Repairs panel entirely.
         """
-        for name in REPAIR_NAMES:
+        for name in (*REPAIR_NAMES, *RETIRED_REPAIR_NAMES):
             ir.async_delete_issue(self.hass, DOMAIN, name)
+        for name in RETIRED_REPAIR_NAMES:
+            ir.async_delete_issue(self.hass, DOMAIN, f"{self.entry.entry_id}_{name}")
 
     def clear_repairs(self) -> None:
         """Clear every repair this entry raised.
@@ -183,8 +214,8 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         """
         for issue_id in self._repair_ids.values():
             ir.async_delete_issue(self.hass, DOMAIN, issue_id)
-        self._drift_repair_raised = False
         self._unreachable_repair_raised = False
+        self._auth_repair_raised = False
         self._sms_storage_full = False
 
     def apply_live_options(self) -> None:
@@ -484,9 +515,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                 else:
                     _LOGGER.debug(
-                        "%s: Error fetching ZTE data (failure %d/3): %s",
+                        "%s: Error fetching ZTE data (failure %d/%d): %s",
                         self.entry.title,
                         self.consecutive_failures,
+                        FETCH_STRIKE_LIMIT,
                         err,
                     )
                 return self.data
@@ -509,9 +541,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                 else:
                     _LOGGER.debug(
-                        "%s: Authentication failed (failure %d/3): %s",
+                        "%s: Authentication failed (failure %d/%d): %s",
                         self.entry.title,
                         self.consecutive_failures,
+                        FETCH_STRIKE_LIMIT,
                         err,
                     )
                 return self.data
@@ -526,6 +559,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     self.entry.title,
                     err,
                 )
+                self._set_auth_repair(True)
                 raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
 
             _LOGGER.error(
@@ -551,9 +585,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                 else:
                     _LOGGER.debug(
-                        "%s: Error fetching ZTE data (failure %d/3): %s",
+                        "%s: Error fetching ZTE data (failure %d/%d): %s",
                         self.entry.title,
                         self.consecutive_failures,
+                        FETCH_STRIKE_LIMIT,
                         err,
                     )
                 return self.data
@@ -595,12 +630,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
     def _active_repairs(self, drift: bool) -> list[str]:
         """Return the repair issues currently raised for this entry."""
         active = []
-        if self._sms_storage_full:
-            active.append("sms_storage_full")
-        if drift:
-            active.append("firmware_contract_drift")
         if self._unreachable_repair_raised:
-            active.append("router_unreachable")
+            active.append(REPAIR_CONN_ERROR)
+        if self._auth_repair_raised:
+            active.append(REPAIR_AUTH_FAILED)
         return active
 
     def _set_unreachable_repair(self, unreachable: bool) -> None:
@@ -619,10 +652,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
-                self._repair_ids["router_unreachable"],
+                self._repair_ids[REPAIR_CONN_ERROR],
                 is_fixable=False,
                 severity=ir.IssueSeverity.ERROR,
-                translation_key="router_unreachable",
+                translation_key=REPAIR_CONN_ERROR,
                 translation_placeholders={
                     "name": self.entry.title,
                     "host": str(self.entry.options.get(CONF_HOST, "unknown")),
@@ -631,37 +664,44 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             )
         else:
             ir.async_delete_issue(
-                self.hass, DOMAIN, self._repair_ids["router_unreachable"]
+                self.hass, DOMAIN, self._repair_ids[REPAIR_CONN_ERROR]
             )
         self._unreachable_repair_raised = unreachable
 
-    def _set_drift_repair(self, drift: bool) -> None:
-        """Raise or clear the contract-drift repair issue.
+    def _set_auth_repair(self, failed: bool) -> None:
+        """Raise or clear the credentials-rejected repair issue.
 
-        Section 19's second tier: a serious, named, actionable condition earns a
-        Repair alongside the sensor. Drift qualifies because the user can act —
-        report it so the integration can be updated — and it auto-clears on the
-        next clean cycle. Kept to this one condition so the Repairs panel does
-        not fill with noise; ordinary unreachability is already visible as
-        unavailable entities and needs no repair.
+        Raised only for `ZTECredentialsError` — a password the router actually
+        refused. A session that merely lapsed is the integration's problem, and
+        a repair telling the user to re-enter working credentials would send
+        them to fix something that was never wrong.
+
+        This is the only `is_fixable=True` repair here, and `repairs.py` gives
+        it a flow that starts the reauth the text promises. Without that module
+        Home Assistant falls back to `ConfirmRepairFlow`, whose Fix button
+        shows an empty confirm box and deletes the card — dismissing the
+        problem rather than fixing it. `is_persistent` keeps it across a
+        restart, since a rejected password is still rejected afterwards.
         """
-        if drift == self._drift_repair_raised:
+        if failed == self._auth_repair_raised:
             return
-        if drift:
+        if failed:
             ir.async_create_issue(
                 self.hass,
                 DOMAIN,
-                self._repair_ids["firmware_contract_drift"],
-                is_fixable=False,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key="firmware_contract_drift",
+                self._repair_ids[REPAIR_AUTH_FAILED],
+                is_fixable=True,
+                is_persistent=True,
+                severity=ir.IssueSeverity.ERROR,
+                translation_key=REPAIR_AUTH_FAILED,
                 translation_placeholders={"name": self.entry.title},
+                data={"entry_id": self.entry.entry_id},
             )
         else:
             ir.async_delete_issue(
-                self.hass, DOMAIN, self._repair_ids["firmware_contract_drift"]
+                self.hass, DOMAIN, self._repair_ids[REPAIR_AUTH_FAILED]
             )
-        self._drift_repair_raised = drift
+        self._auth_repair_raised = failed
 
     def _check_contract_drift(self, data: dict[str, Any]) -> bool:
         """Detect a response that succeeded but parsed to nothing meaningful.
@@ -688,7 +728,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             return False
 
         self._drift_strikes += 1
-        return self._drift_strikes >= FETCH_STRIKE_LIMIT
+        return self._drift_strikes >= HEALTH_DRIFT_STRIKE_LIMIT
 
     def _record_health_success(self, data: dict[str, Any]) -> None:
         """Refresh the health snapshot after a successful cycle.
@@ -706,11 +746,11 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             # A success means the router answered, so the unreachable repair is
             # cleared in the same cycle regardless of how long it was raised.
             self._set_unreachable_repair(False)
+            self._set_auth_repair(False)
 
             drift = self._check_contract_drift(data)
             drift_findings = [DRIFT_CONTRACT] if drift else []
             issues.extend(drift_findings)
-            self._set_drift_repair(drift)
 
             # Reflect an existing repair rather than double-raising it — the
             # SMS-storage issue is owned by _check_sms_storage.
@@ -827,30 +867,21 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             }
 
     def _check_sms_storage(self, data: dict[str, Any]) -> None:
-        """Create or clear the SMS storage full repair issue."""
+        """Record whether the router's message store is full.
+
+        Publishes state only. A full store is an operational condition the user
+        may want to automate on, not something the Repairs panel can help with,
+        so it surfaces as `binary_sensor.*_sms_storage_full` and as a health
+        finding — the family policy in `repair_set_alignment.md` §2. It raised a
+        repair until the 2026-08-25 alignment; `RETIRED_REPAIR_NAMES` carries the
+        id so a card raised before the upgrade is cleared rather than stranded.
+        """
         try:
             nv_able = int(data.get("nv_sms_able") or 0)
             nv_total = int(data.get("sms_nv_total") or 0)
         except (ValueError, TypeError):
             return
         self._sms_storage_full = nv_able > 0 and nv_total >= nv_able
-        if self._sms_storage_full:
-            ir.async_create_issue(
-                self.hass,
-                DOMAIN,
-                self._repair_ids["sms_storage_full"],
-                is_fixable=False,
-                severity=ir.IssueSeverity.WARNING,
-                translation_key="sms_storage_full",
-                translation_placeholders={
-                    "nv_total": str(nv_total),
-                    "nv_able": str(nv_able),
-                },
-            )
-        else:
-            ir.async_delete_issue(
-                self.hass, DOMAIN, self._repair_ids["sms_storage_full"]
-            )
 
     def _check_new_sms(self, messages: list[dict[str, Any]]) -> None:
         """Check for new SMS messages and fire events."""
@@ -890,8 +921,13 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 new_messages.append(msg)
 
         for msg in new_messages:
+            # The sender's number is deliberately not logged (Section 20). It
+            # reaches automations on the bus event below, which is scoped to
+            # this entry; the log is not, and is copied into every diagnostics
+            # download and issue report. The message id is enough to correlate
+            # a log line with an event.
             _LOGGER.info(
-                "%s: New SMS from %s", self.entry.title, msg.get("number_decoded")
+                "%s: New SMS received (id %s)", self.entry.title, msg.get("id")
             )
             self.hass.bus.async_fire(
                 "zte_router_5g_sms_received",

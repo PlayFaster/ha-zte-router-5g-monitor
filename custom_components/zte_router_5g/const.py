@@ -49,12 +49,28 @@ SESSION_IDLE_RESET_SECONDS = 150
 # `unifi_network_monitor`, which uses the same constant for the same purpose.
 FETCH_STRIKE_LIMIT = 3
 
+# Consecutive polls a contract-drift finding must persist before it counts.
+# Split from FETCH_STRIKE_LIMIT so the two budgets can move independently: one
+# counts a router that did not answer, the other a router that answered with
+# nothing the integration recognises. They are the same number today, and the
+# point of the split is that changing one no longer silently changes the other.
+# Matches `huawei_router_5g`, `wifi_ssid_monitor` and `unifi_network_monitor`.
+HEALTH_DRIFT_STRIKE_LIMIT = 3
+
 # Consecutive failures before a Repair is raised for a router that is simply not
 # answering. Deliberately far above FETCH_STRIKE_LIMIT: three strikes is a few
 # minutes and would fire on every router reboot. Ten consecutive failures means
 # the condition has stopped resolving itself, which is what makes it worth a
 # Repair rather than just an unavailable entity (Section 19, second tier).
 UNREACHABLE_STRIKE_LIMIT = 10
+
+# The canonical repair keys, named to match `huawei_router_5g` and the family
+# policy in `x_project/repair_set_alignment.md` §2: the Repairs panel carries
+# only conditions that require the user to act and will not clear themselves.
+# Everything else — contract drift, degraded capabilities — belongs on the
+# Integration Health sensor, and message-store capacity on a binary sensor.
+REPAIR_AUTH_FAILED = "auth_failed"
+REPAIR_CONN_ERROR = "conn_error"
 
 # Number of APN profile slots requested and offered in the APN Profile select.
 #

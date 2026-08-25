@@ -74,7 +74,7 @@ To reach its current "modern" state, the project underwent several major refacto
 - **Options: Reload by Default, Live-Apply by Allow-List**: `entry.add_update_listener` diffs the entry's options against a stored `reload_signature` (options minus `LIVE_OPTION_KEYS`). Anything outside the allow-list — host, username, password — reloads; `scan_interval` and `stop_polling` apply live. Reload is the safe default because live-applying a connection change leaves the running API client pointed at the old device. The listener uses `async_schedule_reload` rather than `await async_reload`, so it collapses safely against the reloads that Reconfigure and Reauth perform themselves. See `dev_standards.md` Section 9.
 - **Sanitized Diagnostics, Not Just Redacted**: `TO_REDACT` only ever matches keys the integration chose itself, and `async_redact_data` rewrites values only — neither reaches a verbatim vendor payload. `diagnostics.py` layers four passes: blank (credentials, subscriber IDs, carrier identity), pseudonymize (IPs, cell IDs and SMS senders → stable `ip-1` / `cell-2` / `phone-1` tokens), summarize (`APN_config*` → shape only), and a structural sweep for anything IP- or MAC-shaped under a key nobody enumerated. Identifiers are matched by **shape and position**, never against a list of real values — a sanitizer seeded with real identifiers could not work for any other user and would put PII in the source tree. See `dev_standards.md` Section 20.
 - **Translated Exceptions (`translation_domain` + `translation_key`)**: every user-facing raise carries translation metadata and an entry in the `exceptions` block of `strings.json` **and** `translations/en.json`; interpolated values go in `translation_placeholders`, never in an f-string. Choose the type deliberately: **`ServiceValidationError`** when the fault is in how the action was _called_ and the user can correct it (no entry specified when several exist, no entry loaded), **`HomeAssistantError`** when the operation itself failed (the router rejected a send, a reboot failed). Guarded by `test_every_raised_exception_has_translated_text`, which walks every raise in the component and fails on an untranslated one or a key missing from either file — so this cannot silently regress the way it did before.
-- **Repairs Are Reserved for What the User Must Act On**: three conditions raise a Repair — `router_unreachable`, `firmware_contract_drift`, `sms_storage_full` — and all auto-clear. The selection rule is _persistence plus agency_: the condition must have stopped resolving itself, **and** there must be something the user can do. Ordinary unreachability fails the first test, which is why `router_unreachable` waits for `UNREACHABLE_STRIKE_LIMIT` (10) consecutive failures rather than the 3-strike unavailability threshold — three strikes is a few minutes and would fire on every router reboot. Repair text should describe **what to check**, not assert a cause: ten failed fetches means the router is not answering, which could be power, IP, credentials or the network path.
+- **Repairs Are Reserved for What the User Must Act On**: two conditions raise a Repair — `conn_error` and `auth_failed`. The selection rule is _persistence plus agency_: the condition must have stopped resolving itself, **and** there must be something the user can do. Ordinary unreachability fails the first test, which is why `conn_error` waits for `UNREACHABLE_STRIKE_LIMIT` (10) consecutive failures rather than the 3-strike unavailability threshold — three strikes is a few minutes and would fire on every router reboot. Repair text should describe **what to check**, not assert a cause: ten failed fetches means the router is not answering, which could be power, IP, credentials or the network path. Three further conditions were assessed against the same rule on 2026-08-25 and moved off the panel: contract drift and degraded capabilities publish on the Integration Health sensor, and a full message store on `binary_sensor.*_sms_storage_full`. All three are real, and none of them is something the Repairs panel can resolve. The set is fixed family-wide by `.shared/issues/x_project/repair_set_alignment.md` §2.
 - **Evaluate Every Attribute for the Recorder**: Attributes are excluded via `_unrecorded_attributes` where they are bulky, churn on most polls, or carry personal data — the SMS sender's number being the clear case. The entity's **state** is still recorded; only the named keys are dropped. Not every attribute should be excluded: `sntp_server1` / `sntp_dst_enable` stay recorded because they are static configuration and a change to them is worth seeing in history. See `dev_standards.md` Section 14.
 - **Sub-device Grouping**: Automatically routing entities to logical sub-devices (Signal, SMS, Data) via the `group` attribute in `EntityDescription`. This prevents "entity fatigue" in the main device view.
 - **Stable Identity Strategy**: Using hardcoded internal keys (e.g., `z5g_rsrp`) combined with the IMEI (or `host_{IP}` fallback) for `unique_id`, rather than relying on friendly names or the host IP. IMEI is hardware-bound and survives IP changes, SIM swaps, and firmware updates. This ensures entity settings (icons, hidden status) survive renames or router reconfiguration.
@@ -204,11 +204,11 @@ The router was measured before anything was changed, and **exonerated**: it appl
 
 The fix is a **targeted read-back** (`api.get_params()`), opt-in per description via `verify_after_write` and `state_key`. Three outcomes must stay distinct, and collapsing any two of them reintroduces a bug:
 
-| Outcome | Meaning | Action |
-| :-- | :-- | :-- |
-| Read agrees | Confirmed | Publish immediately |
-| Read disagrees twice, 200 ms apart | The router declined it | Raise `switch_write_not_applied` |
-| Read errors, or omits the key | **Unverified, not failed** | Log at debug; leave it to the next poll |
+| Outcome                            | Meaning                    | Action                                  |
+| :--------------------------------- | :------------------------- | :-------------------------------------- |
+| Read agrees                        | Confirmed                  | Publish immediately                     |
+| Read disagrees twice, 200 ms apart | The router declined it     | Raise `switch_write_not_applied`        |
+| Read errors, or omits the key      | **Unverified, not failed** | Log at debug; leave it to the next poll |
 
 The third row is the subtle one. A failed _confirmation_ is not a failed _write_ — the command may well have landed, and raising there would report success as failure on every connection blip.
 
@@ -238,12 +238,12 @@ This was the second recurrence of the same shape. The first (`[3.3.0-dev12]`) wa
 
 The fix is not a better total. It is to test a relationship between two classes of key that the device separates for us:
 
-| verdict | condition | meaning |
-| --- | --- | --- |
-| `live` | any authenticated key populated | session works |
-| `expired` | authenticated all blank, unauthenticated populated | reachable, not logged in |
-| `not_ready` | everything blank | reachable, nothing to report yet |
-| `undecidable` | no unauthenticated key requested | fall back to the weaker rule |
+| verdict       | condition                                          | meaning                          |
+| ------------- | -------------------------------------------------- | -------------------------------- |
+| `live`        | any authenticated key populated                    | session works                    |
+| `expired`     | authenticated all blank, unauthenticated populated | reachable, not logged in         |
+| `not_ready`   | everything blank                                   | reachable, nothing to report yet |
+| `undecidable` | no unauthenticated key requested                   | fall back to the weaker rule     |
 
 Three things generalize beyond this router:
 
@@ -253,7 +253,7 @@ Three things generalize beyond this router:
 
 **Drift means data went away, not that it was never there.** `_drift_baseline` starts as an empty set and the grace branch tests it for truthiness, so the baseline never establishes until a core key actually appears. A `goform` sibling that spells those keys differently returns a payload with none of them on every poll, forever, and never raises the repair. That is the correct behavior and it is easy to destroy in a refactor — `None` with an `is None` test reads identically and would fire on every unsupported router. `test_drift_never_fires_on_a_router_that_never_reported` pins it.
 
-Which is also why the repair is titled **"ZTE router data has changed unexpectedly"** rather than naming firmware. It can only fire on a setup that was working, so something did change — but the only two occurrences to date were both this integration's own faults, not the router's. The `issue_id` stays `firmware_contract_drift`: renaming it would orphan any live repair, since `ir.async_delete_issue` looks up by id.
+Which is also why the repair is titled **"ZTE router data has changed unexpectedly"** rather than naming firmware. It can only fire on a setup that was working, so something did change — but the only two occurrences to date were both this integration's own faults, not the router's. The repair itself was retired on 2026-08-25 — drift is not user-fixable, so it publishes on the health sensor instead — and `firmware_contract_drift` moved to `RETIRED_REPAIR_NAMES` rather than simply being deleted, because `ir.async_delete_issue` looks up by id.
 
 ### Only a rejected credential may ask for re-authentication
 
@@ -292,11 +292,11 @@ Two things made it survive.
 
 This is the third time in one release that an invariant stopped being true without anything noticing:
 
-| Invariant | Broken by | Found by |
-| :-- | :-- | :-- |
-| Expiry detection needs an all-blank response | Identity keys added to the batch | Instrumented reboot on hardware |
-| Drift detection needs every `CORE_KEY` blank | `wa_inner_version` added to `CORE_KEYS` | Reading the code |
-| Guard bands documented in `value_min_max.md` | Five never existed | Reading the code |
+| Invariant                                    | Broken by                               | Found by                        |
+| :------------------------------------------- | :-------------------------------------- | :------------------------------ |
+| Expiry detection needs an all-blank response | Identity keys added to the batch        | Instrumented reboot on hardware |
+| Drift detection needs every `CORE_KEY` blank | `wa_inner_version` added to `CORE_KEYS` | Reading the code                |
+| Guard bands documented in `value_min_max.md` | Five never existed                      | Reading the code                |
 
 Three rules follow.
 

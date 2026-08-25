@@ -600,10 +600,17 @@ async def test_switch_properties(
 
 
 @pytest.mark.asyncio
-async def test_coordinator_sms_storage_full_creates_issue(
+async def test_coordinator_sms_storage_full_sets_the_flag_without_a_repair(
     hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
 ):
-    """Test that a full NV SMS store raises a repair issue."""
+    """A full NV SMS store records state and raises no repair card.
+
+    Replaces a pair of tests that asserted a `sms_storage_full` repair. The
+    condition still matters — it is why `binary_sensor.*_sms_storage_full`
+    exists — but the Repairs panel cannot resolve it, so the 2026-08-25
+    alignment moved it off. Asserting that no card is raised is the guard
+    against the repair quietly coming back.
+    """
     from unittest.mock import patch
 
     from custom_components.zte_router_5g.coordinator import (
@@ -623,22 +630,18 @@ async def test_coordinator_sms_storage_full_creates_issue(
         patch(
             "custom_components.zte_router_5g.coordinator.ir.async_create_issue"
         ) as mock_create,
-        patch("custom_components.zte_router_5g.coordinator.ir.async_delete_issue"),
     ):
         await coordinator._async_update_data()
-        mock_create.assert_called_once()
-        call_kwargs = mock_create.call_args
-        # Entry-scoped id, bare translation_key — the two are deliberately
-        # different: the registry needs uniqueness, the user-facing text does not.
-        assert call_kwargs.args[2] == coordinator._repair_ids["sms_storage_full"]
-        assert call_kwargs.kwargs["translation_key"] == "sms_storage_full"
+
+    assert coordinator._sms_storage_full is True
+    assert mock_create.call_args_list == []
 
 
 @pytest.mark.asyncio
-async def test_coordinator_sms_storage_not_full_deletes_issue(
+async def test_coordinator_sms_storage_not_full_clears_the_flag(
     hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
 ):
-    """Test that non-full NV SMS store clears any existing repair issue."""
+    """Room left in the store clears the flag, and still raises nothing."""
     from unittest.mock import patch
 
     from custom_components.zte_router_5g.coordinator import (
@@ -648,6 +651,7 @@ async def test_coordinator_sms_storage_not_full_deletes_issue(
     mock_config_entry.add_to_hass(hass)
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
+    coordinator._sms_storage_full = True
 
     partial_data = {"nv_sms_able": "20", "sms_nv_total": "5"}
 
@@ -655,15 +659,14 @@ async def test_coordinator_sms_storage_not_full_deletes_issue(
         patch.object(api, "get_all_data", return_value=partial_data),
         patch.object(api, "get_sms_capacity", return_value={}),
         patch.object(api, "get_sms_messages", return_value=[]),
-        patch("custom_components.zte_router_5g.coordinator.ir.async_create_issue"),
         patch(
-            "custom_components.zte_router_5g.coordinator.ir.async_delete_issue"
-        ) as mock_delete,
+            "custom_components.zte_router_5g.coordinator.ir.async_create_issue"
+        ) as mock_create,
     ):
         await coordinator._async_update_data()
-        mock_delete.assert_called_once_with(
-            hass, "zte_router_5g", coordinator._repair_ids["sms_storage_full"]
-        )
+
+    assert coordinator._sms_storage_full is False
+    assert mock_create.call_args_list == []
 
 
 # ---------------------------------------------------------------------------

@@ -90,10 +90,10 @@ except (ValueError, TypeError):
 
 Two are exempt by name, in `_UNGUARDED_BY_DESIGN`:
 
-| Sensor | Why it is safe without one |
-| :-- | :-- |
+| Sensor                   | Why it is safe without one                                                                 |
+| :----------------------- | :----------------------------------------------------------------------------------------- |
 | `lte_ca_pcell_bandwidth` | Channel width the network chose. No state class, so it never reaches long-term statistics. |
-| `lte_ca_scell_bandwidth` | As above. |
+| `lte_ca_scell_bandwidth` | As above.                                                                                  |
 
 Adding a numeric sensor without bounds is therefore a deliberate act with a stated reason, not something that can happen by omission.
 
