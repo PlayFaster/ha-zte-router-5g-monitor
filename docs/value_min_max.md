@@ -90,10 +90,10 @@ except (ValueError, TypeError):
 
 Two are exempt by name, in `_UNGUARDED_BY_DESIGN`:
 
-| Sensor                   | Why it is safe without one                                                                 |
-| :----------------------- | :----------------------------------------------------------------------------------------- |
-| `lte_ca_pcell_bandwidth` | Channel width the network chose. No state class, so it never reaches long-term statistics. |
-| `lte_ca_scell_bandwidth` | As above.                                                                                  |
+| Sensor | Why it is safe without one |
+| :-- | :-- |
+| `lte_ca_pcell_bandwidth` | Channel width the network chose. **No state class, and it must stay that way** — `device_class=FREQUENCY` plus `state_class=MEASUREMENT` routes the entity through long-term statistics, and that path does not render Home Assistant's unit selector. Adding one would silently undo the fix that put the selector there. |
+| `lte_ca_scell_bandwidth` | As above. |
 
 Adding a numeric sensor without bounds is therefore a deliberate act with a stated reason, not something that can happen by omission.
 

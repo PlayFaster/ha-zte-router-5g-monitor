@@ -204,11 +204,11 @@ The router was measured before anything was changed, and **exonerated**: it appl
 
 The fix is a **targeted read-back** (`api.get_params()`), opt-in per description via `verify_after_write` and `state_key`. Three outcomes must stay distinct, and collapsing any two of them reintroduces a bug:
 
-| Outcome                            | Meaning                    | Action                                  |
-| :--------------------------------- | :------------------------- | :-------------------------------------- |
-| Read agrees                        | Confirmed                  | Publish immediately                     |
-| Read disagrees twice, 200 ms apart | The router declined it     | Raise `switch_write_not_applied`        |
-| Read errors, or omits the key      | **Unverified, not failed** | Log at debug; leave it to the next poll |
+| Outcome | Meaning | Action |
+| :-- | :-- | :-- |
+| Read agrees | Confirmed | Publish immediately |
+| Read disagrees twice, 200 ms apart | The router declined it | Raise `switch_write_not_applied` |
+| Read errors, or omits the key | **Unverified, not failed** | Log at debug; leave it to the next poll |
 
 The third row is the subtle one. A failed _confirmation_ is not a failed _write_ — the command may well have landed, and raising there would report success as failure on every connection blip.
 
@@ -238,12 +238,12 @@ This was the second recurrence of the same shape. The first (`[3.3.0-dev12]`) wa
 
 The fix is not a better total. It is to test a relationship between two classes of key that the device separates for us:
 
-| verdict       | condition                                          | meaning                          |
-| ------------- | -------------------------------------------------- | -------------------------------- |
-| `live`        | any authenticated key populated                    | session works                    |
-| `expired`     | authenticated all blank, unauthenticated populated | reachable, not logged in         |
-| `not_ready`   | everything blank                                   | reachable, nothing to report yet |
-| `undecidable` | no unauthenticated key requested                   | fall back to the weaker rule     |
+| verdict | condition | meaning |
+| --- | --- | --- |
+| `live` | any authenticated key populated | session works |
+| `expired` | authenticated all blank, unauthenticated populated | reachable, not logged in |
+| `not_ready` | everything blank | reachable, nothing to report yet |
+| `undecidable` | no unauthenticated key requested | fall back to the weaker rule |
 
 Three things generalize beyond this router:
 
@@ -253,13 +253,17 @@ Three things generalize beyond this router:
 
 **Drift means data went away, not that it was never there.** `_drift_baseline` starts as an empty set and the grace branch tests it for truthiness, so the baseline never establishes until a core key actually appears. A `goform` sibling that spells those keys differently returns a payload with none of them on every poll, forever, and never raises the repair. That is the correct behavior and it is easy to destroy in a refactor — `None` with an `is None` test reads identically and would fire on every unsupported router. `test_drift_never_fires_on_a_router_that_never_reported` pins it.
 
-Which is also why the repair is titled **"ZTE router data has changed unexpectedly"** rather than naming firmware. It can only fire on a setup that was working, so something did change — but the only two occurrences to date were both this integration's own faults, not the router's. The repair itself was retired on 2026-08-25 — drift is not user-fixable, so it publishes on the health sensor instead — and `firmware_contract_drift` moved to `RETIRED_REPAIR_NAMES` rather than simply being deleted, because `ir.async_delete_issue` looks up by id.
+Which is also why the drift finding avoids naming firmware. It can only fire on a setup that was working, so something did change — but the only two occurrences to date were both this integration's own faults, not the router's. The repair itself was retired on 2026-08-25 — drift is not user-fixable, so it publishes on the health sensor instead — and `firmware_contract_drift` moved to `RETIRED_REPAIR_NAMES` rather than simply being deleted, because `ir.async_delete_issue` looks up by id.
 
 ### Only a rejected credential may ask for re-authentication
 
 `ConfigEntryAuthFailed` puts a "re-authenticate" prompt in front of the user. It is only honest when the credential is the problem. A session that has merely lapsed is the integration's to fix — and it does, by logging in again — so raising it there tells the user their password is wrong and sends them to re-enter one that was never at fault.
 
 `ZTECredentialsError` subclasses `ZTEAuthError` and is raised only on an explicit rejection. The subclass relationship matters: every existing `except ZTEAuthError` still catches it, so only the one site that needs the distinction has to know about it.
+
+**The same distinction now gates the `auth_failed` repair**, added 2026-08-25. It is raised on `ZTECredentialsError` alone and never on a lapsed session, for the reason above. It is the only `is_fixable=True` repair here, which brings a requirement that is easy to miss: **a fixable issue in an integration with no `repairs` platform gets `ConfirmRepairFlow` substituted by Home Assistant** — an empty confirm form whose Fix button deletes the card and touches nothing else. The button appears, works, and resolves the symptom while leaving the credentials rejected. `repairs.py` exists to make Fix start the reauth flow the card's text promises, and `tests/test_repairs.py::test_the_fix_flow_is_ours_not_the_confirm_fallback` fails if that module is removed.
+
+**It is also the one repair that does not auto-clear**, and `is_persistent=True` for the same reason: a refused password is still refused after a restart.
 
 Router-specific and load-bearing: **the most recent login wins.** Home Assistant logging in takes the session back from the web GUI. There is no state where HA is reachable but permanently locked out, so a persistent auth failure really does mean bad credentials.
 
@@ -292,11 +296,11 @@ Two things made it survive.
 
 This is the third time in one release that an invariant stopped being true without anything noticing:
 
-| Invariant                                    | Broken by                               | Found by                        |
-| :------------------------------------------- | :-------------------------------------- | :------------------------------ |
-| Expiry detection needs an all-blank response | Identity keys added to the batch        | Instrumented reboot on hardware |
-| Drift detection needs every `CORE_KEY` blank | `wa_inner_version` added to `CORE_KEYS` | Reading the code                |
-| Guard bands documented in `value_min_max.md` | Five never existed                      | Reading the code                |
+| Invariant | Broken by | Found by |
+| :-- | :-- | :-- |
+| Expiry detection needs an all-blank response | Identity keys added to the batch | Instrumented reboot on hardware |
+| Drift detection needs every `CORE_KEY` blank | `wa_inner_version` added to `CORE_KEYS` | Reading the code |
+| Guard bands documented in `value_min_max.md` | Five never existed | Reading the code |
 
 Three rules follow.
 

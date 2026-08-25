@@ -360,7 +360,7 @@ This integration provides **92 entities** (depending on your firmware) organized
 | ⚙️ **System** | 53 | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls | 21: Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
 | 📶 **Signal** | 50 | 36 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 10: MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
 | 📈 **Data** | 19 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
-| ✉️ **SMS** | 4 | 3 Sensors, 1 Button | Unread Count, Total Msg, Recent Msg, Delete All (one-click) | None |
+| ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | 1: SMS Storage Full |
 | 🛠️ **Actions** | 4 | — | Send, Delete, Bulk-Delete and List SMS | — |
 
 ---
@@ -1312,7 +1312,7 @@ actions:
 
 > [!TIP]
 >
-> To alert only on the serious cases and ignore ordinary connectivity blips, add a condition on the `severity` attribute: `{{ state_attr('binary_sensor.zte_5g_system_integration_health', 'severity') == 'warning' }}` fires only for a suspected firmware API change, which is the condition that also raises a Repair.
+> To alert only on the serious cases and ignore ordinary connectivity blips, add a condition on the `severity` attribute: `{{ state_attr('binary_sensor.zte_5g_system_integration_health', 'severity') == 'warning' }}` fires only for a suspected firmware API change. That condition does **not** raise a Repair — nothing in the Repairs panel can resolve a firmware change — so this attribute is how you catch it.
 
 ---
 
@@ -1751,7 +1751,7 @@ It is deliberately **available at all times**, including when every other entity
 
 ### 🔨 Repairs
 
-Some problems need you to do something, so they are also raised in Home Assistant's **Repairs** panel in addition to the Integration Health sensor. All clear themselves automatically once the condition resolves.
+Some problems need you to do something, so they are also raised in Home Assistant's **Repairs** panel in addition to the Integration Health sensor. There are two, and they behave differently on purpose: the connection one clears itself as soon as the router answers, while the sign-in one waits for you, because a refused password does not fix itself.
 
 <details>
 
@@ -1759,15 +1759,18 @@ Some problems need you to do something, so they are also raised in Home Assistan
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Repair | Raised when | Why it is a Repair |
+| Repair | Raised when | What to do |
 | :-- | :-- | :-- |
-| **ZTE router is not responding** | 10 consecutive failed fetches | Ten failures in a row means the problem is not clearing on its own. The text lists what to check — power-cycle, whether the IP changed, whether the password changed, the network path. |
-| **ZTE router data has changed unexpectedly** | 3 consecutive polls succeed but contain none of the expected fields, having reported them before | Nothing looks broken from the outside, but sensors will be blank. It can follow a firmware update or point to a fault in the integration, so it needs reporting either way. |
-| **ZTE router SMS storage is full** | The router's message store is at capacity | New messages will be rejected until some are deleted. |
+| **ZTE router is not responding** | 10 consecutive failed fetches | Power-cycle the router, check whether its IP address has changed, check whether its password was changed, check the network path. The card names the address currently configured so you can compare. Clears itself as soon as the router answers. |
+| **ZTE router sign-in failed** | The router rejected the stored username or password | Choose **Fix** and re-enter the credentials. This one does **not** clear on its own — a refused password stays refused until it is corrected — and it survives a restart for the same reason. |
 
 > [!NOTE]
 >
 > A brief outage — a router reboot, a passing network glitch — deliberately does **not** raise a Repair. Integration Health turns on after three failed polls and entities go unavailable after four, keeping the Repairs panel quiet until a problem clearly persists.
+>
+> **Three further conditions deliberately do not raise a Repair**, and moved off the panel in version 3.3.4. The Repairs panel is for problems you can act on: a firmware change renaming the router's data fields, a router capability the integration could not reach, and a full message store are all real, and none of them is fixed from that panel. They report where you can automate on them instead — the first two as `drift` and `degraded_capabilities` on the Integration Health sensor, and the third as **SMS Storage Full**, a disabled-by-default binary sensor on the SMS device.
+>
+> If you were watching for one of the old Repair cards, watch the corresponding attribute or entity instead. Any card still showing from an earlier version is cleared automatically when the integration next starts.
 
 ---
 
