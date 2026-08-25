@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev8\] - 2026-08-25 - A Real HTTP Seam: Both Declared Outcomes Driven, Fault Injection Adopted](#334-dev8---2026-08-25---a-real-http-seam-both-declared-outcomes-driven-fault-injection-adopted)
   - [\[3.3.4-dev7\] - 2026-08-25 - Repair Set Aligned To The Family; Unit Selector, Strike Split, SMS Logging](#334-dev7---2026-08-25---repair-set-aligned-to-the-family-unit-selector-strike-split-sms-logging)
   - [\[3.3.4-dev6\] - 2026-08-25 - CI Bumps; Open Issues Queue; HA Min Ver; Sensor Manifest; Docs](#334-dev6---2026-08-25---ci-bumps-open-issues-queue-ha-min-ver-sensor-manifest-docs)
   - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Chores: Six Chores Assessed and Closed](#334-dev5---2026-08-25---cross-project-chores-six-chores-assessed-and-closed)
@@ -175,6 +176,34 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
 
 ---
+
+## [3.3.4-dev8] - 2026-08-25 - A Real HTTP Seam: Both Declared Outcomes Driven, Fault Injection Adopted
+
+Tests and test tooling only; no shipped code changed. Closes the re-opened chore **C-021** and adopts `x_project`'s _Fault injection in tests_ on this project. `Tests: Depth Check` reports **2 of 2 declared outcomes driven** in `REACH mode: coverage contexts`, and — unlike the reading that closed C-021 in error on 2026-08-24 — the outcomes are now genuinely produced by `api.py` running over a faked transport.
+
+### Added
+
+- **`tests/transport.py`** — the router faked at the HTTP layer over `aioclient_mock`, which `pytest-homeassistant-custom-component` already ships. No dependency added, and it is the seam Home Assistant's own suite uses. Before this the project had **zero** uses of it: every suite built on a `MagicMock` standing in for `ZTERouterAPI`, so anything the payload _derives_ was supplied by the fixture rather than computed.
+- **`tests/test_transport_seam.py`** — 10 tests. Both declared outcomes (`conn_error`, `auth_failed`) driven end to end, plus the fault set: unreachable, timeout, credentials rejected, expired session, router still booting, contract drift, and an HTML page served where JSON was expected.
+
+### Notes on the fake, because three of them are not obvious
+
+- **Login turns on a cookie, not a body field.** `_attempt_login` reads `r.cookies.get("stok")`, so a fake returning a success-shaped body and no cookie fails exactly as a wrong password does. `AiohttpClientMocker` supports `cookies=`, which is what kept this small. The bootstrap was built and proved on its own before anything else was written on top of it — `test_the_login_bootstrap_completes` passed first time.
+- **The SMS capacity endpoint needs its own registration.** A catch-all returning the whole batch payload for every `cmd` looks harmless and is not: the per-endpoint cache then holds every `CORE_KEYS` member, so a later drift poll finds them in the merged data via the cache and drift can never fire. That defect was live in the first version of the fake and was caught by the drift test failing.
+- **A refused password only bites when a login is attempted.** Serving a rejection alongside a live session tests nothing — the poll simply succeeds. The router's "your session is over" answer is its HTML login page, which `api.py:580` responds to by renewing the session, so the fault serves HTML on the read and a refusal on the login that follows. That is the sequence a user actually hits after changing the router's password.
+
+### Fixed in the tests, found by mutation
+
+- **`test_a_dead_session_is_detected_from_the_payload_shape` was asserting the wrong thing**, and its name was wrong too. It asserted `health_snapshot["problem"] is True`, which any fault satisfies, and the payload it served was classified `not_ready` rather than `expired`. Replaced by `test_an_expired_session_is_told_apart_from_a_router_still_booting`, which serves both payloads — they differ only in whether an unauthenticated key still carries a value — and asserts on the **message**, since the two must produce opposite responses.
+- **The HTML test had the same weakness**, asserting only that held values survived. It now asserts the failure names an HTML response.
+
+Both were found because the mutation run reported them as uncaught. Neither would have been found by reading the tests.
+
+### Verification
+
+- **891 tests** (881 → 891), 100% line and branch, 0 partial branches. `mypy` clean; `ruff` clean.
+- **Five `api.py` mutations verified**, each restored by checksum: the login stops reading the `stok` cookie; the dead-session rule weakened; HTML detection disabled on the content-type branch; `not_ready` collapsed into `expired`; and the classifier ignoring unauthenticated keys. **All five are inside `api.py`** — that is the point, because none of them would fail a suite built on an API-object mock.
+- `Tests: Depth Check`: 2 of 2 driven, `REACH mode: coverage contexts`, 0 gates undriven, 0 orphanable, 0 self-healing. **2 stubbed publishes and 2 seams remain** and are the next phase.
 
 ## [3.3.4-dev7] - 2026-08-25 - Repair Set Aligned To The Family; Unit Selector, Strike Split, SMS Logging
 
