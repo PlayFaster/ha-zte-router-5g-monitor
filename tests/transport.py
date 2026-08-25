@@ -127,6 +127,7 @@ class RouterFake:
 
         # Order matters: the two `cmd=`-specific reads are registered before the
         # catch-all, and the mocker takes the first match.
+        self._arm_root()
         self._mock.get(f"{GET_URL}?cmd=LD", json={"LD": self.ld})
         self._mock.get(
             f"{GET_URL}?cmd=wa_inner_version",
@@ -175,6 +176,7 @@ class RouterFake:
             # real sequence a user hits after changing the router's password.
             self.serve(credentials_ok=False)
             self._mock.clear_requests()
+            self._arm_root()
             self._mock.get(f"{GET_URL}?cmd=LD", json={"LD": self.ld})
             self._mock.get(
                 f"{GET_URL}?cmd=wa_inner_version",
@@ -205,8 +207,19 @@ class RouterFake:
         else:  # pragma: no cover - a typo in a test, not a runtime path
             raise ValueError(f"unknown fault mode: {mode}")
 
+    def _arm_root(self) -> None:
+        """Answer the bare-root probe `try_set_protocol` makes.
+
+        The config flow calls it before logging in, walking `http` then `https`
+        and keeping the first that answers under 400. Only the config-flow path
+        reaches this; the coordinator uses the `http` default set in
+        `__init__`, which is why the poll tests never needed it.
+        """
+        self._mock.get(BASE.rstrip("/"), text="")
+
     def _arm_bootstrap(self) -> None:
         """Register the login chain, so a fault lands on the poll not the login."""
+        self._arm_root()
         self._mock.get(f"{GET_URL}?cmd=LD", json={"LD": self.ld})
         self._mock.get(
             f"{GET_URL}?cmd=wa_inner_version",

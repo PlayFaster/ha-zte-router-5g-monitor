@@ -299,3 +299,48 @@ async def test_recovery_clears_the_verdict_in_the_same_cycle(
         is None
     )
     assert coordinator.health_snapshot["problem"] is False
+
+
+# ------------------------------------------------------- the config-flow seam
+
+
+async def test_validate_credentials_runs_for_real_against_the_router(
+    hass: HomeAssistant, router
+) -> None:
+    """`_validate_credentials` driven over the transport, not patched out.
+
+    `Tests: Depth Check` reports this helper as a stubbed seam: `test_config_flow.py`
+    patches it in every flow-branch test, so the mock sits exactly where a defect
+    would. Those patches are legitimate — they select which branch the flow takes
+    — but they mean nothing exercises the helper itself through a real login.
+    This does.
+    """
+    from custom_components.zte_router_5g.config_flow import _validate_credentials
+
+    info = await _validate_credentials(
+        hass,
+        {CONF_HOST: HOST, CONF_USERNAME: "admin", CONF_PASSWORD: "password"},
+    )
+
+    assert info["model"] == GOOD_PAYLOAD["model_name"]
+    assert info["sw_version"] == GOOD_PAYLOAD["wa_inner_version"]
+
+
+async def test_validate_credentials_surfaces_a_rejected_password(
+    hass: HomeAssistant, router
+) -> None:
+    """A refused login must reach the flow as a credentials error.
+
+    Derived from the wire: the fake serves a login POST with no `stok` cookie
+    and a `result` the API classifies. Nothing here constructs the exception.
+    """
+    from custom_components.zte_router_5g.api import ZTECredentialsError
+    from custom_components.zte_router_5g.config_flow import _validate_credentials
+
+    router.serve(credentials_ok=False)
+
+    with pytest.raises(ZTECredentialsError):
+        await _validate_credentials(
+            hass,
+            {CONF_HOST: HOST, CONF_USERNAME: "admin", CONF_PASSWORD: "wrong"},
+        )

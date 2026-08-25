@@ -37,7 +37,13 @@ async def test_polling_interval_change(mock_coordinator, mock_config_entry):
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
     )
     number.hass = _mock_hass_with_async_create_task()
-    number.async_write_ha_state = MagicMock()
+    # Capture the value at the publish moment, not after the write settles —
+    # a bare `MagicMock()` here cannot tell the new value from the old one
+    # (chore C-019).
+    published: list[float | None] = []
+    number.async_write_ha_state = MagicMock(
+        side_effect=lambda: published.append(number.native_value)
+    )
 
     # Mock the debounced apply method to run immediately
     with patch("asyncio.sleep", AsyncMock()):
@@ -47,8 +53,9 @@ async def test_polling_interval_change(mock_coordinator, mock_config_entry):
         if number._refresh_task:
             await number._refresh_task
 
-        # 1. Check local state
+        # 1. Check local state, and what was published at the time
         assert number.native_value == 300
+        assert published[0] == 300, "the slider published its old position"
 
         # 2. Check coordinator interval update
         assert mock_coordinator.update_interval == timedelta(seconds=300)
@@ -85,7 +92,13 @@ async def test_polling_interval_cancel_previous_task(
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
     )
     number.hass = _mock_hass_with_async_create_task()
-    number.async_write_ha_state = MagicMock()
+    # Capture the value at the publish moment, not after the write settles —
+    # a bare `MagicMock()` here cannot tell the new value from the old one
+    # (chore C-019).
+    published: list[float | None] = []
+    number.async_write_ha_state = MagicMock(
+        side_effect=lambda: published.append(number.native_value)
+    )
 
     with patch("asyncio.sleep", AsyncMock()):
         await number.async_set_native_value(120)
@@ -105,7 +118,13 @@ async def test_async_will_remove_from_hass_pending_task(
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
     )
     number.hass = _mock_hass_with_async_create_task()
-    number.async_write_ha_state = MagicMock()
+    # Capture the value at the publish moment, not after the write settles —
+    # a bare `MagicMock()` here cannot tell the new value from the old one
+    # (chore C-019).
+    published: list[float | None] = []
+    number.async_write_ha_state = MagicMock(
+        side_effect=lambda: published.append(number.native_value)
+    )
 
     # Create a pending refresh task
     async def never_completing():
@@ -237,7 +256,13 @@ async def test_a_pending_interval_change_is_flushed_on_removal(
         mock_coordinator, mock_config_entry, POLLING_INTERVAL_DESCRIPTION, 180
     )
     number.hass = _mock_hass_with_async_create_task()
-    number.async_write_ha_state = MagicMock()
+    # Capture the value at the publish moment, not after the write settles —
+    # a bare `MagicMock()` here cannot tell the new value from the old one
+    # (chore C-019).
+    published: list[float | None] = []
+    number.async_write_ha_state = MagicMock(
+        side_effect=lambda: published.append(number.native_value)
+    )
 
     # No `asyncio.sleep` patch here: the point is that removal arrives while
     # the debounce is still waiting.

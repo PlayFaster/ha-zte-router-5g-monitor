@@ -1,6 +1,6 @@
 """Tests for the ZTE Router select platform."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.exceptions import HomeAssistantError
@@ -89,14 +89,14 @@ async def test_set_apn_profile_option_happy_path():
     """Test _set_apn_profile_option calls api.set_apn correctly."""
     api = AsyncMock()
     api.set_apn = AsyncMock(return_value={"result": "success"})
+    # The PDP type is parsed out of the eighth field by `_get_apn_profiles`.
+    # This used to patch that helper with the answer, which meant the assertion
+    # below could not fail if the parse broke.
     data = {"APN_config0": "profile_a($)apn1($)($)($)($)($)($)IPV4V6"}
 
-    with patch(
-        "custom_components.zte_router_5g.select._get_apn_profiles",
-        return_value=[(0, "profile_a", "IPV4V6")],
-    ):
-        await _set_apn_profile_option(api, "profile_a", data)
-        api.set_apn.assert_called_once_with(0, "IPV4V6")
+    await _set_apn_profile_option(api, "profile_a", data)
+
+    api.set_apn.assert_called_once_with(0, "IPV4V6")
 
 
 @pytest.mark.asyncio
@@ -105,13 +105,7 @@ async def test_set_apn_profile_option_not_found():
     api = AsyncMock()
     data = {}
 
-    with (
-        patch(
-            "custom_components.zte_router_5g.select._get_apn_profiles",
-            return_value=[],
-        ),
-        pytest.raises(ValueError, match="APN profile name unknown_profile not found"),
-    ):
+    with pytest.raises(ValueError, match="APN profile name unknown_profile not found"):
         await _set_apn_profile_option(api, "unknown_profile", data)
 
 
@@ -177,7 +171,7 @@ def test_select_current_option_no_data(mock_coordinator, mock_config_entry):
 @pytest.mark.asyncio
 async def test_select_async_select_option_success(mock_coordinator, mock_config_entry):
     """Test async_select_option success path."""
-    mock_coordinator.data = {"APN_config0": "profile_a($)apn1"}
+    mock_coordinator.data = {"APN_config0": "profile_a($)apn1($)($)($)($)($)($)IPV4V6"}
     mock_coordinator.api = AsyncMock()
     mock_coordinator.api.set_apn = AsyncMock()
 
@@ -190,12 +184,10 @@ async def test_select_async_select_option_success(mock_coordinator, mock_config_
     )
     select = ZTERouterSelect(mock_coordinator, mock_config_entry, desc)
 
-    with patch(
-        "custom_components.zte_router_5g.select._get_apn_profiles",
-        return_value=[(0, "profile_a", "IPV4V6")],
-    ):
-        await select.async_select_option("profile_a")
-        mock_coordinator.async_force_refresh.assert_called_once()
+    await select.async_select_option("profile_a")
+
+    mock_coordinator.api.set_apn.assert_called_once_with(0, "IPV4V6")
+    mock_coordinator.async_force_refresh.assert_called_once()
 
 
 @pytest.mark.asyncio

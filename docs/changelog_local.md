@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev9\] - 2026-08-26 - Tests: Depth Check PASSED; Publish-Moment Captures, One Seam Removed](#334-dev9---2026-08-26---tests-depth-check-passed-publish-moment-captures-one-seam-removed)
   - [\[3.3.4-dev8\] - 2026-08-25 - A Real HTTP Seam: Both Declared Outcomes Driven, Fault Injection Adopted](#334-dev8---2026-08-25---a-real-http-seam-both-declared-outcomes-driven-fault-injection-adopted)
   - [\[3.3.4-dev7\] - 2026-08-25 - Repair Set Aligned To The Family; Unit Selector, Strike Split, SMS Logging](#334-dev7---2026-08-25---repair-set-aligned-to-the-family-unit-selector-strike-split-sms-logging)
   - [\[3.3.4-dev6\] - 2026-08-25 - CI Bumps; Open Issues Queue; HA Min Ver; Sensor Manifest; Docs](#334-dev6---2026-08-25---ci-bumps-open-issues-queue-ha-min-ver-sensor-manifest-docs)
@@ -176,6 +177,32 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
 
 ---
+
+## [3.3.4-dev9] - 2026-08-26 - Tests: Depth Check PASSED; Publish-Moment Captures, One Seam Removed
+
+Tests only; no shipped code changed. Closes chore **C-019** and the `x_project` issue _Tests that stub the publish_, and takes `Tests: Depth Check` from FAILED to **PASSED** — the third project in the family to reach it, after `wifi_ssid_monitor` and `huawei_router_5g`.
+
+### Added
+
+- **`tests/test_publish_moment.py`** — 7 tests over the three write paths, each capturing what the entity reads at the instant `async_write_ha_state` fires rather than after the write settles. **This integration was not carrying the defect** — the router switch holds a `_last_known` latch and the other two read from options — but nothing proved it, which is the whole point of chore C-019.
+- **`tests/test_depth_allowlist.txt`**, with one entry and a written reason.
+- **Two config-flow seam tests** in `tests/test_transport_seam.py`, driving `_validate_credentials` over the transport on both success and a rejected password.
+
+### Changed
+
+- **The two reported publish sites now capture.** `test_switch.py:40` and `test_number.py:40` mocked `async_write_ha_state` with a bare `MagicMock`, which records that a publish happened and nothing about what was published. Both now carry a capturing `side_effect`.
+- **The `select._get_apn_profiles` seam is removed rather than allow-listed.** All three patches supplied exactly what the real function derives from the `APN_config*` strings, so the assertions behind them could not have failed if the parse broke. They now feed real payload strings. Removing them left `patch` unused in that module, which is a fair summary of what those patches were contributing.
+
+### Notes
+
+- **One seam is allow-listed, not fixed**, and the reason is written into the file: `_validate_credentials` is patched at 22 sites in `test_config_flow.py`, every one of them selecting which branch a flow takes — already-configured, reauth, each form error — where the branch is the subject of the test. The helper is now driven for real elsewhere, so this is not the case the check exists to catch.
+- **One assertion is deliberately weaker than it looks**, and says so at the site. `test_pause_polling_switch` runs against a `MagicMock` `hass`, so `async_update_entry` records the call without changing `entry.options` — and `is_on` reads those options, so it cannot move within that test whatever the code does. It asserts the publish count there, and the published _value_ is asserted against a real `hass` in `test_publish_moment.py`.
+
+### Verification
+
+- **900 tests** (891 → 900), 100% line and branch, 0 partial branches. `mypy` clean; `ruff` clean.
+- **Three publish/write inversions verified**, each restored by checksum: the router switch publishing before latching the confirmed value, the pause switch publishing before writing options, and the slider publishing before setting the new value. All three failed the capture tests.
+- `Tests: Depth Check`: **PASSED** — 2 of 2 outcomes driven, 0 stubbed publishes, 0 stubbed seams, 0 gates undriven, 0 orphanable, 0 self-healing.
 
 ## [3.3.4-dev8] - 2026-08-25 - A Real HTTP Seam: Both Declared Outcomes Driven, Fault Injection Adopted
 
