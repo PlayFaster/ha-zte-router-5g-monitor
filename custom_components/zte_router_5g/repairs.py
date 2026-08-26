@@ -62,10 +62,10 @@ async def async_create_fix_flow(
 ) -> RepairsFlow:
     """Create the fix flow for a repair issue.
 
-    `issue_id` carries the entry id as a prefix (`{entry_id}_{name}`), but the
-    entry is read from `data` rather than parsed back out of it — the id format
-    is an internal detail and an entry id containing an underscore would make
-    the parse ambiguous.
+    The entry is read from `data` rather than parsed out of `issue_id`. The id
+    format is an internal detail — it is `{entry_id}_{name}` here and
+    `{name}_{entry_id}` on `huawei_router_5g` — and an entry id containing an
+    underscore would make either parse ambiguous.
     """
     entry_id = str((data or {}).get("entry_id", ""))
     return AuthFailedRepairFlow(entry_id)

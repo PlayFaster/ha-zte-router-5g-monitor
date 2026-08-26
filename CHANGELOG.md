@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Interactive Re-authentication Repair**: A persistent, fixable repair is raised when router credentials fail. Clicking **Fix** opens the re-authentication dialog directly to update the stored password.
-- **SMS Storage Full Binary Sensor**: Added `binary_sensor.*_sms_storage_full` under the SMS sub-device (disabled by default) to track when message storage on either the SIM or device is full.
+- **SMS Storage Full Binary Sensor**: Added `binary_sensor.*_sms_storage_full` under the SMS sub-device to track when message storage on either the SIM or device is full.
 
 ### Changed
 

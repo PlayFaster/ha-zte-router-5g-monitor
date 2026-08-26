@@ -1,9 +1,7 @@
 """Tests for the `auth_failed` repair and its fix flow.
 
-The repair set was aligned to the family policy on 2026-08-25
-(`.shared/issues/x_project/repair_set_alignment.md`): the Repairs panel carries
-only `auth_failed` and `conn_error`, and `auth_failed` is the one fixable
-repair this integration raises.
+The Repairs panel carries only `auth_failed` and `conn_error`, and
+`auth_failed` is the one fixable repair this integration raises.
 
 The sharp edge these tests guard is not that the flow works, but that it exists
 at all. Home Assistant substitutes `ConfirmRepairFlow` for a fixable issue whose

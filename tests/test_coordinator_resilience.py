@@ -683,7 +683,7 @@ async def test_force_refresh_clears_its_flag_when_the_request_raises(coordinator
 async def test_drift_uses_its_own_strike_budget_not_the_fetch_one(
     coordinator,
 ) -> None:
-    """The two budgets must be independently movable. Chore C-015.
+    """The two budgets must be independently movable.
 
     They are both 3 today, so a test asserting "drift fires on the third poll"
     passes whichever constant the code reads and proves nothing. Moving one of

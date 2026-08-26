@@ -4,7 +4,6 @@ Every other suite in this project builds the coordinator over a `MagicMock`
 standing in for `ZTERouterAPI`. That proves the coordinator handles what the API
 object returns, and proves nothing about `api.py`, because none of it runs —
 anything the payload *derives* is supplied by the fixture instead of computed.
-Chore C-021 and `x_project/fault_injection_options.md` both exist to close that.
 
 The seam is `aioclient_mock`, which `pytest-homeassistant-custom-component`
 ships and which intercepts `async_get_clientsession`. No dependency is added,
@@ -154,10 +153,10 @@ class RouterFake:
     def fault(self, mode: str) -> None:
         """Make the router misbehave in one named way.
 
-        The set is the one `fault_injection_options.md` asks each project to
-        cover: a router that is not answering at all, one that is answering too
-        slowly, one that rejects the credentials, one whose session has died,
-        and one that answers with something that is not the API.
+        The set covers a router that is not answering at all, one that is
+        answering too slowly, one that rejects the credentials, one whose
+        session has died, one still starting up, and one that answers with
+        something that is not the API.
         """
         self._mock.clear_requests()
 

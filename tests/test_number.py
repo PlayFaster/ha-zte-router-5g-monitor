@@ -39,7 +39,7 @@ async def test_polling_interval_change(mock_coordinator, mock_config_entry):
     number.hass = _mock_hass_with_async_create_task()
     # Capture the value at the publish moment, not after the write settles —
     # a bare `MagicMock()` here cannot tell the new value from the old one
-    # (chore C-019).
+    # .
     published: list[float | None] = []
     number.async_write_ha_state = MagicMock(
         side_effect=lambda: published.append(number.native_value)
@@ -94,7 +94,7 @@ async def test_polling_interval_cancel_previous_task(
     number.hass = _mock_hass_with_async_create_task()
     # Capture the value at the publish moment, not after the write settles —
     # a bare `MagicMock()` here cannot tell the new value from the old one
-    # (chore C-019).
+    # .
     published: list[float | None] = []
     number.async_write_ha_state = MagicMock(
         side_effect=lambda: published.append(number.native_value)
@@ -120,7 +120,7 @@ async def test_async_will_remove_from_hass_pending_task(
     number.hass = _mock_hass_with_async_create_task()
     # Capture the value at the publish moment, not after the write settles —
     # a bare `MagicMock()` here cannot tell the new value from the old one
-    # (chore C-019).
+    # .
     published: list[float | None] = []
     number.async_write_ha_state = MagicMock(
         side_effect=lambda: published.append(number.native_value)
@@ -258,7 +258,7 @@ async def test_a_pending_interval_change_is_flushed_on_removal(
     number.hass = _mock_hass_with_async_create_task()
     # Capture the value at the publish moment, not after the write settles —
     # a bare `MagicMock()` here cannot tell the new value from the old one
-    # (chore C-019).
+    # .
     published: list[float | None] = []
     number.async_write_ha_state = MagicMock(
         side_effect=lambda: published.append(number.native_value)

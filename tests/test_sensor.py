@@ -1322,7 +1322,7 @@ def test_bandwidth_sensors_offer_the_unit_selector() -> None:
 
     `native_unit_of_measurement="MHz"` renders correctly and is inert: without
     a `device_class` HA has no conversion table for the entity, so the unit
-    dropdown does not appear. Chore C-012.
+    dropdown does not appear.
 
     The `state_class` assertion guards something else, and the two are worth
     keeping apart. It is **not** required for the selector: `sensor/device_class_convertible_units`, the websocket command

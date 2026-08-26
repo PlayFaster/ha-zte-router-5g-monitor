@@ -1766,7 +1766,7 @@ Two conditions raise a card in Home Assistant's **Repairs** panel, and both need
 
 **What earns a Repair.** Two things together: the condition has stopped resolving itself, **and** there is something you can do about it. A reading you cannot influence fails the second test however persistent it is.
 
-**What does not, and where to find it instead.** A firmware update that renames the router's data fields shows as `severity: warning`, with the detail in the `drift` attribute. A part of the router the integration could not reach shows in `degraded_capabilities`. A full message store is the **SMS Storage Full** binary sensor on the SMS device. All three are real and worth automating on — none of them is something the Repairs panel can resolve.
+**What does not, and where to find it instead.** A part of the router the integration could not reach shows in `degraded_capabilities`.
 
 **A Repair also turns the Integration Health sensor on**, so an automation watching that sensor sees these two as well, without watching the panel. See [Self-Diagnosis](#-self-diagnosis).
 

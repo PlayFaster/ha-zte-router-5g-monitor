@@ -1,19 +1,15 @@
-"""The health and repair contract sweeps — C-022 step 8.
+"""Contract sweeps over the health snapshot and the repair set.
 
-Six questions each project holds over **its own set** of repairs and severities.
-They do not appear in any depth report: `Tests: Depth Check` cannot see them, and
-a project can pass every other check while having none of them. That is why they
-are written down in the chore rather than left to be noticed.
+Each asserts that every member of a set satisfies a property, rather than
+testing one mechanism. They appear in no coverage or depth report — those read
+the code under test, and these read a **set** the code defines — so a project
+can pass every other check while having none of them.
 
-Read as questions, not as a port. `wifi_ssid_monitor` is the only project in the
-family with a `health.py` and a `CHECKS` tuple; the other three compute health
-inline in the coordinator, so sweeping `CHECKS` is not portable and copying those
-tests does not work. Each sweep below is phrased against a source this project
-actually has.
-
-**8f is the vacuity guard and is not optional.** A sweep that inspects almost
-nothing passes for the same reason a correct one does, so each asserts the size
-of the set it swept as well as the property.
+**The vacuity guards are not optional.** A sweep that inspects almost nothing
+passes for the same reason a correct one does, so the size of each swept set is
+asserted by its own named test rather than folded into the sweeps. A named
+guard covers every sweep over that set, including ones written later, and says
+plainly that the sweep stopped sweeping when it fires.
 """
 
 from __future__ import annotations
@@ -48,6 +44,19 @@ COMPONENT = pathlib.Path("custom_components/zte_router_5g")
 # produced it compares the code with itself, and a rename would pass here while
 # every user automation matching on `severity` broke.
 SEVERITIES = {"ok", "degraded", "warning", "error", "unknown"}
+
+# Every key a health snapshot must carry. Published, so a template reading one
+# that goes missing gets an empty value rather than an error.
+SECTION_19_CONTRACT = {
+    "problem",
+    "issues",
+    "severity",
+    "degraded_capabilities",
+    "drift",
+    "repairs",
+    "last_good_update",
+    "consecutive_failures",
+}
 
 GOOD_DATA = {
     "network_type": "ENDC",
@@ -104,8 +113,8 @@ def coordinator(hass: HomeAssistant, entry):
 # ------------------------------------------------------------------------- 8a
 
 
-def test_every_repair_key_has_a_title_and_rendered_text_everywhere() -> None:
-    """8a. A missing entry shows the raw key, or a card with an empty body.
+def test_every_repair_issue_has_title_and_rendered_text() -> None:
+    """A missing entry shows the raw key, or a card with an empty body.
 
     Stronger than the check this replaces, which asserted only that the key was
     *present* in `issues`.
@@ -121,8 +130,6 @@ def test_every_repair_key_has_a_title_and_rendered_text_everywhere() -> None:
     So: a title always, and rendered text in whichever form the issue's
     fixability calls for.
     """
-    assert REPAIR_NAMES, "no repair keys to sweep — 8a would pass vacuously"
-
     for name in _translation_files():
         issues = _load(name).get("issues", {})
         for key in REPAIR_NAMES:
@@ -147,8 +154,6 @@ def test_every_repair_key_has_a_title_and_rendered_text_everywhere() -> None:
                         "description, so the dialog renders empty"
                     )
 
-    assert len(_translation_files()) >= 2, "expected strings.json plus a translation"
-
 
 def test_the_fixable_repair_is_the_one_with_a_fix_flow() -> None:
     """The two forms must line up with what the code actually raises.
@@ -172,8 +177,8 @@ def test_the_fixable_repair_is_the_one_with_a_fix_flow() -> None:
 # ------------------------------------------------------------------------- 8b
 
 
-def test_no_orphan_issue_text_survives_a_rename() -> None:
-    """8b. Text left behind for a key nothing raises any more.
+def test_no_orphan_issue_translations() -> None:
+    """Text left behind for a key nothing raises any more.
 
     An orphan is invisible: nothing renders it, so nothing reveals that it
     describes a repair that no longer exists. It then quietly becomes the
@@ -196,10 +201,10 @@ def test_no_orphan_issue_text_survives_a_rename() -> None:
 # ------------------------------------------------------------------------- 8c
 
 
-async def test_every_repair_the_code_can_raise_is_registered_for_removal(
+async def test_every_repair_the_code_raises_is_registered_for_removal(
     hass: HomeAssistant, entry
 ) -> None:
-    """8c. The sharp one: a repair omitted here outlives the integration.
+    """The sharp one: a repair omitted here outlives the integration.
 
     `async_remove_entry` deletes exactly the list it is given. A repair the
     code can raise but that list omits sits in the Repairs panel forever, with
@@ -220,8 +225,6 @@ async def test_every_repair_the_code_can_raise_is_registered_for_removal(
     # Every id a card could be live under: the current repairs, the ones
     # retired on 2026-08-25, and both the entry-scoped and bare spellings.
     all_names = (*REPAIR_NAMES, *RETIRED_REPAIR_NAMES)
-    assert len(all_names) >= 5, "8c is sweeping fewer ids than expected"
-
     for name in all_names:
         for issue_id in (f"{entry.entry_id}_{name}", name):
             ir.async_create_issue(
@@ -258,7 +261,7 @@ async def test_every_repair_the_code_can_raise_is_registered_for_removal(
 async def test_every_published_severity_is_in_the_section_19_vocabulary(
     coordinator,
 ) -> None:
-    """8d. A severity outside the vocabulary breaks every automation reading it.
+    """A severity outside the vocabulary breaks every automation reading it.
 
     This exists because a mutation survived on `wifi_ssid_monitor`: every test
     asserted the severity of the check it was written for, so nothing noticed
@@ -298,7 +301,7 @@ async def test_every_published_severity_is_in_the_section_19_vocabulary(
         assert isinstance(value, str) and value, "severity must never be blank or None"
         assert value in SEVERITIES, f"severity '{value}' is outside Section 19"
 
-    assert len(published) == 4, "8d swept fewer paths than it claims"
+    assert len(published) == 4, "this test drove fewer paths than it claims"
     assert len(set(published)) >= 3, (
         "every path reported the same severity — the sweep is not distinguishing them"
     )
@@ -308,7 +311,7 @@ async def test_every_published_severity_is_in_the_section_19_vocabulary(
 
 
 async def test_every_finding_is_classified_exactly_once(coordinator) -> None:
-    """8e. A finding must be drift or capability, never both and never neither.
+    """A finding must be drift or capability, never both and never neither.
 
     The two lists are what a template reads to decide whether a problem is the
     router's shape changing or an endpoint being unavailable. A finding in both
@@ -329,7 +332,7 @@ async def test_every_finding_is_classified_exactly_once(coordinator) -> None:
     assert not (drift & capabilities), (
         f"findings classified as both drift and capability: {drift & capabilities}"
     )
-    assert capabilities, "expected degraded capabilities — 8e swept nothing"
+    assert capabilities, "no capability was degraded, so nothing was classified"
     assert snapshot["problem"] is True
     assert snapshot["issues"], "a problem with no issue text cannot be explained"
 
@@ -340,7 +343,7 @@ async def test_every_finding_is_classified_exactly_once(coordinator) -> None:
 async def test_every_snapshot_the_coordinator_writes_carries_the_full_contract(
     coordinator,
 ) -> None:
-    """8f. The vacuity guard, and a shape sweep over every write path.
+    """The vacuity guard, and a shape sweep over every write path.
 
     Section 19's attribute names are a published contract: users write
     templates against them, so a missing key silently yields an empty template
@@ -352,22 +355,10 @@ async def test_every_snapshot_the_coordinator_writes_carries_the_full_contract(
     Asserts the **count** of keys as well as their presence, so the guard
     cannot quietly shrink.
     """
-    contract = {
-        "problem",
-        "issues",
-        "severity",
-        "degraded_capabilities",
-        "drift",
-        "repairs",
-        "last_good_update",
-        "consecutive_failures",
-    }
+    contract = SECTION_19_CONTRACT
 
     source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
     assignments = source.count("self.health_snapshot = {")
-    assert assignments >= 4, (
-        f"expected at least 4 snapshot assignments to sweep, found {assignments}"
-    )
 
     for block in source.split("self.health_snapshot = {")[1:]:
         body = block[: block.index("}")]
@@ -380,4 +371,39 @@ async def test_every_snapshot_the_coordinator_writes_carries_the_full_contract(
     # And once at runtime, so the static sweep above cannot be the only cover.
     await coordinator._async_update_data()
     assert contract <= set(coordinator.health_snapshot)
-    assert len(contract) == 8, "the contract shrank without this guard being updated"
+
+
+# ------------------------------------------------- the sweeps must sweep something
+
+
+def test_the_repair_text_sweep_is_not_vacuous() -> None:
+    """The text sweeps pass trivially if the key set is empty.
+
+    Pins the count and the membership as well as the property, so a rename that
+    empties `REPAIR_NAMES` fails here rather than turning both text sweeps
+    green. Named rather than folded into either, because one guard has to cover
+    both and anything written over the same set later.
+    """
+    keys = set(REPAIR_NAMES)
+
+    assert len(keys) >= 2
+    assert {"auth_failed", "conn_error"} <= keys
+    assert len(set(RETIRED_REPAIR_NAMES)) >= 3
+    assert len(_translation_files()) >= 2, "expected strings.json plus a translation"
+
+
+def test_the_severity_sweep_still_sweeps_something() -> None:
+    """The guard cannot quietly shrink to a set of one.
+
+    The severity vocabulary is fixed at five, and every place the coordinator
+    assigns a health snapshot has to be in reach of the shape sweep — success,
+    its fallback, failure, and its fallback.
+    """
+    source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+
+    assert len(SEVERITIES) == 5
+    assert len(set(REPAIR_NAMES)) >= 2
+    assert source.count("self.health_snapshot = {") >= 4, (
+        "fewer snapshot assignments than the shape sweep expects to find"
+    )
+    assert len(SECTION_19_CONTRACT) == 8

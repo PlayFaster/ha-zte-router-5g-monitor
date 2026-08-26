@@ -1,6 +1,6 @@
 """What each control reads at the instant it publishes, not afterwards.
 
-Chore C-019 and `x_project/stubbed_publish_tests.md`. Every write test in this
+Every write test in this
 project mocks `async_write_ha_state` with a bare `MagicMock`, which records that
 a publish happened and nothing about what was published. A control that wrote
 the new value and then published the old one passes all of them, because by the

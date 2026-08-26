@@ -1,6 +1,6 @@
 """Polls driven through a real HTTP seam rather than an API-object mock.
 
-Chore C-021 and the `fault_injection_options.md` adoption. Every test here runs
+Every test here runs
 `api.py` for real over `aioclient_mock`: the payload is the input and everything
 the integration reads off it is derived, which is the difference between testing
 the check and testing the fixture that fed it.

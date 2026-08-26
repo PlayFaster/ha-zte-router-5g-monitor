@@ -64,11 +64,11 @@ HEALTH_DRIFT_STRIKE_LIMIT = 3
 # Repair rather than just an unavailable entity (Section 19, second tier).
 UNREACHABLE_STRIKE_LIMIT = 10
 
-# The canonical repair keys, named to match `huawei_router_5g` and the family
-# policy in `x_project/repair_set_alignment.md` §2: the Repairs panel carries
-# only conditions that require the user to act and will not clear themselves.
-# Everything else — contract drift, degraded capabilities — belongs on the
-# Integration Health sensor, and message-store capacity on a binary sensor.
+# The canonical repair keys, named to match `huawei_router_5g`. The Repairs
+# panel carries only conditions that require the user to act and will not clear
+# themselves; everything else — contract drift, degraded capabilities — belongs
+# on the Integration Health sensor, and message-store capacity on a binary
+# sensor.
 REPAIR_AUTH_FAILED = "auth_failed"
 REPAIR_CONN_ERROR = "conn_error"
 

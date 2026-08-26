@@ -40,7 +40,7 @@ async def test_pause_polling_switch(mock_coordinator, mock_config_entry):
     # Capture what the entity reads at the instant it publishes, rather than
     # only that a publish happened. A control that writes the new value and
     # publishes the old one satisfies a bare `MagicMock()` here, because the
-    # state has settled either way by the time the assertions run (chore C-019).
+    # state has settled either way by the time the assertions run.
     published: list[bool] = []
     switch.async_write_ha_state = MagicMock(
         side_effect=lambda: published.append(switch.is_on)

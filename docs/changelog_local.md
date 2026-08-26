@@ -188,6 +188,32 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.4-dev20] - 2026-08-26 - Contract Sweep Naming And Vacuity Guards; Queue References Removed
+
+### Summary
+
+The health and repair contract sweeps are renamed and restructured to match `huawei_router_5g`, and every reference to an issue-queue item is removed from shipped code and tests.
+
+### Changed
+
+- **Three sweeps renamed to the family's names**: `test_every_repair_key_has_a_title_and_rendered_text_everywhere` → `test_every_repair_issue_has_title_and_rendered_text`, `test_no_orphan_issue_text_survives_a_rename` → `test_no_orphan_issue_translations`, and `test_every_repair_the_code_can_raise_is_registered_for_removal` → `test_every_repair_the_code_raises_is_registered_for_removal`. Both projects hold the same six guards; two names for one guard is drift, and the next project to write them copies whichever it finds first.
+
+- **The vacuity guards are now named tests rather than assertions folded into each sweep.** `test_the_repair_text_sweep_is_not_vacuous` and `test_the_severity_sweep_still_sweeps_something` assert the size of each swept set. A folded count guards only the sweep it sits in — the repair-key count was asserted in the text sweep and not in the orphan sweep, so emptying `REPAIR_NAMES` would have left the second passing over an empty loop. A named guard covers every sweep over that set, including ones written later, and its failure says the sweep stopped sweeping rather than reporting an unexplained count mismatch inside an unrelated test.
+
+- **The Section 19 key set moved to a module constant**, `SECTION_19_CONTRACT`, so the shape sweep and the vacuity guard read the same definition.
+
+### Removed
+
+- **Every issue-queue reference in `custom_components/` and `tests/`.** Sixteen sites named chore identifiers or files under `x_project/` — in `const.py`, `repairs.py`, and eleven test modules. A queue identifier is a transient tracking artefact: every chore cited had already closed, so each was a dangling pointer to a register the reader has no reason to hold. The reasoning each comment carried is kept; only the citation is gone.
+
+### Tests
+
+- 906 → **908**, the two new vacuity guards. 100% line and branch, 0 partial branches.
+
+### Verified
+
+- `mypy` and `ruff` clean; `hassfest` reports **Invalid integrations: 0**.
+
 ## [3.3.4-dev19] - 2026-08-26 - README Repairs Section Rewritten
 
 ### Summary

@@ -244,7 +244,7 @@ def test_every_raised_exception_has_translated_text() -> None:
 # `test_every_repair_issue_has_translated_text` lived here until 2026-08-26.
 # It asserted only that each raised key was *present* in the `issues` block,
 # which a key with a title and no description passes — the card then renders
-# with an empty body. Superseded by C-022 step 8 in `tests/test_health_contract.py`,
+# with an empty body. Superseded by the sweeps in `tests/test_health_contract.py`,
 # which checks title and description in `strings.json` and in every
 # `translations/*.json`, and by 8b, which catches text left behind by a rename.
 
@@ -476,8 +476,8 @@ async def test_every_live_entity_has_an_icon_or_a_device_class(
 # Suppressed static-analysis directives — every one is a reviewed decision
 # ---------------------------------------------------------------------------
 #
-# `masked_errors_check` Class D, and chore C-004. A prompt run is a
-# point-in-time audit; this is the mechanism that keeps it true afterwards.
+# `masked_errors_check` Class D. That prompt is a point-in-time audit; this is
+# the mechanism that keeps its result true afterwards.
 # The set cannot grow without someone editing the table below and writing a
 # reason.
 #
