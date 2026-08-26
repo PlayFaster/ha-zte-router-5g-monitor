@@ -5,7 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.4-dev12\] - 2026-08-26 - Correction: The Unit Selector Depends On `device_class`, Not `state_class`](#334-dev12---2026-08-26---correction-the-unit-selector-depends-on-device_class-not-state_class)
+  - [\[3.3.4-dev14\] - 2026-08-26 - Documentation: Comprehensive Changelog Readability and Historical Header Standardization](#334-dev14---2026-08-26---documentation-comprehensive-changelog-readability-and-historical-header-standardization)
+  - [\[3.3.4-dev13\] - 2026-08-26 - Repairs Documentation: Repair Eligibility Criteria and Health Sensor Mapping](#334-dev13---2026-08-26---repairs-documentation-why-a-condition-is-or-is-not-a-repair)
+  - [\[3.3.4-dev12\] - 2026-08-26 - Entity Configuration: Frequency Unit Selector Dependence on Device Class](#334-dev12---2026-08-26---correction-the-unit-selector-depends-on-device_class-not-state_class)
   - [\[3.3.4-dev11\] - 2026-08-26 - Documentation Reconciliation: Repair Set, Quality Scale, and Frequency Units](#334-dev11---2026-08-26---documentation-reconciliation-repair-set-quality-scale-and-frequency-units)
   - [\[3.3.4-dev10\] - 2026-08-26 - Suppression Allow-List Sweep; Health & Repair Contract Tests; Silent-Failure Audit](#334-dev10---2026-08-26---suppression-allow-list-sweep-health--repair-contract-tests-silent-failure-audit)
   - [\[3.3.4-dev9\] - 2026-08-26 - Publish-Moment State Capture Tests; Real APN Payloads in Select Tests](#334-dev9---2026-08-26---publish-moment-state-capture-tests-real-apn-payloads-in-select-tests)
@@ -83,105 +85,151 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
   - [\[3.3.0-dev1\] - 2026-07-27 - PlayFaster Architectural Standards Conformance Pass: Health Sensor, Force Refresh, and Sanitizer](#330-dev1---2026-07-27---playfaster-architectural-standards-conformance-pass-health-sensor-force-refresh-and-sanitizer)
-  - [\[3.2.6-dev8\] - 2026-07-26 - Icons \& Branding Refresh; AGENTS.md Restructured](#326-dev8---2026-07-26---icons--branding-refresh-agentsmd-restructured)
-  - [\[3.2.6-dev7\] - 2026-07-12 - PyTest Coverage to 100%; Codespell Alignment](#326-dev7---2026-07-12---pytest-coverage-to-100-codespell-alignment)
-  - [\[3.2.6-dev6\] - 2026-07-12 - PHACC Bump; README Device-vs-Entity Clarification](#326-dev6---2026-07-12---phacc-bump-readme-device-vs-entity-clarification)
-  - [\[3.2.6-dev5\] - 2026-07-06 - Shared CI Bump to v2.0.6](#326-dev5---2026-07-06---shared-ci-bump-to-v206)
-  - [\[3.2.6-dev4\] - 2026-07-05 - Test Suite Repaired After the Ruff Extension; Back to 100% Coverage](#326-dev4---2026-07-05---test-suite-repaired-after-the-ruff-extension-back-to-100-coverage)
-  - [\[3.2.6-dev3\] - 2026-07-05 - Ruff Checks Extended to Match Home Assistant](#326-dev3---2026-07-05---ruff-checks-extended-to-match-home-assistant)
-  - [\[3.2.6-dev2\] - 2026-07-05 - IQS Static Check Added; `test-before-setup` Completed](#326-dev2---2026-07-05---iqs-static-check-added-test-before-setup-completed)
-  - [\[3.2.6-dev1\] - 2026-07-03 - Check-Drift Script Fixed for an Ahead-of-Local HA Core](#326-dev1---2026-07-03---check-drift-script-fixed-for-an-ahead-of-local-ha-core)
-  - [\[3.2.5\] - 2026-07-03 - Release - Refresh Now Button; Display Units; Config-Flow Hardening](#325---2026-07-03---release---refresh-now-button-display-units-config-flow-hardening)
-  - [\[3.2.5-dev12\] - 2026-07-03 - SMS Actions Default to the Sole Router](#325-dev12---2026-07-03---sms-actions-default-to-the-sole-router)
-  - [\[3.2.5-dev-11\] - 2026-07-03 - PyTest Coverage 99% → 100%](#325-dev-11---2026-07-03---pytest-coverage-99--100)
-  - [\[3.2.5-dev10\] - 2026-07-03 - Ruff Bump; README Screenshots and Sensor Counts](#325-dev10---2026-07-03---ruff-bump-readme-screenshots-and-sensor-counts)
-  - [\[3.2.5-dev9\] - 2026-07-02 - Explicit `config_entry` on the Coordinator](#325-dev9---2026-07-02---explicit-config_entry-on-the-coordinator)
-  - [\[3.2.5-dev8\] - 2026-07-02 - Suggested Display Units and Precision on 16 Sensors](#325-dev8---2026-07-02---suggested-display-units-and-precision-on-16-sensors)
-  - [\[3.2.5-dev7\] - 2026-07-02 - Config-Flow Hardening \& Refresh Now Button](#325-dev7---2026-07-02---config-flow-hardening--refresh-now-button)
-  - [\[3.2.5-dev6\] - 2026-07-01 - Ruff Bump 0.15.18 → 0.15.19](#325-dev6---2026-07-01---ruff-bump-01518--01519)
-  - [\[3.2.5-dev5\] - 2026-06-29 - Ruff Bump 0.15.17 → 0.15.18](#325-dev5---2026-06-29---ruff-bump-01517--01518)
-  - [\[3.2.5-dev4\] - 2026-06-29 - YAML Lint Aligned With Home Assistant](#325-dev4---2026-06-29---yaml-lint-aligned-with-home-assistant)
-  - [\[3.2.5-dev3\] - 2026-06-18 - CI Validation Overhaul](#325-dev3---2026-06-18---ci-validation-overhaul)
-  - [\[3.2.5-dev1\] - 2026-06-15 - Local Task Ordering and Pass/Fail Color](#325-dev1---2026-06-15---local-task-ordering-and-passfail-color)
-  - [\[3.2.4\] - 2026-06-15 - Release - Shared CI Validation v2.0.3](#324---2026-06-15---release---shared-ci-validation-v203)
-  - [\[3.2.4-dev3\] - 2026-06-15 - Shared CI v2.0.3; Coverage Report Removed](#324-dev3---2026-06-15---shared-ci-v203-coverage-report-removed)
-  - [\[3.2.4-dev2\] - 2026-06-15 - Shared CI Bump v2.0.1 → v2.0.2](#324-dev2---2026-06-15---shared-ci-bump-v201--v202)
-  - [\[3.2.4-dev1\] - 2026-06-15 - Shared CI Validation Extended to the Theme Project](#324-dev1---2026-06-15---shared-ci-validation-extended-to-the-theme-project)
-  - [\[3.2.3\] - 2026-06-14 - CodeQL Permissions Corrected for Zizmor](#323---2026-06-14---codeql-permissions-corrected-for-zizmor)
-  - [\[3.2.2\] - 2026-06-14 - Shared CodeQL Validation Config](#322---2026-06-14---shared-codeql-validation-config)
-  - [\[3.2.1\] - 2026-06-14 - CI Validation Test Release](#321---2026-06-14---ci-validation-test-release)
-  - [\[3.2.1-dev9\] - 2026-06-14 - Prettier Config Fix](#321-dev9---2026-06-14---prettier-config-fix)
-  - [\[3.2.1-dev8\] - 2026-06-14 - Link-Check Exclusions; Prettier Config as JSON](#321-dev8---2026-06-14---link-check-exclusions-prettier-config-as-json)
-  - [\[3.2.1-dev7\] - 2026-06-14 - Dependabot Bumps; AGENTS.md Added](#321-dev7---2026-06-14---dependabot-bumps-agentsmd-added)
-  - [\[3.2.1-dev4\] - 2026-06-10 - Validation Tooling Sync System](#321-dev4---2026-06-10---validation-tooling-sync-system)
-  - [\[3.2.1-dev1\] - 2026-06-08 - Coroutine Warnings Fixed; README Emoji Consistency; mypy Realigned With HA](#321-dev1---2026-06-08---coroutine-warnings-fixed-readme-emoji-consistency-mypy-realigned-with-ha)
-  - [\[3.2.0\] - 2026-05-28 - APN Control, Network Mode Select and New Switches](#320---2026-05-28---apn-control-network-mode-select-and-new-switches)
-  - [\[3.1.1-dev11\] - 2026-05-27 - 57 New Tests; Coverage 88% → 99%](#311-dev11---2026-05-27---57-new-tests-coverage-88--99)
-  - [\[3.1.1-dev10\] - 2026-05-27 - mypy Fix in `binary_sensor.py`](#311-dev10---2026-05-27---mypy-fix-in-binary_sensorpy)
-  - [\[3.1.1-dev9\] - 2026-05-27 - APN, Network Mode and LED Controls Added](#311-dev9---2026-05-27---apn-network-mode-and-led-controls-added)
-  - [\[3.1.1-dev8\] - 2026-05-25 - Bare-Tuple `except` Syntax Fixed](#311-dev8---2026-05-25---bare-tuple-except-syntax-fixed)
-  - [\[3.1.1-dev7\] - 2026-05-25 - Debounced Task Tracked by HA; Line-Length and Test Fixes](#311-dev7---2026-05-25---debounced-task-tracked-by-ha-line-length-and-test-fixes)
-  - [\[3.1.1-dev6\] - 2026-05-25 - Three More Bare-Tuple `except` Fixes; 17 New Tests](#311-dev6---2026-05-25---three-more-bare-tuple-except-fixes-17-new-tests)
-  - [\[3.1.1-dev5\] - 2026-05-25 - `state_class` Removed From 8 Sensors](#311-dev5---2026-05-25---state_class-removed-from-8-sensors)
-  - [\[3.1.1-dev4\] - 2026-05-25 - Session-Reset Test Failures Fixed; `api.py` and `coordinator.py` to 100%](#311-dev4---2026-05-25---session-reset-test-failures-fixed-apipy-and-coordinatorpy-to-100)
-  - [\[3.1.1-dev3\] - 2026-05-25 - Proactive Session Reset and Login Session Init](#311-dev3---2026-05-25---proactive-session-reset-and-login-session-init)
-  - [\[3.1.1-dev2\] - 2026-05-24 - README Automation Examples and Icons](#311-dev2---2026-05-24---readme-automation-examples-and-icons)
-  - [\[3.1.1-dev1\] - 2026-05-24 - Dependabot Bumps](#311-dev1---2026-05-24---dependabot-bumps)
-  - [\[3.1.0\] - 2026-05-24 - SMS Actions, Received Event and Storage Repair](#310---2026-05-24---sms-actions-received-event-and-storage-repair)
-  - [\[3.0.2-dev11\] - 2026-05-24 - README SMS Actions and Automation Examples](#302-dev11---2026-05-24---readme-sms-actions-and-automation-examples)
-  - [\[3.0.2-dev10\] - 2026-05-23 - Uptime Boot Timestamp Stabilized; CLAUDE.md Added](#302-dev10---2026-05-23---uptime-boot-timestamp-stabilized-claudemd-added)
-  - [\[3.0.2-dev9\] - 2026-05-23 - SMS Received Event; `__init__.py` to 100% Coverage](#302-dev9---2026-05-23---sms-received-event-__init__py-to-100-coverage)
-  - [\[3.0.2-dev8\] - 2026-05-23 - SMS Send, Delete and List Actions Added](#302-dev8---2026-05-23---sms-send-delete-and-list-actions-added)
-  - [\[3.0.2-dev7\] - 2026-05-23 - Boot Timestamp Persisted Across HA Restarts](#302-dev7---2026-05-23---boot-timestamp-persisted-across-ha-restarts)
-  - [\[3.0.2-dev6\] - 2026-05-23 - 14 New Tests; `api.py` and `coordinator.py` to 100%](#302-dev6---2026-05-23---14-new-tests-apipy-and-coordinatorpy-to-100)
-  - [\[3.0.2-dev5\] - 2026-05-23 - mypy Strict Import Fixes](#302-dev5---2026-05-23---mypy-strict-import-fixes)
-  - [\[3.0.2-dev4\] - 2026-05-23 - 43 mypy Strict Errors Resolved](#302-dev4---2026-05-23---43-mypy-strict-errors-resolved)
-  - [\[3.0.2-dev3\] - 2026-05-22 - Centralized Request Helper; Uptime Duration Sensor](#302-dev3---2026-05-22---centralized-request-helper-uptime-duration-sensor)
-  - [\[3.0.2-dev2\] - 2026-05-13 - SMS Storage Full Repair; `icons.json` Added](#302-dev2---2026-05-13---sms-storage-full-repair-iconsjson-added)
-  - [\[3.0.2-dev1\] - 2026-05-13 - Devcontainer Mounts and mypy Strict Setup](#302-dev1---2026-05-13---devcontainer-mounts-and-mypy-strict-setup)
-  - [\[3.0.1\] - 2026-05-10 - README Overhaul and Internal Alignment](#301---2026-05-10---readme-overhaul-and-internal-alignment)
-  - [\[3.0.1-rc1\] - 2026-05-10 - README Expanded and Re-Ordered](#301-rc1---2026-05-10---readme-expanded-and-re-ordered)
-  - [\[3.0.1-dev8\] - 2026-05-10 - README Additions; `get_rd` Login Guard; Coroutine Warnings Fixed](#301-dev8---2026-05-10---readme-additions-get_rd-login-guard-coroutine-warnings-fixed)
-  - [\[3.0.1-dev6\] - 2026-05-10 - 24 mypy Errors in `api.py`; Coverage to 100%](#301-dev6---2026-05-10---24-mypy-errors-in-apipy-coverage-to-100)
-  - [\[3.0.1-dev5\] - 2026-05-10 - Reconfiguration Flow and Hierarchical Translations](#301-dev5---2026-05-10---reconfiguration-flow-and-hierarchical-translations)
-  - [\[3.0.1-dev4\] - 2026-05-09 - Project-Agnostic `pyproject.toml` and `tasks.json`](#301-dev4---2026-05-09---project-agnostic-pyprojecttoml-and-tasksjson)
-  - [\[3.0.1-dev3\] - 2026-05-09 - Shared Reusable CI Workflow Created](#301-dev3---2026-05-09---shared-reusable-ci-workflow-created)
-  - [\[3.0.0\] - 2026-05-08 - Async Rewrite, Sub-Devices and IMEI Identity](#300---2026-05-08---async-rewrite-sub-devices-and-imei-identity)
-  - [\[3.0.0-rc1\] - 2026-05-08 - Entity Categories Refined; Bridge Mode Rename](#300-rc1---2026-05-08---entity-categories-refined-bridge-mode-rename)
-  - [\[3.0.0-dev22\] - 2026-05-08 - Hassfest Translation Schema and Reauth Placeholder Fixed](#300-dev22---2026-05-08---hassfest-translation-schema-and-reauth-placeholder-fixed)
-  - [\[3.0.0-dev21\] - 2026-05-08 - Gold Standard README; Missing Translations Added](#300-dev21---2026-05-08---gold-standard-readme-missing-translations-added)
-  - [\[3.0.0-dev16\] - 2026-05-07 - Shared `device_info` Helper; Translation-Based Naming; Code-Review Fixes](#300-dev16---2026-05-07---shared-device_info-helper-translation-based-naming-code-review-fixes)
-  - [\[3.0.0-dev15\] - 2026-05-07 - 12 New Sensors; IMEI as the Stable Identity](#300-dev15---2026-05-07---12-new-sensors-imei-as-the-stable-identity)
-  - [\[3.0.0-dev14\] - 2026-05-07 - Diagnostics and Reauthentication Added](#300-dev14---2026-05-07---diagnostics-and-reauthentication-added)
-  - [\[3.0.0-dev11\] - 2026-05-07 - README Badge Links](#300-dev11---2026-05-07---readme-badge-links)
-  - [\[3.0.0-dev10\] - 2026-05-02 - Badge Links; Sub-Device Architecture](#300-dev10---2026-05-02---badge-links-sub-device-architecture)
-  - [\[3.0.0-dev8\] - 2026-04-29 - Sub-Device Architecture and Unit Standardization](#300-dev8---2026-04-29---sub-device-architecture-and-unit-standardization)
-  - [\[3.0.0-dev5\] - 2026-04-07 - Declarative Guard Bands and Custom Naming](#300-dev5---2026-04-07---declarative-guard-bands-and-custom-naming)
-  - [\[3.0.0-dev3\] - 2026-04-07 - Declarative Entity Engine and Background Startup](#300-dev3---2026-04-07---declarative-entity-engine-and-background-startup)
-  - [\[3.0.0-dev2\] - 2026-04-07 - Persistent Metadata; Non-Blocking Startup; Strict Linting](#300-dev2---2026-04-07---persistent-metadata-non-blocking-startup-strict-linting)
-  - [\[3.0.0-dev1\] - 2026-04-01 - Native Async Migration to `aiohttp`](#300-dev1---2026-04-01---native-async-migration-to-aiohttp)
-  - [\[2.3.1\] - 2026-04-01 PUBLIC RELEASE - Coordinator Refactor and HACS Assets](#231---2026-04-01-public-release---coordinator-refactor-and-hacs-assets)
-  - [\[2.2.4\] - 2026-03-30 - Test Coverage and Code Clean-Up](#224---2026-03-30---test-coverage-and-code-clean-up)
-  - [\[2.2.3\] - 2026-03-30 - Python Tests Added; Manifest Fixed](#223---2026-03-30---python-tests-added-manifest-fixed)
-  - [\[2.1.1\] - 2026-03-29 - Improved Error Logging](#211---2026-03-29---improved-error-logging)
-  - [\[2.0.1\] - 2026-03-29 - Options Flow Added](#201---2026-03-29---options-flow-added)
-  - [\[1.9.4\] - 2026-03-29 - Model Number Read From Device; Session Handling](#194---2026-03-29---model-number-read-from-device-session-handling)
-  - [\[1.8.1\] - 2026-03-29 - Translation Folder Structure](#181---2026-03-29---translation-folder-structure)
-  - [\[1.7.3\] - 2026-03-29 - Entity Naming Fixed](#173---2026-03-29---entity-naming-fixed)
-  - [\[1.6.3\] - 2026-03-28 - Async Startup to Avoid Blocking on an Offline Router](#163---2026-03-28---async-startup-to-avoid-blocking-on-an-offline-router)
-  - [\[1.5.7\] - 2026-03-28 - ZTE Icons; Sub-Device Sensor Naming](#157---2026-03-28---zte-icons-sub-device-sensor-naming)
-  - [\[1.5.1\] - 2026-03-28 - Integration Naming Aligned](#151---2026-03-28---integration-naming-aligned)
-  - [\[1.4.5\] - 2026-03-28 - Changelog Added; Standard Sensor Names](#145---2026-03-28---changelog-added-standard-sensor-names)
-  - [\[1.4.4\] - 2026-03-28 - All Router Attributes Exposed as Sensors](#144---2026-03-28---all-router-attributes-exposed-as-sensors)
-  - [\[1.4.3\] - 2026-03-28 - Pause Polling Switch and Polling Interval Slider](#143---2026-03-28---pause-polling-switch-and-polling-interval-slider)
-  - [\[1.4.2\] - 2026-03-27 - SMS Monitoring; Initial GitHub Release](#142---2026-03-27---sms-monitoring-initial-github-release)
-  - [\[1.4.1\] - 2026-03-27 - Coordinator Refactor and Protocol Detection](#141---2026-03-27---coordinator-refactor-and-protocol-detection)
-  - [\[1.4.0\] - 2026-03-26 - Core Signal and Data Sensors](#140---2026-03-26---core-signal-and-data-sensors)
-  - [\[1.3.6\] - 2026-03-25 - Initial Release for the ZTE MC7010](#136---2026-03-25---initial-release-for-the-zte-mc7010)
+  - [\[3.2.6-dev8\] - 2026-07-26 - Project Hygiene: Icons, Branding Refresh, and AGENTS.md Modularization](#326-dev8---2026-07-26---project-hygiene-icons-branding-refresh-and-agentsmd-modularization)
+  - [\[3.2.6-dev7\] - 2026-07-12 - Test Suite: 100% Pytest Coverage and Codespell Alignment](#326-dev7---2026-07-12---test-suite-100-pytest-coverage-and-codespell-alignment)
+  - [\[3.2.6-dev6\] - 2026-07-12 - Tooling Bump: PHACC 0.13.346 and Documentation Device Clarifications](#326-dev6---2026-07-12---tooling-bump-phacc-013346-and-documentation-device-clarifications)
+  - [\[3.2.6-dev5\] - 2026-07-06 - CI Infrastructure: Shared CI Workflow Bump to v2.0.6](#326-dev5---2026-07-06---ci-infrastructure-shared-ci-workflow-bump-to-v206)
+  - [\[3.2.6-dev4\] - 2026-07-05 - Test Suite: Pytest Restoration to 100% Coverage Post-Ruff Extension](#326-dev4---2026-07-05---test-suite-pytest-restoration-to-100-coverage-post-ruff-extension)
+  - [\[3.2.6-dev3\] - 2026-07-05 - Static Analysis: Ruff Lint and Rule Alignment with Home Assistant Core](#326-dev3---2026-07-05---static-analysis-ruff-lint-and-rule-alignment-with-home-assistant-core)
+  - [\[3.2.6-dev2\] - 2026-07-05 - Integration Quality Scale: IQS Static Check and test-before-setup Auth Handling](#326-dev2---2026-07-05---integration-quality-scale-iqs-static-check-and-test-before-setup-auth-handling)
+  - [\[3.2.6-dev1\] - 2026-07-03 - Tooling: Check-Drift Script Handling for Ahead-of-Local Home Assistant Core](#326-dev1---2026-07-03---tooling-check-drift-script-handling-for-ahead-of-local-home-assistant-core)
+  - [\[3.2.5\] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening](#325---2026-07-03---release-refresh-now-button-display-units-and-config-flow-hardening)
+  - [\[3.2.5-dev12\] - 2026-07-03 - Service Architecture: SMS Actions Auto-Targeting Single Configured Router](#325-dev12---2026-07-03---service-architecture-sms-actions-auto-targeting-single-configured-router)
+  - [\[3.2.5-dev-11\] - 2026-07-03 - Test Suite: Coverage Restoration to 100%](#325-dev-11---2026-07-03---test-suite-coverage-restoration-to-100)
+  - [\[3.2.5-dev10\] - 2026-07-03 - Documentation: High-Resolution Screenshots and Sensor Inventory Verification](#325-dev10---2026-07-03---documentation-high-resolution-screenshots-and-sensor-inventory-verification)
+  - [\[3.2.5-dev9\] - 2026-07-02 - Coordinator: Explicit ConfigEntry Reference and Polling Option Support](#325-dev9---2026-07-02---coordinator-explicit-configentry-reference-and-polling-option-support)
+  - [\[3.2.5-dev8\] - 2026-07-02 - Entity Hygiene: Suggested Display Units and Precision for 16 Sensors](#325-dev8---2026-07-02---entity-hygiene-suggested-display-units-and-precision-for-16-sensors)
+  - [\[3.2.5-dev7\] - 2026-07-02 - User Interface: Config Flow Host Normalization, Password Masking, and Refresh Button](#325-dev7---2026-07-02---user-interface-config-flow-host-normalization-password-masking-and-refresh-button)
+  - [\[3.2.5-dev6\] - 2026-07-01 - Tooling Bump: Ruff 0.15.19](#325-dev6---2026-07-01---tooling-bump-ruff-01519)
+  - [\[3.2.5-dev5\] - 2026-06-29 - Tooling Bump: Ruff 0.15.18](#325-dev5---2026-06-29---tooling-bump-ruff-01518)
+  - [\[3.2.5-dev4\] - 2026-06-29 - Linter Alignment: YAML Lint Rules and Document Start Configuration](#325-dev4---2026-06-29---linter-alignment-yaml-lint-rules-and-document-start-configuration)
+  - [\[3.2.5-dev3\] - 2026-06-18 - CI Infrastructure: Migration to Dev-Workbench Validation System](#325-dev3---2026-06-18---ci-infrastructure-migration-to-dev-workbench-validation-system)
+  - [\[3.2.5-dev1\] - 2026-06-15 - Task Runner: Local Tasks Ordering and Status Colors](#325-dev1---2026-06-15---task-runner-local-tasks-ordering-and-status-colors)
+  - [\[3.2.4\] - 2026-06-15 - Release: Shared CI Validation Infrastructure v2.0.3](#324---2026-06-15---release-shared-ci-validation-infrastructure-v203)
+  - [\[3.2.4-dev3\] - 2026-06-15 - CI Infrastructure: Shared CI v2.0.3 and Coverage Badge Streamlining](#324-dev3---2026-06-15---ci-infrastructure-shared-ci-v203-and-coverage-badge-streamlining)
+  - [\[3.2.4-dev2\] - 2026-06-15 - CI Infrastructure: Shared CI Workflow Bump to v2.0.2](#324-dev2---2026-06-15---ci-infrastructure-shared-ci-workflow-bump-to-v202)
+  - [\[3.2.4-dev1\] - 2026-06-15 - CI Infrastructure: Shared CI Extension to Theme Projects](#324-dev1---2026-06-15---ci-infrastructure-shared-ci-extension-to-theme-projects)
+  - [\[3.2.3\] - 2026-06-14 - Release: Shared CodeQL Permissions Alignment for Zizmor](#323---2026-06-14---release-shared-codeql-permissions-alignment-for-zizmor)
+  - [\[3.2.2\] - 2026-06-14 - Release: Shared CodeQL Security Scanning Configuration](#322---2026-06-14---release-shared-codeql-security-scanning-configuration)
+  - [\[3.2.1\] - 2026-06-14 - Release: CI Validation Infrastructure Test Release](#321---2026-06-14---release-ci-validation-infrastructure-test-release)
+  - [\[3.2.1-dev9\] - 2026-06-14 - Tooling: Prettier JSON Configuration Adoption](#321-dev9---2026-06-14---tooling-prettier-json-configuration-adoption)
+  - [\[3.2.1-dev8\] - 2026-06-14 - Tooling: Link-Check Path Exclusions and Prettier Config Migration](#321-dev8---2026-06-14---tooling-link-check-path-exclusions-and-prettier-config-migration)
+  - [\[3.2.1-dev7\] - 2026-06-14 - Project Hygiene: Dependabot Bumps and AGENTS.md Introduction](#321-dev7---2026-06-14---project-hygiene-dependabot-bumps-and-agentsmd-introduction)
+  - [\[3.2.1-dev4\] - 2026-06-10 - Tooling Architecture: Dev-Workbench Tool Version Synchronization System](#321-dev4---2026-06-10---tooling-architecture-dev-workbench-tool-version-synchronization-system)
+  - [\[3.2.1-dev1\] - 2026-06-08 - Bug Fix: Unawaited Login Coroutine Warnings and Mypy Core Alignment](#321-dev1---2026-06-08---bug-fix-unawaited-login-coroutine-warnings-and-mypy-core-alignment)
+  - [\[3.2.0\] - 2026-05-28 - Release: APN Profile Control, Network Mode Select, and Diagnostic Entities](#320---2026-05-28---release-apn-profile-control-network-mode-select-and-diagnostic-entities)
+  - [\[3.1.1-dev11\] - 2026-05-27 - Test Suite: 57 New Tests and 99% Coverage Across Platforms](#311-dev11---2026-05-27---test-suite-57-new-tests-and-99-coverage-across-platforms)
+  - [\[3.1.1-dev10\] - 2026-05-27 - Type Checking: Mypy Binary Sensor Entity List Annotation Fix](#311-dev10---2026-05-27---type-checking-mypy-binary-sensor-entity-list-annotation-fix)
+  - [\[3.1.1-dev9\] - 2026-05-27 - Controls Architecture: APN Profile Select, Network Modes, and ODU LED Controls](#311-dev9---2026-05-27---controls-architecture-apn-profile-select-network-modes-and-odu-led-controls)
+  - [\[3.1.1-dev8\] - 2026-05-25 - Python Compatibility: Bare-Tuple Exception Syntax Corrections](#311-dev8---2026-05-25---python-compatibility-bare-tuple-exception-syntax-corrections)
+  - [\[3.1.1-dev7\] - 2026-05-25 - Task Lifecycle: HA-Tracked Debounced Polling Task and Exception Fixes](#311-dev7---2026-05-25---task-lifecycle-ha-tracked-debounced-polling-task-and-exception-fixes)
+  - [\[3.1.1-dev6\] - 2026-05-25 - Test Depth: 17 Boundary and Error-Handling Tests with Exception Tuple Fixes](#311-dev6---2026-05-25---test-depth-17-boundary-and-error-handling-tests-with-exception-tuple-fixes)
+  - [\[3.1.1-dev5\] - 2026-05-25 - Recorder Optimization: Long-Term Statistics State Class Removal for 8 Sensors](#311-dev5---2026-05-25---recorder-optimization-long-term-statistics-state-class-removal-for-8-sensors)
+  - [\[3.1.1-dev4\] - 2026-05-25 - Test Fixtures: Session-Reset Mock Handling and 100% Coverage on API and Coordinator](#311-dev4---2026-05-25---test-fixtures-session-reset-mock-handling-and-100-coverage-on-api-and-coordinator)
+  - [\[3.1.1-dev3\] - 2026-05-25 - Session Management: Proactive Inactivity Reset and Post-Login Initialization GET](#311-dev3---2026-05-25---session-management-proactive-inactivity-reset-and-post-login-initialization-get)
+  - [\[3.1.1-dev2\] - 2026-05-24 - Documentation: README Automation Examples and Icon Enhancements](#311-dev2---2026-05-24---documentation-readme-automation-examples-and-icon-enhancements)
+  - [\[3.1.1-dev1\] - 2026-05-24 - Tooling Bump: Dependabot Shared Validation, Zizmor, and Typing Updates](#311-dev1---2026-05-24---tooling-bump-dependabot-shared-validation-zizmor-and-typing-updates)
+  - [\[3.1.0\] - 2026-05-24 - Release: SMS Service Actions, Received Bus Events, and Storage Full Repairs](#310---2026-05-24---release-sms-service-actions-received-bus-events-and-storage-full-repairs)
+  - [\[3.0.2-dev11\] - 2026-05-24 - Documentation: README SMS Action Guides and Automation Patterns](#302-dev11---2026-05-24---documentation-readme-sms-action-guides-and-automation-patterns)
+  - [\[3.0.2-dev10\] - 2026-05-23 - Stability: Reboot-Detection Uptime Boot Latch and CLAUDE.md Agent Guide](#302-dev10---2026-05-23---stability-reboot-detection-uptime-boot-latch-and-claudemd-agent-guide)
+  - [\[3.0.2-dev9\] - 2026-05-23 - Service Events: SMS Received Bus Event and 100% Init Module Coverage](#302-dev9---2026-05-23---service-events-sms-received-bus-event-and-100-init-module-coverage)
+  - [\[3.0.2-dev8\] - 2026-05-23 - SMS Platform: Send, Delete, and List Service Actions with Hex Encoding](#302-dev8---2026-05-23---sms-platform-send-delete-and-list-service-actions-with-hex-encoding)
+  - [\[3.0.2-dev7\] - 2026-05-23 - Coordinator: Boot Timestamp State Restoration Across Home Assistant Restarts](#302-dev7---2026-05-23---coordinator-boot-timestamp-state-restoration-across-home-assistant-restarts)
+  - [\[3.0.2-dev6\] - 2026-05-23 - Test Suite: 14 New Tests and 100% Coverage for API and Coordinator](#302-dev6---2026-05-23---test-suite-14-new-tests-and-100-coverage-for-api-and-coordinator)
+  - [\[3.0.2-dev5\] - 2026-05-23 - Type Checking: Mypy Strict EntityCategory Imports and Unused Import Cleanup](#302-dev5---2026-05-23---type-checking-mypy-strict-entitycategory-imports-and-unused-import-cleanup)
+  - [\[3.0.2-dev4\] - 2026-05-23 - Type Checking: Resolution of 43 Mypy Strict Errors Across Core Modules](#302-dev4---2026-05-23---type-checking-resolution-of-43-mypy-strict-errors-across-core-modules)
+  - [\[3.0.2-dev3\] - 2026-05-22 - API Architecture: Centralized Async Request Helper and Uptime Duration Sensor](#302-dev3---2026-05-22---api-architecture-centralized-async-request-helper-and-uptime-duration-sensor)
+  - [\[3.0.2-dev2\] - 2026-05-13 - Repairs and UI: SMS Storage Full Repair Issue and Dynamic State Icons](#302-dev2---2026-05-13---repairs-and-ui-sms-storage-full-repair-issue-and-dynamic-state-icons)
+  - [\[3.0.2-dev1\] - 2026-05-13 - Devcontainer Architecture: Volume Mount Consolidation and Mypy Strict Setup](#302-dev1---2026-05-13---devcontainer-architecture-volume-mount-consolidation-and-mypy-strict-setup)
+  - [\[3.0.1\] - 2026-05-10 - Release: README Documentation Overhaul and Architecture Alignment](#301---2026-05-10---release-readme-documentation-overhaul-and-architecture-alignment)
+  - [\[3.0.1-rc1\] - 2026-05-10 - Documentation: README Structure Reordering and Section Expansions](#301-rc1---2026-05-10---documentation-readme-structure-reordering-and-section-expansions)
+  - [\[3.0.1-dev8\] - 2026-05-10 - Hardening: Get RD Login Guard, Unawaited Coroutine Fixes, and Protocol Fallback Logs](#301-dev8---2026-05-10---hardening-get-rd-login-guard-unawaited-coroutine-fixes-and-protocol-fallback-logs)
+  - [\[3.0.1-dev6\] - 2026-05-10 - Type Checking: 24 Mypy Strict Error Fixes in API and 100% Component Coverage](#301-dev6---2026-05-10---type-checking-24-mypy-strict-error-fixes-in-api-and-100-component-coverage)
+  - [\[3.0.1-dev5\] - 2026-05-10 - Config Flow: Reconfiguration Support and Hierarchical Translation Strategy](#301-dev5---2026-05-10---config-flow-reconfiguration-support-and-hierarchical-translation-strategy)
+  - [\[3.0.1-dev4\] - 2026-05-09 - Project Tooling: Project-Agnostic pyproject.toml and tasks.json Configurations](#301-dev4---2026-05-09---project-tooling-project-agnostic-pyprojecttoml-and-tasksjson-configurations)
+  - [\[3.0.1-dev3\] - 2026-05-09 - CI Architecture: Shared Reusable GitHub Actions CI Workflow Creation](#301-dev3---2026-05-09---ci-architecture-shared-reusable-github-actions-ci-workflow-creation)
+  - [\[3.0.0\] - 2026-05-08 - Major Release: Native Async Rewrite, Sub-Device Architecture, and IMEI Identity](#300---2026-05-08---major-release-native-async-rewrite-sub-device-architecture-and-imei-identity)
+  - [\[3.0.0-rc1\] - 2026-05-08 - Entity Architecture: Category Visibility Refinements and Bridge Mode Rename](#300-rc1---2026-05-08---entity-architecture-category-visibility-refinements-and-bridge-mode-rename)
+  - [\[3.0.0-dev22\] - 2026-05-08 - Bug Fix: Hassfest Translation Schema and Reauth Placeholder Substitution](#300-dev22---2026-05-08---bug-fix-hassfest-translation-schema-and-reauth-placeholder-substitution)
+  - [\[3.0.0-dev21\] - 2026-05-08 - Documentation: Comprehensive Gold Standard README and Missing Translations](#300-dev21---2026-05-08---documentation-comprehensive-gold-standard-readme-and-missing-translations)
+  - [\[3.0.0-dev16\] - 2026-05-07 - Code Review: Shared Device Info Helper, Translation Naming, and Exception Hardening](#300-dev16---2026-05-07---code-review-shared-device-info-helper-translation-naming-and-exception-hardening)
+  - [\[3.0.0-dev15\] - 2026-05-07 - Telemetry: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor](#300-dev15---2026-05-07---telemetry-12-new-sensors-guard-bands-and-imei-hardware-identity-anchor)
+  - [\[3.0.0-dev14\] - 2026-05-07 - Diagnostics and Security: Diagnostics Platform and Reauthentication Flow](#300-dev14---2026-05-07---diagnostics-and-security-diagnostics-platform-and-reauthentication-flow)
+  - [\[3.0.0-dev11\] - 2026-05-07 - Documentation: README Badge Links](#300-dev11---2026-05-07---documentation-readme-badge-links)
+  - [\[3.0.0-dev10\] - 2026-05-02 - Architecture: Sub-Device Partitioning and Badge Link Repairs](#300-dev10---2026-05-02---architecture-sub-device-partitioning-and-badge-link-repairs)
+  - [\[3.0.0-dev8\] - 2026-04-29 - Entity Standardization: Sub-Device Architecture and Native Unit Alignment](#300-dev8---2026-04-29---entity-standardization-sub-device-architecture-and-native-unit-alignment)
+  - [\[3.0.0-dev5\] - 2026-04-07 - Entity Engine: Declarative Guard Bands and Custom Device Prefix Naming](#300-dev5---2026-04-07---entity-engine-declarative-guard-bands-and-custom-device-prefix-naming)
+  - [\[3.0.0-dev3\] - 2026-04-07 - Core Architecture: Declarative Entity Engine and Non-Blocking Startup](#300-dev3---2026-04-07---core-architecture-declarative-entity-engine-and-non-blocking-startup)
+  - [\[3.0.0-dev2\] - 2026-04-07 - Lifecycle Architecture: Local Hardware Cache, Non-Blocking Setup, and Mypy Strict](#300-dev2---2026-04-07---lifecycle-architecture-local-hardware-cache-non-blocking-setup-and-mypy-strict)
+  - [\[3.0.0-dev1\] - 2026-04-01 - Core Architecture: Native Async Migration to aiohttp](#300-dev1---2026-04-01---core-architecture-native-async-migration-to-aiohttp)
+  - [\[2.3.1\] - 2026-04-01 - Release: DataUpdateCoordinator Migration and HACS Branding Assets](#231---2026-04-01---release-dataupdatecoordinator-migration-and-hacs-branding-assets)
+  - [\[2.2.4\] - 2026-03-30 - Test Suite: Pytest Coverage Expansion and Code Clean-up](#224---2026-03-30---test-suite-pytest-coverage-expansion-and-code-clean-up)
+  - [\[2.2.3\] - 2026-03-30 - Test Suite: Python Pytest Introduction and Manifest Repairs](#223---2026-03-30---test-suite-python-pytest-introduction-and-manifest-repairs)
+  - [\[2.1.1\] - 2026-03-29 - Error Handling: Diagnostic Logging Improvements](#211---2026-03-29---error-handling-diagnostic-logging-improvements)
+  - [\[2.0.1\] - 2026-03-29 - Config Flow: Options Flow for Dynamic Reconfiguration](#201---2026-03-29---config-flow-options-flow-for-dynamic-reconfiguration)
+  - [\[1.9.4\] - 2026-03-29 - Device Discovery: Hardware Model Reading and Session Management](#194---2026-03-29---device-discovery-hardware-model-reading-and-session-management)
+  - [\[1.8.1\] - 2026-03-29 - Localization: Standard Translation Directory Structure](#181---2026-03-29---localization-standard-translation-directory-structure)
+  - [\[1.7.3\] - 2026-03-29 - Entity Hygiene: Standardized Entity Naming](#173---2026-03-29---entity-hygiene-standardized-entity-naming)
+  - [\[1.6.3\] - 2026-03-28 - Lifecycle: Non-Blocking Async Startup for Offline Routers](#163---2026-03-28---lifecycle-non-blocking-async-startup-for-offline-routers)
+  - [\[1.5.7\] - 2026-03-28 - Branding and Entity Structure: ZTE Icons and Sub-Device Sensor Naming](#157---2026-03-28---branding-and-entity-structure-zte-icons-and-sub-device-sensor-naming)
+  - [\[1.5.1\] - 2026-03-28 - Integration Hygiene: Home Assistant Integration Naming Alignment](#151---2026-03-28---integration-hygiene-home-assistant-integration-naming-alignment)
+  - [\[1.4.5\] - 2026-03-28 - Documentation and Sensors: Local Changelog Addition and Standard Sensor Names](#145---2026-03-28---documentation-and-sensors-local-changelog-addition-and-standard-sensor-names)
+  - [\[1.4.4\] - 2026-03-28 - Telemetry Expansion: Comprehensive Router Attribute Exposure](#144---2026-03-28---telemetry-expansion-comprehensive-router-attribute-exposure)
+  - [\[1.4.3\] - 2026-03-28 - Polling Controls: Pause Polling Switch and Polling Interval Number Entity](#143---2026-03-28---polling-controls-pause-polling-switch-and-polling-interval-number-entity)
+  - [\[1.4.2\] - 2026-03-27 - Feature Release: SMS Inbox Monitoring and Initial GitHub Release](#142---2026-03-27---feature-release-sms-inbox-monitoring-and-initial-github-release)
+  - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
+  - [\[1.4.0\] - 2026-03-26 - Telemetry Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---telemetry-platform-core-signal-and-cellular-data-sensors)
+  - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
 
-## [3.3.4-dev12] - 2026-08-26 - Correction: The Unit Selector Depends On `device_class`, Not `state_class`
+## [3.3.4-dev14] - 2026-08-26 - Documentation: Comprehensive Changelog Readability and Historical Header Standardization
+
+### Summary
+
+Documentation overhaul of `docs/changelog_local.md`. Standardized 130+ section headers into 3–10 word descriptive noun phrases, synchronized Table of Contents links, and added non-destructive `### Summary` opening blocks across all historical entries from 3.3.4-dev12 down to 1.3.6.
+
+Documentation only. No code, no tests, no entity changes.
+
+### Changed
+
+- **Standardized Section Headers**: Replaced narrative and cryptic titles across 130+ entries (from `3.3.4-dev12` down to `1.3.6`) with factual, scannable 3–10 word noun phrases aligned with `.shared/dev_std/changelog_format.md`.
+- **Added Lead-In Summaries**: Added 1–2 sentence `### Summary` blocks to all historical entries that lacked them, orienting readers coming in cold without deleting or modifying any underlying technical notes, measurements, or category details.
+- **Synchronized Table of Contents**: Fully rebuilt and validated TOC anchor links to ensure clean, deterministic navigation from the top of the document to every individual release and development entry.
+
+## [3.3.4-dev13] - 2026-08-26 - Repairs Documentation: Repair Eligibility Criteria and Health Sensor Mapping
+
+### Summary
+
+Documentation pass. Clarified Home Assistant repair criteria in `README.md`, contrasting actionable repairs with telemetry surfaces like Integration Health and diagnostic binary sensors.
+
+Documentation only. No code, no tests, no entity changes.
+
+### Changed
+
+- **`README.md` § Repairs now says why a condition is or is not a Repair.** The section listed which two conditions raise one and named where everything else is reported, but never said that this is Home Assistant's rule rather than a choice this integration made — so a reader could reasonably conclude the rest was being ignored.
+
+  The opening now states the rule, and the paragraph below answers that question directly:
+
+  > Home Assistant reserves the **Repairs** panel for problems that need you to do something about them. Two conditions here qualify, and both are also reflected on the Integration Health sensor.
+  >
+  > **Everything else this integration detects is still tracked — it is just not a Repair.** A firmware field change shows as `severity: warning` with the detail in the `drift` attribute, a router capability that could not be reached shows in `degraded_capabilities`, and a full message store is the **SMS Storage Full** binary sensor. Automate on those the same way you would on a Repair; the difference is whether there is an action for you to take, not whether the problem is real.
+
+  The closing clause is the part doing the work. Everything before it was already said elsewhere in the section.
+
+### Removed
+
+- **An upgrade note added on 2026-08-25**, which told readers that three conditions used to raise their own cards and no longer do. Accurate, and not worth having: it sends people looking for cards most of them have never seen, and the surfaces those conditions moved to are named a paragraph above it. The `[!NOTE]` keeps its brief-outage paragraph, which is a separate point.
+
+### Notes
+
+- **The same rewrite was applied to `huawei_router_5g`'s README**, which carried the identical paragraph, so the two do not diverge. Its version omits the `degraded_capabilities` clause, which is a surface this project has and that one does not. Recorded there as `[1.2.2-dev1]`.
+
+## [3.3.4-dev12] - 2026-08-26 - Entity Configuration: Frequency Unit Selector Dependence on Device Class
+
+### Summary
+
+Documentation and test docstring correction. Clarified that the Home Assistant unit selector depends solely on `device_class` conversion capabilities, while confirming `state_class is None` protects bandwidth sensors from long-term statistics.
 
 Documentation and one test docstring. A root cause carried in this family's notes, and repeated into this project's documents on 2026-08-25, is wrong.
 
@@ -198,12 +246,6 @@ The claim was that `device_class=FREQUENCY` plus `state_class=MEASUREMENT` suppr
 ### What stays
 
 **The `state_class is None` assertion stays, on its own grounds.** These two sensors are the only entries in `_UNGUARDED_BY_DESIGN`, and that exemption rests on their staying out of long-term statistics — with no state class a bad reading cannot corrupt history, so no guard band is needed. Adding one would end the exemption. That reason predates this session and is unrelated to the selector.
-
-### Changed
-
-- **`README.md` § Repairs now says why a condition is or is not a Repair.** The section listed which conditions raise one and which do not, and never said that this is Home Assistant's rule rather than a choice this integration made. The opening now states it, and the paragraph below answers the question a reader actually has — whether the rest is being ignored: "Everything else this integration detects is still tracked — it is just not a Repair … the difference is whether there is an action for you to take, not whether the problem is real."
-- **An upgrade note added on 2026-08-25 was removed.** It told readers that three conditions used to raise cards and no longer do. Accurate, and not worth having: it sends people looking for cards most of them never saw, and the surfaces those conditions moved to are already named a paragraph above.
-- **The same rewrite was applied to `huawei_router_5g`'s README**, which carried the identical paragraph, so the two do not diverge. Its version omits the `degraded_capabilities` clause, which is a ZTE surface.
 
 ### Corrected
 
@@ -2559,7 +2601,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **§3 (Early Root Registration) is an accepted deviation, recorded in `dev_standards.md` → Project Deviations.** The root stays keyed `{imei}_system` rather than a bare hardware identifier. The ladder exists to enable a merge with a core integration and to prevent IP-to-MAC identifier swaps; neither is reachable here — the `goform` API never exposes a MAC, there is no core `zte` integration, and the IMEI cannot swap.
 - **The `AD`-token logout finding is specific to MC7010 firmware V1.0.0B03**, the only hardware available to test. `get_ad()` already branches by model for the hash algorithm, but `LOGOUT` behavior on MC888/MC889 is untested. If it differs, the failure mode is the pre-existing one: the session lingers until timeout, and `logout()` swallows the error rather than blocking unload.
 
-## [3.2.6-dev8] - 2026-07-26 - Icons & Branding Refresh; AGENTS.md Restructured
+## [3.2.6-dev8] - 2026-07-26 - Project Hygiene: Icons, Branding Refresh, and AGENTS.md Modularization
+
+### Summary
+
+Project hygiene and documentation restructuring. Updated logos and branding assets, modularized `AGENTS.md` to link to shared conventions, and anchored entity count references in `docs/all_sensors.md`.
 
 ### Changed
 
@@ -2573,14 +2619,22 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.346 to 0.13.348
 - **Validate Bump**: Update `codespell` from 2.42 to 2.43
 
-## [3.2.6-dev7] - 2026-07-12 - PyTest Coverage to 100%; Codespell Alignment
+## [3.2.6-dev7] - 2026-07-12 - Test Suite: 100% Pytest Coverage and Codespell Alignment
+
+### Summary
+
+Test coverage and code style maintenance. Restored pytest coverage to 100% with defensive pragma handling in `api.py`, and aligned spellings across documentation.
 
 ### Changed
 
 - **PyTest**: Increased PyTest coverage to 100%. There was one uncovered statement, in api.py, unreachable, but required for MyPy strict. Marked via `pragma: no cover`as defensive.
 - **Formats**: Codespell alignment, words like behavior and color etc.
 
-## [3.2.6-dev6] - 2026-07-12 - PHACC Bump; README Device-vs-Entity Clarification
+## [3.2.6-dev6] - 2026-07-12 - Tooling Bump: PHACC 0.13.346 and Documentation Device Clarifications
+
+### Summary
+
+Tooling update and documentation clarification. Bumped `pytest-homeassistant-custom-component` to 0.13.346 and clarified entity vs. device disabling behavior in the README.
 
 ### Bumps
 
@@ -2591,13 +2645,21 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Docs**: Minor fixes to README for alignment with other project READMEs (clarification on disabling devices and/vs. entities)
 - **Formats**: Codespell alignment, words like behavior and color etc.
 
-## [3.2.6-dev5] - 2026-07-06 - Shared CI Bump to v2.0.6
+## [3.2.6-dev5] - 2026-07-06 - CI Infrastructure: Shared CI Workflow Bump to v2.0.6
+
+### Summary
+
+CI infrastructure maintenance. Bumped shared `.github` CI validation workflow to v2.0.6.
 
 ### Bumps
 
 - **Shared .github CI Validation**: Bump .github Shared CI Validation via SHA from v2.0.5 to v2.0.6
 
-## [3.2.6-dev4] - 2026-07-05 - Test Suite Repaired After the Ruff Extension; Back to 100% Coverage
+## [3.2.6-dev4] - 2026-07-05 - Test Suite: Pytest Restoration to 100% Coverage Post-Ruff Extension
+
+### Summary
+
+Test suite repair post-linter extension. Restored test suite to 100% pass rate (297 tests) and 100% coverage following the Ruff rule set expansion, fixing timezone-aware ISO formats and mock response behaviors.
 
 ### Changed
 
@@ -2625,7 +2687,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - `tests/test_coverage_ext.py` — 12 test fixes + 3 new tests
 - `tests/test_init.py` — 1 test fix
 
-## [3.2.6-dev3] - 2026-07-05 - Ruff Checks Extended to Match Home Assistant
+## [3.2.6-dev3] - 2026-07-05 - Static Analysis: Ruff Lint and Rule Alignment with Home Assistant Core
+
+### Summary
+
+Static analysis compliance pass. Aligned Ruff rules with Home Assistant Core standards, refactoring error flow control, converting timestamps to UTC, and tightening exception handling across production and test code.
 
 ### Changed
 
@@ -2639,7 +2705,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
   - **Timezone-Aware Mocking (`DTZ005` / `DTZ001`)**: Made all mock activity timestamps in `test_api.py` and `test_coverage_ext.py` timezone-aware via `datetime.now(UTC)` and updated original boot anchors in `test_init.py` to use timezone-aware date objects (`tzinfo=UTC`).
   - **Clean Test Scopes (`PT012`)**: Nested `pytest.raises` blocks cleanly inside mock patches to ensure each assertion context evaluates exactly one execution statement.
 
-## [3.2.6-dev2] - 2026-07-05 - IQS Static Check Added; `test-before-setup` Completed
+## [3.2.6-dev2] - 2026-07-05 - Integration Quality Scale: IQS Static Check and test-before-setup Auth Handling
+
+### Summary
+
+Integration Quality Scale (IQS) conformance. Integrated `iqs_static_check.py` validation tooling and updated `ZTEAuthError` handling to raise `ConfigEntryAuthFailed` on persistent failure per `test-before-setup` requirements.
 
 ### Changed
 
@@ -2656,14 +2726,22 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Validate Bump**: Bumped `pytest-homeassistant-custom-component` from 0.13.344 to 0.13.345
 
-## [3.2.6-dev1] - 2026-07-03 - Check-Drift Script Fixed for an Ahead-of-Local HA Core
+## [3.2.6-dev1] - 2026-07-03 - Tooling: Check-Drift Script Handling for Ahead-of-Local Home Assistant Core
+
+### Summary
+
+Workbench tool update. Updated the check-drift script to handle environments where upstream Home Assistant Core versions are ahead of local versions.
 
 ### Changed
 
 - **Dev-WorkBench**: Updated the Check Drift script to account for the situation where the HA Core version online is ahead of the local version (dev-workbench v2.1.0-dev9).
 - **Documentation**: Minor doc updates and formatting.
 
-## [3.2.5] - 2026-07-03 - Release - Refresh Now Button; Display Units; Config-Flow Hardening
+## [3.2.5] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening
+
+### Summary
+
+Feature and hardening release. Added the Refresh Now button, configured suggested display units/precision on 16 sensors, relaxed `entry_id` requirements for single-router SMS actions, and hardened config flow credential masking.
 
 ### Added
 
@@ -2681,20 +2759,32 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Password No Longer Pre-filled on Edit Screens**: On Reconfigure, Options, and Reauth, the password field is now masked and left blank — the stored value is never pre-filled or revealable. Leave it blank to keep the current password, or enter a new one to change it.
 - **Doubled Device URL**: A full URL or trailing slash entered in the Host field is now stripped before storage, preventing a malformed device link (e.g. `http://http://192.168.0.1`).
 
-## [3.2.5-dev12] - 2026-07-03 - SMS Actions Default to the Sole Router
+## [3.2.5-dev12] - 2026-07-03 - Service Architecture: SMS Actions Auto-Targeting Single Configured Router
+
+### Summary
+
+Service usability enhancement. Made `entry_id` optional across `delete_sms`, `delete_all_sms`, and `get_sms_list` actions when exactly one router is configured, automatically resolving the target coordinator.
 
 ### Changed
 
 - **SMS Actions Default to the Sole Router**: The `delete_sms`, `delete_all_sms`, and `get_sms_list` actions no longer require `entry_id`. When exactly one router is configured it is selected automatically; with more than one configured, `entry_id` is required and omitting it now raises a clear "specify entry_id" error instead of silently acting on an arbitrary router (`send_sms` already behaved this way). Implemented by relaxing the three service schemas and `services.yaml` to optional, and tightening `_get_coordinator` to auto-select only when a single entry is loaded. Added tests for the single-entry fallback and the multiple-entry guard.
 - **Documentation**: Updated the README to align as closely as possible with the Huawei 5G Monitor README.
 
-## [3.2.5-dev-11] - 2026-07-03 - PyTest Coverage 99% → 100%
+## [3.2.5-dev-11] - 2026-07-03 - Test Suite: Coverage Restoration to 100%
+
+### Summary
+
+Test suite maintenance. Resolved remaining uncovered statements to bring total test coverage back to 100%.
 
 ### Changed
 
 - **PyTest Coverage**: Increased coverage from 99% to 100% (seven uncovered statements addressed).
 
-## [3.2.5-dev10] - 2026-07-03 - Ruff Bump; README Screenshots and Sensor Counts
+## [3.2.5-dev10] - 2026-07-03 - Documentation: High-Resolution Screenshots and Sensor Inventory Verification
+
+### Summary
+
+Documentation refresh. Updated README UI screenshots and verified all sensor counts against `all_sensors.md`.
 
 ### Bumps
 
@@ -2704,9 +2794,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Documentation**: Updated the README screenshots to include Refresh Now button and with higher resolution. Updated all_sensors.md and README.md to correctly reflect sensor counts and groups.
 
-## [3.2.5-dev9] - 2026-07-02 - Explicit `config_entry` on the Coordinator
+## [3.2.5-dev9] - 2026-07-02 - Coordinator: Explicit ConfigEntry Reference and Polling Option Support
 
 ### Summary
+
+Coordinator lifecycle update. Passed `config_entry` explicitly to `DataUpdateCoordinator` to support Home Assistant's native polling disable toggle and prepare for 2026.8 context requirements.
 
 - **Explicit `config_entry` on the Coordinator**: Pass the config entry explicitly to `DataUpdateCoordinator` so Home Assistant reliably honours the "Enable polling for changes" system option and to satisfy the upcoming HA requirement (implicit `ContextVar` detection is being removed in HA 2026.8).
 
@@ -2723,9 +2815,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Shared .github CI Validation**: Bump .github Shared CI Validation via SHA from v2.0.4 to v2.0.5 (PR #31 #32)
 
-## [3.2.5-dev8] - 2026-07-02 - Suggested Display Units and Precision on 16 Sensors
+## [3.2.5-dev8] - 2026-07-02 - Entity Hygiene: Suggested Display Units and Precision for 16 Sensors
 
 ### Summary
+
+Entity telemetry formatting. Applied `suggested_unit_of_measurement` and `suggested_display_precision` to 16 sensors (converting byte throughput and storage to GB and Mbit/s in the UI while preserving native units for statistics).
 
 - **Suggested Display Units & Precision**: Applied Home Assistant's `suggested_unit_of_measurement` / `suggested_display_precision` to 16 sensors so the UI shows friendly units and sensible decimal places while native values (used for long-term statistics) stay canonical.
 
@@ -2751,9 +2845,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Validate Bump**: Bumped `pytest-homeassistant-custom-component` from 0.13.340 to 0.13.344
 - **Validate Bump**: Bumped `check-jsonschema` from 0.37.2 to 0.37.4
 
-## [3.2.5-dev7] - 2026-07-02 - Config-Flow Hardening & Refresh Now Button
+## [3.2.5-dev7] - 2026-07-02 - User Interface: Config Flow Host Normalization, Password Masking, and Refresh Button
 
 ### Summary
+
+Security and control additions. Added host URL normalization, credential masking on edit screens to prevent password exposure, and introduced the Refresh Now button.
 
 - **Config Flow Hardening & Refresh Button**: Normalized host input before storage, stopped exposing the stored password on edit screens, and added a "Refresh Now" button.
 
@@ -2771,21 +2867,31 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - Added coverage for host cleaning, credential merge, URL-host stripping in the user/reconfigure flows, blank-password retention (reconfigure + options), and the new Refresh Now button.
 
-## [3.2.5-dev6] - 2026-07-01 - Ruff Bump 0.15.18 → 0.15.19
+## [3.2.5-dev6] - 2026-07-01 - Tooling Bump: Ruff 0.15.19
+
+### Summary
+
+Tooling maintenance. Updated Ruff linter from 0.15.18 to 0.15.19.
 
 ### Changed
 
 - **Validate Bump**: Updated `ruff` from 0.15.18 to 0.15.19 (PR #33)
 
-## [3.2.5-dev5] - 2026-06-29 - Ruff Bump 0.15.17 → 0.15.18
+## [3.2.5-dev5] - 2026-06-29 - Tooling Bump: Ruff 0.15.18
+
+### Summary
+
+Tooling maintenance. Updated Ruff linter from 0.15.17 to 0.15.18.
 
 ### Changed
 
 - **Validate Bump**: Updated ruff from 0.15.17 to 0.15.18 (PR #33)
 
-## [3.2.5-dev4] - 2026-06-29 - YAML Lint Aligned With Home Assistant
+## [3.2.5-dev4] - 2026-06-29 - Linter Alignment: YAML Lint Rules and Document Start Configuration
 
 ### Summary
+
+Linter configuration alignment. Updated YAML linting rules to disable document-start requirements in line with Home Assistant standards.
 
 - **All about YAML Lint**: Multiple YAML Lint local validation warns/fails in the ha-dev-pf stub repo highlighted some shortcomings with YAML Lint implementation. Updated to avoid need for "---" at the top of every YAML file, which is a YAML standard, but NOT the HA standard. Also updated to only run on git tracked files (avoids linting devcon files for example).
 
@@ -2798,9 +2904,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Bump**: Updated PyTest Custom from 0.13.326 to 0.13.340
 - **.gitignore**: Added scratch folders
 
-## [3.2.5-dev3] - 2026-06-18 - CI Validation Overhaul
+## [3.2.5-dev3] - 2026-06-18 - CI Infrastructure: Migration to Dev-Workbench Validation System
 
 ### Summary
+
+Validation infrastructure overhaul. Restructured local tasks and CI validation workflows under the `dev-workbench` architecture.
 
 - **CI Validation Overhaul**: Major overhaul of the local (tasks.json) and online (github.com CI) Validation system
 
@@ -2810,40 +2918,62 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **CI Local Tasks**: Fixed an issue with tasks.json where it shows pass, after error messages, for three validation steps.
 - **.gitignore**: Further updates to .gitignore
 
-## [3.2.5-dev1] - 2026-06-15 - Local Task Ordering and Pass/Fail Color
+## [3.2.5-dev1] - 2026-06-15 - Task Runner: Local Tasks Ordering and Status Colors
+
+### Summary
+
+Developer workflow update. Reordered local VS Code tasks and added color-coded output formatting.
 
 ### Changed
 
 - **CI Local Tasks**: Reordered local tasks.json, added color for pass/fail.
 
-## [3.2.4] - 2026-06-15 - Release - Shared CI Validation v2.0.3
+## [3.2.4] - 2026-06-15 - Release: Shared CI Validation Infrastructure v2.0.3
+
+### Summary
+
+Infrastructure release. Bumped shared CI validation workflows to v2.0.3.
 
 ### Changed
 
 - **CI Validation Bump**: Shared CI validation bumped to v2.0.3. No user changes in this release, background/infrastructure only.
 
-## [3.2.4-dev3] - 2026-06-15 - Shared CI v2.0.3; Coverage Report Removed
+## [3.2.4-dev3] - 2026-06-15 - CI Infrastructure: Shared CI v2.0.3 and Coverage Badge Streamlining
+
+### Summary
+
+CI pipeline update. Removed standalone pytest coverage reports in favor of the standard repository coverage badge.
 
 ### Changed
 
 - **CI Validation Bump**: Shared CI validation bumped from v2.0.2 to v2.0.3
 - **CI Coverage Report**: Removed the pytest coverage report as it required extra permissions and is separate to the coverage badge, which is what is really required.
 
-## [3.2.4-dev2] - 2026-06-15 - Shared CI Bump v2.0.1 → v2.0.2
+## [3.2.4-dev2] - 2026-06-15 - CI Infrastructure: Shared CI Workflow Bump to v2.0.2
+
+### Summary
+
+CI infrastructure bump. Updated shared CI validation workflow to v2.0.2.
 
 ### Changed
 
 - **CI Validation Bump**: Shared CI validation bumped from v2.0.1 to v2.0.2
 
-## [3.2.4-dev1] - 2026-06-15 - Shared CI Validation Extended to the Theme Project
+## [3.2.4-dev1] - 2026-06-15 - CI Infrastructure: Shared CI Extension to Theme Projects
+
+### Summary
+
+Validation sync. Extended shared CI validation rules across monorepo theme projects.
 
 ### Changed
 
 - **CI Validation Sync**: Updated the shared CI validation to include the Theme project, which required some all round changes.
 
-## [3.2.3] - 2026-06-14 - CodeQL Permissions Corrected for Zizmor
+## [3.2.3] - 2026-06-14 - Release: Shared CodeQL Permissions Alignment for Zizmor
 
 ### Summary
+
+Security scanning fix. Updated shared CodeQL workflow permissions to satisfy Zizmor validation rules.
 
 - **CI Validation Only**: Changes to the CI Validation set-up require another release to test properly, but there are no user changes in this release, background/infrastructure only.
 
@@ -2851,9 +2981,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **CodeQL**: CodeQL shared config and local caller modified to detail permissions to that Zizmor will pass
 
-## [3.2.2] - 2026-06-14 - Shared CodeQL Validation Config
+## [3.2.2] - 2026-06-14 - Release: Shared CodeQL Security Scanning Configuration
 
 ### Summary
+
+Security workflow addition. Integrated shared CodeQL security scanning across the project.
 
 - **CI Validation Only**: Changes to the CI Validation set-up require another release to test properly, but there are no user changes in this release, background/infrastructure only.
 
@@ -2861,26 +2993,40 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **CodeQL**: Added a shared CodeQL validation config to the shared validation repo, pulled into each project, incl this one.
 
-## [3.2.1] - 2026-06-14 - CI Validation Test Release
+## [3.2.1] - 2026-06-14 - Release: CI Validation Infrastructure Test Release
 
 ### Summary
 
+CI test release. Infrastructure release verifying shared CI workflow execution.
+
 - **CI Validation Only**: Changes to the CI Validation set-up require a release to test properly, but there are no user changes in this release, background/infrastructure only.
 
-## [3.2.1-dev9] - 2026-06-14 - Prettier Config Fix
+## [3.2.1-dev9] - 2026-06-14 - Tooling: Prettier JSON Configuration Adoption
+
+### Summary
+
+Linter config migration. Migrated Prettier configuration to `.prettierrc.json`.
 
 ### Changed
 
 - **Validation Config**: Fixed use of .prettierrc.json
 
-## [3.2.1-dev8] - 2026-06-14 - Link-Check Exclusions; Prettier Config as JSON
+## [3.2.1-dev8] - 2026-06-14 - Tooling: Link-Check Path Exclusions and Prettier Config Migration
+
+### Summary
+
+Tooling adjustments. Added markdown link-check ignore rules for internal `.notes/` and `.shared/` paths.
 
 ### Changed
 
 - **Link Check**: Updated markdown-link-check to ignore .notes/ and .shared/ links in projects as these are excluded.
 - **Validation Config**: Changed from .prettierrc.js to .prettierrc.json to allow GitHub.com CodeQL to run without errors
 
-## [3.2.1-dev7] - 2026-06-14 - Dependabot Bumps; AGENTS.md Added
+## [3.2.1-dev7] - 2026-06-14 - Project Hygiene: Dependabot Bumps and AGENTS.md Introduction
+
+### Summary
+
+Repository documentation and tooling update. Added root `AGENTS.md` guide and applied Dependabot dependency updates.
 
 ### Changed
 
@@ -2889,7 +3035,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **.gitignore**: Multiple updates to .gitignore
 - **AGENTS.md**: Added AGENTS.md to repo root
 
-## [3.2.1-dev4] - 2026-06-10 - Validation Tooling Sync System
+## [3.2.1-dev4] - 2026-06-10 - Tooling Architecture: Dev-Workbench Tool Version Synchronization System
+
+### Summary
+
+Validation framework sync. Implemented `dev-workbench` tool version matrix synchronization across devcontainers and tasks.
 
 ### Changed
 
@@ -2901,7 +3051,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
   - HA Manifest and HACS schema files updated.
   - Ruff updated from 0.15.12 to 0.15.15
 
-## [3.2.1-dev1] - 2026-06-08 - Coroutine Warnings Fixed; README Emoji Consistency; mypy Realigned With HA
+## [3.2.1-dev1] - 2026-06-08 - Bug Fix: Unawaited Login Coroutine Warnings and Mypy Core Alignment
+
+### Summary
+
+Async fix and type-checking alignment. Fixed unawaited coroutine warnings on session timeouts in conftest fixtures and aligned mypy configuration with Home Assistant Core.
 
 ### Fixed
 
@@ -2913,7 +3067,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **`pyproject.toml` — mypy Configuration Realigned with HA's Internal `mypy.ini`**: The project's `[tool.mypy]` section has been restructured to closely match HA's auto-generated `mypy.ini` (produced by `script/hassfest -p mypy_config`). This ensures the pre-commit mypy hook, and the project's basic `mypy custom_components/` check, run under materially the same conditions as HA's own integration quality checks. The goal is for any type errors caught here to be errors HA itself would also catch — and vice versa.
 
-## [3.2.0] - 2026-05-28 - APN Control, Network Mode Select and New Switches
+## [3.2.0] - 2026-05-28 - Release: APN Profile Control, Network Mode Select, and Diagnostic Entities
+
+### Summary
+
+Feature release. Added APN profile and mode switching, network mode selection (Auto/5G NSA/5G SA/4G), ODU LED and data limit switches, and removed long-term statistics tracking from 8 high-frequency sensors.
 
 ### Added
 
@@ -2933,19 +3091,31 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Centralized Session Stability**: central request helper now resets expired tokens proactively, preventing transient authentication errors and empty sensor states.
 
-## [3.1.1-dev11] - 2026-05-27 - 57 New Tests; Coverage 88% → 99%
+## [3.1.1-dev11] - 2026-05-27 - Test Suite: 57 New Tests and 99% Coverage Across Platforms
+
+### Summary
+
+Test suite expansion. Added 57 unit tests across select, switch, binary sensor, and API platforms, raising total component test coverage from 88% to 99%.
 
 ### Added Tests
 
 - **57 new tests** across `test_select.py`, `test_switch.py`, `test_binary_sensor.py`, and `test_api.py`. Coverage: `select.py` (new) 0% → 100%, `switch.py` 80% → 100%, `binary_sensor.py` 89% → 100%, `api.py` 92% → 100%. Overall: 88% → 99%.
 
-## [3.1.1-dev10] - 2026-05-27 - mypy Fix in `binary_sensor.py`
+## [3.1.1-dev10] - 2026-05-27 - Type Checking: Mypy Binary Sensor Entity List Annotation Fix
+
+### Summary
+
+Type checking maintenance. Added explicit list typing annotations in `binary_sensor.py` to resolve mypy list comprehension type errors.
 
 ### Fixed
 
 - **Type Checking (mypy)** (`binary_sensor.py`): Fixed list comprehension type compatibility by explicitly annotating the entities list as `list[BinarySensorEntity]`.
 
-## [3.1.1-dev9] - 2026-05-27 - APN, Network Mode and LED Controls Added
+## [3.1.1-dev9] - 2026-05-27 - Controls Architecture: APN Profile Select, Network Modes, and ODU LED Controls
+
+### Summary
+
+Control entity additions. Added APN profile and mode selects, network mode selector, outdoor unit LED switch, data limit switch, reboot schedule monitoring, and diagnostic band/alert sensors.
 
 ### Added
 
@@ -2962,13 +3132,21 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Type Checking (mypy)** (`binary_sensor.py`): Fixed list comprehension type compatibility by explicitly annotating the entities list as `list[BinarySensorEntity]`.
 
-## [3.1.1-dev8] - 2026-05-25 - Bare-Tuple `except` Syntax Fixed
+## [3.1.1-dev8] - 2026-05-25 - Python Compatibility: Bare-Tuple Exception Syntax Corrections
+
+### Summary
+
+Python syntax modernization. Converted legacy bare-comma exception tuple syntax in `sensor.py` to parenthesized format for Python 3.12+ compatibility.
 
 ### Fixed
 
 - **Exception Syntax** (`sensor.py`): Corrected legacy tuple format `except ValueError, TypeError:` to standard parenthesized format `except (ValueError, TypeError):`.
 
-## [3.1.1-dev7] - 2026-05-25 - Debounced Task Tracked by HA; Line-Length and Test Fixes
+## [3.1.1-dev7] - 2026-05-25 - Task Lifecycle: HA-Tracked Debounced Polling Task and Exception Fixes
+
+### Summary
+
+Lifecycle and compatibility fixes. Switched debounced polling interval tasks to Home Assistant task tracking and fixed bare-tuple exception handling.
 
 ### Fixed
 
@@ -2980,7 +3158,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **HA lifecycle tracking** (`number.py`): Migrated from `asyncio.create_task(...)` to `self.hass.async_create_task(...)` so the debounced polling-interval task is tracked by HA's task registry.
 
-## [3.1.1-dev6] - 2026-05-25 - Three More Bare-Tuple `except` Fixes; 17 New Tests
+## [3.1.1-dev6] - 2026-05-25 - Test Depth: 17 Boundary and Error-Handling Tests with Exception Tuple Fixes
+
+### Summary
+
+Test depth and resilience engineering. Added 17 unit tests covering combinatorial states, uptime margin boundaries, SMS deduplication, and exception propagation.
 
 ### Fixed
 
@@ -3004,14 +3186,22 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
   - Invalid calendar values in `_parse_date`
   - SMS message missing `id` field
 
-## [3.1.1-dev5] - 2026-05-25 - `state_class` Removed From 8 Sensors
+## [3.1.1-dev5] - 2026-05-25 - Recorder Optimization: Long-Term Statistics State Class Removal for 8 Sensors
+
+### Summary
+
+Recorder storage optimization. Removed `state_class` declarations from 8 high-frequency telemetry sensors to prevent database bloat from unwanted long-term statistics.
 
 ### Changed
 
 - **Sensors**: Removed `state_class` from 8 sensors (`realtime_time`, `battery_value`, `rssi`, `rscp`, `realtime_tx_bytes`, `realtime_rx_bytes`, `realtime_tx_thrpt`, `realtime_rx_thrpt`) to prevent non-critical sensors from generating Long Term Statistics entries.
 - **Documentation**: Add details on the non-LTS sensors to README
 
-## [3.1.1-dev4] - 2026-05-25 - Session-Reset Test Failures Fixed; `api.py` and `coordinator.py` to 100%
+## [3.1.1-dev4] - 2026-05-25 - Test Fixtures: Session-Reset Mock Handling and 100% Coverage on API and Coordinator
+
+### Summary
+
+Test mock maintenance. Adjusted API activity timestamps in test setups to isolate inactivity session resets, bringing API and coordinator module coverage to 100%.
 
 ### Fixed
 
@@ -3022,7 +3212,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - `api.py` 93% → 100%, `coordinator.py` 95% → 100%
 - **11 new tests**: session init GET success, non-auth exception handlers for `get_sms_capacity`/`get_last_sms_content`/`get_sms_messages`/`get_rd`, `boot_time` restore (valid + bad value), `last_uptime` restore (valid + bad value), SMS auth retry, `_check_new_sms` early-return, `_check_new_sms` same-timestamp hash dedup.
 
-## [3.1.1-dev3] - 2026-05-25 - Proactive Session Reset and Login Session Init
+## [3.1.1-dev3] - 2026-05-25 - Session Management: Proactive Inactivity Reset and Post-Login Initialization GET
+
+### Summary
+
+Session stability hardening. Implemented proactive token reset on 150-second inactivity, added post-authentication GET initialization, and ensured accurate `ZTEAuthError` propagation.
 
 ### Fixed
 
@@ -3032,13 +3226,21 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Error Handling**: Enabled auth and connection exception propagation in `get_rd()` and `get_last_sms_content()` to prevent silent setup/API failures.
 - **Tests**: Resolved 15 failing unit tests by adjusting mock awaitables, adapting error assertions to the new exception propagation design, and updating obsolete coordinator API method patches.
 
-## [3.1.1-dev2] - 2026-05-24 - README Automation Examples and Icons
+## [3.1.1-dev2] - 2026-05-24 - Documentation: README Automation Examples and Icon Enhancements
+
+### Summary
+
+Documentation enhancements. Added further worked automation examples and expanded icon visual cues in the README.
 
 ### Changed
 
 - **Documentation**: Additional updates to README, more automation examples, more icons.
 
-## [3.1.1-dev1] - 2026-05-24 - Dependabot Bumps
+## [3.1.1-dev1] - 2026-05-24 - Tooling Bump: Dependabot Shared Validation, Zizmor, and Typing Updates
+
+### Summary
+
+Dependency updates. Updated shared CI validation to v1.04, bumped zizmor to 1.25.2, and upgraded python-typing tools.
 
 ### Changed
 
@@ -3046,7 +3248,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Dependabot**: Bump [zizmor](https://github.com/zizmorcore/zizmor-pre-commit) from v1.24.1 to 1.25.2
 - **Dependabot**: Bump [python-typing](https://github.com/cdce8p/python-typing-update) from v0.6.0 to 0.8.1
 
-## [3.1.0] - 2026-05-24 - SMS Actions, Received Event and Storage Repair
+## [3.1.0] - 2026-05-24 - Release: SMS Service Actions, Received Bus Events, and Storage Full Repairs
+
+### Summary
+
+Feature release. Added 4 SMS actions (send, delete, delete-all, list), the `zte_router_5g_sms_received` bus event, SMS storage full repair issues, and dynamic state-dependent entity icons.
 
 ### Added
 
@@ -3067,13 +3273,21 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Spurious Reauthentication**: Transient connection drops and network errors no longer incorrectly trigger the reauthentication flow; reauth is reserved for explicit credential rejection from the router.
 - **Monthly Data (Legacy GB Sensors)**: Corrected unit calculation from binary gibibytes (GiB, 1,073,741,824 bytes) to decimal gigabytes (GB, 1,000,000,000 bytes).
 
-## [3.0.2-dev11] - 2026-05-24 - README SMS Actions and Automation Examples
+## [3.0.2-dev11] - 2026-05-24 - Documentation: README SMS Action Guides and Automation Patterns
+
+### Summary
+
+Documentation update. Added full documentation and automation recipes for the newly introduced SMS management actions and events.
 
 ### Changed
 
 - **Documentation**: Added info on new SMS actions and event to README, plus additional automation examples.
 
-## [3.0.2-dev10] - 2026-05-23 - Uptime Boot Timestamp Stabilized; CLAUDE.md Added
+## [3.0.2-dev10] - 2026-05-23 - Stability: Reboot-Detection Uptime Boot Latch and CLAUDE.md Agent Guide
+
+### Summary
+
+Uptime calculation stabilization and developer guidance. Replaced timestamp-delta jitter latching with clock-independent uptime drop detection, and created CLAUDE.md developer instructions.
 
 ### Added
 
@@ -3083,7 +3297,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Uptime boot timestamp stabilization** (`coordinator.py`): Replaced 30-second timestamp-delta tolerance latch with a reboot-detection latch. Boot time is now computed once and frozen; it re-derives only when the router's uptime counter drops by more than `UPTIME_REBOOT_MARGIN` (30 s) — the only clock-independent signal of a genuine reboot. Added bad-reading guard: missing or unparsable `realtime_time` readings leave the latched value untouched and do not advance the anchor. Added `last_uptime` as a persisted reboot-detection anchor in `entry.data` alongside `boot_time`. Eliminates drift caused by recomputing `now() − uptime` against two independently ticking clocks.
 
-## [3.0.2-dev9] - 2026-05-23 - SMS Received Event; `__init__.py` to 100% Coverage
+## [3.0.2-dev9] - 2026-05-23 - Service Events: SMS Received Bus Event and 100% Init Module Coverage
+
+### Summary
+
+Event platform and test coverage. Added the `zte_router_5g_sms_received` event trigger on SMS arrival and achieved 100% coverage on `__init__.py`.
 
 ### Added
 
@@ -3094,7 +3312,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - `__init__.py` 83% → 100%
 
-## [3.0.2-dev8] - 2026-05-23 - SMS Send, Delete and List Actions Added
+## [3.0.2-dev8] - 2026-05-23 - SMS Platform: Send, Delete, and List Service Actions with Hex Encoding
+
+### Summary
+
+SMS action infrastructure. Implemented `send_sms` with UTF-16BE hex encoding, individual and bulk delete actions with safety thresholds, and paginated `get_sms_list`.
 
 ### Added
 
@@ -3106,13 +3328,21 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **HASSFEST warning** (`__init__.py`): Defined `CONFIG_SCHEMA` helper to resolve setup validation warning.
 
-## [3.0.2-dev7] - 2026-05-23 - Boot Timestamp Persisted Across HA Restarts
+## [3.0.2-dev7] - 2026-05-23 - Coordinator: Boot Timestamp State Restoration Across Home Assistant Restarts
+
+### Summary
+
+Uptime state persistence. Saved calculated boot timestamps to entry data to prevent uptime timestamp drift across Home Assistant restarts.
 
 ### Fixed
 
 - **Uptime Jitter & HA Restarts** (`coordinator.py`): Persisted the calculated boot timestamp in `entry.data` and restored it on startup, applying a 30-second tolerance window to prevent timestamp shifting on Home Assistant reboots.
 
-## [3.0.2-dev6] - 2026-05-23 - 14 New Tests; `api.py` and `coordinator.py` to 100%
+## [3.0.2-dev6] - 2026-05-23 - Test Suite: 14 New Tests and 100% Coverage for API and Coordinator
+
+### Summary
+
+Test suite expansion. Added 14 unit tests achieving 100% coverage on `api.py` and `coordinator.py`, covering prefix stripping, HTML error fallback, and retry limits.
 
 ### Added
 
@@ -3122,20 +3352,32 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **24 test failures across 4 test files** (`test_api.py`, `test_coverage_ext.py`, `test_sensor.py`, `test_init.py`): Root cause — `MockResponse` lacked `headers`/`text()` methods and `session.request` was not routed to `get`/`post` in the conftest fixture. Additional fixes: aligned sensor byte-to-GB test values with decimal `_BYTES_PER_GB=1000000000`, corrected reauth trigger test to account for 3-tolerance retry logic before `UpdateFailed`, and fixed `extra_state_attributes` test using falsy empty dict.
 
-## [3.0.2-dev5] - 2026-05-23 - mypy Strict Import Fixes
+## [3.0.2-dev5] - 2026-05-23 - Type Checking: Mypy Strict EntityCategory Imports and Unused Import Cleanup
+
+### Summary
+
+Type annotation cleanup. Resolved mypy strict `EntityCategory` import errors and cleaned up unused imports.
 
 ### Fixed
 
 - **mypy `--strict` import errors** (`sensor.py`, `switch.py`, `number.py`): Resolved `EntityCategory` import errors by importing directly from `homeassistant.const` instead of `homeassistant.helpers.entity`.
 - **Unused import cleanup** (`__init__.py`): Removed unused `typing.Any` import to satisfy `ruff check`.
 
-## [3.0.2-dev4] - 2026-05-23 - 43 mypy Strict Errors Resolved
+## [3.0.2-dev4] - 2026-05-23 - Type Checking: Resolution of 43 Mypy Strict Errors Across Core Modules
+
+### Summary
+
+Static type verification. Resolved 43 mypy strict typing errors across all platform and coordinator modules.
 
 ### Fixed
 
 - **mypy `--strict` regression** (`coordinator.py`, `sensor.py`, `switch.py`, `number.py`, `button.py`, `binary_sensor.py`, `__init__.py`, `config_flow.py`): Resolved 43 mypy strict errors introduced by recent changes. Fixes include: removed stale `type: ignore` comments, removed redundant `cast()` calls, fixed Python 2 bare-comma `except` syntax, added explicit `datetime | None` type annotations to coordinator `_boot_time` and `last_update_success_time`, suppressed known HA ConfigFlow stub incompatibilities with `type: ignore[override]`, and fixed `MappingProxyType` argument mismatch by converting to `dict()`.
 
-## [3.0.2-dev3] - 2026-05-22 - Centralized Request Helper; Uptime Duration Sensor
+## [3.0.2-dev3] - 2026-05-22 - API Architecture: Centralized Async Request Helper and Uptime Duration Sensor
+
+### Summary
+
+Core request refactoring and telemetry additions. Routed all API calls through a centralized async `_request` helper with automatic session recovery, and added the uptime duration sensor.
 
 ### Added
 
@@ -3154,7 +3396,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Reauth Guard & Login Classification** (`api.py`, `coordinator.py`): Classify login responses to raise `ZTEAuthError` specifically on explicit credential error codes, preventing immediate re-auth flows on transient connection drops by holding last known values for 3 consecutive poll cycles.
 - **Python Exception Syntax** (`sensor.py`): Updated legacy exception syntax to tuple format `except (ValueError, TypeError):` for Python 3.12+ compatibility.
 
-## [3.0.2-dev2] - 2026-05-13 - SMS Storage Full Repair; `icons.json` Added
+## [3.0.2-dev2] - 2026-05-13 - Repairs and UI: SMS Storage Full Repair Issue and Dynamic State Icons
+
+### Summary
+
+Repair issues and dynamic icons. Added the SMS Storage Full repair issue, configured state-dependent icons in `icons.json`, and achieved 100% IQS rule compliance.
 
 ### Added
 
@@ -3172,7 +3418,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **mypy `--strict`**: 0 errors across all 12 source files (`mypy_strict.txt`: "Success: no issues found in 12 source files"). `quality_scale.yaml` `strict-typing` updated to DONE.
 - **Stale test assertions** (`test_binary_sensor.py`): Removed `assert sensor.icon` lines that failed after `icon` property was replaced by `icons.json` declarations. CI unblocked.
 
-## [3.0.2-dev1] - 2026-05-13 - Devcontainer Mounts and mypy Strict Setup
+## [3.0.2-dev1] - 2026-05-13 - Devcontainer Architecture: Volume Mount Consolidation and Mypy Strict Setup
+
+### Summary
+
+Devcontainer and typing setup. Consolidated devcontainer volume mounts into `docker-compose.yml` and mounted Home Assistant core source for mypy strict stub checking.
 
 ### Changed
 
@@ -3182,7 +3432,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **`mypy_path` configured**: Added `mypy_path = "/ha_core"` to `[tool.mypy]` in `pyproject.toml` to point mypy at the mounted HA source.
 - **mypy scoped to custom component**: Added `[[tool.mypy.overrides]]` for `homeassistant.*` with `ignore_errors = true` and `follow_imports = "silent"` to prevent mypy from checking and reporting errors from HA core files while still using them for type resolution.
 
-## [3.0.1] - 2026-05-10 - README Overhaul and Internal Alignment
+## [3.0.1] - 2026-05-10 - Release: README Documentation Overhaul and Architecture Alignment
+
+### Summary
+
+Documentation and maintainability release. Reworked the README, refined internal code alignment with Home Assistant standards, and tightened validation checks.
 
 ### Changed
 
@@ -3190,13 +3444,21 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Under the Hood**: Several internal code changes to improve maintainability and alignment with Home Assistant development standards (no functional breaking changes).
 - **Validations**: Improved local and automated remote testing to ensure code remains secure and follows best practices.
 
-## [3.0.1-rc1] - 2026-05-10 - README Expanded and Re-Ordered
+## [3.0.1-rc1] - 2026-05-10 - Documentation: README Structure Reordering and Section Expansions
+
+### Summary
+
+Documentation update. Reordered README sections and expanded coverage with additional icons.
 
 ### Changed
 
 - **Readme**: Updated Readme with additional information. Re-ordered some sections. Added more emoji icons to headings.
 
-## [3.0.1-dev8] - 2026-05-10 - README Additions; `get_rd` Login Guard; Coroutine Warnings Fixed
+## [3.0.1-dev8] - 2026-05-10 - Hardening: Get RD Login Guard, Unawaited Coroutine Fixes, and Protocol Fallback Logs
+
+### Summary
+
+Error handling and login guards. Added auto-login guards in `get_rd`, resolved unawaited coroutine warnings in test fixtures, and added protocol fallback warnings.
 
 ### Changed
 
@@ -3216,7 +3478,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **1 new test**: `test_coordinator_metadata_update_device_exists` — covers the coordinator path when a device already exists in the registry.
 
-## [3.0.1-dev6] - 2026-05-10 - 24 mypy Errors in `api.py`; Coverage to 100%
+## [3.0.1-dev6] - 2026-05-10 - Type Checking: 24 Mypy Strict Error Fixes in API and 100% Component Coverage
+
+### Summary
+
+Type safety pass. Added complete type annotations across `api.py` to resolve 24 mypy errors, achieving 100% module test coverage.
 
 ### Fixed
 
@@ -3228,7 +3494,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **8 new tests**: `delete_sms` exception handler, `get_all_data` retry-exhausted warning branch, `__init__` background setup success, 5 `config_flow` reconfigure flow tests (success + 3 error branches + form display).
 - **Coverage to 100%**: `api.py` (98→100%), `__init__.py` (92→100%), `config_flow.py` (88→100%). Overall: 99% (824/824, 5 uncovered).
 
-## [3.0.1-dev5] - 2026-05-10 - Reconfiguration Flow and Hierarchical Translations
+## [3.0.1-dev5] - 2026-05-10 - Config Flow: Reconfiguration Support and Hierarchical Translation Strategy
+
+### Summary
+
+Config flow and localization. Added entry reconfiguration support and standardized canonical translation keys across 63 entities.
 
 ### Added
 
@@ -3240,14 +3510,22 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Translation Strategy**: Standardized on `translation_key` across all platforms; removed hardcoded `name` parameters.
 - **Documentation**: Expanded README with Technical Architecture, Resilience (3-strike logic), and Firmware Compatibility.
 
-## [3.0.1-dev4] - 2026-05-09 - Project-Agnostic `pyproject.toml` and `tasks.json`
+## [3.0.1-dev4] - 2026-05-09 - Project Tooling: Project-Agnostic pyproject.toml and tasks.json Configurations
+
+### Summary
+
+Tooling configuration. Converted `pyproject.toml` and `tasks.json` into project-agnostic templates.
 
 ### Changed
 
 - **pyproject.toml**: pyproject.toml is now fully project agnostic. It does not contain the name of the specific project, instead just references the general custom_components folder for pytest coverage.
 - **tasks.json**: tasks.json is also not fully project agnostic. It does require a settings.json file, but this now only requires one change per project.
 
-## [3.0.1-dev3] - 2026-05-09 - Shared Reusable CI Workflow Created
+## [3.0.1-dev3] - 2026-05-09 - CI Architecture: Shared Reusable GitHub Actions CI Workflow Creation
+
+### Summary
+
+CI workflow centralization. Created the shared reusable GitHub Actions CI workflow in the `PlayFaster/.github` repository.
 
 ### Dev Tooling
 
@@ -3258,7 +3536,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Pre-commit: Suppress Inapplicable Hooks**: Added `stages: [manual]` to the `no-commit-to-branch` hook — direct commits to `main`/`dev` are the working pattern for this project, so the hook is retained for explicit use but removed from the default commit flow. Added `exclude: \.yamllint$` to the `yamllint` hook to prevent it from linting its own config file (which lacks `---` and uses CRLF).
 - **VS Code Tasks**: Added `Zizmor: Fix (Safe Auto-Fix)` task (`zizmor --fix .github/`) for applying zizmor's safe auto-fixes on demand. Added `Pre-commit: Autoupdate Hooks` task (`pre-commit autoupdate`) for updating all hook `rev:` pins to their latest releases. Neither task is wired into `Fix All` or `Validate All`.
 
-## [3.0.0] - 2026-05-08 - Async Rewrite, Sub-Devices and IMEI Identity
+## [3.0.0] - 2026-05-08 - Major Release: Native Async Rewrite, Sub-Device Architecture, and IMEI Identity
+
+### Summary
+
+Major architectural rewrite. Migrated to native async `aiohttp`, non-blocking background startup, 3-strike connection resilience, IMEI-anchored device identity, and 4 logical sub-devices.
 
 ### Added
 
@@ -3291,7 +3573,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **User-Friendly Labels**: Refined entity labels for better readability (e.g., "PPP Status" → "**Bridge Mode**", "Wa Inner Version" → "**Firmware Version**").
 - **Readme**: Updated and added automation examples.
 
-## [3.0.0-rc1] - 2026-05-08 - Entity Categories Refined; Bridge Mode Rename
+## [3.0.0-rc1] - 2026-05-08 - Entity Architecture: Category Visibility Refinements and Bridge Mode Rename
+
+### Summary
+
+Entity classification pass. Refined entity categories and default visibilities, and renamed PPP Status to Bridge Mode.
 
 ### Changed
 
@@ -3302,14 +3588,22 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Readme**: Updates to Readme including corrections to automation examples.
 
-## [3.0.0-dev22] - 2026-05-08 - Hassfest Translation Schema and Reauth Placeholder Fixed
+## [3.0.0-dev22] - 2026-05-08 - Bug Fix: Hassfest Translation Schema and Reauth Placeholder Substitution
+
+### Summary
+
+Translation schema fix. Resolved hassfest schema validation errors on reauth keys and fixed runtime placeholder resolution in the reauth flow dialog.
 
 ### Fixed
 
 - **Hassfest translation schema** (`strings.json`, `translations/en.json`): Removed invalid top-level `"reauth"` key; moved `reauth_confirm` step into `config.step` where the HA translation schema requires it. Resolves hassfest CI error: `extra keys not allowed @ data['reauth']`.
 - **Reauth `{host}` placeholder** (`config_flow.py`): Added `description_placeholders={"host": host}` to `async_show_form` in `async_step_reauth_confirm` so the router IP resolves in the dialog description at runtime instead of rendering as a literal `{host}` string.
 
-## [3.0.0-dev21] - 2026-05-08 - Gold Standard README; Missing Translations Added
+## [3.0.0-dev21] - 2026-05-08 - Documentation: Comprehensive Gold Standard README and Missing Translations
+
+### Summary
+
+Documentation overhaul. Created comprehensive README documentation with entity inventories, architecture notes, and complete YAML automation examples.
 
 ### Added
 
@@ -3324,7 +3618,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Hassfest Validation**: Resolved duplicate `reauth` keys in `strings.json` that caused CI/CD failures.
 
-## [3.0.0-dev16] - 2026-05-07 - Shared `device_info` Helper; Translation-Based Naming; Code-Review Fixes
+## [3.0.0-dev16] - 2026-05-07 - Code Review: Shared Device Info Helper, Translation Naming, and Exception Hardening
+
+### Summary
+
+Code quality and robustness pass. Extracted shared `device_info` helper, transitioned 58 sensors to translation keys, fixed recursion guards, and prevented task leaks.
 
 ### Changed
 
@@ -3349,7 +3647,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Duplicate `PARALLEL_UPDATES = 0`**: Removed second declaration from `sensor.py`, `binary_sensor.py`, `switch.py`, `number.py`. Fixes Low #1.
 
-## [3.0.0-dev15] - 2026-05-07 - 12 New Sensors; IMEI as the Stable Identity
+## [3.0.0-dev15] - 2026-05-07 - Telemetry: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor
+
+### Summary
+
+Telemetry expansion and identity anchoring. Added 12 new sensors, configured out-of-range value guard bands, and adopted hardware IMEI as the stable device identifier.
 
 ### Added
 
@@ -3364,7 +3666,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **`coordinator.mac` → `coordinator.imei`**: Renamed across `coordinator.py`, `__init__.py`, and all 5 platform `device_info` properties (`sensor.py`, `binary_sensor.py`, `button.py`, `switch.py`, `number.py`). Sub-device identifiers now use IMEI prefix.
 - **Tests updated**: `conftest.py` fixture renamed to `coordinator.imei = "864155042229309"`; device identifier assertions updated in `test_number.py`, `test_sensor.py`, `test_binary_sensor.py`, `test_button.py`.
 
-## [3.0.0-dev14] - 2026-05-07 - Diagnostics and Reauthentication Added
+## [3.0.0-dev14] - 2026-05-07 - Diagnostics and Security: Diagnostics Platform and Reauthentication Flow
+
+### Summary
+
+Diagnostics and reauth features. Added the diagnostics platform with sensitive data redaction and implemented the reauthentication flow.
 
 ### Added
 
@@ -3386,13 +3692,21 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Action Exceptions**: Both `async_press` handlers (`reboot`, `delete_all`) now raise `HomeAssistantError` on API failure instead of silently logging, enabling automation failure detection.
 - **Test failures**: Updated `test_coverage_ext.py` button exception tests to expect `HomeAssistantError`. Fixed `test_init.py` reauth test to use `patch.object` for `async_start_reauth`.
 
-## [3.0.0-dev11] - 2026-05-07 - README Badge Links
+## [3.0.0-dev11] - 2026-05-07 - Documentation: README Badge Links
+
+### Summary
+
+Documentation fix. Corrected repository badge links in README.md.
 
 ### Changed
 
 - **Badge Links**: Added links to readme badges.
 
-## [3.0.0-dev10] - 2026-05-02 - Badge Links; Sub-Device Architecture
+## [3.0.0-dev10] - 2026-05-02 - Architecture: Sub-Device Partitioning and Badge Link Repairs
+
+### Summary
+
+Device structure reorganization. Grouped entities into logical sub-devices to improve dashboard navigation.
 
 ### Changed
 
@@ -3400,7 +3714,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Sub-device Architecture**: Grouped entities into System (Root), Signal, Data, and SMS devices for better Home Assistant UI organization.
 
-## [3.0.0-dev8] - 2026-04-29 - Sub-Device Architecture and Unit Standardization
+## [3.0.0-dev8] - 2026-04-29 - Entity Standardization: Sub-Device Architecture and Native Unit Alignment
+
+### Summary
+
+Entity standardization. Implemented sub-device architecture and standardized units of measurement across all entities.
 
 ### Added
 
@@ -3409,7 +3727,7 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Standardized Units**: Aligned Signal units with 3GPP standards (RSRP/RSSI in dBm; RSRQ/SNR/SINR in dB).
 - **Entity Identity**: Implemented stable `unique_id` strategy using lowercase internal keys (e.g., `z5g_rsrp`) and MAC address prefix.
 - **SMS Resilience**: Added logic to maintain sensor state attributes during update failures, preventing data loss in the UI.
-- Added `zte_all_sensors.md` which documents all sensors/data-elements, their source and unit etc.
+- **Added `zte_all_sensors.md`**: which documents all sensors/data-elements, their source and unit etc.
 - **Monthly Data in Bytes**: Added Monthly data in native bytes unit (up, down, total). This is the default.
 
 ### Changed
@@ -3435,7 +3753,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Credential Protection**: Verified that no sensitive tokens or passwords are logged or persisted in state attributes.
 
-## [3.0.0-dev5] - 2026-04-07 - Declarative Guard Bands and Custom Naming
+## [3.0.0-dev5] - 2026-04-07 - Entity Engine: Declarative Guard Bands and Custom Device Prefix Naming
+
+### Summary
+
+Sensor validation engine. Implemented declarative guard bands on numeric sensors and enabled customizable device prefix naming.
 
 ### Added
 
@@ -3452,7 +3774,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Entity Naming Integrity**: Synchronized the sensor platform's naming logic to ensure deterministic entity IDs that correctly incorporate the user-defined custom name prefix.
 - **Log Consistency**: Refactored coordinator error messages to use the standardized "PlayFaster" wording for better cross-project log analysis.
 
-## [3.0.0-dev3] - 2026-04-07 - Declarative Entity Engine and Background Startup
+## [3.0.0-dev3] - 2026-04-07 - Core Architecture: Declarative Entity Engine and Non-Blocking Startup
+
+### Summary
+
+Core architecture pass. Created declarative entity engine and non-blocking background initialization.
 
 ### Added
 
@@ -3469,7 +3795,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Domain Cleanup**: Implemented standardized unloading logic to ensure the `DOMAIN` key is scrubbed from Home Assistant's internal memory when no integration instances remain.
 
-## [3.0.0-dev2] - 2026-04-07 - Persistent Metadata; Non-Blocking Startup; Strict Linting
+## [3.0.0-dev2] - 2026-04-07 - Lifecycle Architecture: Local Hardware Cache, Non-Blocking Setup, and Mypy Strict
+
+### Summary
+
+Startup optimization. Added local hardware metadata caching, non-blocking setup, and configured mypy strict typing.
 
 ### Added
 
@@ -3492,7 +3822,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Data Safety**: Implemented safety checks for `None` data in sensors to prevent runtime errors during initialization or connection loss.
 - **Exception Handling**: Fixed invalid syntax in multiple exception handlers.
 
-## [3.0.0-dev1] - 2026-04-01 - Native Async Migration to `aiohttp`
+## [3.0.0-dev1] - 2026-04-01 - Core Architecture: Native Async Migration to aiohttp
+
+### Summary
+
+Async migration. Rewrote core HTTP requests using native aiohttp async architecture.
 
 ### Added
 
@@ -3504,7 +3838,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Version Bump**: Major version update to reflect the complete architectural shift.
 
-## [2.3.1] - 2026-04-01 PUBLIC RELEASE - Coordinator Refactor and HACS Assets
+## [2.3.1] - 2026-04-01 - Release: DataUpdateCoordinator Migration and HACS Branding Assets
+
+### Summary
+
+Public release. Refactored integration to use DataUpdateCoordinator and added official HACS branding assets.
 
 ### Added
 
@@ -3521,7 +3859,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Unavailable Bug**: Fixed an issue where sensors would never go unavailable due to misconfigured grace period.
 
-## [2.2.4] - 2026-03-30 - Test Coverage and Code Clean-Up
+## [2.2.4] - 2026-03-30 - Test Suite: Pytest Coverage Expansion and Code Clean-up
+
+### Summary
+
+Test suite expansion. Added comprehensive pytest test cases and performed general code clean-up.
 
 ### Added
 
@@ -3533,7 +3875,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Testing**: Improved scope of testing.
 - **Strings**: Added strings.json in addition to en.json.
 
-## [2.2.3] - 2026-03-30 - Python Tests Added; Manifest Fixed
+## [2.2.3] - 2026-03-30 - Test Suite: Python Pytest Introduction and Manifest Repairs
+
+### Summary
+
+Testing foundation. Added initial Python pytest test suites and resolved integration manifest schema errors.
 
 ### Added
 
@@ -3543,19 +3889,31 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Manifest**: Fixed manifest.json for GitHub tests.
 
-## [2.1.1] - 2026-03-29 - Improved Error Logging
+## [2.1.1] - 2026-03-29 - Error Handling: Diagnostic Logging Improvements
+
+### Summary
+
+Diagnostic logging. Enhanced debug logging across authentication and polling workflows.
 
 ### Added
 
 - **Error Logging**: Significantly improved home assistant (logger) error logging.
 
-## [2.0.1] - 2026-03-29 - Options Flow Added
+## [2.0.1] - 2026-03-29 - Config Flow: Options Flow for Dynamic Reconfiguration
+
+### Summary
+
+Config flow enhancement. Added options flow allowing runtime reconfiguration of integration parameters.
 
 ### Added
 
 - **Options Flow**: Allow reconfiguration of integration in-situ rather than delete and re-add.
 
-## [1.9.4] - 2026-03-29 - Model Number Read From Device; Session Handling
+## [1.9.4] - 2026-03-29 - Device Discovery: Hardware Model Reading and Session Management
+
+### Summary
+
+Device inspection and session handling. Added automatic hardware model detection and hardened session lifecycle management.
 
 ### Added
 
@@ -3570,25 +3928,41 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Strings and Translate**: Fixed strings en.json structure and moved all elements to this.
 - **Sessions Handling**: Explicit closing of sessions.
 
-## [1.8.1] - 2026-03-29 - Translation Folder Structure
+## [1.8.1] - 2026-03-29 - Localization: Standard Translation Directory Structure
+
+### Summary
+
+Localization update. Migrated translation files to the standard Home Assistant directory structure.
 
 ### Added
 
 - **Strings and Translate**: Added translation folder structure, just en for now.
 
-## [1.7.3] - 2026-03-29 - Entity Naming Fixed
+## [1.7.3] - 2026-03-29 - Entity Hygiene: Standardized Entity Naming
+
+### Summary
+
+Entity naming pass. Standardized entity naming conventions across all exposed router sensors.
 
 ### Fixed
 
 - **Entity Naming**: Fixed entity sensor naming approach.
 
-## [1.6.3] - 2026-03-28 - Async Startup to Avoid Blocking on an Offline Router
+## [1.6.3] - 2026-03-28 - Lifecycle: Non-Blocking Async Startup for Offline Routers
+
+### Summary
+
+Resilience improvement. Implemented non-blocking async startup to prevent Home Assistant boot delays when the router is offline.
 
 ### Changed
 
 - **Reduced Startup Risk**: Moved to async for startup to avoid any potential for slowness/hangs/locks if router is unavailable at HA start.
 
-## [1.5.7] - 2026-03-28 - ZTE Icons; Sub-Device Sensor Naming
+## [1.5.7] - 2026-03-28 - Branding and Entity Structure: ZTE Icons and Sub-Device Sensor Naming
+
+### Summary
+
+UI and entity structure. Added ZTE brand icons and implemented sub-device sensor categorization.
 
 ### Added
 
@@ -3598,13 +3972,21 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Sub Device Sensors**: Properly align sub device (data, sms) sensor naming.
 
-## [1.5.1] - 2026-03-28 - Integration Naming Aligned
+## [1.5.1] - 2026-03-28 - Integration Hygiene: Home Assistant Integration Naming Alignment
+
+### Summary
+
+Integration naming. Aligned integration domain and naming with Home Assistant conventions.
 
 ### Changed
 
 - **Aligned Integration Naming**: All naming now ZTE Router 5G Monitor.
 
-## [1.4.5] - 2026-03-28 - Changelog Added; Standard Sensor Names
+## [1.4.5] - 2026-03-28 - Documentation and Sensors: Local Changelog Addition and Standard Sensor Names
+
+### Summary
+
+Documentation update. Added local changelog tracking and standardized sensor names.
 
 ### Added
 
@@ -3614,13 +3996,21 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 - **Standard Names**: Changed specific sensor names (with ID tag) to standard names.
 
-## [1.4.4] - 2026-03-28 - All Router Attributes Exposed as Sensors
+## [1.4.4] - 2026-03-28 - Telemetry Expansion: Comprehensive Router Attribute Exposure
+
+### Summary
+
+Telemetry expansion. Exposed all available router status and diagnostic attributes as Home Assistant sensors.
 
 ### Added
 
 - **All Relevant Attributes**: Added all relevant signal and status attributes available from the router as sensors.
 
-## [1.4.3] - 2026-03-28 - Pause Polling Switch and Polling Interval Slider
+## [1.4.3] - 2026-03-28 - Polling Controls: Pause Polling Switch and Polling Interval Number Entity
+
+### Summary
+
+Polling controls. Added Pause Polling switch and Polling Interval number entity for granular polling control.
 
 ### Added
 
@@ -3633,7 +4023,11 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Startup Deadlock**: Implemented "Initial Bypass" logic to ensure entities load correctly on restart even if polling was previously paused.
 - **Boot Resilience**: Added a fail-safe to prevent the integration from becoming "Unavailable" if the router is unreachable during the initial Home Assistant startup sequence.
 
-## [1.4.2] - 2026-03-27 - SMS Monitoring; Initial GitHub Release
+## [1.4.2] - 2026-03-27 - Feature Release: SMS Inbox Monitoring and Initial GitHub Release
+
+### Summary
+
+Feature release. Added SMS inbox monitoring and created initial public GitHub repository release.
 
 ### Added
 
@@ -3641,21 +4035,33 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 - **Hybrid Resilience**: Implemented a "one-cycle grace period" where sensors hold their last known value during a single failed poll before marking as unavailable.
 - **GitHub**: Initial release to GitHub repository.
 
-## [1.4.1] - 2026-03-27 - Coordinator Refactor and Protocol Detection
+## [1.4.1] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection
+
+### Summary
+
+Architecture refactoring. Refactored coordinator and added automatic HTTP/HTTPS protocol detection.
 
 ### Changed
 
 - Refactored `DataUpdateCoordinator` to handle centralized data fetching for all platforms.
 - Improved API login reliability with automatic protocol detection (HTTP/HTTPS).
 
-## [1.4.0] - 2026-03-26 - Core Signal and Data Sensors
+## [1.4.0] - 2026-03-26 - Telemetry Platform: Core Signal and Cellular Data Sensors
+
+### Summary
+
+Telemetry platform. Implemented core cellular signal strength and data traffic monitoring sensors.
 
 ### Added
 
 - Core sensors: Signal Strength (RSRP/RSRQ/SINR), Network Type, and Data Usage.
 - Connection status binary sensor.
 
-## [1.3.6] - 2026-03-25 - Initial Release for the ZTE MC7010
+## [1.3.6] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010
+
+### Summary
+
+Initial release. First working custom component integration for the ZTE MC7010 5G router.
 
 ### Added
 
