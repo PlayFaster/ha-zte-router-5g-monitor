@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev20\] - 2026-08-26 - Contract Sweep Naming And Vacuity Guards; Queue References Removed](#334-dev20---2026-08-26---contract-sweep-naming-and-vacuity-guards-queue-references-removed)
   - [\[3.3.4-dev19\] - 2026-08-26 - README Repairs Section Rewritten](#334-dev19---2026-08-26---readme-repairs-section-rewritten)
   - [\[3.3.4-dev18\] - 2026-08-26 - SMS Storage Off Integration Health; Sensor Enabled By Default](#334-dev18---2026-08-26---sms-storage-off-integration-health-sensor-enabled-by-default)
   - [\[3.3.4-dev17\] - 2026-08-26 - SMS Storage Fill Comparison; Hardware Check in Validate All](#334-dev17---2026-08-26---sms-storage-fill-comparison-hardware-check-in-validate-all)
