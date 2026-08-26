@@ -5,12 +5,13 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev16\] - 2026-08-26 - Repair Translation Schema: Fixable Issue Exclusivity](#334-dev16---2026-08-26---repair-translation-schema-fixable-issue-exclusivity)
   - [\[3.3.4-dev15\] - 2026-08-26 - Documentation: Public CHANGELOG.md Release Header and Table of Contents Standardization](#334-dev15---2026-08-26---documentation-public-changelogmd-release-header-and-table-of-contents-standardization)
   - [\[3.3.4-dev14\] - 2026-08-26 - Documentation: Comprehensive Changelog Readability and Historical Header Standardization](#334-dev14---2026-08-26---documentation-comprehensive-changelog-readability-and-historical-header-standardization)
-  - [\[3.3.4-dev13\] - 2026-08-26 - Repairs Documentation: Repair Eligibility Criteria and Health Sensor Mapping](#334-dev13---2026-08-26---repairs-documentation-why-a-condition-is-or-is-not-a-repair)
-  - [\[3.3.4-dev12\] - 2026-08-26 - Entity Configuration: Frequency Unit Selector Dependence on Device Class](#334-dev12---2026-08-26---correction-the-unit-selector-depends-on-device_class-not-state_class)
+  - [\[3.3.4-dev13\] - 2026-08-26 - Repairs Documentation: Repair Eligibility Criteria and Health Sensor Mapping](#334-dev13---2026-08-26---repairs-documentation-repair-eligibility-criteria-and-health-sensor-mapping)
+  - [\[3.3.4-dev12\] - 2026-08-26 - Entity Configuration: Frequency Unit Selector Dependence on Device Class](#334-dev12---2026-08-26---entity-configuration-frequency-unit-selector-dependence-on-device-class)
   - [\[3.3.4-dev11\] - 2026-08-26 - Documentation Reconciliation: Repair Set, Quality Scale, and Frequency Units](#334-dev11---2026-08-26---documentation-reconciliation-repair-set-quality-scale-and-frequency-units)
-  - [\[3.3.4-dev10\] - 2026-08-26 - Suppression Allow-List Sweep; Health & Repair Contract Tests; Silent-Failure Audit](#334-dev10---2026-08-26---suppression-allow-list-sweep-health--repair-contract-tests-silent-failure-audit)
+  - [\[3.3.4-dev10\] - 2026-08-26 - Suppression Allow-List Sweep; Health \& Repair Contract Tests; Silent-Failure Audit](#334-dev10---2026-08-26---suppression-allow-list-sweep-health--repair-contract-tests-silent-failure-audit)
   - [\[3.3.4-dev9\] - 2026-08-26 - Publish-Moment State Capture Tests; Real APN Payloads in Select Tests](#334-dev9---2026-08-26---publish-moment-state-capture-tests-real-apn-payloads-in-select-tests)
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Reauth Repair Flow; Frequency Unit Selector; Separate Drift Strike Budget; SMS Log Privacy](#334-dev7---2026-08-25---interactive-reauth-repair-flow-frequency-unit-selector-separate-drift-strike-budget-sms-log-privacy)
@@ -183,6 +184,37 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.4-dev16] - 2026-08-26 - Repair Translation Schema: Fixable Issue Exclusivity
+
+### Summary
+
+`hassfest` rejected `strings.json` and `translations/en.json` because the `auth_failed` repair carried a `description` alongside its `fix_flow`, which the issues schema declares mutually exclusive. The step-8 sweep that should have caught this required the same invalid shape, so both were corrected.
+
+### Fixed
+
+- **`auth_failed` translation shape**: `description` removed from `strings.json` and `translations/en.json`. `hassfest`'s issues schema (`script/hassfest/translations.py`) declares `vol.Exclusive("description", "fixable")` and `vol.Exclusive("fix_flow", "fixable")`, so an issue takes a `title` and then exactly one of the two. Both were supplied when the repair was added in `[3.3.4-dev7]`, producing _"two or more values in the same group of exclusion 'fixable'"_ against both files, locally and in CI. The prose moved to `fix_flow.step.confirm.description`, which is what the Fix dialog renders; a fixable issue's card carries only its title. No user-facing text was lost.
+
+- **Step-8 sweep 8a required the rejected shape**: `test_every_repair_key_has_a_title_and_a_description_everywhere` asserted a `title` **and** a `description` for every key in `REPAIR_NAMES`. A sweep demanding what `hassfest` forbids cannot pass alongside it, and this one passed while validation failed — the sweep was the check that should have found the defect first. Replaced by `test_every_repair_key_has_a_title_and_rendered_text_everywhere`, which asserts a `title`, then `has_description != has_fix_flow`, then a description on every `fix_flow` step, since a step without one renders an empty dialog.
+
+### Added
+
+- **`test_the_fixable_repair_is_the_one_with_a_fix_flow`**: pairs the two translation shapes against what the coordinator raises. A `fix_flow` on an issue raised `is_fixable=False` is text no user can reach; a fixable issue with no `fix_flow` gets `ConfirmRepairFlow`, whose Fix button dismisses the card without acting. Both fail silently, which is why the pairing is asserted rather than assumed.
+
+### Documentation
+
+- **`AGENTS.md`**: two rows in the sweep table still named `test_every_repair_issue_has_translated_text`, retired in `[3.3.4-dev10]`. Both now point at the step-8 sweeps, and the repair row states the `title` plus exactly one of `description` or `fix_flow` rule.
+- **`docs/DEVELOPMENT.md`**: the re-authentication section records the exclusivity, where the prose for a fixable issue belongs, and that `conn_error` is the other shape.
+- **`.shared/issues/x_project/repair_set_alignment.md` §3.1** and **`x_proj_chores.md` C-022 step 8**: both carry the constraint for `unifi_network_monitor`, which has a fixable `auth_failed` outstanding and would otherwise reproduce this.
+
+### Tests
+
+- 908 → **909**. 100% line and branch, 0 partial branches.
+
+### Verified
+
+- `hassfest` against `custom_components/zte_router_5g`: **Invalid integrations: 0**.
+- **Four mutations of `strings.json`**, each restored by checksum: both forms present at once, a `fix_flow` step losing its description, a repair left with neither form, and the `fix_flow` dropped from the fixable repair. All four failed the rewritten sweeps.
 
 ## [3.3.4-dev15] - 2026-08-26 - Documentation: Public CHANGELOG.md Release Header and Table of Contents Standardization
 
@@ -954,7 +986,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 ### Changed
 
 - **Longer SMS messages**: `send_sms` now accepts the same message length the router's own web page does — up to **765** characters, where the integration previously capped you at 160. A message containing an emoji, curly quote or other special character uses a different encoding and is limited to **335**, again matching the router. The limit is chosen automatically per message, with nothing to configure, and going over it gives a clear error naming the limit that applied.
-  - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
+  - **Obligatory Warning**: It is **_YOUR_** responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
     - Remember **longer** messages generally get **billed** as multiple SMS.
 
 - **Wider ZTE model support**: signal and data-usage sensors now recognize the alternative field names used by other `goform` routers, the login falls back to the other form when a model rejects the first, and the LTE/5G band name is worked out from the channel number when the router leaves it blank.

@@ -265,6 +265,8 @@ Which is also why the drift finding avoids naming firmware. It can only fire on 
 
 **It is also the one repair that does not auto-clear**, and `is_persistent=True` for the same reason: a refused password is still refused after a restart.
 
+**A fixable repair takes a `title` and a `fix_flow`, and must not also carry a `description`.** `hassfest`'s issues schema declares the two `vol.Exclusive` under a `fixable` group (`script/hassfest/translations.py`), so supplying both fails validation with _"two or more values in the same group of exclusion 'fixable'"_. The user-facing prose for a fixable issue belongs in `fix_flow.step.confirm.description`, which is what the Fix dialog renders; the card itself shows only the title. `conn_error` is the other shape — `title` plus `description`, no flow — and the two are guarded against each other by the step-8 sweeps.
+
 Router-specific and load-bearing: **the most recent login wins.** Home Assistant logging in takes the session back from the web GUI. There is no state where HA is reachable but permanently locked out, so a persistent auth failure really does mean bad credentials.
 
 ### Refresh Now recovers the session reactively, and deliberately does not force a login

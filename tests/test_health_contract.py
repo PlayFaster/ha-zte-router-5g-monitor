@@ -30,7 +30,11 @@ from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.api import ZTEConnectionError, ZTERouterAPI
-from custom_components.zte_router_5g.const import DOMAIN, FETCH_STRIKE_LIMIT
+from custom_components.zte_router_5g.const import (
+    DOMAIN,
+    FETCH_STRIKE_LIMIT,
+    REPAIR_AUTH_FAILED,
+)
 from custom_components.zte_router_5g.coordinator import (
     REPAIR_NAMES,
     RETIRED_REPAIR_NAMES,
@@ -100,12 +104,21 @@ def coordinator(hass: HomeAssistant, entry):
 # ------------------------------------------------------------------------- 8a
 
 
-def test_every_repair_key_has_a_title_and_a_description_everywhere() -> None:
-    """8a. A missing entry shows the raw key on the Repairs card.
+def test_every_repair_key_has_a_title_and_rendered_text_everywhere() -> None:
+    """8a. A missing entry shows the raw key, or a card with an empty body.
 
-    Stronger than the check this replaces, which asserted only that the key
-    was *present* in `issues`. A key with a title and no description renders a
-    card with an empty body, which the old form passed.
+    Stronger than the check this replaces, which asserted only that the key was
+    *present* in `issues`.
+
+    **`description` and `fix_flow` are mutually exclusive**, and the sweep has
+    to allow for that or it contradicts `hassfest`. Its issues schema
+    (`script/hassfest/translations.py`) requires a `title`, then exactly one of
+    the two — `vol.Exclusive(..., "fixable")` — because a fixable issue renders
+    its prose in the flow's step rather than on the card. Asserting both, as
+    the first version of this test did, demands a shape Home Assistant rejects.
+
+    So: a title always, and rendered text in whichever form the issue's
+    fixability calls for.
     """
     assert REPAIR_NAMES, "no repair keys to sweep — 8a would pass vacuously"
 
@@ -113,10 +126,46 @@ def test_every_repair_key_has_a_title_and_a_description_everywhere() -> None:
         issues = _load(name).get("issues", {})
         for key in REPAIR_NAMES:
             assert key in issues, f"{name}: no text for repair '{key}'"
-            assert issues[key].get("title"), f"{name}: '{key}' has no title"
-            assert issues[key].get("description"), f"{name}: '{key}' has no description"
+            entry = issues[key]
+            assert entry.get("title"), f"{name}: '{key}' has no title"
+
+            has_description = bool(entry.get("description"))
+            has_fix_flow = bool(entry.get("fix_flow"))
+            assert has_description != has_fix_flow, (
+                f"{name}: '{key}' must carry exactly one of 'description' or "
+                "'fix_flow' — hassfest rejects both, and neither leaves the "
+                "card with an empty body"
+            )
+
+            if has_fix_flow:
+                steps = entry["fix_flow"].get("step", {})
+                assert steps, f"{name}: '{key}' has a fix_flow with no steps"
+                for step_name, step in steps.items():
+                    assert step.get("description"), (
+                        f"{name}: '{key}' fix_flow step '{step_name}' has no "
+                        "description, so the dialog renders empty"
+                    )
 
     assert len(_translation_files()) >= 2, "expected strings.json plus a translation"
+
+
+def test_the_fixable_repair_is_the_one_with_a_fix_flow() -> None:
+    """The two forms must line up with what the code actually raises.
+
+    A `fix_flow` on an issue raised with `is_fixable=False` is text nobody can
+    reach; a fixable issue without one gets `ConfirmRepairFlow` and a Fix
+    button that dismisses the card. Both are silent failures, which is why the
+    pairing is asserted rather than assumed.
+    """
+    source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+
+    issues = _load("strings.json")["issues"]
+    with_flow = {key for key, entry in issues.items() if entry.get("fix_flow")}
+
+    assert with_flow == {REPAIR_AUTH_FAILED}, (
+        f"expected only '{REPAIR_AUTH_FAILED}' to carry a fix_flow, got {with_flow}"
+    )
+    assert "is_fixable=True" in source, "no fixable repair is raised at all"
 
 
 # ------------------------------------------------------------------------- 8b
