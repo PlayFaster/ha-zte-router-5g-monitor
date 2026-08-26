@@ -5,6 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev19\] - 2026-08-26 - README Repairs Section Rewritten](#334-dev19---2026-08-26---readme-repairs-section-rewritten)
+  - [\[3.3.4-dev18\] - 2026-08-26 - SMS Storage Off Integration Health; Sensor Enabled By Default](#334-dev18---2026-08-26---sms-storage-off-integration-health-sensor-enabled-by-default)
+  - [\[3.3.4-dev17\] - 2026-08-26 - SMS Storage Fill Comparison; Hardware Check in Validate All](#334-dev17---2026-08-26---sms-storage-fill-comparison-hardware-check-in-validate-all)
   - [\[3.3.4-dev16\] - 2026-08-26 - Repair Translation Schema: Fixable Issue Exclusivity](#334-dev16---2026-08-26---repair-translation-schema-fixable-issue-exclusivity)
   - [\[3.3.4-dev15\] - 2026-08-26 - Documentation: Public CHANGELOG.md Release Header and Table of Contents Standardization](#334-dev15---2026-08-26---documentation-public-changelogmd-release-header-and-table-of-contents-standardization)
   - [\[3.3.4-dev14\] - 2026-08-26 - Documentation: Comprehensive Changelog Readability and Historical Header Standardization](#334-dev14---2026-08-26---documentation-comprehensive-changelog-readability-and-historical-header-standardization)
@@ -74,7 +77,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -82,7 +85,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Contract Drift Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-contract-drift-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -184,6 +187,26 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.4-dev19] - 2026-08-26 - README Repairs Section Rewritten
+
+### Summary
+
+The Repairs section opened by explaining the boundary between Repairs and Integration Health rather than saying what the two Repairs are, and told readers to automate on a Repair, which is not something Home Assistant supports.
+
+### Changed
+
+- **The summary above the fold now names the two conditions and nothing else**: credentials refused, and the router not responding. It previously opened with the rule Home Assistant applies to its Repairs panel and a paragraph on what does not qualify — an explanation of a boundary, given to a reader who had not yet been told what was on either side of it. The wording also assumed familiarity with a division that had shifted during this release cycle, which is history no user needs.
+
+- **"Automate on any of these the same way you would on a Repair" is removed.** You do not automate on a Repair: it is a card in a panel, with no entity and no state. The sentence was trying to say the non-Repair conditions are still actionable, and said something false to get there.
+
+- **What does and does not earn a Repair moved into the fold**, as prose rather than a callout: the two-part test, then where each non-Repair condition reports instead — `drift`, `degraded_capabilities`, and the **SMS Storage Full** entity.
+
+- **The Integration Health relationship is stated once and linked, not repeated.** A Repair also turns that sensor on, which is the practical point for someone writing an automation; what the sensor does is described in `README.md`'s **Self-Diagnosis** section and is not restated here.
+
+### Notes
+
+- **`huawei_router_5g` carried the same wording and received the same rewrite**, recorded there as `[1.2.2-dev2]`. Its version omits the SMS clause differences; both now read identically apart from the entity names.
 
 ## [3.3.4-dev18] - 2026-08-26 - SMS Storage Off Integration Health; Sensor Enabled By Default
 
@@ -1286,12 +1309,12 @@ The same three keys had also disabled `_check_contract_drift`: `wa_inner_version
 
 `_classify_session` reads a `200 OK` response as two classes of key and returns one of four verdicts:
 
-| verdict | condition | response |
-| --- | --- | --- |
-| `live` | any authenticated key populated | proceed |
-| `expired` | authenticated all blank, unauthenticated populated | re-login and retry |
-| `not_ready` | everything blank | `ZTEConnectionError` — hold last known values |
-| `undecidable` | no unauthenticated key requested | fall back to the previous all-empty rule |
+| verdict       | condition                                          | response                                      |
+| ------------- | -------------------------------------------------- | --------------------------------------------- |
+| `live`        | any authenticated key populated                    | proceed                                       |
+| `expired`     | authenticated all blank, unauthenticated populated | re-login and retry                            |
+| `not_ready`   | everything blank                                   | `ZTEConnectionError` — hold last known values |
+| `undecidable` | no unauthenticated key requested                   | fall back to the previous all-empty rule      |
 
 `not_ready` is new and matters: a router that is answering but has nothing to report yet is booting, not expired. Re-logging in would not help, so it takes the reachability path instead of burning a login and heading toward a reauth prompt.
 
@@ -2332,12 +2355,12 @@ Session expiry detection and endpoint contract hardening. Replaced brittle named
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request | Live session | Dead session |
-  | :-- | :-- | :-- |
-  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
-  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
-  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+  | Request                     | Live session       | Dead session                                         |
+  | :-------------------------- | :----------------- | :--------------------------------------------------- |
+  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
+  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
+  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -2793,16 +2816,16 @@ Test suite repair post-linter extension. Restored test suite to 100% pass rate (
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 
