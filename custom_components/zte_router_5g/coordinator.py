@@ -878,11 +878,18 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         id so a card raised before the upgrade is cleared rather than stranded.
         """
         try:
-            nv_able = int(data.get("nv_sms_able") or 0)
-            nv_total = int(data.get("sms_nv_total") or 0)
+            capacity = int(data.get("sms_nv_total") or 0)
+            used = sum(
+                int(data.get(key) or 0)
+                for key in (
+                    "sms_nv_rev_total",
+                    "sms_nv_send_total",
+                    "sms_nv_draftbox_total",
+                )
+            )
         except (ValueError, TypeError):
             return
-        self._sms_storage_full = nv_able > 0 and nv_total >= nv_able
+        self._sms_storage_full = capacity > 0 and used >= capacity
 
     def _check_new_sms(self, messages: list[dict[str, Any]]) -> None:
         """Check for new SMS messages and fire events."""

@@ -114,8 +114,9 @@ def test_every_repair_key_has_a_title_and_rendered_text_everywhere() -> None:
     to allow for that or it contradicts `hassfest`. Its issues schema
     (`script/hassfest/translations.py`) requires a `title`, then exactly one of
     the two — `vol.Exclusive(..., "fixable")` — because a fixable issue renders
-    its prose in the flow's step rather than on the card. Asserting both, as
-    the first version of this test did, demands a shape Home Assistant rejects.
+    its prose in the flow's step rather than on the card. A sweep asserting
+    both demands a shape Home Assistant rejects, and would pass while
+    validation failed.
 
     So: a title always, and rendered text in whichever form the issue's
     fixability calls for.
@@ -205,11 +206,10 @@ async def test_every_repair_the_code_can_raise_is_registered_for_removal(
     `is_fixable=False` and no UI path to clear it and no integration left that
     could. This class of defect has recurred twice in this family.
 
-    Driven rather than read out of the source. An earlier version of this test
-    asserted that `__init__.py` mentioned the constants, and a mutation that
-    removed them from the loop still passed — the import line matched. Raising
-    a card under every id the code knows about and asserting the registry
-    empties cannot pass that way.
+    Driven rather than read out of the source: an assertion that `__init__.py`
+    mentions the removal constants is satisfied by the import line alone, and
+    passes with the loop emptied. Raising a card under every id the code knows
+    about and asserting the registry empties cannot.
     """
     from homeassistant.helpers import issue_registry as ir
 

@@ -212,7 +212,13 @@ async def test_sms_storage_full_is_a_health_finding_and_no_repair(
     something the Repairs panel can resolve, so it raises no card — the
     distinction the 2026-08-25 alignment drew.
     """
-    full = {**GOOD_DATA, "nv_sms_able": "20", "sms_nv_total": "20"}
+    full = {
+        **GOOD_DATA,
+        "sms_nv_total": "100",
+        "sms_nv_rev_total": "90",
+        "sms_nv_send_total": "8",
+        "sms_nv_draftbox_total": "2",
+    }
     coordinator.api.get_all_data = AsyncMock(return_value=full)
 
     await coordinator._async_update_data()

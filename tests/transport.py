@@ -65,10 +65,11 @@ GOOD_PAYLOAD: dict[str, Any] = {
     "monthly_rx_bytes": "2048",
     # The SMS capacity endpoint asserts `sms_nv_total` through
     # `_require_contract`, so a payload without it degrades that endpoint and
-    # muddies every failure this module is trying to isolate.
-    "sms_nv_total": "3",
-    "nv_sms_able": "20",
-    "sms_sim_total": "0",
+    # muddies every failure this module is trying to isolate. `sms_nv_total` is
+    # the bank's **capacity**; the fill is the three counters beside it.
+    "sms_nv_total": "100",
+    "sms_nv_rev_total": "3",
+    "sms_sim_total": "20",
 }
 
 # The SMS capacity endpoint answers with its own small set. Serving the whole
@@ -76,9 +77,9 @@ GOOD_PAYLOAD: dict[str, Any] = {
 # per-endpoint cache would then hold every `CORE_KEYS` member, so a later drift
 # poll would find them in the merged data via the cache and never fire.
 CAPACITY_PAYLOAD: dict[str, Any] = {
-    "sms_nv_total": "3",
-    "nv_sms_able": "20",
-    "sms_sim_total": "0",
+    "sms_nv_total": "100",
+    "sms_nv_rev_total": "3",
+    "sms_sim_total": "20",
 }
 
 # Two payloads that are byte-similar and mean opposite things, which is the

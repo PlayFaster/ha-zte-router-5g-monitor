@@ -1192,7 +1192,7 @@ def test_check_sms_storage_handles_type_error(coordinator_fixture):
     early return has to leave both the flag and the issue registry untouched.
     """
     coordinator_fixture._sms_storage_full = True
-    data = {"nv_sms_able": ["not", "an", "int"], "sms_nv_total": "5"}
+    data = {"sms_nv_total": "100", "sms_nv_rev_total": ["not", "an", "int"]}
 
     with patch("custom_components.zte_router_5g.coordinator.ir") as mock_ir:
         coordinator_fixture._check_sms_storage(data)

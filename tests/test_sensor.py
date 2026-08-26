@@ -1324,9 +1324,8 @@ def test_bandwidth_sensors_offer_the_unit_selector() -> None:
     a `device_class` HA has no conversion table for the entity, so the unit
     dropdown does not appear. Chore C-012.
 
-    The `state_class` assertion guards something else, and is worth separating
-    because it was mis-stated once already. It is **not** required for the
-    selector: `sensor/device_class_convertible_units`, the websocket command
+    The `state_class` assertion guards something else, and the two are worth
+    keeping apart. It is **not** required for the selector: `sensor/device_class_convertible_units`, the websocket command
     that populates it, takes `device_class` as its only input, and
     `DEVICE_CLASS_STATE_CLASSES[FREQUENCY]` explicitly permits `MEASUREMENT`.
     Checked against `homeassistant/components/sensor/websocket_api.py` and

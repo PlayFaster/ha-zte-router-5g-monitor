@@ -255,6 +255,16 @@ Three things generalize beyond this router:
 
 Which is also why the drift finding avoids naming firmware. It can only fire on a setup that was working, so something did change — but the only two occurrences to date were both this integration's own faults, not the router's. The repair itself was retired on 2026-08-25 — drift is not user-fixable, so it publishes on the health sensor instead — and `firmware_contract_drift` moved to `RETIRED_REPAIR_NAMES` rather than simply being deleted, because `ir.async_delete_issue` looks up by id.
 
+### SMS storage: which field is the size and which is the fill
+
+`sms_nv_total` and `sms_sim_total` are the **capacities** of the two banks — 100 and 20 on the reference MC7010 — not how much of each is used. The fill is the sum of that bank's three `*_rev_total`, `*_send_total` and `*_draftbox_total` counters, which is exactly what `Total Msg` sums for its state while publishing the capacities alongside as attributes.
+
+So a full store is `nv_used >= sms_nv_total`, computed in `_nv_store_is_full` for the binary sensor and mirrored in `coordinator._check_sms_storage` for the health finding. Both read the same four fields, and `tests/test_binary_sensor.py::test_sms_storage_full_reads_capacity_and_fill_the_right_way_round` pins the operands and their order.
+
+**SIM storage is deliberately not consulted.** The banks fill independently, and it is the router's own store running out that stops the network delivering.
+
+**Read these through `sms_capacity_info`, not the batch poll.** The same key names exist in both and behave differently: `multi_data` returns several of the counters as empty strings while the dedicated command returns real numbers, which is why the binary sensor carries `source=ENDPOINT_SMS_CAPACITY` and goes unavailable rather than reading a blank as a zero.
+
 ### Only a rejected credential may ask for re-authentication
 
 `ConfigEntryAuthFailed` puts a "re-authenticate" prompt in front of the user. It is only honest when the credential is the problem. A session that has merely lapsed is the integration's to fix — and it does, by logging in again — so raising it there tells the user their password is wrong and sends them to re-enter one that was never at fault.

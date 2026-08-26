@@ -359,6 +359,7 @@ Full probe results, and the router-facing agent's answers on encodings and write
 - **Used**: Yes — optional endpoint, polled with its own strike budget.
 - **Request**: `GET ...?isTest=false&cmd=sms_capacity_info`
 - **Purpose**: storage capacity and used counts for both banks.
+- **`sms_nv_total` and `sms_sim_total` are capacities, not counts.** Observed on the reference MC7010: **100** and **20**, the sizes of the router's own store and of the SIM. The fill of each bank is the sum of its three `*_rev_total`, `*_send_total` and `*_draftbox_total` counters — which is what the `Total Msg` sensor sums for its state, publishing the two capacities beside it as attributes. A bank is full when its three counters reach its capacity.
 - **Implementation**: `get_sms_capacity`, `api.py:538`. Returns `{}` on non-auth, non-connection failure; auth and connection errors propagate so the resilience layer can count a strike.
 
 ### `cmd=sms_data_total` — message bodies

@@ -185,6 +185,50 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.4-dev17] - 2026-08-26 - SMS Storage Fill Comparison; Hardware Check in Validate All
+
+### Summary
+
+`binary_sensor.sms_storage_full` and the health finding behind it compared the wrong two fields, so neither could ever report a full store. Both now compare the bank's fill against its capacity, and `Hardware: Check Device` joins `Validate All`.
+
+### Fixed
+
+- **SMS storage full compared capacity against a field the router does not return.** The condition was `nv_sms_able > 0 and sms_nv_total >= nv_sms_able`. `nv_sms_able` appears nowhere in the MC7010's responses, so the first clause was never true and the sensor read `off` whatever the store held. `sms_nv_total` was also the wrong operand: it is the **capacity** of the router's own bank, not its fill.
+
+  The correct comparison uses four fields already fetched: `sms_nv_rev_total + sms_nv_send_total + sms_nv_draftbox_total >= sms_nv_total`. Extracted to `_nv_store_is_full` in `binary_sensor.py` and mirrored in `coordinator._check_sms_storage`, which feeds the health finding from the same arithmetic.
+
+  **The field semantics were observable throughout.** `Total Msg` publishes its state as the sum of the six per-bank counters and carries `sms_nv_total` and `sms_sim_total` as attributes — 100 and 20 on the reference MC7010. Capacity and fill were side by side on the entity page.
+
+- **`tests/transport.py` served the same phantom key**, in `GOOD_PAYLOAD` and `CAPACITY_PAYLOAD`, so the transport fake would have taught it to every test written against it. Both now carry a capacity of 100 with a fill of 3.
+
+### Changed
+
+- **`Hardware: Check Device` added to `Validate All`**, last in the `dependsOn` chain so the deterministic checks report first, with a row in `Show: Results Summary` reading `.reports/hardware_check.txt`. Edited at the sync source, `dev-workbench/workbench/tasks.json`; the projects pick it up on the next `sync_shared_files` run. The existing `[ -f scripts/hardware_check.py ]` guard means `zte_router_5g` and `huawei_router_5g` run it and the other two skip at exit 0.
+
+### Added
+
+- **`test_sms_storage_full_reads_capacity_and_fill_the_right_way_round`**, pinned to the observed 100 and 20: full at capacity, not full one short, a full SIM bank ignored, and a missing or unreadable capacity treated as "not full" rather than "full".
+
+### Documentation
+
+- **`docs/zte_how_to_access.md`**: the `cmd=sms_capacity_info` section named "storage capacity and used counts" without saying which field was which. It now states that `sms_nv_total` and `sms_sim_total` are capacities, gives the observed values, and names the three counters that make up each bank's fill.
+- **`docs/DEVELOPMENT.md`**: new section on the same distinction, why SIM storage is not consulted, and why these fields are read through `sms_capacity_info` rather than the batch poll — `multi_data` returns several counters as empty strings.
+
+### Tests
+
+- 909 → **910**. 100% line and branch, 0 partial branches. Three existing tests changed: each supplied `nv_sms_able` by hand, which is why the suite covered this code fully and asserted nothing true about it.
+
+### Verified
+
+- **Three mutations**, each restored by checksum: the phantom key restored in the binary sensor, the operands reversed, and the phantom key restored in the coordinator. All three failed the new tests; the pre-fix code passed every test that existed before them.
+- **A scan of every `data.get("<literal>")` in the component against the keys `api.py` requests** found no other payload key that is read but never fetched. The 18 unmatched names are health-snapshot fields, `entry.data` keys, SMS message fields and service parameters.
+- `Tests: Depth Check` PASSED; assertion audit 2 of 616 allow-listed; `mypy` and `ruff` clean.
+
+### Notes
+
+- **The unit selector on the two bandwidth sensors is confirmed present** on a live instance, closing the one open question from `[3.3.4-dev12]`.
+- **`auth_failed` could not be exercised end to end.** Setting a deliberately wrong password is refused by the config flow with "cannot connect to router" and the stored credentials are left unchanged, which is the correct behaviour and leaves the repair's Fix button unobserved.
+
 ## [3.3.4-dev16] - 2026-08-26 - Repair Translation Schema: Fixable Issue Exclusivity
 
 ### Summary

@@ -44,6 +44,34 @@ class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
     about: str | None = None
 
 
+def _nv_store_is_full(data: Any) -> bool:
+    """Return whether the router's own message store has run out of room.
+
+    Compares the three NV counters against `sms_nv_total`, the capacity of that
+    bank. Mirrored by `coordinator._check_sms_storage`, which feeds the health
+    finding from the same arithmetic.
+
+    `sms_nv_total` is the capacity of that bank, not its fill: `Total Msg`
+    publishes both, and on the reference MC7010 they read 100 and 20 for the
+    two banks.
+    """
+    if not data:
+        return False
+    try:
+        capacity = int(data.get("sms_nv_total") or 0)
+        used = sum(
+            int(data.get(key) or 0)
+            for key in (
+                "sms_nv_rev_total",
+                "sms_nv_send_total",
+                "sms_nv_draftbox_total",
+            )
+        )
+    except (TypeError, ValueError):
+        return False
+    return capacity > 0 and used >= capacity
+
+
 # Define the entity description for static metadata
 BEST_CONN_DESCRIPTION = ZTEBinarySensorEntityDescription(
     key="best_connection",
@@ -75,14 +103,13 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="sms",
-        # `nv_able` is the capacity; a zero means the router did not report one,
-        # which is not the same as a store with no room. Mirrors the arithmetic
-        # in `coordinator._check_sms_storage`, which feeds the health finding.
-        value_fn=lambda data: bool(
-            data
-            and (int(data.get("nv_sms_able") or 0) > 0)
-            and int(data.get("sms_nv_total") or 0) >= int(data.get("nv_sms_able") or 0)
-        ),
+        # `sms_nv_total` is the **capacity** of the router's own store, not
+        # how much of it is used — `Total Msg` publishes both side by side, and
+        # on the reference MC7010 they read 100 and 20 for the two banks. The
+        # fill level is the sum of the three NV counters. SIM storage fills
+        # independently and is not this sensor: a full NV store is what stops
+        # the network delivering.
+        value_fn=lambda data: _nv_store_is_full(data),
     ),
     ZTEBinarySensorEntityDescription(
         key="reboot_schedule",

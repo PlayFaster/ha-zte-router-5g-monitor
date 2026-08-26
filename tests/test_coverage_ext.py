@@ -621,7 +621,13 @@ async def test_coordinator_sms_storage_full_sets_the_flag_without_a_repair(
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
 
-    full_data = {"nv_sms_able": "20", "sms_nv_total": "20"}
+    # Capacity 100, and the three NV counters summing to exactly 100.
+    full_data = {
+        "sms_nv_total": "100",
+        "sms_nv_rev_total": "90",
+        "sms_nv_send_total": "8",
+        "sms_nv_draftbox_total": "2",
+    }
 
     with (
         patch.object(api, "get_all_data", return_value=full_data),
@@ -653,7 +659,12 @@ async def test_coordinator_sms_storage_not_full_clears_the_flag(
     coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
     coordinator._sms_storage_full = True
 
-    partial_data = {"nv_sms_able": "20", "sms_nv_total": "5"}
+    partial_data = {
+        "sms_nv_total": "100",
+        "sms_nv_rev_total": "5",
+        "sms_nv_send_total": "0",
+        "sms_nv_draftbox_total": "0",
+    }
 
     with (
         patch.object(api, "get_all_data", return_value=partial_data),
@@ -928,7 +939,7 @@ async def test_coordinator_sms_storage_check_exception(
         patch.object(
             api,
             "get_all_data",
-            return_value={"nv_sms_able": "invalid", "sms_nv_total": "20"},
+            return_value={"sms_nv_total": "invalid", "sms_nv_rev_total": "1"},
         ),
         patch.object(api, "get_sms_capacity", return_value={}),
         patch.object(api, "get_sms_messages", return_value=[]),
