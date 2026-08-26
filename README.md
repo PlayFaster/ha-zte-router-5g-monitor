@@ -1759,14 +1759,14 @@ Two conditions raise a card in Home Assistant's **Repairs** panel, and both need
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Repair | Raised when | Why it is a Repair |
-| :-- | :-- | :-- |
-| **ZTE router sign-in failed** | The router refuses the stored username or password, and a retry does not recover it | The only one you can act on from the panel — **Fix** opens a reauthentication dialog so you can re-enter the password. Until you do, no data arrives at all. It can mean the password was changed on the router, or that it is refusing new sessions. It does **not** clear on its own, and survives a restart, because a refused password stays refused until it is corrected. |
-| **ZTE router is not responding** | 10 consecutive failed fetches | Ten failures in a row means the problem is not clearing on its own. The text lists what to check — power-cycle, whether the IP changed, whether the password changed, the network path — and names the address currently configured so you can compare. Clears itself once communication is restored. |
+| Condition | Detected State | Surface Reported | Actionable User Step |
+| :-- | :-- | :-- | :-- |
+| **Authentication Failed** | Router rejects stored credentials | **Repairs card** (`auth_failed`) & Integration Health (`error`) | Click **Fix** to re-enter username/password |
+| **Sustained Outage** | 10 consecutive failed polls | **Repairs card** (`conn_error`) & Integration Health (`error`) | Check power, network path, or configured IP address |
+| **Transient Glitch / Reboot** | 1–3 failed poll cycles | Integration Health (`error` during outage) | None (auto-clears on next successful poll) |
+| **Firmware Schema Change** | Unrecognized or missing API fields | Integration Health (`severity: warning`, `drift` attr) | Check for integration updates or report issue |
 
 **What earns a Repair.** Two things together: the condition has stopped resolving itself, **and** there is something you can do about it. A reading you cannot influence fails the second test however persistent it is.
-
-**What does not, and where to find it instead.** A part of the router the integration could not reach shows in `degraded_capabilities`.
 
 **A Repair also turns the Integration Health sensor on**, so an automation watching that sensor sees these two as well, without watching the panel. See [Self-Diagnosis](#-self-diagnosis).
 
