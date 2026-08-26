@@ -101,7 +101,12 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
         translation_key="sms_storage_full",
         device_class=BinarySensorDeviceClass.PROBLEM,
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        # Enabled by default, unlike most diagnostics here. Nothing else reports
+        # this: a full store makes the network stop delivering, and Integration
+        # Health deliberately does not cover it — §19 is about whether the
+        # integration's data can be trusted, and this is the device's state,
+        # reported correctly. If the entity is off, the condition is invisible.
+        entity_registry_enabled_default=True,
         group="sms",
         # `sms_nv_total` is the **capacity** of the router's own store, not
         # how much of it is used — `Total Msg` publishes both side by side, and

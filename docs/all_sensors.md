@@ -38,7 +38,7 @@ A complete list of the static entities and service actions provided by the integ
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| SMS Storage Full | `sms_storage_full` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
+| SMS Storage Full | `sms_storage_full` | Binary Sensor | - | Diagnostic | - |
 | Delete All | `delete_all` | Button | - | - | - |
 | Recent Msg | `msg_recent` | Sensor | - | - | - |
 | Total Msg | `msg_total` | Sensor | - | - | LTS: `measurement` |

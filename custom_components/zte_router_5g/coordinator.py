@@ -149,7 +149,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._drift_strikes = 0
         self._unreachable_repair_raised = False
         self._auth_repair_raised = False
-        self._sms_storage_full = False
 
         # Snapshot of the non-live options this entry was set up with; the
         # update listener diffs against it to decide reload vs live-apply.
@@ -216,7 +215,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             ir.async_delete_issue(self.hass, DOMAIN, issue_id)
         self._unreachable_repair_raised = False
         self._auth_repair_raised = False
-        self._sms_storage_full = False
 
     def apply_live_options(self) -> None:
         """Apply the options that change without a reload.
@@ -493,9 +491,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                         "%s: Reconnected successfully.",
                         self.entry.title,
                     )
-                # Storage check first, so its repair state is current when the
-                # health snapshot reflects it rather than a cycle stale.
-                self._check_sms_storage(data)
                 self._record_health_success(data)
                 self._check_new_sms(messages)
                 return data
@@ -752,11 +747,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             drift_findings = [DRIFT_CONTRACT] if drift else []
             issues.extend(drift_findings)
 
-            # Reflect an existing repair rather than double-raising it — the
-            # SMS-storage issue is owned by _check_sms_storage.
-            if self._sms_storage_full:
-                issues.append("SMS storage is full")
-
             self.health_snapshot = {
                 "problem": bool(issues),
                 "issues": issues,
@@ -866,30 +856,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 "last_good_update": None,
                 "consecutive_failures": self.consecutive_failures,
             }
-
-    def _check_sms_storage(self, data: dict[str, Any]) -> None:
-        """Record whether the router's message store is full.
-
-        Publishes state only. A full store is an operational condition the user
-        may want to automate on, not something the Repairs panel can help with,
-        so it surfaces as `binary_sensor.*_sms_storage_full` and as a health
-        finding — the family policy in `repair_set_alignment.md` §2. It raised a
-        repair until the 2026-08-25 alignment; `RETIRED_REPAIR_NAMES` carries the
-        id so a card raised before the upgrade is cleared rather than stranded.
-        """
-        try:
-            capacity = int(data.get("sms_nv_total") or 0)
-            used = sum(
-                int(data.get(key) or 0)
-                for key in (
-                    "sms_nv_rev_total",
-                    "sms_nv_send_total",
-                    "sms_nv_draftbox_total",
-                )
-            )
-        except (ValueError, TypeError):
-            return
-        self._sms_storage_full = capacity > 0 and used >= capacity
 
     def _check_new_sms(self, messages: list[dict[str, Any]]) -> None:
         """Check for new SMS messages and fire events."""

@@ -263,6 +263,8 @@ So a full store is `nv_used >= sms_nv_total`, computed in `_nv_store_is_full` fo
 
 **SIM storage is deliberately not consulted.** The banks fill independently, and it is the router's own store running out that stops the network delivering.
 
+**A full store is not an Integration Health problem, and the sensor is enabled by default.** Section 19 reports whether this integration's data can be trusted — unreachable, auth refused, an endpoint degraded, the contract drifted. A full message store is the router's state, reported correctly by a poll that worked, so none of the five severity values describes it; routing it through health produced `problem: true` beside `severity: ok`. It is the binary sensor's alone, which is why that entity is on by default where the other diagnostics here are not: nothing else reports it. `huawei_router_5g` has never fed its equivalent into health either.
+
 **Read these through `sms_capacity_info`, not the batch poll.** The same key names exist in both and behave differently: `multi_data` returns several of the counters as empty strings while the dedicated command returns real numbers, which is why the binary sensor carries `source=ENDPOINT_SMS_CAPACITY` and goes unavailable rather than reading a blank as a zero.
 
 ### Only a rejected credential may ask for re-authentication

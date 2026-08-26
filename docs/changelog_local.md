@@ -185,6 +185,40 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.4-dev18] - 2026-08-26 - SMS Storage Off Integration Health; Sensor Enabled By Default
+
+### Summary
+
+A full message store no longer contributes to the Integration Health snapshot, and `binary_sensor.*_sms_storage_full` is enabled by default in its place. Section 19 reports whether the integration's data can be trusted; a full store is the router's state, reported correctly.
+
+### Changed
+
+- **A full message store no longer reaches the health snapshot.** It added `"SMS storage is full"` to `issues`, which set `problem: true` while `severity` stayed `ok` — a pair none of Section 19's five values describes. The enum is built entirely around the integration's ability to report: `degraded` for capabilities lost, `warning` for data that may be wrong, `error` for unreachable or an uncomputable verdict. A store that is full is none of those; the poll succeeded and published an accurate reading.
+
+- **`binary_sensor.*_sms_storage_full` is enabled by default**, where the other diagnostics in this project are not. With health no longer reporting the condition, this entity is its only surface, and its `about` note states the case: nothing else in the integration reports it, and a full store makes the network stop delivering. It also replaces a Repair card that was visible to every user before the 2026-08-25 alignment.
+
+  This diverges from `huawei_router_5g`, where the same entity is disabled. Deliberate: Huawei never retired a visible Repair into it. A task has been raised on that project to consider the same change.
+
+### Removed
+
+- **`coordinator._check_sms_storage` and the `_sms_storage_full` flag.** With the health finding gone, nothing read the flag — the binary sensor computes the condition from `coordinator.data` through `_nv_store_is_full`. Three tests went with it, all of which asserted the flag rather than any observable behavior.
+
+### Tests
+
+- 910 → **906**, all of the reduction from removing the dead coordinator path. 100% line and branch, 0 partial branches.
+- `test_sms_storage_full_is_a_health_finding_and_no_repair` inverts to `test_a_full_message_store_is_not_an_integration_health_problem`, asserting `problem` false, `severity` `ok`, `issues` empty and no repair card.
+
+### Documentation
+
+- **`README.md`**: the Repairs section separates the two cases — drift and degraded capabilities report on Integration Health, a full store on its own entity, which does not touch health. The SMS sub-device no longer lists a disabled entity.
+- **`docs/DEVELOPMENT.md`**: records why the condition is off health and why this one diagnostic is on by default.
+- `docs/all_sensors.md` re-synced through `check_sensor_manifest.py --sync-docs`.
+
+### Verified
+
+- Both repairs confirmed to turn Integration Health on before this change, driven through the transport fake rather than read from source: `conn_error` and `auth_failed` each produce `problem: true`, `severity: error`, and their own key in the `repairs` attribute. Removing the SMS finding therefore leaves no repair unaccompanied.
+- `Tests: Depth Check` PASSED; `mypy` and `ruff` clean; sensor manifest in sync.
+
 ## [3.3.4-dev17] - 2026-08-26 - SMS Storage Fill Comparison; Hardware Check in Validate All
 
 ### Summary

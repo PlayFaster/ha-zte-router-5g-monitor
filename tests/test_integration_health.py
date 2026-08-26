@@ -202,15 +202,18 @@ async def test_publishes_the_section_19_attribute_contract(health) -> None:
     assert "last_good_update" in attrs
 
 
-async def test_sms_storage_full_is_a_health_finding_and_no_repair(
-    health, coordinator, hass: HomeAssistant
+async def test_a_full_message_store_is_not_an_integration_health_problem(
+    hass: HomeAssistant, coordinator
 ) -> None:
-    """A full message store reports as state, not as a Repair.
+    """Section 19 reports whether this integration's data can be trusted.
 
-    The condition is real and worth automating on, which is why it keeps a
-    health finding and gained `binary_sensor.*_sms_storage_full`. It is not
-    something the Repairs panel can resolve, so it raises no card — the
-    distinction the 2026-08-25 alignment drew.
+    A full message store is the router's state, reported correctly by a poll
+    that worked — so it is `binary_sensor.*_sms_storage_full` and nothing else.
+    Routing it through here produced `problem: true` with `severity: ok`, a
+    pair the Section 19 enum has no meaning for, because none of its values
+    describes a device condition the integration is reporting accurately.
+
+    `huawei_router_5g` has never fed its equivalent into health either.
     """
     full = {
         **GOOD_DATA,
@@ -223,9 +226,10 @@ async def test_sms_storage_full_is_a_health_finding_and_no_repair(
 
     await coordinator._async_update_data()
 
-    assert health.is_on is True
-    assert "SMS storage is full" in health.extra_state_attributes["issues"]
-    assert health.extra_state_attributes["repairs"] == []
+    snapshot = coordinator.health_snapshot
+    assert snapshot["problem"] is False
+    assert snapshot["severity"] == "ok"
+    assert snapshot["issues"] == []
     assert not [
         issue
         for (domain, _id), issue in ir.async_get(hass).issues.items()

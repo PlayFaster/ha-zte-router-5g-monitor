@@ -360,7 +360,7 @@ This integration provides **92 entities** (depending on your firmware) organized
 | ⚙️ **System** | 53 | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls | 21: Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
 | 📶 **Signal** | 50 | 36 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 10: MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
 | 📈 **Data** | 19 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
-| ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | 1: SMS Storage Full |
+| ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
 | 🛠️ **Actions** | 4 | — | Send, Delete, Bulk-Delete and List SMS | — |
 
 ---
@@ -1753,7 +1753,7 @@ It is deliberately **available at all times**, including when every other entity
 
 Home Assistant reserves the **Repairs** panel for problems that need you to do something about them. Two conditions here qualify, and both are also reflected on the Integration Health sensor.
 
-**Everything else this integration detects is still tracked — it is just not a Repair.** A firmware field change shows as `severity: warning` with the detail in the `drift` attribute, a router capability that could not be reached shows in `degraded_capabilities`, and a full message store is the **SMS Storage Full** binary sensor. Automate on those the same way you would on a Repair; the difference is whether there is an action for you to take, not whether the problem is real.
+**Everything else this integration detects is still tracked — it is just not a Repair.** A firmware field change shows as `severity: warning` with the detail in the `drift` attribute, and a router capability that could not be reached shows in `degraded_capabilities`. Automate on any of these the same way you would on a Repair; the difference is whether there is an action for you to take, not whether the problem is real.
 
 <details>
 
