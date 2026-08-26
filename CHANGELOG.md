@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.3] - 2026-08-08 - Release - SMS Bugfix
+## [3.3.3] - 2026-08-08 - Release: SMS Bugfix and Polling Resilience
 
 ### Summary
 
@@ -36,7 +36,7 @@ A Send SMS fix, plus several resilience and robustness changes for edge case beh
 
 ---
 
-## [3.3.2] - 2026-08-02 - Release
+## [3.3.2] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Telemetry
 
 ### Summary
 
@@ -98,7 +98,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 
 ---
 
-## [3.2.5] - 2026-07-03 - Release
+## [3.2.5] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening
 
 ### Added
 
@@ -116,31 +116,31 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 - **Edit screen credential security**: Configured the password field on configuration screens to be masked and blank by default, preventing the stored password from being pre-filled or exposed.
 - **Host URL sanitization**: Host input is now automatically sanitized to strip redundant prefixes or trailing slashes, preventing malformed device links.
 
-## [3.2.4] - 2026-06-15 - Release
+## [3.2.4] - 2026-06-15 - Release: Shared CI Validation v2.0.3
 
 ### Changed
 
 - **CI Validation Bump**: Shared CI validation bumped to v2.0.3. No user changes in this release, background/infrastructure only.
 
-## [3.2.3] - 2026-06-14
+## [3.2.3] - 2026-06-14 - Maintenance: Shared CodeQL Permissions Alignment for Zizmor
 
 ### Summary
 
 - **CI Validation Only**: Changes to the CI Validation set-up require another release to test properly, but there are no user changes in this release, background/infrastructure only.
 
-## [3.2.2] - 2026-06-14
+## [3.2.2] - 2026-06-14 - Maintenance: Shared CodeQL Security Scanning
 
 ### Summary
 
 - **CI Validation Only**: Changes to the CI Validation set-up require another release to test properly, but there are no user changes in this release, background/infrastructure only.
 
-## [3.2.1] - 2026-06-14
+## [3.2.1] - 2026-06-14 - Maintenance: CI Validation Infrastructure Test Release
 
 ### Summary
 
 - **CI Validation Only**: Changes to the CI Validation set-up require a release to test properly, but there are no user changes in this release, background/infrastructure only.
 
-## [3.2.0] - 2026-05-28
+## [3.2.0] - 2026-05-28 - Release: APN Profile Control, Network Mode Select, and Diagnostic Entities
 
 ### Added
 
@@ -160,7 +160,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 
 - **Centralized session stability**: The request helper now proactively detects and resets expired session tokens to prevent transient errors and empty sensor states.
 
-## [3.1.0] - 2026-05-24
+## [3.1.0] - 2026-05-24 - Release: SMS Service Actions, Received Bus Events, and Storage Full Repairs
 
 ### Added
 
@@ -181,7 +181,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 - **Reauthentication flow triggers**: Isolated the reauthentication flow to explicit router credential rejections, preventing transient network drops from triggering configuration prompts.
 - **Legacy data unit calculation**: Aligned legacy monthly data sensor conversions to standard decimal gigabytes (GB) instead of binary gibibytes (GiB).
 
-## [3.0.1] - 2026-05-10
+## [3.0.1] - 2026-05-10 - Maintenance: README Documentation and Standards Alignment
 
 ### Changed
 
@@ -189,7 +189,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 - **Under the Hood**: Several internal code changes to improve maintainability and alignment with Home Assistant development standards (no functional breaking changes).
 - **Validations**: Improved local and automated remote testing to ensure code remains secure and follows best practices.
 
-## [3.0.0] - 2026-05-08
+## [3.0.0] - 2026-05-08 - Major Release: Native Async Rewrite, Sub-Device Architecture, and IMEI Identity
 
 ### Added
 
@@ -222,7 +222,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 - **User-Friendly Labels**: Refined entity labels for better readability (e.g., "PPP Status" → "**Bridge Mode**", "Wa Inner Version" → "**Firmware Version**").
 - **Readme**: Updated and added automation examples.
 
-## [2.3.1] - 2026-04-01 PUBLIC RELEASE
+## [2.3.1] - 2026-04-01 - Release: DataUpdateCoordinator Migration and HACS Branding Assets
 
 ### Added
 
@@ -232,37 +232,37 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 
 - **Grace period error handling**: Adjusted grace period configuration to ensure sensors correctly transition to `Unavailable` when the router goes offline.
 
-## [2.1.1] - 2026-03-29
+## [2.1.1] - 2026-03-29 - Maintenance: Diagnostic Error Logging
 
 ### Added
 
 - **Error Logging**: Significantly improved home assistant (logger) error logging.
 
-## [2.0.1] - 2026-03-29
+## [2.0.1] - 2026-03-29 - Feature: Options Flow for Dynamic Reconfiguration
 
 ### Added
 
 - **Options Flow**: Allow reconfiguration of integration in-situ rather than delete and re-add.
 
-## [1.9.4] - 2026-03-29
+## [1.9.4] - 2026-03-29 - Feature: Hardware Model Reading and Session Management
 
 ### Added
 
 - **Model Number**: Pulls model number from device.
 
-## [1.7.3] - 2026-03-29
+## [1.7.3] - 2026-03-29 - Maintenance: Standardized Entity Naming
 
 ### Fixed
 
 - **Entity naming alignment**: Aligned and standardized the sensor naming scheme.
 
-## [1.6.3] - 2026-03-28
+## [1.6.3] - 2026-03-28 - Maintenance: Non-Blocking Async Startup for Offline Routers
 
 ### Changed
 
 - **Reduced Startup Risk**: Moved to async for startup to avoid any potential for slowness/hangs/locks if router is unavailable at HA start.
 
-## [1.5.7] - 2026-03-28
+## [1.5.7] - 2026-03-28 - UI: ZTE Brand Icons and Sub-Device Sensor Naming
 
 ### Added
 
@@ -272,25 +272,25 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 
 - **Sub-device naming alignment**: Standardized sensor naming for secondary data and SMS entities.
 
-## [1.5.1] - 2026-03-28
+## [1.5.1] - 2026-03-28 - Maintenance: Home Assistant Integration Naming Alignment
 
 ### Changed
 
 - **Aligned Integration Naming**: All naming now ZTE Router 5G Monitor.
 
-## [1.4.5] - 2026-03-28
+## [1.4.5] - 2026-03-28 - Documentation: Local Changelog Addition and Standard Sensor Names
 
 ### Changed
 
 - **Standard Names**: Changed specific sensor names (with ID tag) to standard names.
 
-## [1.4.4] - 2026-03-28
+## [1.4.4] - 2026-03-28 - Telemetry: Router Attribute Exposure as Entities
 
 ### Added
 
 - **All Relevant Attributes**: Added all relevant signal and status attributes available from the router as sensors.
 
-## [1.4.3] - 2026-03-28
+## [1.4.3] - 2026-03-28 - Controls: Pause Polling Switch and Polling Interval Number Entity
 
 ### Added
 
@@ -303,7 +303,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 - **Startup deadlock prevention**: Implemented initial bypass checks to ensure integration entities load successfully on Home Assistant restart when polling is paused.
 - **Boot-phase connection resilience**: Added a startup fail-safe to prevent entities from loading in an unavailable state when the router is temporarily unreachable at startup.
 
-## [1.4.2] - 2026-03-27
+## [1.4.2] - 2026-03-27 - Feature: SMS Inbox Monitoring and Initial GitHub Release
 
 ### Added
 
@@ -311,14 +311,14 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 - **Hybrid Resilience**: Implemented a "one-cycle grace period" where sensors hold their last known value during a single failed poll before marking as unavailable.
 - **GitHub**: Initial release to GitHub repository.
 
-## [1.4.0] - 2026-03-26
+## [1.4.0] - 2026-03-26 - Telemetry: Core Signal and Cellular Data Sensors
 
 ### Added
 
 - Core sensors: Signal Strength (RSRP/RSRQ/SINR), Network Type, and Data Usage.
 - Connection status binary sensor.
 
-## [1.3.6] - 2026-03-25
+## [1.3.6] - 2026-03-25 - Initial Release: Custom Component for ZTE MC7010
 
 ### Added
 
@@ -338,30 +338,30 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
-  - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
-  - [\[3.3.2\] - 2026-08-02 - Release](#332---2026-08-02---release)
-  - [\[3.2.5\] - 2026-07-03 - Release](#325---2026-07-03---release)
-  - [\[3.2.4\] - 2026-06-15 - Release](#324---2026-06-15---release)
-  - [\[3.2.3\] - 2026-06-14](#323---2026-06-14)
-  - [\[3.2.2\] - 2026-06-14](#322---2026-06-14)
-  - [\[3.2.1\] - 2026-06-14](#321---2026-06-14)
-  - [\[3.2.0\] - 2026-05-28](#320---2026-05-28)
-  - [\[3.1.0\] - 2026-05-24](#310---2026-05-24)
-  - [\[3.0.1\] - 2026-05-10](#301---2026-05-10)
-  - [\[3.0.0\] - 2026-05-08](#300---2026-05-08)
-  - [\[2.3.1\] - 2026-04-01 PUBLIC RELEASE](#231---2026-04-01-public-release)
-  - [\[2.1.1\] - 2026-03-29](#211---2026-03-29)
-  - [\[2.0.1\] - 2026-03-29](#201---2026-03-29)
-  - [\[1.9.4\] - 2026-03-29](#194---2026-03-29)
-  - [\[1.7.3\] - 2026-03-29](#173---2026-03-29)
-  - [\[1.6.3\] - 2026-03-28](#163---2026-03-28)
-  - [\[1.5.7\] - 2026-03-28](#157---2026-03-28)
-  - [\[1.5.1\] - 2026-03-28](#151---2026-03-28)
-  - [\[1.4.5\] - 2026-03-28](#145---2026-03-28)
-  - [\[1.4.4\] - 2026-03-28](#144---2026-03-28)
-  - [\[1.4.3\] - 2026-03-28](#143---2026-03-28)
-  - [\[1.4.2\] - 2026-03-27](#142---2026-03-27)
-  - [\[1.4.0\] - 2026-03-26](#140---2026-03-26)
-  - [\[1.3.6\] - 2026-03-25](#136---2026-03-25)
+  - [\[3.3.3\] - 2026-08-08 - Release: SMS Bugfix and Polling Resilience](#333---2026-08-08---release-sms-bugfix-and-polling-resilience)
+  - [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Telemetry](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-and-health-telemetry)
+  - [\[3.2.5\] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening](#325---2026-07-03---release-refresh-now-button-display-units-and-config-flow-hardening)
+  - [\[3.2.4\] - 2026-06-15 - Release: Shared CI Validation v2.0.3](#324---2026-06-15---release-shared-ci-validation-v203)
+  - [\[3.2.3\] - 2026-06-14 - Maintenance: Shared CodeQL Permissions Alignment for Zizmor](#323---2026-06-14---maintenance-shared-codeql-permissions-alignment-for-zizmor)
+  - [\[3.2.2\] - 2026-06-14 - Maintenance: Shared CodeQL Security Scanning](#322---2026-06-14---maintenance-shared-codeql-security-scanning)
+  - [\[3.2.1\] - 2026-06-14 - Maintenance: CI Validation Infrastructure Test Release](#321---2026-06-14---maintenance-ci-validation-infrastructure-test-release)
+  - [\[3.2.0\] - 2026-05-28 - Release: APN Profile Control, Network Mode Select, and Diagnostic Entities](#320---2026-05-28---release-apn-profile-control-network-mode-select-and-diagnostic-entities)
+  - [\[3.1.0\] - 2026-05-24 - Release: SMS Service Actions, Received Bus Events, and Storage Full Repairs](#310---2026-05-24---release-sms-service-actions-received-bus-events-and-storage-full-repairs)
+  - [\[3.0.1\] - 2026-05-10 - Maintenance: README Documentation and Standards Alignment](#301---2026-05-10---maintenance-readme-documentation-and-standards-alignment)
+  - [\[3.0.0\] - 2026-05-08 - Major Release: Native Async Rewrite, Sub-Device Architecture, and IMEI Identity](#300---2026-05-08---major-release-native-async-rewrite-sub-device-architecture-and-imei-identity)
+  - [\[2.3.1\] - 2026-04-01 - Release: DataUpdateCoordinator Migration and HACS Branding Assets](#231---2026-04-01---release-dataupdatecoordinator-migration-and-hacs-branding-assets)
+  - [\[2.1.1\] - 2026-03-29 - Maintenance: Diagnostic Error Logging](#211---2026-03-29---maintenance-diagnostic-error-logging)
+  - [\[2.0.1\] - 2026-03-29 - Feature: Options Flow for Dynamic Reconfiguration](#201---2026-03-29---feature-options-flow-for-dynamic-reconfiguration)
+  - [\[1.9.4\] - 2026-03-29 - Feature: Hardware Model Reading and Session Management](#194---2026-03-29---feature-hardware-model-reading-and-session-management)
+  - [\[1.7.3\] - 2026-03-29 - Maintenance: Standardized Entity Naming](#173---2026-03-29---maintenance-standardized-entity-naming)
+  - [\[1.6.3\] - 2026-03-28 - Maintenance: Non-Blocking Async Startup for Offline Routers](#163---2026-03-28---maintenance-non-blocking-async-startup-for-offline-routers)
+  - [\[1.5.7\] - 2026-03-28 - UI: ZTE Brand Icons and Sub-Device Sensor Naming](#157---2026-03-28---ui-zte-brand-icons-and-sub-device-sensor-naming)
+  - [\[1.5.1\] - 2026-03-28 - Maintenance: Home Assistant Integration Naming Alignment](#151---2026-03-28---maintenance-home-assistant-integration-naming-alignment)
+  - [\[1.4.5\] - 2026-03-28 - Documentation: Local Changelog Addition and Standard Sensor Names](#145---2026-03-28---documentation-local-changelog-addition-and-standard-sensor-names)
+  - [\[1.4.4\] - 2026-03-28 - Telemetry: Router Attribute Exposure as Entities](#144---2026-03-28---telemetry-router-attribute-exposure-as-entities)
+  - [\[1.4.3\] - 2026-03-28 - Controls: Pause Polling Switch and Polling Interval Number Entity](#143---2026-03-28---controls-pause-polling-switch-and-polling-interval-number-entity)
+  - [\[1.4.2\] - 2026-03-27 - Feature: SMS Inbox Monitoring and Initial GitHub Release](#142---2026-03-27---feature-sms-inbox-monitoring-and-initial-github-release)
+  - [\[1.4.0\] - 2026-03-26 - Telemetry: Core Signal and Cellular Data Sensors](#140---2026-03-26---telemetry-core-signal-and-cellular-data-sensors)
+  - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-for-zte-mc7010)
 
 ---

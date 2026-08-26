@@ -162,12 +162,12 @@ RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
 
 ---
 
-| Acronym  | Means                              | Think Of                    | Answers                                     |
-| :------- | :--------------------------------- | :-------------------------- | :------------------------------------------ |
-| **SNR**  | Signal-to-Noise Ratio              | **"Signal Quality"**        | _How fast will this actually go?_           |
-| **RSRP** | Reference Signal Received Power    | **"Signal Strength"**       | _Do I have coverage at all?_                |
-| **RSRQ** | Reference Signal Received Quality  | **"Connection Congestion"** | _Is the channel congested/busy?_            |
-| **RSSI** | Received Signal Strength Indicator | **"Total Power"**           | _How much raw RF energy reaches the modem?_ |
+| Acronym | Means | Think Of | Answers |
+| :-- | :-- | :-- | :-- |
+| **SNR** | Signal-to-Noise Ratio | **"Signal Quality"** | _How fast will this actually go?_ |
+| **RSRP** | Reference Signal Received Power | **"Signal Strength"** | _Do I have coverage at all?_ |
+| **RSRQ** | Reference Signal Received Quality | **"Connection Congestion"** | _Is the channel congested/busy?_ |
+| **RSSI** | Received Signal Strength Indicator | **"Total Power"** | _How much raw RF energy reaches the modem?_ |
 
 ---
 
@@ -234,8 +234,8 @@ Monitor monthly data consumption, active session totals, and upload/download spe
 - **Projected Cycle Usage** (`sensor.zte_5g_data_projected_cycle_usage`): An estimate of where you will finish the cycle at your current rate. See [Data Usage Projection](#-data-usage-projection) below.
 - **Download & Upload Speed**: Track your upload and download speeds. Note: This is valid, but only at the instant data was fetched from the router.
 
-|                        Data Sensors                         |                     Data Diagnostics                      |
-| :---------------------------------------------------------: | :-------------------------------------------------------: |
+| Data Sensors | Data Diagnostics |
+| :-: | :-: |
 | ![Data Sensors](.github/images/zte_5g_data_screen_mini.png) | ![Data Diagnostics](.github/images/zte_5g_data_diags.png) |
 
 ---
@@ -260,13 +260,13 @@ The forecast projects end-of-month usage by applying your daily run-rate across 
 
 ![Use vs Projected Use](.github/images/zte_5g_data_project.png)
 
-| Attribute      | Meaning                                                                                                                                                            |
-| :------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `confidence`   | `low`, `medium`, or `high` — how much of the figure rests on observed usage rather than extrapolation. Reaches `high` around a quarter of the way through a cycle. |
-| `basis`        | How the estimate was calculated (e.g. `run_rate_only`).                                                                                                            |
-| `cycle_day`    | Where you are in the cycle, e.g. `12 of 31`.                                                                                                                       |
-| `cycle_start`  | The date the current cycle began.                                                                                                                                  |
-| `cycle_source` | `router` when resolved from `Reset Day`, or `calendar_assumed` when defaulting to the 1st of the month.                                                            |
+| Attribute | Meaning |
+| :-- | :-- |
+| `confidence` | `low`, `medium`, or `high` — how much of the figure rests on observed usage rather than extrapolation. Reaches `high` around a quarter of the way through a cycle. |
+| `basis` | How the estimate was calculated (e.g. `run_rate_only`). |
+| `cycle_day` | Where you are in the cycle, e.g. `12 of 31`. |
+| `cycle_start` | The date the current cycle began. |
+| `cycle_source` | `router` when resolved from `Reset Day`, or `calendar_assumed` when defaulting to the 1st of the month. |
 
 **It is not recorded in long-term statistics** by design. It is an end-of-cycle estimate useful for live alerting rather than historical tracking (historical data volume is already tracked by **Month Total**).
 
@@ -306,8 +306,8 @@ Reboot router hardware directly from Home Assistant and monitor data integrity w
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
 - **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
 
-|                        System Control                        |                             System Diagnostics                             |
-| :----------------------------------------------------------: | :------------------------------------------------------------------------: |
+| System Control | System Diagnostics |
+| :-: | :-: |
 | ![System Control](.github/images/zte_5g_system_controls.png) | ![System Diagnostics](.github/images/zte_5g_system_integration_health.png) |
 
 ---
@@ -355,13 +355,13 @@ This integration provides **92 entities** (depending on your firmware) organized
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Sub-Device     | Entities | Entity Types                                                  | Key Metrics                                                                                                           | Disabled by Default                                                                                                                                                                                                                                                                          |
-| :------------- | -------: | :------------------------------------------------------------ | :-------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ⚙️ **System**  |       53 | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls                         | 21: Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
-| 📶 **Signal**  |       50 | 36 Sensors, 1 Binary Sensor, 3 Selects                        | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection                 | 10: MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask                                                                                                                                      |
-| 📈 **Data**    |       19 | 14 Sensors, 1 Switch                                          | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch                                                                                                                                                                                                                      |
-| ✉️ **SMS**     |        5 | 3 Sensors, 1 Binary Sensor, 1 Button                          | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click)                                     | 1: SMS Storage Full                                                                                                                                                                                                                                                                          |
-| 🛠️ **Actions** |        4 | —                                                             | Send, Delete, Bulk-Delete and List SMS                                                                                | —                                                                                                                                                                                                                                                                                            |
+| Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
+| :-- | --: | :-- | :-- | :-- |
+| ⚙️ **System** | 53 | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls | 21: Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
+| 📶 **Signal** | 50 | 36 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 10: MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
+| 📈 **Data** | 19 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
+| ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | 1: SMS Storage Full |
+| 🛠️ **Actions** | 4 | — | Send, Delete, Bulk-Delete and List SMS | — |
 
 ---
 
@@ -439,26 +439,26 @@ Home Assistant stores Long Term Statistics for numeric sensors that have a `stat
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Sensors with LTS enabled                        | Why                                       |
-| :---------------------------------------------- | :---------------------------------------- |
+| Sensors with LTS enabled | Why |
+| :-- | :-- |
 | LTE & 5G signal metrics (RSRP, RSRQ, RSSI, SNR) | Track connection quality trends over time |
-| Monthly data usage (Sent, Received, Total)      | Monitor data consumption month-over-month |
-| SMS counts (Unread, Total)                      | Track message volume over time            |
-| Signal Bars                                     | Coarse signal summary over time           |
+| Monthly data usage (Sent, Received, Total) | Monitor data consumption month-over-month |
+| SMS counts (Unread, Total) | Track message volume over time |
+| Signal Bars | Coarse signal summary over time |
 
 The following sensors have **no LTS** to avoid unnecessary database growth:
 
-| Sensor                        | Reason                                                                          |
-| :---------------------------- | :------------------------------------------------------------------------------ |
-| Upload / Download Speed       | Instantaneous readings — history at poll intervals has limited analytical value |
-| Session Sent / Received       | Resets on every reconnect — not meaningful for long-term trends                 |
-| Uptime Duration               | Resets on reboot; predictable pattern adds no insight                           |
-| Battery                       | Always 100% when plugged in                                                     |
-| Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default                                              |
-| Projected Cycle Usage         | An estimate of where the cycle ends up, useful now rather than as a history     |
-| Reset Day                     | A billing-cycle setting that changes infrequently                               |
-| Allowance                     | A configured cap, not a measurement                                             |
-| Alert Threshold               | Configuration setting; historical trend holds no analytical value               |
+| Sensor | Reason |
+| :-- | :-- |
+| Upload / Download Speed | Instantaneous readings — history at poll intervals has limited analytical value |
+| Session Sent / Received | Resets on every reconnect — not meaningful for long-term trends |
+| Uptime Duration | Resets on reboot; predictable pattern adds no insight |
+| Battery | Always 100% when plugged in |
+| Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
+| Projected Cycle Usage | An estimate of where the cycle ends up, useful now rather than as a history |
+| Reset Day | A billing-cycle setting that changes infrequently |
+| Allowance | A configured cap, not a measurement |
+| Alert Threshold | Configuration setting; historical trend holds no analytical value |
 
 > [!TIP]
 >
@@ -515,8 +515,8 @@ Several settings are exposed as control entities so you can drive them from dash
 >
 > If the router refuses a control change — APN profile, network mode or ODU LED switch — Home Assistant reports an **error** on the action rather than silently reverting.
 
-|                           System Configuration                            |                        System Control                        |
-| :-----------------------------------------------------------------------: | :----------------------------------------------------------: |
+| System Configuration | System Control |
+| :-: | :-: |
 | ![System Configuration](.github/images/zte_5g_system_config_with_led.png) | ![System Control](.github/images/zte_5g_system_controls.png) |
 
 ---
@@ -543,12 +543,12 @@ Several settings are exposed as control entities so you can drive them from dash
 
 ![Signal Config with APN](.github/images/zte_5g_signal_config_apn_dropdown.png)
 
-| Selector value | Router web page | Meaning                                               |
-| :------------- | :-------------- | :---------------------------------------------------- |
-| `4G_AND_5G`    | **Auto**        | Let the router choose, falling back as signal changes |
-| `LTE_AND_5G`   | **5G NSA**      | 5G anchored to an LTE carrier                         |
-| `Only_5G`      | **5G SA**       | 5G standalone, no LTE anchor                          |
-| `Only_LTE`     | **4G Only**     | LTE only, 5G disabled                                 |
+| Selector value | Router web page | Meaning |
+| :-- | :-- | :-- |
+| `4G_AND_5G` | **Auto** | Let the router choose, falling back as signal changes |
+| `LTE_AND_5G` | **5G NSA** | 5G anchored to an LTE carrier |
+| `Only_5G` | **5G SA** | 5G standalone, no LTE anchor |
+| `Only_LTE` | **4G Only** | LTE only, 5G disabled |
 
 > [!WARNING]
 >
@@ -641,20 +641,20 @@ There is also an SMS received event and four SMS actions to **send, read and del
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Parameter Detail & YAML Example:
 </summary><br>
 
-| Parameter  | Required | Description                                                               |
-| :--------- | :------- | :------------------------------------------------------------------------ |
-| `entry_id` | No       | The router to use. Optional if only one router is configured.             |
-| `target`   | **Yes**  | Recipient phone number(s) (e.g. `+1234567878`).                           |
-| `message`  | **Yes**  | Message content. Length limit depends on the characters used - see below. |
+| Parameter | Required | Description |
+| :-- | :-- | :-- |
+| `entry_id` | No | The router to use. Optional if only one router is configured. |
+| `target` | **Yes** | Recipient phone number(s) (e.g. `+1234567878`). |
+| `message` | **Yes** | Message content. Length limit depends on the characters used - see below. |
 
 > [!NOTE]
 >
 > **How long can a message be?**
 >
-> | Message contains                                               | Fits in one SMS | Maximum accepted |
-> | :------------------------------------------------------------- | :-------------- | :--------------- |
-> | Only standard characters (letters, digits, common punctuation) | **160**         | **765**          |
-> | Any emoji, curly quote, or other special character             | **70**          | **335**          |
+> | Message contains | Fits in one SMS | Maximum accepted |
+> | :-- | :-- | :-- |
+> | Only standard characters (letters, digits, common punctuation) | **160** | **765** |
+> | Any emoji, curly quote, or other special character | **70** | **335** |
 >
 > A single special character changes the encoding for the **whole** message, which is why the second row is so much shorter. Longer messages are split into parts by the router and reassembled by the receiving phone, so they arrive as one message - but **your carrier charges for each part**. A 200-character plain-text alert is 2 parts; the same text with one emoji is 3.
 >
@@ -685,12 +685,12 @@ data:
 
 Fetch a list of SMS messages. Supports **Action Responses** — use the output directly in automations and scripts.
 
-| Parameter  | Required | Default | Range     | Description                                                                               |
-| :--------- | :------- | :------ | :-------- | :---------------------------------------------------------------------------------------- |
-| `entry_id` | No       | —       | —         | The router to use. Defaults to your only router; required if more than one is configured. |
-| `page`     | No       | `1`     | 1–100     | Page number for pagination.                                                               |
-| `count`    | No       | `20`    | 1–50      | Messages per page.                                                                        |
-| `box_type` | No       | `0`     | See below | Mailbox to read from. `0` reads every box.                                                |
+| Parameter | Required | Default | Range | Description |
+| :-- | :-- | :-- | :-- | :-- |
+| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
+| `page` | No | `1` | 1–100 | Page number for pagination. |
+| `count` | No | `20` | 1–50 | Messages per page. |
+| `box_type` | No | `0` | See below | Mailbox to read from. `0` reads every box. |
 
 **`box_type` values:** `0` All Boxes _(default)_ · `1` Local Inbox · `2` Local Sent · `3` Local Draft · `5` SIM Inbox · `6` SIM Sent · `7` SIM Draft · `8` Mix Inbox · `9` Mix Sent · `10` Mix Draft
 
@@ -730,10 +730,10 @@ response_variable: inbox
 
 Delete a single SMS by its storage index. Use the `index` field from `get_sms_list` or from the `zte_router_5g_sms_received` event.
 
-| Parameter  | Required | Description                                                                               |
-| :--------- | :------- | :---------------------------------------------------------------------------------------- |
-| `entry_id` | No       | The router to use. Defaults to your only router; required if more than one is configured. |
-| `index`    | **Yes**  | Storage index of the message to delete (integer ≥ 0).                                     |
+| Parameter | Required | Description |
+| :-- | :-- | :-- |
+| `entry_id` | No | The router to use. Defaults to your only router; required if more than one is configured. |
+| `index` | **Yes** | Storage index of the message to delete (integer ≥ 0). |
 
 ```yaml
 action: zte_router_5g.delete_sms
@@ -759,10 +759,10 @@ data:
 
 > The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
 
-| Parameter   | Required | Default | Range | Description                                                                               |
-| :---------- | :------- | :------ | :---- | :---------------------------------------------------------------------------------------- |
-| `entry_id`  | No       | —       | —     | The router to use. Defaults to your only router; required if more than one is configured. |
-| `keep_last` | No       | `0`     | 0–50  | Number of most recent messages to preserve. `0` deletes all.                              |
+| Parameter | Required | Default | Range | Description |
+| :-- | :-- | :-- | :-- | :-- |
+| `entry_id` | No | — | — | The router to use. Defaults to your only router; required if more than one is configured. |
+| `keep_last` | No | `0` | 0–50 | Number of most recent messages to preserve. `0` deletes all. |
 
 ```yaml
 action: zte_router_5g.delete_all_sms
@@ -788,13 +788,13 @@ data:
 
 Fires automatically when a new incoming SMS is detected. Use as an automation trigger.
 
-| Field      | Type    | Description                                                               |
-| :--------- | :------ | :------------------------------------------------------------------------ |
-| `entry_id` | Text    | Config entry ID of the router that received the message.                  |
-| `phone`    | Text    | Sender's phone number.                                                    |
-| `content`  | Text    | Message body.                                                             |
-| `date`     | Text    | Date/time of the message.                                                 |
-| `index`    | Integer | Storage index — pass directly to `delete_sms` to delete after processing. |
+| Field | Type | Description |
+| :-- | :-- | :-- |
+| `entry_id` | Text | Config entry ID of the router that received the message. |
+| `phone` | Text | Sender's phone number. |
+| `content` | Text | Message body. |
+| `date` | Text | Date/time of the message. |
+| `index` | Integer | Storage index — pass directly to `delete_sms` to delete after processing. |
 
 See [Alert on incoming SMS](#-alert-on-incoming-sms) example.
 
@@ -1761,10 +1761,10 @@ Home Assistant reserves the **Repairs** panel for problems that need you to do s
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-| Repair                           | Raised when                                                                         | Why it is a Repair                                                                                                                                                                                                                                                                                                                                                              |
-| :------------------------------- | :---------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **ZTE router sign-in failed**    | The router refuses the stored username or password, and a retry does not recover it | The only one you can act on from the panel — **Fix** opens a reauthentication dialog so you can re-enter the password. Until you do, no data arrives at all. It can mean the password was changed on the router, or that it is refusing new sessions. It does **not** clear on its own, and survives a restart, because a refused password stays refused until it is corrected. |
-| **ZTE router is not responding** | 10 consecutive failed fetches                                                       | Ten failures in a row means the problem is not clearing on its own. The text lists what to check — power-cycle, whether the IP changed, whether the password changed, the network path — and names the address currently configured so you can compare. Clears itself once communication is restored.                                                                           |
+| Repair | Raised when | Why it is a Repair |
+| :-- | :-- | :-- |
+| **ZTE router sign-in failed** | The router refuses the stored username or password, and a retry does not recover it | The only one you can act on from the panel — **Fix** opens a reauthentication dialog so you can re-enter the password. Until you do, no data arrives at all. It can mean the password was changed on the router, or that it is refusing new sessions. It does **not** clear on its own, and survives a restart, because a refused password stays refused until it is corrected. |
+| **ZTE router is not responding** | 10 consecutive failed fetches | Ten failures in a row means the problem is not clearing on its own. The text lists what to check — power-cycle, whether the IP changed, whether the password changed, the network path — and names the address currently configured so you can compare. Clears itself once communication is restored. |
 
 > [!NOTE]
 >
@@ -1871,13 +1871,13 @@ The **Integration Health** sensor (`binary_sensor.zte_5g_system_integration_heal
 
 It exists because the router can answer a poll _successfully_ while a whole capability is missing — SMS endpoints, diagnostics, monthly usage — in which case the affected sensors just go blank with no explanation anywhere. It reports:
 
-| Attribute               | What it tells you                                                                                                                                                    |
-| :---------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `severity`              | `ok` · `degraded` (a capability was lost) · `warning` (the data may be wrong) · `error` (unreachable) · `unknown` (nothing fetched yet). **Never blank** — see below |
-| `issues`                | Plain-language descriptions of what is wrong; empty when healthy                                                                                                     |
-| `degraded_capabilities` | Which parts of the router stopped answering, by name                                                                                                                 |
-| `drift`                 | Set when the router's firmware appears to have renamed the fields this integration reads                                                                             |
-| `last_good_update`      | When the last fully successful poll completed                                                                                                                        |
+| Attribute | What it tells you |
+| :-- | :-- |
+| `severity` | `ok` · `degraded` (a capability was lost) · `warning` (the data may be wrong) · `error` (unreachable) · `unknown` (nothing fetched yet). **Never blank** — see below |
+| `issues` | Plain-language descriptions of what is wrong; empty when healthy |
+| `degraded_capabilities` | Which parts of the router stopped answering, by name |
+| `drift` | Set when the router's firmware appears to have renamed the fields this integration reads |
+| `last_good_update` | When the last fully successful poll completed |
 
 - **`severity` always has a value.** The list attributes are legitimately empty when everything is fine.
 - **Always Available**: Unlike hardware entities that drop during an outage, this sensor stays active to report the cause.
@@ -2003,12 +2003,12 @@ Logs are then visible under **Settings > System > Logs** (click **Load Full Logs
 
 Because Home Assistant keeps most of it on purpose. This is **Home Assistant behavior, not something this integration controls**, and for most people it's the desirable outcome: re-add the same router and things carry on where they left off.
 
-| What                                                           | How long Home Assistant keeps it                  | On re-add                               |
-| :------------------------------------------------------------- | :------------------------------------------------ | :-------------------------------------- |
-| **Long-term statistics** (long-range graphs, Energy dashboard) | Indefinitely — never deleted                      | Continue unbroken                       |
-| **Recent detailed history**                                    | Recorder retention (10 days by default)           | Continues                               |
-| **Entity IDs** (`sensor.…`)                                    | Reused as long as nothing else has taken the name | Dashboards and automations keep working |
-| Renames, icons, areas, labels, enabled/disabled state          | **30 days**, in Home Assistant's entity registry  | Restored                                |
+| What | How long Home Assistant keeps it | On re-add |
+| :-- | :-- | :-- |
+| **Long-term statistics** (long-range graphs, Energy dashboard) | Indefinitely — never deleted | Continue unbroken |
+| **Recent detailed history** | Recorder retention (10 days by default) | Continues |
+| **Entity IDs** (`sensor.…`) | Reused as long as nothing else has taken the name | Dashboards and automations keep working |
+| Renames, icons, areas, labels, enabled/disabled state | **30 days**, in Home Assistant's entity registry | Restored |
 
 The **30 days** applies only to that fourth row — the entity-registry customizations. Statistics aren't on a timer at all, and your entity IDs come back either way. So re-adding after a year still reconnects your graphs; you would just need to redo any renames. Restarting Home Assistant in between makes no difference to any of this.
 
