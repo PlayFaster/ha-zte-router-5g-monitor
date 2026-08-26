@@ -5,7 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.4-dev11\] - 2026-08-26 - Documentation Reconciled To The Repair-Set Change](#334-dev11---2026-08-26---documentation-reconciled-to-the-repair-set-change)
+  - [\[3.3.4-dev12\] - 2026-08-26 - Correction: The Unit Selector Depends On `device_class`, Not `state_class`](#334-dev12---2026-08-26---correction-the-unit-selector-depends-on-device_class-not-state_class)
+  - [\[3.3.4-dev11\] - 2026-08-26 - Documentation Reconciliation: Repair Set, Quality Scale, and Frequency Units](#334-dev11---2026-08-26---documentation-reconciliation-repair-set-quality-scale-and-frequency-units)
   - [\[3.3.4-dev10\] - 2026-08-26 - Suppression Allow-List Sweep; Health & Repair Contract Tests; Silent-Failure Audit](#334-dev10---2026-08-26---suppression-allow-list-sweep-health--repair-contract-tests-silent-failure-audit)
   - [\[3.3.4-dev9\] - 2026-08-26 - Publish-Moment State Capture Tests; Real APN Payloads in Select Tests](#334-dev9---2026-08-26---publish-moment-state-capture-tests-real-apn-payloads-in-select-tests)
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
@@ -28,60 +29,60 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.3-dev4\] - 2026-08-07 - Test Suite Baseline: 100% Branch Coverage and Zero Unaccounted Assertions](#333-dev4---2026-08-07---test-suite-baseline-100-branch-coverage-and-zero-unaccounted-assertions)
   - [\[3.3.3-dev3\] - 2026-08-07 - Ruff Linting Compliance; Coordinator Endpoint Failure Isolation](#333-dev3---2026-08-07---ruff-linting-compliance-coordinator-endpoint-failure-isolation)
   - [\[3.3.3-dev1\] - 2026-08-07 - Shared CI Bump to v2.0.10; Release Zip Asset Workflow; Branch Coverage Setup](#333-dev1---2026-08-07---shared-ci-bump-to-v2010-release-zip-asset-workflow-branch-coverage-setup)
-  - [\[3.3.2\] - 2026-08-02 - Release - Wider Model Support. Better Data Use Tracking. Longer SMS Messages. About: Attributes. Fixes](#332---2026-08-02---release---wider-model-support-better-data-use-tracking-longer-sms-messages-about-attributes-fixes)
-  - [\[3.3.2-rc15\] - 2026-08-02 - Bump Shared CI to v2.0.9](#332-rc15---2026-08-02---bump-shared-ci-to-v209)
-  - [\[3.3.2-rc14\] - 2026-08-01 - README Review; SMS Action Documentation Corrected](#332-rc14---2026-08-01---readme-review-sms-action-documentation-corrected)
-  - [\[3.3.2-rc13\] - 2026-08-01 - Guard Bands Reconciled Against Code; Sensor Review](#332-rc13---2026-08-01---guard-bands-reconciled-against-code-sensor-review)
-  - [\[3.3.2-rc12\] - 2026-08-01 - Repair Wording, Signal Note Consistency, Drift Guarantee Pinned](#332-rc12---2026-08-01---repair-wording-signal-note-consistency-drift-guarantee-pinned)
-  - [\[3.3.2-rc11\] - 2026-07-31 - Session Detection Rebuilt On A Measured Invariant](#332-rc11---2026-07-31---session-detection-rebuilt-on-a-measured-invariant)
-  - [\[3.3.2-rc10\] - 2026-07-31 - Sensor Review; APN Documentation Completed](#332-rc10---2026-07-31---sensor-review-apn-documentation-completed)
-  - [\[3.3.2-rc9\] - 2026-07-31 - Attended Tier Completed; Two Self-Inflicted Defects](#332-rc9---2026-07-31---attended-tier-completed-two-self-inflicted-defects)
-  - [\[3.3.2-rc8\] - 2026-07-31 - APN Resolution Corrected; Attended Tier Completed](#332-rc8---2026-07-31---apn-resolution-corrected-attended-tier-completed)
-  - [\[3.3.2-rc7\] - 2026-07-31 - `APN_PROC_EX` Partial-Form Defect](#332-rc7---2026-07-31---apn_proc_ex-partial-form-defect)
-  - [\[3.3.2-rc6\] - 2026-07-30 - Write Classification, Hardware Exercise, Attended Tier](#332-rc6---2026-07-30---write-classification-hardware-exercise-attended-tier)
-  - [\[3.3.2-rc5\] - 2026-07-30 - Control Write Path Reworked](#332-rc5---2026-07-30---control-write-path-reworked)
-  - [\[3.3.2-rc4\] - 2026-07-30 - Toolchain Moved To HA 2026.8; Harness Unblocked](#332-rc4---2026-07-30---toolchain-moved-to-ha-20268-harness-unblocked)
-  - [\[3.3.2-rc3\] - 2026-07-30 - Bumps](#332-rc3---2026-07-30---bumps)
-  - [\[3.3.2-rc2\] - 2026-07-30 - `TOTAL` State Class Banned; Release Notes Rewritten](#332-rc2---2026-07-30---total-state-class-banned-release-notes-rewritten)
-  - [\[3.3.2-rc1\] - 2026-07-30 - Device-Registry Tests Unlocked From HA 2026.7](#332-rc1---2026-07-30---device-registry-tests-unlocked-from-ha-20267)
-  - [\[3.3.1-dev20\] - 2026-07-30 - Allowance Enabled; Entity Naming Convention](#331-dev20---2026-07-30---allowance-enabled-entity-naming-convention)
-  - [\[3.3.1-dev19\] - 2026-07-30 - Two Raw Diagnostics Made Readable](#331-dev19---2026-07-30---two-raw-diagnostics-made-readable)
-  - [\[3.3.1-dev18\] - 2026-07-29 - Default-State Review and `about` Note Corrections](#331-dev18---2026-07-29---default-state-review-and-about-note-corrections)
-  - [\[3.3.1-dev17\] - 2026-07-29 - Monthly Counter Statistics Fixed; Allowance Sensor Added](#331-dev17---2026-07-29---monthly-counter-statistics-fixed-allowance-sensor-added)
-  - [\[3.3.1-dev16\] - 2026-07-29 - Corrected Reasoning on Declined Write Controls](#331-dev16---2026-07-29---corrected-reasoning-on-declined-write-controls)
-  - [\[3.3.1-dev15\] - 2026-07-29 - Projection Refinements](#331-dev15---2026-07-29---projection-refinements)
-  - [\[3.3.1-dev14\] - 2026-07-29 - Documentation Reconciliation](#331-dev14---2026-07-29---documentation-reconciliation)
-  - [\[3.3.1-dev13\] - 2026-07-29 - Batch Poll Split In Two](#331-dev13---2026-07-29---batch-poll-split-in-two)
-  - [\[3.3.1-dev12\] - 2026-07-29 - Data Limit Switch Fixed; Batch Poll Budgeted](#331-dev12---2026-07-29---data-limit-switch-fixed-batch-poll-budgeted)
-  - [\[3.3.1-dev11\] - 2026-07-29 - Billing-Cycle Reads and Data-Usage Projection](#331-dev11---2026-07-29---billing-cycle-reads-and-data-usage-projection)
-  - [\[3.3.1-dev10\] - 2026-07-29 - `Future.md` Roadmap Rewritten](#331-dev10---2026-07-29---futuremd-roadmap-rewritten)
-  - [\[3.3.1-dev9\] - 2026-07-29 - `about` Notes: Six Added, Three Corrected, One Cross-Reference Removed](#331-dev9---2026-07-29---about-notes-six-added-three-corrected-one-cross-reference-removed)
-  - [\[3.3.1-dev8\] - 2026-07-29 - Encoding-Aware SMS Length Limit](#331-dev8---2026-07-29---encoding-aware-sms-length-limit)
-  - [\[3.3.1-dev7\] - 2026-07-29 - Dead-Session Fault-Injection Sweep](#331-dev7---2026-07-29---dead-session-fault-injection-sweep)
-  - [\[3.3.1-dev6\] - 2026-07-29 - Actions Silently Failed on an Expired Session](#331-dev6---2026-07-29---actions-silently-failed-on-an-expired-session)
-  - [\[3.3.1-dev5\] - 2026-07-29 - Thermal Set Completed to Five](#331-dev5---2026-07-29---thermal-set-completed-to-five)
-  - [\[3.3.1-dev4\] - 2026-07-28 - Manifest Bump 3.3.0 → 3.3.1 - Release Preparation](#331-dev4---2026-07-28---manifest-bump-330--331---release-preparation)
-  - [\[3.3.1-dev3\] - 2026-07-28 - Sensor Aliasing \& Thermal Entities](#331-dev3---2026-07-28---sensor-aliasing--thermal-entities)
-  - [\[3.3.1-dev2\] - 2026-07-28 - API Params \& Login Fallback](#331-dev2---2026-07-28---api-params--login-fallback)
-  - [\[3.3.1-dev1\] - 2026-07-28 - Helpers \& GSM-7 Inspector](#331-dev1---2026-07-28---helpers--gsm-7-inspector)
-  - [\[3.3.0-rc5\] - 2026-07-28 - AGENTS README About List and Expected Compatibility](#330-rc5---2026-07-28---agents-readme-about-list-and-expected-compatibility)
-  - [\[3.3.0-rc4\] - 2026-07-28 - Automation Example Glitch Guards \& Float Rounding in README](#330-rc4---2026-07-28---automation-example-glitch-guards--float-rounding-in-readme)
-  - [\[3.3.0-rc3\] - 2026-07-28 - `about` Notes on 63 Entities](#330-rc3---2026-07-28---about-notes-on-63-entities)
-  - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage](#330-rc2---2026-07-28---external-code-review-triage)
-  - [\[3.3.0-dev14\] - 2026-07-27 - doc_update Reconciliation Pass](#330-dev14---2026-07-27---doc_update-reconciliation-pass)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Records Caught Up After a Long Session](#330-dev13---2026-07-27---records-caught-up-after-a-long-session)
-  - [\[3.3.0-dev12\] - 2026-07-27 - Expired Session Returned "No SMS"](#330-dev12---2026-07-27---expired-session-returned-no-sms)
-  - [\[3.3.0-dev11\] - 2026-07-27 - Device-Registry Record Cross-Referenced](#330-dev11---2026-07-27---device-registry-record-cross-referenced)
-  - [\[3.3.0-dev10\] - 2026-07-27 - §3 Deviation Retired](#330-dev10---2026-07-27---3-deviation-retired)
-  - [\[3.3.0-dev9\] - 2026-07-27 - §9 Secret Pre-fill Guard](#330-dev9---2026-07-27---9-secret-pre-fill-guard)
-  - [\[3.3.0-dev8\] - 2026-07-27 - §12 Icon Sweep Made Real](#330-dev8---2026-07-27---12-icon-sweep-made-real)
-  - [\[3.3.0-dev7\] - 2026-07-27 - §14 Attributes Are Unrecorded by Default](#330-dev7---2026-07-27---14-attributes-are-unrecorded-by-default)
-  - [\[3.3.0-dev6\] - 2026-07-27 - §19 `drift` Attribute](#330-dev6---2026-07-27---19-drift-attribute)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Interface Documentation](#330-dev5---2026-07-27---interface-documentation)
-  - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Alignment](#330-dev4---2026-07-27---cross-project-alignment)
-  - [\[3.3.0-dev3\] - 2026-07-27 - Unreachable Repair \& Record Corrections](#330-dev3---2026-07-27---unreachable-repair--record-corrections)
-  - [\[3.3.0-dev2\] - 2026-07-27 - IQS Compliance Pass](#330-dev2---2026-07-27---iqs-compliance-pass)
-  - [\[3.3.0-dev1\] - 2026-07-27 - dev_standards Conformance Pass](#330-dev1---2026-07-27---dev_standards-conformance-pass)
+  - [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, Extended SMS Length, and Entity About Notes](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-extended-sms-length-and-entity-about-notes)
+  - [\[3.3.2-rc15\] - 2026-08-02 - Shared CI Bump to v2.0.9; Table of Contents and Sensor Manifest Sync](#332-rc15---2026-08-02---shared-ci-bump-to-v209-table-of-contents-and-sensor-manifest-sync)
+  - [\[3.3.2-rc14\] - 2026-08-01 - README Quality Review; SMS Action Parameters and Alert Formatting Fixes](#332-rc14---2026-08-01---readme-quality-review-sms-action-parameters-and-alert-formatting-fixes)
+  - [\[3.3.2-rc13\] - 2026-08-01 - Numeric Sensor Guard Band Verification; Cumulative Counter Floor Tests](#332-rc13---2026-08-01---numeric-sensor-guard-band-verification-cumulative-counter-floor-tests)
+  - [\[3.3.2-rc12\] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Contract Drift Invariant Tests](#332-rc12---2026-08-01---repair-title-neutrality-signal-guidance-alignment-contract-drift-invariant-tests)
+  - [\[3.3.2-rc11\] - 2026-07-31 - Session Expiry Classification via Unauthenticated Key Verification](#332-rc11---2026-07-31---session-expiry-classification-via-unauthenticated-key-verification)
+  - [\[3.3.2-rc10\] - 2026-07-31 - Live Sensor Review Reconciliation; Router APN Profile Selection Documentation](#332-rc10---2026-07-31---live-sensor-review-reconciliation-router-apn-profile-selection-documentation)
+  - [\[3.3.2-rc9\] - 2026-07-31 - Write Payload Shape Lock Tests; Interactive SMS and Reboot Hardware Verification](#332-rc9---2026-07-31---write-payload-shape-lock-tests-interactive-sms-and-reboot-hardware-verification)
+  - [\[3.3.2-rc8\] - 2026-07-31 - APN Profile Name Resolution; APN Select and Data Limit Switch Hardware Tests](#332-rc8---2026-07-31---apn-profile-name-resolution-apn-select-and-data-limit-switch-hardware-tests)
+  - [\[3.3.2-rc7\] - 2026-07-31 - APN Mode Selection Read-Modify-Write Payload Construction](#332-rc7---2026-07-31---apn-mode-selection-read-modify-write-payload-construction)
+  - [\[3.3.2-rc6\] - 2026-07-30 - Write Command Safety Tiering; Data Limit and Logout Verification Checks](#332-rc6---2026-07-30---write-command-safety-tiering-data-limit-and-logout-verification-checks)
+  - [\[3.3.2-rc5\] - 2026-07-30 - Targeted Post-Write Read-Back Verification; Concurrent Write Serialization](#332-rc5---2026-07-30---targeted-post-write-read-back-verification-concurrent-write-serialization)
+  - [\[3.3.2-rc4\] - 2026-07-30 - Toolchain Migration to Home Assistant 2026.8; Ruff Keyword-Only Argument Fixes](#332-rc4---2026-07-30---toolchain-migration-to-home-assistant-20268-ruff-keyword-only-argument-fixes)
+  - [\[3.3.2-rc3\] - 2026-07-30 - Tooling Bumps: Ruff, Zizmor, PHACC; Pre-Release Documentation Sync](#332-rc3---2026-07-30---tooling-bumps-ruff-zizmor-phacc-pre-release-documentation-sync)
+  - [\[3.3.2-rc2\] - 2026-07-30 - Sensor State Class Policy Enforcement; Ban on TOTAL State Class](#332-rc2---2026-07-30---sensor-state-class-policy-enforcement-ban-on-total-state-class)
+  - [\[3.3.2-rc1\] - 2026-07-30 - Device-Registry Compatibility Shims and Test Harness Alignment for HA 2026.8](#332-rc1---2026-07-30---device-registry-compatibility-shims-and-test-harness-alignment-for-ha-20268)
+  - [\[3.3.1-dev20\] - 2026-07-30 - Allowance Sensor Enabled by Default; Alert Threshold Entity Renaming](#331-dev20---2026-07-30---allowance-sensor-enabled-by-default-alert-threshold-entity-renaming)
+  - [\[3.3.1-dev19\] - 2026-07-30 - Carrier Aggregation and LTE Band Lock Mask Diagnostic Decodes](#331-dev19---2026-07-30---carrier-aggregation-and-lte-band-lock-mask-diagnostic-decodes)
+  - [\[3.3.1-dev18\] - 2026-07-29 - Default Entity State Review and Entity About Note Corrections](#331-dev18---2026-07-29---default-entity-state-review-and-entity-about-note-corrections)
+  - [\[3.3.1-dev17\] - 2026-07-29 - Monthly Byte Counter State Class Fix and Allowance Sensor Addition](#331-dev17---2026-07-29---monthly-byte-counter-state-class-fix-and-allowance-sensor-addition)
+  - [\[3.3.1-dev16\] - 2026-07-29 - Technical Rationale Corrections for Declined Router Write Controls](#331-dev16---2026-07-29---technical-rationale-corrections-for-declined-router-write-controls)
+  - [\[3.3.1-dev15\] - 2026-07-29 - Projected Cycle Usage Fallback Logic and Long-Term Statistics Policy](#331-dev15---2026-07-29---projected-cycle-usage-fallback-logic-and-long-term-statistics-policy)
+  - [\[3.3.1-dev14\] - 2026-07-29 - Documentation Reconciliation: Entity Counts, Unpolled Parameters, and Development Debts](#331-dev14---2026-07-29---documentation-reconciliation-entity-counts-unpolled-parameters-and-development-debts)
+  - [\[3.3.1-dev13\] - 2026-07-29 - Coordinator Batch Poll Split: Core Mandatory and Extended Optional Fetch](#331-dev13---2026-07-29---coordinator-batch-poll-split-core-mandatory-and-extended-optional-fetch)
+  - [\[3.3.1-dev12\] - 2026-07-29 - Data Limit Switch Read-Modify-Write Fix and Batch Poll URL Budget Limit Tests](#331-dev12---2026-07-29---data-limit-switch-read-modify-write-fix-and-batch-poll-url-budget-limit-tests)
+  - [\[3.3.1-dev11\] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Telemetry](#331-dev11---2026-07-29---billing-cycle-tracking-usage-projection-sensor-and-diagnostic-telemetry)
+  - [\[3.3.1-dev10\] - 2026-07-29 - Documentation: Roadmap Revision and Architectural Prioritization in Future.md](#331-dev10---2026-07-29---documentation-roadmap-revision-and-architectural-prioritization-in-futuremd)
+  - [\[3.3.1-dev9\] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Telemetry Coverage](#331-dev9---2026-07-29---entity-about-notes-expansion-select-platform-support-and-control-telemetry-coverage)
+  - [\[3.3.1-dev8\] - 2026-07-29 - Encoding-Aware SMS Length Limits: GSM-7 (765 Chars) and UCS-2 (335 Chars)](#331-dev8---2026-07-29---encoding-aware-sms-length-limits-gsm-7-765-chars-and-ucs-2-335-chars)
+  - [\[3.3.1-dev7\] - 2026-07-29 - API Dead-Session Sweep Test Suite: Dying, Refusing, and Drifting Session Fault Injection](#331-dev7---2026-07-29---api-dead-session-sweep-test-suite-dying-refusing-and-drifting-session-fault-injection)
+  - [\[3.3.1-dev6\] - 2026-07-29 - Authenticated Activity Clock Tracking and Write Action Response Validation](#331-dev6---2026-07-29---authenticated-activity-clock-tracking-and-write-action-response-validation)
+  - [\[3.3.1-dev5\] - 2026-07-29 - Thermal Diagnostic Telemetry Set: Modem and 5G Radio Temperature Sensors](#331-dev5---2026-07-29---thermal-diagnostic-telemetry-set-modem-and-5g-radio-temperature-sensors)
+  - [\[3.3.1-dev4\] - 2026-07-28 - Version Bump to 3.3.1 and API Login Type Refactoring](#331-dev4---2026-07-28---version-bump-to-331-and-api-login-type-refactoring)
+  - [\[3.3.1-dev3\] - 2026-07-28 - Cross-Model Sensor Key Aliasing, ARFCN Band Resolvers, and Thermal Entities](#331-dev3---2026-07-28---cross-model-sensor-key-aliasing-arfcn-band-resolvers-and-thermal-entities)
+  - [\[3.3.1-dev2\] - 2026-07-28 - Cross-Model API Batch Parameters, Login Form Fallback, and SMS GSM-7 Encoding](#331-dev2---2026-07-28---cross-model-api-batch-parameters-login-form-fallback-and-sms-gsm-7-encoding)
+  - [\[3.3.1-dev1\] - 2026-07-28 - GSM 03.38 Character Inspector and 3GPP Channel-to-Band Resolvers](#331-dev1---2026-07-28---gsm-0338-character-inspector-and-3gpp-channel-to-band-resolvers)
+  - [\[3.3.0-rc5\] - 2026-07-28 - Documentation: Router Compatibility Guide and Entity About Attribute Manifest](#330-rc5---2026-07-28---documentation-router-compatibility-guide-and-entity-about-attribute-manifest)
+  - [\[3.3.0-rc4\] - 2026-07-28 - README Automation Glitch Guards, Collapsible Layout, and Float Rounding](#330-rc4---2026-07-28---readme-automation-glitch-guards-collapsible-layout-and-float-rounding)
+  - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
+  - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
+  - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
+  - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
+  - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
+  - [\[3.3.0-dev9\] - 2026-07-27 - Security Hardening: Stored Secret Schema Pre-fill Prevention Tests](#330-dev9---2026-07-27---security-hardening-stored-secret-schema-pre-fill-prevention-tests)
+  - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
+  - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
+  - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Contract Drift Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-contract-drift-attribute-publication)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
+  - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
+  - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
+  - [\[3.3.0-dev1\] - 2026-07-27 - PlayFaster Architectural Standards Conformance Pass: Health Sensor, Force Refresh, and Sanitizer](#330-dev1---2026-07-27---playfaster-architectural-standards-conformance-pass-health-sensor-force-refresh-and-sanitizer)
   - [\[3.2.6-dev8\] - 2026-07-26 - Icons \& Branding Refresh; AGENTS.md Restructured](#326-dev8---2026-07-26---icons--branding-refresh-agentsmd-restructured)
   - [\[3.2.6-dev7\] - 2026-07-12 - PyTest Coverage to 100%; Codespell Alignment](#326-dev7---2026-07-12---pytest-coverage-to-100-codespell-alignment)
   - [\[3.2.6-dev6\] - 2026-07-12 - PHACC Bump; README Device-vs-Entity Clarification](#326-dev6---2026-07-12---phacc-bump-readme-device-vs-entity-clarification)
@@ -180,21 +181,56 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.4-dev11] - 2026-08-26 - Documentation Reconciled To The Repair-Set Change
+## [3.3.4-dev12] - 2026-08-26 - Correction: The Unit Selector Depends On `device_class`, Not `state_class`
+
+Documentation and one test docstring. A root cause carried in this family's notes, and repeated into this project's documents on 2026-08-25, is wrong.
+
+### The correction
+
+The claim was that `device_class=FREQUENCY` plus `state_class=MEASUREMENT` suppresses Home Assistant's unit selector. **It does not.** Checked against the installed core:
+
+- `ws_device_class_units` in `homeassistant/components/sensor/websocket_api.py` serves `sensor/device_class_convertible_units`, the command that supplies the selector's units. It takes **`device_class` as its only argument**; `state_class` is not referenced in that module.
+- `FREQUENCY` is in both `UNIT_CONVERTERS` and `DEVICE_CLASS_UNITS` (`Hz`, `kHz`, `MHz`, `GHz`, `mHz`).
+- `DEVICE_CLASS_STATE_CLASSES[SensorDeviceClass.FREQUENCY]` is `{MEASUREMENT}` — the state class HA permits there.
+
+**What works: a `device_class` Home Assistant can convert, plus a matching unit constant.** That is what fixed these two sensors in `[3.3.4-dev7]`, and that half was never in doubt.
+
+### What stays
+
+**The `state_class is None` assertion stays, on its own grounds.** These two sensors are the only entries in `_UNGUARDED_BY_DESIGN`, and that exemption rests on their staying out of long-term statistics — with no state class a bad reading cannot corrupt history, so no guard band is needed. Adding one would end the exemption. That reason predates this session and is unrelated to the selector.
+
+### Changed
+
+- **`README.md` § Repairs now says why a condition is or is not a Repair.** The section listed which conditions raise one and which do not, and never said that this is Home Assistant's rule rather than a choice this integration made. The opening now states it, and the paragraph below answers the question a reader actually has — whether the rest is being ignored: "Everything else this integration detects is still tracked — it is just not a Repair … the difference is whether there is an action for you to take, not whether the problem is real."
+- **An upgrade note added on 2026-08-25 was removed.** It told readers that three conditions used to raise cards and no longer do. Accurate, and not worth having: it sends people looking for cards most of them never saw, and the surfaces those conditions moved to are already named a paragraph above.
+- **The same rewrite was applied to `huawei_router_5g`'s README**, which carried the identical paragraph, so the two do not diverge. Its version omits the `degraded_capabilities` clause, which is a ZTE surface.
+
+### Corrected
+
+- `docs/value_min_max.md` and the `[3.3.4-dev7]` entry, both of which had gained the claim on 2026-08-25.
+- `test_bandwidth_sensors_offer_the_unit_selector` — its docstring and its assertion message, which stated the wrong reason.
+- `x_proj_chores.md` C-012, and `huawei_router_5g`'s `AGENTS.md`, `docs/DEVELOPMENT.md` and two `changelog_local.md` entries, so the claim stops propagating.
+
+## [3.3.4-dev11] - 2026-08-26 - Documentation Reconciliation: Repair Set, Quality Scale, and Frequency Units
+
+### Summary
+
+Documentation and quality scale reconciliation. Updated `quality_scale.yaml`, `README.md`, `DEVELOPMENT.md`, and `value_min_max.md` to reflect the two-issue repair set (`conn_error` and `auth_failed`), documented the addition of `binary_sensor.*_sms_storage_full`, and recorded the rationale for frequency sensor unit configuration.
 
 No code. The user-facing and contributor documents that described the old three-repair set, reconciled against what now ships.
 
 ### Fixed
 
 - **`custom_components/zte_router_5g/quality_scale.yaml`** described `_set_drift_repair`, a function that no longer exists, and three repairs where there are two. This one is shipped and read by IQS review, so it was the most consequential of the stale documents. It now records both current repairs, the `repairs.py` requirement behind `is_fixable`, and the three conditions deliberately moved off the panel with where each went instead.
-- **`README.md` § Repairs** listed all three retired cards and none of the current ones. Rewritten: two rows, and a note explaining that three conditions were moved off the panel deliberately, where to watch for each instead, and that a card left over from an earlier version clears itself on the next start. The introduction no longer claims all repairs auto-clear — `auth_failed` does not, and that is the point of it.
+- **`README.md` § Repairs** listed all three retired cards and none of the current ones. Rewritten **to `huawei_router_5g`'s structure**, which is the family's worked version of this section: the same opening sentence, a bolded "Two conditions raise a Repair" paragraph outside the fold naming where everything else is reported, the sign-in row first, and the `Why it is a Repair` column heading. The upgrade note is ZTE-specific and is the one addition, because three cards did disappear here.
 - **`README.md` automation example** told the reader that `severity == 'warning'` "is the condition that also raises a Repair". That became false when drift left the panel. It now says the opposite, and why the attribute is the way to catch it.
 - **`README.md` entity table**: the SMS sub-device gained `SMS Storage Full`, 4 entities to 5.
 - **`docs/DEVELOPMENT.md`** still explained the wording of a repair title that no longer exists. The drift section now records that the repair was retired and why; the re-authentication section gains the `ConfirmRepairFlow` trap and the reason `auth_failed` is the one repair that does not auto-clear.
-- **`docs/value_min_max.md`**: the two bandwidth rows now say **why** they must keep no `state_class` — a later "every numeric sensor should have a state class" tidy-up would silently remove the unit selector, which is exactly how `huawei_router_5g` arrived at the same defect.
+- **`docs/value_min_max.md`**: the two bandwidth rows now name the second consequence of adding a `state_class`. The first draft of this edit replaced the existing reason instead of adding to it, which broke the cell — that table is the guard-band exemption list and its column asks _why the sensor is safe without a guard band_, which is answered by "it never reaches long-term statistics", not by anything about the unit selector. Both consequences are now stated, in that order.
 
 ### Notes
 
+- **`huawei_router_5g`'s README carries a claim that is currently false**, found while aligning to it: its sign-in Repair row says **Fix** "opens a reauthentication dialog". Without a `repairs` platform Home Assistant substitutes `ConfirmRepairFlow`, so the button confirms and dismisses. ZTE makes the same claim and it is true here, because `repairs.py` backs it. Recorded on that project's `repair_set_alignment.md` cell, which is already re-opened.
 - **`CHANGELOG.md` is deliberately untouched.** This project writes the user-facing changelog at release; `3.3.4` has ten `-dev` entries here and no release section yet. The user-visible parts of this cycle — the repair set, the new binary sensor, the unit selector — need an entry when `3.3.4` ships.
 - **Cross-project notes were written for `unifi_network_monitor`**, which has the same chores open. They are in `x_proj_chores.md` under C-003, C-004, C-012, C-019, C-020 and C-022 step 8, and in `repair_set_alignment.md` §3.1, `fault_injection_options.md` §1 and `stubbed_publish_tests.md`.
 
@@ -303,7 +339,7 @@ Worked as a single pass over the source so the tree is measured once rather than
 
 - **The repair set is now the family's two keys** (`x_project` issue _Repair set alignment_, policy §2). `router_unreachable` becomes **`conn_error`**, keeping its text verbatim — the same condition under the canonical key. `firmware_contract_drift` and `sms_storage_full` leave the Repairs panel entirely. The rule they failed is _agency_: a schema change is not something a user can fix, and a full message store is an operational state to automate on. Both conditions are unchanged in substance — drift still publishes `severity: warning` and a `drift` finding on the Integration Health sensor, and storage still publishes a health finding.
 - **`HEALTH_DRIFT_STRIKE_LIMIT = 3`** in `const.py`, applied at `coordinator.py:691` (chore **C-015**). `FETCH_STRIKE_LIMIT` was serving both fetch failures and contract drift. Both budgets are 3 today and the value did not move; what changed is that moving one no longer silently moves the other. Matches `huawei_router_5g`, `wifi_ssid_monitor` and `unifi_network_monitor`. The test patches the drift budget to 5 and asserts drift stays quiet at 4 — with one shared constant that assertion cannot pass, which is the only way to tell a real split from a renamed one.
-- **The two bandwidth sensors offer Home Assistant's unit selector** (chore **C-012**). `native_unit_of_measurement="MHz"` as a raw string renders correctly and is inert: with no `device_class` there is no conversion table, so no dropdown. Now `UnitOfFrequency.MEGAHERTZ` plus `SensorDeviceClass.FREQUENCY`. **Neither carries a `state_class`, and the test asserts that** — `device_class=FREQUENCY` together with `state_class=MEASUREMENT` routes the entity through long-term statistics, which does not surface the selector either. That is the trap `huawei_router_5g` fell into and recorded; "add the device class" alone looks done and changes nothing.
+- **The two bandwidth sensors offer Home Assistant's unit selector** (chore **C-012**). `native_unit_of_measurement="MHz"` as a raw string renders correctly and is inert: with no `device_class` there is no conversion table, so no dropdown. Now `UnitOfFrequency.MEGAHERTZ` plus `SensorDeviceClass.FREQUENCY`. **Neither carries a `state_class`, and the test asserts that** — but for the guard-band exemption, not for the selector. See the correction in `[3.3.4-dev12]`: the belief that `state_class` suppresses the selector was checked against Home Assistant's source on 2026-08-26 and is false.
 - **The SMS sender's number no longer reaches the log** (chore **C-020**, §20). `coordinator.py` logged it at `INFO` on every new message. The number still reaches automations on the `zte_router_5g_sms_received` bus event, which is scoped to the entry; the log is not, and is copied into every diagnostics download and issue report. The line now carries the message id, which is enough to correlate a log entry with an event.
 - **Three log lines hardcoded the strike budget as `/3`** while it is a constant, so they would have lied the moment it moved. They interpolate `FETCH_STRIKE_LIMIT`.
 
@@ -826,7 +862,7 @@ Shared CI bump and test infrastructure update. Updated shared CI validation to v
 - **US UK Spelling**: Updated spelling to US standard (z vs s, color vs colour etc), to match HA standard.
 - **Tools not Dev Tools**: Changed References to "Developer Tools" to "Tools" to align with HA 2026.8+
 
-## [3.3.2] - 2026-08-02 - Release - Wider Model Support. Better Data Use Tracking. Longer SMS Messages. About: Attributes. Fixes
+## [3.3.2] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, Extended SMS Length, and Entity About Notes
 
 ### Summary
 
@@ -902,7 +938,11 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ---
 
-## [3.3.2-rc15] - 2026-08-02 - Bump Shared CI to v2.0.9
+## [3.3.2-rc15] - 2026-08-02 - Shared CI Bump to v2.0.9; Table of Contents and Sensor Manifest Sync
+
+### Summary
+
+Validation toolchain bump and documentation alignment. Bumped shared CI to v2.0.9, generated the changelog Table of Contents, and synchronized entity manifests across `all_sensors.md`, `value_min_max.md`, and `about_attribute_list.md`.
 
 ### Bumps
 
@@ -913,7 +953,11 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 - **`changelog_local` ToC**: Added Table of Contents to `changelog_local` (top-of-file) and to end of `CHANGELOG`.
 - **Sensor Docs**: Updated `all_sensors`, `value_min_max`, and `about_attributes_list` documents. **`README`**: On-going updates.
 
-## [3.3.2-rc14] - 2026-08-01 - README Review; SMS Action Documentation Corrected
+## [3.3.2-rc14] - 2026-08-01 - README Quality Review; SMS Action Parameters and Alert Formatting Fixes
+
+### Summary
+
+Documentation quality review and verification. Audited the 2,034-line README against quality standards, fixed SMS mailbox parameter documentation and defaults, corrected GitHub markdown alert callouts, and clarified tested firmware revisions.
 
 `readme_review` (REVIEW_MODE=Full) against the 2034-line README. Ten of thirteen quality-standard rules fully met, all 23 YAML blocks valid, all 29 referenced entity IDs present in the live registry, all four service names correct. Two findings would have broken a user, both in the same parameter.
 
@@ -942,7 +986,11 @@ Nine alerts carried their text on the marker line (`> [!NOTE] This is a...`). Gi
 - **Two conflicting confidence gates.** "Understanding the usage projection" told the reader to gate an automation "so you are not paged on day two", then showed `state: high` — roughly a quarter into the cycle, around day 8. Now uses `confidence != 'low'`, matching both the sentence and the Projected Overage Alert example.
 - **"Near-real-time"** replaced in the two places it survived, after the same phrase was given a concrete figure elsewhere. A reader met the vague claim first and the precise one later.
 
-## [3.3.2-rc13] - 2026-08-01 - Guard Bands Reconciled Against Code; Sensor Review
+## [3.3.2-rc13] - 2026-08-01 - Numeric Sensor Guard Band Verification; Cumulative Counter Floor Tests
+
+### Summary
+
+Numeric sensor guard band verification and enforcement. Verified all 92 live entities against `value_min_max.md`, added missing min-limit guard bands (floor 0) across 10 numeric sensors and 6 byte counters, and created `test_every_numeric_sensor_has_a_guard_band`.
 
 `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) found the entity inventory perfectly reconciled and `value_min_max.md` describing protection the code did not provide.
 
@@ -991,7 +1039,7 @@ Category E of `sensor_review.md` had two directions — does the documented enti
 
 All 35 temporarily-enabled entities re-disabled and confirmed from the live entity list at 57.
 
-## [3.3.2-rc12] - 2026-08-01 - Repair Wording, Signal Note Consistency, Drift Guarantee Pinned
+## [3.3.2-rc12] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Contract Drift Invariant Tests
 
 ### Bumps
 
@@ -999,7 +1047,7 @@ All 35 temporarily-enabled entities re-disabled and confirmed from the live enti
 
 ### Summary
 
-Documentation and user-facing wording, plus one new test. No behavior changed except the text of two repairs and three `about` notes.
+Repair wording and test invariant updates. Rephrased repair titles to report observed conditions neutrally rather than guessing root causes, aligned signal entity guidance notes with `README.md`, and added tests guaranteeing contract drift checks never fire on unsupported hardware.
 
 ### Changed — repair titles no longer assert a cause
 
@@ -1042,7 +1090,7 @@ No entity, key or translation key changed. **`Z5g_SINR`, `z5g_sinr`, `5g_sinr` a
 
 `api.py:372` keeps "the session is probably expired or the firmware changed its API". Unlike the repair, that message cannot tell the two apart at the point it is raised, names both, hedges, and prints the keys actually received — a well-formed developer message rather than a verdict handed to a user.
 
-## [3.3.2-rc11] - 2026-07-31 - Session Detection Rebuilt On A Measured Invariant
+## [3.3.2-rc11] - 2026-07-31 - Session Expiry Classification via Unauthenticated Key Verification
 
 ### Bumps
 
@@ -1050,6 +1098,8 @@ No entity, key or translation key changed. **`Z5g_SINR`, `z5g_sinr`, `5g_sinr` a
 - **Validate Bump**: Update PHACC `pytest-homeassistant-custom-component` from 0.13.349 to 0.13.350
 
 ### Summary
+
+Session expiry detection overhaul and recovery verification. Rewrote session detection (`_classify_session`) to check authenticated vs unauthenticated key responses, preventing dead sessions from masquerading as successful empty polls, separated credentials rejections (`ZTECredentialsError`) from transient timeouts, and added instrumented recovery checks.
 
 The reported fault — many entities going `unknown` for up to a minute after a reboot or an APN change — was investigated on hardware and turned out to be neither transient nor a fetch failure. It was a _successful_ fetch of a dead session, and it had silently disabled two detectors.
 
@@ -1070,12 +1120,12 @@ The same three keys had also disabled `_check_contract_drift`: `wa_inner_version
 
 `_classify_session` reads a `200 OK` response as two classes of key and returns one of four verdicts:
 
-| verdict | condition | response |
-| --- | --- | --- |
-| `live` | any authenticated key populated | proceed |
-| `expired` | authenticated all blank, unauthenticated populated | re-login and retry |
-| `not_ready` | everything blank | `ZTEConnectionError` — hold last known values |
-| `undecidable` | no unauthenticated key requested | fall back to the previous all-empty rule |
+| verdict       | condition                                          | response                                      |
+| ------------- | -------------------------------------------------- | --------------------------------------------- |
+| `live`        | any authenticated key populated                    | proceed                                       |
+| `expired`     | authenticated all blank, unauthenticated populated | re-login and retry                            |
+| `not_ready`   | everything blank                                   | `ZTEConnectionError` — hold last known values |
+| `undecidable` | no unauthenticated key requested                   | fall back to the previous all-empty rule      |
 
 `not_ready` is new and matters: a router that is answering but has nothing to report yet is booting, not expired. Re-logging in would not help, so it takes the reachability path instead of burning a login and heading toward a reauth prompt.
 
@@ -1113,7 +1163,11 @@ The reboot step took a baseline, rebooted, and waited for the router to answer. 
 
 Polling intervals below 150 s stop the preemptive idle reset firing on every cycle, which is what covered this fault in normal operation. That is now safe because detection works, but it is worth recording that the two settings interact.
 
-## [3.3.2-rc10] - 2026-07-31 - Sensor Review; APN Documentation Completed
+## [3.3.2-rc10] - 2026-07-31 - Live Sensor Review Reconciliation; Router APN Profile Selection Documentation
+
+### Summary
+
+Live sensor inventory reconciliation and APN documentation alignment. Reconciled all 92 live entities against documentation, refreshed `about` attribute notes, added a note to `ODU LED Switch`, and documented the boundary between integration APN selection and router-based profile creation.
 
 `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) reconciled the whole inventory, and the APN behavior documented across rc7-rc9 was completed with the half that was missing.
 
@@ -1144,7 +1198,11 @@ The project owner asked whether adding an APN is documented as a router-web-page
 
 `all_sensors.md`'s `About` column reads 85 ✔ and now understates by one; `ODU LED Switch` should be ✔. Left as-is by decision rather than oversight, and recorded here so the next `sensor_review` run reads it as known rather than as fresh drift.
 
-## [3.3.2-rc9] - 2026-07-31 - Attended Tier Completed; Two Self-Inflicted Defects
+## [3.3.2-rc9] - 2026-07-31 - Write Payload Shape Lock Tests; Interactive SMS and Reboot Hardware Verification
+
+### Summary
+
+Write payload shape lock tests and interactive hardware verification. Added `tests/test_write_payload_shapes.py` across all 11 write commands, added interactive CLI verification scripts for SMS send, delete, delete-all, and reboot, and corrected false dead-session detection in targeted reads.
 
 All eleven write commands are now either exercised on hardware or locked against silent change. Getting there produced two defects of my own making, both caught by running the thing rather than by any test.
 
@@ -1187,7 +1245,11 @@ All eleven write commands are now either exercised on hardware or locked against
 
 All eleven writes: **8 exercised on hardware**, 3 covered by real-world use, **11 locked** against payload change. 800 tests, 100% coverage, `mypy --strict` clean.
 
-## [3.3.2-rc8] - 2026-07-31 - APN Resolution Corrected; Attended Tier Completed
+## [3.3.2-rc8] - 2026-07-31 - APN Profile Name Resolution; APN Select and Data Limit Switch Hardware Tests
+
+### Summary
+
+APN profile resolution fix and attended hardware verification. Matched active APN profiles by `wan_apn` name instead of stale `apn_index` when in auto mode, and verified APN selection and data limit switch round trips on live hardware.
 
 The rc7 fix introduced a hazard, caught before release by the project owner's description of how the router actually behaves. All four scriptable ATTENDED writes are now exercised on hardware.
 
@@ -1220,7 +1282,11 @@ The rc7 fix introduced a hazard, caught before release by the project owner's de
 
 `apn_mode=auto`, `wan_apn=3FWA.ie`, `net_select=4G_AND_5G`, all six data-volume fields at their original values, `ppp_connected`. Checked independently of the script.
 
-## [3.3.2-rc7] - 2026-07-31 - `APN_PROC_EX` Partial-Form Defect
+## [3.3.2-rc7] - 2026-07-31 - APN Mode Selection Read-Modify-Write Payload Construction
+
+### Summary
+
+Manual APN mode selection payload construction fix. Converted manual APN mode selection from a single-field POST to a complete five-field payload derived via read-modify-write from poll data, fixing silent rejection on hardware.
 
 Found by the attended tier on its **first real run**, one prompt in. A defect the safe tier structurally could not reach.
 
@@ -1250,7 +1316,11 @@ The two existing tests asserted only `"apn_mode=manual" in data`. **Both passed 
 - `select.py` passes the poll data to `set_apn_mode`.
 - `scripts/hardware_check.py` gained `_call_setter`, which supplies the profile context that setter now needs — fetched fresh either side of a reconnect rather than cached.
 
-## [3.3.2-rc6] - 2026-07-30 - Write Classification, Hardware Exercise, Attended Tier
+## [3.3.2-rc6] - 2026-07-30 - Write Command Safety Tiering; Data Limit and Logout Verification Checks
+
+### Summary
+
+Write command safety classification and hardware testing infrastructure. Created `scripts/write_classification.py` and `tests/test_write_classification.py` categorizing all 11 router write operations into safety tiers (SAFE, ATTENDED, NEVER_AUTOMATED), added automated hardware checks for safe data volume settings and logout operations, and introduced an interactive `--attended` CLI runner.
 
 Follow-on from the control write-path work. The question that prompted it: the ODU LED switch was broken for weeks and nobody noticed, because the owner does not use that entity. What else is in that position, and how far can hardware exercise be pushed safely?
 
@@ -1285,7 +1355,11 @@ The attended **confirm** path (`y`) has not been run: doing so reconnects the li
 
 The register is not a behavioral test and proves nothing about whether any write works. It makes it impossible to add one **in silence** — which is the actual failure that let two broken controls ship.
 
-## [3.3.2-rc5] - 2026-07-30 - Control Write Path Reworked
+## [3.3.2-rc5] - 2026-07-30 - Targeted Post-Write Read-Back Verification; Concurrent Write Serialization
+
+### Summary
+
+Write path reliability and concurrency overhaul. Introduced targeted immediate read-back verification (`get_params`) on switch toggles, prevented dropped sessions during write commands via `_ensure_session`, enforced `PARALLEL_UPDATES = 1` on control platforms, and created `scripts/hardware_check.py`.
 
 Reported as erratic ODU LED toggling: the switch would move, revert, then correct itself seconds later. Two independent faults, neither in the router.
 
@@ -1318,7 +1392,11 @@ Reported as erratic ODU LED toggling: the switch would move, revert, then correc
 
 `test_write_refused_with_a_dead_session_relogs_in_and_retries` **passed against code that failed on hardware**. The mock was written from the same wrong model as the code, so it could only confirm the code agreed with the mistake. Mocks cannot falsify a belief about the device. The enumerate-and-guard tests fared better — the dead-session sweep forced `get_params` into coverage the moment it was added.
 
-## [3.3.2-rc4] - 2026-07-30 - Toolchain Moved To HA 2026.8; Harness Unblocked
+## [3.3.2-rc4] - 2026-07-30 - Toolchain Migration to Home Assistant 2026.8; Ruff Keyword-Only Argument Fixes
+
+### Summary
+
+Development toolchain update. Migrated devcontainer to Home Assistant 2026.8.0b1, PHACC 0.13.349, and Ruff 0.16.0, resolving test harness blocking issues and converting multi-parameter signatures to keyword-only arguments (`PLR0917`).
 
 The devcontainer took **HA 2026.8.0b1**, **PHACC 0.13.349** and **ruff 0.16.0**. The harness problem recorded in `[3.3.2-dev1]` is **resolved** — PHACC 0.13.349 supports 2026.8, so the suite runs with no shim and the throwaway probe is gone for good. Pins were already updated in `.validate/requirements_test.txt` and `version_matrix.json`.
 
@@ -1339,7 +1417,11 @@ The devcontainer took **HA 2026.8.0b1**, **PHACC 0.13.349** and **ruff 0.16.0**.
 - **`unifi_network_monitor` and `huawei_router_5g` keep the same `via_device` test gap**, and both will now also hit `PLR0917` if they have comparable signatures. Neither is actioned here.
 - §7 of the shared device-registry record was verified against **b0**; this run was on **b1**, with no change observed. A final-release check is still the honest closing step.
 
-## [3.3.2-rc3] - 2026-07-30 - Bumps
+## [3.3.2-rc3] - 2026-07-30 - Tooling Bumps: Ruff, Zizmor, PHACC; Pre-Release Documentation Sync
+
+### Summary
+
+Validation tooling dependency updates. Bumped `ruff` to 0.16.0, `zizmor` to 1.28.0, and `pytest-homeassistant-custom-component` to 0.13.349, accompanied by pre-release documentation refinements.
 
 ### Bumps
 
@@ -1351,7 +1433,11 @@ The devcontainer took **HA 2026.8.0b1**, **PHACC 0.13.349** and **ruff 0.16.0**.
 
 - **Docs**: Changes to CHANGELOG.md and README.md prior to v3.3.2 release
 
-## [3.3.2-rc2] - 2026-07-30 - `TOTAL` State Class Banned; Release Notes Rewritten
+## [3.3.2-rc2] - 2026-07-30 - Sensor State Class Policy Enforcement; Ban on TOTAL State Class
+
+### Summary
+
+Sensor state class policy enforcement. Introduced `test_no_sensor_uses_the_total_state_class` in `tests/test_entity_hygiene.py` to enforce a strict ban on `SensorStateClass.TOTAL` across all entities, preventing corrupted long-term statistics on resetting counters.
 
 A guard so the `TOTAL` / `TOTAL_INCREASING` confusion cannot recur
 
@@ -1363,7 +1449,11 @@ A guard so the `TOTAL` / `TOTAL_INCREASING` confusion cannot recur
   - **Mutation-verified**, not merely passing: flipping one description to `TOTAL` fails with the offending entity named (`sensor.zte_5g_data_monthly_sent_gb`). Restored; 14/14 pass, ruff clean. The four `mypy --strict` findings in that file are pre-existing and outside this addition.
   - Known gap, deliberately not covered: the ban does not stop a resetting counter being marked `MEASUREMENT`.
 
-## [3.3.2-rc1] - 2026-07-30 - Device-Registry Tests Unlocked From HA 2026.7
+## [3.3.2-rc1] - 2026-07-30 - Device-Registry Compatibility Shims and Test Harness Alignment for HA 2026.8
+
+### Summary
+
+Home Assistant 2026.8 device-registry testing compatibility. Updated device link test assertions across 9 test files to support both HA 2026.7 (`via_device`) and HA 2026.8 (`via_device_id`) dynamically using shared helper shims.
 
 The devcontainer took **HA 2026.8.0b0**, which triggered the pending re-verification in `.shared/issues/x_project/device_registry_2026_08.md` §7. The compat shims are correct; nine tests were not.
 
@@ -1384,7 +1474,11 @@ The §7 checklist ran against the beta. Every assumed API landed unchanged, so *
 
 **Other projects:** the same test pattern almost certainly exists in `unifi_network_monitor` and `huawei_router_5g`. Flagged in the shared record, not actioned here.
 
-## [3.3.1-dev20] - 2026-07-30 - Allowance Enabled; Entity Naming Convention
+## [3.3.1-dev20] - 2026-07-30 - Allowance Sensor Enabled by Default; Alert Threshold Entity Renaming
+
+### Summary
+
+Entity naming cleanup and default-state adjustments. Enabled `sensor.zte_5g_data_allowance` by default to pair with usage projections, renamed `Data Volume Alert` to `Alert Threshold` to prevent stuttered entity IDs, and added sub-device naming rules to `AGENTS.md`.
 
 ### Changed
 
@@ -1404,7 +1498,11 @@ The §7 checklist ran against the beta. Every assumed API landed unchanged, so *
 
 `sensor.zte_5g_data_allowance` shows `disabled_by='user'` in the registry rather than `'integration'`, so Home Assistant will not auto-enable it there — an explicit user choice is respected over an integration default. It has to be enabled once by hand. Fresh installs get it enabled. This is the same asymmetry recorded in `[3.3.1-dev18]`: the enable direction propagates from an integration default, the disable direction and any explicit user choice do not.
 
-## [3.3.1-dev19] - 2026-07-30 - Two Raw Diagnostics Made Readable
+## [3.3.1-dev19] - 2026-07-30 - Carrier Aggregation and LTE Band Lock Mask Diagnostic Decodes
+
+### Summary
+
+Diagnostic string parsing documentation. Decoded raw diagnostic payloads for Carrier Aggregation Secondary Cells and LTE Band Lock Mask into human-readable field layouts and bitmask formulas in entity `about` notes and technical reference docs.
 
 `Carrier Aggregation Secondary Cells` and `LTE Band Lock Mask` both told the user the value was raw without telling them how to read it. Both notes now carry the decode, and both decodes are verified on hardware rather than asserted.
 
@@ -1422,7 +1520,11 @@ The §7 checklist ran against the beta. Every assumed API landed unchanged, so *
 - `docs/zte_how_to_access.md` § Field formats now carries a per-position confidence column for the CA descriptor, so the three confirmed fields are distinguishable from the two inferred ones and the one unknown.
 - The band-lock warning was retained rather than dropped: the sensor is read-only, but it is where someone checks a lock they applied elsewhere, and "locking to a band the router cannot see leaves it with no service" is the consequence they need at that moment.
 
-## [3.3.1-dev18] - 2026-07-29 - Default-State Review and `about` Note Corrections
+## [3.3.1-dev18] - 2026-07-29 - Default Entity State Review and Entity About Note Corrections
+
+### Summary
+
+Out-of-the-box entity defaults and `about` attribute corrections. Disabled static network identifiers (`MDM MCC`/`MNC`) by default, enabled `Alert Threshold`, and clarified entity notes across WAN fallback mode, byte counter units, bridge mode, and timezone offsets.
 
 User-directed pass over which entities appear out of the box, and over six `about` notes that were awkward, outdated or misleading. Note text is edited in the entity descriptions, not in `docs/about_attribute_list.md`, which is generated from them.
 
@@ -1438,7 +1540,11 @@ User-directed pass over which entities appear out of the box, and over six `abou
 - **Bridge Mode** — the note described the PPP session accurately but never connected it to the entity's name, leaving users to wonder how it relates to WAN Operating Mode. It now states the distinction directly: this reports whether the pass-through session is **up**, while WAN Operating Mode reports which mode the router is **configured** for. The APN-versus-coverage diagnostic hint is kept.
 - **Router Timezone** — previously declined to interpret the format at all. The encoding is now known, so it explains it: base timezone plus DST offset, with `0-1` as the worked example.
 
-## [3.3.1-dev17] - 2026-07-29 - Monthly Counter Statistics Fixed; Allowance Sensor Added
+## [3.3.1-dev17] - 2026-07-29 - Monthly Byte Counter State Class Fix and Allowance Sensor Addition
+
+### Summary
+
+Long-term statistics state class fix and monthly allowance sensor. Corrected monthly data counters from `TOTAL` to `TOTAL_INCREASING` to prevent statistics corruption upon monthly billing resets, corrected binary unit documentation (`2_1048576` = 2 TiB), and introduced the `Allowance` (`data_allowance`) sensor.
 
 Prompted by a user challenge to a claim made in review, which turned out to be half right and exposed a defect that had been corrupting statistics every month.
 
@@ -1459,7 +1565,11 @@ Prompted by a user challenge to a claim made in review, which turned out to be h
 - **`FLOW_CALIBRATION_MANUAL` is that "Data Used" box** — an editable current-usage field, not a missing feature. It re-bases the counter to match an operator's billing figure, which means it _writes_ the counter and so carries the same statistics caveats as a reset, upward as well as down.
 - Named `Allowance` rather than `Data Allowance`: Home Assistant prefixes the sub-device name, so the latter yields "ZTE 5G Data Data Allowance". Same reasoning as `Reset Day`.
 
-## [3.3.1-dev16] - 2026-07-29 - Corrected Reasoning on Declined Write Controls
+## [3.3.1-dev16] - 2026-07-29 - Technical Rationale Corrections for Declined Router Write Controls
+
+### Summary
+
+Architectural review of declined write commands. Corrected documentation across `docs/zte_how_to_access.md` and `docs/Future.md` to distinguish between local LAN reachability and WAN connection drops for declined settings (cell/band locking, DNS, DHCP reservations, and operation modes).
 
 Documentation only. All declined write commands stay declined; the reason given for most of them was wrong.
 
@@ -1476,7 +1586,11 @@ Documentation only. All declined write commands stay declined; the reason given 
 
 **Why this was worth correcting rather than leaving.** A tidy single objection that does not survive inspection is worse than three specific ones: the next reader either applies it to a sixth command where it also fails, or notices the LAN path survives, concludes the whole rationale is bogus, and implements all of them.
 
-## [3.3.1-dev15] - 2026-07-29 - Projection Refinements
+## [3.3.1-dev15] - 2026-07-29 - Projected Cycle Usage Fallback Logic and Long-Term Statistics Policy
+
+### Summary
+
+Data usage projection refinements. Removed `state_class` from `Projected Cycle Usage` to prevent recording redundant estimates in long-term statistics, introduced a calendar-month fallback when no router reset day is configured, and added a robust sample automation for projected overage alerts.
 
 Four changes to `Projected Cycle Usage` following a review of how it behaves in the first days of a cycle.
 
@@ -1494,7 +1608,11 @@ Four changes to `Projected Cycle Usage` following a review of how it behaves in 
 
 - **Phase 4, the cycle-history store, is declined for now.** It would only improve the opening ~18-24 hours of each cycle — precisely the window `confidence` already reports as `low`. `helpers.project_cycle_usage()` keeps its `prior_rate` hook, so it remains one line plus a store if the 1 August rollover shows something worse than predicted. Were it built, it should use `homeassistant.helpers.storage.Store` (already used in two sibling projects) rather than `RestoreEntity` (used in none).
 
-## [3.3.1-dev14] - 2026-07-29 - Documentation Reconciliation
+## [3.3.1-dev14] - 2026-07-29 - Documentation Reconciliation: Entity Counts, Unpolled Parameters, and Development Debts
+
+### Summary
+
+Documentation reconciliation pass. Reconciled entity count mismatches across `README.md` and `all_sensors.md` (91 live entities), documented 15 unpolled MC7010 parameters in `docs/zte_how_to_access.md`, and updated technical debts in `DEVELOPMENT.md`.
 
 Documentation only. Closes the gap between what this session built and what the docs claim, and folds the last of the discovery report into the interface reference.
 
@@ -1510,7 +1628,11 @@ Documentation only. Closes the gap between what this session built and what the 
 - **`DEVELOPMENT.md` § 5** gains two pitfalls: the **URL-length budget** (with the rule that a speculative key is probed alone first, since a batch containing fictional names was seen to time out and fall back to empty defaults), and **`DATA_LIMIT_SETTING` being all-or-nothing** — the write that never worked, and the swallowed exception that hid it.
 - **`DEVELOPMENT.md` § 7** gains the two real debts: the billing-cycle write entities, and the projection's missing cycle-history store.
 
-## [3.3.1-dev13] - 2026-07-29 - Batch Poll Split In Two
+## [3.3.1-dev13] - 2026-07-29 - Coordinator Batch Poll Split: Core Mandatory and Extended Optional Fetch
+
+### Summary
+
+Coordinator polling performance and resilience overhaul. Split `get_all_data()` into a mandatory core poll (75 keys) and an optional extended poll (41 keys) with dedicated failure budgets, preventing URL length overflows (~2048 bytes) and isolating diagnostic failures from core telemetry.
 
 The batch poll had grown to 1,889 characters against a ~2,048-character URL ceiling. Rather than keep trading one key away to make room for the next, the request is now two.
 
@@ -1537,7 +1659,11 @@ The batch poll had grown to 1,889 characters against a ~2,048-character URL ceil
 
 Live MC7010 after a full restart: 120 merged keys, values present from both batches (`traffic_clear_date` and `monthly_tx_bytes` from core, `sntp_timezone`, `opms_wan_mode`, `data_volume_limit_size`, `reboot_dow` from extended), Integration Health `off`, and `endpoint_failures` zero across all three optional endpoints.
 
-## [3.3.1-dev12] - 2026-07-29 - Data Limit Switch Fixed; Batch Poll Budgeted
+## [3.3.1-dev12] - 2026-07-29 - Data Limit Switch Read-Modify-Write Fix and Batch Poll URL Budget Limit Tests
+
+### Summary
+
+Data limit switch fix and polling URL length safety tests. Fixed `set_data_limit_switch` by implementing full 6-field read-modify-write payload construction, translated refused write exceptions to `HomeAssistantError`, and added `test_batch_poll_url_stays_within_the_router_budget`.
 
 Acts on the router-facing agent's answers in `.notes/info/zte_element_discovery_report.md` §6, which resolved every question raised against the discovery report. One of the answers uncovered a defect in shipped code.
 
@@ -1565,7 +1691,11 @@ Acts on the router-facing agent's answers in `.notes/info/zte_element_discovery_
 - Two decisions to publish a raw string rather than parse it were vindicated by the answers. The field order given for `lte_multi_ca_scell_info` has **positions 4 and 5 transposed** — the sample reads `…,20,6300,…`, and EARFCN 6300 falls inside band 20's allocation while `20` is not a valid EARFCN. And `sntp_timezone` rests on a single sample from a UTC+0 unit with a sign convention that runs backwards from expectation. Parsing either would have shipped a wrong value.
 - **`battery_value` returns a hardcoded `100`**, not an empty string. An earlier probe reported it empty because its batch chunk contained fictional names and timed out. The `about` note calling the value meaningless on a mains-powered unit was right all along.
 
-## [3.3.1-dev11] - 2026-07-29 - Billing-Cycle Reads and Data-Usage Projection
+## [3.3.1-dev11] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Telemetry
+
+### Summary
+
+Billing cycle and usage projection entities. Implemented `Projected Cycle Usage` (`data_projection`) and `Reset Day` (`data_clear_day`) sensors, added multi-key aliasing for router billing reset days, and introduced seven disabled-by-default diagnostic entities.
 
 Acts on `.notes/info/zte_element_discovery_report.md`, a two-step discovery run (web UI JavaScript mining plus a live batch probe against the MC7010) that isolated 66 answering parameters. Phase 1 and Phase 3 of the plan in `.notes/issues/data_cycle_and_projection_plan.md`. **Reads only — no new write command reaches the router in this entry.**
 
@@ -1606,7 +1736,11 @@ Live MC7010 (`IRL_H3G_MC7010DV1.0.0B03`), read from a diagnostics download after
 
 - **`OPERATION_MODE`, `LTE_LOCK_CELL_SET`, `ROUTER_DNS_SETTING`, `SET_BIND_STATIC_ADDRESS`.** Each changes how the router routes traffic — including the traffic this integration reaches it over — so the control that undoes a bad change becomes unavailable exactly when it is needed. This is the objection `Future.md` already records against band and cell locking, applied consistently. `opms_wan_mode` ships read-only so the mode is visible without offering a switch that can strand the user; the router's own web page remains the right place to change it.
 
-## [3.3.1-dev10] - 2026-07-29 - `Future.md` Roadmap Rewritten
+## [3.3.1-dev10] - 2026-07-29 - Documentation: Roadmap Revision and Architectural Prioritization in Future.md
+
+### Summary
+
+Integration roadmap and architectural review. Rewrote `docs/Future.md` to document delivered features, record explicit decisions on declined proposals (e.g. token persistence), rescope band/cell locking safeguards, and establish forward priorities.
 
 `docs/Future.md` dated from 2026-05 and had not been revisited. Reviewed every item against the running instance and the current source, then rewrote it. Documentation only — no code touched.
 
@@ -1626,7 +1760,11 @@ Live MC7010 (`IRL_H3G_MC7010DV1.0.0B03`), read from a diagnostics download after
 - **Open items folded in from `DEVELOPMENT.md`** (§15 SMS toggle, custom triggers, the thermal keep-or-remove question, the migration handler) so `Future.md` is a complete forward view rather than a partial one that silently omits known work.
 - **Version Control** section — the document had none, which is why a two-month-old roadmap gave no signal that it was stale.
 
-## [3.3.1-dev9] - 2026-07-29 - `about` Notes: Six Added, Three Corrected, One Cross-Reference Removed
+## [3.3.1-dev9] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Telemetry Coverage
+
+### Summary
+
+Entity `about` attribute expansion. Extended `about` note support to the `select`, `binary_sensor`, and `switch` platforms, added notes to six core control entities (bringing coverage to 74 of 82 entities), and corrected battery and network type notes.
 
 Reconciled the `about` note suite against the running instance with `sensor_review` (`SCOPE=About`), then acted on what it found plus three inaccuracies reported from live use. **74 of 82 entities now carry a note, up from 68.**
 
@@ -1664,7 +1802,11 @@ Reconciled the `about` note suite against the running instance with `sensor_revi
 
 - **A config-entry reload does not pick up changed Python.** HA keeps the modules imported, so the first two post-edit fetches returned the pre-change state with no error and no clue — the note count simply did not move. A full restart (~150 s) is required, and the re-enable must follow it, because a restart reinstates disabled entities. Recorded in `sensor_review.md` v2.9.3 so the next run does not lose the same time.
 
-## [3.3.1-dev8] - 2026-07-29 - Encoding-Aware SMS Length Limit
+## [3.3.1-dev8] - 2026-07-29 - Encoding-Aware SMS Length Limits: GSM-7 (765 Chars) and UCS-2 (335 Chars)
+
+### Summary
+
+Dynamic SMS length validation. Implemented encoding-aware message length validation allowing up to 765 characters for GSM-7 text or 335 characters for UCS-2 (Unicode/emoji) messages, providing descriptive `ServiceValidationError` exceptions on limit breaches.
 
 The `send_sms` limit was a flat **160** in the service schema — an integration invention the router never saw, and wrong in both directions.
 
@@ -1687,7 +1829,11 @@ Validation lives in `async_send_sms`, not the schema, because which limit applie
 - **`docs/zte_how_to_access.md`**: new "`encode_type` and message length" section — the segment arithmetic, the `MessageBody`-stays-UTF-16BE rule with its two independent sources, and the hardware confirmation. `SEND_SMS` table row corrected: `encode_type` is no longer hardcoded to `UNICODE`.
 - **`AGENTS.md`**: the content-dependent limit and why it is not in the schema.
 
-## [3.3.1-dev7] - 2026-07-29 - Dead-Session Fault-Injection Sweep
+## [3.3.1-dev7] - 2026-07-29 - API Dead-Session Sweep Test Suite: Dying, Refusing, and Drifting Session Fault Injection
+
+### Summary
+
+Fault injection test suite for API resilience. Created `tests/test_dead_session_sweep.py` (116 tests) to verify all public API methods raise clean exceptions rather than returning silent empty success on dead sessions, refused write commands, or drifted contracts.
 
 The systematic guard behind `[3.3.1-dev6]`. Both silent-failure bugs in this class were found one at a time, by a user, after release. This makes the next one fail in CI instead.
 
@@ -1706,7 +1852,11 @@ The systematic guard behind `[3.3.1-dev6]`. Both silent-failure bugs in this cla
 - **Mutation matrix, all caught, all reverted**: `_require_success` removed from `send_sms`; from `set_bearer_preference`; `_require_contract` removed from `get_sms_messages`; and the `last_activity` gate reverted to reproduce the original field bug.
 - The double deliberately serves `LD` and `wa_inner_version` even while dead, because the real hardware does — and that is precisely why those calls could reset the activity clock. Modelling them as dying would be a fault the router cannot produce.
 
-## [3.3.1-dev6] - 2026-07-29 - Actions Silently Failed on an Expired Session
+## [3.3.1-dev6] - 2026-07-29 - Authenticated Activity Clock Tracking and Write Action Response Validation
+
+### Summary
+
+Session expiry and write action verification fixes. Restricted session activity timestamp tracking strictly to authenticated requests, implemented `_require_success()` to catch `{"result":"failure"}` on write operations, and ensured SMS sends trigger immediate state refreshes.
 
 **User-reported.** With Pause Polling on, `zte_router_5g.send_sms` reported success and no message arrived. Turning Pause Polling off and resending worked immediately. Two distinct defects, both shipped in **3.2.5**.
 
@@ -1726,7 +1876,11 @@ The systematic guard behind `[3.3.1-dev6]`. Both silent-failure bugs in this cla
 
 Both defects were present in the released **3.2.5**, so by the "would a user on the last release have hit this?" test they qualify for a `Fixed` bullet in `CHANGELOG.md` `[3.3.1]`. Recorded here as an open decision rather than assumed either way.
 
-## [3.3.1-dev5] - 2026-07-29 - Thermal Set Completed to Five
+## [3.3.1-dev5] - 2026-07-29 - Thermal Diagnostic Telemetry Set: Modem and 5G Radio Temperature Sensors
+
+### Summary
+
+Thermal telemetry sensor expansion. Added modem and 5G radio temperature diagnostic sensors (`pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`) disabled by default with guard bands (-40 to 125 °C), completing the 5-sensor thermal suite.
 
 Completes the thermal telemetry set following independent verification of the source research. The set is now defined by a statable rule rather than by which keys the research document happened to name.
 
@@ -1753,7 +1907,11 @@ Verified directly against `Kajkac/ZTE-MC-Home-assistant-repo`: its `const.py` na
 - **`docs/all_sensors.md`**: Three rows added; System count 23 → 26, total 78 → 81.
 - **`docs/value_min_max.md`**: Three guard-band rows added.
 
-## [3.3.1-dev4] - 2026-07-28 - Manifest Bump 3.3.0 → 3.3.1 - Release Preparation
+## [3.3.1-dev4] - 2026-07-28 - Version Bump to 3.3.1 and API Login Type Refactoring
+
+### Summary
+
+Version bump and login typing refactor. Bumped `manifest.json` to 3.3.1, refactored `_attempt_login` return type to `_LoginAttempt` named tuple for strict type narrowing, and updated documentation version manifests.
 
 Release preparation for 3.3.1. This is the first entry in this line to carry a manifest bump.
 
@@ -1775,7 +1933,11 @@ Release preparation for 3.3.1. This is the first entry in this line to carry a m
 - **`CHANGELOG.md`**: The public `## [3.3.1]` entry is deliberately **not** written yet, by instruction. Until it is, `manifest.json` reports 3.3.1 while the public changelog's newest entry is 3.3.0 — an intentional, temporary mismatch to be closed before release.
 - **`docs/about_attribute_list.md`**: Still two entities behind (`pm_sensor_pa1`, `pm_sensor_ambient`), per the deferral recorded in `[3.3.1-dev1]`.
 
-## [3.3.1-dev3] - 2026-07-28 - Sensor Aliasing & Thermal Entities
+## [3.3.1-dev3] - 2026-07-28 - Cross-Model Sensor Key Aliasing, ARFCN Band Resolvers, and Thermal Entities
+
+### Summary
+
+Cross-model parameter aliasing and channel-to-band resolution. Implemented `_get_first` parameter fallback in `sensor.py`, integrated EARFCN/ARFCN channel-to-band fallback resolvers, and added two disabled-by-default thermal sensors (`pm_sensor_pa1`, `pm_sensor_ambient`).
 
 Phase 3 of the cross-model compatibility expansion. On an MC7010 every existing sensor reads exactly as before — the primary key is always tried first — and the two new entities are off by default.
 
@@ -1793,7 +1955,11 @@ Phase 3 of the cross-model compatibility expansion. On an MC7010 every existing 
 - **`docs/all_sensors.md`**: Added both thermal entities; System count 21 → 23, total 76 → 78.
 - **`docs/value_min_max.md`**: Added guard band entries for both thermal sensors (-40 to 125 °C).
 
-## [3.3.1-dev2] - 2026-07-28 - API Params & Login Fallback
+## [3.3.1-dev2] - 2026-07-28 - Cross-Model API Batch Parameters, Login Form Fallback, and SMS GSM-7 Encoding
+
+### Summary
+
+API cross-model compatibility and SMS encoding optimization. Added 10 cross-model parameters to `get_all_data()`, implemented best-effort alternate login form fallback in `_attempt_login()`, and added per-message GSM-7 vs UNICODE encoding selection in `send_sms`.
 
 Phase 2 of the cross-model compatibility expansion. behavior on the MC7010 is unchanged except for SMS encoding, which now stops wasting more than half of every plain-text message.
 
@@ -1807,7 +1973,11 @@ Phase 2 of the cross-model compatibility expansion. behavior on the MC7010 is un
 
 - **`api.py:send_sms()` encoding selection**: `encode_type` is now chosen per message — `GSM7_default` when the text is entirely within the GSM 03.38 alphabet, `UNICODE` otherwise. It was previously hardcoded to `UNICODE`, which capped every message at 70 characters and needlessly split plain-text notifications that would have fitted in 160. `MessageBody` remains UTF-16BE hex for both encodings; `encode_type` selects the DCS and segment accounting, not the body format.
 
-## [3.3.1-dev1] - 2026-07-28 - Helpers & GSM-7 Inspector
+## [3.3.1-dev1] - 2026-07-28 - GSM 03.38 Character Inspector and 3GPP Channel-to-Band Resolvers
+
+### Summary
+
+GSM-7 character validation and 3GPP band resolution helpers. Added `is_gsm7()` and standard alphabet definitions in `helpers.py`, along with 3GPP channel-to-band conversion functions (`earfcn_to_band`, `arfcn_to_band`).
 
 Phase 1 of the cross-model compatibility expansion. Pure additions to `helpers.py` with no call sites yet — nothing in the integration's behavior changes until Phases 2 and 3 wire these in.
 
@@ -1821,7 +1991,11 @@ Phase 1 of the cross-model compatibility expansion. Pure additions to `helpers.p
 
 - **`docs/about_attribute_list.md`** is deliberately not updated in this release line, per project directive; it will be regenerated from `sensor.py` in a later release.
 
-## [3.3.0-rc5] - 2026-07-28 - AGENTS README About List and Expected Compatibility
+## [3.3.0-rc5] - 2026-07-28 - Documentation: Router Compatibility Guide and Entity About Attribute Manifest
+
+### Summary
+
+Documentation expansion for compatibility and entity metadata. Added `docs/expected_zte_compatibility.md` detailing router hardware support across the ZTE `goform` family, created `docs/about_attribute_list.md` cataloging built-in entity notes, and updated project acknowledgements.
 
 ### Changed
 
@@ -1833,9 +2007,11 @@ Phase 1 of the cross-model compatibility expansion. Pure additions to `helpers.p
 - **`about_attribute_list.md`**: Added a document to list all of the `about:` attributes.
 - **`expected_zte_compatibility.md`**: Added a document to detail what additional ZTE Routers _should_ be compatible.
 
-## [3.3.0-rc4] - 2026-07-28 - Automation Example Glitch Guards & Float Rounding in README
+## [3.3.0-rc4] - 2026-07-28 - README Automation Glitch Guards, Collapsible Layout, and Float Rounding
 
-Reinforced example automations in `README.md` to prevent false triggers during router reboots, network glitches, or entity unavailability, and rounded numeric outputs.
+### Summary
+
+README layout enhancements and automation glitch protections. Reinforced example automations in `README.md` to prevent false triggers during router reboots, network glitches, or entity unavailability, rounded numeric sensor outputs, and converted feature sections to collapsible `<details>` blocks.
 
 ### Changed
 
@@ -1850,7 +2026,11 @@ Reinforced example automations in `README.md` to prevent false triggers during r
 
 ---
 
-## [3.3.0-rc3] - 2026-07-28 - `about` Notes on 63 Entities
+## [3.3.0-rc3] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy
+
+### Summary
+
+Entity `about` attribute implementation. Ported the `ZTEAboutEntity` mixin from sibling integrations, added description-level `about` notes across 57 sensors and 6 control entities (explaining signal ranges and metric contexts), and enforced unrecorded attribute handling to prevent database bloat.
 
 Brings the `about` attribute suite to parity with `unifi_network_monitor` and `wifi_ssid_monitor`. **408 tests passing, 100% coverage, ruff clean, mypy strict clean.**
 
@@ -1884,7 +2064,11 @@ Brings the `about` attribute suite to parity with `unifi_network_monitor` and `w
 
 - Two existing tests asserted `extra_state_attributes == {}` for sensors that now carry a note; both updated, and a new test added asserting that a sensor with **no** `about` still publishes nothing — guarding the other half of `_with_about`.
 
-## [3.3.0-rc2] - 2026-07-28 - External Code Review Triage
+## [3.3.0-rc2] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation
+
+### Summary
+
+External code review triage and invariant documentation. Validated and documented the 150-second idle session timeout invariant against measured hardware behavior (MC7010), clarified client-side SMS tag filtering architecture, and corrected session Gotchas documentation.
 
 Triage of `.notes/code_review/code_review_20260728_0019.md` (external agent, 0 findings + 3 architectural observations). **407 tests passing, 100% coverage, ruff clean, mypy strict clean.** Two of the three observations were declined with reasons; the review's most useful effect was prompting a measurement that settled one of them, and a re-read that found a defect the review missed.
 
@@ -1910,7 +2094,11 @@ Triage of `.notes/code_review/code_review_20260728_0019.md` (external agent, 0 f
 
 - **Observation 3 (adopt `via_device_link` for sub-devices) — factually wrong; already done.** The review states `helpers.py` line 45 builds `DeviceInfo` with `via_device=(DOMAIN, entry.unique_id)`. It does not: `helpers.py:10` imports `via_device_link` from `._compat` and line 87 calls it, with a comment naming the 2026.8 deprecation and the 2027.8 removal. That work landed in `[3.3.0-dev4]`, and the review is dated after it. Line 45 is inside `get_router_model`'s model-matching loop. **No change made — the recommendation was to do something already done.**
 
-## [3.3.0-dev14] - 2026-07-27 - doc_update Reconciliation Pass
+## [3.3.0-dev14] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes
+
+### Summary
+
+Documentation reconciliation pass across the 3.3.0-dev cycle. Updated `AGENTS.md` to describe the generalized all-empty session expiry rule, added Integration Health `drift` attribute documentation to `README.md`, and documented automatic session recovery behavior.
 
 Produced by a `doc_update` run over the whole `[3.3.0-dev1]`–`[3.3.0-dev13]` cycle. Documentation only; **407 tests passing, 100% coverage.** Both findings are statements that were true when written and had since become false — the class a purely additive documentation pass cannot find.
 
@@ -1934,7 +2122,11 @@ Produced by a `doc_update` run over the whole `[3.3.0-dev1]`–`[3.3.0-dev13]` c
 - No new-entry duplication: dev1–dev13 already recorded the session's work, so this entry covers only the two corrections and the README addition. `all_sensors.md`, `value_min_max.md`, `DEVELOPMENT.md`, `proj_structure.md` and `zte_how_to_access.md` were assessed and correctly skipped — no entity, guard-band or structural change since each was last updated.
 - Neither `README.md` nor `AGENTS.md` carries a `## Version Control` section, so neither received a version entry.
 
-## [3.3.0-dev13] - 2026-07-27 - Records Caught Up After a Long Session
+## [3.3.0-dev13] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md
+
+### Summary
+
+Technical documentation and file structure catch-up. Updated `DEVELOPMENT.md` to reflect retirement of the §3 root identity deviation, synchronized `proj_structure.md` with newly added compatibility shims (`_compat.py`, `test_compat.py`), and documented `get_sms_list` exception behavior.
 
 Documentation only, closing the loose ends left by twelve dev entries in one day. **407 tests passing, 100% coverage.**
 
@@ -1956,7 +2148,11 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - Final sweep for stale references across ZTE markdown found nothing further; the remaining `STRIKE_LIMIT` matches are the legitimate `FETCH_STRIKE_LIMIT` / `UNREACHABLE_STRIKE_LIMIT` constants. Changelog entries were left pointing at old paths deliberately — they are historical records.
 
-## [3.3.0-dev12] - 2026-07-27 - Expired Session Returned "No SMS"
+## [3.3.0-dev12] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions
+
+### Summary
+
+Session expiry detection and endpoint contract hardening. Replaced brittle named-key session expiry checks with generalized all-empty body verification across all endpoints, added `_require_contract()` assertions on SMS actions to prevent silent empty-inbox bugs, and captured real router payload fixtures.
 
 **User-reported and reproduced.** `get_sms_list` returned an empty list while messages were present on the router; pressing **Refresh Now** and retrying then worked. **407 tests passing, 100% coverage, ruff clean, mypy strict clean.**
 
@@ -1970,12 +2166,12 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
-  | Request | Live session | Dead session |
-  | :-- | :-- | :-- |
-  | `sms_data_total` | `{"messages":[…]}` | `{"sms_data_total":""}` |
-  | `sms_data_total`, empty box | `{"messages":[]}` | `{"sms_data_total":""}` |
-  | batch poll | real values | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
-  | `sms_capacity_info` | real values | `{"sms_capacity_info":""}` |
+  | Request                     | Live session       | Dead session                                         |
+  | :-------------------------- | :----------------- | :--------------------------------------------------- |
+  | `sms_data_total`            | `{"messages":[…]}` | `{"sms_data_total":""}`                              |
+  | `sms_data_total`, empty box | `{"messages":[]}`  | `{"sms_data_total":""}`                              |
+  | batch poll                  | real values        | `{"network_type":"","signalbar":"","wan_ipaddr":""}` |
+  | `sms_capacity_info`         | real values        | `{"sms_capacity_info":""}`                           |
 
   The rule is now **"every value is an empty string"**, which covers all three shapes. `Content-Type` is `text/html` even on valid responses, so it carries no signal — that is why the existing HTML check has to inspect the body.
 
@@ -1998,7 +2194,11 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 - **You remembered this correctly: it was fixed on `huawei_router_5g`**, which wraps every action in `_execute_with_retry` (re-login, retry once). That could not be ported — Huawei's library **raises** `ResponseErrorLoginRequiredException`, so there is something to catch. ZTE's `goform` API returns `200` with a benign body, so the fix had to be **detection**, not retry.
 - **Not a cross-project item, checked rather than assumed.** `unifi_network_monitor` raises on a real `401`; `wifi_ssid_monitor` already flags a missing `accesspoints` key into its health checks (`payload_no_ap_list`) rather than swallowing it; `huawei_router_5g` uses a library that raises. ZTE's goform API is the only one in the family that answers an auth failure with `200 OK` and a plausible body. Deliberately **not** added to the `x_project` queue — it fails the entry criteria.
 
-## [3.3.0-dev11] - 2026-07-27 - Device-Registry Record Cross-Referenced
+## [3.3.0-dev11] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md
+
+### Summary
+
+Device registry architecture and compatibility documentation. Documented `_compat.py` forward-compatibility shims (`via_device_link`, `device_by_identifier`) in `AGENTS.md` and formalized the `{imei}_system` root device topology under `dev_standards` §3.
 
 **No code changed.** Documentation only — the HA 2026.8 device-registry analysis has been split out of `unifi_network_monitor`'s notes into `.shared/issues/device_registry_2026_08.md`, and this project's `AGENTS.md` now points at it.
 
@@ -2015,7 +2215,11 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 - This project's status in the shared record is **DONE** — two of three shims, the third correctly not applicable. Nothing outstanding here.
 - The shared record carries an **open family action**: re-verify the shims natively once HA 2026.8.0 is available in a devcontainer. The current implementation is verified against the HA `dev` branch and mock-patched flags, not a real 2026.8 build.
 
-## [3.3.0-dev10] - 2026-07-27 - §3 Deviation Retired
+## [3.3.0-dev10] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation
+
+### Summary
+
+Standards compliance reconciliation. Formally retired the §3 root identity project deviation following `dev_standards` v1.15.0 update, confirming IMEI-keyed System root devices meet top-tier hardware identity standards.
 
 **No code changed.** `dev_standards` **1.15.0** amends §3's root-identity ladder; this integration's `PARTIAL` and its Project Deviation are withdrawn as a result. **The deviation described a gap in the standard, not in this project.**
 
@@ -2031,7 +2235,11 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **Section Conformance is now 19 `DONE`, 1 `N/A` (§21), 1 `PENDING` (§15).** §15 Feature-Group Toggles is the only outstanding item and is **parked by decision** — a large piece of work for a group most users are unlikely to disable. It remains the single Project Deviation on record for this integration.
 
-## [3.3.0-dev9] - 2026-07-27 - §9 Secret Pre-fill Guard
+## [3.3.0-dev9] - 2026-07-27 - Security Hardening: Stored Secret Schema Pre-fill Prevention Tests
+
+### Summary
+
+Config flow credential security hardening. Added automated tests (`test_stored_secrets_are_never_pre_filled`, `test_no_field_leaks_the_stored_secret`) verifying that passwords and sensitive credentials are never pre-filled or leaked into options or reauth UI schemas.
 
 Closes the last outstanding `**Test:**` tag for this project. **398 tests passing, 100% coverage, ruff clean, mypy strict clean.** This is now the first project covering **every tagged section that applies to it** — §6, §9, §10, §12, §14 `DONE`, §21 `N/A`.
 
@@ -2058,7 +2266,11 @@ Closes the last outstanding `**Test:**` tag for this project. **398 tests passin
 
 - **Reference implementation for the other two projects**, both of which are `PENDING` on §9. Neither has the defect today — UniFi's three `suggested_value` uses are rogue-AP ignore lists, and WiFi uses `suggested_value` nowhere — so this is a guard against a plausible future change, not a fix.
 
-## [3.3.0-dev8] - 2026-07-27 - §12 Icon Sweep Made Real
+## [3.3.0-dev8] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests
+
+### Summary
+
+Comprehensive multi-platform icon testing. Introduced `test_every_live_entity_has_an_icon_or_a_device_class` in `tests/test_entity_hygiene.py`, sweeping all 6 platforms at runtime via a shared `_live_entities` context manager to guarantee complete icon or device class coverage.
 
 Accompanies `dev_standards` **1.13.0 / 1.14.0**, which introduce the `**Test:**` tag — a per-section statement of the automated check that section requires — and name this project as the reference implementation for §12 and §14. **394 tests passing, 100% coverage, ruff clean, mypy strict clean.**
 
@@ -2085,7 +2297,11 @@ Accompanies `dev_standards` **1.13.0 / 1.14.0**, which introduce the `**Test:**`
 - **This project is `DONE` on four of the six tagged sections, and both new `DONE` cells were mutation-proved before being recorded** — §6 (deleting the rounding in `_safe_float` turns `test_safe_float_rounds_at_parse_time` red) and §10 (replacing `await coordinator.api.logout()` on unload turns `test_init` and `test_options_lifecycle` red). Files restored and verified byte-identical afterwards.
 - **§9 is `PENDING` here**, as it is everywhere: no project asserts that stored secrets are absent from a rebuilt options/reauth schema. This project uses `suggested_value` nowhere, so there is no defect today — only no guard against one.
 
-## [3.3.0-dev7] - 2026-07-27 - §14 Attributes Are Unrecorded by Default
+## [3.3.0-dev7] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes
+
+### Summary
+
+Recorder policy enforcement. Implemented runtime sweep `test_no_entity_publishes_a_recorded_attribute` enforcing `_unrecorded_attributes` across all entities, and prevented diagnostic reboot schedule attributes and static SNTP settings from being written to recorder history.
 
 Implements `dev_standards` §14 as revised at **Standard Version 1.12.0**: `_unrecorded_attributes` must cover every key an entity can publish, with no per-attribute judgement and no undocumented exceptions. **394 tests passing, 100% coverage, ruff clean.**
 
@@ -2109,7 +2325,11 @@ Implements `dev_standards` §14 as revised at **Standard Version 1.12.0**: `_unr
 
   Re-verified by mutation after both fixes: removing a single key from `_unrecorded_attributes` fails the sweep.
 
-## [3.3.0-dev6] - 2026-07-27 - §19 `drift` Attribute
+## [3.3.0-dev6] - 2026-07-27 - Integration Health: Firmware Contract Drift Attribute Publication
+
+### Summary
+
+Integration health telemetry enhancement. Added the `drift` attribute to the Integration Health problem binary sensor under `dev_standards` §19, exposing contract drift states directly to templates and automations.
 
 Closes the gap flagged in `[3.3.0-dev5]`. **393 tests passing, 100% coverage, ruff clean, mypy strict clean.**
 
@@ -2127,7 +2347,11 @@ Closes the gap flagged in `[3.3.0-dev5]`. **393 tests passing, 100% coverage, ru
 
 - **`drift` added to `_unrecorded_attributes`.** Caught by the existing `test_attributes_are_unrecorded`, which walks the published attributes and asserts each is excluded from the recorder — the test did its job on the first run.
 
-## [3.3.0-dev5] - 2026-07-27 - Interface Documentation
+## [3.3.0-dev5] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md
+
+### Summary
+
+Technical interface documentation. Created `docs/zte_how_to_access.md` providing a complete reference for the ZTE `goform` protocol, including the 4-step SHA-256 login sequence, AD token derivation, 100 batch parameters, and soft-fail API characteristics.
 
 Documentation and agent-guidance only — no source or test files changed, so no re-validation of the suite was required. Markdown checks (prettier, codespell) clean.
 
@@ -2157,7 +2381,11 @@ Documentation and agent-guidance only — no source or test files changed, so no
 >
 > Deliberately left open rather than fixed inside a documentation-only entry: it changes a published contract and needs a test.
 
-## [3.3.0-dev4] - 2026-07-27 - Cross-Project Alignment
+## [3.3.0-dev4] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims
+
+### Summary
+
+Cross-project standards alignment. Standardized the Integration Health attribute schema (`degraded_capabilities`), migrated strike limit constants to `const.py`, and introduced `_compat.py` shims for upcoming Home Assistant 2026.8 device-registry changes.
 
 Follows a three-way review of `zte_router_5g`, `unifi_network_monitor` and `wifi_ssid_monitor`, checking that the three meet the shared standards the **same way** rather than merely meeting them. The functionality differs by design; the approaches should not. Seventeen of the 21 `dev_standards` sections were already identically DONE — these are the divergences that were not deliberate.
 
@@ -2188,7 +2416,11 @@ Follows a three-way review of `zte_router_5g`, `unifi_network_monitor` and `wifi
 - **`_compat.py` deliberately omits the `owning_entry_ids` shim** — see above. If a future feature inspects device ownership (a cleanup path, for instance), port it then rather than preemptively.
 - Two further alignment items were identified and are **not** in this release: §15 SMS feature-group toggle (recorded PENDING, a Guideline rather than a Gap) and the deferred custom-trigger work.
 
-## [3.3.0-dev3] - 2026-07-27 - Unreachable Repair & Record Corrections
+## [3.3.0-dev3] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections
+
+### Summary
+
+Unreachable router repair issue and standards record updates. Implemented the `router_unreachable` Repair Issue (triggering after 10 consecutive poll failures), updated `quality_scale.yaml` and compliance records, and evaluated custom trigger architecture.
 
 Follows a consolidated review of everything not marked DONE across both standards. One real gap was found and closed; two records were corrected.
 
@@ -2216,7 +2448,11 @@ Follows a consolidated review of everything not marked DONE across both standard
 
 - **Custom triggers investigated and deferred — no code written.** HA's trigger platform (`trigger.py` + `async_get_triggers`, `triggers.yaml`, a `triggers` block in `strings.json`) is real and mature — 45 of 58 core integrations use it, and platform discovery resolves custom components identically to core ones. Two candidates were assessed: `sms_received` (turning the existing raw bus event into a GUI-discoverable, filterable trigger — genuinely valuable) and `router_rebooted` (dropped; a plain state trigger on the uptime sensor already works). **Blocked on a product decision, not a technical one:** the API is a 2026.x construct, while this integration declares a minimum of HA **2024.8.0** and ships to users via HACS — adopting it means roughly a two-year floor raise. There is also **no developer documentation** for the API (the docs site has no page and the blog has no post), so it can still shift without a migration note. Full analysis written up at `ha-wifi-ssid-monitor/.notes/issues/custom_trigger_condition/wifi_trigger_options.md`, since the same decision applies there.
 
-## [3.3.0-dev2] - 2026-07-27 - IQS Compliance Pass
+## [3.3.0-dev2] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification
+
+### Summary
+
+Integration Quality Scale (IQS) compliance audit. Added translatable exception definitions across `strings.json` and `translations/en.json`, converted caller errors to `ServiceValidationError`, and validated 54 canonical IQS rules.
 
 Full `SCAN=Full` IQS pass (`iqs_next_steps`), run immediately after the `dev_standards` work in `3.3.0-dev1` because several rules were last assessed against code that no longer looked the same. 51 of 54 rules validated DONE or exempt against source on the first pass; the three gaps found are all closed here. **`zte_router_5g` is now 48 `done` / 6 `exempt` / 0 outstanding across the canonical 54 rules.**
 
@@ -2254,7 +2490,11 @@ Full `SCAN=Full` IQS pass (`iqs_next_steps`), run immediately after the `dev_sta
 
 - **The one Check B finding is benign and deliberately not "fixed".** `system_uptime_duration` has no `icons.json` entry, but carries `SensorDeviceClass.DURATION` and so renders a device-class default. `dev_standards.md` §12 explicitly exempts device-class-derived icons; adding an entry would be harmless but is not required.
 
-## [3.3.0-dev1] - 2026-07-27 - dev_standards Conformance Pass
+## [3.3.0-dev1] - 2026-07-27 - PlayFaster Architectural Standards Conformance Pass: Health Sensor, Force Refresh, and Sanitizer
+
+### Summary
+
+PlayFaster dev_standards conformance overhaul. Implemented the Integration Health binary sensor (§19), force-refresh bypass (§13), per-endpoint strike budgets (§8), session logout on unload (§10), and layered diagnostics data sanitization (§20).
 
 Brings the integration into full conformance with the PlayFaster `dev_standards.md`, following the first `dev_std_review` pass on this project. 18 of 21 sections now DONE, 2 N/A, 1 accepted deviation (§3). Test suite 297 → 381, coverage 99%, `mypy --strict` and all pre-commit hooks clean.
 
@@ -2367,16 +2607,16 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Test Changes
 
-| Category | Count | Fix |
-| :-- | :-- | :-- |
-| **Python 3.14 tz-aware iso-format** | 4 tests | `+00:00` suffix now included — updated assertions |
-| **Generic `Exception` not caught by code** | 14 tests | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
-| **Missing `json_data` on MockResponse** | 6 tests | `_request` expects JSON; added `json_data={"result": "ok"}` |
-| **MockResponse missing `read()`** | conftest.py | Added `async def read()` method for login session init |
-| **Missing 3rd GET in login mock** | 2 tests | Login now does a session init GET; added 3rd mock response |
-| **AsyncMock for async methods** | 1 test | `return_value = None` → `AsyncMock(return_value=None)` |
-| **Indentation error** | 1 test | Fixed broken indent |
-| **Uncovered lines coverage** | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py |
+| Category                                   | Count       | Fix                                                                        |
+| :----------------------------------------- | :---------- | :------------------------------------------------------------------------- |
+| **Python 3.14 tz-aware iso-format**        | 4 tests     | `+00:00` suffix now included — updated assertions                          |
+| **Generic `Exception` not caught by code** | 14 tests    | Changed to `aiohttp.ClientError` / `TimeoutError` (which the code catches) |
+| **Missing `json_data` on MockResponse**    | 6 tests     | `_request` expects JSON; added `json_data={"result": "ok"}`                |
+| **MockResponse missing `read()`**          | conftest.py | Added `async def read()` method for login session init                     |
+| **Missing 3rd GET in login mock**          | 2 tests     | Login now does a session init GET; added 3rd mock response                 |
+| **AsyncMock for async methods**            | 1 test      | `return_value = None` → `AsyncMock(return_value=None)`                     |
+| **Indentation error**                      | 1 test      | Fixed broken indent                                                        |
+| **Uncovered lines coverage**               | 3 new tests | Lines 333-334, 373-374, 593-595 in api.py                                  |
 
 ### Files modified
 

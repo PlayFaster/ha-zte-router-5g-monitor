@@ -1324,11 +1324,19 @@ def test_bandwidth_sensors_offer_the_unit_selector() -> None:
     a `device_class` HA has no conversion table for the entity, so the unit
     dropdown does not appear. Chore C-012.
 
-    The `state_class` assertion is the non-obvious half, and it is why Huawei's
-    first attempt at this failed. `device_class=FREQUENCY` together with
-    `state_class=MEASUREMENT` routes the entity through long-term statistics,
-    and that path does not surface the selector either — so "add the device
-    class" alone can look done and change nothing.
+    The `state_class` assertion guards something else, and is worth separating
+    because it was mis-stated once already. It is **not** required for the
+    selector: `sensor/device_class_convertible_units`, the websocket command
+    that populates it, takes `device_class` as its only input, and
+    `DEVICE_CLASS_STATE_CLASSES[FREQUENCY]` explicitly permits `MEASUREMENT`.
+    Checked against `homeassistant/components/sensor/websocket_api.py` and
+    `const.py` on 2026-08-26.
+
+    It is asserted because these two sensors are the only entries in
+    `_UNGUARDED_BY_DESIGN`, and that exemption rests on their staying out of
+    long-term statistics: with no state class a bad reading cannot corrupt
+    history, so no guard band is needed. Adding one would silently end the
+    exemption. See `docs/value_min_max.md`.
     """
     from homeassistant.components.sensor import SensorDeviceClass
     from homeassistant.const import UnitOfFrequency
@@ -1342,6 +1350,7 @@ def test_bandwidth_sensors_offer_the_unit_selector() -> None:
         assert description.device_class == SensorDeviceClass.FREQUENCY
         assert description.native_unit_of_measurement == UnitOfFrequency.MEGAHERTZ
         assert description.state_class is None, (
-            f"{description.key}: a state class routes this through long-term "
-            "statistics, which suppresses the unit selector"
+            f"{description.key}: a state class puts this into long-term "
+            "statistics and ends its _UNGUARDED_BY_DESIGN exemption, which "
+            "rests on it staying out. Add guard bands, or leave it off."
         )
