@@ -357,7 +357,7 @@ def test_prior_rate_weight_decays_as_the_cycle_progresses():
     for. A single mid-cycle assertion cannot see that; two points and a
     direction can.
     """
-    common = dict(cycle_length_days=30, prior_rate=10.0, credibility_days=5.0)
+    common = {"cycle_length_days": 30, "prior_rate": 10.0, "credibility_days": 5.0}
 
     early = project_cycle_usage(used=20.0, elapsed_days=2.0, **common)
     late = project_cycle_usage(used=200.0, elapsed_days=20.0, **common)
@@ -373,7 +373,11 @@ def test_prior_rate_weight_decays_as_the_cycle_progresses():
     #
     #   day 2:  weight = 2/(2+5)   = 0.2857 -> rate 74.29 -> 20 + 28 * 74.29
     #   day 20: weight = 20/(20+5) = 0.8    -> rate 28.00 -> 200 + 10 * 28.00
-    common_hi = dict(cycle_length_days=30, prior_rate=100.0, credibility_days=5.0)
+    common_hi = {
+        "cycle_length_days": 30,
+        "prior_rate": 100.0,
+        "credibility_days": 5.0,
+    }
 
     assert project_cycle_usage(
         used=20.0, elapsed_days=2.0, **common_hi

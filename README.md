@@ -1766,7 +1766,7 @@ Two conditions raise a card in Home Assistant's **Repairs** panel, and both need
 | **Transient Glitch / Reboot** | 1–3 failed poll cycles | Integration Health (`error` during outage) | None (auto-clears on next successful poll) |
 | **Firmware Schema Change** | Unrecognized or missing API fields | Integration Health (`severity: warning`, `drift` attr) | Check for integration updates or report issue |
 
-**What earns a Repair.** Two things together: the condition has stopped resolving itself, **and** there is something you can do about it. A reading you cannot influence fails the second test however persistent it is.
+- **Actionable Issues (Repairs)**: A Repair issue is raised only when a condition persists across multiple polls and requires user intervention to resolve (such as updating credentials or checking physical router power). Non-actionable anomalies (such as API drift) report on the Integration Health sensor attributes instead.
 
 **A Repair also turns the Integration Health sensor on**, so an automation watching that sensor sees these two as well, without watching the panel. See [Self-Diagnosis](#-self-diagnosis).
 

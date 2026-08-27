@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev22\] - 2026-08-27 - Ruff rules aligned; Repairs info in README; AGENTS align](#334-dev22---2026-08-27---ruff-rules-aligned-repairs-info-in-readme-agents-align)
   - [\[3.3.4-dev21\] - 2026-08-26 - Documentation: README Repairs and Health Section Alignment](#334-dev21---2026-08-26---documentation-readme-repairs-and-health-section-alignment)
   - [\[3.3.4-dev20\] - 2026-08-26 - Contract Sweep Naming And Vacuity Guards; Queue References Removed](#334-dev20---2026-08-26---contract-sweep-naming-and-vacuity-guards-queue-references-removed)
   - [\[3.3.4-dev19\] - 2026-08-26 - README Repairs Section Rewritten](#334-dev19---2026-08-26---readme-repairs-section-rewritten)
@@ -79,7 +80,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -87,7 +88,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Contract Drift Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-contract-drift-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -189,6 +190,18 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.4-dev22] - 2026-08-27 - Ruff rules aligned; Repairs info in README; AGENTS align
+
+### Changed
+
+- **Repairs Reference Documentation**: Updated the Repairs documentation, separating persistent Repairs (`auth_failed`, `conn_error`) from transient errors.
+- **Ruff Rules Alignment**: Adopted Home Assistant Core's full parameter configuration sub-tables in shared lint configuration, enabling active enforcement of HA module import aliases and banned legacy APIs. This includes:
+  - McCabe complexity check, set to max 25.
+  - Helper shortcut list
+  - Banned APIs
+- **`AGENTS.md`:** Updated via alignment prompt to re-order (sync) sections.
+- **gitignore**: Updated `.gitignore`to add `.coverage.*`, to prevent commits of pytest coverage temp files.
 
 ## [3.3.4-dev21] - 2026-08-26 - Documentation: README Repairs and Health Section Alignment
 
@@ -323,7 +336,7 @@ A full message store no longer contributes to the Integration Health snapshot, a
 ### Notes
 
 - **The unit selector on the two bandwidth sensors is confirmed present** on a live instance, closing the one open question from `[3.3.4-dev12]`.
-- **`auth_failed` could not be exercised end to end.** Setting a deliberately wrong password is refused by the config flow with "cannot connect to router" and the stored credentials are left unchanged, which is the correct behaviour and leaves the repair's Fix button unobserved.
+- **`auth_failed` could not be exercised end to end.** Setting a deliberately wrong password is refused by the config flow with "cannot connect to router" and the stored credentials are left unchanged, which is the correct behavior and leaves the repair's Fix button unobserved.
 
 ## [3.3.4-dev16] - 2026-08-26 - Repair Translation Schema: Fixable Issue Exclusivity
 
@@ -561,7 +574,7 @@ Both were found because the mutation run reported them as uncaught. Neither woul
 
 Aligned repair workflows, privacy standards, and entity configurations across four cross-project chores and one cross-project issue.
 
-Worked as a single pass over the source so the tree is measured once rather than four times. **Every change below is behavioural**, and each carries a test verified to fail against the pre-change code.
+Worked as a single pass over the source so the tree is measured once rather than four times. **Every change below is behavioral**, and each carries a test verified to fail against the pre-change code.
 
 ### Changed
 
@@ -590,7 +603,7 @@ Worked as a single pass over the source so the tree is measured once rather than
 
 - **`huawei_router_5g` has the same `ConfirmRepairFlow` gap** — `auth_failed` fixable, no `repairs.py` — so its `repair_set_alignment.md` cell of `DONE` overstates. Recorded there rather than fixed here.
 - **The ZTE repair id format stays `{entry_id}_{name}`** where Huawei uses `{name}_{entry_id}`. Deliberate: changing it would orphan every live card, which is the exact failure this entry is otherwise about.
-- **`api.py:594` logs a 300-character preview of an unexpected HTML body** at `ERROR`. Left as it is, and recorded as a judgment rather than a §20 breach: the preview is the only diagnostic for an unrecognised response, and it carries no identifier the standard names. The other 62 `_LOGGER` sites were read; `api.py:836` carries the router's `result` status string and `coordinator.py:428` model and firmware, neither of which is personal data.
+- **`api.py:594` logs a 300-character preview of an unexpected HTML body** at `ERROR`. Left as it is, and recorded as a judgment rather than a §20 breach: the preview is the only diagnostic for an unrecognized response, and it carries no identifier the standard names. The other 62 `_LOGGER` sites were read; `api.py:836` carries the router's `result` status string and `coordinator.py:428` model and firmware, neither of which is personal data.
 
 ## [3.3.4-dev6] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation
 

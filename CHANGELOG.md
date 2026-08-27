@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [3.3.4] - 2026-08-26 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Telemetry Refinements
 
+Routine maintenance update refining Repair notifications, and SMS operations with no changes to daily operation; safe to skip until you are next updating integrations.
+
 ### Summary
 
 - **Interactive Re-authentication**: Fix button in Repairs now opens a guided re-authentication flow when the router password is changed or rejected.
