@@ -1,0 +1,30 @@
+# Findings that are deliberate, one per line, as:
+#
+#     REACH::outcome_key            # why no test can drive this end to end
+#     PUBLISH::test_file.py:123     # why the publish value cannot be captured
+#     SEAM::test_file.py:custom_components.x.mod.fn   # why it must be stubbed
+#     SEQ::FETCH_STRIKE_LIMIT       # why no test can drive it that far
+#     LIFE::coordinator.py:500      # why a successor cannot need to clean up
+#     HEAL::coordinator.py:668      # why adopting the new value is correct here
+#
+# An entry says the finding was examined and the stub is the right answer, not
+# that fixing it was inconvenient. Seeding this file to reach a green report is
+# how the suppression problem started; C-022 says so explicitly.
+#
+# ---------------------------------------------------------------------------
+# Reviewed 2026-08-26 against a report of 2 stubbed publishes and 2 seams.
+# Three of the four were fixed rather than listed:
+#
+#   * Both stubbed publishes now capture the state at the publish moment, in
+#     `test_switch.py`, `test_number.py` and the new `test_publish_moment.py`.
+#     Verified by inverting the publish and write order in both platforms.
+#
+#   * The `select._get_apn_profiles` seam is gone. All three patches supplied
+#     exactly what the real function derives from `APN_config*`, so the tests
+#     could not have failed if the parse broke. They now feed real payload
+#     strings. Removing them left `patch` unused in that module.
+#
+# The one entry below is the remainder.
+# ---------------------------------------------------------------------------
+
+SEAM::test_config_flow.py:custom_components.zte_router_5g.config_flow._validate_credentials  # 22 sites, all selecting which branch a flow takes — already-configured, reauth, each form error — where the point of the test is the branch and not the validation. The helper itself is driven for real over aioclient_mock in test_transport_seam.py, both on success and on a rejected password, so it is not the case this check exists to catch: a stub sitting where a defect would with nothing else exercising the code.

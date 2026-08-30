@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD033 -->
+
 # ZTE Router Access Reference 🔗
 
 This document details how this integration navigates the ZTE `goform` interface to fetch data and issue commands — the endpoints, the authentication chain, the commands used (and deliberately not used), and the behaviors of this API that are not obvious from the traffic.
@@ -37,11 +39,24 @@ Login is a challenge-response over SHA-256, not a credential POST. Four steps, i
 3. **Hash twice.** `SHA256(password)` → uppercase → concatenate `LD` → `SHA256` again → uppercase. Both uppercase steps are required; the router rejects lowercase digests.
 4. **`POST goform_set_cmd_process`** with `goformId=LOGIN` or `LOGIN_MULTI_USER`, `password=<the double hash>`, and `username=` when a username is configured.
 
-The session token arrives as a **`stok` cookie**, which is then sent as a literal `Cookie: stok=<value>` header on every subsequent request. The value is stripped of surrounding double quotes before use (`api.py:354`) — some firmware quotes it, and passing the quoted form back produces a silent session failure rather than an error.
+The session token arrives as a **`stok` cookie**, which is then sent as a literal `Cookie: stok=<value>` header on every subsequent request. The value is stripped of surrounding double quotes before use — some firmware quotes it, and passing the quoted form back produces a silent session failure rather than an error.
+
+**Not every firmware issues one.** An MC888 Pro on `CR_ABPLMC888PROV1.0.1B04` answers a successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie` at all, binding the session to the client address instead; reported as issue #56 and analyzed in `.notes/issues/other_router_access/mc888_pro_login_failed_missing_stok_56.md`. A login is therefore established on a cookie **or** an explicit success `result`, and a session with no cookie sends no `Cookie` header. A response carrying neither a cookie nor a success `result` has established nothing and is reported as a connection error.
+
+The token is looked for in four places before that conclusion is drawn (`_extract_stok`), because a token that exists but is not found is worse than none — the session is replayed without it and the router answers by echoing the authenticated keys back empty:
+
+| Source | Why it is needed |
+| :-- | :-- |
+| `r.cookies` | The documented case |
+| Raw `Set-Cookie` headers, matched case-insensitively | `SimpleCookie` morsel names are case-sensitive, and it drops a header it cannot parse without raising |
+| The session cookie jar | `session.post` follows redirects and `r.cookies` carries only the final response; a token set on an intermediate `302` is reachable nowhere else. `login()` empties the jar before posting, so anything found there was set by that request |
+| A `stok` key in the response body | Read from the body already parsed for `result`, so it costs no extra request |
 
 ### `LOGIN` vs `LOGIN_MULTI_USER` — a model split
 
-`LOGIN` (single-user form) is used only when **both** are true: a username is configured, **and** the firmware version contains `MC801` or `MC7010`. Everything else uses `LOGIN_MULTI_USER`. The flag is held as `is_multi` (`api.py:301`).
+`LOGIN` (single-user form) is sent first in two cases: when **no username is configured**, and when a username is configured **and** the firmware version contains `MC801` or `MC7010`. Everything else uses `LOGIN_MULTI_USER`. The model flag is held as `is_multi`, and applies only to the second case.
+
+The no-username rule matches `Kajkac/ZTE-MC-Home-assistant-repo`, which branches on the username alone. `LOGIN_MULTI_USER` carries a user field that a password-only configuration has nothing to fill, so the router rejects it on that ground regardless of model — observed as `{"result":"failure"}` on an MC888 Pro in issue #56.
 
 This is the first of two places where model detection changes the protocol. It is string-matching on the firmware version, which is fragile by nature — a model outside the known set that expects the single-user form will fail login with no distinguishing error.
 
@@ -357,6 +372,7 @@ Full probe results, and the router-facing agent's answers on encodings and write
 - **Used**: Yes — optional endpoint, polled with its own strike budget.
 - **Request**: `GET ...?isTest=false&cmd=sms_capacity_info`
 - **Purpose**: storage capacity and used counts for both banks.
+- **`sms_nv_total` and `sms_sim_total` are capacities, not counts.** Observed on the reference MC7010: **100** and **20**, the sizes of the router's own store and of the SIM. The fill of each bank is the sum of its three `*_rev_total`, `*_send_total` and `*_draftbox_total` counters — which is what the `Total Msg` sensor sums for its state, publishing the two capacities beside it as attributes. A bank is full when its three counters reach its capacity.
 - **Implementation**: `get_sms_capacity`, `api.py:538`. Returns `{}` on non-auth, non-connection failure; auth and connection errors propagate so the resilience layer can count a strike.
 
 ### `cmd=sms_data_total` — message bodies

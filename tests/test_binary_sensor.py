@@ -321,3 +321,65 @@ def test_binary_sensor_unavailable_when_the_whole_fetch_is_down(
     mock_coordinator.endpoint_available.return_value = True
     sensor = ZTERouterBinarySensor(mock_coordinator, mock_config_entry, description)
     assert sensor.available is False
+
+
+def test_sms_storage_full_reads_capacity_and_fill_the_right_way_round() -> None:
+    """`sms_nv_total` is the bank's capacity, not how much of it is used.
+
+    Observed on the reference MC7010: `Total Msg` publishes `sms_nv_total` of
+    100 and `sms_sim_total` of 20 as attributes beside its own state, which is
+    the sum of the six per-bank counters. So the capacity is 100 and the fill
+    is the sum of the three NV counters.
+
+    This pins both halves — the operands, and which way round they go —
+    because a comparison of capacity against capacity reads as plausible and
+    can never become true.
+
+    SIM storage is deliberately not consulted. The two banks fill
+    independently, and it is the router's own store running out that stops the
+    network delivering.
+    """
+    from custom_components.zte_router_5g.binary_sensor import _nv_store_is_full
+
+    # Capacity 100, fill 100 — full.
+    assert _nv_store_is_full(
+        {
+            "sms_nv_total": "100",
+            "sms_nv_rev_total": "90",
+            "sms_nv_send_total": "8",
+            "sms_nv_draftbox_total": "2",
+        }
+    )
+
+    # Capacity 100, fill 99 — one short, and not full.
+    assert not _nv_store_is_full(
+        {
+            "sms_nv_total": "100",
+            "sms_nv_rev_total": "90",
+            "sms_nv_send_total": "8",
+            "sms_nv_draftbox_total": "1",
+        }
+    )
+
+    # A full SIM bank is not this sensor.
+    assert not _nv_store_is_full(
+        {
+            "sms_nv_total": "100",
+            "sms_nv_rev_total": "0",
+            "sms_sim_total": "20",
+            "sms_sim_rev_total": "20",
+        }
+    )
+
+    # No capacity reported is not the same as a full store.
+    assert not _nv_store_is_full({"sms_nv_rev_total": "100"})
+    assert not _nv_store_is_full({"sms_nv_total": "", "sms_nv_rev_total": "100"})
+    assert not _nv_store_is_full(None)
+
+    # A counter the router returned as something uncountable must not blank the
+    # whole sensor into a false "full" — the router has answered with a shape
+    # this cannot read, which is not the same as a store with no room.
+    assert not _nv_store_is_full(
+        {"sms_nv_total": "100", "sms_nv_rev_total": ["not", "an", "int"]}
+    )
+    assert not _nv_store_is_full({"sms_nv_total": "not-a-number"})

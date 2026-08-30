@@ -4,7 +4,43 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.3] - 2026-08-08 - Release - SMS Bugfix
+## [3.3.4] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility
+
+### Summary
+
+- **Interactive Re-authentication**: Fix button in Repairs opens a guided re-authentication dialog when the router password is changed or rejected.
+- **Cookieless Login Compatibility**: Added support for router models and firmware (such as the MC888 Pro) that authenticate without issuing a session cookie.
+- **Repairs Panel Cleanup**: Aligned repairs with Home Assistant guidelines to show actionable issues only, mapping warnings to Integration Health.
+- **Dedicated SMS Storage Sensor**: New binary sensor alerts when message storage on the SIM card or device is full.
+
+### Added
+
+- **Interactive Re-authentication Repair**: A persistent, fixable repair is raised when router credentials fail. Clicking **Fix** opens the re-authentication dialog directly to update the stored password.
+- **SMS Storage Full Binary Sensor**: Added `binary_sensor.*_sms_storage_full` (enabled by default) under the SMS sub-device to monitor when message storage on either the SIM or device is full.
+
+### Changed
+
+- **Login Form Ordering**: Routers configured without a username now post the single-user login form directly, avoiding an initial failed attempt and connection warning.
+- **Repairs Alignment**: Retired non-actionable repair cards (`firmware_contract_drift` and `sms_storage_full`). Schema changes are now tracked via `drift` on Integration Health, while message capacity is tracked by the new binary sensor. Renamed unreachable router issue to `conn_error`.
+- **Bandwidth Sensor Unit Conversion**: LTE Carrier Aggregation bandwidth sensors (`lte_ca_pcell_bandwidth` and `lte_ca_scell_bandwidth`) now declare `device_class: frequency`, allowing unit switching (MHz/GHz/kHz) in the Home Assistant UI.
+- **SMS Logging Privacy**: The sender's phone number is no longer logged at `INFO` level when receiving SMS messages; the internal message index is logged instead.
+- **Health Telemetry Drift Limit**: Split the contract drift strike limit into an independent budget (`HEALTH_DRIFT_STRIKE_LIMIT = 3`) separate from poll fetch failures.
+
+### Fixed
+
+- **Cookieless Router Authentication**: Fixed an issue where router models/firmware that authenticate without issuing a `stok` cookie (such as the ZTE MC888 Pro) failed connection setup with an unreachable router error.
+- **Session Token Detection**: Expanded session token discovery to inspect raw response headers, cookie jars across HTTP redirects, and response payloads.
+- **Repair Translation Schema Compatibility**: Corrected repair translation structure for fixable issues to adhere strictly to Home Assistant issue schema requirements.
+- **Health Snapshot Attribute Completeness**: Resolved an issue where the `repairs` attribute could be omitted from Integration Health sensor fallback snapshots.
+- **Orphaned Repair Issue Cleanup**: Ensured legacy and retired repair issue IDs are cleaned up during integration entry removal.
+
+### Under the hood
+
+- **Transport Test Harness and Coverage Enforcement**: Added full HTTP transport-level mock suites (`aioclient_mock`), enforced 100% line and branch test coverage across all authentication and recovery paths, and added suppression allow-list enforcement.
+
+---
+
+## [3.3.3] - 2026-08-08 - Release: SMS Bugfix and Polling Resilience
 
 ### Summary
 
@@ -12,7 +48,7 @@ A Send SMS fix, plus several resilience and robustness changes for edge case beh
 
 ### Fixed
 
-- **Get SMS List Action now reads Emoji Messages.** Any emoji, or character outside the basic set, made the `get_sms_list` action fail with an internal error, making the whole list was unreadable rather than the one message.
+- **Get SMS List Action now reads Emoji Messages.** Fixed an internal error when decoding messages containing emojis or extended characters, which previously caused the entire message list to fail loading.
 
 ### Changed
 
@@ -36,15 +72,15 @@ A Send SMS fix, plus several resilience and robustness changes for edge case beh
 
 ---
 
-## [3.3.2] - 2026-08-02 - Release
+## [3.3.2] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Telemetry
 
 ### Summary
 
-Wider router support, better data use tracking, SMS improvements, several fixes and a lot of under the hood improvements in this release.
+Adds broader router model support, router-aligned data usage tracking, extended SMS message lengths, and an Integration Health diagnostic sensor.
 
 - **Data usage tracking**: the router's own billing cycle, data cap and alert threshold now appear as entities, alongside a new projection of where the current cycle will finish.
 
-- **Wider ZTE model support**: should now have better support for the wider family of ZTE 5G/LTE Routers that use the `goform` API.
+- **Wider ZTE model support**: Expands compatibility across the family of ZTE 5G/LTE routers using the `goform` API.
   - MC7010, MC801, MC888, MC889, MF266, MF286, MF289
 
 - **SMS improvements**: send the same long messages the router's own web page allows.
@@ -57,21 +93,20 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Added
 
-- **Data usage tracking follows your router's Data Management settings.** If you enable **Data Management** in the router's web page, you can set a **Clear Date** matching your provider's billing day, a **Data Plan** cap, and a **limit reminder** percentage. Those three settings now appear in Home Assistant as **Reset Day**, **Allowance** and **Alert Threshold**. Data use automations can use your router plan numbers — the README has a worked example. Note the router counts in binary units, so a plan it calls "2TB" shows here as about 2199 GB: the same amount, counted the way Home Assistant counts. If you have not set Data Management on the router, the integration falls back to the calendar month.
-  - Alongside these, a new **Projected Cycle Usage** sensor estimates how much data you will have used by the end of the cycle, based on your average daily consumption so far. It follows whichever cycle applies — the router's or the calendar month — and reads low on the first day before settling within 24 hours. Its attributes say how much of the figure rests on real usage rather than assumption: `confidence`, `basis`, `cycle_day`, `cycle_start` and `cycle_source`.
+- **Data usage tracking follows router Data Management settings.** Exposes the router's configured **Clear Date**, **Data Plan** cap, and **Limit Reminder** as **Reset Day**, **Allowance**, and **Alert Threshold** entities. If Data Management is disabled on the router, tracking defaults automatically to the calendar month.
+  - Alongside these, a new **Projected Cycle Usage** sensor forecasts total end-of-cycle data consumption based on observed daily run rates, providing `confidence`, `basis`, `cycle_day`, `cycle_start`, and `cycle_source` attributes.
 
-- **Integration Health sensor**: a new problem binary sensor on the System device that turns on when the integration detects a problem — including the case where a fetch _succeeds_ but returns nothing usable (which can otherwise be a silent fail, unless you are watching the entities closely). Attributes carry the detail: `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, `last_good_update` and `consecutive_failures`.
+- **Integration Health sensor**: A new diagnostic problem sensor on the System device that alerts on connectivity failures, empty data responses, and contract drift, carrying `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, and `consecutive_failures` attributes.
 
-- **Built-in explanations on entities**: most entities now carry an `about` attribute — a plain sentence saying what the value is. Click the entity, then **⋮ → Details**. Signal metrics also give typical ranges ("better than -80 excellent, -80 to -90 good…"). The note is never written to the history database, to avoid bloat.
+- **Built-in explanations on entities**: Most entities now carry an `about` attribute providing clear operational guidance, expected signal ranges, and threshold interpretations without persisting to recorder history.
 
 - **Router Unreachable repair**: after multiple consecutive failed fetches, a repair appears in the Repairs panel.
 
-- **Seven new entities**, all **disabled by default**: Carrier Aggregation Secondary Cells, WAN Operating Mode, WAN Fallback Mode, Router Timezone, APN Interface Version, Web Page Sleep and Web Page Auto-Wake.
-  - This is part of _completeness_. These are included because they are available, and may be of use to some, not necessarily because they contain critical info.
+- **Seven new diagnostic entities** (disabled by default): Added Carrier Aggregation Secondary Cells, WAN Operating Mode, WAN Fallback Mode, Router Timezone, APN Interface Version, Web Page Sleep, and Web Page Auto-Wake.
 
 ### Changed
 
-- **Longer SMS messages**: `send_sms` now accepts the same message length the router's own web page does — up to **765** characters, where the integration previously capped you at 160. A message containing an emoji, curly quote or other special character uses a different encoding and is limited to **335**, again matching the router. The limit is chosen automatically per message, with nothing to configure, and going over it gives a clear error naming the limit that applied.
+- **Extended SMS length support**: `send_sms` now accepts multi-part messages up to **765** ASCII characters or **335** Unicode characters (with emoji/special characters), matching router hardware capacity with automatic encoding selection and validation errors.
   - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
     - Remember **longer** messages generally get **billed** as multiple SMS.
 
@@ -81,38 +116,25 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 - **Documentation**: the README's example automations now ignore `unknown` and `unavailable` states, to avoid false alerts from a HA restart or router reboot.
 
-- **Icons and branding** refreshed.
+- **Icons and branding refreshed**.
 
 ### Fixed
 
-- **APN Profile could show a profile that was not in use**: while APN Selection Mode is **Auto** the router uses the routers default APN — but the dropdown still displayed whichever profile was last chosen **manually**. It now shows the profile only when it genuinely matches the APN in use, and blank otherwise. The **Network APN** sensor remains the authoritative answer to which APN is in use.
+- **APN Profile display alignment**: Aligned the dropdown to display only the active profile in manual APN mode, returning a blank state under auto mode where the router's default is used.
 
-- **APN Selection Mode could not be set to Manual**: switching it to **Auto** worked, but switching back to **Manual** was silently rejected by the router.
-  - Both directions now work. Switching to **Manual** requires the router to be told _which_ stored profile to use, so if the APN currently in use is not one of your saved profiles, the integration asks you to choose one from **APN Profile** instead — which sets the mode and the profile together, in one step.
-  - The integration can only **select** among profiles already stored on the router. Creating, editing or deleting an APN profile is done on the router's own web page; a new one appears in the **APN Profile** dropdown at the next poll, or immediately if you press **Refresh Now**.
+- **APN Selection Mode toggling**: Ensured switching between automatic and manual APN modes is correctly registered and processed by the router.
 
-- **Settings & Actions did not check for login**: If the polling interval was long, Pause Polling was on or the web GUI was used, the integrations login to the router could get dropped.
-  - It re-establishes on every new read, but independent activities, e.g. changing settings or running actions, were not properly checking for an active login.
-  - This, coupled with problems with some of the setting writes, could result in silent failures and unpredictable behavior.
-  - This was also an issue immediately after Router reboot, as that also logged out active sessions.
-  - Now addressed across all Actions and Writes (Settings changes), and for Router reboots.
+- **Session handling on write actions**: Implemented proactive login and session checks across all configuration writes and actions to prevent dropped credentials from causing silent update failures.
 
-- **Actions Fixes**:
-  - re-login if the session has expired
-  - confirm the router's action response
-  - provide an error message if there is an error
-  - update the message counters on SMS send immediately
+- **Actions reliability**: Hardened action pipelines to confirm responses, propagate error messages, refresh counters immediately on send, and re-login proactively.
 
-- **Settings Fixes**:
-  - **Data Limit Switch**: This always read the correct state but could fail to set the state, now fixed.
-  - **ODU LED Switch**: Could show incorrect state and invalid toggles temporarily after trying to change. Now fixed.
-  - **APN Prole & Mode**: Also fixed, see above.
+- **Settings write stability**: Resolved state-setting errors on the **Data Limit Switch** and prevented temporary state desyncs on the **ODU LED Switch** after toggling.
 
-- **Monthly Data counters misclassified**: the monthly upload, download and total sensors were recorded state_class=TOTAL, which is incorrect and can cause issues on reset. This has now been corrected to TOTAL_INCREASING - a resetting counter.
+- **Monthly Data state classification**: Corrected monthly data sensors' state class from `TOTAL` to `TOTAL_INCREASING` to ensure correct long-term statistics tracking and reset behavior.
 
 ---
 
-## [3.2.5] - 2026-07-03 - Release
+## [3.2.5] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening
 
 ### Added
 
@@ -127,38 +149,38 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Password No Longer Pre-filled on Edit Screens**: On Reconfigure, Options, and Reauth, the password field is now masked and left blank — the stored value is never pre-filled or revealable. Leave it blank to keep the current password, or enter a new one to change it.
-- **Doubled Device URL**: A full URL or trailing slash entered in the Host field is now stripped before storage, preventing a malformed device link (e.g. `http://http://192.168.0.1`).
+- **Edit screen credential security**: Configured the password field on configuration screens to be masked and blank by default, preventing the stored password from being pre-filled or exposed.
+- **Host URL sanitization**: Host input is now automatically sanitized to strip redundant prefixes or trailing slashes, preventing malformed device links.
 
-## [3.2.4] - 2026-06-15 - Release
+## [3.2.4] - 2026-06-15 - Release: Shared CI Validation v2.0.3
 
 ### Changed
 
 - **CI Validation Bump**: Shared CI validation bumped to v2.0.3. No user changes in this release, background/infrastructure only.
 
-## [3.2.3] - 2026-06-14
+## [3.2.3] - 2026-06-14 - Maintenance: Shared CodeQL Permissions Alignment for Zizmor
 
 ### Summary
 
 - **CI Validation Only**: Changes to the CI Validation set-up require another release to test properly, but there are no user changes in this release, background/infrastructure only.
 
-## [3.2.2] - 2026-06-14
+## [3.2.2] - 2026-06-14 - Maintenance: Shared CodeQL Security Scanning
 
 ### Summary
 
 - **CI Validation Only**: Changes to the CI Validation set-up require another release to test properly, but there are no user changes in this release, background/infrastructure only.
 
-## [3.2.1] - 2026-06-14
+## [3.2.1] - 2026-06-14 - Maintenance: CI Validation Infrastructure Test Release
 
 ### Summary
 
 - **CI Validation Only**: Changes to the CI Validation set-up require a release to test properly, but there are no user changes in this release, background/infrastructure only.
 
-## [3.2.0] - 2026-05-28
+## [3.2.0] - 2026-05-28 - Release: APN Profile Control, Network Mode Select, and Diagnostic Entities
 
 ### Added
 
-- **New Sensors**: Added several new entities, the most useful of which is a select for **APN Profile**. Changing APN can be as or more effective than rebooting to restore 5G signal that has dropped to 4G (+ or LTE) only. New entities are:
+- **New APN and Configuration Entities**: Added several new controls and diagnostic sensors:
   - **APN Control Selects**: Added select entities for switching active APN profiles (`apn_profile`) and toggling between automatic/manual APN mode (`apn_mode`).
   - **Network Mode Select**: Added carrier network preference selection (`net_select_mode`) to choose between Auto (4G/5G), 5G NSA, 5G SA, and 4G Only.
   - **ODU LED Control Switch**: Added a switch (`odu_led_switch`) to toggle the physical outdoor unit status LEDs.
@@ -172,9 +194,9 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Centralized Session Stability**: central request helper now resets expired tokens proactively, preventing transient authentication errors and empty sensor states.
+- **Centralized session stability**: The request helper now proactively detects and resets expired session tokens to prevent transient errors and empty sensor states.
 
-## [3.1.0] - 2026-05-24
+## [3.1.0] - 2026-05-24 - Release: SMS Service Actions, Received Bus Events, and Storage Full Repairs
 
 ### Added
 
@@ -190,12 +212,12 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Stable Uptime Timestamp**: Boot time is now latched once and only re-derived when the router's uptime counter drops — the only reliable reboot signal. Bad or missing uptime readings leave the cached value untouched, eliminating timestamp drift caused by independently ticking clocks.
-- **Empty Sensor Values**: Sensors receiving an empty string from the router now correctly report **Unknown** state in HA instead of displaying a blank value.
-- **Spurious Reauthentication**: Transient connection drops and network errors no longer incorrectly trigger the reauthentication flow; reauth is reserved for explicit credential rejection from the router.
-- **Monthly Data (Legacy GB Sensors)**: Corrected unit calculation from binary gibibytes (GiB, 1,073,741,824 bytes) to decimal gigabytes (GB, 1,000,000,000 bytes).
+- **Uptime tracking stability**: Latched the boot time calculation to prevent timestamp drift from independently ticking clocks, updating it only when a physical reboot drops the counter.
+- **Empty value handling**: Standardized empty router responses to map to `Unknown` states in Home Assistant instead of displaying blank values.
+- **Reauthentication flow triggers**: Isolated the reauthentication flow to explicit router credential rejections, preventing transient network drops from triggering configuration prompts.
+- **Legacy data unit calculation**: Aligned legacy monthly data sensor conversions to standard decimal gigabytes (GB) instead of binary gibibytes (GiB).
 
-## [3.0.1] - 2026-05-10
+## [3.0.1] - 2026-05-10 - Maintenance: README Documentation and Standards Alignment
 
 ### Changed
 
@@ -203,7 +225,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 - **Under the Hood**: Several internal code changes to improve maintainability and alignment with Home Assistant development standards (no functional breaking changes).
 - **Validations**: Improved local and automated remote testing to ensure code remains secure and follows best practices.
 
-## [3.0.0] - 2026-05-08
+## [3.0.0] - 2026-05-08 - Major Release: Native Async Rewrite, Sub-Device Architecture, and IMEI Identity
 
 ### Added
 
@@ -213,7 +235,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 #### Performance & Stability
 
-- **Faster, Non-Blocking Startup**: Integration setup now runs entirely in the background. Home Assistant will not "hang" or slow down while waiting for the router to respond during startup.
+- **Non-Blocking Startup**: Integration setup runs asynchronously in the background, preventing startup delays while awaiting router responses.
 - **Native Async Architecture**: Rewritten to be more efficient and optimize resource utilization. This ensures the integration operates properly with the Home Assistant event loop.
 - **Improved Connection Resilience**: Sensors will now hold their last known values for up to three failed connection attempts. This prevents "Unavailable" flickers during brief network hiccups.
 - **Reliable Device Info**: Hardware models and software versions are now saved locally. The Device Page will stay populated even if the router is rebooted or goes offline.
@@ -236,7 +258,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 - **User-Friendly Labels**: Refined entity labels for better readability (e.g., "PPP Status" → "**Bridge Mode**", "Wa Inner Version" → "**Firmware Version**").
 - **Readme**: Updated and added automation examples.
 
-## [2.3.1] - 2026-04-01 PUBLIC RELEASE
+## [2.3.1] - 2026-04-01 - Release: DataUpdateCoordinator Migration and HACS Branding Assets
 
 ### Added
 
@@ -244,39 +266,39 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Unavailable Bug**: Fixed an issue where sensors would never go unavailable due to misconfigured grace period.
+- **Grace period error handling**: Adjusted grace period configuration to ensure sensors correctly transition to `Unavailable` when the router goes offline.
 
-## [2.1.1] - 2026-03-29
+## [2.1.1] - 2026-03-29 - Maintenance: Diagnostic Error Logging
 
 ### Added
 
 - **Error Logging**: Significantly improved home assistant (logger) error logging.
 
-## [2.0.1] - 2026-03-29
+## [2.0.1] - 2026-03-29 - Feature: Options Flow for Dynamic Reconfiguration
 
 ### Added
 
 - **Options Flow**: Allow reconfiguration of integration in-situ rather than delete and re-add.
 
-## [1.9.4] - 2026-03-29
+## [1.9.4] - 2026-03-29 - Feature: Hardware Model Reading and Session Management
 
 ### Added
 
 - **Model Number**: Pulls model number from device.
 
-## [1.7.3] - 2026-03-29
+## [1.7.3] - 2026-03-29 - Maintenance: Standardized Entity Naming
 
 ### Fixed
 
-- **Entity Naming**: Fixed entity sensor naming approach.
+- **Entity naming alignment**: Aligned and standardized the sensor naming scheme.
 
-## [1.6.3] - 2026-03-28
+## [1.6.3] - 2026-03-28 - Maintenance: Non-Blocking Async Startup for Offline Routers
 
 ### Changed
 
 - **Reduced Startup Risk**: Moved to async for startup to avoid any potential for slowness/hangs/locks if router is unavailable at HA start.
 
-## [1.5.7] - 2026-03-28
+## [1.5.7] - 2026-03-28 - UI: ZTE Brand Icons and Sub-Device Sensor Naming
 
 ### Added
 
@@ -284,27 +306,27 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Sub Device Sensors**: Properly align sub device (data, sms) sensor naming.
+- **Sub-device naming alignment**: Standardized sensor naming for secondary data and SMS entities.
 
-## [1.5.1] - 2026-03-28
+## [1.5.1] - 2026-03-28 - Maintenance: Home Assistant Integration Naming Alignment
 
 ### Changed
 
 - **Aligned Integration Naming**: All naming now ZTE Router 5G Monitor.
 
-## [1.4.5] - 2026-03-28
+## [1.4.5] - 2026-03-28 - Documentation: Local Changelog Addition and Standard Sensor Names
 
 ### Changed
 
 - **Standard Names**: Changed specific sensor names (with ID tag) to standard names.
 
-## [1.4.4] - 2026-03-28
+## [1.4.4] - 2026-03-28 - Telemetry: Router Attribute Exposure as Entities
 
 ### Added
 
 - **All Relevant Attributes**: Added all relevant signal and status attributes available from the router as sensors.
 
-## [1.4.3] - 2026-03-28
+## [1.4.3] - 2026-03-28 - Controls: Pause Polling Switch and Polling Interval Number Entity
 
 ### Added
 
@@ -314,10 +336,10 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 
 ### Fixed
 
-- **Startup Deadlock**: Implemented "Initial Bypass" logic to ensure entities load correctly on restart even if polling was previously paused.
-- **Boot Resilience**: Added a fail-safe to prevent the integration from becoming "Unavailable" if the router is unreachable during the initial Home Assistant startup sequence.
+- **Startup deadlock prevention**: Implemented initial bypass checks to ensure integration entities load successfully on Home Assistant restart when polling is paused.
+- **Boot-phase connection resilience**: Added a startup fail-safe to prevent entities from loading in an unavailable state when the router is temporarily unreachable at startup.
 
-## [1.4.2] - 2026-03-27
+## [1.4.2] - 2026-03-27 - Feature: SMS Inbox Monitoring and Initial GitHub Release
 
 ### Added
 
@@ -325,14 +347,14 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 - **Hybrid Resilience**: Implemented a "one-cycle grace period" where sensors hold their last known value during a single failed poll before marking as unavailable.
 - **GitHub**: Initial release to GitHub repository.
 
-## [1.4.0] - 2026-03-26
+## [1.4.0] - 2026-03-26 - Telemetry: Core Signal and Cellular Data Sensors
 
 ### Added
 
 - Core sensors: Signal Strength (RSRP/RSRQ/SINR), Network Type, and Data Usage.
 - Connection status binary sensor.
 
-## [1.3.6] - 2026-03-25
+## [1.3.6] - 2026-03-25 - Initial Release: Custom Component for ZTE MC7010
 
 ### Added
 
@@ -352,30 +374,31 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
-  - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
-  - [\[3.3.2\] - 2026-08-02 - Release](#332---2026-08-02---release)
-  - [\[3.2.5\] - 2026-07-03 - Release](#325---2026-07-03---release)
-  - [\[3.2.4\] - 2026-06-15 - Release](#324---2026-06-15---release)
-  - [\[3.2.3\] - 2026-06-14](#323---2026-06-14)
-  - [\[3.2.2\] - 2026-06-14](#322---2026-06-14)
-  - [\[3.2.1\] - 2026-06-14](#321---2026-06-14)
-  - [\[3.2.0\] - 2026-05-28](#320---2026-05-28)
-  - [\[3.1.0\] - 2026-05-24](#310---2026-05-24)
-  - [\[3.0.1\] - 2026-05-10](#301---2026-05-10)
-  - [\[3.0.0\] - 2026-05-08](#300---2026-05-08)
-  - [\[2.3.1\] - 2026-04-01 PUBLIC RELEASE](#231---2026-04-01-public-release)
-  - [\[2.1.1\] - 2026-03-29](#211---2026-03-29)
-  - [\[2.0.1\] - 2026-03-29](#201---2026-03-29)
-  - [\[1.9.4\] - 2026-03-29](#194---2026-03-29)
-  - [\[1.7.3\] - 2026-03-29](#173---2026-03-29)
-  - [\[1.6.3\] - 2026-03-28](#163---2026-03-28)
-  - [\[1.5.7\] - 2026-03-28](#157---2026-03-28)
-  - [\[1.5.1\] - 2026-03-28](#151---2026-03-28)
-  - [\[1.4.5\] - 2026-03-28](#145---2026-03-28)
-  - [\[1.4.4\] - 2026-03-28](#144---2026-03-28)
-  - [\[1.4.3\] - 2026-03-28](#143---2026-03-28)
-  - [\[1.4.2\] - 2026-03-27](#142---2026-03-27)
-  - [\[1.4.0\] - 2026-03-26](#140---2026-03-26)
-  - [\[1.3.6\] - 2026-03-25](#136---2026-03-25)
+  - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
+  - [\[3.3.3\] - 2026-08-08 - Release: SMS Bugfix and Polling Resilience](#333---2026-08-08---release-sms-bugfix-and-polling-resilience)
+  - [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Telemetry](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-and-health-telemetry)
+  - [\[3.2.5\] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening](#325---2026-07-03---release-refresh-now-button-display-units-and-config-flow-hardening)
+  - [\[3.2.4\] - 2026-06-15 - Release: Shared CI Validation v2.0.3](#324---2026-06-15---release-shared-ci-validation-v203)
+  - [\[3.2.3\] - 2026-06-14 - Maintenance: Shared CodeQL Permissions Alignment for Zizmor](#323---2026-06-14---maintenance-shared-codeql-permissions-alignment-for-zizmor)
+  - [\[3.2.2\] - 2026-06-14 - Maintenance: Shared CodeQL Security Scanning](#322---2026-06-14---maintenance-shared-codeql-security-scanning)
+  - [\[3.2.1\] - 2026-06-14 - Maintenance: CI Validation Infrastructure Test Release](#321---2026-06-14---maintenance-ci-validation-infrastructure-test-release)
+  - [\[3.2.0\] - 2026-05-28 - Release: APN Profile Control, Network Mode Select, and Diagnostic Entities](#320---2026-05-28---release-apn-profile-control-network-mode-select-and-diagnostic-entities)
+  - [\[3.1.0\] - 2026-05-24 - Release: SMS Service Actions, Received Bus Events, and Storage Full Repairs](#310---2026-05-24---release-sms-service-actions-received-bus-events-and-storage-full-repairs)
+  - [\[3.0.1\] - 2026-05-10 - Maintenance: README Documentation and Standards Alignment](#301---2026-05-10---maintenance-readme-documentation-and-standards-alignment)
+  - [\[3.0.0\] - 2026-05-08 - Major Release: Native Async Rewrite, Sub-Device Architecture, and IMEI Identity](#300---2026-05-08---major-release-native-async-rewrite-sub-device-architecture-and-imei-identity)
+  - [\[2.3.1\] - 2026-04-01 - Release: DataUpdateCoordinator Migration and HACS Branding Assets](#231---2026-04-01---release-dataupdatecoordinator-migration-and-hacs-branding-assets)
+  - [\[2.1.1\] - 2026-03-29 - Maintenance: Diagnostic Error Logging](#211---2026-03-29---maintenance-diagnostic-error-logging)
+  - [\[2.0.1\] - 2026-03-29 - Feature: Options Flow for Dynamic Reconfiguration](#201---2026-03-29---feature-options-flow-for-dynamic-reconfiguration)
+  - [\[1.9.4\] - 2026-03-29 - Feature: Hardware Model Reading and Session Management](#194---2026-03-29---feature-hardware-model-reading-and-session-management)
+  - [\[1.7.3\] - 2026-03-29 - Maintenance: Standardized Entity Naming](#173---2026-03-29---maintenance-standardized-entity-naming)
+  - [\[1.6.3\] - 2026-03-28 - Maintenance: Non-Blocking Async Startup for Offline Routers](#163---2026-03-28---maintenance-non-blocking-async-startup-for-offline-routers)
+  - [\[1.5.7\] - 2026-03-28 - UI: ZTE Brand Icons and Sub-Device Sensor Naming](#157---2026-03-28---ui-zte-brand-icons-and-sub-device-sensor-naming)
+  - [\[1.5.1\] - 2026-03-28 - Maintenance: Home Assistant Integration Naming Alignment](#151---2026-03-28---maintenance-home-assistant-integration-naming-alignment)
+  - [\[1.4.5\] - 2026-03-28 - Documentation: Local Changelog Addition and Standard Sensor Names](#145---2026-03-28---documentation-local-changelog-addition-and-standard-sensor-names)
+  - [\[1.4.4\] - 2026-03-28 - Telemetry: Router Attribute Exposure as Entities](#144---2026-03-28---telemetry-router-attribute-exposure-as-entities)
+  - [\[1.4.3\] - 2026-03-28 - Controls: Pause Polling Switch and Polling Interval Number Entity](#143---2026-03-28---controls-pause-polling-switch-and-polling-interval-number-entity)
+  - [\[1.4.2\] - 2026-03-27 - Feature: SMS Inbox Monitoring and Initial GitHub Release](#142---2026-03-27---feature-sms-inbox-monitoring-and-initial-github-release)
+  - [\[1.4.0\] - 2026-03-26 - Telemetry: Core Signal and Cellular Data Sensors](#140---2026-03-26---telemetry-core-signal-and-cellular-data-sensors)
+  - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-for-zte-mc7010)
 
 ---

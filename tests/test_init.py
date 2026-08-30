@@ -1182,59 +1182,6 @@ async def test_delete_all_sms_keep_last_gte_total_deletes_nothing(
 # ── Strategy 3: Error State & Negative Path Engineering ─────────────────────
 
 
-def test_check_sms_storage_handles_type_error(coordinator_fixture):
-    """An unreadable capacity reading leaves the previous verdict standing.
-
-    Two distinctions, and the second is the one that matters. It must not
-    raise — the bare-tuple `except` bug made it propagate `TypeError` and take
-    the whole poll down. And it must not treat "cannot tell" as "not full":
-    falling through would delete a live repair on one garbled reading, so the
-    early return has to leave both the flag and the issue registry untouched.
-    """
-    coordinator_fixture._sms_storage_full = True
-    data = {"nv_sms_able": ["not", "an", "int"], "sms_nv_total": "5"}
-
-    with patch("custom_components.zte_router_5g.coordinator.ir") as mock_ir:
-        coordinator_fixture._check_sms_storage(data)
-
-    assert coordinator_fixture._sms_storage_full is True
-    mock_ir.async_create_issue.assert_not_called()
-    mock_ir.async_delete_issue.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_coordinator_sms_message_missing_id_handled(mock_hass, mock_config_entry):
-    """3E: SMS messages missing the 'id' field sort and process without error."""
-    with (
-        patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
-        patch("custom_components.zte_router_5g.async_get_clientsession"),
-        patch("homeassistant.helpers.device_registry.async_get"),
-    ):
-        mock_api = mock_api_class.return_value
-        mock_api.get_all_data = AsyncMock(return_value={"network_type": "LTE"})
-        mock_api.get_sms_capacity = AsyncMock(return_value={})
-        mock_api.get_sms_messages = AsyncMock(
-            return_value=[
-                {
-                    "id": "1",
-                    "content_decoded": "no id here",
-                    "number_decoded": "111",
-                    "date_decoded": "2026-01-01T10:00:00",
-                },
-            ]
-        )
-        mock_api.login = AsyncMock()
-
-        await async_setup_entry(mock_hass, mock_config_entry)
-        coordinator = mock_config_entry.runtime_data
-
-        data = await coordinator._async_update_data()
-        assert data["last_sms"]["number_decoded"] == "111"
-
-
-# --- SMS length: the limit depends on the encoding the text forces ----------
-
-
 def test_plain_text_may_use_the_full_gsm7_length():
     """765 = 5 concatenated segments of 153 septets, as the router advertises."""
     _validate_sms_length("A" * SMS_MAX_CHARS_GSM7)

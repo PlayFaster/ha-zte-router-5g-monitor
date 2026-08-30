@@ -20,7 +20,11 @@ from custom_components.zte_router_5g.binary_sensor import (
     INTEGRATION_HEALTH_DESCRIPTION,
     ZTEIntegrationHealthSensor,
 )
-from custom_components.zte_router_5g.const import DOMAIN, FETCH_STRIKE_LIMIT
+from custom_components.zte_router_5g.const import (
+    DOMAIN,
+    FETCH_STRIKE_LIMIT,
+    HEALTH_DRIFT_STRIKE_LIMIT,
+)
 from custom_components.zte_router_5g.coordinator import (
     DRIFT_CONTRACT,
     ZTERouterDataUpdateCoordinator,
@@ -150,42 +154,38 @@ async def test_attributes_are_unrecorded(health) -> None:
         assert key in ZTEIntegrationHealthSensor._unrecorded_attributes
 
 
-async def test_drift_raises_and_clears_a_repair_issue(
+async def test_drift_is_published_on_health_and_raises_no_repair(
     health, coordinator, hass: HomeAssistant
 ) -> None:
-    """Contract drift is the one condition serious enough for a Repair."""
+    """Contract drift belongs on the health sensor, not the Repairs panel.
+
+    It raised a repair until the 2026-08-25 repair-set alignment. The family
+    policy is that a Repair requires user agency: drift is a code or firmware
+    change the user cannot act on, so it publishes as a `warning` severity and
+    a `drift` finding and leaves the panel alone. The assertion that **no**
+    repair is raised is the point of this test — the previous version asserted
+    the opposite.
+    """
     registry = ir.async_get(hass)
     await coordinator._async_update_data()
 
     coordinator.api.get_all_data = AsyncMock(return_value={"renamed_everything": "1"})
-    for _ in range(FETCH_STRIKE_LIMIT):
+    for _ in range(HEALTH_DRIFT_STRIKE_LIMIT):
         await coordinator._async_update_data()
 
     assert health.is_on is True
-    assert "firmware_contract_drift" in health.extra_state_attributes["repairs"]
-    assert (
-        registry.async_get_issue(
-            DOMAIN, coordinator._repair_ids["firmware_contract_drift"]
-        )
-        is not None
-    )
-
-    # The repair is the actionable signal; `drift` is the published detail a
-    # template can read. Both must be set, or the sensor raises an alarm it
-    # cannot explain.
+    assert health.extra_state_attributes["severity"] == "warning"
     assert health.extra_state_attributes["drift"] == [DRIFT_CONTRACT]
+    assert health.extra_state_attributes["repairs"] == []
+    assert not [
+        issue for (domain, _id), issue in registry.issues.items() if domain == DOMAIN
+    ], "drift must raise no repair card"
 
     coordinator.api.get_all_data = AsyncMock(return_value=dict(GOOD_DATA))
     await coordinator._async_update_data()
 
-    assert (
-        registry.async_get_issue(
-            DOMAIN, coordinator._repair_ids["firmware_contract_drift"]
-        )
-        is None
-    )
-    assert health.extra_state_attributes["repairs"] == []
     assert health.extra_state_attributes["drift"] == []
+    assert health.extra_state_attributes["severity"] == "ok"
 
 
 async def test_publishes_the_section_19_attribute_contract(health) -> None:
@@ -202,18 +202,39 @@ async def test_publishes_the_section_19_attribute_contract(health) -> None:
     assert "last_good_update" in attrs
 
 
-async def test_existing_repair_is_reflected_not_double_raised(
-    health, coordinator
+async def test_a_full_message_store_is_not_an_integration_health_problem(
+    hass: HomeAssistant, coordinator
 ) -> None:
-    """The SMS-storage repair shows in attributes without being re-raised."""
-    full = {**GOOD_DATA, "nv_sms_able": "20", "sms_nv_total": "20"}
+    """Section 19 reports whether this integration's data can be trusted.
+
+    A full message store is the router's state, reported correctly by a poll
+    that worked — so it is `binary_sensor.*_sms_storage_full` and nothing else.
+    Routing it through here produced `problem: true` with `severity: ok`, a
+    pair the Section 19 enum has no meaning for, because none of its values
+    describes a device condition the integration is reporting accurately.
+
+    `huawei_router_5g` has never fed its equivalent into health either.
+    """
+    full = {
+        **GOOD_DATA,
+        "sms_nv_total": "100",
+        "sms_nv_rev_total": "90",
+        "sms_nv_send_total": "8",
+        "sms_nv_draftbox_total": "2",
+    }
     coordinator.api.get_all_data = AsyncMock(return_value=full)
 
     await coordinator._async_update_data()
 
-    assert health.is_on is True
-    assert "sms_storage_full" in health.extra_state_attributes["repairs"]
-    assert "SMS storage is full" in health.extra_state_attributes["issues"]
+    snapshot = coordinator.health_snapshot
+    assert snapshot["problem"] is False
+    assert snapshot["severity"] == "ok"
+    assert snapshot["issues"] == []
+    assert not [
+        issue
+        for (domain, _id), issue in ir.async_get(hass).issues.items()
+        if domain == DOMAIN
+    ], "a full SMS store must raise no repair card"
 
 
 async def test_never_crashes_the_update_it_diagnoses(health, coordinator) -> None:

@@ -37,7 +37,14 @@ async def test_pause_polling_switch(mock_coordinator, mock_config_entry):
     switch.hass = MagicMock()
     # Mock hass.data structure
     switch.hass.data = {DOMAIN: {mock_config_entry.entry_id: mock_coordinator}}
-    switch.async_write_ha_state = MagicMock()
+    # Capture what the entity reads at the instant it publishes, rather than
+    # only that a publish happened. A control that writes the new value and
+    # publishes the old one satisfies a bare `MagicMock()` here, because the
+    # state has settled either way by the time the assertions run.
+    published: list[bool] = []
+    switch.async_write_ha_state = MagicMock(
+        side_effect=lambda: published.append(switch.is_on)
+    )
 
     # 1. Turn ON (Pause)
     await switch.async_turn_on()
@@ -50,6 +57,15 @@ async def test_pause_polling_switch(mock_coordinator, mock_config_entry):
     _args, kwargs = switch.hass.config_entries.async_update_entry.call_args
     assert kwargs["options"][CONF_STOP_POLLING] is False
     mock_coordinator.async_force_refresh.assert_called_once()
+
+    # `hass` here is a `MagicMock`, so `async_update_entry` records the call
+    # without changing `entry.options` — and `is_on` reads those options, so it
+    # cannot move within this test whatever the code does. What is checkable
+    # here is that each toggle published exactly once, at a point where the
+    # write had already been issued. The value published is asserted against a
+    # real `hass` in
+    # `test_publish_moment.py::test_pause_polling_publishes_the_state_it_just_wrote`.
+    assert len(published) == 2, "each toggle must publish exactly once"
 
 
 @pytest.mark.asyncio
@@ -473,7 +489,7 @@ def test_a_poll_omitting_the_key_holds_the_last_known_position(
 
     mock_coordinator.data = {"ODU_led_switch": "0"}
     switch._handle_coordinator_update()
-    assert switch.is_on is False, "a reported off must still be honoured"
+    assert switch.is_on is False, "a reported off must still be honored"
 
 
 @pytest.mark.asyncio

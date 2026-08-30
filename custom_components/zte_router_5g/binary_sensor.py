@@ -18,7 +18,11 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .coordinator import ENDPOINT_EXTENDED, ZTERouterDataUpdateCoordinator
+from .coordinator import (
+    ENDPOINT_EXTENDED,
+    ENDPOINT_SMS_CAPACITY,
+    ZTERouterDataUpdateCoordinator,
+)
 from .helpers import ZTEAboutEntity, build_device_info
 
 PARALLEL_UPDATES = 0
@@ -40,6 +44,34 @@ class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
     about: str | None = None
 
 
+def _nv_store_is_full(data: Any) -> bool:
+    """Return whether the router's own message store has run out of room.
+
+    Compares the three NV counters against `sms_nv_total`, the capacity of that
+    bank. Mirrored by `coordinator._check_sms_storage`, which feeds the health
+    finding from the same arithmetic.
+
+    `sms_nv_total` is the capacity of that bank, not its fill: `Total Msg`
+    publishes both, and on the reference MC7010 they read 100 and 20 for the
+    two banks.
+    """
+    if not data:
+        return False
+    try:
+        capacity = int(data.get("sms_nv_total") or 0)
+        used = sum(
+            int(data.get(key) or 0)
+            for key in (
+                "sms_nv_rev_total",
+                "sms_nv_send_total",
+                "sms_nv_draftbox_total",
+            )
+        )
+    except (TypeError, ValueError):
+        return False
+    return capacity > 0 and used >= capacity
+
+
 # Define the entity description for static metadata
 BEST_CONN_DESCRIPTION = ZTEBinarySensorEntityDescription(
     key="best_connection",
@@ -57,6 +89,33 @@ INTEGRATION_HEALTH_DESCRIPTION = ZTEBinarySensorEntityDescription(
 )
 
 BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
+    ZTEBinarySensorEntityDescription(
+        key="sms_storage_full",
+        source=ENDPOINT_SMS_CAPACITY,
+        about=(
+            "On when message storage has no room left. A full store makes the "
+            "network stop delivering new messages, and nothing else in the "
+            "integration reports that - which is the whole reason this entity "
+            "exists."
+        ),
+        translation_key="sms_storage_full",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        # Enabled by default, unlike most diagnostics here. Nothing else reports
+        # this: a full store makes the network stop delivering, and Integration
+        # Health deliberately does not cover it — §19 is about whether the
+        # integration's data can be trusted, and this is the device's state,
+        # reported correctly. If the entity is off, the condition is invisible.
+        entity_registry_enabled_default=True,
+        group="sms",
+        # `sms_nv_total` is the **capacity** of the router's own store, not
+        # how much of it is used — `Total Msg` publishes both side by side, and
+        # on the reference MC7010 they read 100 and 20 for the two banks. The
+        # fill level is the sum of the three NV counters. SIM storage fills
+        # independently and is not this sensor: a full NV store is what stops
+        # the network delivering.
+        value_fn=lambda data: _nv_store_is_full(data),
+    ),
     ZTEBinarySensorEntityDescription(
         key="reboot_schedule",
         source=ENDPOINT_EXTENDED,

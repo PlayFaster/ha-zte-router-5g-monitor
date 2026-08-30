@@ -1315,3 +1315,41 @@ def test_projection_treats_every_disabled_spelling_as_off():
             _projection({**base, "wan_auto_clear_flow_data_switch": enabled})
             is not None
         ), f"{enabled!r} must not read as disabled"
+
+
+def test_bandwidth_sensors_offer_the_unit_selector() -> None:
+    """A raw unit string leaves Home Assistant with no unit selector.
+
+    `native_unit_of_measurement="MHz"` renders correctly and is inert: without
+    a `device_class` HA has no conversion table for the entity, so the unit
+    dropdown does not appear.
+
+    The `state_class` assertion guards something else, and the two are worth
+    keeping apart. It is **not** required for the selector: `sensor/device_class_convertible_units`, the websocket command
+    that populates it, takes `device_class` as its only input, and
+    `DEVICE_CLASS_STATE_CLASSES[FREQUENCY]` explicitly permits `MEASUREMENT`.
+    Checked against `homeassistant/components/sensor/websocket_api.py` and
+    `const.py` on 2026-08-26.
+
+    It is asserted because these two sensors are the only entries in
+    `_UNGUARDED_BY_DESIGN`, and that exemption rests on their staying out of
+    long-term statistics: with no state class a bad reading cannot corrupt
+    history, so no guard band is needed. Adding one would silently end the
+    exemption. See `docs/value_min_max.md`.
+    """
+    from homeassistant.components.sensor import SensorDeviceClass
+    from homeassistant.const import UnitOfFrequency
+
+    from custom_components.zte_router_5g.sensor import SENSOR_TYPES
+
+    bandwidth = [d for d in SENSOR_TYPES if d.key.endswith("_bandwidth")]
+    assert len(bandwidth) == 2, "expected the pcell and scell bandwidth sensors"
+
+    for description in bandwidth:
+        assert description.device_class == SensorDeviceClass.FREQUENCY
+        assert description.native_unit_of_measurement == UnitOfFrequency.MEGAHERTZ
+        assert description.state_class is None, (
+            f"{description.key}: a state class puts this into long-term "
+            "statistics and ends its _UNGUARDED_BY_DESIGN exemption, which "
+            "rests on it staying out. Add guard bands, or leave it off."
+        )

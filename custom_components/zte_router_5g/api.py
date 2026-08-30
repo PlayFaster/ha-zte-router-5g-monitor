@@ -3,6 +3,7 @@
 import contextlib
 import hashlib
 import logging
+import re
 import urllib.parse
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -191,6 +192,18 @@ _EXTENDED_PARAMS: list[str] = [
 ]
 
 
+# `result` values a login is accepted on. Shares its members with
+# `_is_refusal`, which decides the same question for writes, but is a separate
+# constant on purpose: a login carrying no `result` at all has established
+# nothing, whereas a write carrying none is normal.
+_LOGIN_SUCCESS = frozenset({"success", "0", "ok"})
+
+# Matches a `stok` in a raw `Set-Cookie` header regardless of case. Needed
+# because `SimpleCookie` morsel names are case-sensitive and it drops headers
+# it cannot parse without raising.
+_STOK_HEADER_RE = re.compile(r'(?i)\bstok\s*=\s*"?([^";,\s]+)')
+
+
 # Appended to every targeted read so an all-empty response still distinguishes
 # "these fields are empty" from "the session is gone". See `get_params`.
 _SESSION_SENTINEL = "wan_connect_status"
@@ -298,11 +311,19 @@ def _classify_session(payload: dict[str, Any]) -> str:
 class _LoginAttempt(NamedTuple):
     """Outcome of posting one login form.
 
-    Exactly one of the three is set. `stok` carries the session rather than
-    the caller re-reading `self.stok`, so which attempt produced it stays
-    explicit when two forms are tried.
+    `established` records whether the router accepted the login, and `stok`
+    the session cookie it issued. The two are separate because they disagree
+    on some firmware: an MC888 Pro on `CR_ABPLMC888PROV1.0.1B04` answers a
+    successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie` at all,
+    binding the session to the client address instead (issue #56). Testing the
+    cookie alone scored that success as a connection failure.
+
+    On a failed attempt `established` is false and exactly one of the two
+    errors is set. They carry the outcome rather than the caller re-reading
+    `self.stok`, so which of the two forms produced it stays explicit.
     """
 
+    established: bool
     stok: str | None
     auth_error: str | None
     conn_error: str | None
@@ -332,9 +353,31 @@ class ZTERouterAPI:
         self.protocol = "http"
         self.referer = f"http://{self.ip}/"
         self.timeout = aiohttp.ClientTimeout(total=15)
+        # Two fields, one piece of state. `session_active` is whether the
+        # router has authenticated us; `stok` is the cookie it issued, which
+        # some firmware does not issue at all (see `_LoginAttempt`). Never
+        # assign either directly: `login()` establishes the pair and
+        # `_clear_session()` drops it, so no site can move one without the
+        # other. A session marked active with no cookie sends no `Cookie`
+        # header, which the router answers by echoing the authenticated keys
+        # back empty — indistinguishable from an expired session, and
+        # published as `unknown` on every entity.
         self.stok: str | None = None
+        self.session_active = False
         self.is_multi = True
         self.last_activity = datetime.fromtimestamp(0, UTC)
+
+    def _clear_session(self, *, clear_cookies: bool = False) -> None:
+        """Drop the session pair. The only site that ends a session.
+
+        `clear_cookies` also empties the jar, which matters wherever a later
+        login could otherwise find a `stok` left by the session just ended and
+        mistake it for one the router has just issued.
+        """
+        self.stok = None
+        self.session_active = False
+        if clear_cookies:
+            self.session.cookie_jar.clear(predicate=lambda m: m.key == "stok")
 
     def _hash(self, val: str | None) -> str:
         if val is None:
@@ -514,19 +557,21 @@ class ZTERouterAPI:
         now = datetime.now(UTC)
         if (
             authenticated
-            and self.stok
+            and self.session_active
             and (now - self.last_activity).total_seconds() > SESSION_IDLE_RESET_SECONDS
         ):
-            _LOGGER.debug("Session likely expired due to inactivity; resetting stok")
-            self.stok = None
+            _LOGGER.debug("Session likely expired due to inactivity; resetting session")
+            self._clear_session()
 
-        if authenticated and not self.stok:
-            self.stok = await self.login(timeout_sec=timeout_sec)
+        if authenticated and not self.session_active:
+            await self.login(timeout_sec=timeout_sec)
 
         url = f"{self.referer}{path}"
         req_headers = {"Referer": f"{self.referer}index.html"}
         if headers:
             req_headers.update(headers)
+        # A session with no cookie is normal on firmware that binds the
+        # session to the client address; there is simply no header to send.
         if authenticated and self.stok:
             req_headers["Cookie"] = self.stok
 
@@ -573,14 +618,14 @@ class ZTERouterAPI:
             raise
         except (TimeoutError, aiohttp.ClientError) as e:
             if authenticated:
-                self.stok = None
+                self._clear_session()
             raise ZTEConnectionError(f"Request failed: {e}") from e
 
         # Validate parsed response and handle redirects/HTML
         if is_html_page:
             if authenticated and _retry:
                 _LOGGER.debug("Detected HTML redirect/response; renewing session")
-                self.stok = await self.login(timeout_sec=timeout_sec)
+                await self.login(timeout_sec=timeout_sec)
                 return await self._request(
                     method,
                     path,
@@ -605,7 +650,7 @@ class ZTERouterAPI:
         if resp_json is None:
             if authenticated and _retry:
                 _LOGGER.debug("JSON parse failed; renewing session")
-                self.stok = await self.login(timeout_sec=timeout_sec)
+                await self.login(timeout_sec=timeout_sec)
                 return await self._request(
                     method,
                     path,
@@ -659,7 +704,7 @@ class ZTERouterAPI:
             if (is_status_expired or is_auth_error) and authenticated:
                 if _retry:
                     _LOGGER.debug("Session expired in JSON response; renewing session")
-                    self.stok = await self.login(timeout_sec=timeout_sec)
+                    await self.login(timeout_sec=timeout_sec)
                     return await self._request(
                         method,
                         path,
@@ -723,11 +768,18 @@ class ZTERouterAPI:
         )
         return cast(str, data.get("LD", "").upper())
 
-    async def login(self, timeout_sec: int | None = None) -> str:
-        """Clean login that resets the internal session state."""
+    async def login(self, timeout_sec: int | None = None) -> None:
+        """Clean login that resets the internal session state.
+
+        The only site that establishes a session. Callers do not assign the
+        result: `self.stok` and `self.session_active` are set here together,
+        which is what stops one from being moved without the other.
+        """
         tout = timeout_sec or 15
-        self.stok = None
-        self.session.cookie_jar.clear(predicate=lambda m: m.key == "stok")
+        # Clearing the jar as well as the pair is what lets `_attempt_login`
+        # trust a `stok` it finds there: anything present afterwards was set
+        # by the login POST, not left behind by the session just ended.
+        self._clear_session(clear_cookies=True)
 
         ld = await self.get_ld(timeout_sec=tout)
         version = await self.get_version(timeout_sec=tout)
@@ -741,9 +793,17 @@ class ZTERouterAPI:
         if version and any(m in version for m in ["MC801", "MC7010"]):
             self.is_multi = False
 
-        primary = (
-            "LOGIN" if (self.username and not self.is_multi) else "LOGIN_MULTI_USER"
-        )
+        # No username means the multi-user form has no user field to carry, and
+        # the router rejects it on that ground alone — which is what produced
+        # the `Result: failure` line in issue #56 before the fallback found
+        # `LOGIN`. `Kajkac/ZTE-MC-Home-assistant-repo`, the reference
+        # implementation for this hardware family, branches on the username
+        # alone and sends `LOGIN` here first and only. Matching it removes a
+        # login attempt that cannot succeed, and the warning it logged.
+        if not self.username:
+            primary = "LOGIN"
+        else:
+            primary = "LOGIN" if not self.is_multi else "LOGIN_MULTI_USER"
         attempt = await self._attempt_login(primary, zte_pass, tout)
 
         # Best-effort form fallback for models this integration has never seen.
@@ -753,7 +813,7 @@ class ZTERouterAPI:
         # unclassified failure is worth retrying: a credentials rejection means
         # the password is wrong whichever form carries it, and retrying would
         # just burn a second attempt against routers that lock out.
-        if attempt.stok is None and attempt.auth_error is None:
+        if not attempt.established and attempt.auth_error is None:
             fallback = "LOGIN_MULTI_USER" if primary == "LOGIN" else "LOGIN"
             _LOGGER.debug(
                 "Login form %s did not yield a session; retrying once with %s",
@@ -761,7 +821,7 @@ class ZTERouterAPI:
                 fallback,
             )
             retry = await self._attempt_login(fallback, zte_pass, tout)
-            if retry.stok is not None:
+            if retry.established:
                 _LOGGER.info(
                     "Login succeeded with fallback form %s (this router does not "
                     "accept %s)",
@@ -781,18 +841,28 @@ class ZTERouterAPI:
         if attempt.conn_error:
             raise ZTEConnectionError(attempt.conn_error)
 
-        if attempt.stok is None:  # pragma: no cover - defensive, narrows for mypy
-            raise ZTEConnectionError("Failed to obtain stok from login")
-        return attempt.stok
+        if not attempt.established:  # pragma: no cover - defensive
+            raise ZTEConnectionError("Failed to establish a session at login")
+
+        self.stok = attempt.stok
+        self.session_active = True
+        self.last_activity = datetime.now(UTC)
+        if attempt.stok is None:
+            _LOGGER.debug(
+                "Router accepted the login without issuing a stok cookie; "
+                "the session is bound to this client rather than to a cookie"
+            )
 
     async def _attempt_login(
         self, goform_id: str, zte_pass: str, tout: int
     ) -> _LoginAttempt:
-        """Post one login form, setting `self.stok` on success.
+        """Post one login form and report what the router made of it.
 
-        Genuine transport failures raise `ZTEConnectionError` directly rather
-        than being reported in the result, because there is no point retrying
-        a different form against a router that is not answering at all.
+        Does not touch `self.stok` or `self.session_active`; `login()` owns
+        both. Genuine transport failures raise `ZTEConnectionError` directly
+        rather than being reported in the result, because there is no point
+        retrying a different form against a router that is not answering at
+        all.
         """
         payload = {
             "isTest": "false",
@@ -813,63 +883,118 @@ class ZTERouterAPI:
                 timeout=aiohttp.ClientTimeout(total=tout),
                 ssl=False,
             ) as r:
-                stok = r.cookies.get("stok")
-                if not stok:
-                    # Check body to classify if it is credentials rejection
-                    result = None
-                    try:
-                        resp_json = await r.json(content_type=None)
+                resp_json: Any = None
+                result = None
+                with contextlib.suppress(
+                    ValueError, TypeError, aiohttp.ContentTypeError
+                ):
+                    resp_json = await r.json(content_type=None)
+                    if isinstance(resp_json, dict):
                         result = resp_json.get("result")
-                    except (ValueError, TypeError, aiohttp.ContentTypeError):
-                        pass
 
-                    if result in [
+                stok = self._extract_stok(r, resp_json=resp_json)
+
+                # A cookie proves a session. Without one, only an explicit
+                # success `result` does — an MC888 Pro on
+                # `CR_ABPLMC888PROV1.0.1B04` answers a successful `LOGIN` with
+                # `{"result":"0"}` and no `Set-Cookie`, binding the session to
+                # this client instead (issue #56). A response carrying neither
+                # is not read as success: an absent `result` is normal on a
+                # command that returns none, but a *login* that neither set a
+                # cookie nor said `0` has not established anything.
+                if stok is None and str(result).lower() not in _LOGIN_SUCCESS:
+                    if result in (
                         "password_error",
                         "invalid_password",
                         "write_error",
                         "unauth",
-                    ]:
-                        login_error = (
-                            f"Login failed due to invalid credentials: {result}"
+                    ):
+                        return _LoginAttempt(
+                            False,
+                            None,
+                            f"Login failed due to invalid credentials: {result}",
+                            None,
                         )
-                    else:
-                        _LOGGER.warning(
-                            "Login failed: missing stok (Status: %s, Result: %s). "
-                            "Treating as connection issue.",
-                            r.status,
-                            result,
-                        )
-                        conn_error = f"Failed to obtain stok from login: {result}"
-                else:
-                    self.stok = f"stok={stok.value.strip('"')}"
+                    _LOGGER.warning(
+                        "Login failed: no session established (Status: %s, "
+                        "Result: %s). Treating as connection issue.",
+                        r.status,
+                        result,
+                    )
+                    return _LoginAttempt(
+                        False,
+                        None,
+                        None,
+                        f"Failed to establish a session at login: {result}",
+                    )
 
-                    # Initialize session with a GET request to satisfy POST
-                    # restrictions on some ZTE routers
-                    init_url = f"{self.referer}goform/goform_get_cmd_process"
-                    init_params = {"isTest": "false", "cmd": "wa_inner_version"}
-                    init_headers = {
-                        "Referer": f"{self.referer}index.html",
-                        "Cookie": self.stok,
-                    }
-                    try:
-                        async with self.session.get(
-                            init_url,
-                            params=init_params,
-                            headers=init_headers,
-                            timeout=aiohttp.ClientTimeout(total=tout),
-                            ssl=False,
-                        ) as init_r:
-                            await init_r.read()
-                    except (TimeoutError, aiohttp.ClientError) as init_err:
-                        _LOGGER.debug("Session initialization GET failed: %s", init_err)
-
-                    self.last_activity = datetime.now(UTC)
+                await self._initialize_session(stok, tout)
         except (TimeoutError, aiohttp.ClientError) as e:
             raise ZTEConnectionError(
                 f"Login failed due to connection error: {e}"
             ) from e
 
-        return _LoginAttempt(self.stok, login_error, conn_error)
+        return _LoginAttempt(True, stok, login_error, conn_error)
+
+    def _extract_stok(
+        self, r: aiohttp.ClientResponse, *, resp_json: Any = None
+    ) -> str | None:
+        """Return the `Cookie` header value for this session, or `None`.
+
+        Four sources, because a token that exists but is not found is far
+        worse than none: it means the session is replayed without it, the
+        router echoes the authenticated keys back empty, and every entity
+        publishes `unknown`.
+
+        `r.cookies` is a `SimpleCookie`, whose morsel names are case-sensitive
+        and which silently drops a header it cannot parse, so the raw headers
+        are swept case-insensitively as well. `session.post` follows redirects
+        and `r.cookies` carries only the final response, so a token set on an
+        intermediate `302` — the reporter of issue #56 observed one — is
+        reachable only through the jar. `login()` empties the jar before
+        posting, so anything found there was set by this request.
+        """
+        morsel = r.cookies.get("stok")
+        if morsel:
+            return f"stok={morsel.value.strip('"')}"
+
+        for header in r.headers.getall("Set-Cookie", []):
+            match = _STOK_HEADER_RE.search(header)
+            if match:
+                return f"stok={match.group(1)}"
+
+        for cookie in self.session.cookie_jar:
+            if cookie.key.lower() == "stok" and cookie.value:
+                return f"stok={cookie.value.strip('"')}"
+
+        if isinstance(resp_json, dict):
+            body_stok = resp_json.get("stok")
+            if isinstance(body_stok, str) and body_stok:
+                return f"stok={body_stok.strip('"')}"
+
+        return None
+
+    async def _initialize_session(self, stok: str | None, tout: int) -> None:
+        """Activate the session with the GET some ZTE routers require.
+
+        Best effort: a failure here is logged and not raised, because the
+        login itself already succeeded and the next request retries the same
+        ground.
+        """
+        init_headers = {"Referer": f"{self.referer}index.html"}
+        if stok:
+            init_headers["Cookie"] = stok
+        try:
+            async with self.session.get(
+                f"{self.referer}goform/goform_get_cmd_process",
+                params={"isTest": "false", "cmd": "wa_inner_version"},
+                headers=init_headers,
+                timeout=aiohttp.ClientTimeout(total=tout),
+                ssl=False,
+            ) as init_r:
+                await init_r.read()
+        except (TimeoutError, aiohttp.ClientError) as init_err:
+            _LOGGER.debug("Session initialization GET failed: %s", init_err)
 
     async def logout(self) -> None:
         """End the router session and drop local session state.
@@ -882,7 +1007,7 @@ class ZTERouterAPI:
         login session at a time, so an abandoned session locks the user out of
         the router's own web UI until it times out (dev_standards Section 10).
         """
-        if not self.stok:
+        if not self.session_active:
             return
 
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
@@ -903,8 +1028,7 @@ class ZTERouterAPI:
         except Exception as err:  # noqa: BLE001 - unload must never fail
             _LOGGER.debug("Logout request failed (session dropped anyway): %s", err)
         finally:
-            self.stok = None
-            self.session.cookie_jar.clear(predicate=lambda m: m.key == "stok")
+            self._clear_session(clear_cookies=True)
 
     async def _batch_get(
         self, params: list[str], *, timeout_sec: int | None = None

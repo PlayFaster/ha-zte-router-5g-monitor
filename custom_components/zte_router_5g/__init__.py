@@ -25,7 +25,11 @@ from .const import (
     SMS_MAX_CHARS_UNICODE,
     SMS_SEGMENTS_MAX,
 )
-from .coordinator import REPAIR_NAMES, ZTERouterDataUpdateCoordinator
+from .coordinator import (
+    REPAIR_NAMES,
+    RETIRED_REPAIR_NAMES,
+    ZTERouterDataUpdateCoordinator,
+)
 from .helpers import is_gsm7
 
 _LOGGER = logging.getLogger(__name__)
@@ -257,7 +261,7 @@ async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
                     skipped,
                     len(ids),
                 )
-            # Never send an empty target list: the router's behaviour for a
+            # Never send an empty target list: the router's behavior for a
             # blank `delete_sms` is unknown, and this is a destructive command.
             if ids:
                 await coordinator.api.delete_sms(";".join(ids))
@@ -529,7 +533,11 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     Rebuilt from `entry.entry_id` rather than read from the coordinator:
     `runtime_data` is already gone by the time HA calls this.
     """
-    for name in REPAIR_NAMES:
+    # Retired ids are swept here as well as at setup. `clear_legacy_repairs`
+    # only runs when the entry is set up again, so an entry upgraded and then
+    # removed without a successful setup in between would otherwise keep a card
+    # nothing can clear.
+    for name in (*REPAIR_NAMES, *RETIRED_REPAIR_NAMES):
         ir.async_delete_issue(hass, DOMAIN, f"{entry.entry_id}_{name}")
         # The pre-scoping spelling, for an entry removed before ever being
         # set up again under the new ids.

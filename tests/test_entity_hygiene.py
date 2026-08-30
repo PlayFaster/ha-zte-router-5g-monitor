@@ -57,6 +57,76 @@ def test_sms_sender_number_is_never_recorded() -> None:
     assert "number" in ZTERouterSensor._unrecorded_attributes
 
 
+def test_no_log_line_carries_the_sms_sender_number() -> None:
+    """Section 20: the log is a wider surface than the event bus.
+
+    The sender's number is third-party personal data, and it used to be
+    interpolated into an INFO line on every new message. The bus event still
+    carries it, scoped to this entry; the log is copied into every diagnostics
+    download, issue report and screenshot, and nothing redacts it there.
+
+    Asserted over the source rather than over captured output because the
+    interesting case is the line nobody wrote a test for. `%s` formatting means
+    the number never appears as a literal, so a search of `caplog.text` on the
+    one path a test happens to drive would pass while a second site leaked.
+    """
+    source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
+
+    leaking = [
+        line.strip()
+        for line in source.splitlines()
+        if "number_decoded" in line and "_LOGGER" in line
+    ]
+    assert not leaking, f"phone number reaches a log line: {leaking}"
+
+    # The value is passed as an argument on the following lines, so the call has
+    # to be read as a block rather than a line.
+    for call in re.findall(r"_LOGGER\.\w+\((?:[^()]|\([^()]*\))*\)", source):
+        assert "number_decoded" not in call, f"phone number reaches a log call: {call}"
+
+
+async def test_a_new_sms_logs_nothing_that_identifies_the_sender(
+    hass: HomeAssistant, caplog
+) -> None:
+    """The runtime half of the check above, on the path that used to leak."""
+    import logging
+
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        title="ZTE 5G",
+        data={"imei": "864155042229309"},
+        options={
+            CONF_HOST: "192.168.0.1",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "password",
+        },
+    )
+    entry.add_to_hass(hass)
+    coordinator = ZTERouterDataUpdateCoordinator(hass, entry, AsyncMock())
+    coordinator.last_sms_timestamp = "20260101000000"
+
+    number = "+353871234567"
+    with caplog.at_level(logging.DEBUG):
+        coordinator._check_new_sms(
+            [
+                {
+                    "id": "7",
+                    "date_decoded": "20260102000000",
+                    "number_decoded": number,
+                    "content_decoded": "hello",
+                }
+            ]
+        )
+
+    assert number not in caplog.text
+    assert "New SMS received" in caplog.text
+
+
 def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
     """Section 14: the default is total — no attribute is recorded.
 
@@ -171,14 +241,12 @@ def test_every_raised_exception_has_translated_text() -> None:
         assert not keys - defined, f"{name} missing: {sorted(keys - defined)}"
 
 
-def test_every_repair_issue_has_translated_text() -> None:
-    """A missing issues entry shows the raw key on the Repairs card."""
-    source = (COMPONENT / "coordinator.py").read_text(encoding="utf-8")
-    raised = set(re.findall(r'translation_key="(\w+)"', source))
-
-    for name in ("strings.json", "translations/en.json"):
-        issues = set(_load(name).get("issues", {}))
-        assert raised <= issues, f"{name} missing issue text for {raised - issues}"
+# `test_every_repair_issue_has_translated_text` lived here until 2026-08-26.
+# It asserted only that each raised key was *present* in the `issues` block,
+# which a key with a title and no description passes — the card then renders
+# with an empty body. Superseded by the sweeps in `tests/test_health_contract.py`,
+# which checks title and description in `strings.json` and in every
+# `translations/*.json`, and by 8b, which catches text left behind by a rename.
 
 
 # --------------------------------------------------------------- Section 14
@@ -402,3 +470,267 @@ async def test_every_live_entity_has_an_icon_or_a_device_class(
         missing
     )
     assert checked >= 10, f"only {checked} entities swept — the fixture is stale"
+
+
+# ---------------------------------------------------------------------------
+# Suppressed static-analysis directives — every one is a reviewed decision
+# ---------------------------------------------------------------------------
+#
+# `masked_errors_check` Class D. That prompt is a point-in-time audit; this is
+# the mechanism that keeps its result true afterwards.
+# The set cannot grow without someone editing the table below and writing a
+# reason.
+#
+# **Why ruff and mypy do not already cover this.** `RUF100` and mypy's
+# `warn_unused_ignores` report a suppression that is *unnecessary* — one where
+# no error would have fired. They are silent on the dangerous case: a
+# suppression that IS doing work, because the error is real. On
+# `huawei_router_5g` both tools were clean while two calls to non-existent
+# library methods sat behind `type: ignore`, so Logout and Clear Traffic
+# Statistics had never worked.
+#
+# Ported from `huawei_router_5g` on 2026-08-26, keeping all four points the
+# chore names: `tokenize` rather than a regex, keyed on `(file, directive)`
+# rather than line number, three tests rather than one, and both
+# `custom_components/` and `tests/` swept. `scripts/` is included here too —
+# it is the one place that talks to real hardware.
+#
+# The table started **empty** and was filled by running the sweep and writing a
+# reason for each finding, per the chore. Copying Huawei's entries would have
+# been meaningless: they describe that project's library.
+ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
+    ("api.py", "noqa: S324"): (
+        "MD5 is the hash the legacy `goform` login protocol specifies for the "
+        "`AD` token on pre-new-generation firmware. It is the router's choice, "
+        "not this integration's, and it is not being used to protect anything: "
+        "the value is a per-session challenge response the device compares "
+        "against its own computation. Newer firmware takes SHA-256 and "
+        "`get_ad` selects on the firmware version, so the branch cannot be "
+        "removed without dropping support for the older models."
+    ),
+    ("api.py", "pragma: no cover"): (
+        "Two defensive guards. `login()` re-checks `attempt.stok` after both "
+        "error branches have raised, which narrows the type for mypy and "
+        "cannot be reached at runtime; and `set_data_volume_settings` rejects "
+        "an unknown field name, which guards a programming error rather than "
+        "any input a user or router can supply. Writing a test for either "
+        "would mean constructing a state the code already proves impossible."
+    ),
+    ("api.py", "noqa: BLE001"): (
+        "Three sites, all deliberate containment at a boundary. `logout()` "
+        "runs on unload and must never block Home Assistant tearing the entry "
+        "down, so an unreachable router cannot be allowed to raise. "
+        "`get_sms_capacity` and `get_sms_messages` are optional endpoints "
+        "whose failure degrades their own entities and nothing else — the "
+        "domain exceptions are re-raised first, above each of these, so this "
+        "catches only what is genuinely unanticipated."
+    ),
+    ("coordinator.py", "noqa: BLE001"): (
+        "`_fetch_optional` must contain any failure of an optional endpoint, "
+        "because Section 8 requires one flaky endpoint to degrade only its own "
+        "entities. `ZTEAuthError` is re-raised on the line above so reauth "
+        "still fires; narrowing further would let an unanticipated error take "
+        "down the whole poll, which is the outcome this exists to prevent."
+    ),
+    ("coordinator.py", "pragma: no cover"): (
+        "The two Section 19 health-snapshot computations. A health verdict "
+        "that crashes the update it is diagnosing is worse than no verdict, so "
+        "both are wrapped. The handler is unreachable while the snapshot code "
+        "is correct, and a test would have to break the snapshot deliberately "
+        "to reach it — which tests nothing about the product."
+    ),
+    ("__init__.py", "noqa: BLE001"): (
+        "The follow-up refresh after a successful SMS write. The write has "
+        "already landed at this point, so a failure here costs the user a "
+        "slightly stale reading until the next poll and nothing more. Raising "
+        "would report a failed action that in fact succeeded, which is the "
+        "more misleading of the two outcomes."
+    ),
+    ("switch.py", "noqa: BLE001"): (
+        "The read-back that confirms a switch position. A read that fails "
+        "leaves the write *unverified*, not failed — the command may well have "
+        "landed, and the next poll settles it. Only a successful read "
+        "reporting the wrong value proves a refusal, and that path raises."
+    ),
+    ("hardware_check.py", "ruff: noqa: T201"): (
+        "The console report is this script's entire output. There is no logger "
+        "to route it through and a caller reading the transcript is the point. "
+        "File-level rather than per-line because every print in the file is the "
+        "same deliberate choice."
+    ),
+    ("hardware_check.py", "ruff: noqa: SLF001"): (
+        "The script reads private API state to confirm what a call actually "
+        "did to the session — whether logout released it, whether a token was "
+        "cleared. There is no public accessor, and adding one would put "
+        "shipped API surface into the integration for the sake of a script "
+        "HACS never distributes. Read-only: it observes, never assigns."
+    ),
+    ("hardware_check.py", "noqa: BLE001"): (
+        "Twenty-three sites, each wrapping one hardware interaction whose "
+        "failure IS the result being reported. A narrower except would let an "
+        "unanticipated error abort the run and discard every check already "
+        "recorded, which is the opposite of what a diagnostic script should "
+        "do. The exception type is always printed, never swallowed."
+    ),
+    ("hardware_check.py", "noqa: PLW0603"): (
+        "One module-level colour flag, set once from the parsed arguments "
+        "before any output is produced. Threading it through every print in a "
+        "1400-line report script would be a large change for no behavioural "
+        "difference, and the alternative — a module-level mutable default — is "
+        "worse."
+    ),
+    ("hardware_check.py", "pragma: no cover"): (
+        "The import guard that tells an operator running the script from the "
+        "wrong directory what to do about it. It is reachable only when the "
+        "component is not importable, which is by definition not a state the "
+        "test suite can be in."
+    ),
+    ("test_transport_seam.py", "noqa: BLE001"): (
+        "`_drive_until_it_gives_up` returns whatever the failing poll raised "
+        "so the test can assert on its type and message. Naming a type here "
+        "would move the assertion out of the test and into the helper, and the "
+        "point of several of those tests is precisely *which* exception "
+        "arrived. Nothing is swallowed: the exception is returned to the "
+        "caller, which asserts on it."
+    ),
+    ("transport.py", "pragma: no cover"): (
+        "The unknown-fault-mode guard in the test router. It fires on a typo "
+        "in a test rather than on any runtime path, and covering it would mean "
+        "writing a test whose only purpose is to misspell a fault name."
+    ),
+}
+
+
+def _shipped_root():
+    """Return the project root of the **shipped** tree, not a working copy.
+
+    `mutmut` runs the suite from a `mutants/` directory holding a rewritten
+    copy of `custom_components/` and `tests/` and nothing else. This sweep is
+    about the shipped tree rather than about behavior, and every mutated copy
+    of a function carries its suppression comment again — which would turn a
+    handful of reviewed suppressions into several hundred unreviewed ones and
+    fail the run before a single mutant was tested.
+
+    Resolving from the first ancestor that actually carries a `docs/` directory
+    steps out of the mutant tree and reads what ships. It never falls back to a
+    copy and never skips: a genuinely missing tree still raises.
+    """
+    import custom_components.zte_router_5g as component
+
+    start = pathlib.Path(component.__path__[0]).parent.parent
+    for base in (start, *start.parents):
+        if (base / "docs").is_dir():
+            return base
+    raise FileNotFoundError(f"no docs/ directory found above {start}")
+
+
+def _real_comments() -> list[tuple[str, int, str]]:
+    """Return every genuine comment in the component, tests and scripts.
+
+    Uses `tokenize` rather than a regex over raw text: docstrings in these
+    projects quote directives while explaining why a past one was wrong, and a
+    text search cannot tell those apart from a live suppression. It would
+    report phantom findings, and the allow-list would fill with entries
+    matching nothing.
+    """
+    import tokenize
+
+    root = _shipped_root()
+    roots = [
+        root / "custom_components" / "zte_router_5g",
+        root / "tests",
+        root / "scripts",
+    ]
+
+    found: list[tuple[str, int, str]] = []
+    for base in roots:
+        if not base.is_dir():
+            continue
+        for path in sorted(base.rglob("*.py")):
+            if "__pycache__" in path.parts:
+                continue
+            with path.open("rb") as handle:
+                found.extend(
+                    (path.name, token.start[0], token.string)
+                    for token in tokenize.tokenize(handle.readline)
+                    if token.type == tokenize.COMMENT
+                )
+    return found
+
+
+def _live_suppressions() -> dict[tuple[str, str], list[int]]:
+    """Map (file, directive) to the lines carrying it.
+
+    The optional file-level prefix is caught deliberately: that directive at
+    the top of a module suppresses its rule for **every line in the file**,
+    which is broader than any per-line form. The prefix is kept in the captured
+    code rather than normalized away, so a file-level suppression can never be
+    reviewed as if it were one line.
+
+    The literal prefix is not written out in this comment: ruff scans comments
+    for it and would read an example as a real directive.
+    """
+    pattern = re.compile(
+        r"#\s*((?:ruff:\s*)?(?:type:\s*ignore(?:\[[^\]]*\])?"
+        r"|noqa(?::\s*[A-Z0-9, ]+)?|pragma:\s*no cover))"
+    )
+
+    live: dict[tuple[str, str], list[int]] = {}
+    for filename, line, comment in _real_comments():
+        for raw in pattern.findall(comment):
+            code = " ".join(raw.split())
+            live.setdefault((filename, code), []).append(line)
+    return live
+
+
+def test_every_suppression_is_on_the_reviewed_allow_list() -> None:
+    """No `type: ignore`, `noqa` or `pragma: no cover` without a written reason.
+
+    **If this fails, the new suppression needs a reason, not an entry.** Ask
+    what the tool would have said and whether that thing is actually true — an
+    `attr-defined` ignore on a library call is a *claim about that library*.
+    """
+    unlisted = sorted(
+        f"{filename}:{','.join(str(n) for n in lines)}  {code}"
+        for (filename, code), lines in _live_suppressions().items()
+        if (filename, code) not in ALLOWED_SUPPRESSIONS
+    )
+
+    assert not unlisted, (
+        "suppressions with no reviewed justification:\n"
+        + "\n".join(unlisted)
+        + "\n\nAdd to ALLOWED_SUPPRESSIONS with a reason, or fix the underlying "
+        "problem. Removing the suppression alone is not a fix."
+    )
+
+
+def test_allowed_suppressions_has_no_dead_entries() -> None:
+    """An allow-list entry must not outlive the suppression it covers.
+
+    A dead entry silently pre-approves the next occurrence of the same
+    directive in the same file, which is how a reviewed exception becomes an
+    unreviewed habit.
+    """
+    live = set(_live_suppressions())
+    stale = sorted(f"{f}  {c}" for (f, c) in ALLOWED_SUPPRESSIONS if (f, c) not in live)
+
+    assert not stale, (
+        "ALLOWED_SUPPRESSIONS entries that no longer match anything:\n"
+        + "\n".join(stale)
+    )
+
+
+def test_every_allowed_suppression_states_a_reason() -> None:
+    """The reason is the entire value of the allow-list.
+
+    An entry with a token justification is indistinguishable from one added to
+    make a check pass, which is the thing being guarded against.
+    """
+    thin = sorted(
+        f"{f}  {c}"
+        for (f, c), reason in ALLOWED_SUPPRESSIONS.items()
+        if len(reason.strip()) < 40
+    )
+    assert not thin, "allow-list entries with no real justification:\n" + "\n".join(
+        thin
+    )

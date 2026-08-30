@@ -210,6 +210,7 @@ async def test_no_method_silently_no_ops_on_a_dead_session(method_name, die_afte
     session = _DyingSession(die_after=die_after, revive_on_login=False)
     api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
     api.stok = "stok=stale"
+    api.session_active = True
 
     method = getattr(api, method_name)
     try:
@@ -218,6 +219,16 @@ async def test_no_method_silently_no_ops_on_a_dead_session(method_name, die_afte
         return  # Raised: the failure is visible. This is the correct outcome.
 
     if method_name in _BEST_EFFORT:
+        return
+
+    # `login` reports through the session pair rather than a return value:
+    # a router may authenticate without issuing a stok, so there is nothing
+    # meaningful to hand back (issue #56). Returning `None` is its success
+    # shape, and the equivalent assertion is that the session is now active.
+    if method_name == "login":
+        assert api.session_active, (
+            "login returned without raising and without establishing a session"
+        )
         return
 
     assert not _is_empty_result(result), (
@@ -239,6 +250,7 @@ async def test_methods_recover_when_the_session_can_be_renewed(method_name):
     session = _DyingSession(die_after=0, revive_on_login=True)
     api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
     api.stok = "stok=stale"
+    api.session_active = True
 
     result = await getattr(api, method_name)(*_CALLS[method_name])
 
@@ -293,6 +305,7 @@ async def test_write_commands_surface_a_refusal(method_name):
     session = _RefusingSession(die_after=float("inf"))
     api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
     api.stok = "stok=live"
+    api.session_active = True
 
     with pytest.raises((ZTEAuthError, ZTEConnectionError)):
         await getattr(api, method_name)(*_CALLS[method_name])
@@ -346,6 +359,7 @@ async def test_contracted_reads_reject_a_response_missing_their_key(method_name)
     session = _DriftingSession(die_after=float("inf"))
     api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
     api.stok = "stok=live"
+    api.session_active = True
 
     with pytest.raises((ZTEAuthError, ZTEConnectionError)):
         await getattr(api, method_name)(*_CALLS[method_name])
@@ -365,6 +379,7 @@ async def test_an_empty_inbox_is_not_an_error():
 
     api = ZTERouterAPI(_EmptyInbox(die_after=float("inf")), "1.2.3.4", "a", "p")
     api.stok = "stok=live"
+    api.session_active = True
     # Fresh clock, or the idle reset fires and this double cannot serve a login.
     api.last_activity = datetime.now(UTC)
     assert await api.get_sms_messages() == []

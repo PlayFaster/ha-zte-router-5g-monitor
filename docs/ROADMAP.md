@@ -27,7 +27,7 @@ Two approaches, neither yet chosen:
 
 The two are not exclusive — the counter gives a durable timeline, the store gives the detail behind it.
 
-**Worth knowing:** the `.storage` half is the same infrastructure the **Projection accuracy from cycle history** item needs. Neither exists yet. Whichever is built first should be built to serve both rather than as a one-off.
+**Worth knowing:** the `.storage` half is the same infrastructure the **Projection accuracy from cycle history** item needs — Phase 4 of `.notes/info/data_cycle_and_projection_plan.md`. Neither exists yet. Whichever is built first should be built to serve both rather than as a one-off.
 
 #### Prior art — there is no native mechanism
 
@@ -58,7 +58,7 @@ Two entities remain on the Data sub-device:
 - a **Number** for the reset day (1–31), writing `traffic_clear_date`
 - a **Switch** for `wan_auto_clear_flow_data_switch`, which decides whether monthly counters roll over at all
 
-Both keys are already polled, and the switch already drives the projection sensor's suppression logic. Neither has a user-facing control. Detail in `.notes/issues/data_cycle_and_projection_plan.md` §8.
+Both keys are already polled, and the switch already drives the projection sensor's suppression logic. Neither has a user-facing control. **Design detail — the entity inventory, the write path and its risks — is `.notes/info/data_cycle_and_projection_plan.md` §8 and §2.2.** That file is reference; this entry owns the work.
 
 **Both ship disabled by default**, matching the existing Data Limit Switch. Changing the reset day moves the boundary that the projection sensor and every data-cap automation reason about — not dangerous, but not a display setting either.
 
@@ -88,7 +88,7 @@ The README carries an auto-reboot example with the necessary glitch guards. A sh
 
 `Projected Cycle Usage` extrapolates from the cycle in flight alone, which is why it is volatile in the first few days. Storing the previous two or three cycle totals would let the estimate lean on them early and shed them as real usage accumulates — blended into the **unobserved remainder** only, so the prior's influence decays with the days remaining rather than needing a tuned constant.
 
-`helpers.project_cycle_usage()` already accepts a `prior_rate` argument. What is missing is the store. §2.4 of the same plan.
+`helpers.project_cycle_usage()` already accepts a `prior_rate` argument. What is missing is the store. **Design detail is `.notes/info/data_cycle_and_projection_plan.md` §2.4**; that file is reference and this entry owns the work.
 
 **Would be justified by:** the early-cycle volatility actually causing a bad automation decision. It is a known cosmetic weakness until then.
 

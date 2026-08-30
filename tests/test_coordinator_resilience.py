@@ -25,6 +25,8 @@ from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
     DOMAIN,
     FETCH_STRIKE_LIMIT,
+    REPAIR_AUTH_FAILED,
+    REPAIR_CONN_ERROR,
     UNREACHABLE_STRIKE_LIMIT,
 )
 from custom_components.zte_router_5g.coordinator import (
@@ -371,7 +373,7 @@ async def test_unreachable_repair_waits_out_a_reboot(coordinator, hass) -> None:
 
     assert coordinator.health_snapshot["problem"] is True
     assert (
-        registry.async_get_issue(DOMAIN, coordinator._repair_ids["router_unreachable"])
+        registry.async_get_issue(DOMAIN, coordinator._repair_ids[REPAIR_CONN_ERROR])
         is None
     )
 
@@ -389,15 +391,13 @@ async def test_unreachable_repair_raised_after_sustained_failure(
         with suppress(UpdateFailed):
             await coordinator._async_update_data()
 
-    issue = registry.async_get_issue(
-        DOMAIN, coordinator._repair_ids["router_unreachable"]
-    )
+    issue = registry.async_get_issue(DOMAIN, coordinator._repair_ids[REPAIR_CONN_ERROR])
     assert issue is not None
     assert issue.severity is ir.IssueSeverity.ERROR
     # The text names the host so the user can compare it against the router's
     # actual address — the single most useful fact when an IP has changed.
     assert issue.translation_placeholders["host"] == "192.168.0.1"
-    assert "router_unreachable" in coordinator.health_snapshot["repairs"]
+    assert REPAIR_CONN_ERROR in coordinator.health_snapshot["repairs"]
 
 
 async def test_unreachable_repair_clears_on_recovery(coordinator, hass) -> None:
@@ -410,7 +410,7 @@ async def test_unreachable_repair_clears_on_recovery(coordinator, hass) -> None:
         with suppress(UpdateFailed):
             await coordinator._async_update_data()
     assert (
-        registry.async_get_issue(DOMAIN, coordinator._repair_ids["router_unreachable"])
+        registry.async_get_issue(DOMAIN, coordinator._repair_ids[REPAIR_CONN_ERROR])
         is not None
     )
 
@@ -418,7 +418,7 @@ async def test_unreachable_repair_clears_on_recovery(coordinator, hass) -> None:
     await coordinator._async_update_data()
 
     assert (
-        registry.async_get_issue(DOMAIN, coordinator._repair_ids["router_unreachable"])
+        registry.async_get_issue(DOMAIN, coordinator._repair_ids[REPAIR_CONN_ERROR])
         is None
     )
     assert coordinator.health_snapshot["repairs"] == []
@@ -619,7 +619,9 @@ async def test_unload_clears_the_repairs_this_entry_raised(
     entry.runtime_data = coordinator
 
     coordinator._set_unreachable_repair(True)
-    assert (DOMAIN, f"{entry.entry_id}_router_unreachable") in ir.async_get(hass).issues
+    assert (DOMAIN, f"{entry.entry_id}_{REPAIR_CONN_ERROR}") in ir.async_get(
+        hass
+    ).issues
 
     with patch.object(
         hass.config_entries, "async_unload_platforms", AsyncMock(return_value=True)
@@ -628,7 +630,7 @@ async def test_unload_clears_the_repairs_this_entry_raised(
 
     assert (
         DOMAIN,
-        f"{entry.entry_id}_router_unreachable",
+        f"{entry.entry_id}_{REPAIR_CONN_ERROR}",
     ) not in ir.async_get(hass).issues
 
 
@@ -645,7 +647,7 @@ async def test_removal_clears_repairs_left_by_a_failed_unload(
     from custom_components.zte_router_5g import async_remove_entry
 
     entry.add_to_hass(hass)
-    for name in ("router_unreachable", "sms_storage_full"):
+    for name in (REPAIR_CONN_ERROR, REPAIR_AUTH_FAILED):
         ir.async_create_issue(
             hass,
             DOMAIN,
@@ -676,3 +678,30 @@ async def test_force_refresh_clears_its_flag_when_the_request_raises(coordinator
         await coordinator.async_force_refresh()
 
     assert coordinator._force_refresh_once is False
+
+
+async def test_drift_uses_its_own_strike_budget_not_the_fetch_one(
+    coordinator,
+) -> None:
+    """The two budgets must be independently movable.
+
+    They are both 3 today, so a test asserting "drift fires on the third poll"
+    passes whichever constant the code reads and proves nothing. Moving one of
+    them is the only way to tell them apart: with the drift budget patched to 5,
+    drift must still be quiet at 4 — which it would not be if the check were
+    still counting against `FETCH_STRIKE_LIMIT`.
+    """
+    await coordinator._async_update_data()
+    coordinator.api.get_all_data = AsyncMock(return_value={"renamed": "1"})
+
+    with patch(
+        "custom_components.zte_router_5g.coordinator.HEALTH_DRIFT_STRIKE_LIMIT", 5
+    ):
+        for _ in range(FETCH_STRIKE_LIMIT + 1):
+            await coordinator._async_update_data()
+        assert coordinator.health_snapshot["drift"] == [], (
+            "drift fired on the fetch budget, so the split is not real"
+        )
+
+        await coordinator._async_update_data()
+        assert coordinator.health_snapshot["drift"] == [DRIFT_CONTRACT]

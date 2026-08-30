@@ -20,6 +20,7 @@ from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
     UnitOfDataRate,
+    UnitOfFrequency,
     UnitOfInformation,
     UnitOfTemperature,
     UnitOfTime,
@@ -857,7 +858,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "MHz carries roughly four times the data of 5 MHz, all else being equal."
         ),
         translation_key="signal_lte_ca_pcell_bandwidth",
-        native_unit_of_measurement="MHz",
+        device_class=SensorDeviceClass.FREQUENCY,
+        native_unit_of_measurement=UnitOfFrequency.MEGAHERTZ,
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
@@ -883,7 +885,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "the primary band's capacity rather than replacing it."
         ),
         translation_key="signal_lte_ca_scell_bandwidth",
-        native_unit_of_measurement="MHz",
+        device_class=SensorDeviceClass.FREQUENCY,
+        native_unit_of_measurement=UnitOfFrequency.MEGAHERTZ,
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -1071,7 +1074,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="net_select",
         about=(
             "The network technology the router is currently allowed to use, as chosen "
-            "by the Network Mode control. Restricting it can stabilise a connection "
+            "by the Network Mode control. Restricting it can stabilize a connection "
             "that keeps switching between 4G and 5G."
         ),
         translation_key="signal_net_select",
@@ -1284,8 +1287,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         about=(
             "Total messages held across every storage area - router memory and SIM, "
             "inbox, sent and drafts. The breakdown per area is in this sensor's "
-            "attributes. Storage filling up stops new messages arriving, which the "
-            "Integration Health sensor flags."
+            "attributes. Storage filling up stops new messages arriving."
         ),
         translation_key="sms_msg_total",
         state_class=SensorStateClass.MEASUREMENT,
@@ -1376,7 +1378,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="sntp_server",
         about=(
-            "The time server the router synchronises its clock from. An unreachable "
+            "The time server the router synchronizes its clock from. An unreachable "
             "time server can make the timestamps on SMS messages and logs wrong, so "
             "it is worth checking if dates look implausible."
         ),

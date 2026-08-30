@@ -1,6 +1,7 @@
 {
   "filename": "zte_router_5g.zip",
   "hide_default_branch": true,
+  "homeassistant": "2024.8.0",
   "name": "ZTE Router 5G Monitor",
   "render_readme": true,
   "zip_release": true

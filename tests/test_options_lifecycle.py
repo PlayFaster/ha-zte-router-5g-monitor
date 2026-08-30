@@ -188,6 +188,7 @@ async def test_logout_swallows_errors_and_clears_session(hass: HomeAssistant) ->
     """
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
     api.stok = "stok=live-session"
+    api.session_active = True
 
     with patch.object(
         api, "_request", AsyncMock(side_effect=ZTEConnectionError("router gone"))
@@ -206,6 +207,7 @@ async def test_logout_sends_an_ad_token(hass: HomeAssistant) -> None:
     """
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
     api.stok = "stok=live-session"
+    api.session_active = True
 
     with (
         patch.object(api, "get_ad", AsyncMock(return_value="deadbeef")),

@@ -16,36 +16,46 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 
 ## Validated Signal Limits
 
-| Metric Category | Metric Name | Min | Max | Action if Out of Bounds |
-| :-- | :-- | :-- | :-- | :-- |
-| **Signal Power** | RSRP (5G/LTE) | -140 | -30 | Set to `Unknown` |
-|  | RSRQ (5G/LTE) | -40 | 0 | Set to `Unknown` |
-|  | RSSI (5G/LTE) | -120 | -20 | Set to `Unknown` |
-|  | Legacy RSSI | -120 | -20 | Disabled by default. Separate entity from the LTE and 5G RSSI sensors above. |
-|  | Legacy RSCP | -120 | -20 | Disabled by default. Separate entity from the LTE and 5G RSSI sensors above. |
-| **Signal Quality** | SNR | -20 | 50 | Set to `Unknown` |
-| **Diagnostics** | Signal Bars | 0 | 5 | The router's own 0-5 rating; anything outside it is not a rating. |
-|  | Uptime Duration | 0 | — | Seconds since boot cannot be negative. No ceiling — a long-running router is not an error. |
-| **Data Usage** | Monthly Download | 0 | — | Byte counter cannot be negative (`TOTAL_INCREASING`). No upper bound: a ceiling on an accumulating counter silently drops legitimate data. |
-|  | Monthly Upload | 0 | — | As above. |
-|  | Monthly Total | 0 | — | As above. |
-|  | Monthly Download / Upload / Total GB | 0 | — | Disabled-by-default legacy sensors. Same counters divided by 10⁹, so the same floor applies. |
-|  | Upload Speed | 0 | — | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
-|  | Download Speed | 0 | — | Prevents negative values from firmware glitches. No upper bound (5G peak varies). |
-|  | Session Sent | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
-|  | Session Received | 0 | — | Byte counter cannot be negative. Resets on reconnect (`TOTAL_INCREASING`). |
-|  | Alert Threshold | 0 | 100 | Percentage threshold. |
-|  | Allowance | 0 | 1 PiB | Confirmed against the router's own Data Management page (2 TiB cap, 1.6 TiB reminder), but the upper bound stays as a guard against a misparse reaching the statistics. |
-|  | Reset Day | 1 | 31 | Day of the month. A value outside this range is not a calendar date, whatever the router reports. |
-|  | Projected Cycle Usage | 0 | — | A projection cannot be negative. No upper bound: exceeding it is the very thing the sensor exists to warn about, so a ceiling would hide the case that matters. |
-| **Device** | Battery | 0 | 100 | Physical percentage bounds. |
-|  | Power Amplifier Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-|  | Ambient Modem Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-|  | Modem Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-|  | 5G Modem Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-|  | 5G Radio Temperature | -40 | 125 | Silicon operating range; rejects the sentinel values some firmware emits when the sensor is absent. |
-| **SMS** | Total Msg | 0 | 1000 | Sum across all NV and SIM banks. A count cannot be negative. |
-|  | Unread Msg | 0 | 1000 | A count cannot be negative. |
+<!-- GENERATED:start -->
+
+| Sub-device | Sensor key                  |    Min |                Max | Unit |
+| :--------- | :-------------------------- | -----: | -----------------: | :--- |
+| Data       | `data_allowance`            |    `0` | `1125899906842624` | B    |
+| Data       | `data_clear_day`            |    `1` |               `31` | —    |
+| Data       | `data_projection`           |    `0` |                  — | B    |
+| Data       | `data_volume_alert_percent` |    `0` |              `100` | %    |
+| Data       | `monthly_rx_bytes`          |    `0` |                  — | GB   |
+| Data       | `monthly_rx_bytes_raw`      |    `0` |                  — | B    |
+| Data       | `monthly_total_bytes`       |    `0` |                  — | GB   |
+| Data       | `monthly_total_bytes_raw`   |    `0` |                  — | B    |
+| Data       | `monthly_tx_bytes`          |    `0` |                  — | GB   |
+| Data       | `monthly_tx_bytes_raw`      |    `0` |                  — | B    |
+| Data       | `realtime_rx_bytes`         |    `0` |                  — | B    |
+| Data       | `realtime_rx_thrpt`         |    `0` |                  — | B/s  |
+| Data       | `realtime_tx_bytes`         |    `0` |                  — | B    |
+| Data       | `realtime_tx_thrpt`         |    `0` |                  — | B/s  |
+| SMS        | `msg_total`                 |    `0` |             `1000` | —    |
+| SMS        | `sms_unread_num`            |    `0` |             `1000` | —    |
+| Signal     | `lte_rsrp`                  | `-140` |              `-30` | dBm  |
+| Signal     | `lte_rsrq`                  |  `-40` |                `0` | dB   |
+| Signal     | `lte_rssi`                  | `-120` |              `-20` | dBm  |
+| Signal     | `lte_snr`                   |  `-20` |               `50` | dB   |
+| Signal     | `rscp`                      | `-120` |              `-20` | dBm  |
+| Signal     | `rssi`                      | `-120` |              `-20` | dBm  |
+| Signal     | `signalbar`                 |    `0` |                `5` | —    |
+| Signal     | `z5g_rsrp`                  | `-140` |              `-30` | dBm  |
+| Signal     | `z5g_rsrq`                  |  `-40` |                `0` | dB   |
+| Signal     | `z5g_rssi`                  | `-120` |              `-20` | dBm  |
+| Signal     | `z5g_sinr`                  |  `-20` |               `50` | dB   |
+| System     | `battery_value`             |    `0` |              `100` | %    |
+| System     | `pm_modem_5g`               |  `-40` |              `125` | °C   |
+| System     | `pm_sensor_5g`              |  `-40` |              `125` | °C   |
+| System     | `pm_sensor_ambient`         |  `-40` |              `125` | °C   |
+| System     | `pm_sensor_mdm`             |  `-40` |              `125` | °C   |
+| System     | `pm_sensor_pa1`             |  `-40` |              `125` | °C   |
+| System     | `realtime_time`             |    `0` |                  — | s    |
+
+<!-- GENERATED:end -->
 
 ---
 
@@ -82,7 +92,7 @@ Two are exempt by name, in `_UNGUARDED_BY_DESIGN`:
 
 | Sensor | Why it is safe without one |
 | :-- | :-- |
-| `lte_ca_pcell_bandwidth` | Channel width the network chose. No state class, so it never reaches long-term statistics. |
+| `lte_ca_pcell_bandwidth` | Channel width the network chose. No state class, so it never reaches long-term statistics and a bad reading cannot corrupt history — which is the whole of the exemption. Adding one would end it, and the sensor would then need bounds. |
 | `lte_ca_scell_bandwidth` | As above. |
 
 Adding a numeric sensor without bounds is therefore a deliberate act with a stated reason, not something that can happen by omission.

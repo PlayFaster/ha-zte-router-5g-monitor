@@ -17,7 +17,7 @@
 # a boundary pair, and acceptance genuinely has no observable form:
 # `_validate_sms_length` returns `None` and raises on rejection, so the only
 # available assertion is `is None`, which is the trivial bolt-on dev_standards
-# §11 forbids. Each is paired with a neighbouring test asserting the raise one
+# §11 forbids. Each is paired with a neighboring test asserting the raise one
 # character further on, and `test_a_message_between_the_two_limits_turns_on_
 # content_alone` asserts the distinction the pair exists to draw. Deleting the
 # limit check fails that third test, so these two are not the only guard.

@@ -228,6 +228,11 @@ def _kill_session(api: ZTERouterAPI, session: aiohttp.ClientSession) -> None:
     as every request is concerned.
     """
     api.stok = INVALID_STOK
+    # The session stays *marked* active. A router-side eviction does not tell
+    # the client anything, and clearing the flag here would have `_request`
+    # log in again before the probe ever went out — the opposite of what
+    # these checks watch for.
+    api.session_active = True
     session.cookie_jar.clear(predicate=lambda cookie: cookie.key == "stok")
 
 
@@ -255,7 +260,7 @@ async def check_session_assumptions(
     # answer — `_ensure_session` derives AD *after* the session is assured, so
     # the question does not arise. It is captured because a change here would
     # be the first sign that the token scheme had been reworked.
-    api.stok = await api.login()
+    await api.login()
     after_login = (await api._request("GET", RD_PATH, _retry=False))["RD"]
     report.captured["rd_survives_relogin"] = after_login == live
     print(
@@ -277,7 +282,27 @@ async def check_session_assumptions(
             "the all-values-empty rule did not fire — write recovery depends on it",
         )
 
-    api.stok = await api.login()
+    await api.login()
+
+    # The session is one piece of state held in two fields, and a site that
+    # moves one without the other is not visible from the outside: the client
+    # believes it is signed in, sends no Cookie header, and the router answers
+    # by echoing the authenticated keys back empty. Every entity then publishes
+    # `unknown` while the health sensor stays green. The pair is asserted after
+    # a kill and re-login because that is the sequence every recovery path in
+    # `_request` ends with. See issue #56 Section 4.1.
+    report.record(
+        api.session_active and api.stok is not None,
+        "the session flag and the session cookie agree after re-login",
+        f"session_active={api.session_active}, stok={'set' if api.stok else 'none'}",
+    )
+
+    # This device issues a stok. Recorded rather than scored, because a device
+    # that does not is a supported configuration — an MC888 Pro on
+    # `CR_ABPLMC888PROV1.0.1B04` binds the session to the client address and
+    # sends no cookie at all (issue #56). Capturing it makes the reference
+    # router the documented baseline for `_extract_stok`.
+    report.captured["login_issues_stok_cookie"] = api.stok is not None
 
 
 async def check_write_round_trip(
@@ -310,7 +335,7 @@ async def check_write_round_trip(
             )
         finally:
             with contextlib.suppress(Exception):
-                api.stok = await api.login()
+                await api.login()
                 if (await api.get_params([state_key]))[state_key] != original:
                     await setter(original)
                 restored = (await api.get_params([state_key]))[state_key]
@@ -425,7 +450,11 @@ async def check_logout_ends_the_session(api: ZTERouterAPI, report: Report) -> No
     except Exception as err:  # noqa: BLE001 - reporting, not handling
         report.record(False, "logout completed", f"{err}")
     else:
+        # Restore the whole session pair, not the cookie alone: `logout()`
+        # cleared both, and a replay with the flag down would log in again
+        # instead of presenting the stale token this check exists to test.
         api.stok = stale
+        api.session_active = True
         try:
             await api._request("GET", PROBE_PATH, _retry=False)
         except ZTEAuthError:
@@ -437,7 +466,7 @@ async def check_logout_ends_the_session(api: ZTERouterAPI, report: Report) -> No
                 "the session survived LOGOUT — the user's web UI stays locked",
             )
     finally:
-        api.stok = await api.login()
+        await api.login()
 
 
 # ---------------------------------------------------------------------------
@@ -1148,7 +1177,7 @@ async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
     while time.monotonic() < deadline:
         await asyncio.sleep(REBOOT_POLL)
         try:
-            api.stok = await api.login()
+            await api.login()
             uptime_after = str(
                 (await api.get_params(["realtime_time"])).get("realtime_time")
             )
@@ -1420,7 +1449,7 @@ async def main() -> int:
             session, options["host"], options.get("username"), options["password"]
         )
         await api.try_set_protocol()
-        api.stok = await api.login()
+        await api.login()
         print(f"connected to {options['host']}")
         _warn_about_competing_sessions()
 
