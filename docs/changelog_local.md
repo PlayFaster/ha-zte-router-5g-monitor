@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.4-dev26\] - 2026-08-30 - Login Form Order Aligned With Reference Implementation](#334-dev26---2026-08-30---login-form-order-aligned-with-reference-implementation)
   - [\[3.3.4-dev25\] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing](#334-dev25---2026-08-30---login-session-without-a-stok-cookie-session-state-pairing)
   - [\[3.3.4-dev24\] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README](#334-dev24---2026-08-30---ci-bump-ruff-spelling-actions-screenshot-for-readme)
@@ -194,6 +195,40 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.4] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility
+
+### Summary
+
+- **Interactive Re-authentication**: Fix button in Repairs opens a guided re-authentication dialog when the router password is changed or rejected.
+- **Cookieless Login Compatibility**: Added support for router models and firmware (such as the MC888 Pro) that authenticate without issuing a session cookie.
+- **Repairs Panel Cleanup**: Aligned repairs with Home Assistant guidelines to show actionable issues only, mapping warnings to Integration Health.
+- **Dedicated SMS Storage Sensor**: New binary sensor alerts when message storage on the SIM card or device is full.
+
+### Added
+
+- **Interactive Re-authentication Repair**: A persistent, fixable repair is raised when router credentials fail. Clicking **Fix** opens the re-authentication dialog directly to update the stored password.
+- **SMS Storage Full Binary Sensor**: Added `binary_sensor.*_sms_storage_full` (enabled by default) under the SMS sub-device to monitor when message storage on either the SIM or device is full.
+
+### Changed
+
+- **Login Form Ordering**: Routers configured without a username now post the single-user login form directly, avoiding an initial failed attempt and connection warning.
+- **Repairs Alignment**: Retired non-actionable repair cards (`firmware_contract_drift` and `sms_storage_full`). Schema changes are now tracked via `drift` on Integration Health, while message capacity is tracked by the new binary sensor. Renamed unreachable router issue to `conn_error`.
+- **Bandwidth Sensor Unit Conversion**: LTE Carrier Aggregation bandwidth sensors (`lte_ca_pcell_bandwidth` and `lte_ca_scell_bandwidth`) now declare `device_class: frequency`, allowing unit switching (MHz/GHz/kHz) in the Home Assistant UI.
+- **SMS Logging Privacy**: The sender's phone number is no longer logged at `INFO` level when receiving SMS messages; the internal message index is logged instead.
+- **Health Telemetry Drift Limit**: Split the contract drift strike limit into an independent budget (`HEALTH_DRIFT_STRIKE_LIMIT = 3`) separate from poll fetch failures.
+
+### Fixed
+
+- **Cookieless Router Authentication**: Fixed an issue where router models/firmware that authenticate without issuing a `stok` cookie (such as the ZTE MC888 Pro) failed connection setup with an unreachable router error.
+- **Session Token Detection**: Expanded session token discovery to inspect raw response headers, cookie jars across HTTP redirects, and response payloads.
+- **Repair Translation Schema Compatibility**: Corrected repair translation structure for fixable issues to adhere strictly to Home Assistant issue schema requirements.
+- **Health Snapshot Attribute Completeness**: Resolved an issue where the `repairs` attribute could be omitted from Integration Health sensor fallback snapshots.
+- **Orphaned Repair Issue Cleanup**: Ensured legacy and retired repair issue IDs are cleaned up during integration entry removal.
+
+### Under the hood
+
+- **Transport Test Harness and Coverage Enforcement**: Added full HTTP transport-level mock suites (`aioclient_mock`), enforced 100% line and branch test coverage across all authentication and recovery paths, and added suppression allow-list enforcement.
 
 ## [3.3.4-dev26] - 2026-08-30 - Login Form Order Aligned With Reference Implementation
 

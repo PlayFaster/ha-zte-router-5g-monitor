@@ -4,37 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.4] - 2026-08-26 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Telemetry Refinements
-
-Routine maintenance update refining Repair notifications, and SMS operations with no changes to daily operation; safe to skip until you are next updating integrations.
+## [3.3.4] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility
 
 ### Summary
 
-- **Interactive Re-authentication**: Fix button in Repairs now opens a guided re-authentication flow when the router password is changed or rejected.
-- **Repairs Panel Cleanup**: Aligned repairs with Home Assistant guidelines to only show actionable issues, keeping other warnings in Integration Health sensor.
-- **Dedicated SMS Storage Sensor**: New binary sensor alerts when SMS storage on the device or SIM card is full.
+- **Interactive Re-authentication**: Fix button in Repairs opens a guided re-authentication dialog when the router password is changed or rejected.
+- **Cookieless Login Compatibility**: Added support for router models and firmware (such as the MC888 Pro) that authenticate without issuing a session cookie.
+- **Repairs Panel Cleanup**: Aligned repairs with Home Assistant guidelines to show actionable issues only, mapping warnings to Integration Health.
+- **Dedicated SMS Storage Sensor**: New binary sensor alerts when message storage on the SIM card or device is full.
 
 ### Added
 
 - **Interactive Re-authentication Repair**: A persistent, fixable repair is raised when router credentials fail. Clicking **Fix** opens the re-authentication dialog directly to update the stored password.
-- **SMS Storage Full Binary Sensor**: Added `binary_sensor.*_sms_storage_full` under the SMS sub-device to track when message storage on either the SIM or device is full.
+- **SMS Storage Full Binary Sensor**: Added `binary_sensor.*_sms_storage_full` (enabled by default) under the SMS sub-device to monitor when message storage on either the SIM or device is full.
 
 ### Changed
 
+- **Login Form Ordering**: Routers configured without a username now post the single-user login form directly, avoiding an initial failed attempt and connection warning.
 - **Repairs Alignment**: Retired non-actionable repair cards (`firmware_contract_drift` and `sms_storage_full`). Schema changes are now tracked via `drift` on Integration Health, while message capacity is tracked by the new binary sensor. Renamed unreachable router issue to `conn_error`.
 - **Bandwidth Sensor Unit Conversion**: LTE Carrier Aggregation bandwidth sensors (`lte_ca_pcell_bandwidth` and `lte_ca_scell_bandwidth`) now declare `device_class: frequency`, allowing unit switching (MHz/GHz/kHz) in the Home Assistant UI.
-- **SMS Logging Privacy**: The sender's phone number is no longer logged in the users HA log at `INFO` level when receiving SMS messages; the internal message index is logged instead.
+- **SMS Logging Privacy**: The sender's phone number is no longer logged at `INFO` level when receiving SMS messages; the internal message index is logged instead.
 - **Health Telemetry Drift Limit**: Split the contract drift strike limit into an independent budget (`HEALTH_DRIFT_STRIKE_LIMIT = 3`) separate from poll fetch failures.
 
 ### Fixed
 
+- **Cookieless Router Authentication**: Fixed an issue where router models/firmware that authenticate without issuing a `stok` cookie (such as the ZTE MC888 Pro) failed connection setup with an unreachable router error.
+- **Session Token Detection**: Expanded session token discovery to inspect raw response headers, cookie jars across HTTP redirects, and response payloads.
 - **Repair Translation Schema Compatibility**: Corrected repair translation structure for fixable issues to adhere strictly to Home Assistant issue schema requirements.
 - **Health Snapshot Attribute Completeness**: Resolved an issue where the `repairs` attribute could be omitted from Integration Health sensor fallback snapshots.
 - **Orphaned Repair Issue Cleanup**: Ensured legacy and retired repair issue IDs are cleaned up during integration entry removal.
 
 ### Under the hood
 
-- **Transport Test Harness and Coverage Enforcement**: Added full HTTP transport-level mock suites (`aioclient_mock`), enforced 100% line and branch test coverage, and added suppression allow-list enforcement.
+- **Transport Test Harness and Coverage Enforcement**: Added full HTTP transport-level mock suites (`aioclient_mock`), enforced 100% line and branch test coverage across all authentication and recovery paths, and added suppression allow-list enforcement.
 
 ---
 
@@ -372,7 +374,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
-  - [\[3.3.4\] - 2026-08-26 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Telemetry Refinements](#334---2026-08-26---release-re-authentication-repair-flow-sms-storage-sensor-and-telemetry-refinements)
+  - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.3\] - 2026-08-08 - Release: SMS Bugfix and Polling Resilience](#333---2026-08-08---release-sms-bugfix-and-polling-resilience)
   - [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Telemetry](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-and-health-telemetry)
   - [\[3.2.5\] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening](#325---2026-07-03---release-refresh-now-button-display-units-and-config-flow-hardening)
