@@ -5,6 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev24\] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README](#334-dev24---2026-08-30---ci-bump-ruff-spelling-actions-screenshot-for-readme)
+  - [\[3.3.4-dev23\] - 2026-08-27 - Project Structure Reference Sync; Ha-Compatibility and Test Harness Additions](#334-dev23---2026-08-27---project-structure-reference-sync-ha-compatibility-and-test-harness-additions)
   - [\[3.3.4-dev22\] - 2026-08-27 - Ruff rules aligned; Repairs info in README; AGENTS align](#334-dev22---2026-08-27---ruff-rules-aligned-repairs-info-in-readme-agents-align)
   - [\[3.3.4-dev21\] - 2026-08-26 - Documentation: README Repairs and Health Section Alignment](#334-dev21---2026-08-26---documentation-readme-repairs-and-health-section-alignment)
   - [\[3.3.4-dev20\] - 2026-08-26 - Contract Sweep Naming And Vacuity Guards; Queue References Removed](#334-dev20---2026-08-26---contract-sweep-naming-and-vacuity-guards-queue-references-removed)
@@ -190,6 +192,27 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.4-dev24] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README
+
+### Bumps
+
+- **Validate Bump**: Update `ruff` from 0.16.3 to 0.16.3
+
+### Changed
+
+- **About Notes Spelling**: UK to US spelling updates on some About attribute notes.
+- **`README.md`**: Updated with SMS Actions screenshot, list, from the Automations editor.
+
+## [3.3.4-dev23] - 2026-08-27 - Project Structure Reference Sync; Ha-Compatibility and Test Harness Additions
+
+### Summary
+
+Synchronized `.notes/proj_structure.md` with current repository architecture, recording `repairs.py`, `docs/ha_compatibility.md`, eight new test suites and simulation harnesses, and internal note folders.
+
+### Changed
+
+- **Project Structure Mapping**: Updated `.notes/proj_structure.md` (v1.1.7) to record `repairs.py`, `docs/ha_compatibility.md`, 8 new test suites and test harness (`test_health_contract.py`, `test_publish_moment.py`, `test_repairs.py`, `test_session_detection.py`, `test_transport_seam.py`, `test_write_classification.py`, `test_write_payload_shapes.py`, `transport.py`), and internal notes directories (`test_pytest_issues/`, `whatsnext.md`).
 
 ## [3.3.4-dev22] - 2026-08-27 - Ruff rules aligned; Repairs info in README; AGENTS align
 

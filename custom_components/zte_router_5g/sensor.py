@@ -1074,7 +1074,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="net_select",
         about=(
             "The network technology the router is currently allowed to use, as chosen "
-            "by the Network Mode control. Restricting it can stabilise a connection "
+            "by the Network Mode control. Restricting it can stabilize a connection "
             "that keeps switching between 4G and 5G."
         ),
         translation_key="signal_net_select",
@@ -1287,8 +1287,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         about=(
             "Total messages held across every storage area - router memory and SIM, "
             "inbox, sent and drafts. The breakdown per area is in this sensor's "
-            "attributes. Storage filling up stops new messages arriving, which the "
-            "Integration Health sensor flags."
+            "attributes. Storage filling up stops new messages arriving."
         ),
         translation_key="sms_msg_total",
         state_class=SensorStateClass.MEASUREMENT,
@@ -1379,7 +1378,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="sntp_server",
         about=(
-            "The time server the router synchronises its clock from. An unreachable "
+            "The time server the router synchronizes its clock from. An unreachable "
             "time server can make the timestamps on SMS messages and logs wrong, so "
             "it is worth checking if dates look implausible."
         ),

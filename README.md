@@ -624,7 +624,9 @@ There is also an SMS received event and four SMS actions to **send, read and del
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-![SMS Screen](.github/images/zte_5g_sms_info.png)
+| SMS Screen | SMS Actions |
+| :-: | :-: |
+| ![SMS Screen](.github/images/zte_5g_sms_info.png) | ![SMS Actions](.github/images/zte_5g_action_list.png) |
 
 - The `Recent Msg` sensor displays the most recent message received **OR** _sent_.
 - In addition to the sensor entities, there is

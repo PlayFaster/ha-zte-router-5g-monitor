@@ -46,7 +46,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | :-- | :-- | :-- | :-- |
 | SMS Storage Full | Binary sensor | `sms_storage_full` | On when message storage has no room left. A full store makes the network stop delivering new messages, and nothing else in the integration reports that - which is the whole reason this entity exists. |
 | Recent Msg | Sensor | `msg_recent` | The most recently received message. Sender, date and storage index are in the attributes; the index is what the delete action needs to remove this specific message. |
-| Total Msg | Sensor | `msg_total` | Total messages held across every storage area - router memory and SIM, inbox, sent and drafts. The breakdown per area is in this sensor's attributes. Storage filling up stops new messages arriving, which the Integration Health sensor flags. |
+| Total Msg | Sensor | `msg_total` | Total messages held across every storage area - router memory and SIM, inbox, sent and drafts. The breakdown per area is in this sensor's attributes. Storage filling up stops new messages arriving. |
 
 ## Signal (39)
 
@@ -70,7 +70,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | LTE SNR | Sensor | `lte_snr` | Signal-to-Noise Ratio for 4G, in dB - how far the wanted signal rises above the background noise. This is the best predictor of achievable speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 | MDM MCC | Sensor | `mdm_mcc` | Mobile Country Code - a three-digit code identifying the country of the network the modem is attached to (for example 272 = Ireland). |
 | MDM MNC | Sensor | `mdm_mnc` | Mobile Network Code - identifies the individual operator within that country. Together with the MCC it uniquely names the network you are on. |
-| Network Mode | Sensor | `net_select` | The network technology the router is currently allowed to use, as chosen by the Network Mode control. Restricting it can stabilise a connection that keeps switching between 4G and 5G. |
+| Network Mode | Sensor | `net_select` | The network technology the router is currently allowed to use, as chosen by the Network Mode control. Restricting it can stabilize a connection that keeps switching between 4G and 5G. |
 | Network Provider | Sensor | `network_provider` | The mobile network the router is registered to. This can differ from the SIM's home network while roaming. |
 | Network Type | Sensor | `network_type` | The connection technology in use. ENDC and LTE-NSA are both 5G non-standalone, where a 4G anchor carries the connection alongside a 5G carrier: ENDC means the 5G carrier is actually in use, LTE-NSA means the router is attached for 5G but is running on the 4G anchor alone, which is what weak 5G coverage looks like. Plain LTE means no 5G at all. |
 | 5G Active Band | Sensor | `nr5g_action_band` | The active 5G NR band. Bands below 1 GHz reach furthest, mid-band (around 3.5 GHz) is the usual balance of speed and coverage, and high bands are fastest over the shortest distance. |
@@ -115,7 +115,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Uptime Duration | Sensor | `realtime_time` | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp, which is usually the easier one to automate against. |
 | SIM ICCID | Sensor | `sim_iccid` | Integrated Circuit Card ID - the SIM card's own serial number, printed on the card itself. Useful for identifying which SIM is in the router without opening it. |
 | SIM IMSI | Sensor | `sim_imsi` | International Mobile Subscriber Identity - the unique number identifying your SIM's subscription on the network, as distinct from the IMEI which identifies the hardware. |
-| Time Server (SNTP) | Sensor | `sntp_server` | The time server the router synchronises its clock from. An unreachable time server can make the timestamps on SMS messages and logs wrong, so it is worth checking if dates look implausible. |
+| Time Server (SNTP) | Sensor | `sntp_server` | The time server the router synchronizes its clock from. An unreachable time server can make the timestamps on SMS messages and logs wrong, so it is worth checking if dates look implausible. |
 | Router Timezone | Sensor | `sntp_timezone` | The router's configured base timezone and Daylight Saving Time (DST) offset - for example '0-1' represents base offset UTC+0 with DST active. |
 | Firmware Version | Sensor | `wa_inner_version` | The router's firmware build string. Worth recording before a firmware update, so you can tell what changed if the router starts behaving differently afterwards. |
 | WAN IP Address | Sensor | `wan_ipaddr` | The address your ISP has given the router on the mobile network - what the internet sees. Often a shared carrier-grade NAT address, which is why inbound connections and port forwarding usually do not work on mobile broadband. |
