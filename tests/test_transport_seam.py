@@ -121,10 +121,10 @@ async def test_the_login_bootstrap_completes(hass: HomeAssistant, router) -> Non
     """
     api = real_api(hass)
 
-    stok = await api.login()
+    await api.login()
 
-    assert stok == "stok=s1"
     assert api.stok == "stok=s1"
+    assert api.session_active
 
 
 async def test_a_poll_derives_its_values_from_the_wire(coordinator) -> None:

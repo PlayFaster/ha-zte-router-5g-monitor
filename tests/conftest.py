@@ -4,6 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from multidict import CIMultiDict
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 
@@ -69,7 +70,12 @@ class MockResponse:
         self._json_data = json_data
         self.status = status
         self.cookies = cookies or {}
-        self.headers = headers or {"Content-Type": "application/json"}
+        # `CIMultiDict`, not a plain dict: aiohttp hands back a multi-dict, and
+        # `Set-Cookie` is the header that actually repeats. Faking it with a
+        # dict hid `getall` from anything reading the raw headers.
+        self.headers = CIMultiDict(
+            headers if headers is not None else {"Content-Type": "application/json"}
+        )
         self._url = url
 
     @property

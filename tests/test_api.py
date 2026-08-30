@@ -116,8 +116,9 @@ async def test_api_login_success(mock_aiohttp_client):
         cookies={"stok": mock_stok_cookie}
     )
 
-    stok = await api.login()
-    assert stok == "stok=test_stok"
+    await api.login()
+    assert api.stok == "stok=test_stok"
+    assert api.session_active
     assert api.stok == "stok=test_stok"
 
 
@@ -144,7 +145,9 @@ async def test_api_login_failure_no_stok(mock_aiohttp_client):
     ]
     mock_aiohttp_client.post.return_value = MockResponse(json_data={}, cookies={})
 
-    with pytest.raises(ZTEConnectionError, match="Failed to obtain stok"):
+    with pytest.raises(
+        ZTEConnectionError, match="Failed to establish a session at login"
+    ):
         await api.login()
 
 
@@ -153,6 +156,7 @@ async def test_api_get_all_data_expired_session(mock_aiohttp_client):
     """Test session expiry handling in get_all_data."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=old_stok"
+    api.session_active = True
 
     # 1. Expired response (empty network_type/signalbar)
     # 2. Success response after re-login
@@ -172,6 +176,7 @@ async def test_api_get_all_data_retry_exhausted(mock_aiohttp_client):
     """Test get_all_data when re-login also returns empty data."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=old_stok"
+    api.session_active = True
 
     # Both calls return empty data — retry is exhausted, raises ZTEAuthError
     mock_aiohttp_client.get.side_effect = [
@@ -190,6 +195,7 @@ async def test_api_get_all_data_error(mock_aiohttp_client):
     """Test technical data fetch error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     mock_aiohttp_client.get.side_effect = aiohttp.ClientError("Network Error")
     with pytest.raises(ZTEConnectionError, match="Request failed: Network Error"):
         await api.get_all_data()
@@ -201,6 +207,7 @@ async def test_api_get_sms_capacity(mock_aiohttp_client):
     """Test SMS capacity fetch."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     # Real capacity shape, captured from an MC7010 on 2026-07-27. The previous
     # fixture was `{"cap": 100}` — a shape this router never returns, which let
@@ -219,6 +226,7 @@ async def test_api_get_sms_capacity_error(mock_aiohttp_client):
     """Test SMS capacity fetch error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     mock_aiohttp_client.get.side_effect = aiohttp.ClientError("Fail")
     with pytest.raises(ZTEConnectionError):
         await api.get_sms_capacity()
@@ -229,6 +237,7 @@ async def test_api_get_last_sms_content(mock_aiohttp_client):
     """Test last SMS fetching and decoding."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={
@@ -254,6 +263,7 @@ async def test_api_get_last_sms_content_empty(mock_aiohttp_client):
     """Test last SMS fetching when mailbox is empty."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.post.return_value = MockResponse(json_data={"messages": []})
     assert await api.get_last_sms_content() == {}
@@ -264,6 +274,7 @@ async def test_api_reboot_success(mock_aiohttp_client):
     """Test reboot command success."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     with (
         patch.object(api, "login", return_value="stok=test"),
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -279,6 +290,7 @@ async def test_api_reboot_error(mock_aiohttp_client):
     """Test reboot command failure."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     with (
         patch.object(api, "login"),
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -294,6 +306,7 @@ async def test_api_delete_sms(mock_aiohttp_client):
     """Test single SMS deletion."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with patch.object(api, "get_ad", return_value="test_ad"):
         mock_aiohttp_client.post.return_value = MockResponse(
@@ -307,6 +320,7 @@ async def test_api_delete_sms_exception(mock_aiohttp_client):
     """Test single SMS deletion exception handling."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with patch.object(api, "get_ad", return_value="test_ad"):
         mock_aiohttp_client.post.side_effect = aiohttp.ClientError("Delete Fail")
@@ -320,6 +334,7 @@ async def test_api_delete_all_success(mock_aiohttp_client):
     """Test bulk SMS deletion logic."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
 
     mock_aiohttp_client.post.side_effect = [
         MockResponse(json_data={"messages": [{"id": "1"}, {"id": "2"}]}),
@@ -335,6 +350,7 @@ async def test_api_delete_all_empty(mock_aiohttp_client):
     """Test bulk SMS deletion when no messages exist."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     mock_aiohttp_client.post.return_value = MockResponse(json_data={"messages": []})
     with patch.object(api, "login"):
         assert await api.delete_all() == 200
@@ -359,6 +375,7 @@ async def test_api_get_rd_error(mock_aiohttp_client):
     """Test RD fetch error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=fake"
+    api.session_active = True
     mock_aiohttp_client.get.side_effect = aiohttp.ClientError("Fail")
     with pytest.raises(ZTEConnectionError):
         await api.get_rd()
@@ -369,6 +386,7 @@ async def test_api_send_sms_success(mock_aiohttp_client):
     """Test successful SMS sending."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with patch.object(api, "get_ad", return_value="test_ad"):
         mock_aiohttp_client.post.return_value = MockResponse(
@@ -382,6 +400,7 @@ async def test_api_get_sms_messages_success(mock_aiohttp_client):
     """Test fetching and decoding list of SMS messages."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={
@@ -408,6 +427,7 @@ async def test_api_get_sms_messages_error(mock_aiohttp_client):
     """Test get_sms_messages error handling."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=fake"
+    api.session_active = True
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"LD": "test_ld"})
     mock_aiohttp_client.post.side_effect = aiohttp.ClientError("Fetch Fail")
     with pytest.raises(ZTEConnectionError):
@@ -429,9 +449,17 @@ async def test_request_inactivity_threshold(elapsed, stok_cleared, mock_aiohttp_
     """1F: Stok is cleared only when last_activity gap is strictly greater than 150s."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=existing"
+    api.session_active = True
     api.last_activity = datetime.now(UTC) - timedelta(seconds=elapsed)
 
-    with patch.object(api, "login", return_value="stok=new") as mock_login:
+    # `login()` establishes the session pair rather than returning a token,
+    # so the stand-in has to do the same: a `return_value` would leave the
+    # idle-reset path looking like a login that changed nothing.
+    async def _fake_login(*_args, **_kwargs):
+        api.stok = "stok=new"
+        api.session_active = True
+
+    with patch.object(api, "login", side_effect=_fake_login) as mock_login:
         mock_aiohttp_client.get.return_value = MockResponse(
             json_data={"network_type": "LTE", "signalbar": "4"}
         )
@@ -439,6 +467,7 @@ async def test_request_inactivity_threshold(elapsed, stok_cleared, mock_aiohttp_
         if stok_cleared:
             mock_login.assert_called_once()
             assert api.stok == "stok=new"
+            assert api.session_active
         else:
             mock_login.assert_not_called()
             assert api.stok == "stok=existing"
@@ -469,6 +498,7 @@ async def test_api_set_apn_success(mock_aiohttp_client):
     """Test set_apn calls the right endpoint."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -526,6 +556,7 @@ async def test_api_set_apn_mode_manual_sends_the_complete_form(mock_aiohttp_clie
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -555,6 +586,7 @@ async def test_apn_mode_manual_follows_the_active_apn_not_the_stale_index(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -577,6 +609,7 @@ async def test_apn_mode_manual_refuses_when_no_profile_matches(mock_aiohttp_clie
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     state = {
         "APN_config1": "3broadband.ie($)3broadband.ie" + _IP,
@@ -606,6 +639,7 @@ async def test_apn_mode_manual_trusts_the_index_when_already_manual(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     state = {**_APN_PROFILES, "apn_mode": "manual", "apn_index": "0", "wan_apn": ""}
     with (
@@ -629,6 +663,7 @@ async def test_api_set_apn_mode_auto_falls_back_to_the_bare_form(mock_aiohttp_cl
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -651,6 +686,7 @@ async def test_api_set_apn_mode_auto_prefers_the_complete_form(mock_aiohttp_clie
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -669,6 +705,7 @@ async def test_api_set_apn_mode_error(mock_aiohttp_client):
     """Test set_apn_mode propagates connection error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -684,6 +721,7 @@ async def test_api_set_odu_led_switch_on(mock_aiohttp_client):
     """Test set_odu_led_switch turns the LED on."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -702,6 +740,7 @@ async def test_api_set_odu_led_switch_off(mock_aiohttp_client):
     """Test set_odu_led_switch turns the LED off."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -720,6 +759,7 @@ async def test_api_set_data_limit_switch_on(mock_aiohttp_client):
     """Test set_data_limit_switch enables data limit."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -744,6 +784,7 @@ async def test_api_set_data_limit_switch_off(mock_aiohttp_client):
     """Test set_data_limit_switch disables data limit."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -762,6 +803,7 @@ async def test_api_set_bearer_preference(mock_aiohttp_client):
     """Test set_bearer_preference calls the right endpoint."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -780,6 +822,7 @@ async def test_api_set_bearer_preference_only_5g(mock_aiohttp_client):
     """Test set_bearer_preference with Only_5G."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -798,6 +841,7 @@ async def test_api_set_bearer_preference_error(mock_aiohttp_client):
     """Test set_bearer_preference propagates connection error."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -876,6 +920,7 @@ async def test_expired_session_on_sms_relogs_in_and_returns_messages(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=dead"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)  # inside the 150s guard, so it stays quiet
 
     responses = [
@@ -906,6 +951,7 @@ async def test_persistently_dead_session_raises_instead_of_returning_empty(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=dead"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     mock_aiohttp_client.post = MagicMock(
@@ -933,6 +979,7 @@ async def test_missing_contract_key_raises_even_if_expiry_undetected(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=live"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     # Non-empty values, so the expiry rule does NOT fire — but no `messages`.
@@ -951,6 +998,7 @@ async def test_empty_inbox_still_returns_empty_list(mock_aiohttp_client):
     """Guard against over-correction: a real empty inbox must not raise."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=live"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     mock_aiohttp_client.post = MagicMock(
@@ -994,7 +1042,8 @@ async def test_login_falls_back_to_the_alternate_form(mock_aiohttp_client):
         MockResponse(cookies={"stok": _stok_cookie()}),
     ]
 
-    assert await api.login() == "stok=test_stok"
+    await api.login()
+    assert api.stok == "stok=test_stok"
     assert _login_forms(mock_aiohttp_client) == ["LOGIN_MULTI_USER", "LOGIN"]
 
 
@@ -1014,7 +1063,8 @@ async def test_login_fallback_is_the_other_form_either_way_round(mock_aiohttp_cl
         MockResponse(cookies={"stok": _stok_cookie("fb")}),
     ]
 
-    assert await api.login() == "stok=fb"
+    await api.login()
+    assert api.stok == "stok=fb"
     assert _login_forms(mock_aiohttp_client) == ["LOGIN", "LOGIN_MULTI_USER"]
 
 
@@ -1096,7 +1146,8 @@ async def test_login_success_on_the_primary_form_makes_no_second_attempt(
         cookies={"stok": _stok_cookie()}
     )
 
-    assert await api.login() == "stok=test_stok"
+    await api.login()
+    assert api.stok == "stok=test_stok"
     assert mock_aiohttp_client.post.call_count == 1
 
 
@@ -1105,6 +1156,7 @@ async def test_send_sms_declares_gsm7_for_plain_text(mock_aiohttp_client):
     """Plain text gets 160 characters per segment instead of 70."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "get_ad", return_value="test_ad"):
@@ -1125,6 +1177,7 @@ async def test_send_sms_declares_unicode_when_the_text_needs_it(mock_aiohttp_cli
     """One character outside GSM 03.38 forces UNICODE for the whole message."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "get_ad", return_value="test_ad"):
@@ -1146,6 +1199,7 @@ async def test_get_all_data_requests_every_aliased_key(mock_aiohttp_client):
     """An alias in sensor.py can never fire if the key is not asked for here."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"cell_id": "1"})
 
@@ -1187,6 +1241,7 @@ async def test_get_all_data_params_have_no_duplicates(mock_aiohttp_client):
     """A duplicated key lengthens every poll URL and buys nothing."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"cell_id": "1"})
 
@@ -1215,6 +1270,7 @@ async def test_unauthenticated_call_does_not_refresh_the_session_clock(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=stale"
+    api.session_active = True
     stale = datetime.now(UTC) - timedelta(seconds=10_000)
     api.last_activity = stale
 
@@ -1233,6 +1289,7 @@ async def test_authenticated_call_does_refresh_the_session_clock(mock_aiohttp_cl
     """The other half: a real authenticated call proves the session is alive."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=live"
+    api.session_active = True
     stale = datetime.now(UTC) - timedelta(seconds=10)
     api.last_activity = stale
 
@@ -1249,6 +1306,7 @@ async def test_idle_session_is_reset_before_a_write_after_a_long_pause(
     """End-to-end shape of the reported bug: pause, idle out, then send."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=stale"
+    api.session_active = True
     api.last_activity = datetime.now(UTC) - timedelta(seconds=10_000)
 
     mock_aiohttp_client.get.return_value = MockResponse(
@@ -1301,6 +1359,7 @@ async def test_write_commands_raise_when_the_router_refuses(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "get_ad", return_value="ad"):
@@ -1325,6 +1384,7 @@ async def test_write_commands_accept_success(mock_aiohttp_client, method, args):
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "get_ad", return_value="ad"):
@@ -1375,6 +1435,7 @@ async def test_write_commands_tolerate_a_response_with_no_result_key(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "get_ad", return_value="ad"):
@@ -1394,6 +1455,7 @@ async def test_reboot_still_raises_on_an_explicit_refusal(mock_aiohttp_client):
     """An intact `result=failure` means the router declined, not that it restarted."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     with patch.object(api, "get_ad", return_value="ad"):
@@ -1421,6 +1483,7 @@ async def test_batch_poll_urls_stay_within_the_router_budget(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"cell_id": "1"})
 
@@ -1449,6 +1512,7 @@ async def test_data_volume_write_sends_every_field(mock_aiohttp_client):
     """A partial payload is refused by the router, so all six must be sent."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -1474,6 +1538,7 @@ async def test_data_volume_write_reads_the_clear_day_aliases(mock_aiohttp_client
     """Hardware spelling the reset day differently must still be writable."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     current = {
         **{k: v for k, v in _DATA_VOLUME_STATE.items() if k != "traffic_clear_date"},
@@ -1503,6 +1568,7 @@ async def test_data_volume_write_refuses_to_guess_a_missing_field(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     current = {k: v for k, v in _DATA_VOLUME_STATE.items() if k != dropped}
 
@@ -1521,6 +1587,7 @@ async def test_data_volume_write_treats_empty_as_missing(mock_aiohttp_client):
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     current = {**_DATA_VOLUME_STATE, "data_volume_limit_size": ""}
 
@@ -1533,6 +1600,7 @@ async def test_data_limit_switch_routes_through_the_form(mock_aiohttp_client):
     """One write path for this form, so the two cannot drift apart."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -1586,6 +1654,7 @@ async def test_a_write_checks_the_session_before_deriving_its_token(
     """`get_ad` is the choke point every write passes through."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=live"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     mock_aiohttp_client.get.side_effect = [
@@ -1612,6 +1681,7 @@ async def test_a_dead_session_is_renewed_before_the_token_is_built(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=stale"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     mock_aiohttp_client.get.side_effect = [
@@ -1641,6 +1711,7 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=live"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
 
     mock_aiohttp_client.get.side_effect = [
@@ -1673,6 +1744,7 @@ async def test_targeted_read_of_empty_keys_is_not_a_dead_session(mock_aiohttp_cl
     """Legitimately empty fields must not look like an expired session."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(
         json_data={
@@ -1697,6 +1769,7 @@ async def test_the_sentinel_is_not_added_twice(mock_aiohttp_client):
     """Asking for the sentinel explicitly must not duplicate it in the URL."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=test"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(
         json_data={"wan_connect_status": "ppp_connected"}
@@ -1717,6 +1790,7 @@ async def test_a_genuinely_dead_session_is_still_detected(mock_aiohttp_client):
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=stale"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(
         json_data={"ODU_led_switch": "", "wan_connect_status": ""}
@@ -1746,6 +1820,7 @@ async def test_a_non_dict_json_body_skips_the_session_check(mock_aiohttp_client)
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.stok = "stok=live"
+    api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data=[])
 

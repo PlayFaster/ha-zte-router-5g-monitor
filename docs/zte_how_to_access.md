@@ -39,7 +39,18 @@ Login is a challenge-response over SHA-256, not a credential POST. Four steps, i
 3. **Hash twice.** `SHA256(password)` → uppercase → concatenate `LD` → `SHA256` again → uppercase. Both uppercase steps are required; the router rejects lowercase digests.
 4. **`POST goform_set_cmd_process`** with `goformId=LOGIN` or `LOGIN_MULTI_USER`, `password=<the double hash>`, and `username=` when a username is configured.
 
-The session token arrives as a **`stok` cookie**, which is then sent as a literal `Cookie: stok=<value>` header on every subsequent request. The value is stripped of surrounding double quotes before use (`api.py:354`) — some firmware quotes it, and passing the quoted form back produces a silent session failure rather than an error.
+The session token arrives as a **`stok` cookie**, which is then sent as a literal `Cookie: stok=<value>` header on every subsequent request. The value is stripped of surrounding double quotes before use — some firmware quotes it, and passing the quoted form back produces a silent session failure rather than an error.
+
+**Not every firmware issues one.** An MC888 Pro on `CR_ABPLMC888PROV1.0.1B04` answers a successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie` at all, binding the session to the client address instead; reported as issue #56 and analyzed in `.notes/issues/other_router_access/mc888_pro_login_failed_missing_stok_56.md`. A login is therefore established on a cookie **or** an explicit success `result`, and a session with no cookie sends no `Cookie` header. A response carrying neither a cookie nor a success `result` has established nothing and is reported as a connection error.
+
+The token is looked for in four places before that conclusion is drawn (`_extract_stok`), because a token that exists but is not found is worse than none — the session is replayed without it and the router answers by echoing the authenticated keys back empty:
+
+| Source | Why it is needed |
+| :-- | :-- |
+| `r.cookies` | The documented case |
+| Raw `Set-Cookie` headers, matched case-insensitively | `SimpleCookie` morsel names are case-sensitive, and it drops a header it cannot parse without raising |
+| The session cookie jar | `session.post` follows redirects and `r.cookies` carries only the final response; a token set on an intermediate `302` is reachable nowhere else. `login()` empties the jar before posting, so anything found there was set by that request |
+| A `stok` key in the response body | Read from the body already parsed for `result`, so it costs no extra request |
 
 ### `LOGIN` vs `LOGIN_MULTI_USER` — a model split
 

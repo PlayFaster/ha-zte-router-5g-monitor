@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev25\] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing](#334-dev25---2026-08-30---login-session-without-a-stok-cookie-session-state-pairing)
   - [\[3.3.4-dev24\] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README](#334-dev24---2026-08-30---ci-bump-ruff-spelling-actions-screenshot-for-readme)
   - [\[3.3.4-dev23\] - 2026-08-27 - Project Structure Reference Sync; Ha-Compatibility and Test Harness Additions](#334-dev23---2026-08-27---project-structure-reference-sync-ha-compatibility-and-test-harness-additions)
   - [\[3.3.4-dev22\] - 2026-08-27 - Ruff rules aligned; Repairs info in README; AGENTS align](#334-dev22---2026-08-27---ruff-rules-aligned-repairs-info-in-readme-agents-align)
@@ -192,6 +193,30 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.4-dev25] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing
+
+### Summary
+
+Issue #56: an MC888 Pro on firmware `CR_ABPLMC888PROV1.0.1B04` answers a successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie`, binding the session to the client address instead. `_attempt_login` tested for the cookie alone, so the login was classified as a connection failure and reported as an unreachable router. The session is now two fields — the cookie and whether the router has authenticated us — established and cleared only as a pair.
+
+### Fixed
+
+- **Login on firmware that issues no session cookie**: A login is accepted on an explicit success `result` where no `stok` cookie is present. A response carrying neither a cookie nor a success `result` remains a connection error, and the credentials-rejection classification is unchanged. Analysis: `.notes/issues/other_router_access/mc888_pro_login_failed_missing_stok_56.md`.
+- **Session token recovery from three further sources**: `_extract_stok` sweeps the raw `Set-Cookie` headers case-insensitively, the session cookie jar, and a `stok` key in the response body, before concluding that no cookie was issued. `SimpleCookie` morsel names are case-sensitive and it drops headers it cannot parse; `session.post` follows redirects and `r.cookies` carries only the final response, so a token set on the intermediate `302` the reporter observed is reachable only through the jar. `login()` empties the jar before posting, so anything found there was set by that request.
+
+### Changed
+
+- **Session state is a pair, written in one place**: `ZTERouterAPI.session_active` joins `stok`. `login()` is the only site that establishes the pair and `_clear_session()` the only site that drops it, so none of the seven recovery paths in `_request` can move one field without the other. A session marked active with no cookie sends no `Cookie` header, which this API answers by echoing the authenticated keys back empty — indistinguishable from an expired session, and published as `unknown` on every entity.
+- **`login()` returns `None`**: There is no longer a token to hand back on every successful login, so callers read `api.stok` and `api.session_active` rather than the return value. `_LoginAttempt` carries `established` alongside `stok` for the same reason.
+- **`_initialize_session()` extracted**: The post-login activation GET is its own method and omits the `Cookie` header where no cookie was issued.
+
+### Testing
+
+- **`tests/test_cookieless_session.py`** (new, 14 tests): cookieless login success; no `Cookie` header and no repeated login on such a session; the neither-cookie-nor-success and credentials-rejection paths unchanged; token recovery from a raw `STOK=` header, from the jar after a redirect, and from the response body.
+- **Regression cover for the reference MC7010**, which issues a cookie and so never reaches the new path: the cookie and the flag are asserted to move together across all five renewal triggers in `_request`, a stale token seeded into the jar is asserted not to be adopted, and `logout()` is asserted to clear both fields.
+- **`scripts/hardware_check.py`**: `_kill_session()` and the logout replay set the whole pair; the six `api.stok = await api.login()` assignments follow the new signature. Check [1] now scores that the pair agrees after a kill and re-login, and records whether the device issues a `stok` cookie at all.
+- **`tests/conftest.py`**: `MockResponse.headers` is a `CIMultiDict` rather than a plain dict, which is what aiohttp returns and what `getall` requires.
 
 ## [3.3.4-dev24] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README
 
