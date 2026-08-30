@@ -804,7 +804,14 @@ class ZTERouterAPI:
             primary = "LOGIN"
         else:
             primary = "LOGIN" if not self.is_multi else "LOGIN_MULTI_USER"
-        attempt = await self._attempt_login(primary, zte_pass, tout)
+        # Derived once and only when a multi-user attempt is actually
+        # possible, so the extra unauthenticated read never lands on the
+        # single-user path — which is every login on the reference MC7010.
+        multi_ad: str | None = None
+        if self.username and version:
+            multi_ad = await self._login_ad(version, timeout_sec=tout)
+
+        attempt = await self._attempt_login(primary, zte_pass, tout, multi_ad)
 
         # Best-effort form fallback for models this integration has never seen.
         # Which form a goform router accepts is a per-model quirk and the model
@@ -820,7 +827,7 @@ class ZTERouterAPI:
                 primary,
                 fallback,
             )
-            retry = await self._attempt_login(fallback, zte_pass, tout)
+            retry = await self._attempt_login(fallback, zte_pass, tout, multi_ad)
             if retry.established:
                 _LOGGER.info(
                     "Login succeeded with fallback form %s (this router does not "
@@ -854,7 +861,7 @@ class ZTERouterAPI:
             )
 
     async def _attempt_login(
-        self, goform_id: str, zte_pass: str, tout: int
+        self, goform_id: str, zte_pass: str, tout: int, ad: str | None = None
     ) -> _LoginAttempt:
         """Post one login form and report what the router made of it.
 
@@ -869,8 +876,26 @@ class ZTERouterAPI:
             "goformId": goform_id,
             "password": zte_pass,
         }
+        # The two forms take the username under different names, and only the
+        # multi-user form carries an `AD` token. Both details follow
+        # `Kajkac/ZTE-MC-Home-assistant-repo`, the reference implementation
+        # for this hardware family; ZRM's previous shape — `username=` with no
+        # token on both forms — is not supported by any device this project
+        # can reach, since the MC7010 refuses `LOGIN_MULTI_USER` whatever it
+        # carries (measured 2026-08-30, all four combinations).
+        #
+        # `LOGIN` keeps `username=`. That is measured, not inherited: on
+        # MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` both spellings are
+        # accepted and yield a usable session, while omitting the field
+        # entirely — Kajkac's shape for this form — makes the router close the
+        # connection without answering.
         if self.username:
-            payload["username"] = self.username
+            if goform_id == "LOGIN_MULTI_USER":
+                payload["user"] = self.username
+                if ad:
+                    payload["AD"] = ad
+            else:
+                payload["username"] = self.username
 
         url = f"{self.referer}goform/goform_set_cmd_process"
         login_error = None
@@ -1299,13 +1324,7 @@ class ZTERouterAPI:
                 "Cannot derive the AD token: the router did not return its "
                 "firmware version. The command was not sent."
             )
-        is_new_gen = any(m in version for m in ["MC888", "MC889"])
-        hash_func: Callable[[str], str] = (
-            (lambda s: hashlib.sha256(s.encode()).hexdigest().upper())
-            if is_new_gen
-            # MD5 hash is required by the legacy ZTE router API authentication protocol
-            else (lambda s: hashlib.md5(s.encode()).hexdigest())  # noqa: S324
-        )
+        hash_func = self._ad_hash_func(version)
         a = hash_func(version)
         rd = await self.get_rd(timeout_sec=timeout_sec)
         if not rd:
@@ -1320,6 +1339,52 @@ class ZTERouterAPI:
                 "The command was not sent."
             )
         return hash_func(a + rd)
+
+    @staticmethod
+    def _ad_hash_func(version: str) -> Callable[[str], str]:
+        """Return the digest this firmware family uses for `AD`.
+
+        Shared by `get_ad` and the login-time derivation so the two cannot
+        drift: a login carrying an `AD` built with the wrong digest would be
+        refused exactly like a wrong password, with no way to tell them apart.
+        """
+        is_new_gen = any(m in version for m in ["MC888", "MC889"])
+        return (
+            (lambda s: hashlib.sha256(s.encode()).hexdigest().upper())
+            if is_new_gen
+            # MD5 hash is required by the legacy ZTE router API authentication protocol
+            else (lambda s: hashlib.md5(s.encode()).hexdigest())  # noqa: S324
+        )
+
+    async def _login_ad(
+        self, version: str, timeout_sec: int | None = None
+    ) -> str | None:
+        """Derive the `AD` token the multi-user login form carries.
+
+        Cannot reuse `get_ad()`, which asserts the session first and reads
+        `RD` through the authenticated path — neither is available before a
+        login. `LD`, `wa_inner_version` and `RD` are all served without a
+        session, confirmed against MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`
+        on 2026-08-30 by computing this token before any session existed.
+
+        Returns `None` rather than raising when `RD` cannot be read. The
+        token is one half of a login shape that is itself a best guess, so a
+        missing `RD` should let the attempt proceed without it and fall
+        through to the alternate form, not fail the login outright.
+        """
+        path = "goform/goform_get_cmd_process?isTest=false&cmd=RD"
+        try:
+            data = await self._request(
+                "GET", path, timeout_sec=timeout_sec, authenticated=False
+            )
+        except (ZTEAuthError, ZTEConnectionError) as err:
+            _LOGGER.debug("Could not read RD before login: %s", err)
+            return None
+        rd = cast(str, data.get("RD", ""))
+        if not rd:
+            return None
+        hash_func = self._ad_hash_func(version)
+        return hash_func(hash_func(version) + rd)
 
     async def get_rd(self, timeout_sec: int | None = None) -> str:
         """Get the RD parameter for AD generation."""

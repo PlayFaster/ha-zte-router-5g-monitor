@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.5-dev1\] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation](#335-dev1---2026-08-30---multi-user-login-payload-aligned-with-reference-implementation)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.4-dev26\] - 2026-08-30 - Login Form Order Aligned With Reference Implementation](#334-dev26---2026-08-30---login-form-order-aligned-with-reference-implementation)
   - [\[3.3.4-dev25\] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing](#334-dev25---2026-08-30---login-session-without-a-stok-cookie-session-state-pairing)
@@ -195,6 +196,33 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.5-dev1] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation
+
+### Summary
+
+`LOGIN_MULTI_USER` now carries the username as `user` and includes an `AD` token, matching `Kajkac/ZTE-MC-Home-assistant-repo`. ZRM's previous shape for that form is supported by no device this project can reach, so the reference implementation decides it. `LOGIN` is unchanged and keeps `username`, which is a hardware measurement rather than an inherited choice.
+
+### Changed
+
+- **`LOGIN_MULTI_USER` payload**: The username is sent as `user` rather than `username`, and an `AD` token is included. The form is posted only where a username is configured, and `is_multi` still decides which form is primary — an MC7010 with a username continues to send `LOGIN` first.
+- **`LOGIN` payload**: Unchanged, and now covered by a test recording why. On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`, `username=` and `user=` are both accepted and yield a usable session, while omitting the field entirely — the shape `mc.py` uses on this form — makes the router close the connection without answering.
+
+### Added
+
+- **`_login_ad()`**: Derives the login-time `AD` token. `get_ad()` cannot serve this: it asserts the session first and reads `RD` through the authenticated path, neither of which exists before a login. `LD`, `wa_inner_version` and `RD` are all served without a session, confirmed on the reference MC7010 by computing the token before any session existed. It returns `None` rather than raising when `RD` is unreadable, so a missing token falls through to the alternate form instead of failing the login.
+- **`_ad_hash_func()`**: The SHA-256 or MD5 selection is now shared by `get_ad()` and `_login_ad()`. A login carrying an `AD` built with the wrong digest would be refused exactly like a wrong password, with no way to separate them.
+
+### Testing
+
+- **Payload shape**: The multi-user form is asserted to carry `user` and `AD` and no `username`; the single-user form to carry `username` and neither `user` nor `AD`.
+- **Degraded `RD`**: A router that answers the pre-login `RD` read without the key still receives the multi-user attempt, without an `AD` field, and the login completes.
+- **Mocked login sequences**: Every username-configured login test now queues the additional `RD` read.
+- **Reference hardware**: Login, a full poll of 55 populated keys, `AD` derivation and logout all verified against the live MC7010 after the change.
+
+### Notes
+
+The change is not testable on available hardware. The MC7010 refuses `LOGIN_MULTI_USER` in all four combinations of field name and `AD` token, measured 2026-08-30, so no device here exercises the path. It is adopted because ZRM's shape has no supporting evidence from any device while Kajkac's is carried by a maintained project — a tie broken by authority, not a de-risked change. Recorded in `.notes/info/other_zte_projects/divergence_review.md` Section 2.1.
 
 ## [3.3.4] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility
 

@@ -35,11 +35,17 @@ def _stok_cookie(value="test_stok"):
     return cookie
 
 
-def _bootstrap(client, version="MC888_V1", *, extra_gets=1):
-    """Queue the LD and version reads every login makes before it posts."""
+def _bootstrap(client, version="MC888_V1", *, extra_gets=1, username=False):
+    """Queue the reads every login makes before it posts.
+
+    A configured username adds an `RD` read: the multi-user form carries an
+    `AD` token derived from it, and that derivation runs before the first
+    attempt so the fallback can reuse it.
+    """
     client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": version}),
+        *([MockResponse(json_data={"RD": "RD"})] if username else []),
         *[
             MockResponse(json_data={"wa_inner_version": version})
             for _ in range(extra_gets)
@@ -252,7 +258,7 @@ async def test_a_username_on_an_unlisted_model_still_sends_the_multi_user_form(
 ):
     """The username branch is unchanged: only the no-username case moved."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    _bootstrap(mock_aiohttp_client)
+    _bootstrap(mock_aiohttp_client, username=True)
     mock_aiohttp_client.post.return_value = MockResponse(
         cookies={"stok": _stok_cookie()}
     )
@@ -261,6 +267,67 @@ async def test_a_username_on_an_unlisted_model_still_sends_the_multi_user_form(
 
     _args, kwargs = mock_aiohttp_client.post.call_args
     assert kwargs["data"]["goformId"] == "LOGIN_MULTI_USER"
+    # Kajkac's shape: the multi-user form takes `user`, not `username`, and
+    # carries an `AD` token.
+    assert kwargs["data"]["user"] == "admin"
+    assert "username" not in kwargs["data"]
+    assert kwargs["data"]["AD"]
+
+
+@pytest.mark.asyncio
+async def test_the_single_user_form_keeps_username_when_one_is_configured(
+    mock_aiohttp_client,
+):
+    """Measured, not inherited from the reference implementation.
+
+    On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` both `username=` and
+    `user=` are accepted on `LOGIN` and yield a usable session, but omitting
+    the field — which is `mc.py`'s shape for this form — makes the router
+    close the connection without answering.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    _bootstrap(mock_aiohttp_client, version="MC7010_V1", username=True)
+    mock_aiohttp_client.post.return_value = MockResponse(
+        cookies={"stok": _stok_cookie()}
+    )
+
+    await api.login()
+
+    _args, kwargs = mock_aiohttp_client.post.call_args
+    assert kwargs["data"]["goformId"] == "LOGIN"
+    assert kwargs["data"]["username"] == "admin"
+    assert "user" not in kwargs["data"]
+    assert "AD" not in kwargs["data"]
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_rd_does_not_block_the_multi_user_attempt(
+    mock_aiohttp_client,
+):
+    """The `AD` token is one half of a shape that is itself a best guess.
+
+    A router that will not answer `RD` before login should still get the
+    attempt, and fall through to the alternate form on its own terms, rather
+    than have the login fail outright over a token the form may not need.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"LD": "LD"}),
+        MockResponse(json_data={"wa_inner_version": "MC888_V1"}),
+        MockResponse(json_data={}),  # RD absent from an otherwise valid reply
+        MockResponse(json_data={"wa_inner_version": "MC888_V1"}),
+    ]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        cookies={"stok": _stok_cookie()}
+    )
+
+    await api.login()
+
+    _args, kwargs = mock_aiohttp_client.post.call_args
+    assert kwargs["data"]["goformId"] == "LOGIN_MULTI_USER"
+    assert kwargs["data"]["user"] == "admin"
+    assert "AD" not in kwargs["data"]
+    assert api.session_active
 
 
 @pytest.mark.asyncio
@@ -351,6 +418,7 @@ async def test_the_cookie_and_the_flag_move_together_on_every_renewal(
         dead[trigger],
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+        MockResponse(json_data={"RD": "RD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
         fresh,
     ]
@@ -379,6 +447,7 @@ async def test_the_idle_reset_clears_both_fields(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+        MockResponse(json_data={"RD": "RD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
         MockResponse(json_data={"network_type": "LTE", "signalbar": "4"}),
     ]

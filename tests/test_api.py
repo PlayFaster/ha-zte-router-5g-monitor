@@ -107,6 +107,7 @@ async def test_api_login_success(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
     ]
 
@@ -142,6 +143,7 @@ async def test_api_login_failure_no_stok(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "VER"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(json_data={}, cookies={})
 
@@ -1035,6 +1037,7 @@ async def test_login_falls_back_to_the_alternate_form(mock_aiohttp_client):
         MockResponse(json_data={"LD": "LD"}),
         # An unlisted model: neither MC801 nor MC7010, so is_multi stays True.
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
     ]
     mock_aiohttp_client.post.side_effect = [
@@ -1056,6 +1059,7 @@ async def test_login_fallback_is_the_other_form_either_way_round(mock_aiohttp_cl
         MockResponse(json_data={"LD": "LD"}),
         # MC7010 with a username selects LOGIN as primary.
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
     ]
     mock_aiohttp_client.post.side_effect = [
@@ -1078,6 +1082,7 @@ async def test_login_does_not_fall_back_on_a_credentials_rejection(
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={"result": "password_error"}, cookies={}
@@ -1099,6 +1104,7 @@ async def test_login_fallback_reports_the_credentials_error_it_uncovers(
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
     mock_aiohttp_client.post.side_effect = [
         MockResponse(json_data={"result": "failure"}, cookies={}),
@@ -1119,6 +1125,7 @@ async def test_login_fallback_failure_stays_a_connection_error(mock_aiohttp_clie
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={"result": "failure"}, cookies={}
@@ -1140,6 +1147,7 @@ async def test_login_success_on_the_primary_form_makes_no_second_attempt(
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
@@ -1861,6 +1869,7 @@ async def test_login_omits_the_username_field_when_none_is_configured(
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(

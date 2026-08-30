@@ -37,7 +37,14 @@ Login is a challenge-response over SHA-256, not a credential POST. Four steps, i
 1. **`GET goform_get_cmd_process?cmd=LD`** → returns `LD`, a per-session salt. Upper-cased on receipt.
 2. **`GET goform_get_cmd_process?cmd=wa_inner_version`** → the firmware version string. Fetched here because it determines _which login form to use_ (below), not for telemetry.
 3. **Hash twice.** `SHA256(password)` → uppercase → concatenate `LD` → `SHA256` again → uppercase. Both uppercase steps are required; the router rejects lowercase digests.
-4. **`POST goform_set_cmd_process`** with `goformId=LOGIN` or `LOGIN_MULTI_USER`, `password=<the double hash>`, and `username=` when a username is configured.
+4. **`POST goform_set_cmd_process`** with `goformId=LOGIN` or `LOGIN_MULTI_USER` and `password=<the double hash>`. The two forms take the username under different names, and only the multi-user form carries a token:
+
+   | Form               | Username field | `AD` token   |
+   | :----------------- | :------------- | :----------- |
+   | `LOGIN`            | `username=`    | None         |
+   | `LOGIN_MULTI_USER` | `user=`        | `AD=<token>` |
+
+   The multi-user shape follows `mc.py`. The single-user shape is measured: on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` both spellings are accepted on `LOGIN` and yield a usable session, while omitting the field makes the router close the connection without answering. The login-time `AD` is derived by `_login_ad()` from `wa_inner_version` and `RD`, both of which answer without a session; a router that will not return `RD` gets the attempt without the token rather than a failed login.
 
 The session token arrives as a **`stok` cookie**, which is then sent as a literal `Cookie: stok=<value>` header on every subsequent request. The value is stripped of surrounding double quotes before use — some firmware quotes it, and passing the quoted form back produces a silent session failure rather than an error.
 
