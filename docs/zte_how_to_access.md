@@ -54,7 +54,9 @@ The token is looked for in four places before that conclusion is drawn (`_extrac
 
 ### `LOGIN` vs `LOGIN_MULTI_USER` — a model split
 
-`LOGIN` (single-user form) is used only when **both** are true: a username is configured, **and** the firmware version contains `MC801` or `MC7010`. Everything else uses `LOGIN_MULTI_USER`. The flag is held as `is_multi` (`api.py:301`).
+`LOGIN` (single-user form) is sent first in two cases: when **no username is configured**, and when a username is configured **and** the firmware version contains `MC801` or `MC7010`. Everything else uses `LOGIN_MULTI_USER`. The model flag is held as `is_multi`, and applies only to the second case.
+
+The no-username rule matches `Kajkac/ZTE-MC-Home-assistant-repo`, which branches on the username alone. `LOGIN_MULTI_USER` carries a user field that a password-only configuration has nothing to fill, so the router rejects it on that ground regardless of model — observed as `{"result":"failure"}` on an MC888 Pro in issue #56.
 
 This is the first of two places where model detection changes the protocol. It is string-matching on the firmware version, which is fragile by nature — a model outside the known set that expects the single-user form will fail login with no distinguishing error.
 

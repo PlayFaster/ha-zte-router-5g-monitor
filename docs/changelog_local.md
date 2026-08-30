@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.4-dev26\] - 2026-08-30 - Login Form Order Aligned With Reference Implementation](#334-dev26---2026-08-30---login-form-order-aligned-with-reference-implementation)
   - [\[3.3.4-dev25\] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing](#334-dev25---2026-08-30---login-session-without-a-stok-cookie-session-state-pairing)
   - [\[3.3.4-dev24\] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README](#334-dev24---2026-08-30---ci-bump-ruff-spelling-actions-screenshot-for-readme)
   - [\[3.3.4-dev23\] - 2026-08-27 - Project Structure Reference Sync; Ha-Compatibility and Test Harness Additions](#334-dev23---2026-08-27---project-structure-reference-sync-ha-compatibility-and-test-harness-additions)
@@ -193,6 +194,21 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.4-dev26] - 2026-08-30 - Login Form Order Aligned With Reference Implementation
+
+### Summary
+
+Follow-up to dev25. A router configured without a username now receives `LOGIN` as its first and only login form, matching `Kajkac/ZTE-MC-Home-assistant-repo`, the reference implementation for this hardware family. Branch coverage of the token sweep introduced in dev25 is completed.
+
+### Changed
+
+- **Login form selection when no username is configured**: `LOGIN` is sent first rather than `LOGIN_MULTI_USER`. The multi-user form carries no user field in that configuration and the router rejects it on that ground alone, which is the `Result: failure` line reported in issue #56 before the fallback reached `LOGIN`. The attempt could not succeed, and it logged a warning that reads as a fault. The username branch is unchanged: `is_multi` still selects between the two forms there, and the fallback still covers a wrong first choice in either direction.
+
+### Testing
+
+- **Form selection**: A router with no username posts `LOGIN` once, with no `username` field and no second attempt. A router with a username on an unlisted model still posts `LOGIN_MULTI_USER`.
+- **Token sweep branch coverage**: Two partial branches in `_extract_stok` are closed — a `Set-Cookie` header that is not the session token is read past to the one that is, and a jar holding an unrelated cookie alongside a `stok` with an empty value yields no token rather than a false one. `api.py` is at 100% branch coverage.
 
 ## [3.3.4-dev25] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing
 

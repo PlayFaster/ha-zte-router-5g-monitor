@@ -793,9 +793,17 @@ class ZTERouterAPI:
         if version and any(m in version for m in ["MC801", "MC7010"]):
             self.is_multi = False
 
-        primary = (
-            "LOGIN" if (self.username and not self.is_multi) else "LOGIN_MULTI_USER"
-        )
+        # No username means the multi-user form has no user field to carry, and
+        # the router rejects it on that ground alone — which is what produced
+        # the `Result: failure` line in issue #56 before the fallback found
+        # `LOGIN`. `Kajkac/ZTE-MC-Home-assistant-repo`, the reference
+        # implementation for this hardware family, branches on the username
+        # alone and sends `LOGIN` here first and only. Matching it removes a
+        # login attempt that cannot succeed, and the warning it logged.
+        if not self.username:
+            primary = "LOGIN"
+        else:
+            primary = "LOGIN" if not self.is_multi else "LOGIN_MULTI_USER"
         attempt = await self._attempt_login(primary, zte_pass, tout)
 
         # Best-effort form fallback for models this integration has never seen.

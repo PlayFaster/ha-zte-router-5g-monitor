@@ -17,6 +17,7 @@ from unittest.mock import MagicMock
 
 import aiohttp
 import pytest
+from multidict import CIMultiDict
 
 from custom_components.zte_router_5g.api import (
     ZTEConnectionError,
@@ -220,6 +221,89 @@ async def test_a_stale_token_in_the_jar_is_not_adopted(mock_aiohttp_client):
     await api.login()
 
     assert api.stok != "stok=stale_from_last_session"
+    assert api.session_active
+
+
+@pytest.mark.asyncio
+async def test_no_username_sends_the_single_user_form_first(mock_aiohttp_client):
+    """The multi-user form has no user field to carry, so it cannot succeed.
+
+    `Kajkac/ZTE-MC-Home-assistant-repo` branches on the username alone and
+    sends `LOGIN` here first and only. Sending `LOGIN_MULTI_USER` first cost
+    an attempt that could only be rejected, and logged a warning for it.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", None, "password")
+    _bootstrap(mock_aiohttp_client)
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "0"}, cookies={}
+    )
+
+    await api.login()
+
+    assert mock_aiohttp_client.post.call_count == 1
+    _args, kwargs = mock_aiohttp_client.post.call_args
+    assert kwargs["data"]["goformId"] == "LOGIN"
+    assert "username" not in kwargs["data"]
+
+
+@pytest.mark.asyncio
+async def test_a_username_on_an_unlisted_model_still_sends_the_multi_user_form(
+    mock_aiohttp_client,
+):
+    """The username branch is unchanged: only the no-username case moved."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    _bootstrap(mock_aiohttp_client)
+    mock_aiohttp_client.post.return_value = MockResponse(
+        cookies={"stok": _stok_cookie()}
+    )
+
+    await api.login()
+
+    _args, kwargs = mock_aiohttp_client.post.call_args
+    assert kwargs["data"]["goformId"] == "LOGIN_MULTI_USER"
+
+
+@pytest.mark.asyncio
+async def test_an_unrelated_set_cookie_header_is_skipped(mock_aiohttp_client):
+    """The header sweep must read past cookies that are not the session token."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", None, "password")
+    _bootstrap(mock_aiohttp_client)
+    headers = CIMultiDict(
+        [
+            ("Content-Type", "application/json"),
+            ("Set-Cookie", "sessionid=irrelevant; Path=/"),
+            ("Set-Cookie", "stok=the_real_one; Path=/"),
+        ]
+    )
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "0"}, cookies={}, headers=headers
+    )
+
+    await api.login()
+
+    assert api.stok == "stok=the_real_one"
+
+
+@pytest.mark.asyncio
+async def test_an_unrelated_cookie_in_the_jar_is_skipped(mock_aiohttp_client):
+    """Same for the jar: another cookie must not be mistaken for the token."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", None, "password")
+    _bootstrap(mock_aiohttp_client)
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "0"}, cookies={}
+    )
+
+    other = MagicMock()
+    other.key = "sessionid"
+    other.value = "irrelevant"
+    blank = MagicMock()
+    blank.key = "stok"
+    blank.value = ""
+    type(mock_aiohttp_client.cookie_jar).__iter__ = lambda _self: iter([other, blank])
+
+    await api.login()
+
+    assert api.stok is None
     assert api.session_active
 
 
