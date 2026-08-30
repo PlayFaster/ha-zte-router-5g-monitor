@@ -20,6 +20,7 @@ import pytest
 from multidict import CIMultiDict
 
 from custom_components.zte_router_5g.api import (
+    _CORE_PARAMS,
     ZTEConnectionError,
     ZTECredentialsError,
     ZTERouterAPI,
@@ -400,8 +401,11 @@ async def test_the_cookie_and_the_flag_move_together_on_every_renewal(
             json_data=None, headers={"Content-Type": "text/html"}
         ),
         "unparsable_json": MockResponse(json_data=None),
+        # Every core key echoed back, which is the shape a dead session
+        # actually produces; a partial response is declined by the classifier
+        # rather than scored as an expiry.
         "expired_echo": MockResponse(
-            json_data={"network_type": "", "signalbar": "", "imei": "123"}
+            json_data={**dict.fromkeys(_CORE_PARAMS, ""), "imei": "123"}
         ),
     }
 

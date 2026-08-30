@@ -11,7 +11,11 @@ from typing import Any, NamedTuple, cast
 
 import aiohttp
 
-from .const import APN_PROFILE_SLOTS, SESSION_IDLE_RESET_SECONDS
+from .const import (
+    ABSENT_KEY_PROPORTION_LIMIT,
+    APN_PROFILE_SLOTS,
+    SESSION_IDLE_RESET_SECONDS,
+)
 from .helpers import is_gsm7
 
 _LOGGER = logging.getLogger(__name__)
@@ -260,7 +264,9 @@ class ZTECredentialsError(ZTEAuthError):
     """
 
 
-def _classify_session(payload: dict[str, Any]) -> str:
+def _classify_session(
+    payload: dict[str, Any], requested: list[str] | None = None
+) -> str:
     """Say what a `200 OK` response proves about the session.
 
     This router never reports an expired session as an error. It answers
@@ -305,7 +311,27 @@ def _classify_session(payload: dict[str, Any]) -> str:
     # decides whether that means "no session" or "nothing to report yet".
     if not unauthenticated:
         return "undecidable"
-    return "expired" if any(v != "" for v in unauthenticated) else "not_ready"
+    if all(v == "" for v in unauthenticated):
+        return "not_ready"
+
+    # Everything points to an expired session — but only if the router
+    # actually answered what was asked. A response missing much of its
+    # request is a truncated or refused read, or firmware key-name drift,
+    # and says nothing about the session.
+    #
+    # This suppresses `expired` alone. It must not preempt `not_ready`: a
+    # router still starting up answers blank, and a device that also omits
+    # keys would otherwise be scored as a dead session and re-logged-in
+    # pointlessly. `requested` is `None` wherever the caller does not know
+    # its own key list — every endpoint but the two batch reads — and the
+    # check is skipped, leaving those callers exactly as they were.
+    if requested is not None:
+        wanted = [k for k in requested if k not in _UNAUTHENTICATED_KEYS]
+        if wanted:
+            absent = sum(1 for k in wanted if k not in payload)
+            if absent / len(wanted) > ABSENT_KEY_PROPORTION_LIMIT:
+                return "undecidable"
+    return "expired"
 
 
 class _LoginAttempt(NamedTuple):
@@ -366,6 +392,51 @@ class ZTERouterAPI:
         self.session_active = False
         self.is_multi = True
         self.last_activity = datetime.fromtimestamp(0, UTC)
+
+        # Evidence for the diagnostics download. `coordinator.data` is `None`
+        # until the first successful poll, so an integration that has never
+        # succeeded produces an empty `data` block — which is exactly when the
+        # download is asked for. These two carry what was rejected and what the
+        # login saw, and both are sanitized on the way out.
+        self.last_rejection: dict[str, Any] | None = None
+        self.login_metadata: dict[str, Any] = {}
+        self._stok_found_in = "none"
+
+    def _record_verdict(
+        self, verdict: str, payload: dict[str, Any], requested: list[str] | None
+    ) -> None:
+        """Hold the response behind a non-live verdict, for diagnostics.
+
+        Names only in the key map, and the payload itself is sanitized by
+        `diagnostics.py` on the way out — the same walker that already handles
+        `coordinator.data`, so a rejected payload is no more revealing than an
+        accepted one. Bounded to the most recent, and cleared by a live
+        verdict so a stale rejection cannot outlive the fault.
+        """
+        if verdict == "live":
+            self.last_rejection = None
+            return
+
+        asked = list(requested) if requested else list(payload)
+        self.last_rejection = {
+            "verdict": verdict,
+            "keys_populated": sorted(k for k, v in payload.items() if v != ""),
+            "keys_empty": sorted(k for k, v in payload.items() if v == ""),
+            "keys_absent": sorted(k for k in asked if k not in payload),
+            "payload": dict(payload),
+        }
+
+    def _record_unparsable(self, status: int, body: str) -> None:
+        """Hold a preview of a response that was not JSON at all.
+
+        There is no payload to retain in that case, and the preview is what
+        `_request` already computes for its own log line and discards.
+        """
+        self.last_rejection = {
+            "verdict": "unparsable",
+            "status": status,
+            "body_preview": body.strip()[:300].replace(chr(10), " "),
+        }
 
     def _clear_session(self, *, clear_cookies: bool = False) -> None:
         """Drop the session pair. The only site that ends a session.
@@ -548,7 +619,9 @@ class ZTERouterAPI:
         headers: dict[str, str] | None = None,
         timeout_sec: int | None = None,
         authenticated: bool = True,
+        requested: list[str] | None = None,
         _retry: bool = True,
+        _after_relogin: bool = False,
     ) -> Any:
         """Centralized request helper that handles session creation and auto-renewal."""
         tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
@@ -634,8 +707,11 @@ class ZTERouterAPI:
                     headers=headers,
                     timeout_sec=timeout_sec,
                     authenticated=authenticated,
+                    requested=requested,
                     _retry=False,
+                    _after_relogin=True,
                 )
+            self._record_unparsable(status, body_preview)
             _LOGGER.error(
                 "Unexpected HTML response from %s (Status: %s, Content-Type: %s): %s",
                 url_str,
@@ -659,8 +735,11 @@ class ZTERouterAPI:
                     headers=headers,
                     timeout_sec=timeout_sec,
                     authenticated=authenticated,
+                    requested=requested,
                     _retry=False,
+                    _after_relogin=True,
                 )
+            self._record_unparsable(status, body_preview)
             raise ZTEConnectionError("Failed to parse JSON response from router")
 
         # 3. Check JSON structure for session expiry/invalid indicators
@@ -679,7 +758,8 @@ class ZTERouterAPI:
             # why the difference matters. `undecidable` keeps the older rule for
             # the SMS endpoints, which carry no unauthenticated key to compare
             # against — the case that rule was written for and still handles.
-            verdict = _classify_session(resp_json)
+            verdict = _classify_session(resp_json, requested)
+            self._record_verdict(verdict, resp_json, requested)
             is_status_expired = verdict == "expired" or (
                 verdict == "undecidable"
                 and bool(resp_json)
@@ -713,8 +793,27 @@ class ZTERouterAPI:
                         headers=headers,
                         timeout_sec=timeout_sec,
                         authenticated=authenticated,
+                        requested=requested,
                         _retry=False,
+                        _after_relogin=True,
                     )
+                if _after_relogin and not is_auth_error:
+                    # A session established seconds ago cannot itself be
+                    # expired. The response was scored from its *shape*, and
+                    # a fresh session producing that shape refutes the rule
+                    # rather than confirming the verdict. Reported as a
+                    # reachability problem so it picks up the coordinator's
+                    # hold-last-known-values path, and so a rule that does not
+                    # fit this device cannot present as an auth condition.
+                    raise ZTEConnectionError(
+                        "Router returned an expired-looking response on a "
+                        "freshly established session — the session is not the "
+                        "problem"
+                    )
+                # Either the router said so explicitly, or the caller asked for
+                # no recovery. `scripts/hardware_check.py` probes an invalidated
+                # session with `_retry=False` and asserts this exception; that
+                # check is the standing hardware proof that expiry is detectable.
                 raise ZTEAuthError("Session expired/unauthorized")
 
         # Only an authenticated call proves the session is still alive, so only
@@ -918,6 +1017,7 @@ class ZTERouterAPI:
                         result = resp_json.get("result")
 
                 stok = self._extract_stok(r, resp_json=resp_json)
+                self._record_login_metadata(r, goform_id, stok, result)
 
                 # A cookie proves a session. Without one, only an explicit
                 # success `result` does — an MC888 Pro on
@@ -961,6 +1061,36 @@ class ZTERouterAPI:
 
         return _LoginAttempt(True, stok, login_error, conn_error)
 
+    def _record_login_metadata(
+        self,
+        r: aiohttp.ClientResponse,
+        goform_id: str,
+        stok: str | None,
+        result: Any,
+    ) -> None:
+        """Record what the login response looked like, for diagnostics.
+
+        Names and status only. **The cookie value is never recorded** — it is
+        a live session credential, and `test_login_metadata_never_carries_a
+        _cookie_value` asserts its absence from the whole serialized output.
+
+        `session_cookie_name` is the field that says whether a device issues a
+        session cookie under a name `_extract_stok` does not look for, which
+        is otherwise answerable only by asking a reporter to capture the login
+        response from a browser.
+        """
+        names = sorted(set(r.headers))
+        cookie_names = sorted(r.cookies)
+        self.login_metadata = {
+            "form_used": goform_id,
+            "status": r.status,
+            "result": result,
+            "header_names": names,
+            "cookie_names": cookie_names,
+            "session_cookie_issued": stok is not None,
+            "stok_found_in": self._stok_found_in,
+        }
+
     def _extract_stok(
         self, r: aiohttp.ClientResponse, *, resp_json: Any = None
     ) -> str | None:
@@ -979,22 +1109,27 @@ class ZTERouterAPI:
         reachable only through the jar. `login()` empties the jar before
         posting, so anything found there was set by this request.
         """
+        self._stok_found_in = "none"
         morsel = r.cookies.get("stok")
         if morsel:
+            self._stok_found_in = "response_cookie"
             return f"stok={morsel.value.strip('"')}"
 
         for header in r.headers.getall("Set-Cookie", []):
             match = _STOK_HEADER_RE.search(header)
             if match:
+                self._stok_found_in = "raw_header"
                 return f"stok={match.group(1)}"
 
         for cookie in self.session.cookie_jar:
             if cookie.key.lower() == "stok" and cookie.value:
+                self._stok_found_in = "cookie_jar"
                 return f"stok={cookie.value.strip('"')}"
 
         if isinstance(resp_json, dict):
             body_stok = resp_json.get("stok")
             if isinstance(body_stok, str) and body_stok:
+                self._stok_found_in = "response_body"
                 return f"stok={body_stok.strip('"')}"
 
         return None
@@ -1064,7 +1199,11 @@ class ZTERouterAPI:
             "goform/goform_get_cmd_process?multi_data=1&isTest=false"
             f"&sms_received_flag_flag=0&cmd={cmd}"
         )
-        data = await self._request("GET", path, timeout_sec=timeout_sec)
+        # The key list travels with the request so the session classifier can
+        # tell a key that came back empty from one that never came back.
+        data = await self._request(
+            "GET", path, timeout_sec=timeout_sec, requested=params
+        )
         return cast(dict[str, Any], data)
 
     async def get_params(

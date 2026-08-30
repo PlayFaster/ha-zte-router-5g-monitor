@@ -700,6 +700,10 @@ So the test is **"every value is an empty string"**, not "these named keys are e
 
 Note that an **empty inbox** returns `{"messages":[]}` — the contract key is present. That is what makes "no messages" distinguishable from "no session", and any check here must preserve the distinction.
 
+**The keys are echoed, not omitted.** A dead session returns every key the request asked for, with the values blanked; it does not shorten the response. Measured on firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31 by sending a batch read with no session cookie: 80 of 80 core keys and 36 of 36 extended keys came back, none absent. That experiment also reproduced the unauthenticated set exactly — `imei`, `model_name` and `wa_inner_version` in the core batch, `opms_wan_mode` and `opms_wan_auto_mode` in the extended one — which is the same set the invalidated-`stok` replay produced, so the two experiments agree on this device.
+
+A key going **missing** is therefore a different fault from a key coming back **empty**: a truncated or refused request, or a firmware that spells it differently. Since 3.3.5-dev2 the client will not read an expired session from a response that lost most of its request.
+
 **`auth status` reporting healthy while every command fails** is the signature of a stale session, not a credential problem. Re-login once; if it persists across a retry, it is a genuine problem and should be surfaced rather than retried further. See `agent_conventions.md`.
 
 **The web UI always wins.** Any manual login to the router's web interface terminates the integration's session. During diagnosis this means the act of checking the router changes the thing you are checking.

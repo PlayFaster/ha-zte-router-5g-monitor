@@ -47,8 +47,30 @@ from custom_components.zte_router_5g.coordinator import (
 
 from .conftest import MockResponse
 
+
 # What the router actually returned on 2026-07-31 with an invalidated stok:
 # every authenticated key blank, the three unauthenticated ones intact.
+def _full_core_response(populated: dict[str, str] | None = None) -> dict[str, str]:
+    """Build a response carrying every core key, blank unless named.
+
+    The router answers a batch read with every key it was asked for, whether
+    or not the session is alive; only the values change. Tests that reach
+    `_request` need that shape, because the session classifier now weighs how
+    much of the request came back.
+    """
+    response = dict.fromkeys(_CORE_PARAMS, "")
+    response.update(
+        {
+            "imei": "864155042229309",
+            "model_name": "MC7010",
+            "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03",
+        }
+    )
+    if populated:
+        response.update(populated)
+    return response
+
+
 DEAD_SESSION_CORE = {
     "imei": "864155042229309",
     "model_name": "MC7010",
@@ -169,9 +191,16 @@ async def test_expired_session_triggers_a_relogin(mock_aiohttp_client) -> None:
     api.stok = "stok=dead"
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # The full batch, not an abbreviation. A dead session on this API echoes
+    # every requested key back — measured on MC7010 firmware
+    # `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-30, where a cookieless read
+    # returned 80 of 80 core keys with none absent. An eight-key stand-in is
+    # a shape the router does not produce, and the classifier now declines to
+    # rule on a response that dropped most of its request.
+    dead_full = _full_core_response()
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data=DEAD_SESSION_CORE),
-        MockResponse(json_data={**DEAD_SESSION_CORE, "signalbar": "4"}),
+        MockResponse(json_data=dead_full),
+        MockResponse(json_data={**dead_full, "signalbar": "4"}),
     ]
 
     with patch.object(api, "login", AsyncMock(return_value="stok=fresh")) as login:
@@ -190,7 +219,7 @@ async def test_a_booting_router_raises_connection_not_auth(
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(
-        json_data=dict.fromkeys(DEAD_SESSION_CORE, "")
+        json_data=dict.fromkeys(_full_core_response(), "")
     )
 
     with (

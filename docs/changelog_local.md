@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.5-dev2\] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll](#335-dev2---2026-08-31---session-verdict-evidence-diagnostics-capture-on-a-failed-poll)
   - [\[3.3.5-dev1\] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation](#335-dev1---2026-08-30---multi-user-login-payload-aligned-with-reference-implementation)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.4-dev26\] - 2026-08-30 - Login Form Order Aligned With Reference Implementation](#334-dev26---2026-08-30---login-form-order-aligned-with-reference-implementation)
@@ -196,6 +197,30 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.5-dev2] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll
+
+### Summary
+
+Two corrections to how an expired session is decided, and three additions that give the diagnostics download something to carry when the integration has never succeeded. The session verdict is derived from a key list measured on one MC7010 and asserted about every device; these changes narrow where that inference is trusted and record what was rejected when it is not.
+
+### Fixed
+
+- **A response missing most of its request is no longer read as an expired session**: `_classify_session()` receives the requested key list and declines to return `expired` when more than `ABSENT_KEY_PROPORTION_LIMIT` of the requested authenticated keys are absent rather than empty. A dead session on this API echoes every requested key back — measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31, where a cookieless batch read returned 80 of 80 core and 36 of 36 extended keys with none absent — so keys going missing indicates a truncated or refused request, or firmware key-name drift. The guard suppresses `expired` alone and cannot preempt `not_ready`, or a router still starting up that also omitted keys would be re-logged-in pointlessly. The limit is not zero because an unknown `cmd` name is simply absent rather than an error.
+- **An expired-looking response on a freshly established session no longer reports as an authentication failure**: a session created seconds earlier cannot itself be expired, so an identical verdict on the replayed request refutes the classification rather than confirming it. It now raises `ZTEConnectionError`, which routes into the coordinator's hold-last-known-values path. A caller that passed `_retry=False` itself still receives `ZTEAuthError` — `scripts/hardware_check.py` probes an invalidated session that way, and that assertion is the standing hardware proof that expiry is detectable.
+
+### Added
+
+- **The rejected payload is retained for diagnostics**: the response behind any non-live verdict is held on the API client and published in the download, sanitized by the same walker that already handles `coordinator.data`. Bounded to the most recent and cleared by a live verdict. `coordinator.data` is `None` until the first successful poll, so an integration that has never succeeded previously produced an empty `data` block — the case the download is most often requested for.
+- **The verdict and a key presence map**: which requested keys came back populated, empty, or absent. Names only, no values, so this separates a truncated batch from a hollow session from key-name drift without reading a payload.
+- **A body preview when the response was not JSON**: there is no payload to retain in that case, and the preview is what `_request` already computes for its log line and discards.
+- **Login response metadata**: form used, status, `result`, header names, cookie names, whether a session cookie was issued, and which of the four sources in `_extract_stok` supplied the token. **The cookie value is never recorded** — it is a live session credential, and a test asserts its absence from the whole serialized structure rather than from one field.
+
+### Testing
+
+- **`tests/test_diagnostic_capture.py`** (new, 15 tests): the absent-key rule in five configurations including the `not_ready` ordering; retention and clearing of a rejection; the non-JSON preview; login metadata for both a cookie-issuing and a cookieless login; and the negative assertion on cookie values.
+- **Test fakes corrected**: `DEAD_SESSION_CORE` in `tests/test_session_detection.py` and `EXPIRED_SESSION_PAYLOAD` in `tests/transport.py` were abbreviations answering a fraction of the request — a shape the router does not produce. Both now cover the full core batch.
+- **Reference hardware**: `scripts/hardware_check.py` passes 12 of 12, dead-session detection included.
 
 ## [3.3.5-dev1] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation
 

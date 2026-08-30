@@ -41,6 +41,8 @@ from typing import Any
 
 import aiohttp
 
+from custom_components.zte_router_5g.api import _CORE_PARAMS
+
 HOST = "192.168.0.1"
 BASE = f"http://{HOST}/"
 GET_URL = f"{BASE}goform/goform_get_cmd_process"
@@ -87,7 +89,16 @@ CAPACITY_PAYLOAD: dict[str, Any] = {
 # `expired` — every **authenticated** key blank while an unauthenticated one
 # still carries a value. The router is plainly answering, so blankness is the
 # session, and re-logging in is the right response.
+#
+# Built over the whole core batch, not over `GOOD_PAYLOAD` alone. The router
+# echoes every key it was asked for whether or not the session is alive —
+# measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-30, where
+# a cookieless read returned 80 of 80 core keys with none absent. The
+# classifier now weighs how much of the request came back, so a fake that
+# answers a fraction of it is a shape the router never produces and is
+# correctly declined rather than scored as an expiry.
 EXPIRED_SESSION_PAYLOAD: dict[str, Any] = {
+    **dict.fromkeys(_CORE_PARAMS, ""),
     **dict.fromkeys(GOOD_PAYLOAD, ""),
     "wa_inner_version": GOOD_PAYLOAD["wa_inner_version"],
     "model_name": GOOD_PAYLOAD["model_name"],

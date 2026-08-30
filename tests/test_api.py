@@ -180,14 +180,16 @@ async def test_api_get_all_data_retry_exhausted(mock_aiohttp_client):
     api.stok = "stok=old_stok"
     api.session_active = True
 
-    # Both calls return empty data — retry is exhausted, raises ZTEAuthError
+    # Both calls return the same empty shape. The re-login still happens; the
+    # second identical response refutes the expiry rather than confirming it,
+    # so the failure is reported as a reachability problem.
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"network_type": "", "signalbar": ""}),
         MockResponse(json_data={"network_type": "", "signalbar": ""}),
     ]
 
     with patch.object(api, "login") as mock_login:
-        with pytest.raises(ZTEAuthError, match="Session expired/unauthorized"):
+        with pytest.raises(ZTEConnectionError, match="freshly established session"):
             await api.get_all_data()
         assert mock_login.called
 
@@ -965,7 +967,7 @@ async def test_persistently_dead_session_raises_instead_of_returning_empty(
 
     with (
         patch.object(ZTERouterAPI, "login", return_value="stok=fresh"),
-        pytest.raises(ZTEAuthError),
+        pytest.raises((ZTEAuthError, ZTEConnectionError)),
     ):
         await api.get_sms_messages()
 
@@ -1804,9 +1806,13 @@ async def test_a_genuinely_dead_session_is_still_detected(mock_aiohttp_client):
         json_data={"ODU_led_switch": "", "wan_connect_status": ""}
     )
 
+    # A fresh session producing the same shape refutes the verdict rather
+    # than confirming it, so this is reported as a reachability problem. What
+    # matters for this test is unchanged: it raises rather than handing back
+    # an empty result that reads as "the setting is blank".
     with (
         patch.object(api, "login", AsyncMock(return_value="stok=fresh")),
-        pytest.raises(ZTEAuthError),
+        pytest.raises(ZTEConnectionError, match="freshly established session"),
     ):
         await api.get_params(["ODU_led_switch"])
 
