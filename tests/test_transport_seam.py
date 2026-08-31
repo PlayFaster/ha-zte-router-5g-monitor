@@ -123,7 +123,7 @@ async def test_the_login_bootstrap_completes(hass: HomeAssistant, router) -> Non
 
     await api.login()
 
-    assert api.stok == "stok=s1"
+    assert api.cookies == {"stok": "s1"}
     assert api.session_active
 
 

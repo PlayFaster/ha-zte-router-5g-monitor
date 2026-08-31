@@ -68,7 +68,7 @@ async def test_a_success_result_without_a_cookie_establishes_a_session(
     await api.login()
 
     assert api.session_active
-    assert api.stok is None
+    assert not api.cookies
 
 
 @pytest.mark.asyncio
@@ -129,12 +129,13 @@ async def test_a_credentials_rejection_without_a_cookie_is_still_an_auth_error(
 
 
 @pytest.mark.asyncio
-async def test_a_stok_only_in_a_raw_header_is_captured(mock_aiohttp_client):
-    """`SimpleCookie` morsel names are case-sensitive; the sweep is not.
+async def test_a_cookie_only_in_a_raw_header_is_captured(mock_aiohttp_client):
+    """`SimpleCookie` drops a header it cannot parse, without raising.
 
-    A token that exists but is not found is worse than none: the session is
-    replayed without it, the router echoes the authenticated keys back empty,
-    and every entity publishes `unknown`.
+    A cookie that exists but is not found is worse than none: the session is
+    replayed without it, the router answers as it does to any anonymous
+    client, and every entity publishes `unknown`. The name is kept exactly as
+    the router spelled it.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", None, "password")
     _bootstrap(mock_aiohttp_client)
@@ -146,17 +147,19 @@ async def test_a_stok_only_in_a_raw_header_is_captured(mock_aiohttp_client):
 
     await api.login()
 
-    assert api.stok == "stok=upper_case_name"
+    assert api.cookies == {"STOK": "upper_case_name"}
 
 
 @pytest.mark.asyncio
-async def test_a_stok_set_on_an_intermediate_redirect_is_recovered(
-    mock_aiohttp_client, monkeypatch
-):
-    """`r.cookies` carries only the final response of a followed redirect.
+async def test_the_cookie_jar_is_not_consulted(mock_aiohttp_client, monkeypatch):
+    """A jar entry must not become this session's cookie.
 
-    The reporter of issue #56 observed a `302` to `index.html` on this device,
-    so a token issued with the redirect is reachable through the jar alone.
+    The jar was read for a token set on an intermediate `302`. That branch
+    could never fire in the configuration it was written for: Home Assistant's
+    shared client session carries aiohttp's default `CookieJar`, which refuses
+    cookies from an IP-address host. Reading it also risked adopting a cookie
+    the login response never set, which is the defect this project has shipped
+    once — an invalidated token replayed against a live poll.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", None, "password")
     _bootstrap(mock_aiohttp_client)
@@ -166,7 +169,7 @@ async def test_a_stok_set_on_an_intermediate_redirect_is_recovered(
 
     jar_cookie = MagicMock()
     jar_cookie.key = "stok"
-    jar_cookie.value = "from_redirect"
+    jar_cookie.value = "from_the_jar"
     monkeypatch.setattr(
         type(mock_aiohttp_client.cookie_jar),
         "__iter__",
@@ -176,7 +179,8 @@ async def test_a_stok_set_on_an_intermediate_redirect_is_recovered(
 
     await api.login()
 
-    assert api.stok == "stok=from_redirect"
+    assert api.cookies == {}
+    assert api.session_active
 
 
 @pytest.mark.asyncio
@@ -194,7 +198,7 @@ async def test_a_stok_returned_in_the_body_is_captured(mock_aiohttp_client):
 
     await api.login()
 
-    assert api.stok == "stok=from_body"
+    assert api.cookies == {"stok": "from_body"}
 
 
 @pytest.mark.asyncio
@@ -227,7 +231,7 @@ async def test_a_stale_token_in_the_jar_is_not_adopted(mock_aiohttp_client):
 
     await api.login()
 
-    assert api.stok != "stok=stale_from_last_session"
+    assert api.cookies != {"stok": "stale_from_last_session"}
     assert api.session_active
 
 
@@ -332,14 +336,19 @@ async def test_an_unreadable_rd_does_not_block_the_multi_user_attempt(
 
 
 @pytest.mark.asyncio
-async def test_an_unrelated_set_cookie_header_is_skipped(mock_aiohttp_client):
-    """The header sweep must read past cookies that are not the session token."""
+async def test_every_cookie_in_the_response_is_replayed(mock_aiohttp_client):
+    """Which cookie carries the session is the router's business, not ours.
+
+    Replaying one that is not the session costs nothing; missing the one that
+    is costs the whole integration, and no rule for telling them apart
+    survives contact with a firmware nobody has seen.
+    """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", None, "password")
     _bootstrap(mock_aiohttp_client)
     headers = CIMultiDict(
         [
             ("Content-Type", "application/json"),
-            ("Set-Cookie", "sessionid=irrelevant; Path=/"),
+            ("Set-Cookie", "sessionid=also_sent; Path=/"),
             ("Set-Cookie", "stok=the_real_one; Path=/"),
         ]
     )
@@ -349,30 +358,37 @@ async def test_an_unrelated_set_cookie_header_is_skipped(mock_aiohttp_client):
 
     await api.login()
 
-    assert api.stok == "stok=the_real_one"
+    assert api.cookies == {"sessionid": "also_sent", "stok": "the_real_one"}
 
 
 @pytest.mark.asyncio
-async def test_an_unrelated_cookie_in_the_jar_is_skipped(mock_aiohttp_client):
-    """Same for the jar: another cookie must not be mistaken for the token."""
+async def test_a_session_cookie_named_zsidn_is_replayed(mock_aiohttp_client):
+    """The reported defect, from the reporter's own diagnostics.
+
+    An MC888 Pro on `BD_ABPLMC888PROMODV1.0.0B01` answers a successful
+    `LOGIN` with `{"result":"0"}` and a cookie named `zsidn`. Matching the
+    literal name `stok` discarded it, so every request went out
+    unauthenticated and six of eighty-two keys came back populated behind a
+    poll that scored as a success (issue #56).
+    """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", None, "password")
-    _bootstrap(mock_aiohttp_client)
+    _bootstrap(mock_aiohttp_client, extra_gets=3)
     mock_aiohttp_client.post.return_value = MockResponse(
-        json_data={"result": "0"}, cookies={}
+        json_data={"result": "0"},
+        cookies={"zsidn": MagicMock(value="session_value")},
     )
 
-    other = MagicMock()
-    other.key = "sessionid"
-    other.value = "irrelevant"
-    blank = MagicMock()
-    blank.key = "stok"
-    blank.value = ""
-    type(mock_aiohttp_client.cookie_jar).__iter__ = lambda _self: iter([other, blank])
-
     await api.login()
+    assert api.cookies == {"zsidn": "session_value"}
 
-    assert api.stok is None
-    assert api.session_active
+    mock_aiohttp_client.get.side_effect = None
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"network_type": "LTE", "signalbar": "4"}
+    )
+    await api.get_all_data()
+
+    _args, kwargs = mock_aiohttp_client.get.call_args
+    assert kwargs["headers"]["Cookie"] == "zsidn=session_value"
 
 
 @pytest.mark.asyncio
@@ -392,7 +408,7 @@ async def test_the_cookie_and_the_flag_move_together_on_every_renewal(
     trigger in `_request` is driven here and the pair asserted afterwards.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=stale"
+    api.cookies = {"stok": "stale"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
@@ -414,7 +430,7 @@ async def test_the_cookie_and_the_flag_move_together_on_every_renewal(
         with pytest.raises(ZTEConnectionError):
             await api.get_all_data()
         assert not api.session_active
-        assert api.stok is None
+        assert not api.cookies
         return
 
     fresh = MockResponse(json_data={"network_type": "LTE", "signalbar": "4"})
@@ -433,7 +449,7 @@ async def test_the_cookie_and_the_flag_move_together_on_every_renewal(
     await api.get_all_data()
 
     assert api.session_active
-    assert api.stok == "stok=renewed"
+    assert api.cookies == {"stok": "renewed"}
 
 
 @pytest.mark.asyncio
@@ -444,7 +460,7 @@ async def test_the_idle_reset_clears_both_fields(mock_aiohttp_client):
     only here and in a container left polling past the interval.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=idle"
+    api.cookies = {"stok": "idle"}
     api.session_active = True
     api.last_activity = datetime.now(UTC) - timedelta(seconds=1000)
 
@@ -462,18 +478,18 @@ async def test_the_idle_reset_clears_both_fields(mock_aiohttp_client):
     await api.get_all_data()
 
     assert api.session_active
-    assert api.stok == "stok=after_idle"
+    assert api.cookies == {"stok": "after_idle"}
 
 
 @pytest.mark.asyncio
 async def test_logout_clears_both_fields(mock_aiohttp_client):
     """An abandoned session locks the user out of the router's own web UI."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=live"
+    api.cookies = {"stok": "live"}
     api.session_active = True
     mock_aiohttp_client.post.side_effect = aiohttp.ClientError("unreachable")
 
     await api.logout()
 
     assert not api.session_active
-    assert api.stok is None
+    assert not api.cookies

@@ -63,6 +63,9 @@ def mock_api():
         api.login = AsyncMock(return_value="stok=test")
         api.logout = AsyncMock(return_value=None)
         api.get_all_data = AsyncMock(return_value=dict(ROUTER_DATA))
+        # Both run once in background setup and feed diagnostics only.
+        api.probe_discovery_candidates = AsyncMock(return_value={})
+        api.measure_unauthenticated_keys = AsyncMock(return_value=frozenset())
         api.get_sms_capacity = AsyncMock(return_value={})
         api.get_sms_messages = AsyncMock(return_value=[])
         yield api
@@ -176,7 +179,9 @@ async def test_unload_releases_the_router_session(
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
 
-    mock_api.logout.assert_awaited_once()
+    # Twice: background setup logs out once to sample the unauthenticated key
+    # set with no session, and unload releases the session the router keeps.
+    assert mock_api.logout.await_count == 2
 
 
 async def test_logout_swallows_errors_and_clears_session(hass: HomeAssistant) -> None:
@@ -187,7 +192,7 @@ async def test_logout_swallows_errors_and_clears_session(hass: HomeAssistant) ->
     state regardless of what the router does.
     """
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
-    api.stok = "stok=live-session"
+    api.cookies = {"stok": "live-session"}
     api.session_active = True
 
     with patch.object(
@@ -195,7 +200,7 @@ async def test_logout_swallows_errors_and_clears_session(hass: HomeAssistant) ->
     ):
         await api.logout()
 
-    assert api.stok is None
+    assert not api.cookies
 
 
 async def test_logout_sends_an_ad_token(hass: HomeAssistant) -> None:
@@ -206,7 +211,7 @@ async def test_logout_sends_an_ad_token(hass: HomeAssistant) -> None:
     make this method look like it worked while changing nothing.
     """
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
-    api.stok = "stok=live-session"
+    api.cookies = {"stok": "live-session"}
     api.session_active = True
 
     with (

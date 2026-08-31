@@ -14,6 +14,8 @@ import aiohttp
 from .const import (
     ABSENT_KEY_PROPORTION_LIMIT,
     APN_PROFILE_SLOTS,
+    DISCOVERY_CANDIDATES,
+    DISCOVERY_CHUNK_SIZE,
     SESSION_IDLE_RESET_SECONDS,
 )
 from .helpers import is_gsm7
@@ -145,12 +147,40 @@ _CORE_PARAMS: list[str] = [
     "flux_monthly_rx_bytes",
     "data_volume_clear_date",
     "data_volume_clear_day",
+    # The `flux_` prefix is a whole parallel vocabulary on this API, not a
+    # quirk of the monthly counters. `Kajkac/ZTE-MC-Home-assistant-repo`
+    # requests both spellings of realtime throughput and of the data-volume
+    # settings; this integration aliased the monthly pair and stopped, which
+    # left the rest single-spelled. The MC7010 answers "" for all of these.
+    #
+    # `flux_monthly_time` is deliberately absent: it aliases `monthly_time`,
+    # which this integration neither requests nor reads, so it would carry
+    # URL budget for nothing.
+    "flux_realtime_tx_bytes",
+    "flux_realtime_rx_bytes",
+    "flux_realtime_tx_thrpt",
+    "flux_realtime_rx_thrpt",
+    "flux_realtime_time",
+    # These three feed `DATA_LIMIT_SETTING`, an all-or-nothing form the router
+    # refuses if a field is missing. A wrong spelling here does not blank a
+    # sensor, it makes the write impossible.
+    "flux_data_volume_limit_size",
+    "flux_data_volume_limit_unit",
+    "flux_data_volume_alert_percent",
 ]
 
 _EXTENDED_PARAMS: list[str] = [
     # --- Subscriber identifiers (disabled sensors) ---
     "sim_imsi",
     "sim_iccid",
+    # The shorter spellings the rest of the goform family uses. Measured on
+    # MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31: `iccid`
+    # carries the identical value to `sim_iccid`, and `imsi` is present but
+    # empty while `sim_imsi` is populated — the ordinary alias case. Placed in
+    # the extended batch because the core batch is the one bounded by URL
+    # budget, and neither feeds an enabled-by-default entity.
+    "imsi",
+    "iccid",
     # --- Diagnostics ---
     "battery_value",
     "rssi",
@@ -202,10 +232,11 @@ _EXTENDED_PARAMS: list[str] = [
 # nothing, whereas a write carrying none is normal.
 _LOGIN_SUCCESS = frozenset({"success", "0", "ok"})
 
-# Matches a `stok` in a raw `Set-Cookie` header regardless of case. Needed
-# because `SimpleCookie` morsel names are case-sensitive and it drops headers
-# it cannot parse without raising.
-_STOK_HEADER_RE = re.compile(r'(?i)\bstok\s*=\s*"?([^";,\s]+)')
+# Splits `name=value` off the front of a raw `Set-Cookie` header. Needed
+# because `SimpleCookie` morsel names are case-sensitive and it drops a header
+# it cannot parse without raising, so a cookie can be present in the response
+# and absent from `r.cookies`.
+_SET_COOKIE_RE = re.compile(r'\s*([^=;,\s]+)\s*=\s*("?[^";,]*"?)')
 
 
 # Appended to every targeted read so an all-empty response still distinguishes
@@ -231,6 +262,18 @@ _SESSION_SENTINEL = "wan_connect_status"
 # Anything added here must be verified on hardware, never assumed from a name.
 # `test_session_detection` asserts each batch still contains keys of *both*
 # classes, because a batch of only one kind makes the test below undecidable.
+# Mirrors `coordinator.CORE_KEYS`. Not imported: `coordinator.py` imports this
+# module, so the dependency only runs one way. `test_contract_keys_agree`
+# fails if the two lists diverge.
+_CONTRACT_KEYS = frozenset(
+    {
+        "network_type",
+        "signalbar",
+        "realtime_time",
+        "wan_connect_status",
+    }
+)
+
 _UNAUTHENTICATED_KEYS = frozenset(
     {
         "imei",
@@ -265,7 +308,9 @@ class ZTECredentialsError(ZTEAuthError):
 
 
 def _classify_session(
-    payload: dict[str, Any], requested: list[str] | None = None
+    payload: dict[str, Any],
+    requested: list[str] | None = None,
+    unauthenticated: frozenset[str] = _UNAUTHENTICATED_KEYS,
 ) -> str:
     """Say what a `200 OK` response proves about the session.
 
@@ -299,19 +344,19 @@ def _classify_session(
     if not payload:
         return "undecidable"
 
-    authenticated = [v for k, v in payload.items() if k not in _UNAUTHENTICATED_KEYS]
-    unauthenticated = [v for k, v in payload.items() if k in _UNAUTHENTICATED_KEYS]
+    authenticated_values = [v for k, v in payload.items() if k not in unauthenticated]
+    unauthenticated_values = [v for k, v in payload.items() if k in unauthenticated]
 
-    if not authenticated:
+    if not authenticated_values:
         return "undecidable"
-    if any(value != "" for value in authenticated):
+    if any(value != "" for value in authenticated_values):
         return "live"
 
     # Every authenticated value is blank. What the unauthenticated ones say
     # decides whether that means "no session" or "nothing to report yet".
-    if not unauthenticated:
+    if not unauthenticated_values:
         return "undecidable"
-    if all(v == "" for v in unauthenticated):
+    if all(v == "" for v in unauthenticated_values):
         return "not_ready"
 
     # Everything points to an expired session — but only if the router
@@ -326,7 +371,7 @@ def _classify_session(
     # its own key list — every endpoint but the two batch reads — and the
     # check is skipped, leaving those callers exactly as they were.
     if requested is not None:
-        wanted = [k for k in requested if k not in _UNAUTHENTICATED_KEYS]
+        wanted = [k for k in requested if k not in unauthenticated]
         if wanted:
             absent = sum(1 for k in wanted if k not in payload)
             if absent / len(wanted) > ABSENT_KEY_PROPORTION_LIMIT:
@@ -334,23 +379,33 @@ def _classify_session(
     return "expired"
 
 
+def _cookie_header(cookies: dict[str, str]) -> str:
+    """Render cookies as one `Cookie` request header.
+
+    Sorted so the header is stable between calls, which keeps a captured
+    request comparable across runs.
+    """
+    return "; ".join(f"{name}={value}" for name, value in sorted(cookies.items()))
+
+
 class _LoginAttempt(NamedTuple):
     """Outcome of posting one login form.
 
-    `established` records whether the router accepted the login, and `stok`
-    the session cookie it issued. The two are separate because they disagree
-    on some firmware: an MC888 Pro on `CR_ABPLMC888PROV1.0.1B04` answers a
-    successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie` at all,
-    binding the session to the client address instead (issue #56). Testing the
-    cookie alone scored that success as a connection failure.
+    `established` records whether the router accepted the login, and
+    `cookies` carries every cookie the response set, by name. The two are
+    separate because a login can succeed without setting a cookie this client
+    recognises — the condition reported as issue #56, where an MC888 Pro
+    answered a successful `LOGIN` with `{"result":"0"}` and a cookie named
+    `zsidn`. Testing for one named cookie scored that success as a failure.
 
-    On a failed attempt `established` is false and exactly one of the two
-    errors is set. They carry the outcome rather than the caller re-reading
-    `self.stok`, so which of the two forms produced it stays explicit.
+    On a failed attempt `established` is false, `cookies` is empty, and
+    exactly one of the two errors is set. They carry the outcome rather than
+    the caller re-reading client state, so which of the two forms produced it
+    stays explicit.
     """
 
     established: bool
-    stok: str | None
+    cookies: dict[str, str]
     auth_error: str | None
     conn_error: str | None
 
@@ -388,8 +443,19 @@ class ZTERouterAPI:
         # header, which the router answers by echoing the authenticated keys
         # back empty — indistinguishable from an expired session, and
         # published as `unknown` on every entity.
-        self.stok: str | None = None
+        self.cookies: dict[str, str] = {}
         self.session_active = False
+        # Whether the most recent LOGOUT was acknowledged by the router. Only
+        # a confirmed logout makes a subsequent read an unauthenticated one.
+        self.logout_acknowledged = False
+        # Keys this device answers without a session, measured rather than
+        # assumed. Empty until a measurement passes validation; the module
+        # constant is used until then.
+        self.unauthenticated_keys: frozenset[str] = frozenset()
+        # Which candidate `cmd` names this device answers. Populated once per
+        # setup and published in the diagnostics download; never read by
+        # runtime logic.
+        self.discovery: dict[str, str] = {}
         self.is_multi = True
         self.last_activity = datetime.fromtimestamp(0, UTC)
 
@@ -400,7 +466,7 @@ class ZTERouterAPI:
         # login saw, and both are sanitized on the way out.
         self.last_rejection: dict[str, Any] | None = None
         self.login_metadata: dict[str, Any] = {}
-        self._stok_found_in = "none"
+        self._cookies_found_in = "none"
 
     def _record_verdict(
         self, verdict: str, payload: dict[str, Any], requested: list[str] | None
@@ -445,7 +511,7 @@ class ZTERouterAPI:
         login could otherwise find a `stok` left by the session just ended and
         mistake it for one the router has just issued.
         """
-        self.stok = None
+        self.cookies = {}
         self.session_active = False
         if clear_cookies:
             self.session.cookie_jar.clear(predicate=lambda m: m.key == "stok")
@@ -645,8 +711,8 @@ class ZTERouterAPI:
             req_headers.update(headers)
         # A session with no cookie is normal on firmware that binds the
         # session to the client address; there is simply no header to send.
-        if authenticated and self.stok:
-            req_headers["Cookie"] = self.stok
+        if authenticated and self.cookies:
+            req_headers["Cookie"] = _cookie_header(self.cookies)
 
         is_html_page = False
         status = 200
@@ -758,7 +824,9 @@ class ZTERouterAPI:
             # why the difference matters. `undecidable` keeps the older rule for
             # the SMS endpoints, which carry no unauthenticated key to compare
             # against — the case that rule was written for and still handles.
-            verdict = _classify_session(resp_json, requested)
+            verdict = _classify_session(
+                resp_json, requested, self.unauthenticated_key_set()
+            )
             self._record_verdict(verdict, resp_json, requested)
             is_status_expired = verdict == "expired" or (
                 verdict == "undecidable"
@@ -871,7 +939,7 @@ class ZTERouterAPI:
         """Clean login that resets the internal session state.
 
         The only site that establishes a session. Callers do not assign the
-        result: `self.stok` and `self.session_active` are set here together,
+        result: `self.cookies` and `self.session_active` are set here together,
         which is what stops one from being moved without the other.
         """
         tout = timeout_sec or 15
@@ -950,21 +1018,29 @@ class ZTERouterAPI:
         if not attempt.established:  # pragma: no cover - defensive
             raise ZTEConnectionError("Failed to establish a session at login")
 
-        self.stok = attempt.stok
+        self.cookies = dict(attempt.cookies)
         self.session_active = True
         self.last_activity = datetime.now(UTC)
-        if attempt.stok is None:
+        if not attempt.cookies:
+            # Kept because a router answering a success `result` with no
+            # cookie at all remains a supported outcome, but no device is now
+            # known to do it: the MC888 Pro that prompted this path turned out
+            # to issue `zsidn` (issue #56), which the old name-matching
+            # extractor discarded. Treat a cookieless session as unevidenced
+            # rather than as a firmware family.
             _LOGGER.debug(
-                "Router accepted the login without issuing a stok cookie; "
-                "the session is bound to this client rather than to a cookie"
+                "Router accepted the login without setting any cookie; the "
+                "session is bound to this client rather than to a cookie"
             )
+        else:
+            _LOGGER.debug("Login established with cookies: %s", sorted(attempt.cookies))
 
     async def _attempt_login(
         self, goform_id: str, zte_pass: str, tout: int, ad: str | None = None
     ) -> _LoginAttempt:
         """Post one login form and report what the router made of it.
 
-        Does not touch `self.stok` or `self.session_active`; `login()` owns
+        Does not touch `self.cookies` or `self.session_active`; `login()` owns
         both. Genuine transport failures raise `ZTEConnectionError` directly
         rather than being reported in the result, because there is no point
         retrying a different form against a router that is not answering at
@@ -1016,18 +1092,16 @@ class ZTERouterAPI:
                     if isinstance(resp_json, dict):
                         result = resp_json.get("result")
 
-                stok = self._extract_stok(r, resp_json=resp_json)
-                self._record_login_metadata(r, goform_id, stok, result)
+                cookies = self._extract_cookies(r, resp_json=resp_json)
+                self._record_login_metadata(r, goform_id, cookies, result)
 
-                # A cookie proves a session. Without one, only an explicit
-                # success `result` does — an MC888 Pro on
-                # `CR_ABPLMC888PROV1.0.1B04` answers a successful `LOGIN` with
-                # `{"result":"0"}` and no `Set-Cookie`, binding the session to
-                # this client instead (issue #56). A response carrying neither
-                # is not read as success: an absent `result` is normal on a
-                # command that returns none, but a *login* that neither set a
-                # cookie nor said `0` has not established anything.
-                if stok is None and str(result).lower() not in _LOGIN_SUCCESS:
+                # A cookie proves a session — any cookie, under any name.
+                # Without one, only an explicit success `result` does. A
+                # response carrying neither is not read as success: an absent
+                # `result` is normal on a command that returns none, but a
+                # *login* that neither set a cookie nor said `0` has not
+                # established anything.
+                if not cookies and str(result).lower() not in _LOGIN_SUCCESS:
                     if result in (
                         "password_error",
                         "invalid_password",
@@ -1036,7 +1110,7 @@ class ZTERouterAPI:
                     ):
                         return _LoginAttempt(
                             False,
-                            None,
+                            {},
                             f"Login failed due to invalid credentials: {result}",
                             None,
                         )
@@ -1048,24 +1122,24 @@ class ZTERouterAPI:
                     )
                     return _LoginAttempt(
                         False,
-                        None,
+                        {},
                         None,
                         f"Failed to establish a session at login: {result}",
                     )
 
-                await self._initialize_session(stok, tout)
+                await self._initialize_session(cookies, tout)
         except (TimeoutError, aiohttp.ClientError) as e:
             raise ZTEConnectionError(
                 f"Login failed due to connection error: {e}"
             ) from e
 
-        return _LoginAttempt(True, stok, login_error, conn_error)
+        return _LoginAttempt(True, cookies, login_error, conn_error)
 
     def _record_login_metadata(
         self,
         r: aiohttp.ClientResponse,
         goform_id: str,
-        stok: str | None,
+        cookies: dict[str, str],
         result: Any,
     ) -> None:
         """Record what the login response looked like, for diagnostics.
@@ -1087,54 +1161,64 @@ class ZTERouterAPI:
             "result": result,
             "header_names": names,
             "cookie_names": cookie_names,
-            "session_cookie_issued": stok is not None,
-            "stok_found_in": self._stok_found_in,
+            "session_cookie_issued": bool(cookies),
+            "cookies_replayed": sorted(cookies),
+            "cookies_found_in": self._cookies_found_in,
         }
 
-    def _extract_stok(
+    def _extract_cookies(
         self, r: aiohttp.ClientResponse, *, resp_json: Any = None
-    ) -> str | None:
-        """Return the `Cookie` header value for this session, or `None`.
+    ) -> dict[str, str]:
+        """Return every cookie the login response set, by name.
 
-        Four sources, because a token that exists but is not found is far
-        worse than none: it means the session is replayed without it, the
-        router echoes the authenticated keys back empty, and every entity
-        publishes `unknown`.
+        **Does not decide which cookie is the session.** An MC888 Pro on
+        `BD_ABPLMC888PROMODV1.0.0B01` names its session cookie `zsidn`, not
+        `stok` (issue #56), and the previous form matched the literal name
+        `stok` in four places — so the cookie was received, ignored, and every
+        subsequent request went out unauthenticated. The router then answered
+        as it does to any anonymous client, and every entity published
+        `unknown` behind a poll that scored as a success.
 
-        `r.cookies` is a `SimpleCookie`, whose morsel names are case-sensitive
-        and which silently drops a header it cannot parse, so the raw headers
-        are swept case-insensitively as well. `session.post` follows redirects
-        and `r.cookies` carries only the final response, so a token set on an
-        intermediate `302` — the reporter of issue #56 observed one — is
-        reachable only through the jar. `login()` empties the jar before
-        posting, so anything found there was set by this request.
+        A browser replays whatever the origin set, and so does this. Replaying
+        a cookie that is not the session costs nothing; missing the one that
+        is costs the whole integration, and no rule for telling them apart
+        survives contact with a firmware nobody has seen.
+
+        Three sources, in order. `r.cookies` is a `SimpleCookie`, whose morsel
+        names are case-sensitive and which silently drops a header it cannot
+        parse, so the raw headers are swept as well. A `stok` in the response
+        body is read last, for firmware that answers the token in JSON rather
+        than as a cookie.
+
+        The session cookie jar is deliberately **not** consulted. Home
+        Assistant's shared client session carries aiohttp's default
+        `CookieJar`, which refuses cookies from an IP-address host — the
+        normal configuration here — so that branch could never fire for the
+        redirect case it was written for.
         """
-        self._stok_found_in = "none"
-        morsel = r.cookies.get("stok")
-        if morsel:
-            self._stok_found_in = "response_cookie"
-            return f"stok={morsel.value.strip('"')}"
+        cookies: dict[str, str] = {
+            name: morsel.value.strip('"') for name, morsel in r.cookies.items()
+        }
+        if cookies:
+            self._cookies_found_in = "response_cookies"
 
         for header in r.headers.getall("Set-Cookie", []):
-            match = _STOK_HEADER_RE.search(header)
+            match = _SET_COOKIE_RE.match(header.strip())
             if match:
-                self._stok_found_in = "raw_header"
-                return f"stok={match.group(1)}"
+                name, value = match.group(1), match.group(2).strip('"')
+                if name not in cookies and value:
+                    cookies[name] = value
+                    self._cookies_found_in = "raw_header"
 
-        for cookie in self.session.cookie_jar:
-            if cookie.key.lower() == "stok" and cookie.value:
-                self._stok_found_in = "cookie_jar"
-                return f"stok={cookie.value.strip('"')}"
-
-        if isinstance(resp_json, dict):
+        if not cookies and isinstance(resp_json, dict):
             body_stok = resp_json.get("stok")
             if isinstance(body_stok, str) and body_stok:
-                self._stok_found_in = "response_body"
-                return f"stok={body_stok.strip('"')}"
+                cookies["stok"] = body_stok.strip('"')
+                self._cookies_found_in = "response_body"
 
-        return None
+        return cookies
 
-    async def _initialize_session(self, stok: str | None, tout: int) -> None:
+    async def _initialize_session(self, cookies: dict[str, str], tout: int) -> None:
         """Activate the session with the GET some ZTE routers require.
 
         Best effort: a failure here is logged and not raised, because the
@@ -1142,8 +1226,8 @@ class ZTERouterAPI:
         ground.
         """
         init_headers = {"Referer": f"{self.referer}index.html"}
-        if stok:
-            init_headers["Cookie"] = stok
+        if cookies:
+            init_headers["Cookie"] = _cookie_header(cookies)
         try:
             async with self.session.get(
                 f"{self.referer}goform/goform_get_cmd_process",
@@ -1155,6 +1239,172 @@ class ZTERouterAPI:
                 await init_r.read()
         except (TimeoutError, aiohttp.ClientError) as init_err:
             _LOGGER.debug("Session initialization GET failed: %s", init_err)
+
+    async def measure_unauthenticated_keys(
+        self, timeout_sec: int | None = None
+    ) -> frozenset[str]:
+        """Ask this device which keys it answers without a session.
+
+        `_UNAUTHENTICATED_KEYS` is five names measured on one MC7010 by
+        replaying an invalidated token, and asserted about every device since.
+        It is wrong on at least one: an MC888 Pro answers `network_type` and
+        `ppp_status` without a session (issue #56), both of which the constant
+        classifies as authenticated. On that device a lapsed session would show
+        a populated "authenticated" key, `_classify_session` would return
+        `live`, and a dead session would score healthy with nothing logged.
+
+        **Call only after a confirmed logout.** A reading taken while the
+        session is still live samples an authenticated response and measures
+        the whole batch as unauthenticated, which leaves the classifier unable
+        to ever return `expired` — a worse failure than the constant it
+        replaces. `logout()` records whether the router acknowledged; this
+        refuses to run unless it did.
+
+        Returns the measured set, or an empty set where no measurement could
+        be trusted. The caller keeps using the constant in that case.
+        """
+        if self.session_active or not self.logout_acknowledged:
+            _LOGGER.debug(
+                "Not measuring unauthenticated keys: session_active=%s, "
+                "logout_acknowledged=%s",
+                self.session_active,
+                self.logout_acknowledged,
+            )
+            return frozenset()
+
+        measured: set[str] = set()
+        for params in (_CORE_PARAMS, _EXTENDED_PARAMS):
+            # `authenticated=False` is the whole point: `_batch_get` would
+            # log back in before sending, sample an authenticated response,
+            # and measure the entire batch as unauthenticated.
+            path = (
+                "goform/goform_get_cmd_process?multi_data=1&isTest=false"
+                f"&sms_received_flag_flag=0&cmd={','.join(params)}"
+            )
+            try:
+                payload = await self._request(
+                    "GET",
+                    path,
+                    timeout_sec=timeout_sec,
+                    authenticated=False,
+                )
+            except (ZTEAuthError, ZTEConnectionError) as err:
+                _LOGGER.debug("Unauthenticated probe failed: %s", err)
+                return frozenset()
+            if not isinstance(payload, dict):
+                return frozenset()
+            measured |= {k for k, v in payload.items() if v not in ("", None)}
+
+        if not self._measurement_is_usable(measured):
+            return frozenset()
+
+        _LOGGER.info(
+            "Measured %d keys this router answers without a session",
+            len(measured),
+        )
+        return frozenset(measured)
+
+    @staticmethod
+    def _measurement_is_usable(measured: set[str]) -> bool:
+        """Reject a measurement that cannot safely replace the constant.
+
+        Each rule exists because the failure it prevents is silent. A set that
+        swallows a whole batch leaves nothing authenticated to compare
+        against, so `_classify_session` returns `undecidable` forever and
+        falls back to a rule that `_CORE_PARAMS` made unsatisfiable. A set
+        containing the sentinel or a contract key breaks `get_params` and the
+        drift check, which both depend on those being authenticated.
+        """
+        if not measured:
+            _LOGGER.debug("Measurement rejected: nothing answered")
+            return False
+
+        for params in (_CORE_PARAMS, _EXTENDED_PARAMS):
+            if not set(params) - measured:
+                _LOGGER.warning(
+                    "Measurement rejected: it would leave no authenticated key "
+                    "in a batch, so an expired session could never be detected"
+                )
+                return False
+
+        # Checked **before** the sentinel: `_SESSION_SENTINEL` is itself a
+        # contract key, so testing the sentinel first made this branch
+        # unreachable — coverage caught it.
+        #
+        # Reject only a set that claims **every** contract key, not one that
+        # claims any. The drift check asks whether *any* of them is present, so
+        # it survives losing one — and the MC888 Pro genuinely answers
+        # `network_type` without a session (issue #56). Rejecting on a single
+        # contract key would refuse that device's own true measurement and
+        # leave it on a constant that is wrong for it, which is the failure
+        # this whole mechanism exists to prevent.
+        if measured >= _CONTRACT_KEYS:
+            _LOGGER.warning(
+                "Measurement rejected: it would leave no authenticated contract "
+                "key, disabling the firmware drift check"
+            )
+            return False
+
+        if _SESSION_SENTINEL in measured:
+            # `get_params` appends this key to every targeted read precisely to
+            # prove the session is alive. A device answering it unauthenticated
+            # would make that proof meaningless, and there is no fallback for
+            # it — unlike the contract keys, which are a set.
+            _LOGGER.warning(
+                "Measurement rejected: %s must stay authenticated",
+                _SESSION_SENTINEL,
+            )
+            return False
+
+        return True
+
+    def unauthenticated_key_set(self) -> frozenset[str]:
+        """The key set in force: measured where trusted, constant otherwise."""
+        return self.unauthenticated_keys or _UNAUTHENTICATED_KEYS
+
+    async def probe_discovery_candidates(
+        self, timeout_sec: int | None = None
+    ) -> dict[str, str]:
+        """Ask which candidate names this device answers, for diagnostics only.
+
+        The `goform` API cannot be enumerated — one `cmd` takes a list of
+        names and answers those, so a name nobody asks for is invisible
+        forever. This is the only route to discovering that a device populates
+        something under a spelling this integration has never heard of.
+
+        **Chunked, and every chunk tolerated independently.**
+        `docs/zte_how_to_access.md` records a discovery probe carrying names
+        outside the firmware's dictionary making a whole chunk time out and
+        fall back to empty defaults, taking a genuinely populated key down
+        with it. A chunk that fails is skipped and the rest still run; nothing
+        here can affect the poll, because this never joins it.
+
+        Runs authenticated: the question is what the device populates for a
+        logged-in client, which is what a working integration would read.
+        """
+        found: dict[str, str] = {}
+        for start in range(0, len(DISCOVERY_CANDIDATES), DISCOVERY_CHUNK_SIZE):
+            chunk = DISCOVERY_CANDIDATES[start : start + DISCOVERY_CHUNK_SIZE]
+            path = (
+                "goform/goform_get_cmd_process?multi_data=1&isTest=false"
+                f"&sms_received_flag_flag=0&cmd={','.join(chunk)}"
+            )
+            try:
+                payload = await self._request("GET", path, timeout_sec=timeout_sec)
+            except (ZTEAuthError, ZTEConnectionError) as err:
+                _LOGGER.debug("Discovery chunk starting %s failed: %s", chunk[0], err)
+                continue
+            if isinstance(payload, dict):
+                found.update(
+                    {k: v for k, v in payload.items() if isinstance(v, str) and v}
+                )
+
+        _LOGGER.debug(
+            "Discovery: %d of %d candidates answered",
+            len(found),
+            len(DISCOVERY_CANDIDATES),
+        )
+        return found
 
     async def logout(self) -> None:
         """End the router session and drop local session state.
@@ -1178,12 +1428,21 @@ class ZTERouterAPI:
             # V1.0.0B03 on 2026-07-27: with AD it returns success and the stok
             # is genuinely invalidated; without it, the stok stays live.
             ad = await self.get_ad()
-            await self._request(
+            resp = await self._request(
                 "POST",
                 "goform/goform_set_cmd_process",
                 data=f"isTest=false&goformId=LOGOUT&AD={ad}",
                 headers=headers,
                 _retry=False,
+            )
+            # Recorded because a measurement taken after logout is only an
+            # *unauthenticated* sample if the logout actually took effect.
+            # This method swallows its own errors by design, and the router
+            # answers `{"result":"failure"}` on a bad `AD` — so without this
+            # flag a refused logout is indistinguishable from a clean one,
+            # and a probe would sample a session that is still live.
+            self.logout_acknowledged = isinstance(resp, dict) and not self._is_refusal(
+                resp
             )
         except Exception as err:  # noqa: BLE001 - unload must never fail
             _LOGGER.debug("Logout request failed (session dropped anyway): %s", err)
@@ -1690,9 +1949,23 @@ class ZTERouterAPI:
     # read back from. The router refuses a payload missing any of them.
     DATA_VOLUME_FIELDS: dict[str, tuple[str, ...]] = {
         "data_volume_limit_switch": ("data_volume_limit_switch",),
-        "data_volume_limit_unit": ("data_volume_limit_unit",),
-        "data_volume_limit_size": ("data_volume_limit_size",),
-        "data_volume_alert_percent": ("data_volume_alert_percent",),
+        # The `flux_` spellings matter more here than on a sensor. This is an
+        # all-or-nothing form: the router refuses it outright when a field is
+        # missing, and this method raises rather than guessing, so on a device
+        # using those spellings the data-limit controls would not degrade —
+        # they would be impossible to write at all.
+        "data_volume_limit_unit": (
+            "data_volume_limit_unit",
+            "flux_data_volume_limit_unit",
+        ),
+        "data_volume_limit_size": (
+            "data_volume_limit_size",
+            "flux_data_volume_limit_size",
+        ),
+        "data_volume_alert_percent": (
+            "data_volume_alert_percent",
+            "flux_data_volume_alert_percent",
+        ),
         "wan_auto_clear_flow_data_switch": ("wan_auto_clear_flow_data_switch",),
         "traffic_clear_date": (
             "traffic_clear_date",

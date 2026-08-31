@@ -79,6 +79,15 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     "login": (),
     "logout": (),
     "get_all_data": (),
+    # Returns an empty set rather than raising, and only ever runs after a
+    # confirmed logout — so on a dead session it refuses to run at all, which
+    # is the behavior being asserted rather than an exception.
+    "measure_unauthenticated_keys": (),
+    # Diagnostics only. Every chunk is tolerated independently by design, so a
+    # dead session yields an empty mapping rather than an exception — nothing
+    # downstream reads it, and a raise would make a debugging aid able to
+    # break a poll.
+    "probe_discovery_candidates": (),
     "get_extended_data": (),
     # The targeted read-back used to confirm a switch write. It must behave
     # exactly like the batch reads against a dead session: the switch treats a
@@ -209,7 +218,7 @@ async def test_no_method_silently_no_ops_on_a_dead_session(method_name, die_afte
     """
     session = _DyingSession(die_after=die_after, revive_on_login=False)
     api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
-    api.stok = "stok=stale"
+    api.cookies = {"stok": "stale"}
     api.session_active = True
 
     method = getattr(api, method_name)
@@ -231,6 +240,29 @@ async def test_no_method_silently_no_ops_on_a_dead_session(method_name, die_afte
         )
         return
 
+    # Not a best-effort exemption, which is capped deliberately. Its contract
+    # is "the measured set, or empty where nothing can be trusted", and a dead
+    # session is exactly the case where nothing can be. Returning empty here
+    # is the required behavior, not a silent no-op: measuring against a live
+    # session would classify the whole batch as unauthenticated and leave the
+    # classifier unable to ever report an expiry.
+    if method_name == "probe_discovery_candidates":
+        # Degrades rather than failing, by design: chunks are tolerated
+        # independently, so a session dying partway leaves whatever earlier
+        # chunks answered. Nothing reads this but the diagnostics download,
+        # and a raise would let a debugging aid break a poll.
+        assert isinstance(result, dict), (
+            "probe_discovery_candidates must always return a mapping"
+        )
+        return
+
+    if method_name == "measure_unauthenticated_keys":
+        assert result == frozenset(), (
+            "measure_unauthenticated_keys returned a set on a dead session; "
+            "it must decline unless a logout was acknowledged"
+        )
+        return
+
     assert not _is_empty_result(result), (
         f"{method_name} returned {result!r} after the session died — a silent "
         f"no-op. It must raise instead, so the caller can tell 'nothing there' "
@@ -249,7 +281,7 @@ async def test_methods_recover_when_the_session_can_be_renewed(method_name):
     """
     session = _DyingSession(die_after=0, revive_on_login=True)
     api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
-    api.stok = "stok=stale"
+    api.cookies = {"stok": "stale"}
     api.session_active = True
 
     result = await getattr(api, method_name)(*_CALLS[method_name])
@@ -304,7 +336,7 @@ async def test_write_commands_surface_a_refusal(method_name):
     """
     session = _RefusingSession(die_after=float("inf"))
     api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
-    api.stok = "stok=live"
+    api.cookies = {"stok": "live"}
     api.session_active = True
 
     with pytest.raises((ZTEAuthError, ZTEConnectionError)):
@@ -358,7 +390,7 @@ async def test_contracted_reads_reject_a_response_missing_their_key(method_name)
     """
     session = _DriftingSession(die_after=float("inf"))
     api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
-    api.stok = "stok=live"
+    api.cookies = {"stok": "live"}
     api.session_active = True
 
     with pytest.raises((ZTEAuthError, ZTEConnectionError)):
@@ -378,7 +410,7 @@ async def test_an_empty_inbox_is_not_an_error():
             return MockResponse(json_data={"messages": [], "sms_nv_total": "0"})
 
     api = ZTERouterAPI(_EmptyInbox(die_after=float("inf")), "1.2.3.4", "a", "p")
-    api.stok = "stok=live"
+    api.cookies = {"stok": "live"}
     api.session_active = True
     # Fresh clock, or the idle reset fires and this double cannot serve a login.
     api.last_activity = datetime.now(UTC)

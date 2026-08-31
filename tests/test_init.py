@@ -227,6 +227,41 @@ async def test_background_setup_failure(mock_hass, mock_config_entry):
 
 
 @pytest.mark.asyncio
+async def test_background_setup_adopts_a_measured_key_set(mock_hass, mock_config_entry):
+    """A measurement that passed validation replaces the module constant.
+
+    The constant is five names taken from one MC7010; the MC888 Pro in issue
+    #56 answers a different set, and a dead session on that device reads as
+    `live` while the constant is in force.
+    """
+    measured = frozenset({"imei", "model_name", "network_type"})
+    with (
+        patch("custom_components.zte_router_5g.ZTERouterAPI") as mock_api_class,
+        patch("custom_components.zte_router_5g.async_get_clientsession"),
+        patch("homeassistant.helpers.device_registry.async_get"),
+    ):
+        mock_api = mock_api_class.return_value
+        mock_api.try_set_protocol = AsyncMock(return_value=None)
+        mock_api.login = AsyncMock(return_value=None)
+        mock_api.logout = AsyncMock(return_value=None)
+        mock_api.get_all_data = AsyncMock(return_value={"network_type": "ENDC"})
+        mock_api.probe_discovery_candidates = AsyncMock(return_value={})
+        mock_api.measure_unauthenticated_keys = AsyncMock(return_value=measured)
+
+        background_coro = None
+
+        def mock_capture_task(hass, coro, name):
+            nonlocal background_coro
+            background_coro = coro
+            return MagicMock()
+
+        mock_config_entry.async_create_background_task = mock_capture_task
+        await async_setup_entry(mock_hass, mock_config_entry)
+        await background_coro
+
+        assert mock_api.unauthenticated_keys == measured
+
+
 async def test_background_setup_success(mock_hass, mock_config_entry):
     """The offloaded task probes the protocol, logs in, and stores the session.
 
@@ -244,6 +279,9 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
         mock_api.try_set_protocol = AsyncMock(return_value=None)
         mock_api.login = AsyncMock(return_value="stok=test")
         mock_api.get_all_data = AsyncMock(return_value={"network_type": "ENDC"})
+        mock_api.probe_discovery_candidates = AsyncMock(return_value={})
+        mock_api.measure_unauthenticated_keys = AsyncMock(return_value=frozenset())
+        mock_api.logout = AsyncMock(return_value=None)
 
         background_coro = None
 
@@ -263,7 +301,14 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
         # default (10-15 s) is the trap that section names: it blocks startup
         # long enough to trip the very warning the offload exists to prevent.
         mock_api.try_set_protocol.assert_awaited_once_with(5)
-        mock_api.login.assert_awaited_once_with(5)
+        # Twice: once to establish the session, and once to restore it after
+        # the unauthenticated key measurement, which can only be taken with no
+        # session and so ends the first one.
+        assert mock_api.login.await_count == 2
+        assert all(call.args == (5,) for call in mock_api.login.await_args_list)
+        mock_api.logout.assert_awaited_once()
+        mock_api.probe_discovery_candidates.assert_awaited_once()
+        mock_api.measure_unauthenticated_keys.assert_awaited_once()
         mock_api.get_all_data.assert_awaited()
 
 

@@ -27,6 +27,8 @@ from .const import (
     HEALTH_DRIFT_STRIKE_LIMIT,
     REPAIR_AUTH_FAILED,
     REPAIR_CONN_ERROR,
+    SPARSE_PAYLOAD_FRACTION,
+    SPARSE_PAYLOAD_MIN_HISTORY,
     UNREACHABLE_STRIKE_LIMIT,
 )
 from .helpers import get_router_model
@@ -144,6 +146,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self.api = api
         self.entry = entry
         self.consecutive_failures = 0
+        # The most keys this entry has ever seen populated, for the sparse
+        # payload check. Not persisted: a restart re-learns it on the first
+        # poll, which is the conservative direction.
+        self._payload_high_water = 0
         self.last_update_success_time: datetime | None = None
         self._was_available = True
         self._boot_time: datetime | None = None
@@ -477,7 +483,15 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 # against two independently ticking clocks.
                 seconds: int | None = None
                 with contextlib.suppress(ValueError, TypeError):
-                    raw_uptime = data.get("realtime_time")
+                    # Aliased: a device that spells this `flux_realtime_time`
+                    # would otherwise never latch a boot time, and the uptime
+                    # sensor would sit at `unknown` forever. Mirrors
+                    # `sensor._ALIAS_REALTIME_TIME`, which `sensor.py` cannot
+                    # be imported from here — `test_uptime_alias_matches_the
+                    # _sensor_tuple` fails if the two diverge.
+                    raw_uptime = data.get("realtime_time") or data.get(
+                        "flux_realtime_time"
+                    )
                     if raw_uptime is not None:
                         seconds = int(float(raw_uptime))
 
@@ -1019,6 +1033,37 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._drift_strikes += 1
         return self._drift_strikes >= HEALTH_DRIFT_STRIKE_LIMIT
 
+    def _sparse_payload_finding(self, data: dict[str, Any]) -> str | None:
+        """Report a poll that succeeded while answering almost nothing.
+
+        The MC888 Pro in issue #56 polled successfully with six of eighty-two
+        keys populated, because the drift check asks only whether *any*
+        contract key is present. A handful of values is neither drift nor an
+        expiry, but it is not a healthy poll either, and the only place it was
+        visible was a diagnostics download.
+
+        The threshold is relative to what this device has answered before, not
+        an absolute count: the reference MC7010 legitimately leaves 46 of 127
+        names empty, so a fixed floor would either miss the MC888 case or
+        report the MC7010 as faulty every cycle. `_payload_high_water` is the
+        most this entry has seen, so the finding fires only on a collapse
+        against the device's own history.
+        """
+        populated = sum(1 for value in data.values() if value not in ("", None))
+        if populated > self._payload_high_water:
+            self._payload_high_water = populated
+            return None
+
+        if self._payload_high_water < SPARSE_PAYLOAD_MIN_HISTORY:
+            return None
+
+        if populated <= self._payload_high_water * SPARSE_PAYLOAD_FRACTION:
+            return (
+                f"Sparse payload: {populated} keys populated against "
+                f"{self._payload_high_water} previously seen"
+            )
+        return None
+
     def _record_health_success(self, data: dict[str, Any]) -> None:
         """Refresh the health snapshot after a successful cycle.
 
@@ -1041,10 +1086,16 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             drift_findings = [DRIFT_CONTRACT] if drift else []
             issues.extend(drift_findings)
 
+            sparse = self._sparse_payload_finding(data)
+            if sparse:
+                issues.append(sparse)
+
             self.health_snapshot = {
                 "problem": bool(issues),
                 "issues": issues,
-                "severity": "warning" if drift else ("degraded" if degraded else "ok"),
+                "severity": "warning"
+                if (drift or sparse)
+                else ("degraded" if degraded else "ok"),
                 "degraded_capabilities": degraded,
                 "drift": drift_findings,
                 "repairs": self._active_repairs(drift),

@@ -5,6 +5,10 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
+  - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
+  - [\[3.3.7-dev2\] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep](#337-dev2---2026-08-31---data-limit-form-aliases-classified-concept-alias-sweep)
+  - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery](#337-dev1---2026-08-31---mc888-pro-session-cookie-per-device-unauthenticated-key-set-key-discovery)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
   - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Could Hold a Stale Boot Time Across a Home Assistant Restart](#336-dev1---2026-08-31---device-uptime-could-hold-a-stale-boot-time-across-a-home-assistant-restart)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
@@ -200,6 +204,91 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.7] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls
+
+### Summary
+
+- **Dynamic Session Cookie Compatibility**: The integration now retains and replays all session cookies set by the router (such as `zsidn` on the MC888 Pro) rather than requiring a literal `stok` cookie.
+- **Dynamic Unauthenticated Key Discovery**: The unauthenticated key set is now measured per device at startup, ensuring accurate session-expiry detection across varying router firmwares.
+- **Data Limit Control Compatibility**: Added alternate parameter aliases (including `flux_` variants) to the data limit write form, restoring data limit settings functionality on newer router models.
+- **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal telemetry.
+
+### Added
+
+- **Dynamic Cookie Name Support**: Router firmwares that issue session cookies under non-standard names (such as `zsidn` on the ZTE MC888 Pro) now have their cookies captured and replayed properly on all subsequent requests, resolving authentication failures.
+- **Per-Device Session Classification**: Session health monitoring now dynamically probes which keys the router answers without authentication during setup, preventing firmwares that report network status unauthenticated from causing session classification mismatches.
+- **Data Limit Settings Controls**: Added `flux_` parameter aliases to `DATA_LIMIT_SETTING` form writes, ensuring data limit configuration switches and thresholds are writable on routers using modern firmware schemas.
+- **Diagnostics Privacy**: Ensured alternate cell identifier key spellings (`Z5g_CELL_ID`) are pseudonymized in diagnostic downloads alongside primary keys.
+- **Sparse Payload Telemetry Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded telemetry baseline.
+- **Firmware Parameter Discovery**: Added a startup discovery probe that safely tests candidate parameter names to discover available telemetry keys across router models and publishes safe results in diagnostics.
+
+### Under the hood
+
+- **Alias Classification Sweep & Symlink Link Checker**: Enforced test coverage ensuring all redacted and pseudonymized concepts cover all parameter aliases, and added repository link validation tooling for Markdown documentation.
+
+## [3.3.7-dev3] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added
+
+### Added
+
+- **SymmLink Link Checker**: Added a validation checker to enforce that Markdown links in git-tracked files resolve strictly within the project repository boundaries and do not reference out-of-repo symlinked folders or untracked targets.
+  - **`.workbench/check_repo_links.py`**: Validates all git-tracked Markdown files (`git ls-files -- '*.md'`) against repository boundary escapes and forbidden external symlinks (`.notes/`, `.shared/`, `.workbench/`, `shared/SharedNotes/`, `shared/ProjNotes/`). Exempts `AGENTS.md` by default. Catches local `file:///` URLs and targets not tracked in the project git repository that pass local checks due to directory junctions but fail in GitHub Actions CI.
+  - **Task Integration**:
+    - `dev-workbench/workbench/tasks.json`: Added `Markdown: Check Repo Links` task, wired into `Validate All` dependencies and `Show: Results Summary`.
+
+## [3.3.7-dev2] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep
+
+### Summary
+
+Two items of the 3.3.7 sweep were reported complete in dev1 and were not. `DATA_VOLUME_FIELDS` kept single spellings for three of its six fields, and the alias-classification test covered subscriber identifiers only. Broadening the second found a diagnostics leak that predates this sweep.
+
+### Fixed
+
+- **`DATA_LIMIT_SETTING` sources every field through its aliases**: `data_volume_limit_unit`, `data_volume_limit_size` and `data_volume_alert_percent` now carry their `flux_` spellings in `DATA_VOLUME_FIELDS`. This form is all-or-nothing — the router refuses it when a field is missing, and `set_data_volume_settings` raises rather than guessing — so on a device using those spellings the data-limit controls were not degraded but unwritable. The sensor read sites were aliased in dev1; the write path was not.
+- **`Z5g_CELL_ID` is pseudonymized in the diagnostics download**: it is the other spelling of `nr5g_pci`, which is in `CELL_KEYS`, so one was tokenized and the other published intact. Present since the alias was added, not introduced by this sweep.
+
+### Testing
+
+- **`test_the_data_limit_form_sources_every_field_through_its_aliases`**: every field of the write form is asserted to have an alias tuple whose members are all requested.
+- **`test_every_flux_spelling_requested_is_aliased_somewhere`**: a `flux_` name in the request list that nothing reads costs URL budget on every poll, and the budget is what bounds the batch.
+- **`test_every_classified_concept_covers_all_its_aliases`**: an alias of a redacted, address or cell-identifier concept must itself be classified. `TO_REDACT`, `IP_KEYS` and `CELL_KEYS` enumerate by exact name, so a new spelling is invisible to them. This is the test that found the `Z5g_CELL_ID` leak.
+
+## [3.3.7-dev1] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery
+
+### Summary
+
+Issue #56 is resolved. The reporter's diagnostics download showed the MC888 Pro issuing a session cookie named `zsidn`; `_extract_stok` matched the literal name `stok` in four places, so the cookie was received, discarded, and every request went out unauthenticated. That same download also showed the device answering `network_type` and `ppp_status` without a session, both of which the MC7010-derived key constant classifies as authenticated — so once the session worked, a later lapse would have read as healthy. Both are fixed, and a discovery probe now reports which key spellings a device answers on.
+
+### Fixed
+
+- **A session cookie under any name is replayed**: `_extract_cookies` keeps every cookie the login response sets, by name, and `_cookie_header` renders them into one `Cookie` header. Which cookie carries the session is the router's business; replaying one that does not costs nothing, and missing the one that does costs the whole integration. The MC888 Pro's `zsidn` is pinned by a regression test built from the reporter's own metadata.
+- **The unauthenticated key set is measured per device**: `measure_unauthenticated_keys()` asks the router which keys it answers with no session, and `_classify_session` uses that in place of `_UNAUTHENTICATED_KEYS` where the measurement passes validation. On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` the measurement reproduces the constant exactly, verified by `scripts/hardware_check.py` check [1c].
+- **Data-limit settings and realtime counters carry their `flux_` spellings**: eight aliases added. Three feed `DATA_LIMIT_SETTING`, an all-or-nothing form the router refuses when a field is missing — a wrong spelling there makes the write impossible rather than blanking a sensor. `flux_monthly_time` was excluded: it aliases `monthly_time`, which this integration neither requests nor reads.
+- **Subscriber identifiers carry their short spellings**: `imsi` and `iccid` join the extended batch. Measured on the reference device: `iccid` carries the identical value to `sim_iccid`, and `imsi` is present but empty while `sim_imsi` is populated.
+
+### Added
+
+- **Discovery probe**: 62 candidate `cmd` names harvested from `Kajkac/ZTE-MC-Home-assistant-repo` and curated to this integration's scope, probed once per setup in chunks of 16 with every chunk tolerated independently. It never joins the poll — `docs/zte_how_to_access.md` records a probe carrying names outside the firmware's dictionary timing out a whole chunk and taking a populated key down with it. The MC7010 answers 36 of the 62.
+- **Sparse payload health finding**: a poll that succeeds while answering a fraction of what the device has answered before is now reported. The MC888 Pro polled successfully on 6 of 82 keys and nothing said so. The threshold is relative to that entry's own high-water mark, because the MC7010 legitimately leaves 46 of 127 names empty.
+- **Diagnostics**: the measured unauthenticated key set, and the discovery result. Discovery values publish only for names on `DISCOVERY_VALUE_SAFE`; everything else reports shape, kind and length, because `_sanitize_payload` classifies by exact key name and a name it does not know would otherwise travel with its value intact.
+
+### Changed
+
+- **`api.stok` becomes `api.cookies`**, a mapping. Five consumers updated, `scripts/hardware_check.py` included.
+- **`_sweep` masks digit runs of 15 or more**, catching IMSI (15) and ICCID (19-20). Not lower: an 11-digit byte counter is pinned by test, so anything below 12 would mask ordinary telemetry.
+- **`imsi` and `iccid` added to `TO_REDACT`** in the same change that put them in the request list.
+- **Background setup** runs both probes once, then restores the session. Login is awaited twice by design: the measurement can only be taken with no session.
+
+### Testing
+
+- **`tests/test_unauthenticated_key_measurement.py`** (new, 33 tests): the MC888 payload read as `live` under the constant and `expired` under the measured set; every rejection rule; the alias and redaction guards.
+- **`tests/test_sparse_payload_health.py`** (new, 7 tests): baseline growth, the issue #56 collapse, and a normally sparse device staying silent.
+- **`scripts/hardware_check.py`**: check [1c] scores the post-logout measurement against the cookieless read of [1b]. The two are different experiments and nothing had established they agree; on the reference device they do. 14 of 14 pass.
+- **Three tests rewritten**: `test_an_unrelated_set_cookie_header_is_skipped` and `test_an_unrelated_cookie_in_the_jar_is_skipped` pinned the rule this release reverses; the jar branch is removed, because Home Assistant's shared session refuses cookies from an IP-address host and it could never have fired.
+
+### Notes
+
+The cookieless-session path added in 3.3.5-dev25 is retained but is no longer evidenced. It was built on the inference that the MC888 Pro binds sessions to the client address; the device issues a cookie, and no known device is cookieless.
 
 ## [3.3.6] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts
 

@@ -112,7 +112,7 @@ def test_a_populated_response_is_live_however_much_is_absent() -> None:
 async def test_a_rejected_payload_is_retained_with_its_verdict(mock_aiohttp_client):
     """The response that caused the failure is otherwise discarded."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=dead"
+    api.cookies = {"stok": "dead"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.side_effect = [
@@ -142,7 +142,7 @@ async def test_a_rejected_payload_is_retained_with_its_verdict(mock_aiohttp_clie
 async def test_a_live_response_clears_a_previous_rejection(mock_aiohttp_client):
     """A stale rejection must not outlive the fault it describes."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=live"
+    api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     api.last_rejection = {"verdict": "expired"}
@@ -161,7 +161,7 @@ async def test_a_response_that_is_not_json_is_retained_as_a_preview(
 ):
     """There is no payload to keep, so the body preview is the evidence."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=live"
+    api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     # HTML on both passes: the first triggers a renewal, the second has no
@@ -207,7 +207,8 @@ async def test_login_metadata_records_the_cookie_name_and_source(
     assert meta["form_used"] == "LOGIN"
     assert meta["session_cookie_issued"] is True
     assert meta["cookie_names"] == ["stok"]
-    assert meta["stok_found_in"] == "response_cookie"
+    assert meta["cookies_replayed"] == ["stok"]
+    assert meta["cookies_found_in"] == "response_cookies"
 
 
 @pytest.mark.asyncio
@@ -227,7 +228,8 @@ async def test_login_metadata_records_a_cookieless_login(mock_aiohttp_client):
 
     assert api.login_metadata["session_cookie_issued"] is False
     assert api.login_metadata["cookie_names"] == []
-    assert api.login_metadata["stok_found_in"] == "none"
+    assert api.login_metadata["cookies_replayed"] == []
+    assert api.login_metadata["cookies_found_in"] == "none"
 
 
 @pytest.mark.asyncio
@@ -270,7 +272,7 @@ async def test_a_caller_that_declined_recovery_still_gets_an_auth_error(
     been spent.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=dead"
+    api.cookies = {"stok": "dead"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data=_dead_core())
@@ -322,3 +324,135 @@ async def test_the_download_carries_a_body_preview_sanitized(diagnostics_entry):
 
     assert result["last_rejection"]["verdict"] == "unparsable"
     assert "10.11.12.13" not in json.dumps(result)
+
+
+# ---------------------------------------------------------------------------
+# Discovery: names outside the request list
+# ---------------------------------------------------------------------------
+
+
+def test_every_discovery_candidate_is_classified() -> None:
+    """An unclassified candidate would be published with its value intact.
+
+    `_sanitize_payload` matches on exact key name, and these are names it does
+    not know. The allow-list is the gate: a candidate is either judged safe to
+    publish or reported as shape and length. Neither is a default.
+    """
+    from custom_components.zte_router_5g.const import (
+        DISCOVERY_CANDIDATES,
+        DISCOVERY_VALUE_SAFE,
+    )
+
+    assert set(DISCOVERY_CANDIDATES) >= DISCOVERY_VALUE_SAFE
+
+
+def test_no_discovery_candidate_is_already_requested() -> None:
+    """Discovery exists for names the poll does not carry."""
+    from custom_components.zte_router_5g.api import _CORE_PARAMS, _EXTENDED_PARAMS
+    from custom_components.zte_router_5g.const import DISCOVERY_CANDIDATES
+
+    requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+    assert not requested & set(DISCOVERY_CANDIDATES)
+
+
+def test_a_safe_candidate_publishes_its_value() -> None:
+    """Identifying an element needs its value; a name alone will not do it."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({"lte_band": "20"}, _Tokenizer())
+    assert out == {"lte_band": "20"}
+
+
+def test_an_unclassified_candidate_publishes_only_its_shape() -> None:
+    """A name not on the allow-list must never carry its value out."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({"spn_name_data": "Some Carrier Ltd"}, _Tokenizer())
+    assert "Some Carrier" not in str(out)
+    assert out["spn_name_data"].startswith("<")
+
+
+def test_a_safe_candidate_is_still_swept_for_addresses() -> None:
+    """Being allow-listed is not a licence to publish an address."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({"lte_band": "10.11.12.13"}, _Tokenizer())
+    assert "10.11.12.13" not in str(out)
+
+
+def test_a_non_string_discovery_value_survives() -> None:
+    """The router answers numbers on some keys; they are not text to describe."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    assert _sanitize_discovery({"tx_power": 23}, _Tokenizer()) == {"tx_power": 23}
+
+
+def test_a_missing_discovery_block_is_empty(diagnostics_entry) -> None:
+    """Diagnostics must survive an api stand-in without a discovery mapping."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    assert _sanitize_discovery(None, _Tokenizer()) == {}
+
+
+def test_shape_descriptions_distinguish_the_three_kinds() -> None:
+    """Shape has to carry enough to identify what an element is.
+
+    A counter, an identifier-ish token and free text must not all render the
+    same, or the fallback tells the reader nothing.
+    """
+    from custom_components.zte_router_5g.diagnostics import _describe
+
+    assert _describe("12345") == "<digits, 5 chars>"
+    assert _describe("band-20_ca") == "<alphanumeric, 10 chars>"
+    assert _describe("Some Carrier Ltd") == "<mixed, 16 chars>"
+
+
+@pytest.mark.asyncio
+async def test_a_failing_discovery_chunk_does_not_stop_the_rest(mock_aiohttp_client):
+    """`zte_how_to_access.md` records a chunk timing out and taking a key with it.
+
+    Each chunk is tolerated independently for that reason: one refusing must
+    not cost the answers the others already gave.
+    """
+    from custom_components.zte_router_5g.api import ZTEConnectionError
+    from custom_components.zte_router_5g.const import DISCOVERY_CANDIDATES
+
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    answers = [MockResponse(json_data={DISCOVERY_CANDIDATES[0]: "20"})]
+    answers += [ZTEConnectionError("chunk refused")] * 12
+    mock_aiohttp_client.get.side_effect = answers
+
+    found = await api.probe_discovery_candidates()
+
+    assert found == {DISCOVERY_CANDIDATES[0]: "20"}
+
+
+@pytest.mark.asyncio
+async def test_a_non_dict_discovery_response_is_skipped(mock_aiohttp_client):
+    """A list or scalar body is not a payload to harvest."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=["not", "a", "dict"])
+
+    assert await api.probe_discovery_candidates() == {}

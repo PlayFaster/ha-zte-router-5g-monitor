@@ -58,6 +58,16 @@ SESSION_IDLE_RESET_SECONDS = 150
 # echoing them would trip a stricter rule on every healthy poll.
 ABSENT_KEY_PROPORTION_LIMIT = 0.5
 
+# A poll answering at or below this fraction of the most keys this entry has
+# ever seen populated is reported on the health sensor. Relative rather than
+# absolute: the reference MC7010 leaves 46 of 127 names legitimately empty,
+# so a fixed floor would report it faulty every cycle, while the MC888 Pro in
+# issue #56 polled successfully with 6 of 82 and nothing was said at all.
+SPARSE_PAYLOAD_FRACTION = 0.25
+
+# Below this the high-water mark is not yet a baseline worth judging against.
+SPARSE_PAYLOAD_MIN_HISTORY = 20
+
 # Consecutive failures tolerated before entities are marked unavailable
 # (dev_standards Section 8 — the "3-strike" rule). Applied both globally and,
 # independently, to each optional endpoint. Named to match
@@ -156,3 +166,158 @@ PROJECTION_CONFIDENCE_MEDIUM = 0.75
 SMS_SEGMENTS_MAX = 5
 SMS_MAX_CHARS_GSM7 = 765
 SMS_MAX_CHARS_UNICODE = 335
+
+# Candidate `cmd` names harvested from `Kajkac/ZTE-MC-Home-assistant-repo`,
+# which covers the MC801A, MC888 and MC889, minus everything this integration
+# already requests and everything outside its scope (Wi-Fi, guest networks,
+# DHCP, DNS, IPv6, battery, firmware upgrade state).
+#
+# Probed once per setup so a diagnostics download can show which of them a
+# device populates. **Never joins the poll**: `docs/zte_how_to_access.md`
+# records a probe carrying names outside the firmware's dictionary making a
+# whole chunk time out and fall back to empty defaults, taking a genuinely
+# populated key down with it. Chunked and individually tolerant for the same
+# reason.
+#
+# Every name here is classified in `diagnostics.py` — see
+# `DISCOVERY_VALUE_SAFE`. An unclassified candidate is not eligible for this
+# list, because its value would be published.
+# Names per discovery request. Small deliberately: a chunk carrying a name
+# outside the firmware's dictionary can time out entirely, and a smaller chunk
+# loses less when it does.
+DISCOVERY_CHUNK_SIZE = 16
+
+DISCOVERY_CANDIDATES: list[str] = [
+    "5g_rx0_rsrp",
+    "5g_rx1_rsrp",
+    "Lte_ca_status",
+    "Z5g_dlEarfcn",
+    "ZCELLINFO_band",
+    "bandwidth",
+    "cr_version",
+    "dial_mode",
+    "ecio",
+    "ecio_1",
+    "ecio_2",
+    "ecio_3",
+    "ecio_4",
+    "flux_monthly_time",
+    "lte_band",
+    "lte_ca_pcell_arfcn",
+    "lte_ca_pcell_freq",
+    "lte_ca_scell_arfcn",
+    "lte_ca_scell_info",
+    "lte_earfcn_lock",
+    "lte_multi_ca_scell_sig_info",
+    "lte_pci_lock",
+    "lte_rsrp_1",
+    "lte_rsrp_2",
+    "lte_rsrp_3",
+    "lte_rsrp_4",
+    "lte_snr_1",
+    "lte_snr_2",
+    "lte_snr_3",
+    "lte_snr_4",
+    "modem_main_state",
+    "monthly_time",
+    "network_information",
+    "network_provider_fullname",
+    "ngbr_cell_info",
+    "nr5g_action_nsa_band",
+    "nr5g_cell_id",
+    "nr5g_nsa_band_lock",
+    "nr5g_sa_band_lock",
+    "nr_ca_pcell_band",
+    "nr_ca_pcell_freq",
+    "nr_multi_ca_scell_info",
+    "pdp_type",
+    "pdp_type_ui",
+    "pin_status",
+    "ppp_dial_conn_fail_counter",
+    "pppoe_status",
+    "roam_setting_option",
+    "rscp_1",
+    "rscp_2",
+    "rscp_3",
+    "rscp_4",
+    "simcard_roam",
+    "sms_received_flag",
+    "spn_b1_flag",
+    "spn_b2_flag",
+    "spn_name_data",
+    "static_wan_ipaddr",
+    "static_wan_status",
+    "sts_received_flag",
+    "tx_power",
+    "wa_version",
+]
+
+# Discovery candidates whose values may be published in the diagnostics
+# download. Everything else is reported as shape and length only.
+#
+# `diagnostics._sanitize_payload` classifies by exact key name, and `_sweep`
+# catches only address- and identifier-shaped strings — so a name it does not
+# know falls through with its value intact. These are the names judged to
+# carry radio telemetry, counters or enumerations rather than identity,
+# location or third-party content. The excluded ones are: static WAN address,
+# NR cell id, carrier long name, service-provider name data, two firmware
+# version strings, and the two free-text blobs `network_information` and
+# `ngbr_cell_info`, which carry neighbouring-cell detail.
+DISCOVERY_VALUE_SAFE: frozenset[str] = frozenset(
+    {
+        "5g_rx0_rsrp",
+        "5g_rx1_rsrp",
+        "Lte_ca_status",
+        "Z5g_dlEarfcn",
+        "ZCELLINFO_band",
+        "bandwidth",
+        "dial_mode",
+        "ecio",
+        "ecio_1",
+        "ecio_2",
+        "ecio_3",
+        "ecio_4",
+        "flux_monthly_time",
+        "lte_band",
+        "lte_ca_pcell_arfcn",
+        "lte_ca_pcell_freq",
+        "lte_ca_scell_arfcn",
+        "lte_ca_scell_info",
+        "lte_earfcn_lock",
+        "lte_multi_ca_scell_sig_info",
+        "lte_pci_lock",
+        "lte_rsrp_1",
+        "lte_rsrp_2",
+        "lte_rsrp_3",
+        "lte_rsrp_4",
+        "lte_snr_1",
+        "lte_snr_2",
+        "lte_snr_3",
+        "lte_snr_4",
+        "modem_main_state",
+        "monthly_time",
+        "nr5g_action_nsa_band",
+        "nr5g_nsa_band_lock",
+        "nr5g_sa_band_lock",
+        "nr_ca_pcell_band",
+        "nr_ca_pcell_freq",
+        "nr_multi_ca_scell_info",
+        "pdp_type",
+        "pdp_type_ui",
+        "pin_status",
+        "ppp_dial_conn_fail_counter",
+        "pppoe_status",
+        "roam_setting_option",
+        "rscp_1",
+        "rscp_2",
+        "rscp_3",
+        "rscp_4",
+        "simcard_roam",
+        "sms_received_flag",
+        "spn_b1_flag",
+        "spn_b2_flag",
+        "static_wan_status",
+        "sts_received_flag",
+        "tx_power",
+    }
+)
