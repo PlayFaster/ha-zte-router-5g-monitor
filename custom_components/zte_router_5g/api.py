@@ -1949,9 +1949,23 @@ class ZTERouterAPI:
     # read back from. The router refuses a payload missing any of them.
     DATA_VOLUME_FIELDS: dict[str, tuple[str, ...]] = {
         "data_volume_limit_switch": ("data_volume_limit_switch",),
-        "data_volume_limit_unit": ("data_volume_limit_unit",),
-        "data_volume_limit_size": ("data_volume_limit_size",),
-        "data_volume_alert_percent": ("data_volume_alert_percent",),
+        # The `flux_` spellings matter more here than on a sensor. This is an
+        # all-or-nothing form: the router refuses it outright when a field is
+        # missing, and this method raises rather than guessing, so on a device
+        # using those spellings the data-limit controls would not degrade —
+        # they would be impossible to write at all.
+        "data_volume_limit_unit": (
+            "data_volume_limit_unit",
+            "flux_data_volume_limit_unit",
+        ),
+        "data_volume_limit_size": (
+            "data_volume_limit_size",
+            "flux_data_volume_limit_size",
+        ),
+        "data_volume_alert_percent": (
+            "data_volume_alert_percent",
+            "flux_data_volume_alert_percent",
+        ),
         "wan_auto_clear_flow_data_switch": ("wan_auto_clear_flow_data_switch",),
         "traffic_clear_date": (
             "traffic_clear_date",

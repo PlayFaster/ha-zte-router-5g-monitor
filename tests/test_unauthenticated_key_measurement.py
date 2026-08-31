@@ -399,3 +399,72 @@ def test_a_set_cookie_header_that_does_not_parse_is_ignored(mock_aiohttp_client)
     response.headers = CIMultiDict([("Set-Cookie", ";;;")])
 
     assert api._extract_cookies(response) == {}
+
+
+def test_the_data_limit_form_sources_every_field_through_its_aliases() -> None:
+    """An all-or-nothing form: a missing field makes the write impossible.
+
+    `set_data_volume_settings` raises rather than guessing when a field is
+    absent from the last poll, so a spelling this integration does not request
+    does not degrade the control — it removes it.
+    """
+    requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+    for field, aliases in ZTERouterAPI.DATA_VOLUME_FIELDS.items():
+        assert aliases, f"{field} has no alias tuple"
+        for alias in aliases:
+            assert alias in requested, (
+                f"{field} aliases {alias}, which is never asked for"
+            )
+
+
+def test_every_flux_spelling_requested_is_aliased_somewhere() -> None:
+    """A `flux_` name in the request list that nothing reads is dead weight.
+
+    It costs URL budget on every poll, and the budget is what bounds the batch.
+    """
+    from custom_components.zte_router_5g import sensor
+
+    consumed = {
+        key
+        for name in dir(sensor)
+        if name.startswith("_ALIAS_")
+        for key in getattr(sensor, name)
+    }
+    for tup in ZTERouterAPI.DATA_VOLUME_FIELDS.values():
+        consumed |= set(tup)
+    consumed |= {"flux_realtime_time"}  # read by the coordinator's uptime latch
+
+    flux_requested = {
+        key
+        for key in set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+        if key.startswith("flux_")
+    }
+    assert flux_requested <= consumed, f"unread: {sorted(flux_requested - consumed)}"
+
+
+def test_every_classified_concept_covers_all_its_aliases() -> None:
+    """A new spelling of a classified concept is invisible to the sanitizer.
+
+    `TO_REDACT`, `IP_KEYS` and `CELL_KEYS` enumerate by exact name, so an
+    alias added to the request list without being classified is published.
+    """
+    from custom_components.zte_router_5g import sensor
+    from custom_components.zte_router_5g.diagnostics import CELL_KEYS
+
+    concepts = {
+        "cell": (CELL_KEYS, sensor._ALIAS_5G_PCI),
+    }
+    for label, (classified, aliases) in concepts.items():
+        overlap = classified & set(aliases)
+        if overlap:
+            assert set(aliases) <= classified, (
+                f"{label}: {sorted(set(aliases) - classified)} share a concept "
+                f"with a classified key but are not classified"
+            )
+    assert {"imsi", "sim_imsi", "iccid", "sim_iccid"} <= _redacted()
+
+
+def _redacted() -> set[str]:
+    from custom_components.zte_router_5g.diagnostics import TO_REDACT
+
+    return set(TO_REDACT)

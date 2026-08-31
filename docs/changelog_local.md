@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.7-dev2\] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep](#337-dev2---2026-08-31---data-limit-form-aliases-classified-concept-alias-sweep)
   - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery](#337-dev1---2026-08-31---mc888-pro-session-cookie-per-device-unauthenticated-key-set-key-discovery)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
   - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Could Hold a Stale Boot Time Across a Home Assistant Restart](#336-dev1---2026-08-31---device-uptime-could-hold-a-stale-boot-time-across-a-home-assistant-restart)
@@ -201,6 +202,23 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.7-dev2] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep
+
+### Summary
+
+Two items of the 3.3.7 sweep were reported complete in dev1 and were not. `DATA_VOLUME_FIELDS` kept single spellings for three of its six fields, and the alias-classification test covered subscriber identifiers only. Broadening the second found a diagnostics leak that predates this sweep.
+
+### Fixed
+
+- **`DATA_LIMIT_SETTING` sources every field through its aliases**: `data_volume_limit_unit`, `data_volume_limit_size` and `data_volume_alert_percent` now carry their `flux_` spellings in `DATA_VOLUME_FIELDS`. This form is all-or-nothing — the router refuses it when a field is missing, and `set_data_volume_settings` raises rather than guessing — so on a device using those spellings the data-limit controls were not degraded but unwritable. The sensor read sites were aliased in dev1; the write path was not.
+- **`Z5g_CELL_ID` is pseudonymized in the diagnostics download**: it is the other spelling of `nr5g_pci`, which is in `CELL_KEYS`, so one was tokenized and the other published intact. Present since the alias was added, not introduced by this sweep.
+
+### Testing
+
+- **`test_the_data_limit_form_sources_every_field_through_its_aliases`**: every field of the write form is asserted to have an alias tuple whose members are all requested.
+- **`test_every_flux_spelling_requested_is_aliased_somewhere`**: a `flux_` name in the request list that nothing reads costs URL budget on every poll, and the budget is what bounds the batch.
+- **`test_every_classified_concept_covers_all_its_aliases`**: an alias of a redacted, address or cell-identifier concept must itself be classified. `TO_REDACT`, `IP_KEYS` and `CELL_KEYS` enumerate by exact name, so a new spelling is invisible to them. This is the test that found the `Z5g_CELL_ID` leak.
 
 ## [3.3.7-dev1] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery
 

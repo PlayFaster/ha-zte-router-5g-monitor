@@ -70,7 +70,12 @@ CARRIER_KEYS = {
 # Identifiers that DO carry cross-reference value, so they are tokenized rather
 # than blanked: seeing that two fields hold the same cell is diagnostic.
 IP_KEYS = {"wan_ipaddr", "lan_ipaddr", "ipv6_wan_ipaddr"}
-CELL_KEYS = {"cell_id", "enodeb_id", "lte_pci", "nr5g_pci"}
+# `Z5g_CELL_ID` is the other spelling of `nr5g_pci` — see
+# `sensor._ALIAS_5G_PCI`. It was requested and published untokenized while its
+# sibling was pseudonymized, which `test_every_classified_concept_covers_all
+# _its_aliases` now prevents: an alias of a classified concept is invisible to
+# a set that enumerates by exact name.
+CELL_KEYS = {"cell_id", "enodeb_id", "lte_pci", "nr5g_pci", "Z5g_CELL_ID"}
 
 # The SMS block is the highest-sensitivity content in the payload: it is data
 # about a *third party* who never consented to appear in a bug report.
