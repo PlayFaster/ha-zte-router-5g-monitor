@@ -188,7 +188,7 @@ def test_a_response_of_only_unauthenticated_keys_is_undecidable() -> None:
 async def test_expired_session_triggers_a_relogin(mock_aiohttp_client) -> None:
     """The recovery path already existed; it was simply never reached."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=dead"
+    api.cookies = {"stok": "dead"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     # The full batch, not an abbreviation. A dead session on this API echoes
@@ -215,7 +215,7 @@ async def test_a_booting_router_raises_connection_not_auth(
 ) -> None:
     """`not_ready` must not burn a re-login, and must not look like bad auth."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=live"
+    api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(

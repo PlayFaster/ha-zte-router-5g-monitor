@@ -176,6 +176,21 @@ _ALIAS_5G_PCI: Final = ("nr5g_pci", "Z5g_CELL_ID")
 _ALIAS_MONTHLY_TX: Final = ("monthly_tx_bytes", "flux_monthly_tx_bytes")
 _ALIAS_MONTHLY_RX: Final = ("monthly_rx_bytes", "flux_monthly_rx_bytes")
 
+# The `flux_` prefix is a parallel vocabulary across this API, not a quirk of
+# the monthly counters. The bare spelling leads because the reference MC7010
+# answers on it; order is the tie-break, see `_get_first`.
+_ALIAS_REALTIME_TX_BYTES: Final = ("realtime_tx_bytes", "flux_realtime_tx_bytes")
+_ALIAS_REALTIME_RX_BYTES: Final = ("realtime_rx_bytes", "flux_realtime_rx_bytes")
+_ALIAS_REALTIME_TX_THRPT: Final = ("realtime_tx_thrpt", "flux_realtime_tx_thrpt")
+_ALIAS_REALTIME_RX_THRPT: Final = ("realtime_rx_thrpt", "flux_realtime_rx_thrpt")
+_ALIAS_REALTIME_TIME: Final = ("realtime_time", "flux_realtime_time")
+_ALIAS_LIMIT_SIZE: Final = ("data_volume_limit_size", "flux_data_volume_limit_size")
+_ALIAS_LIMIT_UNIT: Final = ("data_volume_limit_unit", "flux_data_volume_limit_unit")
+_ALIAS_ALERT_PERCENT: Final = (
+    "data_volume_alert_percent",
+    "flux_data_volume_alert_percent",
+)
+
 # Day of the month on which the router zeroes its monthly counters. Three
 # spellings are in circulation across the goform family; `traffic_clear_date` is
 # the one a live MC7010 probe answered on, so it leads. Order is the tie-break —
@@ -230,10 +245,10 @@ def _data_allowance_bytes(data: dict[str, Any]) -> int | None:
     router can limit by hours instead of bytes, and a duration is not an
     allowance this sensor can report.
     """
-    if data.get("data_volume_limit_unit") == "time":
+    if _get_first(data, _ALIAS_LIMIT_UNIT) == "time":
         return None
 
-    raw = _safe_str(data.get("data_volume_limit_size"))
+    raw = _safe_str(_get_first(data, _ALIAS_LIMIT_SIZE))
     if raw is None or raw.count("_") != 1:
         return None
 
@@ -441,7 +456,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="system",
         min_limit=0,
-        value_fn=lambda data: _safe_int(data.get("realtime_time")),
+        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_TIME)),
     ),
     ZTESensorEntityDescription(
         key="last_updated",
@@ -1223,7 +1238,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=2,
         min_limit=0,
         group="data",
-        value_fn=lambda data: _safe_int(data.get("realtime_tx_thrpt")),
+        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_TX_THRPT)),
     ),
     ZTESensorEntityDescription(
         key="realtime_rx_thrpt",
@@ -1239,7 +1254,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=2,
         min_limit=0,
         group="data",
-        value_fn=lambda data: _safe_int(data.get("realtime_rx_thrpt")),
+        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_RX_THRPT)),
     ),
     ZTESensorEntityDescription(
         key="realtime_tx_bytes",
@@ -1255,7 +1270,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=2,
         min_limit=0,
         group="data",
-        value_fn=lambda data: _safe_int(data.get("realtime_tx_bytes")),
+        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_TX_BYTES)),
     ),
     ZTESensorEntityDescription(
         key="realtime_rx_bytes",
@@ -1270,7 +1285,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=2,
         min_limit=0,
         group="data",
-        value_fn=lambda data: _safe_int(data.get("realtime_rx_bytes")),
+        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_RX_BYTES)),
     ),
     # --- SMS Sub-device ---
     ZTESensorEntityDescription(
@@ -1373,7 +1388,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=0,
         max_limit=100,
         group="data",
-        value_fn=lambda data: _safe_int(data.get("data_volume_alert_percent")),
+        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_ALERT_PERCENT)),
     ),
     ZTESensorEntityDescription(
         key="sntp_server",

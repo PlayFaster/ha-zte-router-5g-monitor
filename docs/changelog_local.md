@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery](#337-dev1---2026-08-31---mc888-pro-session-cookie-per-device-unauthenticated-key-set-key-discovery)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
   - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Could Hold a Stale Boot Time Across a Home Assistant Restart](#336-dev1---2026-08-31---device-uptime-could-hold-a-stale-boot-time-across-a-home-assistant-restart)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
@@ -200,6 +201,43 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.7-dev1] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery
+
+### Summary
+
+Issue #56 is resolved. The reporter's diagnostics download showed the MC888 Pro issuing a session cookie named `zsidn`; `_extract_stok` matched the literal name `stok` in four places, so the cookie was received, discarded, and every request went out unauthenticated. That same download also showed the device answering `network_type` and `ppp_status` without a session, both of which the MC7010-derived key constant classifies as authenticated — so once the session worked, a later lapse would have read as healthy. Both are fixed, and a discovery probe now reports which key spellings a device answers on.
+
+### Fixed
+
+- **A session cookie under any name is replayed**: `_extract_cookies` keeps every cookie the login response sets, by name, and `_cookie_header` renders them into one `Cookie` header. Which cookie carries the session is the router's business; replaying one that does not costs nothing, and missing the one that does costs the whole integration. The MC888 Pro's `zsidn` is pinned by a regression test built from the reporter's own metadata.
+- **The unauthenticated key set is measured per device**: `measure_unauthenticated_keys()` asks the router which keys it answers with no session, and `_classify_session` uses that in place of `_UNAUTHENTICATED_KEYS` where the measurement passes validation. On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` the measurement reproduces the constant exactly, verified by `scripts/hardware_check.py` check [1c].
+- **Data-limit settings and realtime counters carry their `flux_` spellings**: eight aliases added. Three feed `DATA_LIMIT_SETTING`, an all-or-nothing form the router refuses when a field is missing — a wrong spelling there makes the write impossible rather than blanking a sensor. `flux_monthly_time` was excluded: it aliases `monthly_time`, which this integration neither requests nor reads.
+- **Subscriber identifiers carry their short spellings**: `imsi` and `iccid` join the extended batch. Measured on the reference device: `iccid` carries the identical value to `sim_iccid`, and `imsi` is present but empty while `sim_imsi` is populated.
+
+### Added
+
+- **Discovery probe**: 62 candidate `cmd` names harvested from `Kajkac/ZTE-MC-Home-assistant-repo` and curated to this integration's scope, probed once per setup in chunks of 16 with every chunk tolerated independently. It never joins the poll — `docs/zte_how_to_access.md` records a probe carrying names outside the firmware's dictionary timing out a whole chunk and taking a populated key down with it. The MC7010 answers 36 of the 62.
+- **Sparse payload health finding**: a poll that succeeds while answering a fraction of what the device has answered before is now reported. The MC888 Pro polled successfully on 6 of 82 keys and nothing said so. The threshold is relative to that entry's own high-water mark, because the MC7010 legitimately leaves 46 of 127 names empty.
+- **Diagnostics**: the measured unauthenticated key set, and the discovery result. Discovery values publish only for names on `DISCOVERY_VALUE_SAFE`; everything else reports shape, kind and length, because `_sanitize_payload` classifies by exact key name and a name it does not know would otherwise travel with its value intact.
+
+### Changed
+
+- **`api.stok` becomes `api.cookies`**, a mapping. Five consumers updated, `scripts/hardware_check.py` included.
+- **`_sweep` masks digit runs of 15 or more**, catching IMSI (15) and ICCID (19-20). Not lower: an 11-digit byte counter is pinned by test, so anything below 12 would mask ordinary telemetry.
+- **`imsi` and `iccid` added to `TO_REDACT`** in the same change that put them in the request list.
+- **Background setup** runs both probes once, then restores the session. Login is awaited twice by design: the measurement can only be taken with no session.
+
+### Testing
+
+- **`tests/test_unauthenticated_key_measurement.py`** (new, 33 tests): the MC888 payload read as `live` under the constant and `expired` under the measured set; every rejection rule; the alias and redaction guards.
+- **`tests/test_sparse_payload_health.py`** (new, 7 tests): baseline growth, the issue #56 collapse, and a normally sparse device staying silent.
+- **`scripts/hardware_check.py`**: check [1c] scores the post-logout measurement against the cookieless read of [1b]. The two are different experiments and nothing had established they agree; on the reference device they do. 14 of 14 pass.
+- **Three tests rewritten**: `test_an_unrelated_set_cookie_header_is_skipped` and `test_an_unrelated_cookie_in_the_jar_is_skipped` pinned the rule this release reverses; the jar branch is removed, because Home Assistant's shared session refuses cookies from an IP-address host and it could never have fired.
+
+### Notes
+
+The cookieless-session path added in 3.3.5-dev25 is retained but is no longer evidenced. It was built on the inference that the MC888 Pro binds sessions to the client address; the device issues a cookie, and no known device is cookieless.
 
 ## [3.3.6] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts
 

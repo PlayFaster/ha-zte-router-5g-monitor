@@ -149,7 +149,7 @@ async def test_write_payload_shape_is_unchanged(
     the payload changed without the expectation following.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.post.return_value = MockResponse(
@@ -189,7 +189,7 @@ async def test_delete_all_reuses_the_delete_payload(mock_aiohttp_client):
     would be invisible until someone tried to clear a full inbox.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.post.return_value = MockResponse(

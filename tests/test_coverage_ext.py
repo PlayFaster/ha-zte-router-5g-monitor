@@ -71,7 +71,7 @@ async def test_api_login_connection_error(mock_aiohttp_client):
             ZTEConnectionError, match="Login failed due to connection error"
         ):
             await api.login()
-        assert api.stok is None
+        assert not api.cookies
 
 
 @pytest.mark.asyncio
@@ -123,14 +123,14 @@ async def test_api_auto_login_get_last_sms_content(mock_aiohttp_client):
 async def test_api_get_last_sms_content_exception(mock_aiohttp_client):
     """Test get_last_sms_content exception handling."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"LD": "test_ld"})
     mock_aiohttp_client.post.side_effect = aiohttp.ClientError("SMS Fail")
 
     with pytest.raises(ZTEConnectionError):
         await api.get_last_sms_content()
-    assert api.stok is None
+    assert not api.cookies
 
 
 @pytest.mark.asyncio
@@ -154,7 +154,7 @@ async def test_api_auto_login_delete_sms(mock_aiohttp_client):
 async def test_api_delete_all_exception(mock_aiohttp_client):
     """Test delete_all exception handling."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
 
     with patch.object(api, "login", return_value="stok=test"):
@@ -163,7 +163,7 @@ async def test_api_delete_all_exception(mock_aiohttp_client):
 
         with pytest.raises(ZTEConnectionError, match="Request failed: Delete All Fail"):
             await api.delete_all()
-        assert api.stok is None
+        assert not api.cookies
 
 
 @pytest.mark.asyncio
@@ -216,7 +216,7 @@ async def test_api_get_ad_raises_when_rd_is_unavailable(mock_aiohttp_client):
 async def test_api_get_rd_success(mock_aiohttp_client):
     """Test get_rd success path."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=fake"
+    api.cookies = {"stok": "fake"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data={"RD": "test_rd"})
@@ -419,6 +419,9 @@ async def test_init_background_setup_success(
         mock_config_entry.async_create_background_task = mock_capture_task
 
         mock_api.get_all_data = AsyncMock(return_value={"network_type": "ENDC"})
+        mock_api.probe_discovery_candidates = AsyncMock(return_value={})
+        mock_api.measure_unauthenticated_keys = AsyncMock(return_value=frozenset())
+        mock_api.logout = AsyncMock(return_value=None)
 
         # Trigger setup
         assert await async_setup_entry(hass, mock_config_entry) is True
@@ -427,7 +430,14 @@ async def test_init_background_setup_success(
         await background_coro
         await hass.async_block_till_done()
 
-        mock_api.login.assert_awaited_once_with(5)
+        # Twice: once to establish the session, and once to restore it after
+        # the unauthenticated key measurement, which can only be taken with no
+        # session and so ends the first one.
+        assert mock_api.login.await_count == 2
+        assert all(call.args == (5,) for call in mock_api.login.await_args_list)
+        mock_api.logout.assert_awaited_once()
+        mock_api.probe_discovery_candidates.assert_awaited_once()
+        mock_api.measure_unauthenticated_keys.assert_awaited_once()
         assert mock_config_entry.runtime_data.data["network_type"] == "ENDC"
         assert mock_config_entry.runtime_data.last_update_success is True
 
@@ -619,7 +629,7 @@ async def test_api_ip_with_protocol_prefix(mock_aiohttp_client):
 async def test_api_request_html_via_url_no_retry(mock_aiohttp_client):
     """Test _request HTML detection via URL, no retry (api.py:122,133-163)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     mock_aiohttp_client.get.return_value = MockResponse(
         json_data={}, url="http://192.168.0.1/index.html"
@@ -632,7 +642,7 @@ async def test_api_request_html_via_url_no_retry(mock_aiohttp_client):
 async def test_api_request_html_via_url_with_retry(mock_aiohttp_client):
     """Test _request HTML detection via URL with retry and relogin (api.py:133-147)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     mock_aiohttp_client.get.return_value = MockResponse(
         json_data={}, url="http://192.168.0.1/index.html"
@@ -649,7 +659,7 @@ async def test_api_request_html_via_url_with_retry(mock_aiohttp_client):
 async def test_api_request_html_via_content_type(mock_aiohttp_client):
     """Test _request HTML detection via Content-Type header (api.py:123-130)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     mock_response = MockResponse(json_data=None, headers={"Content-Type": "text/html"})
     mock_aiohttp_client.get.return_value = mock_response
@@ -666,7 +676,7 @@ async def test_api_request_html_via_content_type(mock_aiohttp_client):
 async def test_api_request_html_via_content_type_starts_with_angle(mock_aiohttp_client):
     """Test _request HTML detection when text body starts with '<' (api.py:127)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     mock_response = MockResponse(
         json_data=None,
@@ -686,7 +696,7 @@ async def test_api_request_html_via_content_type_starts_with_angle(mock_aiohttp_
 async def test_api_request_json_parse_retry(mock_aiohttp_client):
     """Test _request JSON parse failure with retry (api.py:170-184)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
 
     # First response fails json(), second response succeeds
@@ -707,7 +717,7 @@ async def test_api_request_json_parse_retry(mock_aiohttp_client):
 async def test_api_request_json_parse_no_retry(mock_aiohttp_client):
     """Test _request JSON parse failure without retry (api.py:184-186)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     mock_response = MockResponse(json_data=None)
     mock_aiohttp_client.get.return_value = mock_response
@@ -740,7 +750,7 @@ async def test_api_login_password_error_result(mock_aiohttp_client):
 async def test_api_request_reauth_error_in_outer_except(mock_aiohttp_client):
     """Test _request re-raises ZTEAuthError in outer except (api.py:225)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
 
     with (
@@ -889,7 +899,7 @@ async def test_api_request_html_text_exception(mock_aiohttp_client):
     to JSON parsing. This test validates that the pass block is entered.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     mock_response = MockResponse(json_data={}, headers={"Content-Type": "text/html"})
     mock_aiohttp_client.get.return_value = mock_response
@@ -909,7 +919,7 @@ async def test_api_request_html_body_preview_exception(mock_aiohttp_client):
     and r.text() raises during body_preview extraction.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     mock_response = MockResponse(json_data={}, url="http://192.168.0.1/index.html")
     mock_aiohttp_client.get.return_value = mock_response
@@ -946,16 +956,16 @@ async def test_api_login_session_init_success(mock_aiohttp_client):
     )
 
     await api.login()
-    assert api.stok == "stok=test_stok"
+    assert api.cookies == {"stok": "test_stok"}
     assert api.session_active
-    assert api.stok == "stok=test_stok"
+    assert api.cookies == {"stok": "test_stok"}
 
 
 @pytest.mark.asyncio
 async def test_api_get_sms_capacity_other_exception(mock_aiohttp_client):
     """Test get_sms_capacity defensive handler for non-auth errors (api.py:464-465)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
@@ -968,7 +978,7 @@ async def test_api_get_sms_capacity_other_exception(mock_aiohttp_client):
 async def test_api_get_last_sms_content_other_exception(mock_aiohttp_client):
     """Test get_last_sms_content defensive handler (api.py:543-544)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
@@ -981,7 +991,7 @@ async def test_api_get_last_sms_content_other_exception(mock_aiohttp_client):
 async def test_api_get_sms_messages_other_exception(mock_aiohttp_client):
     """Test get_sms_messages defensive handler (api.py:652-654)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
@@ -994,7 +1004,7 @@ async def test_api_get_sms_messages_other_exception(mock_aiohttp_client):
 async def test_api_get_rd_other_exception(mock_aiohttp_client):
     """Test get_rd defensive handler (api.py:631-632)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
@@ -1261,16 +1271,16 @@ async def test_api_login_session_init_failure(mock_aiohttp_client):
     )
 
     await api.login()
-    assert api.stok == "stok=test_stok"
+    assert api.cookies == {"stok": "test_stok"}
     assert api.session_active
-    assert api.stok == "stok=test_stok"
+    assert api.cookies == {"stok": "test_stok"}
 
 
 @pytest.mark.asyncio
 async def test_api_delete_all_list_timeout(mock_aiohttp_client):
     """Test delete_all when delete_sms raises TimeoutError (api.py:593-595)."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    api.stok = "stok=test"
+    api.cookies = {"stok": "test"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 

@@ -106,7 +106,7 @@ except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
 
 CONFIG_ENTRIES = pathlib.Path("/config/.storage/core.config_entries")
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent / "tests" / "fixtures"
-INVALID_STOK = "stok=0000000000000000000000000000000f"
+INVALID_STOK = "0000000000000000000000000000000f"
 
 # Writes this script is allowed to make. Each names the key its position is read
 # back from — not always the entity key — and the two values to cycle through.
@@ -233,7 +233,7 @@ def _kill_session(api: ZTERouterAPI, session: aiohttp.ClientSession) -> None:
     Home Assistant's. Replacing the stok is indistinguishable from that as far
     as every request is concerned.
     """
-    api.stok = INVALID_STOK
+    api.cookies = {"stok": INVALID_STOK}
     # The session stays *marked* active. A router-side eviction does not tell
     # the client anything, and clearing the flag here would have `_request`
     # log in again before the probe ever went out — the opposite of what
@@ -298,9 +298,9 @@ async def check_session_assumptions(
     # a kill and re-login because that is the sequence every recovery path in
     # `_request` ends with. See issue #56 Section 4.1.
     report.record(
-        api.session_active and api.stok is not None,
-        "the session flag and the session cookie agree after re-login",
-        f"session_active={api.session_active}, stok={'set' if api.stok else 'none'}",
+        api.session_active and bool(api.cookies),
+        "the session flag and the session cookies agree after re-login",
+        f"session_active={api.session_active}, cookies={sorted(api.cookies)}",
     )
 
     await _capture_cookieless_batch(api, session, report)
@@ -310,7 +310,9 @@ async def check_session_assumptions(
     # `CR_ABPLMC888PROV1.0.1B04` binds the session to the client address and
     # sends no cookie at all (issue #56). Capturing it makes the reference
     # router the documented baseline for `_extract_stok`.
-    report.captured["login_issues_stok_cookie"] = api.stok is not None
+    report.captured["login_cookie_names"] = sorted(api.cookies)
+
+    await _check_logout_then_probe(api, report)
 
 
 async def _probe_cookieless(
@@ -399,6 +401,44 @@ async def _capture_cookieless_batch(
     print(_cyan("\n[1b] Cookieless batch reads (evidence for per-device measurement)"))
     await _probe_cookieless(api, session, report, "core", _CORE_PARAMS)
     await _probe_cookieless(api, session, report, "extended", _EXTENDED_PARAMS)
+
+
+async def _check_logout_then_probe(api: ZTERouterAPI, report: Report) -> None:
+    """Confirm the post-logout measurement agrees with the cookieless read.
+
+    The per-device measurement of `_UNAUTHENTICATED_KEYS` takes its sample
+    after a confirmed logout. Nothing had ever established that this window
+    and the cookieless read of [1b] produce the same answer — the docstring of
+    `_capture_cookieless_batch` flags exactly that. They are different
+    experiments: one sends no cookie against a live session, the other sends a
+    normal request against a session the router has ended.
+
+    Scored, not merely recorded. A disagreement means the measurement is
+    sampling something other than an unauthenticated response, which is the
+    failure that would leave the classifier unable to report an expiry at all.
+    """
+    print(_cyan("\n[1c] Post-logout measurement against the cookieless read"))
+
+    await api.logout()
+    report.record(
+        api.logout_acknowledged,
+        "the router acknowledged the LOGOUT",
+        "the measurement refuses to run without this",
+    )
+
+    measured = await api.measure_unauthenticated_keys()
+    core = report.captured.get("cookieless_batch_core", {})
+    extended = report.captured.get("cookieless_batch_extended", {})
+    cookieless = set(core.get("populated", [])) | set(extended.get("populated", []))
+
+    report.record(
+        bool(measured) and set(measured) == cookieless,
+        "the post-logout measurement matches the cookieless read",
+        f"measured={sorted(measured)}, cookieless={sorted(cookieless)}",
+    )
+    report.captured["measured_unauthenticated_keys"] = sorted(measured)
+
+    await api.login()
 
 
 async def check_write_round_trip(
@@ -540,7 +580,7 @@ async def check_logout_ends_the_session(api: ZTERouterAPI, report: Report) -> No
     """
     print(_cyan("\n[5] Logout actually ends the session"))
 
-    stale = api.stok
+    stale = dict(api.cookies)
     try:
         await api.logout()
     except Exception as err:  # noqa: BLE001 - reporting, not handling
@@ -549,7 +589,7 @@ async def check_logout_ends_the_session(api: ZTERouterAPI, report: Report) -> No
         # Restore the whole session pair, not the cookie alone: `logout()`
         # cleared both, and a replay with the flag down would log in again
         # instead of presenting the stale token this check exists to test.
-        api.stok = stale
+        api.cookies = stale
         api.session_active = True
         try:
             await api._request("GET", PROBE_PATH, _retry=False)

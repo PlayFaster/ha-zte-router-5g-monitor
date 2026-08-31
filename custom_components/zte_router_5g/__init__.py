@@ -488,6 +488,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await api.try_set_protocol(5)
             await api.login(5)
             await coordinator.async_refresh()
+
+            # Both run once per setup and feed the diagnostics download only.
+            # Neither is allowed to fail setup: the discovery probe tolerates
+            # every chunk independently, and the measurement declines rather
+            # than raising when it cannot take a trustworthy sample.
+            api.discovery = await api.probe_discovery_candidates(timeout_sec=20)
+
+            # The unauthenticated key set can only be sampled with no session,
+            # so this ends the one just established and logs back in. It costs
+            # one logout and one login, once, and replaces a five-name
+            # constant measured on a single MC7010 with this device's own
+            # answer — see `api.measure_unauthenticated_keys`.
+            await api.logout()
+            measured = await api.measure_unauthenticated_keys(timeout_sec=20)
+            if measured:
+                api.unauthenticated_keys = measured
+            await api.login(5)
+
             _LOGGER.info("%s: Background initialization complete.", entry.title)
         except (
             TimeoutError,

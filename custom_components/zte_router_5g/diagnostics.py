@@ -34,6 +34,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from .const import DISCOVERY_VALUE_SAFE
 from .coordinator import ZTERouterDataUpdateCoordinator
 
 # Values with no cross-reference worth preserving — blanked outright.
@@ -43,6 +44,14 @@ TO_REDACT = {
     "imei",
     "sim_imsi",
     "sim_iccid",
+    # The shorter spellings the goform family also answers on. Added with the
+    # aliases that put them in the request list: this module matches on exact
+    # key name, and `_sweep` catches only IP- and MAC-shaped strings, so a
+    # bare-digit IMSI would have travelled to a public issue in clear text.
+    # `test_subscriber_aliases_are_redacted` fails if an alias of a redacted
+    # concept is requested without being classified here.
+    "imsi",
+    "iccid",
     "msisdn",
 }
 
@@ -70,6 +79,8 @@ SMS_NUMBER_KEYS = {"number", "number_decoded"}
 
 _IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _MAC_RE = re.compile(r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b")
+# Identifier-shaped digit runs: IMSI is 15 digits, ICCID 19-20. See `_sweep`.
+_LONG_DIGITS_RE = re.compile(r"\b\d{15,}\b")
 _PDP_RE = re.compile(r"\b(IPv4v6|IPv6|IPv4|PPP|IP)\b")
 
 REDACTED = "**REDACTED**"
@@ -113,14 +124,20 @@ def _summarize_apn(value: str, tokenizer: _Tokenizer) -> str:
 
 
 def _sweep(value: str, tokenizer: _Tokenizer) -> str:
-    """Replace anything IP- or MAC-shaped anywhere in a string.
+    """Replace anything IP-, MAC- or identifier-shaped anywhere in a string.
 
     A structural backstop for keys this module does not enumerate. Matched on
     shape only — never against a list of real values, which would put PII in
     the source tree and would not work for anybody else's router.
+
+    The digit threshold is 15, not lower. An IMSI is 15 digits and an ICCID
+    19 or 20, so 15 catches both; a byte counter is not an identifier, and
+    `test_byte_counters_are_not_mistaken_for_identifiers` pins an 11-digit
+    one, so anything below 12 would mask ordinary telemetry.
     """
     value = _IP_RE.sub(lambda m: tokenizer.token("ip", m.group(0)), value)
-    return _MAC_RE.sub(lambda m: tokenizer.token("mac", m.group(0)), value)
+    value = _MAC_RE.sub(lambda m: tokenizer.token("mac", m.group(0)), value)
+    return _LONG_DIGITS_RE.sub(lambda m: tokenizer.token("id", m.group(0)), value)
 
 
 def _sanitize_sms(block: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
@@ -240,12 +257,58 @@ async def async_get_config_entry_diagnostics(
         "last_rejection": _sanitize_rejection(
             coordinator.api.last_rejection, tokenizer
         ),
+        # Measured rather than assumed: which keys this device answers
+        # without a session. Names only. Empty means no measurement passed
+        # validation and the module constant is in force.
+        "unauthenticated_keys": sorted(coordinator.api.unauthenticated_keys)
+        if isinstance(coordinator.api.unauthenticated_keys, (set, frozenset))
+        else [],
+        # Which candidate names this device answered. Values only for the
+        # names classified safe in `const.DISCOVERY_VALUE_SAFE`; everything
+        # else reports shape and length, because `_sanitize_payload` matches
+        # on exact key name and a name it does not know would otherwise be
+        # published intact.
+        "discovery": _sanitize_discovery(coordinator.api.discovery, tokenizer),
         "login": (
             deepcopy(coordinator.api.login_metadata)
             if isinstance(coordinator.api.login_metadata, dict)
             else {}
         ),
     }
+
+
+def _describe(value: str) -> str:
+    """Reduce a value to its shape, for a name not classified safe."""
+    if value.isdigit():
+        kind = "digits"
+    elif all(c.isalnum() or c in "-_." for c in value):
+        kind = "alphanumeric"
+    else:
+        kind = "mixed"
+    return f"<{kind}, {len(value)} chars>"
+
+
+def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]:
+    """Publish discovery results, values only where the name was classified.
+
+    Identifying what an element is needs its value, and a name alone will not
+    do it — but these are names the payload walker does not know, so an
+    unclassified one would travel with its value intact. The allow-list is the
+    gate: a candidate not in `DISCOVERY_VALUE_SAFE` reports its shape and
+    length instead, which still distinguishes a counter from a timestamp from
+    a free-text blob.
+    """
+    if not isinstance(discovery, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for key, value in discovery.items():
+        if not isinstance(value, str):
+            out[key] = value
+        elif key in DISCOVERY_VALUE_SAFE:
+            out[key] = _sweep(value, tokenizer)
+        else:
+            out[key] = _describe(value)
+    return out
 
 
 def _sanitize_rejection(

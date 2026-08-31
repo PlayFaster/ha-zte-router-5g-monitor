@@ -75,6 +75,8 @@ def mock_api():
         api.login = AsyncMock(return_value="stok=test")
         api.logout = AsyncMock(return_value=None)
         api.get_all_data = AsyncMock(return_value=dict(ROUTER_DATA))
+        api.probe_discovery_candidates = AsyncMock(return_value={})
+        api.measure_unauthenticated_keys = AsyncMock(return_value=frozenset())
         api.get_sms_capacity = AsyncMock(return_value={})
         api.get_sms_messages = AsyncMock(return_value=[])
         yield api
