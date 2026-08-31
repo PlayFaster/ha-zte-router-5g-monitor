@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
   - [\[3.3.7-dev2\] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep](#337-dev2---2026-08-31---data-limit-form-aliases-classified-concept-alias-sweep)
   - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery](#337-dev1---2026-08-31---mc888-pro-session-cookie-per-device-unauthenticated-key-set-key-discovery)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
@@ -202,6 +203,15 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.7-dev3] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added
+
+### Added
+
+- **SymmLink Link Checker**: Added a validation checker to enforce that Markdown links in git-tracked files resolve strictly within the project repository boundaries and do not reference out-of-repo symlinked folders or untracked targets.
+  - **`.workbench/check_repo_links.py`**: Validates all git-tracked Markdown files (`git ls-files -- '*.md'`) against repository boundary escapes and forbidden external symlinks (`.notes/`, `.shared/`, `.workbench/`, `shared/SharedNotes/`, `shared/ProjNotes/`). Exempts `AGENTS.md` by default. Catches local `file:///` URLs and targets not tracked in the project git repository that pass local checks due to directory junctions but fail in GitHub Actions CI.
+  - **Task Integration**:
+    - `dev-workbench/workbench/tasks.json`: Added `Markdown: Check Repo Links` task, wired into `Validate All` dependencies and `Show: Results Summary`.
 
 ## [3.3.7-dev2] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep
 
