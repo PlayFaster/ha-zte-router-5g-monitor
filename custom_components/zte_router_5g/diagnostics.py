@@ -229,4 +229,43 @@ async def async_get_config_entry_diagnostics(
             "endpoint_failures": coordinator.endpoint_failures,
         },
         "data": payload,
+        # `data` is empty until the first successful poll, which is exactly
+        # the case this file is usually requested for. These two carry the
+        # evidence that would otherwise be reachable only from raw logs.
+        #
+        # The rejected payload goes through the same walker as `data`, so it
+        # is no more revealing than an accepted one. `login` carries names and
+        # status only and never a cookie value — see
+        # `api.ZTERouterAPI._record_login_metadata`.
+        "last_rejection": _sanitize_rejection(
+            coordinator.api.last_rejection, tokenizer
+        ),
+        "login": (
+            deepcopy(coordinator.api.login_metadata)
+            if isinstance(coordinator.api.login_metadata, dict)
+            else {}
+        ),
     }
+
+
+def _sanitize_rejection(
+    rejection: dict[str, Any] | None, tokenizer: _Tokenizer
+) -> dict[str, Any] | None:
+    """Sanitize a retained rejection, payload included.
+
+    The key maps are names only and pass through untouched; the payload is
+    walked exactly as `coordinator.data` is. A response that was never JSON
+    carries a body preview instead of a payload, and that is swept for
+    address-shaped strings by the same walker.
+    """
+    # `isinstance`, not truthiness: diagnostics must survive a coordinator
+    # whose api is a stand-in, and must never put a non-serializable object
+    # into a file the user is about to attach to an issue.
+    if not isinstance(rejection, dict):
+        return None
+    out = deepcopy(rejection)
+    if "payload" in out:
+        out["payload"] = _sanitize_payload(out["payload"], tokenizer)
+    if "body_preview" in out:
+        out["body_preview"] = _sweep(out["body_preview"], tokenizer)
+    return out

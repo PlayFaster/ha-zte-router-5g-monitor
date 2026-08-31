@@ -87,7 +87,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 try:
     import aiohttp
 
-    from custom_components.zte_router_5g.api import ZTEAuthError, ZTERouterAPI
+    from custom_components.zte_router_5g.api import (
+        _CORE_PARAMS,
+        _EXTENDED_PARAMS,
+        _UNAUTHENTICATED_KEYS,
+        ZTEAuthError,
+        ZTERouterAPI,
+    )
     from custom_components.zte_router_5g.const import APN_PROFILE_SLOTS
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
     raise SystemExit(
@@ -297,12 +303,102 @@ async def check_session_assumptions(
         f"session_active={api.session_active}, stok={'set' if api.stok else 'none'}",
     )
 
+    await _capture_cookieless_batch(api, session, report)
+
     # This device issues a stok. Recorded rather than scored, because a device
     # that does not is a supported configuration — an MC888 Pro on
     # `CR_ABPLMC888PROV1.0.1B04` binds the session to the client address and
     # sends no cookie at all (issue #56). Capturing it makes the reference
     # router the documented baseline for `_extract_stok`.
     report.captured["login_issues_stok_cookie"] = api.stok is not None
+
+
+async def _probe_cookieless(
+    api: ZTERouterAPI,
+    session: aiohttp.ClientSession,
+    report: Report,
+    label: str,
+    params: list[str],
+) -> None:
+    """Read one batch with no session cookie and compare against the constant."""
+    cmd = ",".join(params)
+    url = (
+        f"{api.referer}goform/goform_get_cmd_process?multi_data=1&isTest=false"
+        f"&sms_received_flag_flag=0&cmd={cmd}"
+    )
+    key = f"cookieless_batch_{label}"
+    try:
+        async with session.get(
+            url,
+            headers={"Referer": f"{api.referer}index.html"},
+            timeout=aiohttp.ClientTimeout(total=15),
+            ssl=False,
+        ) as r:
+            status = r.status
+            body = await r.text()
+    except (TimeoutError, aiohttp.ClientError) as err:
+        report.captured[key] = {"error": f"{type(err).__name__}: {err}"}
+        print(f"  {label}: {_yellow('request failed')} — {err}")
+        return
+
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        preview = body.strip()[:100].replace("\n", " ")
+        report.captured[key] = {
+            "status": status,
+            "json": False,
+            "body_preview": preview,
+        }
+        print(f"  {label}: {_yellow('not JSON')} (status {status}) — {_dim(preview)}")
+        return
+
+    populated = sorted(k for k, v in payload.items() if v != "")
+    absent = sorted(set(params) - set(payload))
+    expected = sorted(_UNAUTHENTICATED_KEYS & set(params))
+    matches = populated == expected
+
+    report.captured[key] = {
+        "status": status,
+        "keys_returned": len(payload),
+        "keys_absent": len(absent),
+        "populated": populated,
+        "expected_from_constant": expected,
+        "matches_constant": matches,
+    }
+
+    verdict = _green("agrees") if matches else _yellow("DISAGREES")
+    print(
+        f"  {label}: {len(payload)}/{len(params)} keys returned, "
+        f"{len(absent)} absent — {verdict}"
+    )
+    print(f"      populated: {populated or '(none)'}")
+    print(f"      constant : {expected or '(none)'}")
+
+
+async def _capture_cookieless_batch(
+    api: ZTERouterAPI, session: aiohttp.ClientSession, report: Report
+) -> None:
+    """Record which keys answer a batch read carrying no session cookie.
+
+    Settles a question the existing evidence does not. `_UNAUTHENTICATED_KEYS`
+    was measured by replaying an **invalidated** stok; a proposal to measure
+    that set per device would instead send **no cookie at all**. Those are
+    different experiments, and nothing establishes that they agree — a router
+    may answer an absent cookie with an HTML redirect, or omit keys rather
+    than echoing them back blank.
+
+    Both batches are probed. `_classify_session` runs on each, and a per-device
+    measurement has to leave at least one authenticated key in each, so a
+    result for the core batch says nothing about the extended one. The two
+    `opms_` keys in the constant appear only in the extended batch.
+
+    Recorded, not scored. A disagreement is evidence about that proposal, not
+    a fault in the integration. It sits in the safe tier because it only reads.
+    """
+    print(_cyan("\n[1b] Cookieless batch reads (evidence for per-device measurement)"))
+    await _probe_cookieless(api, session, report, "core", _CORE_PARAMS)
+    await _probe_cookieless(api, session, report, "extended", _EXTENDED_PARAMS)
 
 
 async def check_write_round_trip(

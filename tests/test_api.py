@@ -107,6 +107,7 @@ async def test_api_login_success(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
     ]
 
@@ -142,6 +143,7 @@ async def test_api_login_failure_no_stok(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "VER"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(json_data={}, cookies={})
 
@@ -178,14 +180,16 @@ async def test_api_get_all_data_retry_exhausted(mock_aiohttp_client):
     api.stok = "stok=old_stok"
     api.session_active = True
 
-    # Both calls return empty data — retry is exhausted, raises ZTEAuthError
+    # Both calls return the same empty shape. The re-login still happens; the
+    # second identical response refutes the expiry rather than confirming it,
+    # so the failure is reported as a reachability problem.
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"network_type": "", "signalbar": ""}),
         MockResponse(json_data={"network_type": "", "signalbar": ""}),
     ]
 
     with patch.object(api, "login") as mock_login:
-        with pytest.raises(ZTEAuthError, match="Session expired/unauthorized"):
+        with pytest.raises(ZTEConnectionError, match="freshly established session"):
             await api.get_all_data()
         assert mock_login.called
 
@@ -963,7 +967,7 @@ async def test_persistently_dead_session_raises_instead_of_returning_empty(
 
     with (
         patch.object(ZTERouterAPI, "login", return_value="stok=fresh"),
-        pytest.raises(ZTEAuthError),
+        pytest.raises((ZTEAuthError, ZTEConnectionError)),
     ):
         await api.get_sms_messages()
 
@@ -1035,6 +1039,7 @@ async def test_login_falls_back_to_the_alternate_form(mock_aiohttp_client):
         MockResponse(json_data={"LD": "LD"}),
         # An unlisted model: neither MC801 nor MC7010, so is_multi stays True.
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
     ]
     mock_aiohttp_client.post.side_effect = [
@@ -1056,6 +1061,7 @@ async def test_login_fallback_is_the_other_form_either_way_round(mock_aiohttp_cl
         MockResponse(json_data={"LD": "LD"}),
         # MC7010 with a username selects LOGIN as primary.
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
     ]
     mock_aiohttp_client.post.side_effect = [
@@ -1078,6 +1084,7 @@ async def test_login_does_not_fall_back_on_a_credentials_rejection(
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={"result": "password_error"}, cookies={}
@@ -1099,6 +1106,7 @@ async def test_login_fallback_reports_the_credentials_error_it_uncovers(
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
     mock_aiohttp_client.post.side_effect = [
         MockResponse(json_data={"result": "failure"}, cookies={}),
@@ -1119,6 +1127,7 @@ async def test_login_fallback_failure_stays_a_connection_error(mock_aiohttp_clie
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MF286_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={"result": "failure"}, cookies={}
@@ -1140,6 +1149,7 @@ async def test_login_success_on_the_primary_form_makes_no_second_attempt(
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
@@ -1796,9 +1806,13 @@ async def test_a_genuinely_dead_session_is_still_detected(mock_aiohttp_client):
         json_data={"ODU_led_switch": "", "wan_connect_status": ""}
     )
 
+    # A fresh session producing the same shape refutes the verdict rather
+    # than confirming it, so this is reported as a reachability problem. What
+    # matters for this test is unchanged: it raises rather than handing back
+    # an empty result that reads as "the setting is blank".
     with (
         patch.object(api, "login", AsyncMock(return_value="stok=fresh")),
-        pytest.raises(ZTEAuthError),
+        pytest.raises(ZTEConnectionError, match="freshly established session"),
     ):
         await api.get_params(["ODU_led_switch"])
 
@@ -1861,6 +1875,7 @@ async def test_login_omits_the_username_field_when_none_is_configured(
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(

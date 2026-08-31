@@ -43,6 +43,7 @@ async def test_api_login_mc801(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
         MockResponse(json_data={"wa_inner_version": "MC801_VER"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "MC801_VER"}),
     ]
 
@@ -725,6 +726,7 @@ async def test_api_login_password_error_result(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "VER"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={"result": "password_error"}, cookies={}
@@ -935,6 +937,7 @@ async def test_api_login_session_init_success(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
     ]
 
@@ -1213,6 +1216,7 @@ async def test_api_login_json_parse_failure(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
+        MockResponse(json_data={"RD": "test_rd"}),
     ]
 
     # Login response: no stok cookie, json() raises ValueError
@@ -1237,6 +1241,7 @@ async def test_api_login_session_init_failure(mock_aiohttp_client):
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"LD": "test_ld"}),
         MockResponse(json_data={"wa_inner_version": "test_v"}),
+        MockResponse(json_data={"RD": "test_rd"}),
         TimeoutError("Init timeout"),
     ]
 

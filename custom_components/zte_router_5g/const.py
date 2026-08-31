@@ -43,6 +43,21 @@ LIVE_OPTION_KEYS = frozenset({CONF_SCAN_INTERVAL, CONF_STOP_POLLING})
 # indistinguishable from success at the HTTP layer.
 SESSION_IDLE_RESET_SECONDS = 150
 
+# Proportion of the *requested* authenticated keys that may be missing from a
+# response before the session classifier declines to rule on it.
+#
+# An expired session on this API echoes the requested keys back as empty
+# strings; it does not drop them. Measured on MC7010 firmware
+# `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-30, where a cookieless read returned
+# 80 of 80 core and 36 of 36 extended keys with none absent. Keys going
+# *missing* is therefore a different fault — a truncated or refused request,
+# or firmware key-name drift — and must not be read as a dead session.
+#
+# Not zero. An unknown `cmd` name is simply absent from the response rather
+# than an error, so a device that omits the cross-model aliases instead of
+# echoing them would trip a stricter rule on every healthy poll.
+ABSENT_KEY_PROPORTION_LIMIT = 0.5
+
 # Consecutive failures tolerated before entities are marked unavailable
 # (dev_standards Section 8 — the "3-strike" rule). Applied both globally and,
 # independently, to each optional endpoint. Named to match

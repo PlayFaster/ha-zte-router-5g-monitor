@@ -5,6 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
+  - [\[3.3.5-dev2\] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll](#335-dev2---2026-08-31---session-verdict-evidence-diagnostics-capture-on-a-failed-poll)
+  - [\[3.3.5-dev1\] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation](#335-dev1---2026-08-30---multi-user-login-payload-aligned-with-reference-implementation)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.4-dev26\] - 2026-08-30 - Login Form Order Aligned With Reference Implementation](#334-dev26---2026-08-30---login-form-order-aligned-with-reference-implementation)
   - [\[3.3.4-dev25\] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing](#334-dev25---2026-08-30---login-session-without-a-stok-cookie-session-state-pairing)
@@ -195,6 +198,82 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.5] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment
+
+### Summary
+
+- **Multi-User Login Compatibility**: Aligned the multi-user login payload shape and token derivation with the reference hardware standard.
+- **Session Recovery Resilience**: Prevented false authentication failure alerts when a newly authenticated session receives unsupported or missing keys.
+- **Diagnostics Capture on Setup Failures**: Diagnostic downloads now capture the sanitized router response, key map, and login metadata even if initial connection fails.
+
+### Added
+
+- **Diagnostic Capture on Setup Failures**: Diagnostics downloads now retain the sanitized rejected response, key presence map (populated, empty, or absent keys), and login response metadata when initial setup encounters errors, allowing troubleshooting directly from diagnostic downloads without raw debug logs.
+
+### Changed
+
+- **Multi-User Login Payload**: Aligned the `LOGIN_MULTI_USER` form payload to send the username parameter as `user` and include the pre-login `AD` token, matching multi-user router requirements.
+
+### Fixed
+
+- **Session Expiry Misclassification**: Refined session expiry detection so responses missing requested keys (from firmware schema variations or truncated requests) are no longer misidentified as dead sessions.
+- **False Re-Authentication Alerts**: An identical empty response on a freshly established session is now correctly classified as a communication issue rather than a lapsed session, routing to the coordinator's value-holding resilience path.
+
+### Under the hood
+
+- **Diagnostic Test Harness and Negative Token Verification**: Added comprehensive diagnostic capture test suites and explicit assertions ensuring session tokens and credentials are never stored or exported in diagnostics.
+
+## [3.3.5-dev2] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll
+
+### Summary
+
+Two corrections to how an expired session is decided, and three additions that give the diagnostics download something to carry when the integration has never succeeded. The session verdict is derived from a key list measured on one MC7010 and asserted about every device; these changes narrow where that inference is trusted and record what was rejected when it is not.
+
+### Fixed
+
+- **A response missing most of its request is no longer read as an expired session**: `_classify_session()` receives the requested key list and declines to return `expired` when more than `ABSENT_KEY_PROPORTION_LIMIT` of the requested authenticated keys are absent rather than empty. A dead session on this API echoes every requested key back — measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31, where a cookieless batch read returned 80 of 80 core and 36 of 36 extended keys with none absent — so keys going missing indicates a truncated or refused request, or firmware key-name drift. The guard suppresses `expired` alone and cannot preempt `not_ready`, or a router still starting up that also omitted keys would be re-logged-in pointlessly. The limit is not zero because an unknown `cmd` name is simply absent rather than an error.
+- **An expired-looking response on a freshly established session no longer reports as an authentication failure**: a session created seconds earlier cannot itself be expired, so an identical verdict on the replayed request refutes the classification rather than confirming it. It now raises `ZTEConnectionError`, which routes into the coordinator's hold-last-known-values path. A caller that passed `_retry=False` itself still receives `ZTEAuthError` — `scripts/hardware_check.py` probes an invalidated session that way, and that assertion is the standing hardware proof that expiry is detectable.
+
+### Added
+
+- **The rejected payload is retained for diagnostics**: the response behind any non-live verdict is held on the API client and published in the download, sanitized by the same walker that already handles `coordinator.data`. Bounded to the most recent and cleared by a live verdict. `coordinator.data` is `None` until the first successful poll, so an integration that has never succeeded previously produced an empty `data` block — the case the download is most often requested for.
+- **The verdict and a key presence map**: which requested keys came back populated, empty, or absent. Names only, no values, so this separates a truncated batch from a hollow session from key-name drift without reading a payload.
+- **A body preview when the response was not JSON**: there is no payload to retain in that case, and the preview is what `_request` already computes for its log line and discards.
+- **Login response metadata**: form used, status, `result`, header names, cookie names, whether a session cookie was issued, and which of the four sources in `_extract_stok` supplied the token. **The cookie value is never recorded** — it is a live session credential, and a test asserts its absence from the whole serialized structure rather than from one field.
+
+### Testing
+
+- **`tests/test_diagnostic_capture.py`** (new, 15 tests): the absent-key rule in five configurations including the `not_ready` ordering; retention and clearing of a rejection; the non-JSON preview; login metadata for both a cookie-issuing and a cookieless login; and the negative assertion on cookie values.
+- **Test fakes corrected**: `DEAD_SESSION_CORE` in `tests/test_session_detection.py` and `EXPIRED_SESSION_PAYLOAD` in `tests/transport.py` were abbreviations answering a fraction of the request — a shape the router does not produce. Both now cover the full core batch.
+- **Reference hardware**: `scripts/hardware_check.py` passes 12 of 12, dead-session detection included.
+
+## [3.3.5-dev1] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation
+
+### Summary
+
+`LOGIN_MULTI_USER` now carries the username as `user` and includes an `AD` token, matching `Kajkac/ZTE-MC-Home-assistant-repo`. ZRM's previous shape for that form is supported by no device this project can reach, so the reference implementation decides it. `LOGIN` is unchanged and keeps `username`, which is a hardware measurement rather than an inherited choice.
+
+### Changed
+
+- **`LOGIN_MULTI_USER` payload**: The username is sent as `user` rather than `username`, and an `AD` token is included. The form is posted only where a username is configured, and `is_multi` still decides which form is primary — an MC7010 with a username continues to send `LOGIN` first.
+- **`LOGIN` payload**: Unchanged, and now covered by a test recording why. On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`, `username=` and `user=` are both accepted and yield a usable session, while omitting the field entirely — the shape `mc.py` uses on this form — makes the router close the connection without answering.
+
+### Added
+
+- **`_login_ad()`**: Derives the login-time `AD` token. `get_ad()` cannot serve this: it asserts the session first and reads `RD` through the authenticated path, neither of which exists before a login. `LD`, `wa_inner_version` and `RD` are all served without a session, confirmed on the reference MC7010 by computing the token before any session existed. It returns `None` rather than raising when `RD` is unreadable, so a missing token falls through to the alternate form instead of failing the login.
+- **`_ad_hash_func()`**: The SHA-256 or MD5 selection is now shared by `get_ad()` and `_login_ad()`. A login carrying an `AD` built with the wrong digest would be refused exactly like a wrong password, with no way to separate them.
+
+### Testing
+
+- **Payload shape**: The multi-user form is asserted to carry `user` and `AD` and no `username`; the single-user form to carry `username` and neither `user` nor `AD`.
+- **Degraded `RD`**: A router that answers the pre-login `RD` read without the key still receives the multi-user attempt, without an `AD` field, and the login completes.
+- **Mocked login sequences**: Every username-configured login test now queues the additional `RD` read.
+- **Reference hardware**: Login, a full poll of 55 populated keys, `AD` derivation and logout all verified against the live MC7010 after the change.
+
+### Notes
+
+The change is not testable on available hardware. The MC7010 refuses `LOGIN_MULTI_USER` in all four combinations of field name and `AD` token, measured 2026-08-30, so no device here exercises the path. It is adopted because ZRM's shape has no supporting evidence from any device while Kajkac's is carried by a maintained project — a tie broken by authority, not a de-risked change. Recorded in `.notes/info/other_zte_projects/divergence_review.md` Section 2.1.
 
 ## [3.3.4] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility
 

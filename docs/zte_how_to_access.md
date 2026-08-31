@@ -37,7 +37,14 @@ Login is a challenge-response over SHA-256, not a credential POST. Four steps, i
 1. **`GET goform_get_cmd_process?cmd=LD`** → returns `LD`, a per-session salt. Upper-cased on receipt.
 2. **`GET goform_get_cmd_process?cmd=wa_inner_version`** → the firmware version string. Fetched here because it determines _which login form to use_ (below), not for telemetry.
 3. **Hash twice.** `SHA256(password)` → uppercase → concatenate `LD` → `SHA256` again → uppercase. Both uppercase steps are required; the router rejects lowercase digests.
-4. **`POST goform_set_cmd_process`** with `goformId=LOGIN` or `LOGIN_MULTI_USER`, `password=<the double hash>`, and `username=` when a username is configured.
+4. **`POST goform_set_cmd_process`** with `goformId=LOGIN` or `LOGIN_MULTI_USER` and `password=<the double hash>`. The two forms take the username under different names, and only the multi-user form carries a token:
+
+   | Form               | Username field | `AD` token   |
+   | :----------------- | :------------- | :----------- |
+   | `LOGIN`            | `username=`    | None         |
+   | `LOGIN_MULTI_USER` | `user=`        | `AD=<token>` |
+
+   The multi-user shape follows `mc.py`. The single-user shape is measured: on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` both spellings are accepted on `LOGIN` and yield a usable session, while omitting the field makes the router close the connection without answering. The login-time `AD` is derived by `_login_ad()` from `wa_inner_version` and `RD`, both of which answer without a session; a router that will not return `RD` gets the attempt without the token rather than a failed login.
 
 The session token arrives as a **`stok` cookie**, which is then sent as a literal `Cookie: stok=<value>` header on every subsequent request. The value is stripped of surrounding double quotes before use — some firmware quotes it, and passing the quoted form back produces a silent session failure rather than an error.
 
@@ -692,6 +699,10 @@ They are deliberately separate: the first raises before the others are reached, 
 So the test is **"every value is an empty string"**, not "these named keys are empty". Detecting on named keys works for the batch poll and silently fails everywhere else: an SMS response has no `network_type`, so a check for `network_type == ""` can never fire, and the caller sees an empty inbox rather than an error. That was a real defect, fixed 2026-07-27.
 
 Note that an **empty inbox** returns `{"messages":[]}` — the contract key is present. That is what makes "no messages" distinguishable from "no session", and any check here must preserve the distinction.
+
+**The keys are echoed, not omitted.** A dead session returns every key the request asked for, with the values blanked; it does not shorten the response. Measured on firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31 by sending a batch read with no session cookie: 80 of 80 core keys and 36 of 36 extended keys came back, none absent. That experiment also reproduced the unauthenticated set exactly — `imei`, `model_name` and `wa_inner_version` in the core batch, `opms_wan_mode` and `opms_wan_auto_mode` in the extended one — which is the same set the invalidated-`stok` replay produced, so the two experiments agree on this device.
+
+A key going **missing** is therefore a different fault from a key coming back **empty**: a truncated or refused request, or a firmware that spells it differently. Since 3.3.5-dev2 the client will not read an expired session from a response that lost most of its request.
 
 **`auth status` reporting healthy while every command fails** is the signature of a stale session, not a credential problem. Re-login once; if it persists across a retry, it is a genuine problem and should be surfaced rather than retried further. See `agent_conventions.md`.
 

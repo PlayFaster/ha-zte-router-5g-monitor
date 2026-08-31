@@ -241,9 +241,18 @@ The fix is not a better total. It is to test a relationship between two classes 
 | verdict | condition | meaning |
 | --- | --- | --- |
 | `live` | any authenticated key populated | session works |
-| `expired` | authenticated all blank, unauthenticated populated | reachable, not logged in |
+| `expired` | authenticated all blank, unauthenticated populated, **and the response answered most of what was requested** | reachable, not logged in |
 | `not_ready` | everything blank | reachable, nothing to report yet |
-| `undecidable` | no unauthenticated key requested | fall back to the weaker rule |
+| `undecidable` | no unauthenticated key requested, **or most of the request came back absent** | fall back to the weaker rule |
+
+**A verdict of `expired` requires the router to have answered what was asked** (added 3.3.5-dev2). A dead session on this API echoes every requested key back as an empty string; it does not drop them. Measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31, where a cookieless batch read returned 80 of 80 core and 36 of 36 extended keys with none absent. Keys going _missing_ is therefore a different fault — a truncated or refused request, or firmware key-name drift — and `_classify_session` declines to rule once more than `ABSENT_KEY_PROPORTION_LIMIT` of the requested authenticated keys are absent.
+
+Two constraints on that guard, both learned by breaking them:
+
+- **It suppresses `expired` alone and must not preempt `not_ready`.** Written first as an early return, it took a booting router that also omitted keys and scored it as a dead session, burning a re-login on a device with nothing to say. Order it after the blank-versus-populated comparison, never before.
+- **The limit is not zero.** An unknown `cmd` name is absent from the response rather than an error, so a device that omits the cross-model aliases instead of echoing them would trip a stricter rule on every healthy poll.
+
+**A fresh session producing the same shape refutes the verdict** (added 3.3.5-dev2). The response after a re-login used to confirm the expiry; a session established seconds earlier cannot be expired, so an identical verdict means the rule did not fit that device. It now raises `ZTEConnectionError` and picks up the hold-last-known-values path, rather than presenting a classification failure as an authentication condition. A caller that passed `_retry=False` itself still receives `ZTEAuthError` — `scripts/hardware_check.py` probes an invalidated session that way, and that assertion is the standing hardware proof that expiry is detectable. The two cases are separated by `_after_relogin`; collapsing it back into `_retry` disarms that check silently.
 
 Three things generalize beyond this router:
 
@@ -288,7 +297,7 @@ Router-specific and load-bearing: **the most recent login wins.** Home Assistant
 Two mechanisms already cover it, and between them there is no gap:
 
 - **Proactive** — `SESSION_IDLE_RESET_SECONDS` (150s) discards the `stok` before sending, so at the 180s default interval every scheduled poll already logs in fresh.
-- **Reactive** — `_classify_session` reaches a verdict on every core poll. `test_every_batch_carries_both_classes` guarantees the core batch can never be `undecidable`, so "session gone and not noticed" is no longer a reachable state on this path.
+- **Reactive** — `_classify_session` reaches a verdict on every core poll. `test_every_batch_carries_both_classes` guarantees the core batch always carries keys of both classes, so it can never be `undecidable` _for want of a comparison_. Since 3.3.5-dev2 a core poll can still be `undecidable` for the other reason — most of the request came back absent — which is a truncated or refused read rather than a session state, and is held for the diagnostics download rather than acted on as an expiry.
 
 Against that, an unconditional login costs four round trips (`LD`, `wa_inner_version`, the `LOGIN` POST, the post-login initialization GET) against the poll's one, on every press, forever. It lands worst in the case that prompted the question: a user pressing Refresh Now repeatedly during a reboot would put four login attempts per press against a router that is still booting, where one cheap read correctly reads `not_ready` and holds values.
 
