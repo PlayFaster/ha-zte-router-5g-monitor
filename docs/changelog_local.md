@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
   - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
   - [\[3.3.7-dev2\] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep](#337-dev2---2026-08-31---data-limit-form-aliases-classified-concept-alias-sweep)
   - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery](#337-dev1---2026-08-31---mc888-pro-session-cookie-per-device-unauthenticated-key-set-key-discovery)
@@ -203,6 +204,28 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.7] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls
+
+### Summary
+
+- **Dynamic Session Cookie Compatibility**: The integration now retains and replays all session cookies set by the router (such as `zsidn` on the MC888 Pro) rather than requiring a literal `stok` cookie.
+- **Dynamic Unauthenticated Key Discovery**: The unauthenticated key set is now measured per device at startup, ensuring accurate session-expiry detection across varying router firmwares.
+- **Data Limit Control Compatibility**: Added alternate parameter aliases (including `flux_` variants) to the data limit write form, restoring data limit settings functionality on newer router models.
+- **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal telemetry.
+
+### Added
+
+- **Dynamic Cookie Name Support**: Router firmwares that issue session cookies under non-standard names (such as `zsidn` on the ZTE MC888 Pro) now have their cookies captured and replayed properly on all subsequent requests, resolving authentication failures.
+- **Per-Device Session Classification**: Session health monitoring now dynamically probes which keys the router answers without authentication during setup, preventing firmwares that report network status unauthenticated from causing session classification mismatches.
+- **Data Limit Settings Controls**: Added `flux_` parameter aliases to `DATA_LIMIT_SETTING` form writes, ensuring data limit configuration switches and thresholds are writable on routers using modern firmware schemas.
+- **Diagnostics Privacy**: Ensured alternate cell identifier key spellings (`Z5g_CELL_ID`) are pseudonymized in diagnostic downloads alongside primary keys.
+- **Sparse Payload Telemetry Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded telemetry baseline.
+- **Firmware Parameter Discovery**: Added a startup discovery probe that safely tests candidate parameter names to discover available telemetry keys across router models and publishes safe results in diagnostics.
+
+### Under the hood
+
+- **Alias Classification Sweep & Symlink Link Checker**: Enforced test coverage ensuring all redacted and pseudonymized concepts cover all parameter aliases, and added repository link validation tooling for Markdown documentation.
 
 ## [3.3.7-dev3] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added
 

@@ -4,6 +4,30 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.7] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls
+
+### Summary
+
+- **Dynamic Session Cookie Compatibility**: The integration now retains and replays all session cookies set by the router (such as `zsidn` on the MC888 Pro) rather than requiring a literal `stok` cookie.
+- **Dynamic Unauthenticated Key Discovery**: The unauthenticated key set is now measured per device at startup, ensuring accurate session-expiry detection across varying router firmwares.
+- **Data Limit Control Compatibility**: Added alternate parameter aliases (including `flux_` variants) to the data limit write form, restoring data limit settings functionality on newer router models.
+- **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal telemetry.
+
+### Added
+
+- **Dynamic Cookie Name Support**: Router firmwares that issue session cookies under non-standard names (such as `zsidn` on the ZTE MC888 Pro) now have their cookies captured and replayed properly on all subsequent requests, resolving authentication failures.
+- **Per-Device Session Classification**: Session health monitoring now dynamically probes which keys the router answers without authentication during setup, preventing firmwares that report network status unauthenticated from causing session classification mismatches.
+- **Data Limit Settings Controls**: Added `flux_` parameter aliases to `DATA_LIMIT_SETTING` form writes, ensuring data limit configuration switches and thresholds are writable on routers using modern firmware schemas.
+- **Diagnostics Privacy**: Ensured alternate cell identifier key spellings (`Z5g_CELL_ID`) are pseudonymized in diagnostic downloads alongside primary keys.
+- **Sparse Payload Telemetry Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded telemetry baseline.
+- **Firmware Parameter Discovery**: Added a startup discovery probe that safely tests candidate parameter names to discover available telemetry keys across router models and publishes safe results in diagnostics.
+
+### Under the hood
+
+- **Alias Classification Sweep & Symlink Link Checker**: Enforced test coverage ensuring all redacted and pseudonymized concepts cover all parameter aliases, and added repository link validation tooling for Markdown documentation.
+
+---
+
 ## [3.3.6] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts
 
 ### Summary
@@ -420,6 +444,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
