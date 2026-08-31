@@ -13,6 +13,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -36,6 +37,39 @@ _LOGGER = logging.getLogger(__name__)
 # genuine reboot. A real reboot resets uptime to ~0, so this margin only serves
 # to reject small downward blips from coarse resolution or stale readings.
 UPTIME_REBOOT_MARGIN = 30
+
+# How far the boot instant derived from a live counter may sit from the stored
+# one and still be judged the same boot. Applied once per Home Assistant start
+# and never during a running session, so it cannot reintroduce polling jitter.
+# It absorbs drift between the Home Assistant clock and the router's counter
+# accumulated across an offline period: a crystal at 100 ppm drifts roughly
+# three minutes over three weeks. Estimated, not measured — confirm from the
+# reconciliation logs and adjust.
+BOOT_MATCH_TOLERANCE = 600
+
+# A stored boot instant further ahead of now() than this is rejected as
+# invalid. It can only arise from a latch taken against a clock that was wrong
+# and has since been corrected.
+BOOT_FUTURE_TOLERANCE = 300
+
+# Below this year the system clock is treated as unset rather than wrong. A
+# host without a battery-backed real-time clock, including most Raspberry Pi
+# units, starts at 1970-01-01 and stays there until NTP completes; re-latching
+# in that window writes a boot instant decades adrift. **Do not delete this as
+# an arbitrary constant** — it exists for that specific startup window.
+CLOCK_FLOOR_YEAR = 2024
+
+# An uptime beyond this is rejected as a bad reading rather than believed.
+# Ten years, comfortably past any plausible consumer router.
+MAX_PLAUSIBLE_UPTIME = 10 * 365 * 24 * 3600
+
+# Storage for the running uptime counter. The counter is persisted on a fixed
+# interval as well as on every latch, so the counter-regression check has a
+# reasonably current baseline after a restart. `boot_time` stays in
+# `entry.data`: a boot instant does not go stale, so it needs no maintenance.
+UPTIME_STORAGE_VERSION = 1
+UPTIME_WRITE_INTERVAL = timedelta(minutes=20)
+UPTIME_SAVE_DELAY = 60
 
 
 # Optional endpoints that hold their own last-good payload and strike count, so
@@ -114,6 +148,19 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._was_available = True
         self._boot_time: datetime | None = None
         self._last_uptime: int | None = None
+
+        # Startup reconciliation state. `_startup_reconciled` stays false until
+        # a poll yields a usable counter and the reconciliation completes, so a
+        # failed or guard-rejected poll defers it rather than skipping it.
+        # `_pending_startup_strike` carries the one-poll wait: the runtime
+        # comparison cannot revisit it, because the first poll sets
+        # `_last_uptime` from the live reading and finds no regression against
+        # it on the second.
+        self._startup_reconciled = False
+        self._pending_startup_strike = False
+        self._store: Store[dict[str, Any]] | None = None
+        self._stored_last_uptime: int | None = None
+        self._last_counter_write: datetime | None = None
         self.last_sms_timestamp: str | None = None
         self.fired_sms_hashes: set[str] = set()
 
@@ -153,14 +200,23 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # Snapshot of the non-live options this entry was set up with; the
         # update listener diffs against it to decide reload vs live-apply.
         self.reload_signature: dict[str, Any] = {}
+        # The boot instant is physically constant between reboots, so a value
+        # written weeks ago is still correct and is restored as-is. A naive or
+        # unparsable value is treated as absent, which routes to an
+        # unconditional latch on the first poll rather than raising when it is
+        # subtracted from an aware datetime.
         boot_time_str = entry.data.get("boot_time")
         if boot_time_str:
             with contextlib.suppress(Exception):
-                self._boot_time = dt_util.parse_datetime(boot_time_str)
-        last_uptime_raw = entry.data.get("last_uptime")
-        if last_uptime_raw is not None:
-            with contextlib.suppress(ValueError, TypeError):
-                self._last_uptime = int(last_uptime_raw)
+                parsed = dt_util.parse_datetime(boot_time_str)
+                if parsed is not None and parsed.tzinfo is not None:
+                    self._boot_time = parsed
+
+        # `entry.data["last_uptime"]` is deliberately NOT read. It is written
+        # only on a latch, so it is frozen at whatever small value the previous
+        # reboot recorded, and comparing a live counter against it is the
+        # defect this design replaces. The counter comes from the store
+        # instead; the legacy key is dropped on the next latch.
 
         # Load hardware identity from persistent ConfigEntry data.
         # This ensures device info is stable from boot (The "Flat Identity" pattern).
@@ -430,22 +486,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     # not advance the reboot anchor on a missing/garbage reading.
                     data["boot_time"] = self._boot_time
                 else:
-                    is_reboot = self._boot_time is None or (
-                        self._last_uptime is not None
-                        and seconds < self._last_uptime - UPTIME_REBOOT_MARGIN
-                    )
-                    if is_reboot:
-                        calc_time = dt_util.now() - timedelta(seconds=seconds)
-                        self._boot_time = calc_time.replace(microsecond=0)
-                        new_data = {
-                            **self.entry.data,
-                            "boot_time": self._boot_time.isoformat(),
-                            "last_uptime": seconds,
-                        }
-                        self.hass.config_entries.async_update_entry(
-                            self.entry, data=new_data
-                        )
-                    self._last_uptime = seconds
+                    self._apply_uptime(seconds)
                     data["boot_time"] = self._boot_time
 
                 # Identify if hardware metadata has changed
@@ -601,6 +642,259 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             )
             self._was_available = False
             raise UpdateFailed(f"Communication error: {err}") from err
+
+    # ------------------------------------------------------------------
+    # Boot-time latch
+    #
+    # Two checks decide whether the router rebooted while Home Assistant was
+    # not watching, and they do not carry equal weight. A counter that has
+    # moved backward is conclusive: no clock is involved, and while the counter
+    # is monotonic the check cannot produce a false positive. A boot instant
+    # that has moved is suggestive but derived from now(), so on its own it
+    # waits one poll before acting.
+    #
+    # Full specification, including both worked failure modes:
+    # `.shared/info/uptime_timestamp/uptime_timestamp_router_vs_ha_202608.md`.
+    # ------------------------------------------------------------------
+
+    async def async_load_stored_uptime(self) -> None:
+        """Load the persisted uptime counter. Never raises.
+
+        Awaited in ``async_setup_entry`` so the counter is in memory before the
+        background initialization task runs the first poll. An absent, corrupt
+        or unreadable record resolves to "no stored counter", which skips the
+        counter-regression check and leaves the boot-instant check fully
+        functional on its own — the store is a cross-check, never the anchor.
+        """
+        self._store = Store(
+            self.hass,
+            UPTIME_STORAGE_VERSION,
+            f"{DOMAIN}_{self.entry.entry_id}_uptime",
+        )
+        stored: dict[str, Any] | None = None
+        try:
+            stored = await self._store.async_load()
+        except Exception as err:  # noqa: BLE001 - see below
+            # Deliberately broad. The contract is that **no** storage fault
+            # can fail entry setup: the store is a cross-check, and the
+            # boot-instant check works without it. Narrowing this to the
+            # exceptions seen so far would let an unanticipated one abort a
+            # setup that has no need of the store at all.
+            _LOGGER.debug(
+                "%s: uptime store unreadable, continuing without it: %s",
+                self.entry.title,
+                err,
+            )
+            return
+        if isinstance(stored, dict):
+            with contextlib.suppress(ValueError, TypeError):
+                raw = stored.get("last_uptime")
+                if raw is not None:
+                    self._stored_last_uptime = int(raw)
+
+    def _apply_uptime(self, seconds: int) -> None:
+        """Route one usable counter reading to startup or runtime handling."""
+        now = dt_util.now()
+
+        if now.year < CLOCK_FLOOR_YEAR:
+            # Clock floor guard: the host has no battery-backed clock and NTP
+            # has not completed. Defer rather than latch a boot instant that
+            # would be decades adrift.
+            _LOGGER.debug(
+                "%s: system clock reads %s; deferring uptime reconciliation",
+                self.entry.title,
+                now.isoformat(),
+            )
+            return
+        if seconds > MAX_PLAUSIBLE_UPTIME:
+            _LOGGER.warning(
+                "%s: implausible uptime %s s; keeping the stored boot time",
+                self.entry.title,
+                seconds,
+            )
+            return
+
+        if self._startup_reconciled:
+            self._apply_runtime_uptime(seconds, now)
+        else:
+            self._reconcile_startup_uptime(seconds, now)
+
+        self._last_uptime = seconds
+        self._maybe_persist_counter(seconds, now)
+
+    def _apply_runtime_uptime(self, seconds: int, now: datetime) -> None:
+        """Compare the counter against itself during an unbroken session.
+
+        Exact, and the reason the latch is stable: the router's hardware
+        counter is compared with its own previous value, so no clock enters the
+        comparison and no jitter can reach the timestamp.
+        """
+        if (
+            self._last_uptime is not None
+            and seconds < self._last_uptime - UPTIME_REBOOT_MARGIN
+        ):
+            self._latch_boot_time(now - timedelta(seconds=seconds), seconds)
+
+    def _reconcile_startup_uptime(self, seconds: int, now: datetime) -> None:
+        """Decide, on the first usable poll, whether the router rebooted."""
+        raw_boot = (now - timedelta(seconds=seconds)).replace(microsecond=0)
+        stored_boot = self._boot_time
+
+        if stored_boot is not None and dt_util.as_utc(stored_boot) > dt_util.as_utc(
+            now
+        ) + timedelta(seconds=BOOT_FUTURE_TOLERANCE):
+            # Only reachable from a latch taken against a clock that was wrong
+            # and has since been corrected.
+            _LOGGER.warning(
+                "%s: stored boot time %s is in the future; re-latching",
+                self.entry.title,
+                stored_boot.isoformat(),
+            )
+            stored_boot = None
+
+        if stored_boot is None:
+            self._latch_boot_time(raw_boot, seconds)
+            self._finish_startup()
+            return
+
+        boot_diverged = (
+            abs(
+                (dt_util.as_utc(raw_boot) - dt_util.as_utc(stored_boot)).total_seconds()
+            )
+            > BOOT_MATCH_TOLERANCE
+        )
+        counter_regressed = (
+            self._stored_last_uptime is not None
+            and seconds < self._stored_last_uptime - UPTIME_REBOOT_MARGIN
+        )
+
+        if self._pending_startup_strike:
+            self._resolve_startup_strike(raw_boot, seconds, boot_diverged, stored_boot)
+            return
+
+        if counter_regressed:
+            # Conclusive on its own, whatever the boot-instant check reports.
+            self._log_reconciliation(
+                "counter regression", seconds, stored_boot, raw_boot
+            )
+            self._latch_boot_time(raw_boot, seconds)
+            self._finish_startup()
+            return
+
+        if boot_diverged:
+            # The only combination that waits. It is also the expected shape of
+            # a genuine long-gap reboot whose stored counter has aged, so the
+            # wait guards against a single bad reading or an unsynchronized
+            # clock rather than expressing doubt about the reboot.
+            _LOGGER.warning(
+                "%s: boot instant moved but the counter did not regress "
+                "(live %s s, stored counter %s, stored boot %s, derived %s); "
+                "deferring the decision one poll",
+                self.entry.title,
+                seconds,
+                self._stored_last_uptime,
+                stored_boot.isoformat(),
+                raw_boot.isoformat(),
+            )
+            self._pending_startup_strike = True
+            return
+
+        self._log_reconciliation("no reboot", seconds, stored_boot, raw_boot)
+        self._finish_startup()
+
+    def _resolve_startup_strike(
+        self,
+        raw_boot: datetime,
+        seconds: int,
+        boot_diverged: bool,
+        stored_boot: datetime,
+    ) -> None:
+        """Take the deferred decision on the next usable poll."""
+        if boot_diverged:
+            self._log_reconciliation(
+                "boot instant, confirmed on the second poll",
+                seconds,
+                stored_boot,
+                raw_boot,
+            )
+            self._latch_boot_time(raw_boot, seconds)
+        else:
+            # A warning was recorded against the first poll. Answer it, so the
+            # log does not leave an unresolved alarm behind.
+            _LOGGER.info(
+                "%s: the deferred boot-time divergence was a false alarm "
+                "(live %s s, stored boot %s, derived %s); keeping the stored "
+                "boot time",
+                self.entry.title,
+                seconds,
+                stored_boot.isoformat(),
+                raw_boot.isoformat(),
+            )
+        self._finish_startup()
+
+    def _finish_startup(self) -> None:
+        """Mark startup reconciliation complete and clear the pending wait."""
+        self._startup_reconciled = True
+        self._pending_startup_strike = False
+
+    def _log_reconciliation(
+        self,
+        outcome: str,
+        seconds: int,
+        stored_boot: datetime | None,
+        raw_boot: datetime,
+    ) -> None:
+        """Record every input to a startup decision, and the decision."""
+        _LOGGER.info(
+            "%s: uptime reconciliation — %s (live %s s, stored counter %s, "
+            "stored boot %s, derived boot %s)",
+            self.entry.title,
+            outcome,
+            seconds,
+            self._stored_last_uptime,
+            stored_boot.isoformat() if stored_boot is not None else None,
+            raw_boot.isoformat(),
+        )
+
+    def _latch_boot_time(self, boot_time: datetime, seconds: int) -> None:
+        """Re-anchor the boot instant and persist it immediately."""
+        self._boot_time = boot_time.replace(microsecond=0)
+        _LOGGER.info(
+            "%s: boot time latched: %s", self.entry.title, self._boot_time.isoformat()
+        )
+        # The legacy `last_uptime` key is dropped here. It is never read, and
+        # leaving it invites a future reader to wire it back in.
+        new_data = {
+            key: value for key, value in self.entry.data.items() if key != "last_uptime"
+        }
+        new_data["boot_time"] = self._boot_time.isoformat()
+        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+        self._write_counter(seconds, dt_util.now())
+
+    def _maybe_persist_counter(self, seconds: int, now: datetime) -> None:
+        """Flush the running counter on a fixed interval.
+
+        Bounds how far behind the stored counter can fall, for every stop
+        condition rather than only an orderly one. A clean shutdown is covered
+        as well without a hook: ``async_delay_save`` registers a final-write
+        listener that flushes any pending save when Home Assistant stops.
+        """
+        if (
+            self._last_counter_write is not None
+            and now - self._last_counter_write < UPTIME_WRITE_INTERVAL
+        ):
+            return
+        self._write_counter(seconds, now)
+
+    def _write_counter(self, seconds: int, now: datetime) -> None:
+        """Schedule a debounced write of the running counter."""
+        if self._store is None:  # pragma: no cover - store is loaded at setup
+            return
+        self._stored_last_uptime = seconds
+        self._last_counter_write = now
+        self._store.async_delay_save(
+            lambda: {"last_uptime": seconds}, UPTIME_SAVE_DELAY
+        )
 
     def _degraded_endpoints(self) -> list[str]:
         """Return the friendly names of endpoints that have exhausted strikes.

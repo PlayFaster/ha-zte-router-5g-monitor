@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.6] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts
+
+### Summary
+
+- **Device Uptime Startup Accuracy**: Resolved an issue where the `Device Uptime` sensor could retain a stale boot timestamp across Home Assistant restarts if the router rebooted during the restart gap.
+
+### Fixed
+
+- **Stale Boot Time Across Restarts**: Fixed a bug where a router reboot occurring during a Home Assistant restart, host power cycle, or system update was not detected on startup, causing `Device Uptime` to freeze on the prior boot time indefinitely. Startup now cross-checks the live uptime counter and calculated boot instant against persisted history to reconcile reboots accurately.
+  - This issue could be seen when:
+    - HA restarted after a long downtime, during which time the router had rebooted.
+    - HA and the ROuter restarted at the same time, after a power outaage.
+
+### Under the hood
+
+- **Startup Reconciliation Test Suite**: Added 34 tests verifying startup reconciliation across multi-week offline gaps, clock skew, un-synchronized host clocks, and storage error conditions.
+
+---
+
 ## [3.3.5] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment
 
 ### Summary
@@ -401,6 +420,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.3\] - 2026-08-08 - Release: SMS Bugfix and Polling Resilience](#333---2026-08-08---release-sms-bugfix-and-polling-resilience)
