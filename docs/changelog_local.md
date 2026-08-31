@@ -5,6 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
+  - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Could Hold a Stale Boot Time Across a Home Assistant Restart](#336-dev1---2026-08-31---device-uptime-could-hold-a-stale-boot-time-across-a-home-assistant-restart)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
   - [\[3.3.5-dev2\] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll](#335-dev2---2026-08-31---session-verdict-evidence-diagnostics-capture-on-a-failed-poll)
   - [\[3.3.5-dev1\] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation](#335-dev1---2026-08-30---multi-user-login-payload-aligned-with-reference-implementation)
@@ -198,6 +200,60 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.6] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts
+
+### Summary
+
+- **Device Uptime Startup Accuracy**: Resolved an issue where the `Device Uptime` sensor could retain a stale boot timestamp across Home Assistant restarts if the router rebooted during the restart gap.
+
+### Fixed
+
+- **Stale Boot Time Across Restarts**: Fixed a bug where a router reboot occurring during a Home Assistant restart, host power cycle, or system update was not detected on startup, causing `Device Uptime` to freeze on the prior boot time indefinitely. Startup now cross-checks the live uptime counter and calculated boot instant against persisted history to reconcile reboots accurately.
+  - This issue could be seen when:
+    - HA restarted after a long downtime, during which time the router had rebooted.
+    - HA and the ROuter restarted at the same time, after a power outaage.
+
+### Under the hood
+
+- **Startup Reconciliation Test Suite**: Added 34 tests verifying startup reconciliation across multi-week offline gaps, clock skew, un-synchronized host clocks, and storage error conditions.
+
+## [3.3.6-dev1] - 2026-08-31 - Device Uptime Could Hold a Stale Boot Time Across a Home Assistant Restart
+
+### Summary
+
+`Device Uptime` could report a boot time from before the last Home Assistant restart and never correct itself, while the companion duration sensor stayed accurate. The running-session logic was never at fault and is unchanged; the defect was entirely at the persistence boundary, where the counter the reboot check compares against was restored from a value that is written only on a latch and is therefore frozen. The startup path is replaced by two independent checks with an asymmetric resolution, backed by a per-entry store, four guards and full reconciliation logging.
+
+Specification and both worked failure modes: [`uptime_timestamp_router_vs_ha_202608.md`](../.shared/info/uptime_timestamp/uptime_timestamp_router_vs_ha_202608.md). Cross-project item: `x_project/fix_uptime_timestamp_gets_stuck.md`. This project implements first and is the reference the Huawei and UniFi implementations are read against.
+
+### Fixed
+
+- **The reboot check could not fire after a restart**: `entry.data["last_uptime"]` is written only inside the reboot branch, so on disk it stays frozen at whatever the previous latch recorded — typically around 60. Restoring it into `self._last_uptime` at construction meant the first poll after any restart evaluated `seconds < 60 - 30`, which is false for any live uptime, and the coordinator held the stale boot time indefinitely. The legacy key is now never read, and is dropped from `entry.data` at the next latch so it cannot be wired back in.
+- **Two conditions produced this, both ordinary**: a mains interruption returning the router and the host together, and any restart gap during which the router also rebooted — a host power cycle, an operating system update that ran long, a container restart. Gap length changed only how conspicuous the wrong timestamp looked, never whether it occurred.
+- **A naive stored `boot_time` no longer raises**: subtracting a naive datetime from an aware one raises `TypeError`. A value with no offset, or one that does not parse, is now treated as absent, which routes to an unconditional latch on the first poll. The integration only ever writes an aware `isoformat()`, so this reaches an entry through a hand-edited file rather than through normal operation.
+
+### Added
+
+- **Boot-instant check** (`_reconcile_startup_uptime`): on the first poll yielding a usable counter, the boot instant implied by that counter is compared with the stored one, and they are judged the same boot when within `BOOT_MATCH_TOLERANCE` (600 s). A boot instant is physically constant between reboots, so a value written weeks ago is still correct and needs no maintenance on disk. Applied once per Home Assistant start and never during a session, so it cannot reintroduce the polling jitter that ruled out a tolerance window in May 2026.
+- **Counter-regression check**: a live counter below the stored one is a reboot with no clock in the comparison, so while the counter is monotonic it cannot produce a false positive. This is why the running counter is now persisted.
+- **Asymmetric resolution**: a counter regression latches on the first poll whatever the boot-instant check reports. A boot-instant divergence with no regression — the expected shape of a long-gap reboot whose stored counter has aged — logs a warning and defers one poll, which is the only combination that waits. The sensor reports its previous value throughout, so nothing goes unavailable.
+- **`_pending_startup_strike`**: the deferred decision needs its own state. The first poll sets `_last_uptime` from the live reading, so the running-session comparison finds no regression against it on the second and would never revisit the decision — the wait and the anchor cancel each other without it. The flag survives a failed or guard-rejected poll and is resolved on the next usable one, in both directions: confirmed, or cleared as a false alarm with an `INFO` line answering the earlier warning.
+- **`_startup_reconciled`**: reconciliation runs on the first poll that yields a usable counter, which is not necessarily the first attempted. A timeout, an authentication handshake or a router still booting defers it rather than marking startup complete.
+- **Per-entry counter store** (`Store`, `{DOMAIN}_{entry_id}_uptime`): the running counter is flushed every 20 minutes and on every latch, through `async_delay_save`. This bounds staleness for every stop condition rather than only an orderly one, and a clean shutdown is covered without a hook because `async_delay_save` registers a final-write listener. `boot_time` deliberately stays in `entry.data`: keeping it there means no migration, and a store that is absent or corrupt disables only the cross-check while the boot-instant check remains fully functional. Removed in `async_remove_entry`, which cancels any pending save before unlinking.
+- **Clock floor guard** (`CLOCK_FLOOR_YEAR`): a host with no battery-backed clock starts at 1970 and stays there until NTP completes. Reconciliation is deferred rather than latching a boot instant decades adrift.
+- **Stored-value and plausibility guards**: a stored boot instant more than `BOOT_FUTURE_TOLERANCE` ahead of now is rejected and re-latched, which is only reachable from a latch taken against a clock since corrected. A counter beyond `MAX_PLAUSIBLE_UPTIME` is rejected rather than believed. The derived instant needs no future guard, being `now()` minus a non-negative counter.
+- **Reconciliation logging**: every startup decision records the live counter, the stored counter, the stored boot time, the derived boot time and the outcome. The absence of this is a substantial part of why this class of problem has been hard to diagnose across previous revisions.
+
+### Changed
+
+- **The store is loaded before platforms are forwarded**: `await coordinator.async_load_stored_uptime()` in `async_setup_entry`. Setup here is non-blocking (Section 1) — platforms are forwarded and the first fetch runs later in a background task — so an awaited local JSON read of about a millisecond precedes every poll. The load catches broadly and deliberately: no storage fault may fail entry setup, and narrowing to the exceptions seen so far would let an unanticipated one abort a setup that has no need of the store.
+- **The poll path**: the inline latch block is replaced by `_apply_uptime(seconds)`, which routes to the startup or running-session handler and then flushes the counter if the interval has elapsed. The running-session comparison itself is byte-for-byte the logic that has been stable since May 2026.
+
+### Testing
+
+- **`tests/test_uptime_latch.py`** (new, 34 tests): both failure modes traced end to end on the first upgraded start; the offline gap parametrized over three weeks and forty minutes, asserting identical behavior; the short-gap case where the stored counter is lower than the live one and the boot-instant check acts alone; steady polling over 100 jittered readings asserting the latch never moves and no write occurs outside the interval; both branches of the deferred decision; the deferred decision surviving a failed poll; all four guards; the legacy key being dropped at the latch; and the store's absent, corrupt, malformed and per-entry cases.
+- **Three existing tests repointed, none weakened**: `test_coordinator_last_uptime_restored` asserted the exact behavior that causes the defect and is now `test_coordinator_last_uptime_is_not_restored`, standing as the guard against restoring the legacy key. `test_coordinator_boot_time_restored` used a naive timestamp the coordinator never writes and now uses an aware one. `test_reboot_detection_boundary` targets the running-session margin and now sets `_startup_reconciled` rather than incidentally exercising the startup path.
+- **977 tests pass; coverage 100%** on `coordinator.py` (385 statements) and `__init__.py` (179). Ruff and mypy clean.
 
 ## [3.3.5] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment
 

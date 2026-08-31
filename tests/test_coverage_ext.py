@@ -1012,7 +1012,11 @@ async def test_api_get_rd_other_exception(mock_aiohttp_client):
 async def test_coordinator_boot_time_restored(
     hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
 ):
-    """Test coordinator restores boot_time from entry.data (coordinator.py:47-48)."""
+    """The stored boot instant is restored as written, offset included.
+
+    The coordinator writes an aware `isoformat()`, so that is what a real entry
+    carries. A naive value is a different case and is covered separately.
+    """
     from custom_components.zte_router_5g.coordinator import (
         ZTERouterDataUpdateCoordinator,
     )
@@ -1021,12 +1025,12 @@ async def test_coordinator_boot_time_restored(
     mock_config_entry.add_to_hass(hass)
     hass.config_entries.async_update_entry(
         mock_config_entry,
-        data={**mock_config_entry.data, "boot_time": "2024-01-15T10:00:00"},
+        data={**mock_config_entry.data, "boot_time": "2024-01-15T10:00:00+00:00"},
     )
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
     assert coordinator._boot_time is not None
-    assert coordinator._boot_time.isoformat() == "2024-01-15T10:00:00"
+    assert coordinator._boot_time.isoformat() == "2024-01-15T10:00:00+00:00"
 
 
 @pytest.mark.asyncio
@@ -1049,10 +1053,17 @@ async def test_coordinator_boot_time_restored_bad_value(
 
 
 @pytest.mark.asyncio
-async def test_coordinator_last_uptime_restored(
+async def test_coordinator_last_uptime_is_not_restored(
     hass: HomeAssistant, mock_config_entry, mock_aiohttp_client
 ):
-    """Test coordinator restores last_uptime from entry.data (coordinator.py:51-52)."""
+    """The legacy `last_uptime` in `entry.data` is deliberately not restored.
+
+    It is written only on a latch, so it is frozen at whatever the previous
+    reboot recorded. Restoring it and comparing a live counter against it is
+    the defect this design replaces: the comparison could never fire again, and
+    the stale boot time was held indefinitely. The counter now comes from the
+    store, and this test is the guard against wiring the legacy key back in.
+    """
     from custom_components.zte_router_5g.coordinator import (
         ZTERouterDataUpdateCoordinator,
     )
@@ -1064,7 +1075,7 @@ async def test_coordinator_last_uptime_restored(
     )
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     coordinator = ZTERouterDataUpdateCoordinator(hass, mock_config_entry, api)
-    assert coordinator._last_uptime == 12345
+    assert coordinator._last_uptime is None
 
 
 @pytest.mark.asyncio

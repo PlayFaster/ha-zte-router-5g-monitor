@@ -14,6 +14,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
@@ -28,6 +29,7 @@ from .const import (
 from .coordinator import (
     REPAIR_NAMES,
     RETIRED_REPAIR_NAMES,
+    UPTIME_STORAGE_VERSION,
     ZTERouterDataUpdateCoordinator,
 )
 from .helpers import is_gsm7
@@ -442,6 +444,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store for platform access via runtime_data
     entry.runtime_data = coordinator
 
+    # The persisted uptime counter, read before anything can poll. Setup here
+    # is non-blocking (Section 1) — platforms are forwarded and the first fetch
+    # runs later in a background task — so an awaited local JSON read of about
+    # a millisecond precedes every poll. It cannot raise: a missing or corrupt
+    # record leaves the counter-regression cross-check disabled and the
+    # boot-instant check fully functional.
+    await coordinator.async_load_stored_uptime()
+
     # Remember which non-live options this entry was set up with, so the update
     # listener can tell a connection change (reload) from a tuning change
     # (live-apply). Section 9.
@@ -537,6 +547,14 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     # only runs when the entry is set up again, so an entry upgraded and then
     # removed without a successful setup in between would otherwise keep a card
     # nothing can clear.
+    # The uptime counter store is per entry and is not cleaned up by Home
+    # Assistant when the entry goes, so it would otherwise outlive it.
+    # `async_remove` cancels any pending delayed save before unlinking, so a
+    # scheduled write cannot recreate the file afterwards.
+    await Store(
+        hass, UPTIME_STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}_uptime"
+    ).async_remove()
+
     for name in (*REPAIR_NAMES, *RETIRED_REPAIR_NAMES):
         ir.async_delete_issue(hass, DOMAIN, f"{entry.entry_id}_{name}")
         # The pre-scoping spelling, for an entry removed before ever being

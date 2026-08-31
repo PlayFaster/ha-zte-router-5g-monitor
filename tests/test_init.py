@@ -982,6 +982,10 @@ async def test_reboot_detection_boundary(
         original_boot = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         coordinator._boot_time = original_boot
         coordinator._last_uptime = 100
+        # This case is about the running-session margin, so startup
+        # reconciliation is already done. The first poll of a session takes the
+        # startup path instead, which is covered in `test_uptime_latch.py`.
+        coordinator._startup_reconciled = True
 
         coordinator.api.get_all_data = AsyncMock(
             return_value={"realtime_time": str(uptime), "network_type": "LTE"}
