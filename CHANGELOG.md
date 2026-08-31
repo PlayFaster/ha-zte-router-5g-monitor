@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.5] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment
+
+### Summary
+
+- **Multi-User Login Compatibility**: Aligned the multi-user login payload shape and token derivation with the reference hardware standard.
+- **Session Recovery Resilience**: Prevented false authentication failure alerts when a newly authenticated session receives unsupported or missing keys.
+- **Diagnostics Capture on Setup Failures**: Diagnostic downloads now capture the sanitized router response, key map, and login metadata even if initial connection fails.
+
+### Added
+
+- **Diagnostic Capture on Setup Failures**: Diagnostics downloads now retain the sanitized rejected response, key presence map (populated, empty, or absent keys), and login response metadata when initial setup encounters errors, allowing troubleshooting directly from diagnostic downloads without raw debug logs.
+
+### Changed
+
+- **Multi-User Login Payload**: Aligned the `LOGIN_MULTI_USER` form payload to send the username parameter as `user` and include the pre-login `AD` token, matching multi-user router requirements.
+
+### Fixed
+
+- **Session Expiry Misclassification**: Refined session expiry detection so responses missing requested keys (from firmware schema variations or truncated requests) are no longer misidentified as dead sessions.
+- **False Re-Authentication Alerts**: An identical empty response on a freshly established session is now correctly classified as a communication issue rather than a lapsed session, routing to the coordinator's value-holding resilience path.
+
+### Under the hood
+
+- **Diagnostic Test Harness and Negative Token Verification**: Added comprehensive diagnostic capture test suites and explicit assertions ensuring session tokens and credentials are never stored or exported in diagnostics.
+
+---
+
 ## [3.3.4] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility
 
 ### Summary
@@ -374,6 +401,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.3\] - 2026-08-08 - Release: SMS Bugfix and Polling Resilience](#333---2026-08-08---release-sms-bugfix-and-polling-resilience)
   - [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Telemetry](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-and-health-telemetry)

@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
   - [\[3.3.5-dev2\] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll](#335-dev2---2026-08-31---session-verdict-evidence-diagnostics-capture-on-a-failed-poll)
   - [\[3.3.5-dev1\] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation](#335-dev1---2026-08-30---multi-user-login-payload-aligned-with-reference-implementation)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
@@ -197,6 +198,31 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.5] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment
+
+### Summary
+
+- **Multi-User Login Compatibility**: Aligned the multi-user login payload shape and token derivation with the reference hardware standard.
+- **Session Recovery Resilience**: Prevented false authentication failure alerts when a newly authenticated session receives unsupported or missing keys.
+- **Diagnostics Capture on Setup Failures**: Diagnostic downloads now capture the sanitized router response, key map, and login metadata even if initial connection fails.
+
+### Added
+
+- **Diagnostic Capture on Setup Failures**: Diagnostics downloads now retain the sanitized rejected response, key presence map (populated, empty, or absent keys), and login response metadata when initial setup encounters errors, allowing troubleshooting directly from diagnostic downloads without raw debug logs.
+
+### Changed
+
+- **Multi-User Login Payload**: Aligned the `LOGIN_MULTI_USER` form payload to send the username parameter as `user` and include the pre-login `AD` token, matching multi-user router requirements.
+
+### Fixed
+
+- **Session Expiry Misclassification**: Refined session expiry detection so responses missing requested keys (from firmware schema variations or truncated requests) are no longer misidentified as dead sessions.
+- **False Re-Authentication Alerts**: An identical empty response on a freshly established session is now correctly classified as a communication issue rather than a lapsed session, routing to the coordinator's value-holding resilience path.
+
+### Under the hood
+
+- **Diagnostic Test Harness and Negative Token Verification**: Added comprehensive diagnostic capture test suites and explicit assertions ensuring session tokens and credentials are never stored or exported in diagnostics.
 
 ## [3.3.5-dev2] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll
 
