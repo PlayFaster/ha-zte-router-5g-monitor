@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.9-dev1\] - 2026-09-01 - Batch Reads Split By URL Budget](#339-dev1---2026-09-01---batch-reads-split-by-url-budget)
   - [\[3.3.8-dev2\] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors](#338-dev2---2026-09-01---carrier-identity-withheld-in-discovery-mined-aliases-firmware-update-sensors)
   - [\[3.3.8-dev1\] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys](#338-dev1---2026-09-01---key-discovery-from-the-routers-own-web-ui-concept-based-contract-keys)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
@@ -206,6 +207,29 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.9-dev1] - 2026-09-01 - Batch Reads Split By URL Budget
+
+### Summary
+
+The mandatory poll was one request bounded by the router's URL length, and it had reached 1,551 characters against a ceiling of roughly 2,048. That ceiling had become a design constraint: the request list grows with every model supported rather than with every feature added, because a device spelling a concept differently needs both spellings requested. `_batch_get` now splits a list that would exceed the budget and merges the responses.
+
+### Changed
+
+- **`_batch_get` splits by URL length**: a list longer than `BATCH_URL_BUDGET` becomes several requests, merged into one mapping. The caller sees no difference. The budget is 1,600 characters, below the measured ceiling — that ceiling is one device's, and a firmware with a lower one truncates the response rather than erroring, which presents as missing fields.
+- **The overhead is measured, not assumed**: the fixed query is a constant and the host comes from `self.referer`, because a hostname is longer than an IP and the budget is a property of the whole URL.
+- **Every chunk is required.** A mandatory batch that tolerated a failed chunk would serve half its entities from a partial response and score the poll a success. Per-chunk tolerance belongs to discovery, which is diagnostics-only.
+- **Each chunk carries its own key list** into `_classify_session`, so the absent-key guard judges a response against what that request actually asked for.
+
+### Testing
+
+- 1103 tests, 100% branch coverage. `test_batch_poll_urls_stay_within_the_router_budget` now asserts the property that matters — every request issued stays inside the ceiling, however long the list grows — rather than checking a single URL.
+- New: a list within the budget is one request; a list past it is split and merged; no chunk exceeds the budget for a long hostname; a single name longer than the budget still gets a request rather than being dropped; a failing chunk fails the whole batch; a non-object chunk response contributes nothing.
+- **Hardware, 17 of 17.** Measured on the reference MC7010: the current lists still fit in one request each — core 95 keys, extended 38 — and no requested key is absent from the response.
+
+### Notes
+
+The split is inert today and exists for what follows: ten alias additions planned for this release take the core list to roughly 1,795 characters, past the budget and into two requests. A second round trip costs about 30 ms against a 180-second interval.
 
 ## [3.3.8-dev2] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors
 

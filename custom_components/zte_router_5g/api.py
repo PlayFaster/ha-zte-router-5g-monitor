@@ -15,6 +15,7 @@ import aiohttp
 from .const import (
     ABSENT_KEY_PROPORTION_LIMIT,
     APN_PROFILE_SLOTS,
+    BATCH_URL_BUDGET,
     DISCOVERY_BUDGET_SECONDS,
     DISCOVERY_CANDIDATES,
     DISCOVERY_CHUNK_SIZE,
@@ -268,6 +269,14 @@ _SAFE_CMD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
 # key a `goform` response carries its outcome in, and reads as a `cmd` literal
 # in the bundles.
 _NOT_ROUTER_FIELDS = frozenset({"result", "cmd", "isTest", "goformId"})
+
+# The fixed part of a batch query, before any `cmd` name. The host is measured
+# separately from `self.referer`, because a hostname is longer than an IP and
+# the budget is a property of the whole URL.
+_BATCH_PATH_PREFIX = (
+    "goform/goform_get_cmd_process?multi_data=1&isTest=false"
+    "&sms_received_flag_flag=0&cmd="
+)
 
 
 # Appended to every targeted read so an all-empty response still distinguishes
@@ -1641,21 +1650,66 @@ class ZTERouterAPI:
         finally:
             self._clear_session(clear_cookies=True)
 
+    def _split_by_url_budget(self, params: list[str]) -> list[list[str]]:
+        """Split a `cmd` list into requests that fit the router's URL limit.
+
+        The limit is a **URL length**, not a name count — see
+        `docs/zte_how_to_access.md`. A single list had reached 1,795 characters
+        against a ceiling of roughly 2,048 on the reference MC7010, and alias
+        expansion for other models keeps adding to it: a device that spells a
+        concept differently needs both spellings requested, so the list grows
+        with every model supported rather than with every feature added.
+
+        `BATCH_URL_BUDGET` is set below the measured ceiling deliberately. The
+        ceiling is one device's, and a firmware with a lower one would
+        otherwise truncate — which this API signals by returning the response
+        short, not by erroring.
+
+        Splitting never changes what a caller gets: the chunks are merged and
+        every one is required. See `_batch_get`.
+        """
+        # Measured from this entry's own address rather than assumed: a
+        # hostname is longer than an IP, and the budget is a property of the
+        # whole URL.
+        overhead = len(self.referer) + len(_BATCH_PATH_PREFIX)
+        chunks: list[list[str]] = [[]]
+        length = overhead
+        for name in params:
+            addition = len(name) + 1
+            if chunks[-1] and length + addition > BATCH_URL_BUDGET:
+                chunks.append([])
+                length = overhead
+            chunks[-1].append(name)
+            length += addition
+        return chunks
+
     async def _batch_get(
         self, params: list[str], *, timeout_sec: int | None = None
     ) -> dict[str, Any]:
-        """Issue one `multi_data` batch read for the given `cmd` names."""
-        cmd = ",".join(params)
-        path = (
-            "goform/goform_get_cmd_process?multi_data=1&isTest=false"
-            f"&sms_received_flag_flag=0&cmd={cmd}"
-        )
-        # The key list travels with the request so the session classifier can
-        # tell a key that came back empty from one that never came back.
-        data = await self._request(
-            "GET", path, timeout_sec=timeout_sec, requested=params
-        )
-        return cast(dict[str, Any], data)
+        """Read the given `cmd` names, in as many requests as the URL allows.
+
+        **Every chunk is required.** A mandatory batch that tolerated a failed
+        chunk would serve half its entities from a partial response and score
+        the poll a success — the silent-failure shape this integration has
+        closed twice already. Per-chunk tolerance belongs to discovery, which
+        is diagnostics-only; here a failure propagates and fails the poll
+        exactly as one oversized request would.
+
+        Each chunk carries its own key list into `_classify_session`, so the
+        absent-key guard judges a response against what that request actually
+        asked for.
+        """
+        merged: dict[str, Any] = {}
+        for chunk in self._split_by_url_budget(params):
+            data = await self._request(
+                "GET",
+                f"{_BATCH_PATH_PREFIX}{','.join(chunk)}",
+                timeout_sec=timeout_sec,
+                requested=chunk,
+            )
+            if isinstance(data, dict):
+                merged.update(data)
+        return merged
 
     async def get_params(
         self, params: list[str], *, timeout_sec: int | None = None

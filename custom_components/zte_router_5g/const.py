@@ -185,6 +185,16 @@ SMS_MAX_CHARS_UNICODE = 335
 # Names per discovery request. Small deliberately: a chunk carrying a name
 # outside the firmware's dictionary can time out entirely, and a smaller chunk
 # loses less when it does.
+# Characters a single batch request may reach before it is split. The router
+# bounds a GET by URL length rather than by name count, and the ceiling
+# measured on an MC7010 is roughly 2,048 — but that is one device's, and a
+# firmware with a lower one truncates the response rather than erroring, which
+# presents as missing fields. The margin is deliberate.
+#
+# The list grows with every model supported, not with every feature added: a
+# device that spells a concept differently needs both spellings requested.
+BATCH_URL_BUDGET = 1600
+
 DISCOVERY_CHUNK_SIZE = 16
 
 # Mined names are unvalidated by definition, so their chunks are smaller: a
