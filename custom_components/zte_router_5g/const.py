@@ -187,6 +187,32 @@ SMS_MAX_CHARS_UNICODE = 335
 # loses less when it does.
 DISCOVERY_CHUNK_SIZE = 16
 
+# Mined names are unvalidated by definition, so their chunks are smaller: a
+# chunk that times out returns empty defaults for every name in it, and a
+# genuinely populated key inside is scored absent with no trace.
+MINED_CHUNK_SIZE = 8
+
+# Per-chunk timeout. A healthy 75-key batch answers in about 30 ms, so eight
+# seconds is generous for a chunk that will succeed and short for one that
+# will not.
+DISCOVERY_CHUNK_TIMEOUT = 8
+
+# Wall-clock ceiling for the whole discovery pass. A timed-out chunk clears
+# the session, so the next pays a full login; without a ceiling a hostile
+# firmware could make a diagnostics download take minutes.
+DISCOVERY_BUDGET_SECONDS = 90
+
+# Bundles the router serves for its own admin UI, which is a client of this
+# same API. `docs/zte_how_to_access.md` names these as the sources the
+# 2026-07-29 mining pass crawled to recover 175 `cmd` names.
+JS_BUNDLES: tuple[str, ...] = (
+    "js/service.js",
+    "js/statusBar.js",
+    "js/home.js",
+    "js/main.js",
+    "js/app.js",
+)
+
 DISCOVERY_CANDIDATES: list[str] = [
     "5g_rx0_rsrp",
     "5g_rx1_rsrp",

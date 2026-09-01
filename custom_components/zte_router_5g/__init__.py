@@ -489,12 +489,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await api.login(5)
             await coordinator.async_refresh()
 
-            # Both run once per setup and feed the diagnostics download only.
-            # Neither is allowed to fail setup: the discovery probe tolerates
-            # every chunk independently, and the measurement declines rather
-            # than raising when it cannot take a trustworthy sample.
-            api.discovery = await api.probe_discovery_candidates(timeout_sec=20)
-
+            # Discovery no longer runs here. Its only consumer is the
+            # diagnostics download, so it runs when the user asks for one
+            # rather than speculatively for everyone on every reload — see
+            # `coordinator.async_run_discovery`.
+            #
             # The unauthenticated key set can only be sampled with no session,
             # so this ends the one just established and logs back in. It costs
             # one logout and one login, once, and replaces a five-name

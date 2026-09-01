@@ -5,6 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.8-dev2\] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors](#338-dev2---2026-09-01---carrier-identity-withheld-in-discovery-mined-aliases-firmware-update-sensors)
+  - [\[3.3.8-dev1\] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys](#338-dev1---2026-09-01---key-discovery-from-the-routers-own-web-ui-concept-based-contract-keys)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
   - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
   - [\[3.3.7-dev2\] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep](#337-dev2---2026-08-31---data-limit-form-aliases-classified-concept-alias-sweep)
@@ -204,6 +206,73 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.8-dev2] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors
+
+### Summary
+
+The first discovery download from the reference MC7010 published the operator's APN profile name and the registered PLMN, both of which the payload block already redacts under other spellings. The gate's mechanism was sound and its vocabulary was not. The same download supplied four alternate spellings worth adopting as fallbacks and two fields worth reporting.
+
+### Fixed
+
+- **Carrier identity is withheld in the discovery block**: `profile_name`, `provider`, `spn`, `plmn`, `fullname` and `shortname` join the deny-pattern. `network_provider` and `wan_apn` are in `CARRIER_KEYS`, so publishing `profile_name_ui`, `m_profile_name`, `strFullName`, `strShortName`, `network_provider_fullname`, `spn_name_data` and `rplmn_num` was inconsistent as well as revealing — `rplmn_num` carries MCC and MNC in one value. Verified on hardware: all seven now report shape only, and neither the profile name nor the PLMN appears anywhere in the file.
+- **`result` is neither mined nor harvested**: it is the key a `goform` response carries its outcome in, and it reads as a `cmd` literal in the bundles. Excluding it from mined names was not enough — a refused chunk echoes it back in the response, so it was published as though it were telemetry.
+
+### Added
+
+- **Four fallback spellings**, recovered by mining and added to the request list: `strBearer` for `network_type`, `strFullName` and `strShortName` for `network_provider`, `wan_apn_ui` for `wan_apn`, and `hardwarenumber` for `hardware_version`. The three carrier spellings join `CARRIER_KEYS`, since their partners are already there.
+- **Firmware Update Available** (`new_version_state`) and **Firmware Update State** (`current_upgrade_state`): System sub-device, diagnostic, enabled by default. Two questions — whether an update has been found, and whether one is running — so two entities. The values are vendor enumerations and only the idle case has been observed, so they are reported unchanged rather than mapped.
+
+### Changed
+
+- **`test_the_download_is_json_serializable` asserts a round trip** rather than relying on `json.dumps` raising, which the assertion audit could not see.
+
+### Testing
+
+- 1097 tests, 100% branch coverage, assertion audit passing. Seven carrier-identity names asserted withheld; `result` asserted neither mined nor harvested; each of the four aliases asserted to resolve when its primary is empty; the two new sensors asserted to publish the router's value unchanged.
+- **Hardware, 17 of 17.** Live verification confirmed the seven withheld verdicts and that `3FWA.ie` and `27205` are absent from the sanitized output.
+
+### Notes
+
+`strBearer` read `ENDC` alongside `network_type` when first sampled and has since been observed empty while `network_type` still reported `ENDC`. It is a fallback rather than a proven duplicate; the leader wins whenever it carries a value.
+
+The core batch is 95 keys and 1,551 characters after these additions. Measured on the reference device: no requested key is absent from the response, so the batch remains inside the router's URL budget.
+
+`web_version` is recorded as a known field and not adopted — it reports the web UI build, and the firmware version already identifies the build.
+
+## [3.3.8-dev1] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys
+
+### Summary
+
+The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`, so it can only confirm or deny names already on it — on the reporter's MC888 Pro it answered 10 of 62. This release mines the router's own JavaScript, which is a client of the same API, and probes what it finds. Measured on the reference MC7010: **383 names in `js/service.js`, 303 of them never requested by this integration**, against 48 static candidates the bundles do not mention at all. Separately, the session sentinel and the contract keys stop being single names.
+
+### Added
+
+- **Names are mined from the router's web UI at download time**: `mine_candidate_names()` fetches the bundles named in `docs/zte_how_to_access.md`, extracts every `cmd=` literal, and filters to tokens that are actually `cmd` names — the 2026-07-29 artefact contains the literal `1`, and both probe paths interpolate names straight into a URL. The static list is retained and unioned, because 48 of its names appear in no bundle.
+- **Discovery runs when the user asks for a download**, not at setup: the mined names have no runtime consumer, so the work is done where the value is rather than speculatively on every reload. It logs in when no session is live — the user pressed the button, and that authorises using the router.
+- **Values publish by default, gated in layers**: `DISCOVERY_VALUE_SAFE` becomes a bypass for vetted names rather than the gate. A mined name has no allow-list entry by construction, so denying by default would list names and answer nothing. Safety comes from a name deny-pattern for credentials, subscriber identifiers, location, SSIDs and APNs; then the existing walker; then shape rules for coordinates and blobs; then a length cap. The verdict for each key publishes alongside its value, so a key that answered nothing and a key that was withheld stop looking alike.
+- **Failure notes throughout**: the download carries an `errors` list, per-bundle mining notes, whether the probe ran on an existing session or a fresh login, why the unauthenticated-key measurement was skipped or rejected, and `logout_acknowledged`.
+
+### Changed
+
+- **`_SESSION_SENTINEL` becomes `_SESSION_SENTINELS`**, a set of spellings, filtered at use time through the measured unauthenticated key set. A spelling the device answers without a session proves nothing — the MC888 Pro returns `ppp_status` on a dead session, so appending it unfiltered would make a dead session look alive. The appended set is capped at two, or the absent-key guard crosses its threshold on a one-key read and returns `undecidable`.
+- **`CORE_KEYS` becomes `CORE_CONCEPTS`**: drift is judged per concept, so a device answering `ppp_status` where another answers `wan_connect_status` has not lost its connection state. `uptime` gains `flux_realtime_time` for the same reason.
+- **`_request` catches `RuntimeError` and `ValueError`**: `RuntimeError("Session is closed")` is raised when Home Assistant tears down its shared session mid-request, and is neither a `ClientError` nor a `TimeoutError`.
+
+### Fixed
+
+- **A timed-out probe chunk no longer hides the keys inside it**: a chunk that times out returns empty defaults for every name in it, so a genuinely populated key was scored absent with no trace. Any chunk that times out or answers nothing is re-probed one name at a time. Mined chunks are 8 names, the static list 16, with an 8-second per-chunk timeout and a 90-second wall-clock budget.
+- **The discovery pass holds the coordinator's update lock**: the probe shares the API client and a timed-out chunk clears the session, which beside a live poll could reach `FETCH_STRIKE_LIMIT` and mark entities unavailable because the user pressed Download.
+- **A non-serializable field can no longer fail the whole file**: values read off a collaborator pass through `_scalar` first. Serialization happens after every guard has passed, so this failed at the last moment and past every check.
+
+### Testing
+
+- 1082 tests, 100% branch coverage. New: the download survives every router call failing, a closed aiohttp session, and a section that raises; the whole file is asserted JSON-serializable; seven mined credential names are asserted never to publish their values; a non-identifier token is never probed; a timed-out chunk is re-probed singly; the budget curtails and records it.
+- **Hardware, 17 of 17**: check `[1d]` mines the bundles and scores the yield; `[1e]` confirms a discovery pass leaves the session usable. Measured this run — 383 names from `js/service.js`, 303 unknown, 116 answered, poll healthy afterwards with 55 keys populated.
+
+### Notes
+
+`js/statusBar.js` returns HTTP 404 on the reference device and the other three bundles yield nothing; `service.js` carries all 383. The list is kept as named in the API reference rather than trimmed, because a bundle absent on one firmware may be present on another.
 
 ## [3.3.7] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls
 

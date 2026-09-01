@@ -92,7 +92,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G RSSI | Sensor | `z5g_rssi` | Total received power across the 5G channel, in dBm, including noise and interference. Use 5G RSRP for a cleaner measure of your own cell's strength. |
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 
-## System (24)
+## System (26)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -103,8 +103,10 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Web Page Auto-Wake | Binary sensor | `web_wake` | Whether the router's web management interface automatically wakes from sleep when accessed. |
 | APN Interface Version | Sensor | `apn_interface_version` | Which version of the router's own APN configuration format is in use. Only of interest when an APN change is not taking effect. |
 | Battery | Sensor | `battery_value` | Battery charge level for portable ZTE models. Mains-powered units lacking a battery report 100%. |
+| Firmware Update State | Sensor | `current_upgrade_state` | Whether a firmware update is running. The value is the router's own, reported unchanged. |
 | Device Uptime | Sensor | `device_uptime` | The moment the router last booted, held steady between reboots rather than recalculated each poll. It only moves when the router's own uptime counter drops, so a genuine restart is easy to trigger automations on. |
 | IMEI | Sensor | `imei` | International Mobile Equipment Identity - the modem's unique 15-digit hardware serial, used by networks to identify the device itself rather than the SIM. This integration also uses it as the stable identity for your router, so entity history survives an IP change. |
+| Firmware Update Available | Sensor | `new_version_state` | Whether the router has found a firmware update. The value is the router's own, reported unchanged. |
 | WAN Fallback Mode | Sensor | `opms_wan_auto_mode` | The WAN operating mode the router falls back to automatically. A difference between this and the active mode is normal. |
 | WAN Operating Mode | Sensor | `opms_wan_mode` | Whether the router is passing traffic as a gateway of its own or bridging it straight through to equipment behind it. Changing this is deliberately not offered here: it alters the path this integration reaches the router over, so use the router's own web page where a mistake can still be undone. |
 | 5G Modem Temperature | Sensor | `pm_modem_5g` | Temperature reported by the router's 5G modem section. Not reported by all models. |

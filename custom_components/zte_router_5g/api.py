@@ -7,6 +7,7 @@ import re
 import urllib.parse
 from collections.abc import Callable
 from datetime import UTC, datetime
+from time import monotonic
 from typing import Any, NamedTuple, cast
 
 import aiohttp
@@ -14,8 +15,12 @@ import aiohttp
 from .const import (
     ABSENT_KEY_PROPORTION_LIMIT,
     APN_PROFILE_SLOTS,
+    DISCOVERY_BUDGET_SECONDS,
     DISCOVERY_CANDIDATES,
     DISCOVERY_CHUNK_SIZE,
+    DISCOVERY_CHUNK_TIMEOUT,
+    JS_BUNDLES,
+    MINED_CHUNK_SIZE,
     SESSION_IDLE_RESET_SECONDS,
 )
 from .helpers import is_gsm7
@@ -167,6 +172,18 @@ _CORE_PARAMS: list[str] = [
     "flux_data_volume_limit_size",
     "flux_data_volume_limit_unit",
     "flux_data_volume_alert_percent",
+    # Alternate spellings recovered by mining the router's own web UI on
+    # 2026-09-01. Each answered the identical value to the key it backs on an
+    # MC7010, so each is a fallback rather than a second concept.
+    "strBearer",
+    "strFullName",
+    "strShortName",
+    "wan_apn_ui",
+    "hardwarenumber",
+    # Firmware update state. Two questions, so two keys: whether an update has
+    # been found, and whether one is running.
+    "current_upgrade_state",
+    "new_version_state",
 ]
 
 _EXTENDED_PARAMS: list[str] = [
@@ -238,10 +255,51 @@ _LOGIN_SUCCESS = frozenset({"success", "0", "ok"})
 # and absent from `r.cookies`.
 _SET_COOKIE_RE = re.compile(r'\s*([^=;,\s]+)\s*=\s*("?[^";,]*"?)')
 
+# `cmd=` literals in the router's own JavaScript. Matches the name that
+# follows, in either quoting style the bundles use.
+_JS_CMD_RE = re.compile(r"cmd['\"]?\s*[:=]\s*['\"]([A-Za-z_][A-Za-z0-9_,]*)")
+
+# A mined token is only probed when it looks like a `cmd` name. The 2026-07-29
+# artefact contains the literal `1`, and both probe paths interpolate names
+# straight into a URL — a token carrying `&` or `=` would corrupt the request.
+_SAFE_CMD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
+
+# Tokens that survive the filter but are not router fields. `result` is the
+# key a `goform` response carries its outcome in, and reads as a `cmd` literal
+# in the bundles.
+_NOT_ROUTER_FIELDS = frozenset({"result", "cmd", "isTest", "goformId"})
+
 
 # Appended to every targeted read so an all-empty response still distinguishes
 # "these fields are empty" from "the session is gone". See `get_params`.
-_SESSION_SENTINEL = "wan_connect_status"
+# Concepts, not names. Each entry is one thing the router reports, with every
+# spelling known to carry it. A device that spells a concept differently is
+# handled by the same rule as the aliased sensors, and no model is named here.
+#
+# `wan_connect_status` is blank on an MC888 Pro that reports `ppp_connected`
+# under `ppp_status` (issue #56), which is why a single name will not do.
+_CONTRACT_CONCEPTS: dict[str, tuple[str, ...]] = {
+    "network_type": ("network_type", "strBearer"),
+    "signal_bars": ("signalbar",),
+    "uptime": ("realtime_time", "flux_realtime_time"),
+    "connection_state": ("wan_connect_status", "ppp_status"),
+}
+
+# Flattened for membership tests. `test_contract_keys_agree` asserts this
+# matches `coordinator.CORE_KEYS`, which is the same mapping flattened the
+# same way — `coordinator.py` imports this module, so the dependency runs one
+# way only and the two are mirrored rather than shared.
+_CONTRACT_KEYS = frozenset(
+    key for spellings in _CONTRACT_CONCEPTS.values() for key in spellings
+)
+
+# Spellings of the key appended to every targeted read to prove the session is
+# alive. **Bounded deliberately.** `_batch_get` passes the requested list into
+# `_classify_session`, whose absent-key guard declines to rule once more than
+# half of what was asked for came back missing — appending four spellings to a
+# one-key read, with three absent, crosses that line and returns `undecidable`,
+# which is the exact regression the sentinel exists to prevent.
+_SESSION_SENTINELS: tuple[str, ...] = _CONTRACT_CONCEPTS["connection_state"]
 
 
 # Keys this router answers **without a session**. Measured against an MC7010 on
@@ -262,18 +320,6 @@ _SESSION_SENTINEL = "wan_connect_status"
 # Anything added here must be verified on hardware, never assumed from a name.
 # `test_session_detection` asserts each batch still contains keys of *both*
 # classes, because a batch of only one kind makes the test below undecidable.
-# Mirrors `coordinator.CORE_KEYS`. Not imported: `coordinator.py` imports this
-# module, so the dependency only runs one way. `test_contract_keys_agree`
-# fails if the two lists diverge.
-_CONTRACT_KEYS = frozenset(
-    {
-        "network_type",
-        "signalbar",
-        "realtime_time",
-        "wan_connect_status",
-    }
-)
-
 _UNAUTHENTICATED_KEYS = frozenset(
     {
         "imei",
@@ -455,7 +501,6 @@ class ZTERouterAPI:
         # Which candidate `cmd` names this device answers. Populated once per
         # setup and published in the diagnostics download; never read by
         # runtime logic.
-        self.discovery: dict[str, str] = {}
         self.is_multi = True
         self.last_activity = datetime.fromtimestamp(0, UTC)
 
@@ -755,7 +800,13 @@ class ZTERouterAPI:
                         resp_json = await r.json(content_type=None)
         except (ZTEAuthError, ZTEConnectionError):
             raise
-        except (TimeoutError, aiohttp.ClientError) as e:
+        except (TimeoutError, aiohttp.ClientError, RuntimeError, ValueError) as e:
+            # `RuntimeError` covers "Session is closed", which Home Assistant
+            # raises when its shared client session is torn down while a
+            # request is in flight — a diagnostics download taken during a
+            # reload hits exactly that. `ValueError` covers a body that will
+            # not decode. Neither is an `aiohttp.ClientError`, so both used to
+            # escape as themselves.
             if authenticated:
                 self._clear_session()
             raise ZTEConnectionError(f"Request failed: {e}") from e
@@ -1327,8 +1378,8 @@ class ZTERouterAPI:
                 )
                 return False
 
-        # Checked **before** the sentinel: `_SESSION_SENTINEL` is itself a
-        # contract key, so testing the sentinel first made this branch
+        # Checked **before** the sentinel: the sentinel spellings are
+        # themselves contract keys, so testing them first made this branch
         # unreachable — coverage caught it.
         #
         # Reject only a set that claims **every** contract key, not one that
@@ -1345,14 +1396,15 @@ class ZTERouterAPI:
             )
             return False
 
-        if _SESSION_SENTINEL in measured:
+        if set(_SESSION_SENTINELS) <= measured:
             # `get_params` appends this key to every targeted read precisely to
             # prove the session is alive. A device answering it unauthenticated
             # would make that proof meaningless, and there is no fallback for
             # it — unlike the contract keys, which are a set.
             _LOGGER.warning(
-                "Measurement rejected: %s must stay authenticated",
-                _SESSION_SENTINEL,
+                "Measurement rejected: every spelling of %s answers without "
+                "a session, so nothing proves a targeted read is alive",
+                sorted(_SESSION_SENTINELS),
             )
             return False
 
@@ -1362,49 +1414,189 @@ class ZTERouterAPI:
         """The key set in force: measured where trusted, constant otherwise."""
         return self.unauthenticated_keys or _UNAUTHENTICATED_KEYS
 
-    async def probe_discovery_candidates(
+    async def mine_candidate_names(
         self, timeout_sec: int | None = None
-    ) -> dict[str, str]:
-        """Ask which candidate names this device answers, for diagnostics only.
+    ) -> tuple[set[str], list[str]]:
+        """Read the router's own web UI for `cmd` names it uses.
 
-        The `goform` API cannot be enumerated — one `cmd` takes a list of
-        names and answers those, so a name nobody asks for is invisible
-        forever. This is the only route to discovering that a device populates
-        something under a spelling this integration has never heard of.
+        The `goform` API cannot be enumerated: one `cmd` parameter takes a list
+        of names and answers those, so a name nobody asks for is invisible
+        forever. The router's admin UI is a client of this same API, and its
+        JavaScript is the only reliable source for names nobody has written
+        down — the 2026-07-29 mining pass recorded in
+        `.notes/local_only/router_probe/js_mined_keys.json` recovered 175, of
+        which 117 this integration has never requested.
 
-        **Chunked, and every chunk tolerated independently.**
-        `docs/zte_how_to_access.md` records a discovery probe carrying names
-        outside the firmware's dictionary making a whole chunk time out and
-        fall back to empty defaults, taking a genuinely populated key down
-        with it. A chunk that fails is skipped and the rest still run; nothing
-        here can affect the poll, because this never joins it.
+        Several bundles, not one. `docs/zte_how_to_access.md` names
+        `js/service.js` alongside `statusBar.js`, `home.js` and the RequireJS
+        modules, and that pass crawled all of them to reach 175.
 
-        Runs authenticated: the question is what the device populates for a
-        logged-in client, which is what a working integration would read.
+        Returns the names and a list of human-readable notes. Every failure is
+        a note rather than an exception: this runs while a diagnostics download
+        is being generated, and a download that reports what went wrong is
+        useful where one that fails to generate is not.
         """
-        found: dict[str, str] = {}
-        for start in range(0, len(DISCOVERY_CANDIDATES), DISCOVERY_CHUNK_SIZE):
-            chunk = DISCOVERY_CANDIDATES[start : start + DISCOVERY_CHUNK_SIZE]
-            path = (
-                "goform/goform_get_cmd_process?multi_data=1&isTest=false"
-                f"&sms_received_flag_flag=0&cmd={','.join(chunk)}"
-            )
+        names: set[str] = set()
+        notes: list[str] = []
+        for bundle in JS_BUNDLES:
             try:
-                payload = await self._request("GET", path, timeout_sec=timeout_sec)
-            except (ZTEAuthError, ZTEConnectionError) as err:
-                _LOGGER.debug("Discovery chunk starting %s failed: %s", chunk[0], err)
+                async with self.session.get(
+                    f"{self.referer}{bundle}",
+                    headers={"Referer": f"{self.referer}index.html"},
+                    timeout=aiohttp.ClientTimeout(total=timeout_sec or 10),
+                    ssl=False,
+                ) as r:
+                    if r.status != 200:
+                        notes.append(f"{bundle}: HTTP {r.status}")
+                        continue
+                    body = await r.text(errors="replace")
+            except Exception as err:  # noqa: BLE001 - a note, never a failure
+                notes.append(f"{bundle}: {type(err).__name__}: {err}")
                 continue
-            if isinstance(payload, dict):
-                found.update(
-                    {k: v for k, v in payload.items() if isinstance(v, str) and v}
-                )
 
-        _LOGGER.debug(
-            "Discovery: %d of %d candidates answered",
-            len(found),
-            len(DISCOVERY_CANDIDATES),
+            found = {
+                part
+                for m in _JS_CMD_RE.finditer(body)
+                for part in m.group(1).split(",")
+            }
+            names |= found
+            notes.append(f"{bundle}: {len(found)} names")
+
+        return {
+            n
+            for n in names
+            if _SAFE_CMD_RE.fullmatch(n) and n not in _NOT_ROUTER_FIELDS
+        }, notes
+
+    async def probe_names(
+        self,
+        names: list[str],
+        *,
+        chunk_size: int = DISCOVERY_CHUNK_SIZE,
+        deadline: float | None = None,
+    ) -> tuple[dict[str, str], list[str]]:
+        """Read a list of `cmd` names, tolerating anything that goes wrong.
+
+        Chunked, and every chunk tolerated on its own.
+        `docs/zte_how_to_access.md` records a chunk carrying a name outside the
+        firmware's dictionary timing out and returning empty defaults for
+        *every* name in it — so a genuinely populated key sharing that chunk is
+        scored absent with no trace. Per-chunk tolerance saves the other
+        chunks; it does nothing for the names inside the failed one, which is
+        why a chunk that times out or answers nothing is re-probed one name at
+        a time. That converts a timeout into per-name truth.
+
+        `deadline` is wall-clock and checked between chunks. A timed-out chunk
+        clears the session, so the next pays a full login; without a ceiling a
+        slow firmware could make a diagnostics download take minutes.
+
+        Catches `Exception`, not the two domain types. This runs inside a
+        diagnostics download, which must produce a file whatever happens, and
+        a `RuntimeError` from a closed session is neither a `ZTEAuthError` nor
+        a `ZTEConnectionError`.
+        """
+        if deadline is None:
+            deadline = monotonic() + DISCOVERY_BUDGET_SECONDS
+        found: dict[str, str] = {}
+        notes: list[str] = []
+        retry: list[str] = []
+
+        for start in range(0, len(names), chunk_size):
+            if monotonic() > deadline:
+                notes.append(
+                    f"budget exhausted with {len(names) - start} names unprobed"
+                )
+                return found, notes
+            chunk = names[start : start + chunk_size]
+            answered = await self._probe_chunk(chunk)
+            if answered is None:
+                retry.extend(chunk)
+                continue
+            found.update(answered)
+            if not answered and len(chunk) > 1:
+                retry.extend(chunk)
+
+        for name in retry:
+            if monotonic() > deadline:
+                notes.append("budget exhausted during single-name re-probe")
+                break
+            answered = await self._probe_chunk([name])
+            if answered:
+                found.update(answered)
+        if retry:
+            notes.append(f"{len(retry)} names re-probed singly")
+
+        return found, notes
+
+    async def _probe_chunk(self, chunk: list[str]) -> dict[str, str] | None:
+        """Read one chunk. `None` means it failed; `{}` means it answered blank."""
+        path = (
+            "goform/goform_get_cmd_process?multi_data=1&isTest=false"
+            f"&sms_received_flag_flag=0&cmd={','.join(chunk)}"
         )
-        return found
+        try:
+            payload = await self._request(
+                "GET", path, timeout_sec=DISCOVERY_CHUNK_TIMEOUT
+            )
+        except Exception as err:  # noqa: BLE001 - a note, never a failure
+            _LOGGER.debug("Probe chunk starting %s failed: %s", chunk[0], err)
+            return None
+        if not isinstance(payload, dict):
+            return None
+        # `result` is the key a `goform` response carries its outcome in, and
+        # a refused chunk echoes it back. It is not a router field, and
+        # harvesting it would publish `failure` as though it were telemetry.
+        return {
+            k: v
+            for k, v in payload.items()
+            if isinstance(v, str) and v and k not in _NOT_ROUTER_FIELDS
+        }
+
+    async def run_discovery(self, timeout_sec: int | None = None) -> dict[str, Any]:
+        """Mine, probe and report — the whole discovery pass, for diagnostics.
+
+        Never raises. Every failure becomes a note in the returned mapping,
+        because this is called while a diagnostics download is generated and a
+        download that reports a failure is useful where one that fails to
+        generate is not.
+        """
+        deadline = monotonic() + DISCOVERY_BUDGET_SECONDS
+        result: dict[str, Any] = {"notes": [], "values": {}}
+        try:
+            # The user pressed Download Diagnostics, which authorises using
+            # the router. Logging in evicts whoever holds the single session
+            # this hardware permits, and that is acceptable — declining to
+            # log in would return less exactly when the download matters most.
+            if self.session_active:
+                result["session"] = "existing"
+            else:
+                await self.login(timeout_sec=timeout_sec)
+                result["session"] = "fresh login"
+
+            mined, notes = await self.mine_candidate_names(timeout_sec=timeout_sec)
+            result["notes"].extend(notes)
+            result["mined_count"] = len(mined)
+
+            requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+            static = [n for n in DISCOVERY_CANDIDATES if n not in requested]
+            unknown = sorted(mined - requested - set(static))
+
+            # The static list is not belt-and-braces: 52 of its 62 names do not
+            # appear in the mined artefact at all, so the two sources barely
+            # overlap and both are needed.
+            static_found, static_notes = await self.probe_names(
+                static, chunk_size=DISCOVERY_CHUNK_SIZE, deadline=deadline
+            )
+            mined_found, mined_notes = await self.probe_names(
+                unknown, chunk_size=MINED_CHUNK_SIZE, deadline=deadline
+            )
+            result["notes"].extend(static_notes + mined_notes)
+            result["values"] = {**static_found, **mined_found}
+            result["mined_names_probed"] = len(unknown)
+            result["mined_names_answered"] = len(mined_found)
+        except Exception as err:  # noqa: BLE001 - a note, never a failure
+            result["notes"].append(f"discovery aborted: {type(err).__name__}: {err}")
+        return result
 
     async def logout(self) -> None:
         """End the router session and drop local session state.
@@ -1494,8 +1686,21 @@ class ZTERouterAPI:
         read by key and the extra costs nothing.
         """
         request = list(params)
-        if _SESSION_SENTINEL not in request:
-            request.append(_SESSION_SENTINEL)
+        # Every spelling the device does not answer without a session. One
+        # it *does* answer proves nothing — an MC888 Pro returns `ppp_status`
+        # on a dead session (issue #56), so appending it unfiltered would make
+        # a dead session look alive, which is the opposite of the point.
+        #
+        # Capped at two. `_batch_get` passes this list into
+        # `_classify_session`, whose absent-key guard declines to rule once
+        # more than half the request came back missing; appending four
+        # spellings to a one-key read, three of them absent, crosses that line
+        # and returns `undecidable`.
+        unauthenticated = self.unauthenticated_key_set()
+        usable = [k for k in _SESSION_SENTINELS if k not in unauthenticated]
+        for sentinel in (usable or list(_SESSION_SENTINELS))[:2]:
+            if sentinel not in request:
+                request.append(sentinel)
         return await self._batch_get(request, timeout_sec=timeout_sec)
 
     async def get_all_data(self) -> dict[str, Any]:

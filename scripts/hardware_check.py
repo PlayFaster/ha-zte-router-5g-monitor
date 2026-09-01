@@ -94,7 +94,10 @@ try:
         ZTEAuthError,
         ZTERouterAPI,
     )
-    from custom_components.zte_router_5g.const import APN_PROFILE_SLOTS
+    from custom_components.zte_router_5g.const import (
+        APN_PROFILE_SLOTS,
+        DISCOVERY_CANDIDATES,
+    )
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
     raise SystemExit(
         f"cannot import {err.name!r}.\n\n"
@@ -313,6 +316,8 @@ async def check_session_assumptions(
     report.captured["login_cookie_names"] = sorted(api.cookies)
 
     await _check_logout_then_probe(api, report)
+    await check_js_mining_yield(api, report)
+    await check_no_mined_probe_disturbs_the_poll(api, report)
 
 
 async def _probe_cookieless(
@@ -439,6 +444,75 @@ async def _check_logout_then_probe(api: ZTERouterAPI, report: Report) -> None:
     report.captured["measured_unauthenticated_keys"] = sorted(measured)
 
     await api.login()
+
+
+async def check_js_mining_yield(api: ZTERouterAPI, report: Report) -> None:
+    """Mine the router's own web UI and score the yield against the static list.
+
+    The `goform` API cannot be enumerated, so a name nobody asks for is
+    invisible. The router's admin UI is a client of this same API, and its
+    JavaScript is the only source for names nobody has written down. The
+    2026-07-29 pass recorded in `.notes/local_only/router_probe/
+    js_mined_keys.json` recovered 175 names, 117 of which this integration has
+    never requested.
+
+    Scored, because the whole diagnostics-time discovery path rests on the
+    bundles being fetchable and parseable on live hardware.
+    """
+    print(_cyan("\n[1d] Mining the router's web UI for cmd names"))
+
+    mined, notes = await api.mine_candidate_names()
+    for note in notes:
+        print(f"      {_dim(note)}")
+
+    requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+    static = set(DISCOVERY_CANDIDATES)
+    unknown = mined - requested - static
+
+    report.record(
+        bool(mined),
+        "the router's JavaScript yields cmd names",
+        f"{len(mined)} names from {len(notes)} bundles",
+    )
+    report.record(
+        bool(unknown),
+        "mining finds names neither requested nor in the static list",
+        f"{len(unknown)} new, {len(static - mined)} static names absent from the bundles",
+    )
+    report.captured["js_mining"] = {
+        "mined": len(mined),
+        "unknown": len(unknown),
+        "static_not_mined": len(static - mined),
+        "notes": notes,
+    }
+
+
+async def check_no_mined_probe_disturbs_the_poll(
+    api: ZTERouterAPI, report: Report
+) -> None:
+    """Confirm a discovery pass leaves the session usable for the next poll.
+
+    The probe shares the API client, and a chunk that times out clears the
+    session. Nothing here should leave the caller unable to read — a user
+    pressing Download Diagnostics must not cost their entities.
+    """
+    print(_cyan("\n[1e] A discovery pass leaves the session usable"))
+
+    result = await api.run_discovery()
+    values = result.get("values", {})
+    print(f"      {_dim(str(len(values)) + ' names answered')}")
+    print(f"      {_dim('session: ' + str(result.get('session')))}")
+    for note in result.get("notes", []):
+        print(f"      {_dim(note)}")
+
+    data = await api.get_all_data()
+    populated = sum(1 for value in data.values() if value not in ("", None))
+    report.record(
+        populated > 0,
+        "the poll still answers after a discovery pass",
+        f"{populated} keys populated",
+    )
+    report.captured["discovery_answered"] = len(values)
 
 
 async def check_write_round_trip(

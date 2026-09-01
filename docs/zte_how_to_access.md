@@ -640,6 +640,8 @@ Paired with `data_volume_limit_unit`, which is `data` for a byte cap or `time` f
 
 Both times this interface has been extended, the same two-step method found things that guesswork did not. Recorded so it can be repeated rather than reinvented.
 
+**This is now automated.** `api.mine_candidate_names()` fetches the bundles and extracts their `cmd=` literals when a diagnostics download is generated, and the result is probed and published in that file. Measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-09-01: `js/service.js` carries **383 names, 303 of which this integration has never requested**. On that device `js/statusBar.js` answers HTTP 404 and the other bundles yield nothing, but the list is kept as named below, because a bundle absent on one firmware may be present on another.
+
 **Step 1 — mine the web UI's JavaScript.** The router serves its own admin UI, and that UI is a client of this same API. Crawl and parse the bundles — `js/service.js` is the main one, alongside `statusBar.js`, `home.js` and the RequireJS modules — and extract every `cmd=` name and every `goformId` literal. This is the **only** reliable source for write commands: a `goformId` cannot be discovered by probing, because an unknown one fails the same way a refused one does. It is also the only source for a command's full **field set**, which is what the `DATA_LIMIT_SETTING` case turned on.
 
 A 2026-07-29 pass produced 175 GET commands, 26 `goformId` write actions and 63 parameter keys.

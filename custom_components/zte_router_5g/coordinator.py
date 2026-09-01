@@ -119,12 +119,19 @@ RETIRED_REPAIR_NAMES = (
 # circumstances — including the firmware change it exists to catch. Adding an
 # unauthenticated key here disables this check silently; `_UNAUTHENTICATED_KEYS`
 # in `api.py` names the ones known to qualify, and a test enforces the split.
-CORE_KEYS = (
-    "network_type",
-    "signalbar",
-    "realtime_time",
-    "wan_connect_status",
-)
+# Flattened from `api._CONTRACT_CONCEPTS`, which is the authority. Mirrored
+# rather than imported so the dependency keeps running one way; the two are
+# built from the same mapping and `test_contract_keys_agree` fails if they
+# diverge. Drift is judged per *concept* — a device spelling one differently
+# has not lost it.
+CORE_CONCEPTS: dict[str, tuple[str, ...]] = {
+    "network_type": ("network_type", "strBearer"),
+    "signal_bars": ("signalbar",),
+    "uptime": ("realtime_time", "flux_realtime_time"),
+    "connection_state": ("wan_connect_status", "ppp_status"),
+}
+
+CORE_KEYS = tuple(key for spellings in CORE_CONCEPTS.values() for key in spellings)
 
 # The single drift finding this integration can report. Section 19 requires the
 # `drift` attribute to be a list of findings, so the message lives here rather
@@ -150,6 +157,9 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # payload check. Not persisted: a restart re-learns it on the first
         # poll, which is the conservative direction.
         self._payload_high_water = 0
+        # Serializes a diagnostics discovery probe against the poll; both use
+        # the same API client and the same session.
+        self._async_update_lock = asyncio.Lock()
         self.last_update_success_time: datetime | None = None
         self._was_available = True
         self._boot_time: datetime | None = None
@@ -1016,7 +1026,14 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         the full strike budget before it counts, so a single odd response does
         not raise an alarm.
         """
-        present = {key for key in CORE_KEYS if data.get(key) not in (None, "")}
+        # Per concept, not per name: a device that answers `ppp_status` where
+        # another answers `wan_connect_status` still reports its connection
+        # state, and scoring that as drift would fire on every poll.
+        present = {
+            concept
+            for concept, spellings in CORE_CONCEPTS.items()
+            if any(data.get(key) not in (None, "") for key in spellings)
+        }
 
         if not self._drift_baseline:
             # Startup grace — no verdict until a good poll establishes what
@@ -1032,6 +1049,18 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
         self._drift_strikes += 1
         return self._drift_strikes >= HEALTH_DRIFT_STRIKE_LIMIT
+
+    async def async_run_discovery(self) -> dict[str, Any]:
+        """Run the discovery pass under the coordinator's update lock.
+
+        The probe shares this coordinator's API client, and a chunk that times
+        out clears the session. Running it beside a live poll could score that
+        poll expired, and repeating it across chunks could reach
+        `FETCH_STRIKE_LIMIT` — marking entities unavailable because the user
+        pressed Download Diagnostics. The lock makes the two take turns.
+        """
+        async with self._async_update_lock:
+            return await self.api.run_discovery()
 
     def _sparse_payload_finding(self, data: dict[str, Any]) -> str | None:
         """Report a poll that succeeded while answering almost nothing.

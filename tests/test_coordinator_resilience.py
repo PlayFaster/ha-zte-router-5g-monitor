@@ -705,3 +705,23 @@ async def test_drift_uses_its_own_strike_budget_not_the_fetch_one(
 
         await coordinator._async_update_data()
         assert coordinator.health_snapshot["drift"] == [DRIFT_CONTRACT]
+
+
+@pytest.mark.asyncio
+async def test_a_diagnostics_probe_does_not_strike_the_coordinator(coordinator) -> None:
+    """The probe shares this coordinator's client and can clear the session.
+
+    Run beside a live poll, a chunk timing out could score that poll expired,
+    and repeated across chunks it could reach `FETCH_STRIKE_LIMIT` — marking
+    entities unavailable because the user pressed Download Diagnostics. The
+    update lock makes the two take turns.
+    """
+    coordinator.api.run_discovery = AsyncMock(return_value={"values": {}})
+
+    async def _poll_while_probing():
+        async with coordinator._async_update_lock:
+            return "poll held the lock"
+
+    await coordinator.async_run_discovery()
+    assert await _poll_while_probing() == "poll held the lock"
+    assert coordinator.api.run_discovery.await_count == 1

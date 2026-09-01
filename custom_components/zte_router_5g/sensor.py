@@ -184,6 +184,17 @@ _ALIAS_REALTIME_RX_BYTES: Final = ("realtime_rx_bytes", "flux_realtime_rx_bytes"
 _ALIAS_REALTIME_TX_THRPT: Final = ("realtime_tx_thrpt", "flux_realtime_tx_thrpt")
 _ALIAS_REALTIME_RX_THRPT: Final = ("realtime_rx_thrpt", "flux_realtime_rx_thrpt")
 _ALIAS_REALTIME_TIME: Final = ("realtime_time", "flux_realtime_time")
+
+# Alternate spellings mined from the router's own web UI on 2026-09-01. Each
+# answered the identical value to the key it leads at the moment it was
+# sampled. `strBearer` has since been observed empty on that device while
+# `network_type` reported `ENDC`, so it is a fallback rather than a proven
+# duplicate — which is what a fallback is for: the leader wins whenever it
+# carries a value.
+_ALIAS_NETWORK_TYPE: Final = ("network_type", "strBearer")
+_ALIAS_PROVIDER: Final = ("network_provider", "strFullName", "strShortName")
+_ALIAS_WAN_APN: Final = ("wan_apn", "wan_apn_ui")
+_ALIAS_HARDWARE: Final = ("hardware_version", "hardwarenumber")
 _ALIAS_LIMIT_SIZE: Final = ("data_volume_limit_size", "flux_data_volume_limit_size")
 _ALIAS_LIMIT_UNIT: Final = ("data_volume_limit_unit", "flux_data_volume_limit_unit")
 _ALIAS_ALERT_PERCENT: Final = (
@@ -484,7 +495,29 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="system_hardware_version",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
-        value_fn=lambda data: data.get("hardware_version"),
+        value_fn=lambda data: _get_first(data, _ALIAS_HARDWARE),
+    ),
+    ZTESensorEntityDescription(
+        key="new_version_state",
+        about=(
+            "Whether the router has found a firmware update. The value is the "
+            "router's own, reported unchanged."
+        ),
+        translation_key="system_firmware_update_available",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        value_fn=lambda data: _safe_str(data.get("new_version_state")),
+    ),
+    ZTESensorEntityDescription(
+        key="current_upgrade_state",
+        about=(
+            "Whether a firmware update is running. The value is the router's "
+            "own, reported unchanged."
+        ),
+        translation_key="system_firmware_update_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        value_fn=lambda data: _safe_str(data.get("current_upgrade_state")),
     ),
     ZTESensorEntityDescription(
         key="battery_value",
@@ -657,7 +690,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_wan_apn",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("wan_apn")),
+        value_fn=lambda data: _safe_str(_get_first(data, _ALIAS_WAN_APN)),
     ),
     ZTESensorEntityDescription(
         key="network_type",
@@ -670,7 +703,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         ),
         translation_key="signal_network_type",
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("network_type")),
+        value_fn=lambda data: _safe_str(_get_first(data, _ALIAS_NETWORK_TYPE)),
     ),
     ZTESensorEntityDescription(
         key="signalbar",
@@ -695,7 +728,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_network_provider",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("network_provider")),
+        value_fn=lambda data: _safe_str(_get_first(data, _ALIAS_PROVIDER)),
     ),
     ZTESensorEntityDescription(
         key="mdm_mcc",

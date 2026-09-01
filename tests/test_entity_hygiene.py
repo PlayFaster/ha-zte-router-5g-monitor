@@ -501,6 +501,16 @@ async def test_every_live_entity_has_an_icon_or_a_device_class(
 # reason for each finding, per the chore. Copying Huawei's entries would have
 # been meaningless: they describe that project's library.
 ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
+    ("diagnostics.py", "noqa: BLE001"): (
+        "`_guarded` catches `Exception` because Home Assistant does not wrap "
+        "`config_entry_diagnostics` — an exception escaping this function is "
+        "an HTTP 500 and no file at all, which is worse than any partial "
+        "download. The breadth is the point: a narrower catch would let an "
+        "unanticipated type destroy the file a user is trying to attach to an "
+        "issue. Every caught error is recorded as a field in that file, so "
+        "nothing is swallowed, and `test_diagnostics_never_raises_when_every"
+        "_router_call_fails` proves the guarantee it buys."
+    ),
     ("api.py", "noqa: S324"): (
         "MD5 is the hash the legacy `goform` login protocol specifies for the "
         "`AD` token on pre-new-generation firmware. It is the router's choice, "

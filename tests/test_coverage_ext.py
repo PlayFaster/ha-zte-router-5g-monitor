@@ -419,7 +419,6 @@ async def test_init_background_setup_success(
         mock_config_entry.async_create_background_task = mock_capture_task
 
         mock_api.get_all_data = AsyncMock(return_value={"network_type": "ENDC"})
-        mock_api.probe_discovery_candidates = AsyncMock(return_value={})
         mock_api.measure_unauthenticated_keys = AsyncMock(return_value=frozenset())
         mock_api.logout = AsyncMock(return_value=None)
 
@@ -436,7 +435,6 @@ async def test_init_background_setup_success(
         assert mock_api.login.await_count == 2
         assert all(call.args == (5,) for call in mock_api.login.await_args_list)
         mock_api.logout.assert_awaited_once()
-        mock_api.probe_discovery_candidates.assert_awaited_once()
         mock_api.measure_unauthenticated_keys.assert_awaited_once()
         assert mock_config_entry.runtime_data.data["network_type"] == "ENDC"
         assert mock_config_entry.runtime_data.last_update_success is True
