@@ -245,7 +245,6 @@ async def test_background_setup_adopts_a_measured_key_set(mock_hass, mock_config
         mock_api.login = AsyncMock(return_value=None)
         mock_api.logout = AsyncMock(return_value=None)
         mock_api.get_all_data = AsyncMock(return_value={"network_type": "ENDC"})
-        mock_api.probe_discovery_candidates = AsyncMock(return_value={})
         mock_api.measure_unauthenticated_keys = AsyncMock(return_value=measured)
 
         background_coro = None
@@ -279,7 +278,6 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
         mock_api.try_set_protocol = AsyncMock(return_value=None)
         mock_api.login = AsyncMock(return_value="stok=test")
         mock_api.get_all_data = AsyncMock(return_value={"network_type": "ENDC"})
-        mock_api.probe_discovery_candidates = AsyncMock(return_value={})
         mock_api.measure_unauthenticated_keys = AsyncMock(return_value=frozenset())
         mock_api.logout = AsyncMock(return_value=None)
 
@@ -307,7 +305,6 @@ async def test_background_setup_success(mock_hass, mock_config_entry):
         assert mock_api.login.await_count == 2
         assert all(call.args == (5,) for call in mock_api.login.await_args_list)
         mock_api.logout.assert_awaited_once()
-        mock_api.probe_discovery_candidates.assert_awaited_once()
         mock_api.measure_unauthenticated_keys.assert_awaited_once()
         mock_api.get_all_data.assert_awaited()
 

@@ -21,7 +21,7 @@ import pytest
 from custom_components.zte_router_5g.api import (
     _CORE_PARAMS,
     _EXTENDED_PARAMS,
-    _SESSION_SENTINEL,
+    _SESSION_SENTINELS,
     _UNAUTHENTICATED_KEYS,
     ZTERouterAPI,
     _classify_session,
@@ -49,13 +49,20 @@ def _api(client, **kwargs):
 
 
 def test_contract_keys_agree() -> None:
-    """`api._CONTRACT_KEYS` mirrors `coordinator.CORE_KEYS`, not imports it.
+    """The two concept mappings are mirrored, and must not drift.
 
     `coordinator.py` imports `api.py`, so the dependency runs one way only and
-    the list is duplicated. This is what stops the copies diverging.
+    the mapping is duplicated. Compared concept by concept and spelling by
+    spelling — comparing the flattened sets alone would pass while the two
+    disagreed about which spellings belong to which concept.
     """
-    from custom_components.zte_router_5g.api import _CONTRACT_KEYS
+    from custom_components.zte_router_5g.api import (
+        _CONTRACT_CONCEPTS,
+        _CONTRACT_KEYS,
+    )
+    from custom_components.zte_router_5g.coordinator import CORE_CONCEPTS
 
+    assert _CONTRACT_CONCEPTS == CORE_CONCEPTS
     assert frozenset(CORE_KEYS) == _CONTRACT_KEYS
 
 
@@ -156,13 +163,24 @@ def test_a_measurement_swallowing_the_extended_batch_is_rejected() -> None:
     assert ZTERouterAPI._measurement_is_usable(measured) is False
 
 
-def test_a_measurement_claiming_the_sentinel_is_rejected() -> None:
-    """`get_params` appends the sentinel to prove the session is alive."""
-    assert ZTERouterAPI._measurement_is_usable({"imei", _SESSION_SENTINEL}) is False
+def test_a_measurement_claiming_every_sentinel_spelling_is_rejected() -> None:
+    """`get_params` appends a sentinel to prove the session is alive.
+
+    One spelling answered unauthenticated is survivable — the others still
+    prove liveness. All of them is not: nothing left would distinguish a dead
+    session from a legitimately empty read.
+    """
+    measured = {"imei", *_SESSION_SENTINELS}
+    assert ZTERouterAPI._measurement_is_usable(measured) is False
+
+
+def test_one_sentinel_spelling_answered_unauthenticated_is_survivable() -> None:
+    """The MC888 Pro answers `ppp_status` without a session (issue #56)."""
+    assert ZTERouterAPI._measurement_is_usable({"imei", "ppp_status"}) is True
 
 
 @pytest.mark.parametrize(
-    "contract_key", [k for k in CORE_KEYS if k != _SESSION_SENTINEL]
+    "contract_key", [k for k in CORE_KEYS if k not in _SESSION_SENTINELS]
 )
 def test_one_contract_key_does_not_reject_a_measurement(contract_key) -> None:
     """The drift check asks whether *any* contract key is present.
@@ -175,14 +193,9 @@ def test_one_contract_key_does_not_reject_a_measurement(contract_key) -> None:
     assert ZTERouterAPI._measurement_is_usable({"imei", contract_key}) is True
 
 
-def test_the_sentinel_is_rejected_even_though_it_is_a_contract_key() -> None:
-    """`wan_connect_status` is both, and the sentinel rule is the strict one.
-
-    Every targeted read appends it to prove the session is alive, and there is
-    no fallback for it the way there is for the contract set.
-    """
-    assert _SESSION_SENTINEL in CORE_KEYS
-    assert ZTERouterAPI._measurement_is_usable({"imei", _SESSION_SENTINEL}) is False
+def test_the_sentinels_are_contract_keys_too() -> None:
+    """`connection_state` is both a contract concept and the sentinel set."""
+    assert set(_SESSION_SENTINELS) <= set(CORE_KEYS)
 
 
 def test_a_measurement_claiming_every_contract_key_is_rejected() -> None:
@@ -244,9 +257,20 @@ def test_every_new_alias_is_requested() -> None:
             assert key in requested, f"{key} is aliased but never requested"
 
 
-def test_no_flux_spelling_is_a_contract_key() -> None:
-    """Drift is judged on the bare spellings; a `flux_` key must not join them."""
-    assert not any(key.startswith("flux_") for key in CORE_KEYS)
+def test_a_flux_spelling_never_stands_alone_as_a_concept() -> None:
+    """Superseded the rule that no `flux_` key may be a contract key.
+
+    Drift is now judged per concept, so a `flux_` spelling belonging to a
+    concept is the mechanism working — it is how a device using that
+    vocabulary still reports the concept. What must not happen is a concept
+    whose *only* spelling is a `flux_` one, which would make drift fire on
+    every device that uses the bare name.
+    """
+    from custom_components.zte_router_5g.api import _CONTRACT_CONCEPTS
+
+    for concept, spellings in _CONTRACT_CONCEPTS.items():
+        bare = [k for k in spellings if not k.startswith("flux_")]
+        assert bare, f"{concept} has no bare spelling"
 
 
 def test_uptime_alias_matches_the_sensor_tuple() -> None:
@@ -382,10 +406,10 @@ def test_a_measurement_claiming_every_contract_key_but_not_the_sentinel() -> Non
     from custom_components.zte_router_5g.api import _CONTRACT_KEYS
 
     measured = {"imei", *_CONTRACT_KEYS}
-    # The sentinel is itself a contract key, so this set trips both rules.
+    # The sentinel spellings are contract keys, so this set trips both rules.
     # The contract rule is checked first; testing the sentinel first left this
     # branch unreachable.
-    assert _SESSION_SENTINEL in measured
+    assert set(_SESSION_SENTINELS) <= measured
     assert ZTERouterAPI._measurement_is_usable(measured) is False
 
 
@@ -468,3 +492,44 @@ def _redacted() -> set[str]:
     from custom_components.zte_router_5g.diagnostics import TO_REDACT
 
     return set(TO_REDACT)
+
+
+def test_a_sentinel_answered_unauthenticated_does_not_prove_liveness() -> None:
+    """The MC888 Pro answers `ppp_status` on a dead session (issue #56).
+
+    `get_params` appends a sentinel to prove a targeted read is alive.
+    Appending a spelling the device answers without a session would make a
+    dead session look alive — the opposite of the point.
+    """
+    api = _api(MagicMock())
+    api.unauthenticated_keys = frozenset({"imei", "ppp_status"})
+
+    request = ["ODU_led_switch"]
+    unauthenticated = api.unauthenticated_key_set()
+    usable = [k for k in _SESSION_SENTINELS if k not in unauthenticated]
+
+    assert "ppp_status" not in usable
+    assert usable, "no sentinel spelling left to prove liveness"
+
+
+@pytest.mark.asyncio
+async def test_the_appended_sentinel_set_stays_bounded(mock_aiohttp_client):
+    """`_classify_session` declines once most of a request came back missing.
+
+    Appending four spellings to a one-key read, three of them absent, crosses
+    that line and returns `undecidable` — the regression the sentinel exists
+    to prevent.
+    """
+    api = _api(mock_aiohttp_client)
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"ODU_led_switch": "1", "wan_connect_status": "connected"}
+    )
+
+    await api.get_params(["ODU_led_switch"])
+
+    url = mock_aiohttp_client.get.call_args[0][0]
+    appended = [k for k in _SESSION_SENTINELS if k in url]
+    assert len(appended) <= 2

@@ -204,21 +204,91 @@ def _sanitize_payload(data: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, 
     return clean
 
 
+def _scalar(value: Any) -> Any:
+    """Return a value only when it is a JSON scalar, else `None`.
+
+    The download is serialized after every section has succeeded, so a value
+    that cannot be encoded fails the whole file at the last moment and past
+    every guard. Anything read off a collaborator — which may be a stand-in
+    under test, or a future object here — passes through this first.
+    """
+    return value if isinstance(value, (str, int, float, bool)) else None
+
+
+async def _async_guarded(section: str, coro: Any, errors: list[str]) -> Any:
+    """Await one section, recording a failure rather than raising."""
+    try:
+        return await coro
+    except Exception as err:  # noqa: BLE001 - recorded, never raised
+        errors.append(f"{section}: {type(err).__name__}: {err}")
+        return None
+
+
+def _guarded(section: str, build: Any, errors: list[str]) -> Any:
+    """Run one section of the download, recording a failure rather than raising.
+
+    Home Assistant does not wrap `config_entry_diagnostics`
+    (`homeassistant/components/diagnostics/__init__.py`), so an exception
+    escaping here is an HTTP 500 and no file at all. A download that reports
+    what went wrong is useful; one that fails to generate is not.
+    """
+    try:
+        return build()
+    except Exception as err:  # noqa: BLE001 - recorded, never raised
+        errors.append(f"{section}: {type(err).__name__}: {err}")
+        return None
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> dict[str, Any]:
-    """Return sanitized diagnostics for a config entry."""
+    """Return sanitized diagnostics for a config entry.
+
+    Every section is built independently and every failure is recorded in the
+    file. This function must not raise: see `_guarded`.
+    """
     coordinator: ZTERouterDataUpdateCoordinator = entry.runtime_data
 
     tokenizer = _Tokenizer()
+    errors: list[str] = []
 
     # deepcopy first — diagnostics is a read path and must never mutate the
     # live coordinator payload the entities are serving from.
     raw = deepcopy(coordinator.data) if coordinator.data else {}
-    payload = _sanitize_payload(raw, tokenizer)
+    payload = _guarded("data", lambda: _sanitize_payload(raw, tokenizer), errors) or {}
 
-    entry_data = _sanitize_payload(deepcopy(dict(entry.data)), tokenizer)
-    entry_options = _sanitize_payload(deepcopy(dict(entry.options)), tokenizer)
+    entry_data = (
+        _guarded(
+            "entry.data",
+            lambda: _sanitize_payload(deepcopy(dict(entry.data)), tokenizer),
+            errors,
+        )
+        or {}
+    )
+    entry_options = (
+        _guarded(
+            "entry.options",
+            lambda: _sanitize_payload(deepcopy(dict(entry.options)), tokenizer),
+            errors,
+        )
+        or {}
+    )
+
+    # The router is touched here, not at setup: the mined names have no
+    # runtime consumer, so the work is done when the user asks for it and not
+    # speculatively for everyone. `run_discovery` never raises — it returns
+    # its failures as notes — and the guard is the second line of defence.
+    discovery_raw = await _async_guarded(
+        "discovery", coordinator.async_run_discovery(), errors
+    )
+    discovery = (
+        _guarded(
+            "discovery.sanitize",
+            lambda: _sanitize_discovery(discovery_raw, tokenizer),
+            errors,
+        )
+        or {}
+    )
 
     return {
         "entry": {
@@ -265,6 +335,10 @@ async def async_get_config_entry_diagnostics(
         # Measured rather than assumed: which keys this device answers
         # without a session. Names only. Empty means no measurement passed
         # validation and the module constant is in force.
+        "measurement_note": _scalar(getattr(coordinator.api, "measurement_note", None)),
+        "logout_acknowledged": _scalar(
+            getattr(coordinator.api, "logout_acknowledged", None)
+        ),
         "unauthenticated_keys": sorted(coordinator.api.unauthenticated_keys)
         if isinstance(coordinator.api.unauthenticated_keys, (set, frozenset))
         else [],
@@ -273,7 +347,8 @@ async def async_get_config_entry_diagnostics(
         # else reports shape and length, because `_sanitize_payload` matches
         # on exact key name and a name it does not know would otherwise be
         # published intact.
-        "discovery": _sanitize_discovery(coordinator.api.discovery, tokenizer),
+        "discovery": discovery,
+        "errors": errors,
         "login": (
             deepcopy(coordinator.api.login_metadata)
             if isinstance(coordinator.api.login_metadata, dict)
@@ -293,26 +368,103 @@ def _describe(value: str) -> str:
     return f"<{kind}, {len(value)} chars>"
 
 
+# Names whose value is never published, matched case-insensitively anywhere in
+# the key. Mined names are discovered rather than chosen, and the 2026-07-29
+# artefact contains `pppoe_password`, `tr069_ServerPassword`,
+# `tr069_ConnectionRequestPassword`, `wifi_chip1_ssid1_password_encode`,
+# `wifi_wds_WPAPSK1`, `gps_lat`, `gps_lon`, `msisdn` and `loginfo` — none of
+# which `_sweep` would catch.
+_DENY_NAME_RE = re.compile(
+    r"(?i)(pass|pwd|psk|secret|token|cred|key_|_key|imsi|iccid|msisdn"
+    r"|gps|_lat$|_lon$|latitude|longitude|ssid|apn|loginfo|serial|sn$)"
+)
+
+# Decimal degrees, as a pair or alone: a coordinate is location whatever the
+# key is called.
+_GEO_RE = re.compile(r"^-?\d{1,3}\.\d{4,}$")
+
+# Above this a value is a blob rather than a reading, and is reported as one.
+_BLOB_CHARS = 200
+
+# Published values are capped. A long value is still identifiable from its
+# first line; an uncapped one bloats a file that is attached to an issue.
+_VALUE_CAP = 120
+
+
+def _gate_discovery_value(
+    key: str, value: str, tokenizer: _Tokenizer
+) -> tuple[Any, str]:
+    """Decide what a discovered value publishes as, and say why.
+
+    **Publish by default.** A value is what identifies an element — a name
+    alone does not distinguish a counter from a timestamp from free text — and
+    the whole purpose of discovery is to learn what a device reports. Denying
+    by default would produce a file listing names and answering nothing.
+
+    Safety comes from layers rather than from an allow-list, because a mined
+    name has no allow-list entry by construction:
+
+    1. `DISCOVERY_VALUE_SAFE` bypasses the rest for names already vetted.
+    2. The name is matched against `_DENY_NAME_RE` — credentials, subscriber
+       identifiers, location, SSIDs and APNs never publish.
+    3. The existing walker runs: addresses, MACs and long digit runs are
+       tokenized exactly as they are in the payload block.
+    4. Shape rules catch what the name did not: coordinates, and anything long
+       enough to be a blob.
+    5. What survives is truncated.
+
+    Returns the published value and a one-word verdict, so a reader can tell a
+    key that answered nothing from one that was withheld.
+    """
+    if key in DISCOVERY_VALUE_SAFE:
+        return _sweep(value, tokenizer), "vetted"
+
+    if _DENY_NAME_RE.search(key):
+        return _describe(value), "denied-name"
+
+    swept = _sweep(value, tokenizer)
+    if swept != value:
+        return swept, "tokenized"
+
+    if _GEO_RE.match(value.strip()):
+        return tokenizer.token("geo", value), "denied-shape"
+
+    if len(value) > _BLOB_CHARS:
+        return _describe(value), "blob"
+
+    return value[:_VALUE_CAP], "published"
+
+
 def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]:
     """Publish discovery results, values only where the name was classified.
 
-    Identifying what an element is needs its value, and a name alone will not
-    do it — but these are names the payload walker does not know, so an
-    unclassified one would travel with its value intact. The allow-list is the
-    gate: a candidate not in `DISCOVERY_VALUE_SAFE` reports its shape and
-    length instead, which still distinguishes a counter from a timestamp from
-    a free-text blob.
+    Values publish by default and are withheld by the layered gate in
+    `_gate_discovery_value`, because a mined name has no allow-list entry by
+    construction — denying by default would list names and answer nothing,
+    which is the opposite of what discovery is for. The verdict for each key
+    is published alongside, so a key that answered nothing and a key that was
+    withheld stop looking alike.
     """
     if not isinstance(discovery, dict):
         return {}
-    out: dict[str, Any] = {}
-    for key, value in discovery.items():
+
+    values = discovery.get("values") if "values" in discovery else discovery
+    if not isinstance(values, dict):
+        values = {}
+
+    published: dict[str, Any] = {}
+    verdicts: dict[str, str] = {}
+    for key, value in values.items():
         if not isinstance(value, str):
-            out[key] = value
-        elif key in DISCOVERY_VALUE_SAFE:
-            out[key] = _sweep(value, tokenizer)
-        else:
-            out[key] = _describe(value)
+            published[key] = value
+            verdicts[key] = "published"
+            continue
+        published[key], verdicts[key] = _gate_discovery_value(key, value, tokenizer)
+
+    out: dict[str, Any] = {"values": published, "verdicts": verdicts}
+    for field in ("notes", "mined_count", "mined_names_probed", "mined_names_answered"):
+        if field in discovery:
+            out[field] = discovery[field]
     return out
 
 

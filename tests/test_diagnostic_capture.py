@@ -13,9 +13,11 @@ extended keys with none absent, so a dead session echoes its request back
 rather than dropping it.
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
+from time import monotonic
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -363,23 +365,29 @@ def test_a_safe_candidate_publishes_its_value() -> None:
     )
 
     out = _sanitize_discovery({"lte_band": "20"}, _Tokenizer())
-    assert out == {"lte_band": "20"}
+    assert out["values"] == {"lte_band": "20"}
+    assert out["verdicts"]["lte_band"] == "vetted"
 
 
-def test_an_unclassified_candidate_publishes_only_its_shape() -> None:
-    """A name not on the allow-list must never carry its value out."""
+def test_a_name_matching_a_credential_pattern_is_withheld() -> None:
+    """The allow-list cannot gate a mined name — it has no entry by construction.
+
+    Denying by name pattern is what makes publish-by-default safe. The
+    2026-07-29 mining artefact contains `pppoe_password`, `wifi_wds_WPAPSK1`,
+    `gps_lat` and `msisdn` among the names it recovered.
+    """
     from custom_components.zte_router_5g.diagnostics import (
         _sanitize_discovery,
         _Tokenizer,
     )
 
-    out = _sanitize_discovery({"spn_name_data": "Some Carrier Ltd"}, _Tokenizer())
-    assert "Some Carrier" not in str(out)
-    assert out["spn_name_data"].startswith("<")
+    out = _sanitize_discovery({"pppoe_password": "hunter2"}, _Tokenizer())
+    assert "hunter2" not in str(out)
+    assert out["verdicts"]["pppoe_password"] == "denied-name"
 
 
-def test_a_safe_candidate_is_still_swept_for_addresses() -> None:
-    """Being allow-listed is not a licence to publish an address."""
+def test_a_vetted_name_is_still_swept_for_addresses() -> None:
+    """Being vetted is not a licence to publish an address."""
     from custom_components.zte_router_5g.diagnostics import (
         _sanitize_discovery,
         _Tokenizer,
@@ -387,6 +395,19 @@ def test_a_safe_candidate_is_still_swept_for_addresses() -> None:
 
     out = _sanitize_discovery({"lte_band": "10.11.12.13"}, _Tokenizer())
     assert "10.11.12.13" not in str(out)
+    assert out["verdicts"]["lte_band"] == "vetted"
+
+
+def test_an_unvetted_name_carrying_an_address_is_tokenized() -> None:
+    """The existing walker runs on every name, vetted or not."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({"some_new_field": "10.11.12.13"}, _Tokenizer())
+    assert "10.11.12.13" not in str(out)
+    assert out["verdicts"]["some_new_field"] == "tokenized"
 
 
 def test_a_non_string_discovery_value_survives() -> None:
@@ -396,7 +417,8 @@ def test_a_non_string_discovery_value_survives() -> None:
         _Tokenizer,
     )
 
-    assert _sanitize_discovery({"tx_power": 23}, _Tokenizer()) == {"tx_power": 23}
+    out = _sanitize_discovery({"tx_power": 23}, _Tokenizer())
+    assert out["values"] == {"tx_power": 23}
 
 
 def test_a_missing_discovery_block_is_empty(diagnostics_entry) -> None:
@@ -437,13 +459,17 @@ async def test_a_failing_discovery_chunk_does_not_stop_the_rest(mock_aiohttp_cli
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
-    answers = [MockResponse(json_data={DISCOVERY_CANDIDATES[0]: "20"})]
-    answers += [ZTEConnectionError("chunk refused")] * 12
+    names = list(DISCOVERY_CANDIDATES[:32])
+    answers = [MockResponse(json_data={names[0]: "20"})]
+    answers += [ZTEConnectionError("chunk refused")] * 60
     mock_aiohttp_client.get.side_effect = answers
 
-    found = await api.probe_discovery_candidates()
+    found, notes = await api.probe_names(
+        names, chunk_size=16, deadline=monotonic() + 30
+    )
 
-    assert found == {DISCOVERY_CANDIDATES[0]: "20"}
+    assert found == {names[0]: "20"}
+    assert any("re-probed singly" in note for note in notes)
 
 
 @pytest.mark.asyncio
@@ -455,4 +481,380 @@ async def test_a_non_dict_discovery_response_is_skipped(mock_aiohttp_client):
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data=["not", "a", "dict"])
 
-    assert await api.probe_discovery_candidates() == {}
+    found, _notes = await api.probe_names(
+        ["lte_band"], chunk_size=8, deadline=monotonic() + 30
+    )
+    assert found == {}
+
+
+# ---------------------------------------------------------------------------
+# The download must never fail
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_never_raises_when_every_router_call_fails(
+    diagnostics_entry,
+):
+    """Home Assistant does not wrap `config_entry_diagnostics`.
+
+    An exception escaping is an HTTP 500 and no file at all — worse than any
+    partial download, because the user has nothing to attach to the issue.
+    """
+    coordinator = diagnostics_entry.runtime_data
+    coordinator.async_run_discovery = AsyncMock(side_effect=OSError("router gone"))
+    coordinator.health_snapshot = {"problem": True}
+
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+
+    assert isinstance(result, dict)
+    assert any("discovery" in err for err in result["errors"])
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_survives_a_closed_aiohttp_session(diagnostics_entry):
+    """`RuntimeError("Session is closed")` is neither a ClientError nor a Timeout.
+
+    Home Assistant tears its shared session down on reload, and a download
+    taken at that moment used to see the error escape as itself.
+    """
+    coordinator = diagnostics_entry.runtime_data
+    coordinator.async_run_discovery = AsyncMock(
+        side_effect=RuntimeError("Session is closed")
+    )
+
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+
+    assert any("RuntimeError" in err for err in result["errors"])
+
+
+@pytest.mark.asyncio
+async def test_the_download_is_json_serializable(diagnostics_entry):
+    """Serialization happens after every guard has passed.
+
+    A value that cannot be encoded fails the whole file at the last moment,
+    which is why anything read off a collaborator goes through `_scalar`.
+    """
+    coordinator = diagnostics_entry.runtime_data
+    coordinator.async_run_discovery = AsyncMock(return_value={"values": {"a": "1"}})
+
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+
+    json.dumps(result)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "name",
+    [
+        "pppoe_password",
+        "tr069_ServerPassword",
+        "tr069_ConnectionRequestPassword",
+        "wifi_wds_WPAPSK1",
+        "gps_lat",
+        "gps_lon",
+        "msisdn",
+    ],
+)
+async def test_a_mined_credential_name_is_never_published_with_its_value(name):
+    """All seven are in the 2026-07-29 mining artefact.
+
+    `_sweep` catches none of them — an IMSI is bare digits, a password is
+    arbitrary text — so the name deny-pattern is what makes publish-by-default
+    safe rather than reckless.
+    """
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({name: "s3cr3t-value"}, _Tokenizer())
+
+    assert "s3cr3t-value" not in json.dumps(out)
+    assert out["verdicts"][name] in ("denied-name", "denied-shape", "blob")
+
+
+def test_a_mined_name_that_is_not_an_identifier_is_never_probed() -> None:
+    """The artefact contains the literal `1`.
+
+    Both probe paths interpolate names straight into a URL, so a token
+    carrying `&` or `=` would corrupt or inject request parameters.
+    """
+    from custom_components.zte_router_5g.api import _SAFE_CMD_RE
+
+    for junk in ("1", "ab", "a&b=c", "", "x=1"):
+        assert not _SAFE_CMD_RE.fullmatch(junk), junk
+    for good in ("lte_band", "wa_inner_version", "Z5g_rsrp"):
+        assert _SAFE_CMD_RE.fullmatch(good), good
+
+
+@pytest.mark.asyncio
+async def test_a_timed_out_chunk_is_reprobed_singly(mock_aiohttp_client):
+    """A timed-out chunk answers empty defaults for every name in it.
+
+    Per-chunk tolerance saves the other chunks and does nothing for the names
+    inside the failed one — which is how a real value was once recorded as
+    absent. Re-probing singly converts a timeout into per-name truth.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    names = ["a_one", "b_two", "c_three"]
+    mock_aiohttp_client.get.side_effect = [
+        TimeoutError("chunk timed out"),
+        MockResponse(json_data={"a_one": ""}),
+        MockResponse(json_data={"b_two": "42"}),
+        MockResponse(json_data={"c_three": ""}),
+    ]
+
+    # A timed-out request clears the session, so the re-probe would otherwise
+    # spend the queued responses on a fresh login. The stand-in restores the
+    # session without touching the transport.
+    async def _relogin(*_args, **_kwargs):
+        api.session_active = True
+
+    with patch.object(api, "login", side_effect=_relogin):
+        found, notes = await api.probe_names(names, chunk_size=3)
+
+    assert found == {"b_two": "42"}
+    assert any("re-probed singly" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_the_discovery_budget_curtails_and_records_it(mock_aiohttp_client):
+    """A timed-out chunk clears the session, so the next pays a full login.
+
+    Without a ceiling a slow firmware could make a download take minutes.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={})
+
+    found, notes = await api.probe_names(
+        ["a_one", "b_two"], chunk_size=1, deadline=monotonic() - 1
+    )
+
+    assert found == {}
+    assert any("budget exhausted" in note for note in notes)
+
+
+# ---------------------------------------------------------------------------
+# Mining the router's own web UI
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_mining_reads_cmd_names_from_the_bundles(mock_aiohttp_client):
+    """The UI is a client of this same API; its `cmd` literals are the names.
+
+    A comma-separated `cmd` is split, because the bundles batch reads exactly
+    as this integration does.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data=None, text_body="cmd='lte_band' ... cmd=\"a_one,b_two\""
+    )
+
+    names, notes = await api.mine_candidate_names()
+
+    assert {"lte_band", "a_one", "b_two"} <= names
+    assert any("names" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_mining_records_a_bundle_that_is_missing(mock_aiohttp_client):
+    """Not every firmware serves every bundle; a 404 is a note, not a failure."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=None, status=404)
+
+    names, notes = await api.mine_candidate_names()
+
+    assert names == set()
+    assert all("HTTP 404" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_mining_records_a_transport_failure(mock_aiohttp_client):
+    """An unreachable bundle must not stop the ones that answer."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.side_effect = OSError("no route")
+
+    names, notes = await api.mine_candidate_names()
+
+    assert names == set()
+    assert any("OSError" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_mining_drops_tokens_that_are_not_cmd_names(mock_aiohttp_client):
+    """The 2026-07-29 artefact contains the literal `1`."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data=None, text_body="cmd='1' cmd='ok' cmd='real_name'"
+    )
+
+    names, _notes = await api.mine_candidate_names()
+
+    assert names == {"real_name"}
+
+
+@pytest.mark.asyncio
+async def test_run_discovery_logs_in_when_no_session_is_active(mock_aiohttp_client):
+    """The user pressed Download Diagnostics; that authorises using the router.
+
+    Declining to log in would return less exactly when the download matters
+    most — on a device whose session is broken.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.session_active = False
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={})
+
+    async def _login(*_args, **_kwargs):
+        api.session_active = True
+
+    with patch.object(api, "login", side_effect=_login):
+        result = await api.run_discovery()
+
+    assert result["session"] == "fresh login"
+
+
+@pytest.mark.asyncio
+async def test_run_discovery_reuses_a_live_session(mock_aiohttp_client):
+    """No reason to evict anyone when we already hold the session."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={})
+
+    result = await api.run_discovery()
+
+    assert result["session"] == "existing"
+
+
+@pytest.mark.asyncio
+async def test_run_discovery_records_an_abort_rather_than_raising(
+    mock_aiohttp_client,
+):
+    """It runs inside a download that must produce a file whatever happens."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.session_active = True
+    with patch.object(api, "mine_candidate_names", side_effect=OSError("boom")):
+        result = await api.run_discovery()
+
+    assert any("discovery aborted" in note for note in result["notes"])
+
+
+def test_a_coordinate_is_withheld_whatever_the_key_is_called() -> None:
+    """A decimal-degree value is location even under an innocuous name."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({"some_reading": "51.507351"}, _Tokenizer())
+
+    assert "51.507351" not in json.dumps(out)
+    assert out["verdicts"]["some_reading"] == "denied-shape"
+
+
+def test_a_long_value_is_reported_as_a_blob() -> None:
+    """Above the blob threshold a value is not a reading and is described."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({"some_reading": "x" * 300}, _Tokenizer())
+
+    assert out["verdicts"]["some_reading"] == "blob"
+
+
+def test_a_published_value_is_capped() -> None:
+    """A long value is identifiable from its start; an uncapped one bloats."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({"some_reading": "y" * 150}, _Tokenizer())
+
+    assert len(out["values"]["some_reading"]) == 120
+
+
+def test_discovery_notes_are_carried_into_the_download() -> None:
+    """A note explaining a gap is as diagnostic as a value."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery(
+        {"values": {}, "notes": ["service.js: 40 names"], "mined_count": 40},
+        _Tokenizer(),
+    )
+
+    assert out["notes"] == ["service.js: 40 names"]
+    assert out["mined_count"] == 40
+
+
+def test_a_malformed_discovery_result_is_survivable() -> None:
+    """`values` may be absent or the wrong type without costing the file."""
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({"values": "not a mapping"}, _Tokenizer())
+
+    assert out["values"] == {}
+
+
+@pytest.mark.asyncio
+async def test_the_budget_stops_the_single_name_reprobe_too(mock_aiohttp_client):
+    """The re-probe is one request per name and must respect the same ceiling.
+
+    A chunk that fails queues every name in it for a single re-probe, so a
+    failing batch turns one request into many — which is exactly where an
+    unbounded pass would run away.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    async def _fail_then_stall(chunk):
+        # The first chunk fails, queueing its names; by the time the re-probe
+        # starts the deadline has passed.
+        await asyncio.sleep(0.05)
+
+    with patch.object(api, "_probe_chunk", side_effect=_fail_then_stall):
+        found, notes = await api.probe_names(
+            ["a_one", "b_two", "c_three"],
+            chunk_size=3,
+            deadline=monotonic() + 0.02,
+        )
+
+    assert found == {}
+    assert any("re-probe" in note for note in notes)
+
+
+def test_a_section_that_raises_is_recorded_not_raised() -> None:
+    """`_guarded` is the synchronous half of the never-fail guarantee.
+
+    Home Assistant does not wrap `config_entry_diagnostics`, so a section that
+    raises would otherwise cost the whole file.
+    """
+    from custom_components.zte_router_5g.diagnostics import _guarded
+
+    errors: list[str] = []
+
+    def _explode():
+        raise ValueError("payload is not walkable")
+
+    assert _guarded("data", _explode, errors) is None
+    assert errors == ["data: ValueError: payload is not walkable"]

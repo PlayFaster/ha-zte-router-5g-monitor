@@ -83,11 +83,16 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     # confirmed logout — so on a dead session it refuses to run at all, which
     # is the behavior being asserted rather than an exception.
     "measure_unauthenticated_keys": (),
-    # Diagnostics only. Every chunk is tolerated independently by design, so a
-    # dead session yields an empty mapping rather than an exception — nothing
-    # downstream reads it, and a raise would make a debugging aid able to
-    # break a poll.
-    "probe_discovery_candidates": (),
+    # Diagnostics only, and it must never raise: it runs while a download is
+    # being generated, and Home Assistant does not guard that call, so an
+    # escaping exception is an HTTP 500 and no file at all. Every failure
+    # becomes a note in the returned mapping.
+    "run_discovery": (),
+    # Reads the router's own JavaScript for `cmd` names. Returns names and
+    # notes; a dead session or an unreachable bundle is a note.
+    "mine_candidate_names": (),
+    # Reads a list of names. Chunk failures are absorbed by design.
+    "probe_names": ([],),
     "get_extended_data": (),
     # The targeted read-back used to confirm a switch write. It must behave
     # exactly like the batch reads against a dead session: the switch treats a
@@ -246,14 +251,19 @@ async def test_no_method_silently_no_ops_on_a_dead_session(method_name, die_afte
     # is the required behavior, not a silent no-op: measuring against a live
     # session would classify the whole batch as unauthenticated and leave the
     # classifier unable to ever report an expiry.
-    if method_name == "probe_discovery_candidates":
+    if method_name in ("mine_candidate_names", "probe_names"):
+        # Both return a pair and absorb their own failures: a chunk that
+        # cannot be read is a note, not an exception, because the caller is a
+        # diagnostics download that must produce a file whatever happens.
+        assert isinstance(result, tuple), f"{method_name} must return a pair"
+        return
+
+    if method_name == "run_discovery":
         # Degrades rather than failing, by design: chunks are tolerated
         # independently, so a session dying partway leaves whatever earlier
         # chunks answered. Nothing reads this but the diagnostics download,
         # and a raise would let a debugging aid break a poll.
-        assert isinstance(result, dict), (
-            "probe_discovery_candidates must always return a mapping"
-        )
+        assert isinstance(result, dict), "run_discovery must always return a mapping"
         return
 
     if method_name == "measure_unauthenticated_keys":

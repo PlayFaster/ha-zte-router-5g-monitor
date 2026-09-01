@@ -65,9 +65,19 @@ def mock_coordinator():
 class MockResponse:
     """Helper to mock aiohttp responses."""
 
-    def __init__(self, json_data=None, status=200, cookies=None, headers=None, url=""):
+    def __init__(
+        self,
+        json_data=None,
+        status=200,
+        cookies=None,
+        headers=None,
+        url="",
+        text_body=None,
+    ):
         """Initialize the mock response."""
         self._json_data = json_data
+        # Set where the body is not JSON — a JavaScript bundle, for instance.
+        self._text_body = text_body
         self.status = status
         self.cookies = cookies or {}
         # `CIMultiDict`, not a plain dict: aiohttp hands back a multi-dict, and
@@ -87,8 +97,10 @@ class MockResponse:
         """Return the JSON data."""
         return self._json_data
 
-    async def text(self):
+    async def text(self, **kwargs):
         """Return the text body."""
+        if self._text_body is not None:
+            return self._text_body
         if self._json_data is not None:
             return str(self._json_data)
         return ""
