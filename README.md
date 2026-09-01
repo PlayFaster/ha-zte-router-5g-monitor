@@ -51,17 +51,27 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 **📟 Router Hardware:**
 
-- **Fully Tested**:
-  - **ZTE MC7010** (5G Outdoor CPE) — tested on firmware `V1.0.0B01` and `V1.0.0B03`.
-  - _This is currently the primary model verified on live hardware._
+- **Verified Models**:
+  - **ZTE MC7010** (5G Outdoor CPE) — **Live Hardware Verified** on firmware `V1.0.0B01` and `V1.0.0B03`.
+  - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Diagnostic Capture Verified** on firmware `V1.0.1B04`.
 
 - **Expected Compatible (ZTE `goform` API Family)**:
   - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
     - **ZTE MC801 / MC801A** (Indoor 5G CPE)
     - **ZTE MC888 / MC888A / MC888 Ultra** (Indoor 5G Wi-Fi 6 CPE)
-    - **ZTE MC889 / MC889A** (Outdoor 5G CPE)
+    - **ZTE MC889 / MC889A / MC889 Pro** (Outdoor 5G CPE)
     - **ZTE MF266 / MF286 / MF289** (LTE/4G Outdoor & Indoor CPEs)
-  - _(Note: While protocol support for these model families is built into the integration, they remain unverified)._
+  - _(Note: While protocol support for these model families is built into the integration, they remain unverified on live hardware)._
+
+> [!TIP] **Help verify your router model**
+>
+> If you are using a model other than the MC7010 (or a different firmware version), sharing a **Diagnostic Download** is extremely valuable — even when everything is working. The download automatically mines and maps the parameter dictionary supported by your router's firmware.
+>
+> ⏱️ **Note on duration**: The download probes hundreds of discovered parameters and takes **about 1 minute with no progress indicator in the browser** — please be patient and do not cancel it.
+>
+> 🔒 **Privacy**: Passwords, credentials, subscriber identifiers (IMSI/ICCID), carrier names, and SMS messages are automatically redacted or pseudonymized before saving.
+>
+> 📖 See [How do I download diagnostics?](#-how-do-i-download-diagnostics) for the full step-by-step guide, and attach your file to a new [GitHub Issue](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues) or Discussion with your router model and firmware version.
 
 - **Not Compatible (Incompatible Router Families)**:
   - ❌ **ZTE G5-Series Next-Gen Routers (G5TC, G5TS, G5C, G5 Max)** — These use ZTE's OpenWrt-based `/ubus/` JSON-RPC API instead of `goform`. Use **[`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router)** instead.
@@ -1972,9 +1982,15 @@ Attach this file to GitHub issues so maintainers can inspect router firmware res
 - **Summarized** — internal hardware identifiers and connection tokens are redacted to structural shape summaries.
 - **What stays** — firmware version, signal metrics, frequency bands, byte counters, uptime, and integration health metrics.
 
-> [!TIP]
+**It asks your router what else it can report.** Beyond the values the integration already reads, the download interrogates the router for fields this integration does not yet know about — it reads the router's own web interface to learn which field names that firmware uses, then asks for each one. On a model whose firmware spells things differently, this is what identifies the missing sensors.
+
+> [!NOTE]
 >
-> If you are reporting a problem on a model other than the MC7010, say so in the issue. Most of this integration's cross-model support is inferred from other open-source projects rather than tested on hardware, so a diagnostics file from an MC888, MC889 or MF-series unit is genuinely valuable even when nothing is wrong.
+> **This takes about a minute, and the browser gives no progress.** The download makes several hundred requests to your router while it works, so be patient and do not cancel it. It logs you out of the router's own web page if you are signed in there — sign back in afterwards. Nothing about your router is changed: every request is a read.
+
+Anything discovered this way is put through the same redaction as everything else, and values that look like credentials, locations, network names or subscriber identifiers are withheld — each field carries a note saying whether its value was published or held back.
+
+> [!TIP] When reporting an issue for any router model or firmware variant, always attach this diagnostics file. It provides the maintainer with the exact parameter map and response shapes required to diagnose sensor availability or API differences quickly.
 
 ---
 

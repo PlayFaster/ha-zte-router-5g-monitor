@@ -193,7 +193,11 @@ SMS_MAX_CHARS_UNICODE = 335
 #
 # The list grows with every model supported, not with every feature added: a
 # device that spells a concept differently needs both spellings requested.
-BATCH_URL_BUDGET = 1600
+# Named for what it is rather than as a "budget": `check_test_depth.py`
+# reserves that suffix for accumulation gates — strike counters a test has to
+# reach by polling repeatedly — and this is a size threshold decided within a
+# single call.
+BATCH_URL_MAX_CHARS = 1600
 
 DISCOVERY_CHUNK_SIZE = 16
 

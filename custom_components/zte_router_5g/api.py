@@ -15,7 +15,7 @@ import aiohttp
 from .const import (
     ABSENT_KEY_PROPORTION_LIMIT,
     APN_PROFILE_SLOTS,
-    BATCH_URL_BUDGET,
+    BATCH_URL_MAX_CHARS,
     DISCOVERY_BUDGET_SECONDS,
     DISCOVERY_CANDIDATES,
     DISCOVERY_CHUNK_SIZE,
@@ -270,6 +270,17 @@ _JS_QUOTED_RE = re.compile(r"['\"]([A-Za-z_][A-Za-z0-9_]{2,})['\"]")
 
 # `cell_id:"",lte_snr:"",wan_active_band:""` — an object literal seeded blank.
 _JS_OBJKEY_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]{2,})\s*:\s*['\"]{2}")
+
+# `goformId` literals — the *write* commands. Extracted so they can be
+# subtracted from the read candidates: the wider extraction harvests them as
+# quoted strings like any other, and 81 of 520 names probed on an MC7010 were
+# write commands answering nothing. They cost probe budget and re-probe slots,
+# and `docs/zte_how_to_access.md` warns that a name the firmware does not
+# accept as a `cmd` can time out the chunk carrying it.
+#
+# Subtracted by name rather than by shape: excluding every uppercase token
+# would risk dropping a genuine read name.
+_JS_GOFORM_RE = re.compile(r"goformId['\"]?\s*[:=]\s*['\"]([A-Za-z_][A-Za-z0-9_]*)")
 
 # A mined token is only probed when it looks like a `cmd` name. The wider
 # extraction harvests function names, CSS classes and element ids alongside
@@ -559,6 +570,12 @@ class ZTERouterAPI:
         self.measurement_note = "not attempted: setup did not reach it"
         # Whether background setup ran to completion, for the same reason.
         self.setup_completed = False
+        # Write commands recovered from the router's own JavaScript. Recorded
+        # for the diagnostics download, and subtracted from the read
+        # candidates — `zte_how_to_access.md` notes these cannot be discovered
+        # by probing, because an unknown `goformId` fails exactly as a refused
+        # one does.
+        self.goform_ids: list[str] = []
         # Which candidate `cmd` names this device answers. Populated once per
         # setup and published in the diagnostics download; never read by
         # runtime logic.
@@ -1507,6 +1524,7 @@ class ZTERouterAPI:
         useful where one that fails to generate is not.
         """
         names: set[str] = set()
+        goform_ids: set[str] = set()
         notes: list[str] = []
         bundles = await self._discover_bundles(timeout_sec, notes)
         for bundle in bundles:
@@ -1532,13 +1550,19 @@ class ZTERouterAPI:
             }
             found |= {m.group(1) for m in _JS_QUOTED_RE.finditer(body)}
             found |= {m.group(1) for m in _JS_OBJKEY_RE.finditer(body)}
+            goform_ids |= {m.group(1) for m in _JS_GOFORM_RE.finditer(body)}
             names |= found
             notes.append(f"{bundle}: {len(found)} names")
 
+        if goform_ids:
+            notes.append(f"{len(goform_ids)} write commands excluded from probing")
+        self.goform_ids = sorted(goform_ids)
         return {
             n
             for n in names
-            if _SAFE_CMD_RE.fullmatch(n) and n not in _NOT_ROUTER_FIELDS
+            if _SAFE_CMD_RE.fullmatch(n)
+            and n not in _NOT_ROUTER_FIELDS
+            and n not in goform_ids
         }, notes
 
     async def _discover_bundles(
@@ -1722,6 +1746,7 @@ class ZTERouterAPI:
             )
             # The device's own vocabulary, useful even where nothing answered.
             result["mined_names"] = sorted(mined)
+            result["write_commands"] = list(self.goform_ids)
         except Exception as err:  # noqa: BLE001 - a note, never a failure
             result["notes"].append(f"discovery aborted: {type(err).__name__}: {err}")
         return result
@@ -1779,7 +1804,7 @@ class ZTERouterAPI:
         concept differently needs both spellings requested, so the list grows
         with every model supported rather than with every feature added.
 
-        `BATCH_URL_BUDGET` is set below the measured ceiling deliberately. The
+        `BATCH_URL_MAX_CHARS` is set below the measured ceiling deliberately. The
         ceiling is one device's, and a firmware with a lower one would
         otherwise truncate — which this API signals by returning the response
         short, not by erroring.
@@ -1795,7 +1820,7 @@ class ZTERouterAPI:
         length = overhead
         for name in params:
             addition = len(name) + 1
-            if chunks[-1] and length + addition > BATCH_URL_BUDGET:
+            if chunks[-1] and length + addition > BATCH_URL_MAX_CHARS:
                 chunks.append([])
                 length = overhead
             chunks[-1].append(name)

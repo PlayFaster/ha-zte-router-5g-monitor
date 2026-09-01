@@ -5,7 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.9-dev2\] - 2026-09-01 - Wider Web UI Extraction; What Answered Nothing](#339-dev2---2026-09-01---wider-web-ui-extraction-what-answered-nothing)
+  - [\[3.3.9-dev3\] - 2026-09-01 - Write Commands Excluded From Probing](#339-dev3---2026-09-01---write-commands-excluded-from-probing)
+  - [\[3.3.9-dev2\] - 2026-09-01 - Wider Web UI Extraction; Unanswered Parameter Diagnostics](#339-dev2---2026-09-01---wider-web-ui-extraction-unanswered-parameter-diagnostics)
   - [\[3.3.9-dev1\] - 2026-09-01 - Batch Reads Split By URL Budget](#339-dev1---2026-09-01---batch-reads-split-by-url-budget)
   - [\[3.3.8-dev2\] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors](#338-dev2---2026-09-01---carrier-identity-withheld-in-discovery-mined-aliases-firmware-update-sensors)
   - [\[3.3.8-dev1\] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys](#338-dev1---2026-09-01---key-discovery-from-the-routers-own-web-ui-concept-based-contract-keys)
@@ -14,7 +15,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.7-dev2\] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep](#337-dev2---2026-08-31---data-limit-form-aliases-classified-concept-alias-sweep)
   - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery](#337-dev1---2026-08-31---mc888-pro-session-cookie-per-device-unauthenticated-key-set-key-discovery)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
-  - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Could Hold a Stale Boot Time Across a Home Assistant Restart](#336-dev1---2026-08-31---device-uptime-could-hold-a-stale-boot-time-across-a-home-assistant-restart)
+  - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Stale Boot Time Reconciliation Across Restarts](#336-dev1---2026-08-31---device-uptime-stale-boot-time-reconciliation-across-restarts)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
   - [\[3.3.5-dev2\] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll](#335-dev2---2026-08-31---session-verdict-evidence-diagnostics-capture-on-a-failed-poll)
   - [\[3.3.5-dev1\] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation](#335-dev1---2026-08-30---multi-user-login-payload-aligned-with-reference-implementation)
@@ -209,7 +210,24 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.9-dev2] - 2026-09-01 - Wider Web UI Extraction; What Answered Nothing
+## [3.3.9-dev3] - 2026-09-01 - Write Commands Excluded From Probing
+
+### Summary
+
+A review of the first 3.3.9-dev2 download found that 81 of the 520 names probed on the reference MC7010 were `goformId` write commands rather than read fields. The wider extraction harvests them as quoted strings like any other name, and they answered nothing while consuming probe budget and re-probe slots.
+
+### Changed
+
+- **`goformId` literals are extracted and subtracted from the read candidates.** Subtracted by name rather than by shape: excluding every uppercase token would have dropped `Z5g_CELL_ID`, `ODU_led_switch` and `DIAG_URL`, which are read fields this integration already requests. Measured on the reference device: 75 write commands removed, 501 names probed against 576, the pass down from 49 to 37 seconds, and one more name answered.
+- **`write_commands` is published in the download.** `docs/zte_how_to_access.md` records that a `goformId` cannot be discovered by probing — an unknown one fails exactly as a refused one does — so the bundles are the only source, and the inventory is worth keeping.
+- **`BATCH_URL_BUDGET` renamed to `BATCH_URL_MAX_CHARS`.** `check_test_depth.py` reserves the `_BUDGET` suffix for accumulation gates, which a test must reach by polling repeatedly; this is a size threshold decided within a single call, and the name claimed otherwise.
+
+### Testing
+
+- 1112 tests, 100% branch coverage. New: write commands are recorded and never probed; an uppercase read name is not excluded.
+- Test Depth passes — the rename clears the one undriven-gate finding.
+
+## [3.3.9-dev2] - 2026-09-01 - Wider Web UI Extraction; Unanswered Parameter Diagnostics
 
 ### Summary
 
@@ -438,7 +456,7 @@ The cookieless-session path added in 3.3.5-dev25 is retained but is no longer ev
 
 - **Startup Reconciliation Test Suite**: Added 34 tests verifying startup reconciliation across multi-week offline gaps, clock skew, un-synchronized host clocks, and storage error conditions.
 
-## [3.3.6-dev1] - 2026-08-31 - Device Uptime Could Hold a Stale Boot Time Across a Home Assistant Restart
+## [3.3.6-dev1] - 2026-08-31 - Device Uptime Stale Boot Time Reconciliation Across Restarts
 
 ### Summary
 

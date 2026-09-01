@@ -16,7 +16,7 @@ from custom_components.zte_router_5g.api import (
     ZTEConnectionError,
     ZTERouterAPI,
 )
-from custom_components.zte_router_5g.const import BATCH_URL_BUDGET
+from custom_components.zte_router_5g.const import BATCH_URL_MAX_CHARS
 
 from .conftest import MockResponse
 
@@ -1491,7 +1491,7 @@ async def test_batch_poll_urls_stay_within_the_router_budget(
     The router accepts a GET of roughly 2,048 characters and truncates past
     it — which presents as missing fields and is indistinguishable from
     firmware contract drift. `_batch_get` now splits a list that would exceed
-    `BATCH_URL_BUDGET`, so this asserts the property that matters: **every
+    `BATCH_URL_MAX_CHARS`, so this asserts the property that matters: **every
     request issued** stays inside the ceiling, however long the list grows.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
@@ -2027,16 +2027,16 @@ def test_no_chunk_exceeds_the_budget() -> None:
 
     for chunk in api._split_by_url_budget(names):
         url = f"{api.referer}{_BATCH_PATH_PREFIX}{','.join(chunk)}"
-        assert len(url) <= BATCH_URL_BUDGET, f"{len(url)} characters"
+        assert len(url) <= BATCH_URL_MAX_CHARS, f"{len(url)} characters"
 
 
 def test_a_single_name_longer_than_the_budget_still_gets_a_request() -> None:
     """A chunk is never empty, or the name would be dropped silently."""
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", None, "pw")
 
-    chunks = api._split_by_url_budget(["x" * (BATCH_URL_BUDGET * 2)])
+    chunks = api._split_by_url_budget(["x" * (BATCH_URL_MAX_CHARS * 2)])
 
-    assert chunks == [["x" * (BATCH_URL_BUDGET * 2)]]
+    assert chunks == [["x" * (BATCH_URL_MAX_CHARS * 2)]]
 
 
 @pytest.mark.asyncio

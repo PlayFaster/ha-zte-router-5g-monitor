@@ -1068,3 +1068,46 @@ async def test_the_single_name_reprobe_is_capped(mock_aiohttp_client):
     singles = [c for c in probed if len(c) == 1]
     assert len(singles) == DISCOVERY_REPROBE_LIMIT
     assert any("capped at" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_write_commands_are_recorded_and_never_probed(mock_aiohttp_client):
+    """`goformId` names are write commands, not read fields.
+
+    The wider extraction harvests them as quoted strings like any other name,
+    and 81 of 520 probed on an MC7010 were write commands answering nothing.
+    They cost probe budget and re-probe slots, and a name the firmware does
+    not accept as a `cmd` can time out the chunk carrying it.
+
+    Subtracted by name rather than by shape: excluding every uppercase token
+    would risk dropping a genuine read name.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    body = (
+        "goformId='ADD_PORT_MAP' goformId:\"ALG_SETTING\" "
+        '"ADD_PORT_MAP","ALG_SETTING","lte_snr"'
+    )
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=None, text_body=body)
+
+    names, notes = await api.mine_candidate_names()
+
+    assert names == {"lte_snr"}
+    assert set(api.goform_ids) == {"ADD_PORT_MAP", "ALG_SETTING"}
+    assert any("write commands excluded" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_an_uppercase_read_name_is_not_excluded(mock_aiohttp_client):
+    """Only names the bundles declare as `goformId` are subtracted.
+
+    `Z5g_CELL_ID` and `ODU_led_switch` are read fields this integration
+    already requests, and a shape rule would have dropped them.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    body = 'goformId=\'ADD_PORT_MAP\' "Z5g_CELL_ID","ODU_led_switch","DIAG_URL"'
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=None, text_body=body)
+
+    names, _notes = await api.mine_candidate_names()
+
+    assert {"Z5g_CELL_ID", "ODU_led_switch", "DIAG_URL"} <= names
+    assert "ADD_PORT_MAP" not in names
