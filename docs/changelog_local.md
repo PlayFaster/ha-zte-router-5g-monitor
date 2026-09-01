@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.9-dev2\] - 2026-09-01 - Wider Web UI Extraction; What Answered Nothing](#339-dev2---2026-09-01---wider-web-ui-extraction-what-answered-nothing)
   - [\[3.3.9-dev1\] - 2026-09-01 - Batch Reads Split By URL Budget](#339-dev1---2026-09-01---batch-reads-split-by-url-budget)
   - [\[3.3.8-dev2\] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors](#338-dev2---2026-09-01---carrier-identity-withheld-in-discovery-mined-aliases-firmware-update-sensors)
   - [\[3.3.8-dev1\] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys](#338-dev1---2026-09-01---key-discovery-from-the-routers-own-web-ui-concept-based-contract-keys)
@@ -207,6 +208,43 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.9-dev2] - 2026-09-01 - Wider Web UI Extraction; What Answered Nothing
+
+### Summary
+
+The mining regex required the literal token `cmd` before a name, and the bundles mostly do not write them that way. Measured on the reference MC7010: 383 names from that form against 642 unioned with two others — and `lte_rsrq`, `lte_snr`, `signalbar` and `cell_id` appear only in the forms we were not reading. Those are precisely the LTE metrics missing on the MC888.
+
+### Changed
+
+- **Three extraction forms, not one**: the `cmd=` literal, quoted names in array literals, and object-literal keys seeded blank. On the reference device the whole pass now yields 694 names across five bundles, against 383 before.
+- **The bundle list is read from the router's index page** where it names its scripts, unioned with the static list rather than replacing it, since a page may load through a module loader and name only an entry point. On the reference MC7010 the index names no scripts and the static list is used; the note records which happened.
+- **`_NOT_ROUTER_FIELDS` widened**: a wider net harvests function names, CSS classes and element ids alongside fields, so the filter carries more weight than when only the `cmd=` form was read.
+- **Per-chunk timeout 8s to 5s, budget 90s to 240s**: the first measured run exhausted the budget with names still unprobed. It now completes in about 49 seconds.
+- **The single-name re-probe is capped at 120.** A chunk answering nothing queues every name in it, and the wider extraction makes most chunks legitimately empty — 208 were queued on one run, enough to crowd out chunks that had not run.
+- **A two-second settle follows a discovery pass**, held inside the coordinator's update lock. A pass now issues several hundred requests in under a minute, and a write attempted immediately afterwards was once refused with an empty transport error — once in two runs, not reproducible on the next.
+
+### Added
+
+- **`probed_no_answer`**: the names probed that answered nothing, names only. A name the router's own UI uses but the device leaves empty is a different fact from a name that does not exist, and only the first was visible. On the reference device that is 520 names.
+- **`mined_names`**: the device's own vocabulary, useful where nothing answered.
+- **`data_populated` and `data_empty`** counts beside the payload, so a vocabulary mismatch is visible without diffing two downloads.
+- **`setup_completed`** on the API client, published in the download.
+
+### Fixed
+
+- **`measurement_note` is now set.** It was published from 3.3.8 while never being assigned, so the field read `null` where it should have carried a reason — the reporter's download showed exactly that. It is set at construction, on each refusal, on a failed probe and on success, and a test asserts it is a non-empty string before anything runs.
+
+### Testing
+
+- 1110 tests, 100% branch coverage across every module. New: names in array and object literals are found; JavaScript scaffolding is never probed; the bundle list comes from the index page; an unreadable index falls back to the static list; probed names that answered nothing are published; the re-probe cap holds.
+- **Hardware, 17 of 17** after a re-run. The first run failed one safe write immediately after the discovery pass, which is the observation behind the settle.
+
+### Notes
+
+The index page on the reference MC7010 names no scripts, so bundle discovery falls back there. It is retained because a different firmware may name them.
+
+A login failure is logged during a full discovery pass — `Result: failure` on a re-login after a timed-out chunk — and the pass completes regardless. Not investigated.
 
 ## [3.3.9-dev1] - 2026-09-01 - Batch Reads Split By URL Budget
 

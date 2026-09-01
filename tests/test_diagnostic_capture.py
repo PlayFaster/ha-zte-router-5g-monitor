@@ -676,7 +676,10 @@ async def test_mining_records_a_bundle_that_is_missing(mock_aiohttp_client):
     names, notes = await api.mine_candidate_names()
 
     assert names == set()
-    assert all("HTTP 404" in note for note in notes)
+    # The index page is read first and answers 404 too, so its note precedes
+    # the per-bundle ones.
+    assert any("HTTP 404" in note for note in notes)
+    assert any("static list" in note for note in notes)
 
 
 @pytest.mark.asyncio
@@ -928,3 +931,140 @@ async def test_a_goform_response_key_is_never_harvested(mock_aiohttp_client):
     found, _notes = await api.probe_names(["lte_band"], chunk_size=1)
 
     assert found == {"lte_band": "20"}
+
+
+# ---------------------------------------------------------------------------
+# Wider extraction (v3.3.9-dev2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_names_in_array_and_object_literals_are_found(mock_aiohttp_client):
+    """The bundles write field names three ways and we read one.
+
+    Measured on the MC7010 bundle: 383 names from the `cmd=` form against 642
+    unioned. `lte_rsrq`, `lte_snr`, `signalbar` and `cell_id` appear only in
+    the other two — the LTE metrics missing on the MC888 are exactly what the
+    narrower extraction cannot reach.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    body = (
+        'var a=["wan_active_band","nr5g_pci","lte_snr"];'
+        'var b={cell_id:"",lte_rsrq:"",signalbar:""};'
+        "cmd='wa_inner_version'"
+    )
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=None, text_body=body)
+
+    names, _notes = await api.mine_candidate_names()
+
+    assert {"lte_snr", "cell_id", "lte_rsrq", "signalbar"} <= names
+    assert "wa_inner_version" in names
+
+
+@pytest.mark.asyncio
+async def test_javascript_scaffolding_is_never_probed(mock_aiohttp_client):
+    """A wider net catches function names, CSS classes and element ids."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    body = '"function","prototype","undefined","click","lte_snr"'
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=None, text_body=body)
+
+    names, _notes = await api.mine_candidate_names()
+
+    assert names == {"lte_snr"}
+
+
+@pytest.mark.asyncio
+async def test_the_bundle_list_comes_from_the_index_page(mock_aiohttp_client):
+    """The static list is a guess: `js/statusBar.js` 404s on both devices."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    index = '<script src="js/unexpected_bundle.js"></script>'
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=None, text_body=index)
+
+    _names, notes = await api.mine_candidate_names()
+
+    assert any("scripts named" in note for note in notes)
+    requested = [call[0][0] for call in mock_aiohttp_client.get.call_args_list]
+    assert any("unexpected_bundle.js" in url for url in requested)
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_index_falls_back_to_the_static_list(
+    mock_aiohttp_client,
+):
+    """Losing the index must not lose the mining."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.side_effect = OSError("no route")
+
+    _names, notes = await api.mine_candidate_names()
+
+    assert any("static list" in note for note in notes)
+
+
+# ---------------------------------------------------------------------------
+# Reporting what did not answer
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_probed_names_that_answered_nothing_are_published(
+    mock_aiohttp_client,
+):
+    """A name the UI uses that the device leaves empty is its own fact.
+
+    It is different from a name that does not exist, and only the first was
+    visible before: 406 of 602 probed on the MC888 answered nothing and none
+    of them appeared in the download.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={})
+
+    result = await api.run_discovery()
+
+    assert "probed_no_answer" in result
+    assert all(name not in result["values"] for name in result["probed_no_answer"])
+
+
+def test_the_measurement_note_is_set_before_anything_runs() -> None:
+    """An empty key set says nothing about why it is empty.
+
+    The field was published for a release while never being set, so a download
+    carried `null` where it should have carried a reason.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+
+    assert isinstance(api.measurement_note, str)
+    assert api.measurement_note
+    assert api.setup_completed is False
+
+
+@pytest.mark.asyncio
+async def test_the_single_name_reprobe_is_capped(mock_aiohttp_client):
+    """A wider net makes most chunks legitimately empty.
+
+    Each queues every name in it for a single re-probe, and 208 were queued on
+    one MC7010 run — enough to exhaust the budget before the remaining chunks
+    had run. The cap stops the re-probe crowding out work not yet done.
+    """
+    from custom_components.zte_router_5g.const import DISCOVERY_REPROBE_LIMIT
+
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    names = [f"a_name_{i:04d}" for i in range(DISCOVERY_REPROBE_LIMIT * 2)]
+    probed: list[list[str]] = []
+
+    async def _record(chunk):
+        probed.append(chunk)
+        return {}
+
+    with patch.object(api, "_probe_chunk", side_effect=_record):
+        _found, notes = await api.probe_names(names, chunk_size=8)
+
+    singles = [c for c in probed if len(c) == 1]
+    assert len(singles) == DISCOVERY_REPROBE_LIMIT
+    assert any("capped at" in note for note in notes)

@@ -205,12 +205,25 @@ MINED_CHUNK_SIZE = 8
 # Per-chunk timeout. A healthy 75-key batch answers in about 30 ms, so eight
 # seconds is generous for a chunk that will succeed and short for one that
 # will not.
-DISCOVERY_CHUNK_TIMEOUT = 8
+DISCOVERY_CHUNK_TIMEOUT = 5
 
 # Wall-clock ceiling for the whole discovery pass. A timed-out chunk clears
 # the session, so the next pays a full login; without a ceiling a hostile
 # firmware could make a diagnostics download take minutes.
-DISCOVERY_BUDGET_SECONDS = 90
+DISCOVERY_BUDGET_SECONDS = 240
+
+# Ceiling on the single-name re-probe. A chunk that answers nothing queues
+# every name in it, and the wider extraction makes most chunks legitimately
+# empty — 208 names were queued on one MC7010 run, which exhausted the budget
+# before the list was finished. Bounded so the re-probe cannot crowd out the
+# chunks that have not run yet.
+DISCOVERY_REPROBE_LIMIT = 120
+
+# Pause after a discovery pass before returning. Several hundred requests in
+# under a minute left an MC7010 refusing the next write with an empty
+# transport error — once in two runs. The user is already waiting for the
+# download; two seconds is not what they will notice.
+DISCOVERY_SETTLE_SECONDS = 2
 
 # Bundles the router serves for its own admin UI, which is a client of this
 # same API. `docs/zte_how_to_access.md` names these as the sources the

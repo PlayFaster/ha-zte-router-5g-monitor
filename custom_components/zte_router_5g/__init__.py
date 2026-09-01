@@ -505,6 +505,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 api.unauthenticated_keys = measured
             await api.login(5)
 
+            api.setup_completed = True
             _LOGGER.info("%s: Background initialization complete.", entry.title)
         except (
             TimeoutError,

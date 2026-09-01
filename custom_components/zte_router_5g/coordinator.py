@@ -22,6 +22,7 @@ from .api import ZTEAuthError, ZTECredentialsError, ZTERouterAPI
 from .const import (
     CONF_SCAN_INTERVAL,
     CONF_STOP_POLLING,
+    DISCOVERY_SETTLE_SECONDS,
     DOMAIN,
     FETCH_STRIKE_LIMIT,
     HEALTH_DRIFT_STRIKE_LIMIT,
@@ -1060,7 +1061,15 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         pressed Download Diagnostics. The lock makes the two take turns.
         """
         async with self._async_update_lock:
-            return await self.api.run_discovery()
+            result = await self.api.run_discovery()
+            # A pass issues several hundred requests in under a minute, and a
+            # write attempted immediately afterwards was once refused with an
+            # empty transport error on the reference MC7010 — once in two
+            # runs, not reproducible on the next. The pause is held inside the
+            # lock so the next poll waits for it too, and the user is already
+            # waiting for a download.
+            await asyncio.sleep(DISCOVERY_SETTLE_SECONDS)
+            return result
 
     def _sparse_payload_finding(self, data: dict[str, Any]) -> str | None:
         """Report a poll that succeeded while answering almost nothing.

@@ -20,6 +20,7 @@ from .const import (
     DISCOVERY_CANDIDATES,
     DISCOVERY_CHUNK_SIZE,
     DISCOVERY_CHUNK_TIMEOUT,
+    DISCOVERY_REPROBE_LIMIT,
     JS_BUNDLES,
     MINED_CHUNK_SIZE,
     SESSION_IDLE_RESET_SECONDS,
@@ -256,19 +257,63 @@ _LOGIN_SUCCESS = frozenset({"success", "0", "ok"})
 # and absent from `r.cookies`.
 _SET_COOKIE_RE = re.compile(r'\s*([^=;,\s]+)\s*=\s*("?[^";,]*"?)')
 
-# `cmd=` literals in the router's own JavaScript. Matches the name that
-# follows, in either quoting style the bundles use.
+# Three ways the bundles name a `cmd` field, because they use all three and
+# the first alone finds a third of them. Measured on the MC7010 bundle:
+# 383 names from the `cmd=` form, 311 from quoted tokens, 67 from object
+# literals, 642 unioned. `lte_rsrq`, `lte_snr`, `signalbar` and `cell_id`
+# appear only in the second and third forms — the LTE metrics missing on the
+# MC888 are exactly what a narrower extraction cannot reach.
 _JS_CMD_RE = re.compile(r"cmd['\"]?\s*[:=]\s*['\"]([A-Za-z_][A-Za-z0-9_,]*)")
 
-# A mined token is only probed when it looks like a `cmd` name. The 2026-07-29
-# artefact contains the literal `1`, and both probe paths interpolate names
-# straight into a URL — a token carrying `&` or `=` would corrupt the request.
+# `"wan_active_band","nr5g_pci","lte_snr"` — a quoted name in an array.
+_JS_QUOTED_RE = re.compile(r"['\"]([A-Za-z_][A-Za-z0-9_]{2,})['\"]")
+
+# `cell_id:"",lte_snr:"",wan_active_band:""` — an object literal seeded blank.
+_JS_OBJKEY_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]{2,})\s*:\s*['\"]{2}")
+
+# A mined token is only probed when it looks like a `cmd` name. The wider
+# extraction harvests function names, CSS classes and element ids alongside
+# the fields, so this filter and `_NOT_ROUTER_FIELDS` carry more weight than
+# they did when only the `cmd=` form was read.
 _SAFE_CMD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
 
-# Tokens that survive the filter but are not router fields. `result` is the
-# key a `goform` response carries its outcome in, and reads as a `cmd` literal
-# in the bundles.
-_NOT_ROUTER_FIELDS = frozenset({"result", "cmd", "isTest", "goformId"})
+# `<script src="js/service.js">` on the router's own index page.
+_HTML_SCRIPT_RE = re.compile(r"""<script[^>]+src\s*=\s*["']([^"']+)["']""")
+
+# Tokens that survive the identifier filter and are not router fields.
+# `result` is the key a `goform` response carries its outcome in; the rest are
+# query parameters and JavaScript scaffolding the wider extraction reaches.
+_NOT_ROUTER_FIELDS = frozenset(
+    {
+        "result",
+        "cmd",
+        "isTest",
+        "goformId",
+        "multi_data",
+        "sms_received_flag_flag",
+        "function",
+        "return",
+        "prototype",
+        "undefined",
+        "length",
+        "value",
+        "true",
+        "false",
+        "null",
+        "type",
+        "data",
+        "name",
+        "class",
+        "style",
+        "html",
+        "text",
+        "href",
+        "src",
+        "click",
+        "change",
+        "submit",
+    }
+)
 
 # The fixed part of a batch query, before any `cmd` name. The host is measured
 # separately from `self.referer`, because a hostname is longer than an IP and
@@ -507,6 +552,13 @@ class ZTERouterAPI:
         # assumed. Empty until a measurement passes validation; the module
         # constant is used until then.
         self.unauthenticated_keys: frozenset[str] = frozenset()
+        # Why the measured key set is or is not in force. An empty set says
+        # nothing about whether the measurement was skipped, refused or never
+        # reached, and a download carrying only the empty set left that
+        # ambiguous.
+        self.measurement_note = "not attempted: setup did not reach it"
+        # Whether background setup ran to completion, for the same reason.
+        self.setup_completed = False
         # Which candidate `cmd` names this device answers. Populated once per
         # setup and published in the diagnostics download; never read by
         # runtime logic.
@@ -1324,6 +1376,11 @@ class ZTERouterAPI:
         be trusted. The caller keeps using the constant in that case.
         """
         if self.session_active or not self.logout_acknowledged:
+            self.measurement_note = (
+                "not measured: session still active"
+                if self.session_active
+                else "not measured: the router did not acknowledge the logout"
+            )
             _LOGGER.debug(
                 "Not measuring unauthenticated keys: session_active=%s, "
                 "logout_acknowledged=%s",
@@ -1349,15 +1406,19 @@ class ZTERouterAPI:
                     authenticated=False,
                 )
             except (ZTEAuthError, ZTEConnectionError) as err:
+                self.measurement_note = f"probe failed: {type(err).__name__}"
                 _LOGGER.debug("Unauthenticated probe failed: %s", err)
                 return frozenset()
             if not isinstance(payload, dict):
+                self.measurement_note = "probe answered a non-object body"
                 return frozenset()
             measured |= {k for k, v in payload.items() if v not in ("", None)}
 
         if not self._measurement_is_usable(measured):
+            self.measurement_note = f"rejected: {len(measured)} keys answered"
             return frozenset()
 
+        self.measurement_note = f"measured: {len(measured)} keys"
         _LOGGER.info(
             "Measured %d keys this router answers without a session",
             len(measured),
@@ -1447,7 +1508,8 @@ class ZTERouterAPI:
         """
         names: set[str] = set()
         notes: list[str] = []
-        for bundle in JS_BUNDLES:
+        bundles = await self._discover_bundles(timeout_sec, notes)
+        for bundle in bundles:
             try:
                 async with self.session.get(
                     f"{self.referer}{bundle}",
@@ -1468,6 +1530,8 @@ class ZTERouterAPI:
                 for m in _JS_CMD_RE.finditer(body)
                 for part in m.group(1).split(",")
             }
+            found |= {m.group(1) for m in _JS_QUOTED_RE.finditer(body)}
+            found |= {m.group(1) for m in _JS_OBJKEY_RE.finditer(body)}
             names |= found
             notes.append(f"{bundle}: {len(found)} names")
 
@@ -1476,6 +1540,46 @@ class ZTERouterAPI:
             for n in names
             if _SAFE_CMD_RE.fullmatch(n) and n not in _NOT_ROUTER_FIELDS
         }, notes
+
+    async def _discover_bundles(
+        self, timeout_sec: int | None, notes: list[str]
+    ) -> list[str]:
+        """Read the router's index page for the scripts it actually loads.
+
+        The static list is a guess and is partly wrong: `js/statusBar.js`
+        answers HTTP 404 on both devices seen so far, and a firmware may ship
+        files nobody has named. Asking the page it serves is the only way to
+        know, and costs one request.
+
+        Falls back to the static list when the page cannot be read or names no
+        scripts — a note either way, never an exception.
+        """
+        try:
+            async with self.session.get(
+                self.referer,
+                headers={"Referer": self.referer},
+                timeout=aiohttp.ClientTimeout(total=timeout_sec or 10),
+                ssl=False,
+            ) as r:
+                body = await r.text(errors="replace")
+        except Exception as err:  # noqa: BLE001 - a note, never a failure
+            notes.append(f"index: {type(err).__name__}: {err}; using the static list")
+            return list(JS_BUNDLES)
+
+        found = [
+            m.group(1).lstrip("./")
+            for m in _HTML_SCRIPT_RE.finditer(body)
+            if m.group(1).endswith(".js")
+        ]
+        if not found:
+            notes.append("index: no scripts named; using the static list")
+            return list(JS_BUNDLES)
+
+        # Unioned rather than replaced: the page may load its scripts through a
+        # module loader, naming only the entry point.
+        merged = list(dict.fromkeys(found + list(JS_BUNDLES)))
+        notes.append(f"index: {len(found)} scripts named, {len(merged)} to read")
+        return merged
 
     async def probe_names(
         self,
@@ -1524,6 +1628,13 @@ class ZTERouterAPI:
             found.update(answered)
             if not answered and len(chunk) > 1:
                 retry.extend(chunk)
+
+        if len(retry) > DISCOVERY_REPROBE_LIMIT:
+            notes.append(
+                f"{len(retry)} names queued for re-probe, capped at "
+                f"{DISCOVERY_REPROBE_LIMIT}"
+            )
+            retry = retry[:DISCOVERY_REPROBE_LIMIT]
 
         for name in retry:
             if monotonic() > deadline:
@@ -1603,6 +1714,14 @@ class ZTERouterAPI:
             result["values"] = {**static_found, **mined_found}
             result["mined_names_probed"] = len(unknown)
             result["mined_names_answered"] = len(mined_found)
+            # A name the UI uses that the device leaves empty is a different
+            # fact from a name that does not exist, and only the first was
+            # visible before. Names only — these answered nothing.
+            result["probed_no_answer"] = sorted(
+                n for n in unknown + static if n not in result["values"]
+            )
+            # The device's own vocabulary, useful even where nothing answered.
+            result["mined_names"] = sorted(mined)
         except Exception as err:  # noqa: BLE001 - a note, never a failure
             result["notes"].append(f"discovery aborted: {type(err).__name__}: {err}")
         return result

@@ -327,6 +327,13 @@ async def async_get_config_entry_diagnostics(
             "endpoint_failures": coordinator.endpoint_failures,
         },
         "data": payload,
+        # Counted here so a vocabulary mismatch is visible without diffing two
+        # downloads: a device spelling concepts differently answers most of
+        # the request empty.
+        "data_populated": sum(
+            1 for value in payload.values() if value not in ("", None, {})
+        ),
+        "data_empty": sum(1 for value in payload.values() if value in ("", None)),
         # `data` is empty until the first successful poll, which is exactly
         # the case this file is usually requested for. These two carry the
         # evidence that would otherwise be reachable only from raw logs.
@@ -341,6 +348,7 @@ async def async_get_config_entry_diagnostics(
         # Measured rather than assumed: which keys this device answers
         # without a session. Names only. Empty means no measurement passed
         # validation and the module constant is in force.
+        "setup_completed": _scalar(getattr(coordinator.api, "setup_completed", None)),
         "measurement_note": _scalar(getattr(coordinator.api, "measurement_note", None)),
         "logout_acknowledged": _scalar(
             getattr(coordinator.api, "logout_acknowledged", None)
@@ -474,7 +482,15 @@ def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]
         published[key], verdicts[key] = _gate_discovery_value(key, value, tokenizer)
 
     out: dict[str, Any] = {"values": published, "verdicts": verdicts}
-    for field in ("notes", "mined_count", "mined_names_probed", "mined_names_answered"):
+    for field in (
+        "notes",
+        "mined_count",
+        "mined_names_probed",
+        "mined_names_answered",
+        "probed_no_answer",
+        "mined_names",
+        "session",
+    ):
         if field in discovery:
             out[field] = discovery[field]
     return out
