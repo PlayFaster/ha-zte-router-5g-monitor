@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.8] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Concept-Based Drift Tolerance
+
+### Summary
+
+- **Web UI Parameter Mining**: Diagnostics downloads now automatically inspect the router's web interface JavaScript to discover all parameters supported by the firmware.
+- **New Firmware Update Sensors**: Added `Firmware Update Available` and `Firmware Update State` sensors under the System sub-device.
+- **Concept-Based Contract Drift**: Contract drift evaluation now recognizes equivalent parameter aliases across router models, preventing false drift warnings.
+- **Diagnostic Privacy & Timeout Resilience**: Enhanced diagnostics redaction for carrier/APN identity and isolated discovery requests to prevent interference with live polling.
+
+### Added
+
+- **Firmware Update Sensors**: Added `sensor.*_firmware_update_available` (`new_version_state`) and `sensor.*_firmware_update_state` (`current_upgrade_state`) diagnostic sensors under the System sub-device.
+- **Web UI Parameter Discovery**: When generating diagnostics, the integration now extracts and probes supported parameters directly from the router's web UI scripts, providing comprehensive firmware parameter maps for troubleshooting.
+- **Fallback Parameter Aliases**: Added fallback spellings for network type (`strBearer`), network provider (`strFullName`, `strShortName`), APN (`wan_apn_ui`), and hardware version (`hardwarenumber`).
+
+### Changed
+
+- **Concept-Based Contract Drift**: Contract drift evaluation in Integration Health now evaluates parameter concepts rather than strict key names, ensuring models that report connection state or uptime under alternate keys (e.g. `ppp_status` or `flux_realtime_time`) remain fully compliant.
+- **Dynamic Session Sentinels**: Session verification sentinels are now dynamically selected based on measured unauthenticated keys to prevent false alive signals on models returning connection status unauthenticated.
+- **Carrier Identity Redaction in Discovery**: Ensured carrier profile names, SPN, and PLMN values discovered during parameter mining are sanitized and withheld in diagnostics downloads.
+- **Discovery Lock Isolation**: Parameter discovery now synchronizes with the coordinator's update lock, preventing large diagnostic downloads from causing transient timeouts or missed polling cycles.
+
+### Under the hood
+
+- **Serialization & Redaction Test Coverage**: Added tests asserting 100% JSON serialization safety across diagnostic bundles, single-key chunk fallback probing, and carrier redaction filters.
+
+---
+
 ## [3.3.7] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls
 
 ### Summary
@@ -444,6 +472,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.8\] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Concept-Based Drift Tolerance](#338---2026-09-01---release-web-ui-parameter-mining-firmware-update-sensors-and-concept-based-drift-tolerance)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
