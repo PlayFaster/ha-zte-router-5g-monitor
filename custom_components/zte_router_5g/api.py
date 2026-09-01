@@ -172,6 +172,18 @@ _CORE_PARAMS: list[str] = [
     "flux_data_volume_limit_size",
     "flux_data_volume_limit_unit",
     "flux_data_volume_alert_percent",
+    # Alternate spellings recovered by mining the router's own web UI on
+    # 2026-09-01. Each answered the identical value to the key it backs on an
+    # MC7010, so each is a fallback rather than a second concept.
+    "strBearer",
+    "strFullName",
+    "strShortName",
+    "wan_apn_ui",
+    "hardwarenumber",
+    # Firmware update state. Two questions, so two keys: whether an update has
+    # been found, and whether one is running.
+    "current_upgrade_state",
+    "new_version_state",
 ]
 
 _EXTENDED_PARAMS: list[str] = [
@@ -252,6 +264,11 @@ _JS_CMD_RE = re.compile(r"cmd['\"]?\s*[:=]\s*['\"]([A-Za-z_][A-Za-z0-9_,]*)")
 # straight into a URL — a token carrying `&` or `=` would corrupt the request.
 _SAFE_CMD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
 
+# Tokens that survive the filter but are not router fields. `result` is the
+# key a `goform` response carries its outcome in, and reads as a `cmd` literal
+# in the bundles.
+_NOT_ROUTER_FIELDS = frozenset({"result", "cmd", "isTest", "goformId"})
+
 
 # Appended to every targeted read so an all-empty response still distinguishes
 # "these fields are empty" from "the session is gone". See `get_params`.
@@ -262,7 +279,7 @@ _SAFE_CMD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
 # `wan_connect_status` is blank on an MC888 Pro that reports `ppp_connected`
 # under `ppp_status` (issue #56), which is why a single name will not do.
 _CONTRACT_CONCEPTS: dict[str, tuple[str, ...]] = {
-    "network_type": ("network_type",),
+    "network_type": ("network_type", "strBearer"),
     "signal_bars": ("signalbar",),
     "uptime": ("realtime_time", "flux_realtime_time"),
     "connection_state": ("wan_connect_status", "ppp_status"),
@@ -1445,7 +1462,11 @@ class ZTERouterAPI:
             names |= found
             notes.append(f"{bundle}: {len(found)} names")
 
-        return {n for n in names if _SAFE_CMD_RE.fullmatch(n)}, notes
+        return {
+            n
+            for n in names
+            if _SAFE_CMD_RE.fullmatch(n) and n not in _NOT_ROUTER_FIELDS
+        }, notes
 
     async def probe_names(
         self,
@@ -1522,7 +1543,14 @@ class ZTERouterAPI:
             return None
         if not isinstance(payload, dict):
             return None
-        return {k: v for k, v in payload.items() if isinstance(v, str) and v}
+        # `result` is the key a `goform` response carries its outcome in, and
+        # a refused chunk echoes it back. It is not a router field, and
+        # harvesting it would publish `failure` as though it were telemetry.
+        return {
+            k: v
+            for k, v in payload.items()
+            if isinstance(v, str) and v and k not in _NOT_ROUTER_FIELDS
+        }
 
     async def run_discovery(self, timeout_sec: int | None = None) -> dict[str, Any]:
         """Mine, probe and report — the whole discovery pass, for diagnostics.

@@ -238,6 +238,12 @@
       },
       "data_allowance": {
         "default": "mdi:gauge-full"
+      },
+      "system_firmware_update_available": {
+        "default": "mdi:package-down"
+      },
+      "system_firmware_update_state": {
+        "default": "mdi:package-variant"
       }
     },
     "button": {

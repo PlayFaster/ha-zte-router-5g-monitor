@@ -11,8 +11,8 @@ A complete list of the static entities and service actions provided by the integ
 | **Data**   | 15           | Data entities.         |
 | **SMS**    | 5            | SMS entities.          |
 | **Signal** | 40           | Signal entities.       |
-| **System** | 33           | System entities.       |
-| **Total**  | **93**       | Total static entities. |
+| **System** | 35           | System entities.       |
+| **Total**  | **95**       | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
 
@@ -89,7 +89,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G RSSI | `z5g_rssi` | Sensor | dBm | - | LTS: `measurement` |
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 
-## System Sub-Device (33 Entities)
+## System Sub-Device (35 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -104,12 +104,14 @@ A complete list of the static entities and service actions provided by the integ
 | Polling Interval | `polling_interval` | Number | s | Config | - |
 | APN Interface Version | `apn_interface_version` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Battery | `battery_value` | Sensor | % | - | **Disabled by default.** |
+| Firmware Update State | `current_upgrade_state` | Sensor | - | Diagnostic | - |
 | Device Uptime | `device_uptime` | Sensor | - | - | - |
 | Hardware Version | `hardware_version` | Sensor | - | Diagnostic | - |
 | IMEI | `imei` | Sensor | - | Diagnostic | **Disabled by default.** |
 | LAN IP Address | `lan_ipaddr` | Sensor | - | Diagnostic | - |
 | Last Updated | `last_updated` | Sensor | - | - | - |
 | Model Name | `model_name` | Sensor | - | Diagnostic | - |
+| Firmware Update Available | `new_version_state` | Sensor | - | Diagnostic | - |
 | WAN Fallback Mode | `opms_wan_auto_mode` | Sensor | - | Diagnostic | **Disabled by default.** |
 | WAN Operating Mode | `opms_wan_mode` | Sensor | - | Diagnostic | **Disabled by default.** |
 | 5G Modem Temperature | `pm_modem_5g` | Sensor | °C | Diagnostic | **Disabled by default.** LTS: `measurement` |

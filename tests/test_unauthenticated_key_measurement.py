@@ -533,3 +533,45 @@ async def test_the_appended_sentinel_set_stays_bounded(mock_aiohttp_client):
     url = mock_aiohttp_client.get.call_args[0][0]
     appended = [k for k in _SESSION_SENTINELS if k in url]
     assert len(appended) <= 2
+
+
+@pytest.mark.parametrize(
+    ("primary", "fallback"),
+    [
+        ("network_type", "strBearer"),
+        ("network_provider", "strFullName"),
+        ("wan_apn", "wan_apn_ui"),
+        ("hardware_version", "hardwarenumber"),
+    ],
+)
+def test_a_mined_alias_resolves_when_its_primary_is_empty(primary, fallback) -> None:
+    """Each answered the identical value to the key it backs on an MC7010.
+
+    A device populating only the alternate spelling must still report the
+    concept.
+    """
+    from custom_components.zte_router_5g import sensor
+
+    tuples = [
+        getattr(sensor, name) for name in dir(sensor) if name.startswith("_ALIAS_")
+    ]
+    pair = next(t for t in tuples if t[0] == primary)
+
+    assert fallback in pair
+    assert sensor._get_first({primary: "", fallback: "value"}, pair) == "value"
+
+
+def test_the_firmware_update_sensors_report_the_router_value() -> None:
+    """The values are vendor enumerations, and only the idle case is observed.
+
+    Reported unchanged rather than mapped, because a translation of states
+    nobody has seen would be invention.
+    """
+    from custom_components.zte_router_5g.sensor import SENSOR_TYPES
+
+    by_key = {d.key: d for d in SENSOR_TYPES}
+    for key, value in (
+        ("new_version_state", "version_idle"),
+        ("current_upgrade_state", "fota_idle"),
+    ):
+        assert by_key[key].value_fn({key: value}) == value

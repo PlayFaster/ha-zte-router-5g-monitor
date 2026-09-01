@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.8-dev2\] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors](#338-dev2---2026-09-01---carrier-identity-withheld-in-discovery-mined-aliases-firmware-update-sensors)
   - [\[3.3.8-dev1\] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys](#338-dev1---2026-09-01---key-discovery-from-the-routers-own-web-ui-concept-based-contract-keys)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
   - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
@@ -205,6 +206,39 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.8-dev2] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors
+
+### Summary
+
+The first discovery download from the reference MC7010 published the operator's APN profile name and the registered PLMN, both of which the payload block already redacts under other spellings. The gate's mechanism was sound and its vocabulary was not. The same download supplied four alternate spellings worth adopting as fallbacks and two fields worth reporting.
+
+### Fixed
+
+- **Carrier identity is withheld in the discovery block**: `profile_name`, `provider`, `spn`, `plmn`, `fullname` and `shortname` join the deny-pattern. `network_provider` and `wan_apn` are in `CARRIER_KEYS`, so publishing `profile_name_ui`, `m_profile_name`, `strFullName`, `strShortName`, `network_provider_fullname`, `spn_name_data` and `rplmn_num` was inconsistent as well as revealing — `rplmn_num` carries MCC and MNC in one value. Verified on hardware: all seven now report shape only, and neither the profile name nor the PLMN appears anywhere in the file.
+- **`result` is neither mined nor harvested**: it is the key a `goform` response carries its outcome in, and it reads as a `cmd` literal in the bundles. Excluding it from mined names was not enough — a refused chunk echoes it back in the response, so it was published as though it were telemetry.
+
+### Added
+
+- **Four fallback spellings**, recovered by mining and added to the request list: `strBearer` for `network_type`, `strFullName` and `strShortName` for `network_provider`, `wan_apn_ui` for `wan_apn`, and `hardwarenumber` for `hardware_version`. The three carrier spellings join `CARRIER_KEYS`, since their partners are already there.
+- **Firmware Update Available** (`new_version_state`) and **Firmware Update State** (`current_upgrade_state`): System sub-device, diagnostic, enabled by default. Two questions — whether an update has been found, and whether one is running — so two entities. The values are vendor enumerations and only the idle case has been observed, so they are reported unchanged rather than mapped.
+
+### Changed
+
+- **`test_the_download_is_json_serializable` asserts a round trip** rather than relying on `json.dumps` raising, which the assertion audit could not see.
+
+### Testing
+
+- 1097 tests, 100% branch coverage, assertion audit passing. Seven carrier-identity names asserted withheld; `result` asserted neither mined nor harvested; each of the four aliases asserted to resolve when its primary is empty; the two new sensors asserted to publish the router's value unchanged.
+- **Hardware, 17 of 17.** Live verification confirmed the seven withheld verdicts and that `3FWA.ie` and `27205` are absent from the sanitized output.
+
+### Notes
+
+`strBearer` read `ENDC` alongside `network_type` when first sampled and has since been observed empty while `network_type` still reported `ENDC`. It is a fallback rather than a proven duplicate; the leader wins whenever it carries a value.
+
+The core batch is 95 keys and 1,551 characters after these additions. Measured on the reference device: no requested key is absent from the response, so the batch remains inside the router's URL budget.
+
+`web_version` is recorded as a known field and not adopted — it reports the web UI build, and the firmware version already identifies the build.
 
 ## [3.3.8-dev1] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys
 

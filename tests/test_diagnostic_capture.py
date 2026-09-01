@@ -540,7 +540,9 @@ async def test_the_download_is_json_serializable(diagnostics_entry):
 
     result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
 
-    json.dumps(result)
+    # Round-tripped, not merely dumped: the assertion is that the file a user
+    # attaches to an issue survives encoding with its content intact.
+    assert json.loads(json.dumps(result)) == result
 
 
 @pytest.mark.asyncio
@@ -858,3 +860,71 @@ def test_a_section_that_raises_is_recorded_not_raised() -> None:
 
     assert _guarded("data", _explode, errors) is None
     assert errors == ["data: ValueError: payload is not walkable"]
+
+
+# ---------------------------------------------------------------------------
+# Carrier identity in discovery
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "profile_name_ui",
+        "m_profile_name",
+        "strFullName",
+        "strShortName",
+        "network_provider_fullname",
+        "spn_name_data",
+        "rplmn_num",
+    ],
+)
+def test_a_carrier_identity_name_is_never_published(name) -> None:
+    """`network_provider` and `wan_apn` are redacted in the payload block.
+
+    Publishing their discovery equivalents was inconsistent as well as
+    revealing: an MC7010 answered `profile_name_ui` with the operator's own
+    APN profile name, and `rplmn_num` carries MCC and MNC in one value.
+    """
+    from custom_components.zte_router_5g.diagnostics import (
+        _sanitize_discovery,
+        _Tokenizer,
+    )
+
+    out = _sanitize_discovery({name: "3FWA.ie"}, _Tokenizer())
+
+    assert "3FWA.ie" not in json.dumps(out)
+    assert out["verdicts"][name] == "denied-name"
+
+
+@pytest.mark.asyncio
+async def test_a_goform_response_key_is_never_probed(mock_aiohttp_client):
+    """`result` reads as a `cmd` literal in the bundles and is not a field."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data=None, text_body="cmd='result' cmd='goformId' cmd='lte_band'"
+    )
+
+    names, _notes = await api.mine_candidate_names()
+
+    assert names == {"lte_band"}
+
+
+@pytest.mark.asyncio
+async def test_a_goform_response_key_is_never_harvested(mock_aiohttp_client):
+    """A refused chunk echoes `result` back, and it is not telemetry.
+
+    Excluding it from the mined names is not enough: the router returns it in
+    the probe response itself.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"result": "failure", "lte_band": "20"}
+    )
+
+    found, _notes = await api.probe_names(["lte_band"], chunk_size=1)
+
+    assert found == {"lte_band": "20"}

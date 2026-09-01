@@ -80,6 +80,12 @@
       "system_hardware_version": {
         "name": "Hardware Version"
       },
+      "system_firmware_update_available": {
+        "name": "Firmware Update Available"
+      },
+      "system_firmware_update_state": {
+        "name": "Firmware Update State"
+      },
       "system_battery_value": {
         "name": "Battery"
       },

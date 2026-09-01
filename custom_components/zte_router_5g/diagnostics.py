@@ -65,6 +65,12 @@ CARRIER_KEYS = {
     "rmnc",
     "network_provider",
     "wan_apn",
+    # Alternate spellings of the two above. A concept classified here must
+    # cover every spelling requested, or one is redacted and the other is not
+    # — `test_every_classified_concept_covers_all_its_aliases` enforces it.
+    "strFullName",
+    "strShortName",
+    "wan_apn_ui",
 }
 
 # Identifiers that DO carry cross-reference value, so they are tokenized rather
@@ -376,7 +382,13 @@ def _describe(value: str) -> str:
 # which `_sweep` would catch.
 _DENY_NAME_RE = re.compile(
     r"(?i)(pass|pwd|psk|secret|token|cred|key_|_key|imsi|iccid|msisdn"
-    r"|gps|_lat$|_lon$|latitude|longitude|ssid|apn|loginfo|serial|sn$)"
+    r"|gps|_lat$|_lon$|latitude|longitude|ssid|apn|loginfo|serial|sn$"
+    # Carrier identity. `network_provider` and `wan_apn` are already in
+    # `CARRIER_KEYS`, so publishing their discovery equivalents was
+    # inconsistent as well as revealing: an MC7010 answered `profile_name_ui`
+    # and `m_profile_name` with the operator's own APN profile name, and
+    # `rplmn_num` carries MCC and MNC in one value.
+    r"|profile_name|provider|spn|plmn|fullname|shortname)"
 )
 
 # Decimal degrees, as a pair or alone: a coordinate is location whatever the

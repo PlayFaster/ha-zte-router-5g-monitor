@@ -125,7 +125,7 @@ RETIRED_REPAIR_NAMES = (
 # diverge. Drift is judged per *concept* — a device spelling one differently
 # has not lost it.
 CORE_CONCEPTS: dict[str, tuple[str, ...]] = {
-    "network_type": ("network_type",),
+    "network_type": ("network_type", "strBearer"),
     "signal_bars": ("signalbar",),
     "uptime": ("realtime_time", "flux_realtime_time"),
     "connection_state": ("wan_connect_status", "ppp_status"),
