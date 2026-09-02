@@ -155,7 +155,7 @@ def _safe_str(val: Any) -> str | None:
 # hardware that does not populate the first.
 _ALIAS_5G_RSRP: Final = ("Z5g_rsrp", "5g_rsrp", "nr5g_rsrp")
 _ALIAS_5G_SINR: Final = ("Z5g_SINR", "Z5g_snr", "5g_sinr", "nr5g_sinr")
-_ALIAS_5G_PCI: Final = ("nr5g_pci", "Z5g_CELL_ID")
+_ALIAS_5G_PCI: Final = ("nr5g_pci", "Z5g_CELL_ID", "network_Z5g_PCI")
 _ALIAS_MONTHLY_TX: Final = ("monthly_tx_bytes", "flux_monthly_tx_bytes")
 _ALIAS_MONTHLY_RX: Final = ("monthly_rx_bytes", "flux_monthly_rx_bytes")
 
@@ -227,6 +227,36 @@ _ALIAS_LIMIT_SWITCH: Final = (
     "data_volume_limit_switch",
     "flux_data_volume_limit_switch",
 )
+
+
+# The rest of the `network_` family, answered by the MC888 Pro on 2026-09-02
+# while the bare spelling this integration polls came back empty. Each was
+# matched to its leader by value as well as by name: the two PCI keys agreed
+# with each other at 167, the cell identity was a plain integer, and the two
+# channel numbers landed in the LTE and NR-ARFCN ranges for the bands reported
+# alongside them.
+#
+# `network_rssi` is excluded on purpose - see the note in `api.py`. So is
+# `network_sinr`: 3.8 is a plausible dB figure and the name is right, but it
+# has been seen on one device once and there is no second reading to check it
+# against, and a wrong SNR is worse than an empty one because it reads as a
+# measurement.
+_ALIAS_CELL_ID: Final = ("cell_id", "network_cell_id")
+_ALIAS_LTE_PCI: Final = ("lte_pci", "network_Z_PCI")
+_ALIAS_ACTIVE_BAND: Final = ("wan_active_band", "network_ZCELLINFO_band")
+_ALIAS_ACTIVE_CHANNEL: Final = ("wan_active_channel", "network_Z_dl_earfcn")
+_ALIAS_NR_BAND: Final = ("nr5g_action_band", "network_Z5g_CELLINFO_band")
+_ALIAS_NR_CHANNEL: Final = ("nr5g_action_channel", "network_Z5g_dlEarfcn")
+_ALIAS_SIGNALBAR: Final = ("signalbar", "network_signalbar")
+_ALIAS_RMCC: Final = ("rmcc", "network_rmcc")
+_ALIAS_RMNC: Final = ("rmnc", "network_rmnc")
+_ALIAS_ROAMING: Final = ("simcard_roam", "network_simcard_roam")
+
+# Two close matches rather than members of a prefix family: the same field
+# under a different prefix each, found by comparing the names the MC888
+# answered against the names it left empty.
+_ALIAS_MODEM_STATE: Final = ("modem_main_state", "mc_modem_main_state")
+_ALIAS_PIN_ATTEMPTS: Final = ("pinnumber", "sim_pinnumber")
 
 
 def _scell_field(data: dict[str, Any], index: int) -> float | None:
@@ -429,8 +459,8 @@ def _monthly_total_bytes(data: dict[str, Any]) -> int | None:
 
 def _band_or_channel_fallback(
     data: dict[str, Any],
-    band_key: str,
-    channel_key: str,
+    band_aliases: tuple[str, ...],
+    channel_aliases: tuple[str, ...],
     resolver: Callable[[int | str | None], str | None],
 ) -> str | None:
     """Prefer the band name the router reports; derive it only if absent.
@@ -438,11 +468,16 @@ def _band_or_channel_fallback(
     Some models report the channel number but leave the band name empty. The
     reported name always wins — the resolver is a fallback, and for NR it is
     an inherently ambiguous one.
+
+    The reported name is stripped. It is a free-form display string that
+    differs by model — `LTE BAND 28` on the MC7010, ` LTE B3` on the MC888 Pro
+    — and the leading space on the latter would otherwise reach the state
+    machine unaltered.
     """
-    reported = _safe_str(data.get(band_key))
+    reported = _safe_str(get_first(data, band_aliases))
     if reported is not None:
-        return reported
-    return resolver(data.get(channel_key))
+        return reported.strip() or None
+    return resolver(get_first(data, channel_aliases))
 
 
 # Technical Router Sensors
@@ -764,7 +799,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="signal",
         min_limit=0,
         max_limit=5,
-        value_fn=lambda data: _safe_int(data.get("signalbar")),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_SIGNALBAR)),
     ),
     ZTESensorEntityDescription(
         key="network_provider",
@@ -813,7 +848,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="signal",
         source=ENDPOINT_EXTENDED,
-        value_fn=lambda data: data.get("rmcc"),
+        value_fn=lambda data: get_first(data, _ALIAS_RMCC),
     ),
     ZTESensorEntityDescription(
         key="rmnc",
@@ -826,7 +861,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="signal",
         source=ENDPOINT_EXTENDED,
-        value_fn=lambda data: data.get("rmnc"),
+        value_fn=lambda data: get_first(data, _ALIAS_RMNC),
     ),
     ZTESensorEntityDescription(
         key="lte_rsrp",
@@ -909,7 +944,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_lte_pci",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("lte_pci")),
+        value_fn=lambda data: _safe_str(get_first(data, _ALIAS_LTE_PCI)),
     ),
     ZTESensorEntityDescription(
         key="cell_id",
@@ -921,7 +956,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_cell_id",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("cell_id")),
+        value_fn=lambda data: _safe_str(get_first(data, _ALIAS_CELL_ID)),
     ),
     ZTESensorEntityDescription(
         key="wan_lte_ca",
@@ -999,7 +1034,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
         value_fn=lambda data: _band_or_channel_fallback(
-            data, "wan_active_band", "wan_active_channel", earfcn_to_band
+            data, _ALIAS_ACTIVE_BAND, _ALIAS_ACTIVE_CHANNEL, earfcn_to_band
         ),
     ),
     ZTESensorEntityDescription(
@@ -1012,7 +1047,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_wan_active_channel",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_int(data.get("wan_active_channel")),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_ACTIVE_CHANNEL)),
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrp",
@@ -1102,7 +1137,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
         value_fn=lambda data: _band_or_channel_fallback(
-            data, "nr5g_action_band", "nr5g_action_channel", arfcn_to_band
+            data, _ALIAS_NR_BAND, _ALIAS_NR_CHANNEL, arfcn_to_band
         ),
     ),
     ZTESensorEntityDescription(
@@ -1115,7 +1150,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_nr5g_action_channel",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_int(data.get("nr5g_action_channel")),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_NR_CHANNEL)),
     ),
     ZTESensorEntityDescription(
         key="rssi",
@@ -1327,7 +1362,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
-        value_fn=lambda data: _safe_int(data.get("pinnumber")),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_PIN_ATTEMPTS)),
     ),
     ZTESensorEntityDescription(
         key="sim_puk_attempts",
@@ -1354,7 +1389,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
-        value_fn=lambda data: data.get("modem_main_state") or None,
+        value_fn=lambda data: get_first(data, _ALIAS_MODEM_STATE) or None,
     ),
     ZTESensorEntityDescription(
         key="connection_failure_count",
@@ -1382,7 +1417,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
-        value_fn=lambda data: data.get("simcard_roam") or None,
+        value_fn=lambda data: get_first(data, _ALIAS_ROAMING) or None,
     ),
     ZTESensorEntityDescription(
         key="nr5g_nsa_band_lock",

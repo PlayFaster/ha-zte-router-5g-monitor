@@ -1376,7 +1376,96 @@ _MC888_ALIASES = (
     ("wan_auto_clear_flow_data_switch", "flux_auto_clear_flow_data_switch", "on"),
     ("data_volume_limit_switch", "flux_data_volume_limit_switch", "0"),
     ("traffic_clear_date", "flux_clear_date", "1"),
+    # Added in [3.3.10-dev2] from the 2026-09-02 download.
+    ("cell_id", "network_cell_id", "16512357"),
+    ("lte_pci", "network_Z_PCI", "167"),
+    ("nr5g_pci", "network_Z5g_PCI", "167"),
+    ("wan_active_band", "network_ZCELLINFO_band", " LTE B3"),
+    ("wan_active_channel", "network_Z_dl_earfcn", "1800"),
+    ("nr5g_action_band", "network_Z5g_CELLINFO_band", "N78"),
+    ("nr5g_action_channel", "network_Z5g_dlEarfcn", "637440"),
+    ("signalbar", "network_signalbar", "5"),
+    ("rmcc", "network_rmcc", "204"),
+    ("rmnc", "network_rmnc", "16"),
+    ("simcard_roam", "network_simcard_roam", "Home"),
+    ("modem_main_state", "mc_modem_main_state", "modem_init_complete"),
+    ("pinnumber", "sim_pinnumber", "1"),
 )
+
+# The same readings, reached through the entity rather than through
+# `get_first`. The pair test proves the helper picks the alias; this proves the
+# sensor is wired to the helper, which is the failure the 3.3.9 downloads
+# actually showed - the alias existed and the entity did not use it.
+_MC888_ENTITY_READINGS = (
+    ("cell_id", {"network_cell_id": "16512357"}, "16512357"),
+    ("lte_pci", {"network_Z_PCI": "167"}, "167"),
+    ("nr5g_pci", {"network_Z5g_PCI": "167"}, "167"),
+    ("wan_active_band", {"network_ZCELLINFO_band": " LTE B3"}, "LTE B3"),
+    ("wan_active_channel", {"network_Z_dl_earfcn": "1800"}, 1800),
+    ("nr5g_action_band", {"network_Z5g_CELLINFO_band": "N78"}, "N78"),
+    ("nr5g_action_channel", {"network_Z5g_dlEarfcn": "637440"}, 637440),
+    ("signalbar", {"network_signalbar": "5"}, 5),
+    ("rmcc", {"network_rmcc": "204"}, "204"),
+    ("rmnc", {"network_rmnc": "16"}, "16"),
+    ("roaming_state", {"network_simcard_roam": "Home"}, "Home"),
+    (
+        "modem_state",
+        {"mc_modem_main_state": "modem_init_complete"},
+        "modem_init_complete",
+    ),
+    ("sim_pin_attempts", {"sim_pinnumber": "1"}, 1),
+)
+
+
+@pytest.mark.parametrize(("entity_key", "payload", "expected"), _MC888_ENTITY_READINGS)
+def test_each_mc888_entity_reads_its_alias(
+    entity_key: str, payload: dict[str, str], expected: object
+) -> None:
+    """Thirteen sensors that were blank on the MC888 Pro now report a value."""
+    description = next(d for d in SENSOR_TYPES if d.key == entity_key)
+
+    assert description.value_fn(payload) == expected
+
+
+@pytest.mark.parametrize(("entity_key", "payload", "_expected"), _MC888_ENTITY_READINGS)
+def test_each_mc888_entity_is_still_empty_without_its_alias(
+    entity_key: str, payload: dict[str, str], _expected: object
+) -> None:
+    """The alias is the only thing supplying the value.
+
+    Without this the reading test would pass on a sensor that had some other
+    source, and the alias would be untested.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == entity_key)
+
+    assert description.value_fn(dict.fromkeys(payload, "")) is None
+
+
+def test_the_reported_band_name_is_stripped() -> None:
+    """The MC888 answers ` LTE B3` with a leading space; the MC7010 does not.
+
+    A band name is a free-form display string, so the space would otherwise
+    reach the state machine unaltered and make the two devices disagree on a
+    value they agree about.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "wan_active_band")
+
+    assert description.value_fn({"wan_active_band": "  LTE BAND 28  "}) == "LTE BAND 28"
+    assert description.value_fn({"wan_active_band": "   "}) is None
+
+
+def test_the_rejected_mc888_spellings_are_not_polled() -> None:
+    """Two names the 2026-09-02 download answered are deliberately unused.
+
+    `network_rssi` read 73 where RSRP read -105, so it is a bar or percentage
+    scale rather than dBm. `network_sinr` is plausible but single-sighted, and
+    a wrong SNR is worse than an empty one because it reads as a measurement.
+    Requesting either would invite a later change wiring it up on the strength
+    of it already being in the list.
+    """
+    requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+
+    assert not requested & {"network_rssi", "network_sinr"}
 
 
 @pytest.mark.parametrize(("primary", "alias", "value"), _MC888_ALIASES)

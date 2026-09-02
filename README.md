@@ -53,7 +53,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 - **Verified Models**:
   - **ZTE MC7010** (5G Outdoor CPE) — **Live Hardware Verified** on firmware `V1.0.0B01` and `V1.0.0B03`.
-  - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Diagnostic Capture Verified** on firmware `V1.0.1B04`.
+  - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Diagnostic Capture Verified** on firmware `V1.0.1B04`, where a reporter's own installation polls the router successfully and reports no integration problem, with 76 of the 156 requested parameters populated.
 
 - **Expected Compatible (ZTE `goform` API Family)**:
   - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
