@@ -223,13 +223,17 @@ CANARY_FALLBACK_EVERY = 8
 # a user opening the router's web page while a download runs — and short enough
 # that a sustained competitor is reported as one rather than fought.
 #
-# Counted per probe phase, and a pass runs two — the static list and the mined
-# one — so a pass may re-establish up to six times in total. Measured on the
-# reference MC7010: a healthy pass re-establishes twice, because a chunk that
-# times out clears the session locally and the next chunk finds it gone. That
-# is the same 16 names that have appeared as "read without a session" in every
-# download taken since the canary was introduced; until now they were requeued
-# and frequently discarded by the re-probe cap rather than recovered.
+# Counted per probe phase, so a pass may re-establish several times in total.
+# Measured on the reference MC7010: a healthy pass now re-establishes zero
+# times.
+#
+# It re-established twice per pass until v3.3.9-dev10, and the cause was not a
+# lost session. A chunk carrying a name the router declines answers
+# `{"result": "failure"}`, which carries none of the requested keys and none of
+# the canaries, so an unhandled refusal was indistinguishable from an eviction.
+# Twelve `tr069_` names sort contiguously and spanned two chunks, which is the
+# 16 names that appeared as "read without a session" in every download taken
+# between the canary being introduced and the refusal being handled.
 DISCOVERY_RELOGIN_LIMIT = 3
 
 DISCOVERY_CHUNK_SIZE = 16

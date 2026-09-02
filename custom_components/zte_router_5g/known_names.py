@@ -791,3 +791,37 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "zte_voice_debug_voice_set",
     }
 )
+
+# Names observed to be declined by at least one device, probed one at a time.
+#
+# A refusal replaces the entire response, so a declined name in a shared
+# request costs every other name in it. Asking these on their own is not a
+# claim that they will be declined — a name that answers is recorded exactly
+# like any other — it is a way of keeping one device's policy from destroying
+# another name's answer.
+#
+# Measured on the reference MC7010 on 2026-09-02: each of these answers
+# `{"result": "failure"}` in 40-60 ms, while `tr069_ReqURL` answers normally
+# with a live ACS callback URL. The MC888 Pro in issue #56, which its owner
+# states is self-purchased rather than operator-supplied, answers
+# `tr069_CPEPortNo`, `tr069_CertEnable`, `tr069_DataModule`,
+# `tr069_PeriodicInformEnable` and `tr069_PeriodicInformInterval` plainly.
+#
+# That asymmetry is consistent with an operator-supplied unit withholding its
+# provisioning configuration, and it is not established: there is one device on
+# each side, so a difference of model or firmware fits the same evidence.
+REFUSABLE_NAMES: Final[frozenset[str]] = frozenset(
+    {
+        "tr069_CPEPortNo",
+        "tr069_CertEnable",
+        "tr069_ConnectionRequestPassword",
+        "tr069_ConnectionRequestUname",
+        "tr069_DataModule",
+        "tr069_PeriodicInformEnable",
+        "tr069_PeriodicInformInterval",
+        "tr069_ServerPassword",
+        "tr069_ServerURL",
+        "tr069_ServerUsername",
+        "tr069_Webui_DataModuleSupport",
+    }
+)

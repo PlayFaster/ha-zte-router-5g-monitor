@@ -529,6 +529,7 @@ DISCOVERY_METADATA_PUBLISHED = frozenset(
         "not_reprobed",
         "notes",
         "probed_no_answer",
+        "refused",
         "session",
         "session_alive_after",
         "sessionless_measurement",

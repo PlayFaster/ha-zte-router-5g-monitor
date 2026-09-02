@@ -29,7 +29,7 @@ from .const import (
     SESSION_IDLE_RESET_SECONDS,
 )
 from .helpers import is_gsm7
-from .known_names import KNOWN_NAMES
+from .known_names import KNOWN_NAMES, REFUSABLE_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -303,6 +303,23 @@ _HTML_SCRIPT_RE = re.compile(r"""<script[^>]+src\s*=\s*["']([^"']+)["']""")
 # need different handling: the second must never be recorded as a firmware
 # that does not report those names.
 _SESSION_LOST: dict[str, str] = {}
+
+# Returned by `_probe_chunk` when the router declined the request outright.
+# Measured on the reference MC7010 on 2026-09-02: a name the firmware does not
+# have is echoed back empty (`{"zzz_not_a_real_key": ""}`), while a name it
+# declines answers `{"result": "failure"}` in 40-60 ms and carries none of the
+# requested keys. The two are opposite facts and the second is the more
+# informative, so it needs its own outcome.
+#
+# The refusal replaces the whole response, so one declined name loses every
+# other name in the same request. It also takes the canaries with it, which is
+# why an unhandled refusal reads as a lost session — the cause of the two
+# spurious mid-pass re-establishments seen in every pass before this release.
+#
+# A read cannot signal an expired session this way: `_ensure_session` records,
+# from repeated hardware runs, that a dead session echoes every requested key
+# back empty. `{"result": "failure"}` on a read is unambiguous.
+_REQUEST_REFUSED: dict[str, str] = {}
 
 _NOT_ROUTER_FIELDS = frozenset(
     {
@@ -1662,7 +1679,13 @@ class ZTERouterAPI:
         if not canaries:
             return await self._session_still_alive()
         answered = await self._probe_chunk([], canaries=canaries)
-        return answered is not None and answered is not _SESSION_LOST
+        # Identity, never equality: both sentinels are empty dicts, and so is
+        # a successful read whose only answer was the canaries themselves.
+        return (
+            answered is not None
+            and answered is not _SESSION_LOST
+            and answered is not _REQUEST_REFUSED
+        )
 
     async def _session_still_alive(self) -> bool:
         """Confirm the session survived a discovery pass.
@@ -1724,7 +1747,7 @@ class ZTERouterAPI:
         chunk_size: int = DISCOVERY_CHUNK_SIZE,
         deadline: float | None = None,
         canaries: Sequence[str] = (),
-    ) -> tuple[dict[str, str], list[str], list[str]]:
+    ) -> tuple[dict[str, str], list[str], list[str], list[str]]:
         """Read a list of `cmd` names, tolerating anything that goes wrong.
 
         Chunked, and every chunk tolerated on its own.
@@ -1753,6 +1776,8 @@ class ZTERouterAPI:
         unreliable = 0
         blank_since_check = 0
         fallback_checks = 0
+        refused_chunks = 0
+        refused_early: list[str] = []
         relogins = 0
         recovered = 0
         failed_relogins = 0
@@ -1762,9 +1787,23 @@ class ZTERouterAPI:
                 notes.append(
                     f"budget exhausted with {len(names) - start} names unprobed"
                 )
-                return found, notes, names[start:]
+                return found, notes, names[start:], []
             chunk = names[start : start + chunk_size]
             answered = await self._probe_chunk(chunk, canaries=canaries)
+            if answered is _REQUEST_REFUSED:
+                if len(chunk) == 1:
+                    # Asked alone and declined, so the answer is already
+                    # unambiguous and re-asking it would only repeat the
+                    # refusal. This is the path the refusable phase takes.
+                    refused_early.append(chunk[0])
+                    continue
+                # One declined name takes the whole request with it, so the
+                # other names in this chunk have not been asked. Requeued as a
+                # failure: nothing here is evidence about any of them, and none
+                # of it says anything about the session.
+                refused_chunks += 1
+                retry.extend(chunk)
+                continue
             if answered is _SESSION_LOST:
                 # Every canary went silent: this chunk was read without a
                 # session, so every name in it came back blank for a reason
@@ -1823,13 +1862,18 @@ class ZTERouterAPI:
                 "re-login limit reached; later names were read without a "
                 "confirmed session"
             )
+        if refused_chunks:
+            notes.append(
+                f"{refused_chunks} shared requests declined by the router and "
+                "re-probed one name at a time"
+            )
         if fallback_checks:
             notes.append(
                 f"no canary available: session confirmed out of band "
                 f"{fallback_checks} times"
             )
 
-        found_again, never_reprobed, rounds = await self._reprobe_singly(
+        found_again, refused, never_reprobed, rounds = await self._reprobe_singly(
             retry, canaries=canaries, deadline=deadline, notes=notes
         )
         found.update(found_again)
@@ -1843,8 +1887,11 @@ class ZTERouterAPI:
                 f"{len(never_reprobed)} names could not be re-probed and are "
                 "not reported as absent"
             )
+        refused = refused_early + refused
+        if refused:
+            notes.append(f"{len(refused)} names declined by the router")
 
-        return found, notes, never_reprobed
+        return found, notes, never_reprobed, sorted(refused)
 
     async def _reprobe_singly(
         self,
@@ -1853,13 +1900,14 @@ class ZTERouterAPI:
         canaries: Sequence[str],
         deadline: float,
         notes: list[str],
-    ) -> tuple[dict[str, str], list[str], list[int]]:
+    ) -> tuple[dict[str, str], list[str], list[str], list[int]]:
         """Re-probe one name at a time until the answers stop changing.
 
-        Returns what was resolved, the names that could never be asked, and
-        how many each round resolved.
+        Returns what was resolved, the names the router declined, the names
+        that could never be asked, and how many each round resolved.
         """
         found: dict[str, str] = {}
+        refused: list[str] = []
         # Convergence. Names reach the queue because a chunk failed, answered
         # blank, or was read without a session — never because the firmware
         # said anything about them individually. Re-probing one at a time turns
@@ -1893,7 +1941,12 @@ class ZTERouterAPI:
                     out_of_budget = True
                     break
                 answered = await self._probe_chunk([name], canaries=canaries)
-                if answered is _SESSION_LOST or answered is None:
+                if answered is _REQUEST_REFUSED:
+                    # Asked on its own and declined. That is a statement about
+                    # the firmware, not a failure to ask, so the name is
+                    # settled here rather than queued for another round.
+                    refused.append(name)
+                elif answered is _SESSION_LOST or answered is None:
                     # Not asked, as far as this device is concerned.
                     still.append(name)
                 elif answered:
@@ -1915,7 +1968,7 @@ class ZTERouterAPI:
         else:
             never_reprobed.extend(queue)
 
-        return found, never_reprobed, rounds
+        return found, refused, never_reprobed, rounds
 
     async def _probe_chunk(
         self, chunk: list[str], canaries: Sequence[str] = ()
@@ -1951,6 +2004,10 @@ class ZTERouterAPI:
             return None
         if not isinstance(payload, dict):
             return None
+        # Before the canary check, because a refusal blanks the canaries too
+        # and would otherwise be read as a session this pass never lost.
+        if self._is_refusal(payload) and not any(k in payload for k in request):
+            return _REQUEST_REFUSED
         # Each canary is a key this device answered moments ago and that needs
         # a session. All silent means the chunk was read unauthenticated, so
         # every blank in it is about the session and not about the firmware.
@@ -2051,6 +2108,12 @@ class ZTERouterAPI:
             # supported here", which is the same conflation `probed_no_answer`
             # exists to avoid one layer down.
             candidates = (mined | KNOWN_NAMES) - set(self.goform_ids)
+            # Held out of the chunked phases entirely. A declined name replaces
+            # the whole response, so one of these inside a chunk costs every
+            # other name in it — measured on the reference MC7010, two chunks
+            # per pass and sixteen names re-probed for nothing.
+            refusable = sorted((candidates & REFUSABLE_NAMES) - requested)
+            candidates -= REFUSABLE_NAMES
             unknown = sorted(candidates - requested - set(static))
             result["names_from_union_only"] = len(
                 (KNOWN_NAMES - mined) - requested - set(static)
@@ -2059,20 +2122,50 @@ class ZTERouterAPI:
             # The static list is not belt-and-braces: 52 of its 62 names do not
             # appear in the mined artefact at all, so the two sources barely
             # overlap and both are needed.
-            static_found, static_notes, static_unasked = await self.probe_names(
+            (
+                static_found,
+                static_notes,
+                static_unasked,
+                static_refused,
+            ) = await self.probe_names(
                 static,
                 chunk_size=DISCOVERY_CHUNK_SIZE,
                 deadline=deadline,
                 canaries=canaries,
             )
-            mined_found, mined_notes, mined_unasked = await self.probe_names(
+            # One name per request: a refusal here cannot reach anything else,
+            # and a name that answers is recorded like any other.
+            (
+                refusable_found,
+                refusable_notes,
+                refusable_unasked,
+                refused,
+            ) = await self.probe_names(
+                refusable,
+                chunk_size=1,
+                deadline=deadline,
+                canaries=canaries,
+            )
+            (
+                mined_found,
+                mined_notes,
+                mined_unasked,
+                mined_refused,
+            ) = await self.probe_names(
                 unknown,
                 chunk_size=MINED_CHUNK_SIZE,
                 deadline=deadline,
                 canaries=canaries,
             )
-            result["notes"].extend(static_notes + mined_notes)
-            result["values"] = {**static_found, **mined_found}
+            result["notes"].extend(static_notes + mined_notes + refusable_notes)
+            result["values"] = {**static_found, **mined_found, **refusable_found}
+            # A name the router declined outright. Not silence and not a
+            # failure to ask: the firmware knows the name and will not serve
+            # it, which is the most informative of the four outcomes and was
+            # previously indistinguishable from a lost session.
+            result["refused"] = sorted(
+                set(refused) | set(static_refused) | set(mined_refused)
+            )
             result["mined_names_probed"] = len(unknown)
             result["mined_names_answered"] = len(mined_found)
 
@@ -2086,7 +2179,7 @@ class ZTERouterAPI:
             # from an absence would inherit that claim. The MC888 key list this
             # release exists to grow was read off downloads that made exactly
             # that mistake for about a hundred names a pass.
-            unasked = set(static_unasked) | set(mined_unasked)
+            unasked = set(static_unasked) | set(mined_unasked) | set(refusable_unasked)
             result["not_reprobed"] = sorted(unasked)
 
             # A name the UI uses that the device leaves empty is a different
@@ -2095,8 +2188,10 @@ class ZTERouterAPI:
             # nothing.
             result["probed_no_answer"] = sorted(
                 n
-                for n in unknown + static
-                if n not in result["values"] and n not in unasked
+                for n in unknown + static + refusable
+                if n not in result["values"]
+                and n not in unasked
+                and n not in result["refused"]
             )
             # The device's own vocabulary, useful even where nothing answered.
             result["mined_names"] = sorted(mined)

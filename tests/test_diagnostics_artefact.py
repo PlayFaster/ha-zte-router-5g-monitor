@@ -57,6 +57,7 @@ def _discovery_result() -> dict[str, object]:
         "names_from_union_only": 102,
         "probed_no_answer": ["absent_key"],
         "not_reprobed": ["never_asked_key"],
+        "refused": ["declined_key"],
         "mined_names": ["lte_rsrp", "absent_key"],
         "write_commands": ["SET_APN"],
         "session_alive_after": True,

@@ -63,6 +63,7 @@ import pathlib
 import re
 import sys
 from datetime import UTC, datetime
+from itertools import combinations
 from typing import TYPE_CHECKING, Any, cast
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
@@ -356,6 +357,7 @@ async def produce(label: str, sabotage_at: int = 0) -> dict[str, Any]:
         f"  canaries={len(discovery.get('canaries', []))}"
         f"  no_session={_note_count(discovery, 'read without a session')}"
         f"  unasked={len(discovery.get('not_reprobed', []))}"
+        f"  refused={len(discovery.get('refused', []))}"
     )
     for note in discovery.get("notes", []):
         print(_dim(f"           {note}"))
@@ -504,24 +506,23 @@ def check_discovery(result: dict[str, Any], report: Report) -> None:
         "[2] answered never exceeds probed",
         f"{answered} of {probed}",
     )
-    silent = set(discovery.get("probed_no_answer", []))
-    unasked = set(discovery.get("not_reprobed", []))
-    report.record(
-        not (silent & set(values)),
-        "[2] a name that answered is not also listed as silent",
-    )
-    # The distinction the whole release turns on: asked and silent, versus
-    # never asked. A name in both fields would assert an absence that was
-    # never measured, which is what a capped re-probe used to publish.
-    report.record(
-        not (silent & unasked),
-        "[2] silent and unasked are disjoint",
-        f"{len(silent)} silent, {len(unasked)} unasked",
-    )
-    report.record(
-        not (unasked & set(values)),
-        "[2] a name that answered is not also listed as unasked",
-    )
+    # Four outcomes, and a name belongs to exactly one. Answered, asked and
+    # silent, asked and declined, and could not be asked are four different
+    # claims; a name in two of them asserts something nobody measured.
+    outcomes = {
+        "answered": set(values),
+        "silent": set(discovery.get("probed_no_answer", [])),
+        "refused": set(discovery.get("refused", [])),
+        "unasked": set(discovery.get("not_reprobed", [])),
+    }
+    for left, right in combinations(outcomes, 2):
+        overlap = outcomes[left] & outcomes[right]
+        report.record(
+            not overlap,
+            f"[2] {left} and {right} are disjoint",
+            f"{len(outcomes[left])} {left}, {len(outcomes[right])} {right}"
+            + (f", overlap {sorted(overlap)[:3]}" if overlap else ""),
+        )
 
 
 def check_sanitization(result: dict[str, Any], report: Report) -> None:

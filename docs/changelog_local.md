@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.9-dev10\] - 2026-09-02 - Diagnostic Download Declined Parameters Recorded; False Session Losses Removed](#339-dev10---2026-09-02---diagnostic-download-declined-parameters-recorded-false-session-losses-removed)
   - [\[3.3.9-dev9\] - 2026-09-02 - Diagnostic Download Yield 90 → 101; Capped Re-Probe False Absences Fixed](#339-dev9---2026-09-02---diagnostic-download-yield-90--101-capped-re-probe-false-absences-fixed)
   - [\[3.3.9-dev7\] - 2026-09-02 - Diagnostic Download Canary Field Published; Hardware Verification of the Produced File](#339-dev7---2026-09-02---diagnostic-download-canary-field-published-hardware-verification-of-the-produced-file)
   - [\[3.3.9-dev6\] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization](#339-dev6---2026-09-02---readme-hardware-compatibility-alignment-changelog-header-normalization)
@@ -214,6 +215,38 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.9-dev10] - 2026-09-02 - Diagnostic Download Declined Parameters Recorded; False Session Losses Removed
+
+### Summary
+
+Every diagnostics pass re-established the router session twice, and recorded sixteen names as read without a session. Neither had happened. A name the router declines answers `{"result": "failure"}`, which carries none of the requested keys and none of the canaries, so a refusal was indistinguishable from an eviction.
+
+Measured on the reference MC7010 on 2026-09-02: a name this firmware does not have is echoed back empty, while eleven `tr069_` configuration keys answer `{"result": "failure"}` in 40 to 60 milliseconds. Those are opposite facts. The refusal also replaces the whole response, so one declined name in a request cost every other name in it.
+
+### Added
+
+- **`refused`, a fourth outcome for a probed name.** A name asked in a request of its own that the router declines is a statement about the firmware — it knows the name and will not serve it — and belongs neither with the names that answered nothing nor with the names the pass could not ask about. All four fields are now asserted pairwise disjoint on hardware.
+- **`REFUSABLE_NAMES` in `known_names.py`**, holding names observed to be declined by any device, probed one per request so a refusal cannot reach another name. Holding a name there is not a claim that it will be declined: one that answers is recorded in `values` like any other.
+
+### Fixed
+
+- **A declined request is no longer read as a lost session.** Detected before the canary check, because the refusal blanks the canaries along with everything else. A read cannot signal an expired session this way — `_ensure_session` records from repeated hardware runs that a dead session echoes every requested key back empty — so a non-success `result` carrying none of the requested names is unambiguous.
+- **A name declined in a request of its own is settled there**, rather than being requeued and asked again to receive the same refusal.
+- **Sentinel comparison is by identity.** Both sentinels are empty dictionaries, and so is a successful read whose only populated keys were the canaries, so an equality test reported that read as a lost session.
+
+### Measured
+
+|                                    |            Before | After |
+| :--------------------------------- | ----------------: | ----: |
+| Names read without a session       |                16 |     0 |
+| Session re-establishments per pass |                 2 |     0 |
+| Names not established              |                11 |     0 |
+| Names recorded as declined         | not distinguished |    11 |
+| Re-probe rounds                    |                 4 |     1 |
+| Names answered                     |               101 |   101 |
+
+`tr069_ReqURL` answers with a live ACS callback URL on port 7547 while its eleven siblings are declined. The MC888 Pro in issue #56, self-purchased rather than operator-supplied, answers five of those keys plainly. That asymmetry is consistent with an operator-supplied unit withholding its provisioning configuration, and is not established: there is one device on each side of the comparison.
 
 ## [3.3.9-dev9] - 2026-09-02 - Diagnostic Download Yield 90 → 101; Capped Re-Probe False Absences Fixed
 
