@@ -294,6 +294,12 @@ _HTML_SCRIPT_RE = re.compile(r"""<script[^>]+src\s*=\s*["']([^"']+)["']""")
 # Tokens that survive the identifier filter and are not router fields.
 # `result` is the key a `goform` response carries its outcome in; the rest are
 # query parameters and JavaScript scaffolding the wider extraction reaches.
+# Returned by `_probe_chunk` when the canary went silent. A distinct object
+# rather than `None`, because "the request failed" and "we were not logged in"
+# need different handling: the second must never be recorded as a firmware
+# that does not report those names.
+_SESSION_LOST: dict[str, str] = {}
+
 _NOT_ROUTER_FIELDS = frozenset(
     {
         "result",
@@ -1575,6 +1581,23 @@ class ZTERouterAPI:
             and n not in goform_ids
         }, notes
 
+    async def _pick_canary(self, timeout_sec: int | None) -> str | None:
+        """Return a key this device answers and a session is required for.
+
+        Read classified, so this doubles as proof the fresh session works.
+        `None` where nothing qualifies — a device answering almost nothing has
+        no canary to offer, which is recorded rather than papered over.
+        """
+        unauthenticated = self.unauthenticated_key_set()
+        try:
+            payload = await self._batch_get(_CORE_PARAMS, timeout_sec=timeout_sec)
+        except Exception:  # noqa: BLE001 - no canary is an answer, not a fault
+            return None
+        for key, value in payload.items():
+            if key not in unauthenticated and isinstance(value, str) and value:
+                return key
+        return None
+
     async def _session_still_alive(self) -> bool:
         """Confirm the session survived a discovery pass.
 
@@ -1634,6 +1657,7 @@ class ZTERouterAPI:
         *,
         chunk_size: int = DISCOVERY_CHUNK_SIZE,
         deadline: float | None = None,
+        canary: str | None = None,
     ) -> tuple[dict[str, str], list[str]]:
         """Read a list of `cmd` names, tolerating anything that goes wrong.
 
@@ -1660,6 +1684,7 @@ class ZTERouterAPI:
         found: dict[str, str] = {}
         notes: list[str] = []
         retry: list[str] = []
+        unreliable = 0
 
         for start in range(0, len(names), chunk_size):
             if monotonic() > deadline:
@@ -1668,7 +1693,15 @@ class ZTERouterAPI:
                 )
                 return found, notes
             chunk = names[start : start + chunk_size]
-            answered = await self._probe_chunk(chunk)
+            answered = await self._probe_chunk(chunk, canary=canary)
+            if answered is _SESSION_LOST:
+                # The canary went silent: this chunk was read without a
+                # session, so every name in it came back blank for a reason
+                # that has nothing to do with the firmware. Recording it as
+                # "not reported" would be the lie discovery exists to avoid.
+                unreliable += len(chunk)
+                retry.extend(chunk)
+                continue
             if answered is None:
                 retry.extend(chunk)
                 continue
@@ -1683,23 +1716,36 @@ class ZTERouterAPI:
             )
             retry = retry[:DISCOVERY_REPROBE_LIMIT]
 
+        if unreliable:
+            notes.append(f"{unreliable} names read without a session and re-probed")
+
         for name in retry:
             if monotonic() > deadline:
                 notes.append("budget exhausted during single-name re-probe")
                 break
-            answered = await self._probe_chunk([name])
-            if answered:
+            answered = await self._probe_chunk([name], canary=canary)
+            if answered and answered is not _SESSION_LOST:
                 found.update(answered)
         if retry:
             notes.append(f"{len(retry)} names re-probed singly")
 
         return found, notes
 
-    async def _probe_chunk(self, chunk: list[str]) -> dict[str, str] | None:
-        """Read one chunk. `None` means it failed; `{}` means it answered blank."""
+    async def _probe_chunk(
+        self, chunk: list[str], canary: str | None = None
+    ) -> dict[str, str] | None:
+        """Read one chunk.
+
+        `None` means the request failed, `{}` that it answered blank, and
+        `_SESSION_LOST` that the canary went silent — the chunk was read
+        without a session and says nothing about the firmware.
+        """
+        request = list(chunk)
+        if canary and canary not in request:
+            request.append(canary)
         path = (
             "goform/goform_get_cmd_process?multi_data=1&isTest=false"
-            f"&sms_received_flag_flag=0&cmd={','.join(chunk)}"
+            f"&sms_received_flag_flag=0&cmd={','.join(request)}"
         )
         try:
             payload = await self._request(
@@ -1713,13 +1759,18 @@ class ZTERouterAPI:
             return None
         if not isinstance(payload, dict):
             return None
+        # The canary is a key this device answered moments ago and that needs
+        # a session. Silent here means the chunk was read unauthenticated, so
+        # every blank in it is about the session and not about the firmware.
+        if canary and not payload.get(canary):
+            return _SESSION_LOST
         # `result` is the key a `goform` response carries its outcome in, and
         # a refused chunk echoes it back. It is not a router field, and
         # harvesting it would publish `failure` as though it were telemetry.
         return {
             k: v
             for k, v in payload.items()
-            if isinstance(v, str) and v and k not in _NOT_ROUTER_FIELDS
+            if isinstance(v, str) and v and k not in _NOT_ROUTER_FIELDS and k != canary
         }
 
     async def run_discovery(self, timeout_sec: int | None = None) -> dict[str, Any]:
@@ -1733,15 +1784,30 @@ class ZTERouterAPI:
         deadline = monotonic() + DISCOVERY_BUDGET_SECONDS
         result: dict[str, Any] = {"notes": [], "values": {}}
         try:
+            # Always a fresh session, never the one we happen to hold.
+            # `session_active` is a flag, not a fact: the router can discard a
+            # session without telling us, and the probe suppresses the
+            # classification that would otherwise discover it. A pass run that
+            # way answered 3 names instead of 90 and still reported the
+            # session alive at the end, recording 559 names as "this firmware
+            # does not report these" when the truth was "we were not logged
+            # in".
+            #
             # The user pressed Download Diagnostics, which authorises using
-            # the router. Logging in evicts whoever holds the single session
-            # this hardware permits, and that is acceptable — declining to
-            # log in would return less exactly when the download matters most.
-            if self.session_active:
-                result["session"] = "existing"
-            else:
-                await self.login(timeout_sec=timeout_sec)
-                result["session"] = "fresh login"
+            # the router. This evicts whoever holds the single session the
+            # hardware permits, and four requests is a cheap price for a
+            # starting state that is known rather than assumed.
+            await self.logout()
+            await self.login(timeout_sec=timeout_sec)
+            result["session"] = "fresh login"
+
+            # A name this device answers *now*, carried in every chunk so a
+            # session lost partway is caught where it happens. Chosen from the
+            # device's own response rather than hardcoded: a fixed name would
+            # be an assumption about one model, which is the class of mistake
+            # this release keeps unpicking.
+            canary = await self._pick_canary(timeout_sec)
+            result["canary"] = canary or "unavailable"
 
             mined, notes = await self.mine_candidate_names(timeout_sec=timeout_sec)
             result["notes"].extend(notes)
@@ -1755,10 +1821,16 @@ class ZTERouterAPI:
             # appear in the mined artefact at all, so the two sources barely
             # overlap and both are needed.
             static_found, static_notes = await self.probe_names(
-                static, chunk_size=DISCOVERY_CHUNK_SIZE, deadline=deadline
+                static,
+                chunk_size=DISCOVERY_CHUNK_SIZE,
+                deadline=deadline,
+                canary=canary,
             )
             mined_found, mined_notes = await self.probe_names(
-                unknown, chunk_size=MINED_CHUNK_SIZE, deadline=deadline
+                unknown,
+                chunk_size=MINED_CHUNK_SIZE,
+                deadline=deadline,
+                canary=canary,
             )
             result["notes"].extend(static_notes + mined_notes)
             result["values"] = {**static_found, **mined_found}

@@ -728,17 +728,29 @@ async def test_run_discovery_logs_in_when_no_session_is_active(mock_aiohttp_clie
 
 
 @pytest.mark.asyncio
-async def test_run_discovery_reuses_a_live_session(mock_aiohttp_client):
-    """No reason to evict anyone when we already hold the session."""
+async def test_run_discovery_always_starts_a_fresh_session(mock_aiohttp_client):
+    """`session_active` is a flag, not a fact.
+
+    The router can discard a session without telling us, and the probe
+    suppresses the classification that would otherwise discover it. A pass run
+    on a discarded session answered 3 names instead of 90 and still reported
+    the session alive at the end.
+    """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data={})
 
-    result = await api.run_discovery()
+    with (
+        patch.object(api, "logout", AsyncMock()) as logout,
+        patch.object(api, "login", AsyncMock()) as login,
+    ):
+        result = await api.run_discovery()
 
-    assert result["session"] == "existing"
+    assert result["session"] == "fresh login"
+    logout.assert_awaited_once()
+    login.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -832,7 +844,7 @@ async def test_the_budget_stops_the_single_name_reprobe_too(mock_aiohttp_client)
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
-    async def _fail_then_stall(chunk):
+    async def _fail_then_stall(chunk, canary=None):
         # The first chunk fails, queueing its names; by the time the re-probe
         # starts the deadline has passed.
         await asyncio.sleep(0.05)
@@ -1021,7 +1033,11 @@ async def test_probed_names_that_answered_nothing_are_published(
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data={})
 
-    result = await api.run_discovery()
+    with (
+        patch.object(api, "logout", AsyncMock()),
+        patch.object(api, "login", AsyncMock()),
+    ):
+        result = await api.run_discovery()
 
     assert "probed_no_answer" in result
     assert all(name not in result["values"] for name in result["probed_no_answer"])
@@ -1058,7 +1074,7 @@ async def test_the_single_name_reprobe_is_capped(mock_aiohttp_client):
     names = [f"a_name_{i:04d}" for i in range(DISCOVERY_REPROBE_LIMIT * 2)]
     probed: list[list[str]] = []
 
-    async def _record(chunk):
+    async def _record(chunk, canary=None):
         probed.append(chunk)
         return {}
 
@@ -1182,9 +1198,15 @@ async def test_the_session_is_checked_after_a_discovery_pass(mock_aiohttp_client
         json_data={_CORE_PARAMS[0]: "value", "wan_connect_status": "connected"}
     )
 
-    result = await api.run_discovery()
+    with (
+        patch.object(api, "logout", AsyncMock()),
+        patch.object(api, "login", AsyncMock()),
+    ):
+        result = await api.run_discovery()
 
     assert result["session_alive_after"] is True
+    # The canary is chosen from what the device answered, never hardcoded.
+    assert result["canary"] == _CORE_PARAMS[0]
 
 
 @pytest.mark.asyncio
@@ -1197,7 +1219,126 @@ async def test_a_dead_session_after_the_pass_is_recorded_not_raised(
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
-    with patch.object(api, "get_params", side_effect=OSError("gone")):
+    with (
+        patch.object(api, "logout", AsyncMock()),
+        patch.object(api, "login", AsyncMock()),
+        patch.object(api, "get_params", side_effect=OSError("gone")),
+    ):
         result = await api.run_discovery()
 
     assert result["session_alive_after"] is False
+
+
+# ---------------------------------------------------------------------------
+# A pass must never be silently degraded (v3.3.9-dev5)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_chunk_read_without_a_session_is_not_recorded_as_absent(
+    mock_aiohttp_client,
+):
+    """The defect this closes, from two downloads taken a minute apart.
+
+    One answered 3 names and the other 90, from the same device with the same
+    code. The first ran on a session the router had discarded: every chunk
+    came back blank, and with classification suppressed nothing noticed. It
+    recorded 559 names as "this firmware does not report these" when the truth
+    was "we were not logged in".
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    # The canary is blank, which is what an unauthenticated read looks like.
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"a_one": "", "b_two": "", "lte_rsrp": ""}
+    )
+
+    found, notes = await api.probe_names(
+        ["a_one", "b_two"], chunk_size=2, canary="lte_rsrp"
+    )
+
+    assert found == {}
+    assert any("without a session" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_a_live_canary_lets_a_blank_chunk_stand(mock_aiohttp_client):
+    """A blank answer beside a live canary is a real answer about the firmware."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"a_one": "", "b_two": "", "lte_rsrp": "-96"}
+    )
+
+    found, notes = await api.probe_names(
+        ["a_one", "b_two"], chunk_size=2, canary="lte_rsrp"
+    )
+
+    assert found == {}
+    assert not any("without a session" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_the_canary_is_never_published_as_a_discovered_value(
+    mock_aiohttp_client,
+):
+    """It rides in every chunk and is not part of the answer."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"a_one": "20", "lte_rsrp": "-96"}
+    )
+
+    found, _notes = await api.probe_names(["a_one"], chunk_size=1, canary="lte_rsrp")
+
+    assert found == {"a_one": "20"}
+
+
+@pytest.mark.asyncio
+async def test_no_canary_is_recorded_rather_than_assumed(mock_aiohttp_client):
+    """A device answering almost nothing has no canary to offer.
+
+    Recorded, because a pass without one cannot detect a session lost partway
+    and a reader should know that.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data=dict.fromkeys(_CORE_PARAMS, "")
+    )
+
+    with (
+        patch.object(api, "logout", AsyncMock()),
+        patch.object(api, "login", AsyncMock()),
+    ):
+        result = await api.run_discovery()
+
+    assert result["canary"] == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_an_unauthenticated_key_is_never_chosen_as_the_canary(
+    mock_aiohttp_client,
+):
+    """A key the device answers without a session proves nothing about one."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    api.unauthenticated_keys = frozenset({"imei", "model_name"})
+    payload = dict.fromkeys(_CORE_PARAMS, "")
+    payload["imei"] = "864155042229309"
+    payload["signalbar"] = "4"
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=payload)
+
+    canary = await api._pick_canary(None)
+
+    assert canary == "signalbar"

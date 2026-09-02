@@ -5,7 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.9-dev4\] - 2026-09-02 - Discovery Probes Are Not Session Evidence](#339-dev4---2026-09-02---discovery-probes-are-not-session-evidence)
+  - [\[3.3.9-dev5\] - 2026-09-02 - Discovery Pass Fresh Login State; Per-Chunk Canary Verification](#339-dev5---2026-09-02---discovery-pass-fresh-login-state-per-chunk-canary-verification)
+  - [\[3.3.9-dev4\] - 2026-09-02 - Diagnostic Download Time Reduced from 60s to 6s; False Re-Login Fix](#339-dev4---2026-09-02---diagnostic-download-time-reduced-from-60s-to-6s-false-re-login-fix)
   - [\[3.3.9-dev3\] - 2026-09-01 - Write Commands Excluded From Probing](#339-dev3---2026-09-01---write-commands-excluded-from-probing)
   - [\[3.3.9-dev2\] - 2026-09-01 - Wider Web UI Extraction; Unanswered Parameter Diagnostics](#339-dev2---2026-09-01---wider-web-ui-extraction-unanswered-parameter-diagnostics)
   - [\[3.3.9-dev1\] - 2026-09-01 - Batch Reads Split By URL Budget](#339-dev1---2026-09-01---batch-reads-split-by-url-budget)
@@ -211,7 +212,33 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.9-dev4] - 2026-09-02 - Discovery Probes Are Not Session Evidence
+## [3.3.9-dev5] - 2026-09-02 - Discovery Pass Fresh Login State; Per-Chunk Canary Verification
+
+### Summary
+
+Two downloads taken a minute apart from the same device differed by 6 kB. One answered 3 names, the other 90. The first ran on a session the router had already discarded: with classification suppressed since dev4, every blank chunk read as "this firmware does not report these" rather than "we were not logged in", and it recorded 559 names that way. The `session_alive_after` check added in dev4 reported `True` for it, because a classified read at the end re-establishes the session and proves nothing about the pass.
+
+### Fixed
+
+- **Every pass now begins with an explicit logout and a fresh login.** `session_active` is a flag, not a fact — the router can discard a session without saying so, and the probe suppresses the classification that would otherwise find out. Four requests buy a starting state that is known rather than assumed, and a diagnostics download is a deliberate, infrequent act where that trade is worth making. Reproduced and confirmed: a pass started from a deliberately invalidated session answered 25 names before this change and 90 after.
+- **Every chunk carries a canary.** A name this device answered moments ago, needing a session — chosen from its own response rather than hardcoded, because a fixed name would be an assumption about one model. When the canary comes back blank the chunk was read unauthenticated, so its names are re-probed instead of being recorded as absent. Measured on the reference MC7010: 16 names caught that way in a healthy pass.
+- **A device with no canary to offer is recorded, not assumed.** One that answers almost nothing has no key that proves a session, and a reader should know a pass could not detect a session lost partway.
+
+### Changed
+
+- **`discovery.session` always reads `fresh login`.** The `existing` case is gone with the reuse it described.
+- **`_probe_chunk` distinguishes three outcomes** — the request failed, it answered blank, or the canary went silent. The last must never be recorded as a firmware that does not report those names.
+
+### Testing
+
+- 1121 tests, 100% branch coverage. New: a chunk read without a session is not recorded as absent; a live canary lets a blank chunk stand; the canary is never published as a discovered value; no canary is recorded rather than assumed; an unauthenticated key is never chosen as the canary.
+- **Hardware.** A healthy pass and a deliberately sabotaged one now both answer 90 names in about 6 seconds.
+
+### Notes
+
+The mechanism behind the original 01:11 download is confirmed in class and not in particulars. A router refusing reads after a reload, or rate-limiting the setup sequence, would leave the same fingerprint as a discarded session, and the file cannot separate them. Both fixes are chosen not to depend on which it was.
+
+## [3.3.9-dev4] - 2026-09-02 - Diagnostic Download Time Reduced from 60s to 6s; False Re-Login Fix
 
 ### Summary
 
