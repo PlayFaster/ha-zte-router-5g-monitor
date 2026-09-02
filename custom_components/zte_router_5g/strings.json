@@ -95,6 +95,24 @@
       "data_volume_alert_percent": {
         "name": "Alert Threshold"
       },
+      "signal_5g_rsrp_antenna_1": {
+        "name": "5G RSRP Antenna 1"
+      },
+      "signal_5g_rsrp_antenna_2": {
+        "name": "5G RSRP Antenna 2"
+      },
+      "signal_ca_scell_rsrp": {
+        "name": "CA Secondary Cell RSRP"
+      },
+      "signal_ca_scell_rsrq": {
+        "name": "CA Secondary Cell RSRQ"
+      },
+      "signal_ca_scell_rssi": {
+        "name": "CA Secondary Cell RSSI"
+      },
+      "signal_ca_scell_snr": {
+        "name": "CA Secondary Cell SNR"
+      },
       "signal_cell_id": {
         "name": "Cell ID"
       },
@@ -158,8 +176,14 @@
       "signal_nr5g_action_channel": {
         "name": "5G Active Channel"
       },
+      "signal_nr5g_nsa_band_lock": {
+        "name": "5G NSA Band Lock"
+      },
       "signal_nr5g_pci": {
         "name": "5G PCI"
+      },
+      "signal_nr5g_sa_band_lock": {
+        "name": "5G SA Band Lock"
       },
       "signal_ppp_status": {
         "name": "Bridge Mode"
@@ -169,6 +193,9 @@
       },
       "signal_rmnc": {
         "name": "Roaming MNC"
+      },
+      "signal_roaming_state": {
+        "name": "Roaming State"
       },
       "signal_rscp": {
         "name": "Legacy RSCP"
@@ -221,6 +248,9 @@
       "system_battery_value": {
         "name": "Battery"
       },
+      "system_connection_failure_count": {
+        "name": "Connection Failure Count"
+      },
       "system_device_uptime": {
         "name": "Device Uptime"
       },
@@ -244,6 +274,9 @@
       },
       "system_model_name": {
         "name": "Model Name"
+      },
+      "system_modem_state": {
+        "name": "Modem State"
       },
       "system_opms_wan_auto_mode": {
         "name": "WAN Fallback Mode"
@@ -272,11 +305,20 @@
       "system_sim_imsi": {
         "name": "SIM IMSI"
       },
+      "system_sim_pin_attempts": {
+        "name": "SIM PIN Attempts Remaining"
+      },
+      "system_sim_puk_attempts": {
+        "name": "SIM PUK Attempts Remaining"
+      },
       "system_sntp_server": {
         "name": "Time Server (SNTP)"
       },
       "system_sntp_timezone": {
         "name": "Router Timezone"
+      },
+      "system_upgrade_result": {
+        "name": "Firmware Update Result"
       },
       "system_uptime_duration": {
         "name": "Uptime Duration"
@@ -303,26 +345,29 @@
       "signal_best_connection": {
         "name": "Best Connection"
       },
+      "sms_storage_full": {
+        "name": "SMS Storage Full"
+      },
+      "system_integration_health": {
+        "name": "Integration Health"
+      },
+      "system_operator_provisioned": {
+        "name": "Operator Provisioned"
+      },
       "system_reboot_schedule": {
         "name": "Reboot Schedule"
-      },
-      "system_upnp_enabled": {
-        "name": "UPnP Enabled"
       },
       "system_sip_alg_enabled": {
         "name": "SIP ALG Enabled"
       },
-      "system_integration_health": {
-        "name": "Integration Health"
+      "system_upnp_enabled": {
+        "name": "UPnP Enabled"
       },
       "system_web_sleep": {
         "name": "Web Page Sleep"
       },
       "system_web_wake": {
         "name": "Web Page Auto-Wake"
-      },
-      "sms_storage_full": {
-        "name": "SMS Storage Full"
       }
     },
     "switch": {

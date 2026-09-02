@@ -85,6 +85,21 @@ ENDPOINT_SMS_MESSAGES = "sms_messages"
 # at ~2048 characters; optional because it carries only diagnostics and
 # disabled-by-default entities, so a failure must not blank Signal and Data.
 ENDPOINT_EXTENDED = "extended_data"
+ENDPOINT_PROVISIONING = "provisioning"
+
+# How often the operator-provisioning probe runs. A refusal replaces the whole
+# response, so this read can never share a request with anything else and costs
+# one round trip whenever it fires. Gated on elapsed time rather than a poll
+# count, following `UPTIME_WRITE_INTERVAL`: a count behaves differently for
+# every user, since twenty polls is ten minutes at a 30-second interval and
+# over five hours at 960.
+PROVISIONING_READ_INTERVAL = timedelta(hours=1)
+
+# The key the probe reads. Declined by an operator-supplied MC7010 and answered
+# plainly by a self-purchased MC888 Pro, which is the asymmetry the sensor
+# reports. Any of the eleven declined names would serve; this one is a plain
+# configuration string rather than a credential.
+PROVISIONING_PROBE_KEY = "tr069_ServerURL"
 
 # Every repair this integration can raise. The names double as `translation_key`
 # values, which stay bare; only the registry **id** carries the entry (see
@@ -178,6 +193,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._store: Store[dict[str, Any]] | None = None
         self._stored_last_uptime: int | None = None
         self._last_counter_write: datetime | None = None
+        self._last_provisioning_read: datetime | None = None
+        # None until the first successful read, so the sensor reports unknown
+        # rather than a confident guess on a device that has never answered.
+        self.provisioning_restricted: bool | None = None
         self.last_sms_timestamp: str | None = None
         self.fired_sms_hashes: set[str] = set()
 
@@ -589,6 +608,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                 self._record_health_success(data)
                 self._check_new_sms(messages)
+                await self._read_provisioning(forced=forced)
                 return data
 
         except TimeoutError as err:
@@ -951,6 +971,40 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             lambda: {"last_uptime": seconds}, UPTIME_SAVE_DELAY
         )
 
+    async def _read_provisioning(self, *, forced: bool) -> None:
+        """Read whether the router declines its provisioning configuration.
+
+        One request, and it cannot ride an existing one: a refusal replaces the
+        entire response, so a declined name shares a request with nothing. It
+        runs hourly, and on any forced refresh — Refresh Now is what a user
+        presses after changing something, so it is the right moment to re-ask.
+
+        The result is held on the coordinator rather than merged into
+        `coordinator.data`. That dict means "what the router said" and feeds the
+        populated counts, the drift check and the sparse-payload check; a
+        synthetic key would skew all three.
+        """
+        now = dt_util.now()
+        if (
+            not forced
+            and self._last_provisioning_read is not None
+            and now - self._last_provisioning_read < PROVISIONING_READ_INTERVAL
+        ):
+            return
+
+        async def _probe() -> bool:
+            answer = await self.api.get_params([PROVISIONING_PROBE_KEY])
+            # A declined request carries none of the requested keys. A present
+            # name — populated or empty — means the router served it.
+            return PROVISIONING_PROBE_KEY not in answer
+
+        restricted = await self._fetch_optional(
+            ENDPOINT_PROVISIONING, _probe, self.provisioning_restricted
+        )
+        if restricted is not None:
+            self.provisioning_restricted = bool(restricted)
+            self._last_provisioning_read = now
+
     def _degraded_endpoints(self) -> list[str]:
         """Return the friendly names of endpoints that have exhausted strikes.
 
@@ -965,10 +1019,14 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             ENDPOINT_SMS_MESSAGES: "SMS messages",
             ENDPOINT_EXTENDED: "Extended diagnostics",
         }
+        # `ENDPOINT_PROVISIONING` is deliberately absent from the map and
+        # excluded below. It feeds one diagnostic sensor that is disabled by
+        # default, and reporting the integration degraded because an hourly
+        # curiosity failed would train users to ignore the health sensor.
         return [
             friendly.get(source, source)
             for source, failures in self._endpoint_failures.items()
-            if failures > FETCH_STRIKE_LIMIT
+            if failures > FETCH_STRIKE_LIMIT and source != ENDPOINT_PROVISIONING
         ]
 
     def _active_repairs(self, drift: bool) -> list[str]:

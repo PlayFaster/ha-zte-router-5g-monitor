@@ -120,6 +120,7 @@ Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower detail
 - **Detailed Signal Metrics**: SNR, RSRP, RSRQ and RSSI for both the 5G NR and the LTE anchor cell tower.
 - **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active bands. See the [Cell Tower Change Alert](#-cell-tower-change-alert) example.
 - **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use. See the [Signal Quality Alert](#-signal-quality-alert) example.
+- **Per-Carrier and Per-Antenna Detail** _(disabled by default)_: RSRP, RSRQ, SNR and RSSI for the aggregated secondary cell, RSRP for each of the two 5G receivers, and the 5G NSA and SA band locks.
 
 ![Signal Sensors](.github/images/zte_5g_signal_sensors.png)
 
@@ -169,6 +170,17 @@ They move independently, and that is the point:
 | **RSSI** (dBm) | > −65     | −65 to −75 | −75 to −85  | < −85  |
 
 RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
+
+#### More detail, if the headline numbers are not enough
+
+These are **disabled by default** — enable them from the device's Entities tab. Each carries an about note explaining what it shows.
+
+| Entity | Shows |
+| :-- | :-- |
+| `CA Secondary Cell RSRP`, `CA Secondary Cell RSRQ`, `CA Secondary Cell SNR`, `CA Secondary Cell RSSI` | The aggregated second carrier, separately from the primary. Its SNR is often the better of the two, which the headline `LTE SNR` does not show |
+| `5G RSRP Antenna 1`, `5G RSRP Antenna 2` | The two 5G receivers separately. A steady gap between them points at placement or an obstruction rather than at the network |
+| `5G NSA Band Lock`, `5G SA Band Lock` | Which 5G bands the router may use, alongside the existing `LTE Band Lock Mask` |
+| `Roaming State`, `Network Mode Config` | Whether the SIM is roaming, and whether the router picks its network mode itself |
 
 ---
 
@@ -315,6 +327,7 @@ Reboot router hardware directly from Home Assistant and monitor data integrity w
 
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
 - **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
+- **Router and SIM State**: **Operator Provisioned** reports whether the router refuses to hand over its remote-management (TR-069) settings, which is usual on an operator-supplied unit and explains why some settings cannot be changed locally. **Firmware Update Result** reports how the last update attempt ended. _Disabled by default_: **Modem State**, **Connection Failure Count**, and **SIM PIN Attempts Remaining** and **SIM PUK Attempts Remaining** — a locked SIM presents as no service, which otherwise reads as a coverage fault.
 
 | System Control | System Diagnostics |
 | :-: | :-: |
@@ -357,7 +370,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **92 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **111 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -367,11 +380,13 @@ This integration provides **92 entities** (depending on your firmware) organized
 
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
-| ⚙️ **System** | 53 | 22 Sensors, 6 Binary Sensors, 2 Switches, 2 Buttons, 1 Number | Firmware, IP Addresses, Uptime, **Integration Health**, Refresh Now, Reboot, Polling Controls | 21: Uptime Duration, IMEI, Battery, SIM IMSI, SIM ICCID, the five temperature sensors, Time Server (SNTP), Router Timezone, WAN Operating Mode, WAN Fallback Mode, APN Interface Version, ODU LED Switch, Reboot Schedule, UPnP Enabled, SIP ALG Enabled, Web Page Sleep, Web Page Auto-Wake |
-| 📶 **Signal** | 50 | 36 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 10: MDM MCC, MDM MNC, RMCC, RMNC, LTE Secondary Band & Bandwidth, Carrier Aggregation Secondary Cells, RSSI (legacy), RSCP (legacy), LTE Band Lock Mask |
-| 📈 **Data** | 19 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
+| ⚙️ **System** | 41 | 29 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, Refresh Now, Reboot, Polling Controls | 25, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM PIN and PUK Attempts Remaining |
+| 📶 **Signal** | 50 | 46 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 20, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, Roaming State, Network Mode Config, LTE Band Lock Mask |
+| 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
 | 🛠️ **Actions** | 4 | — | Send, Delete, Bulk-Delete and List SMS | — |
+
+> The full list, with the entity key and default state of every one, is in [`docs/all_sensors.md`](docs/all_sensors.md).
 
 ---
 
@@ -455,6 +470,9 @@ Home Assistant stores Long Term Statistics for numeric sensors that have a `stat
 | Monthly data usage (Sent, Received, Total) | Monitor data consumption month-over-month |
 | SMS counts (Unread, Total) | Track message volume over time |
 | Signal Bars | Coarse signal summary over time |
+| Secondary cell RSRP, RSRQ, SNR, RSSI _(disabled by default)_ | Same value as the primary metrics, for the aggregated carrier |
+| 5G RSRP Antenna 1 and 2 _(disabled by default)_ | Comparing the two receivers over time is what makes a placement problem visible |
+| Connection Failure Count _(disabled by default)_ | A rising count is only meaningful against its own history |
 
 The following sensors have **no LTS** to avoid unnecessary database growth:
 
@@ -466,6 +484,7 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 | Battery | Always 100% when plugged in |
 | Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
 | Projected Cycle Usage | An estimate of where the cycle ends up, useful now rather than as a history |
+| SIM PIN Attempts Remaining, SIM PUK Attempts Remaining | Moves only on a failed unlock — a count, not a trend |
 | Reset Day | A billing-cycle setting that changes infrequently |
 | Allowance | A configured cap, not a measurement |
 | Alert Threshold | Configuration setting; historical trend holds no analytical value |

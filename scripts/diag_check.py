@@ -604,13 +604,31 @@ def check_stability(
     # back blank, which follows the device's own live values, so it varies
     # legitimately between two passes a minute apart — measured at 198 and 190.
     # The counts below do not.
-    for phrase, label in (
-        ("read without a session", "names read without a session"),
-        ("declined by the router", "names declined by the router"),
-    ):
-        one = _note_count(first.get("discovery", {}), phrase)
-        two = _note_count(second.get("discovery", {}), phrase)
-        report.record(one == two, f"[4] {label} is stable", f"{one} then {two}")
+    one = _note_count(first.get("discovery", {}), "declined by the router")
+    two = _note_count(second.get("discovery", {}), "declined by the router")
+    report.record(
+        one == two, "[4] names declined by the router is stable", f"{one} then {two}"
+    )
+
+    # Not an equality check on names read without a session. A session lost
+    # partway is an environmental event — another client taking the router's
+    # single session, or a chunk timing out — and asserting two runs saw the
+    # same number of them tests the environment rather than this code. Measured
+    # over six spaced passes: one reported eight, five reported none, and all
+    # six answered the same 99 names with nothing left unestablished.
+    #
+    # The property that matters is that the pass survives it, which is what
+    # this asserts.
+    for label, download in (("first", first), ("second", second)):
+        discovery = download.get("discovery", {})
+        lost = _note_count(discovery, "read without a session")
+        if lost:
+            report.record(
+                not discovery.get("not_reprobed"),
+                f"[4] the {label} run recovered from losing its session",
+                f"{lost} names read without a session, "
+                f"{len(discovery.get('not_reprobed', []))} left unestablished",
+            )
 
 
 def _save(result: dict[str, Any], label: str, title: str) -> pathlib.Path:

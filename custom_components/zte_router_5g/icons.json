@@ -8,21 +8,24 @@
           "off": "mdi:signal-cellular-1"
         }
       },
-      "system_reboot_schedule": {
-        "default": "mdi:clock-check-outline"
-      },
-      "system_upnp_enabled": {
-        "default": "mdi:router"
-      },
-      "system_sip_alg_enabled": {
-        "default": "mdi:phone-voip"
-      },
       "system_integration_health": {
         "default": "mdi:heart-pulse",
         "state": {
           "on": "mdi:heart-broken",
           "off": "mdi:heart-pulse"
         }
+      },
+      "system_operator_provisioned": {
+        "default": "mdi:shield-lock-outline"
+      },
+      "system_reboot_schedule": {
+        "default": "mdi:clock-check-outline"
+      },
+      "system_sip_alg_enabled": {
+        "default": "mdi:phone-voip"
+      },
+      "system_upnp_enabled": {
+        "default": "mdi:router"
       },
       "system_web_sleep": {
         "default": "mdi:sleep"
@@ -73,6 +76,24 @@
       },
       "data_volume_alert_percent": {
         "default": "mdi:alert-outline"
+      },
+      "signal_5g_rsrp_antenna_1": {
+        "default": "mdi:antenna"
+      },
+      "signal_5g_rsrp_antenna_2": {
+        "default": "mdi:antenna"
+      },
+      "signal_ca_scell_rsrp": {
+        "default": "mdi:signal-cellular-2"
+      },
+      "signal_ca_scell_rsrq": {
+        "default": "mdi:signal-cellular-2"
+      },
+      "signal_ca_scell_rssi": {
+        "default": "mdi:signal-cellular-2"
+      },
+      "signal_ca_scell_snr": {
+        "default": "mdi:signal-cellular-2"
       },
       "signal_cell_id": {
         "default": "mdi:transmission-tower"
@@ -137,8 +158,14 @@
       "signal_nr5g_action_channel": {
         "default": "mdi:numeric"
       },
+      "signal_nr5g_nsa_band_lock": {
+        "default": "mdi:lock-outline"
+      },
       "signal_nr5g_pci": {
         "default": "mdi:transmission-tower"
+      },
+      "signal_nr5g_sa_band_lock": {
+        "default": "mdi:lock-outline"
       },
       "signal_ppp_status": {
         "default": "mdi:connection"
@@ -148,6 +175,9 @@
       },
       "signal_rmnc": {
         "default": "mdi:map-marker-outline"
+      },
+      "signal_roaming_state": {
+        "default": "mdi:earth"
       },
       "signal_rscp": {
         "default": "mdi:signal"
@@ -200,6 +230,9 @@
       "system_battery_value": {
         "default": "mdi:battery"
       },
+      "system_connection_failure_count": {
+        "default": "mdi:close-network"
+      },
       "system_device_uptime": {
         "default": "mdi:clock-outline"
       },
@@ -224,6 +257,9 @@
       "system_model_name": {
         "default": "mdi:router-wireless"
       },
+      "system_modem_state": {
+        "default": "mdi:router-wireless-settings"
+      },
       "system_opms_wan_auto_mode": {
         "default": "mdi:transit-connection-horizontal"
       },
@@ -236,11 +272,20 @@
       "system_sim_imsi": {
         "default": "mdi:sim"
       },
+      "system_sim_pin_attempts": {
+        "default": "mdi:sim"
+      },
+      "system_sim_puk_attempts": {
+        "default": "mdi:sim-alert"
+      },
       "system_sntp_server": {
         "default": "mdi:web-clock"
       },
       "system_sntp_timezone": {
         "default": "mdi:map-clock-outline"
+      },
+      "system_upgrade_result": {
+        "default": "mdi:package-variant-closed-check"
       },
       "system_wa_inner_version": {
         "default": "mdi:information-outline"

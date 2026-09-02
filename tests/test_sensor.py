@@ -1448,3 +1448,126 @@ def test_network_mode_config_reports_the_routers_own_setting() -> None:
     )
     assert description.value_fn({}) is None
     assert description.entity_registry_enabled_default is False
+
+
+# ---------------------------------------------------------------------------
+# Diagnostic sensors added in [3.3.9-dev12]
+# ---------------------------------------------------------------------------
+
+# The live MC7010 reading on 2026-09-02, one secondary carrier.
+_SCELL = "-89.1,-11.0,17.2,-58.1,0.0,2.0"
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("ca_scell_rsrp", -89.1),
+        ("ca_scell_rsrq", -11.0),
+        ("ca_scell_snr", 17.2),
+        ("ca_scell_rssi", -58.1),
+    ],
+)
+def test_the_secondary_carrier_fields_are_read_in_the_measured_order(
+    key: str, expected: float
+) -> None:
+    """The column order is measured, and the sensors must match it.
+
+    RSRQ, RSRP and RSSI are related by definition as
+    `RSRQ = RSRP - RSSI + 10*log10(N)`. Solving for N across twelve samples on
+    2026-09-02 gave 99.4 resource blocks with a spread of 2.3 - 100 RB, a
+    20 MHz carrier - for this assignment and no other. Fields five and six are
+    deliberately unpublished.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+
+    assert description.value_fn({"lte_multi_ca_scell_sig_info": _SCELL}) == expected
+
+
+def test_the_secondary_carrier_parser_reads_only_the_first_group() -> None:
+    """A device aggregating two secondary carriers reports two groups.
+
+    Nothing here reads past the first, but the parser must not assume there is
+    only ever one - a whole-string split would take the second carrier's RSRP
+    as this carrier's RSRQ.
+    """
+    two = "-89.1,-11.0,17.2,-58.1,0.0,2.0;-70.5,-8.0,20.1,-50.2,0.0,4.0"
+    description = next(d for d in SENSOR_TYPES if d.key == "ca_scell_rsrp")
+
+    assert description.value_fn({"lte_multi_ca_scell_sig_info": two}) == -89.1
+
+
+@pytest.mark.parametrize(
+    "raw", ["", "   ", "not,enough", "nonsense", ";", "a,b,c,d,e,f"]
+)
+def test_a_malformed_secondary_carrier_string_reports_nothing(raw: str) -> None:
+    """Absent, short and unparsable all report unknown rather than a number."""
+    description = next(d for d in SENSOR_TYPES if d.key == "ca_scell_rssi")
+
+    assert description.value_fn({"lte_multi_ca_scell_sig_info": raw}) is None
+    assert description.value_fn({}) is None
+
+
+@pytest.mark.parametrize(
+    ("key", "data", "expected"),
+    [
+        ("upgrade_result", {"upgrade_result": "error"}, "error"),
+        ("upgrade_result", {"upgrade_result": ""}, None),
+        ("5g_rsrp_antenna_1", {"5g_rx0_rsrp": "-97"}, -97.0),
+        ("5g_rsrp_antenna_2", {"5g_rx1_rsrp": "-95"}, -95.0),
+        ("sim_pin_attempts", {"pinnumber": "3"}, 3),
+        ("sim_puk_attempts", {"puknumber": "10"}, 10),
+        (
+            "modem_state",
+            {"modem_main_state": "modem_init_complete"},
+            "modem_init_complete",
+        ),
+        ("connection_failure_count", {"ppp_dial_conn_fail_counter": "0"}, 0),
+        ("roaming_state", {"simcard_roam": "Home"}, "Home"),
+        (
+            "nr5g_nsa_band_lock",
+            {"nr5g_nsa_band_lock": "1,3,7,28,77,78"},
+            "1,3,7,28,77,78",
+        ),
+        (
+            "nr5g_sa_band_lock",
+            {"nr5g_sa_band_lock": "1,3,7,20,28,38,77,78"},
+            "1,3,7,20,28,38,77,78",
+        ),
+    ],
+)
+def test_each_new_diagnostic_sensor_reads_its_live_value(
+    key: str, data: dict, expected: object
+) -> None:
+    """Every value here was read from the reference MC7010 on 2026-09-02."""
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+
+    assert description.value_fn(data) == expected
+
+
+def test_the_new_diagnostic_sensors_are_disabled_by_default() -> None:
+    """All but the firmware result, which reports a fault nothing else shows.
+
+    The reference device reads `error` while both existing firmware entities
+    report benign states, so that one is worth surfacing without the user
+    having to go looking for it.
+    """
+    off_by_default = {
+        "5g_rsrp_antenna_1",
+        "5g_rsrp_antenna_2",
+        "ca_scell_rsrp",
+        "ca_scell_rsrq",
+        "ca_scell_snr",
+        "ca_scell_rssi",
+        "sim_pin_attempts",
+        "sim_puk_attempts",
+        "modem_state",
+        "connection_failure_count",
+        "roaming_state",
+        "nr5g_nsa_band_lock",
+        "nr5g_sa_band_lock",
+    }
+    by_key = {d.key: d for d in SENSOR_TYPES}
+
+    for key in off_by_default:
+        assert by_key[key].entity_registry_enabled_default is False, key
+    assert by_key["upgrade_result"].entity_registry_enabled_default is not False

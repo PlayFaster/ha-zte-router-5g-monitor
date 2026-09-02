@@ -229,6 +229,37 @@ _ALIAS_LIMIT_SWITCH: Final = (
 )
 
 
+def _scell_field(data: dict[str, Any], index: int) -> float | None:
+    """Return one field of the first secondary carrier, or None.
+
+    `lte_multi_ca_scell_sig_info` carries one comma-separated group per
+    secondary carrier, semicolon-terminated. A live MC7010 reading with one
+    carrier: `-89.1,-11.0,17.2,-58.1,0.0,2.0`.
+
+    Fields one to four are RSRP, RSRQ, SNR and RSSI. That order is measured
+    rather than inferred: RSRQ, RSRP and RSSI are related by definition as
+    `RSRQ = RSRP - RSSI + 10*log10(N)`, and solving for N across twelve samples
+    on 2026-09-02 gave 99.4 resource blocks with a spread of 2.3 - 100 RB, a
+    20 MHz carrier. No other assignment yields a physically possible N, and the
+    ranges separate RSRQ from RSSI, which the identity alone cannot. Fields
+    five and six are not published: one is constant at 0 and the other was seen
+    changing from 2 to 4, and neither is understood.
+
+    The first group only. A device aggregating two secondary carriers reports
+    two groups, and reading past the first would need entities that do not
+    exist - but the parser must not assume there is only ever one, which is why
+    the split is on `;` rather than a whole-string parse.
+    """
+    raw = data.get("lte_multi_ca_scell_sig_info")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    first = raw.strip().rstrip(";").split(";")[0]
+    fields = first.split(",")
+    if len(fields) <= index:
+        return None
+    return _safe_float(fields[index])
+
+
 def _clear_day(data: dict[str, Any]) -> int | None:
     """Return the monthly counter reset day, 1-31, or None.
 
@@ -1159,6 +1190,223 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="signal",
         value_fn=lambda data: get_first(data, _ALIAS_NET_SELECT_MODE),
+    ),
+    ZTESensorEntityDescription(
+        key="upgrade_result",
+        about=(
+            "The outcome of the router's last firmware update attempt. Reads "
+            "error where an update was tried and did not complete, which the "
+            "update-state entities do not show."
+        ),
+        translation_key="system_upgrade_result",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        value_fn=lambda data: data.get("upgrade_result") or None,
+    ),
+    ZTESensorEntityDescription(
+        key="5g_rsrp_antenna_1",
+        about=(
+            "Reference signal strength at the first 5G receiver, in dBm. The "
+            "two receivers see the same cell through different antennas, so a "
+            "persistent gap between them points at placement or an obstruction "
+            "rather than at the network."
+        ),
+        translation_key="signal_5g_rsrp_antenna_1",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        suggested_display_precision=0,
+        min_limit=-140,
+        max_limit=-40,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("5g_rx0_rsrp")),
+    ),
+    ZTESensorEntityDescription(
+        key="5g_rsrp_antenna_2",
+        about=(
+            "Reference signal strength at the second 5G receiver, in dBm. "
+            "Compare with the first: a steady difference is an antenna or "
+            "placement effect, not a change in coverage."
+        ),
+        translation_key="signal_5g_rsrp_antenna_2",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        suggested_display_precision=0,
+        min_limit=-140,
+        max_limit=-40,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("5g_rx1_rsrp")),
+    ),
+    ZTESensorEntityDescription(
+        key="ca_scell_rsrp",
+        about=(
+            "Reference signal strength on the aggregated secondary carrier, in "
+            "dBm. Carrier aggregation adds a second band alongside the primary "
+            "one; this is how strong that second band is."
+        ),
+        translation_key="signal_ca_scell_rsrp",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        suggested_display_precision=0,
+        min_limit=-140,
+        max_limit=-40,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _scell_field(data, 0),
+    ),
+    ZTESensorEntityDescription(
+        key="ca_scell_rsrq",
+        about=(
+            "Reference signal quality on the aggregated secondary carrier, in "
+            "dB. Typically -10 or better is good, below -15 poor."
+        ),
+        translation_key="signal_ca_scell_rsrq",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        suggested_display_precision=1,
+        min_limit=-40,
+        max_limit=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _scell_field(data, 1),
+    ),
+    ZTESensorEntityDescription(
+        key="ca_scell_snr",
+        about=(
+            "Signal-to-noise ratio on the aggregated secondary carrier, in dB. "
+            "Worth comparing against the primary: the secondary band often "
+            "carries the cleaner signal, which the headline SNR does not show."
+        ),
+        translation_key="signal_ca_scell_snr",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        suggested_display_precision=1,
+        min_limit=-20,
+        max_limit=50,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _scell_field(data, 2),
+    ),
+    ZTESensorEntityDescription(
+        key="ca_scell_rssi",
+        about=(
+            "Total received power on the aggregated secondary carrier, in dBm - "
+            "wanted signal, interference and noise together."
+        ),
+        translation_key="signal_ca_scell_rssi",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        suggested_display_precision=0,
+        min_limit=-120,
+        max_limit=-20,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _scell_field(data, 3),
+    ),
+    ZTESensorEntityDescription(
+        key="sim_pin_attempts",
+        about=(
+            "PIN attempts left before the SIM locks and needs the PUK. A SIM "
+            "that has locked presents as no service, which otherwise looks "
+            "like a coverage or connection fault."
+        ),
+        translation_key="system_sim_pin_attempts",
+        min_limit=0,
+        max_limit=10,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_int(data.get("pinnumber")),
+    ),
+    ZTESensorEntityDescription(
+        key="sim_puk_attempts",
+        about=(
+            "PUK attempts left before the SIM is permanently blocked and has "
+            "to be replaced by the operator."
+        ),
+        translation_key="system_sim_puk_attempts",
+        min_limit=0,
+        max_limit=10,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_int(data.get("puknumber")),
+    ),
+    ZTESensorEntityDescription(
+        key="modem_state",
+        about=(
+            "What the modem itself reports about its own startup, separately "
+            "from whether a connection is up. Useful when the router answers "
+            "but nothing is passing traffic."
+        ),
+        translation_key="system_modem_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: data.get("modem_main_state") or None,
+    ),
+    ZTESensorEntityDescription(
+        key="connection_failure_count",
+        about=(
+            "How many times the router has failed to establish the mobile data "
+            "connection since it last restarted. A rising count with the "
+            "connection apparently up means it is dropping and recovering."
+        ),
+        translation_key="system_connection_failure_count",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        min_limit=0,
+        max_limit=10000,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_int(data.get("ppp_dial_conn_fail_counter")),
+    ),
+    ZTESensorEntityDescription(
+        key="roaming_state",
+        about=(
+            "Whether the SIM is on its home network or roaming. Roaming can "
+            "carry different charges and different speed limits."
+        ),
+        translation_key="signal_roaming_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: data.get("simcard_roam") or None,
+    ),
+    ZTESensorEntityDescription(
+        key="nr5g_nsa_band_lock",
+        about=(
+            "The 5G bands the router may use in non-standalone mode, where 5G "
+            "runs alongside a 4G anchor. The counterpart to LTE Band Lock."
+        ),
+        translation_key="signal_nr5g_nsa_band_lock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: data.get("nr5g_nsa_band_lock") or None,
+    ),
+    ZTESensorEntityDescription(
+        key="nr5g_sa_band_lock",
+        about=(
+            "The 5G bands the router may use in standalone mode, where 5G runs "
+            "without a 4G anchor."
+        ),
+        translation_key="signal_nr5g_sa_band_lock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: data.get("nr5g_sa_band_lock") or None,
     ),
     ZTESensorEntityDescription(
         key="ppp_status",

@@ -273,7 +273,7 @@ async def check_session_assumptions(
     after_login = (await api._request("GET", RD_PATH, _retry=False))["RD"]
     report.captured["rd_survives_relogin"] = after_login == live
     print(
-        f"  {_yellow('\u25cf  NOTE')}  RD "
+        f"  {_dim('\u25cf  note')}  RD "
         f"{'survives' if after_login == live else 'changes on'} re-login "
         + _dim("(observation only, nothing depends on it)")
     )
@@ -363,6 +363,22 @@ async def _probe_cookieless(
     populated = sorted(k for k, v in payload.items() if v != "")
     absent = sorted(set(params) - set(payload))
     expected = sorted(_UNAUTHENTICATED_KEYS & set(params))
+    # Only one direction of this comparison can be wrong.
+    #
+    # The device serving *more* than the constant names is the designed state:
+    # `_UNAUTHENTICATED_KEYS` is a deliberate floor, five names measured on one
+    # MC7010, and the per-device measurement is what the integration uses. This
+    # device has served `current_upgrade_state` beyond the constant since 3.3.8
+    # and `modem_main_state` since 3.3.9-dev12.
+    #
+    # The device serving *fewer* is a fault: the constant would be claiming a
+    # key needs no session where this firmware requires one, which weakens
+    # expiry detection anywhere the per-device measurement did not run.
+    #
+    # Printing a verdict on the harmless direction is what this used to do, in
+    # a colour that means "act on this", for a comparison with no failing
+    # outcome.
+    withheld = sorted(set(expected) - set(populated))
     matches = populated == expected
 
     report.captured[key] = {
@@ -374,13 +390,19 @@ async def _probe_cookieless(
         "matches_constant": matches,
     }
 
-    verdict = _green("agrees") if matches else _yellow("DISAGREES")
-    print(
-        f"  {label}: {len(payload)}/{len(params)} keys returned, "
-        f"{len(absent)} absent — {verdict}"
+    report.record(
+        not withheld,
+        f"the {label} batch serves every key the constant claims",
+        f"withheld: {withheld}" if withheld else f"all {len(expected)}",
     )
-    print(f"      populated: {populated or '(none)'}")
-    print(f"      constant : {expected or '(none)'}")
+    extra = sorted(set(populated) - set(expected))
+    print(
+        _dim(
+            f"      {len(payload)}/{len(params)} keys returned, {len(absent)} "
+            f"absent; {len(extra)} served beyond the constant"
+            + (f" {extra}" if extra else "")
+        )
+    )
 
 
 async def _capture_cookieless_batch(
@@ -1592,7 +1614,10 @@ def _warn_about_competing_sessions() -> None:
     Hence a warning rather than a check — the competitor is usually on another
     machine, and nothing reachable from here can see it.
     """
-    print(_yellow("\n  !  This run needs the router to itself."))
+    # Cyan, not yellow. This is a precondition stated before anything runs,
+    # not a finding - yellow means act on this, and there is nothing to act
+    # on once the reader has the router to themselves.
+    print(_cyan("\n  i  This run needs the router to itself."))
     print(
         _dim(
             "     The router hands the session to whoever logged in last, so"

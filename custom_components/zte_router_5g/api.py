@@ -209,6 +209,10 @@ _CORE_PARAMS: list[str] = [
     "flux_clear_date",
     "flux_auto_clear_flow_data_switch",
     "flux_data_volume_limit_switch",
+    # Firmware update outcome, distinct from the two update-state keys already
+    # here: those report whether an update is available or running, this
+    # reports whether the last attempt completed.
+    "upgrade_result",
 ]
 
 _EXTENDED_PARAMS: list[str] = [
@@ -265,6 +269,19 @@ _EXTENDED_PARAMS: list[str] = [
     "pm_sensor_mdm",
     "pm_modem_5g",
     "pm_sensor_5g",
+    # Diagnostic detail added in [3.3.9-dev12]. All disabled by default,
+    # so the cost on a device that answers them is one entry each in a
+    # request that already runs.
+    "5g_rx0_rsrp",
+    "5g_rx1_rsrp",
+    "lte_multi_ca_scell_sig_info",
+    "pinnumber",
+    "puknumber",
+    "modem_main_state",
+    "ppp_dial_conn_fail_counter",
+    "simcard_roam",
+    "nr5g_nsa_band_lock",
+    "nr5g_sa_band_lock",
 ]
 
 

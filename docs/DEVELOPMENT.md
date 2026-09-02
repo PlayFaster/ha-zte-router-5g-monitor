@@ -22,6 +22,16 @@ The integration follows the standard Home Assistant Custom Component pattern, op
 - **`number.py`**: Provides UI control over the `DataUpdateCoordinator` refresh interval with persistent storage in `ConfigEntry` options.
 - **`config_flow.py`**: Manages initial setup and reconfiguration via `OptionsFlow`, storing credentials in `entry.options`. Normalizes the host input (`_clean_host`) before storage, and on edit screens leaves credential fields blank (masked, never pre-filled) — restoring the stored password on a blank submit via `_merge_credentials`, so the password can be re-set without ever being displayed.
 
+#### The one read that is not part of the poll
+
+`coordinator._read_provisioning()` asks whether the router declines its own TR-069 settings, which is what the **Operator Provisioned** entity reports. Three things about it are deliberate and should not be tidied away.
+
+It cannot share a request. A refusal answers `{"result": "failure"}` and carries none of the requested keys, so a declined name in a shared request destroys every other name in it.
+
+It is gated on elapsed time, not a poll count, following `UPTIME_WRITE_INTERVAL`. Twenty polls is ten minutes at a 30-second interval and over five hours at 960, so a count would give different users different guarantees. It also fires on any forced refresh, because Refresh Now is what a user presses after changing something.
+
+Its result is held on the coordinator, never merged into `coordinator.data`. That dict means "what the router said" and feeds `data_populated`, the drift check and the sparse-payload check; a synthetic key would skew all three. And it is excluded from `_degraded_endpoints()` on purpose — reporting the whole integration degraded because an hourly diagnostic curiosity failed would train users to ignore the health sensor.
+
 ### Operator Tooling (`scripts/`)
 
 - **`hardware_check.py`**: exercises the write path against a real router and records what it answers. Not part of CI — it needs the hardware. Round-trips every safe write (including with the session deliberately invalidated), asserts the device assumptions the write path rests on, and captures observed payloads to `tests/fixtures/` with `--capture`. Run before a release and after any firmware update. See §5 for why the unit suite cannot do this job.

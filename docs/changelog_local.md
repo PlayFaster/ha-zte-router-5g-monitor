@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.9-dev12\] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported](#339-dev12---2026-09-02---fourteen-diagnostic-sensors-added-operator-provisioning-reported)
   - [\[3.3.9-dev11\] - 2026-09-02 - MC888 Parameter Spellings Supported; Two-Request Core Poll](#339-dev11---2026-09-02---mc888-parameter-spellings-supported-two-request-core-poll)
   - [\[3.3.9-dev10\] - 2026-09-02 - Diagnostic Download Declined Parameters Recorded; False Session Losses Removed](#339-dev10---2026-09-02---diagnostic-download-declined-parameters-recorded-false-session-losses-removed)
   - [\[3.3.9-dev9\] - 2026-09-02 - Diagnostic Download Yield 90 → 101; Capped Re-Probe False Absences Fixed](#339-dev9---2026-09-02---diagnostic-download-yield-90--101-capped-re-probe-false-absences-fixed)
@@ -216,6 +217,37 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.9-dev12] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported
+
+### Summary
+
+A diagnostics download from the reference MC7010 answers 137 keys that no entity reads. Most are static configuration a user sets once, but fourteen carry something they would act on, and one of them reports a fault the existing entities do not: `upgrade_result` reads `error` while both firmware-update sensors report benign states.
+
+### Added
+
+- **Operator Provisioned**, a diagnostic binary sensor on the System sub-device, enabled by default. On when the router declines to serve its remote-management (TR-069) settings, which is usual on an operator-supplied unit and is why some settings cannot be changed locally. Read hourly and on any forced refresh, because Refresh Now is what a user presses after changing something.
+- **Firmware Update Result** from `upgrade_result`, System, enabled by default.
+- **5G RSRP Antenna 1** and **Antenna 2** from `5g_rx0_rsrp` and `5g_rx1_rsrp`, Signal, disabled by default. Two genuine receive paths, established across twenty samples where the aggregate held −96 throughout while these ranged −98 to −97 and −95, a gap that never closed below 2 dB.
+- **CA Secondary Cell RSRP, RSRQ, SNR and RSSI**, parsed from `lte_multi_ca_scell_sig_info`, Signal, disabled by default. The reference device reports a 20 MHz secondary carrier while `lte_ca_scell_bandwidth` is empty, and that carrier's SNR ran 14 to 18 dB while the primary ran −2.4 to 2.6 — the headline SNR shows the worse of the two.
+- **SIM PIN Attempts Remaining** and **SIM PUK Attempts Remaining**, System, disabled by default. A locked SIM presents as no service, which otherwise reads as a coverage fault.
+- **Modem State**, **Connection Failure Count** and **Roaming State**, disabled by default.
+- **5G NSA Band Lock** and **5G SA Band Lock**, Signal, disabled by default, the counterparts to the existing LTE Band Lock.
+
+### Changed
+
+- **Eleven keys added to the polls**: `upgrade_result` to the core batch, the other ten to the extended batch. Core is 106 names in two requests, extended 48 in one. Measured on the reference device: 108 keys populated of 158 requested, against 97 of 147 before.
+- **Eight names removed from `DISCOVERY_CANDIDATES` and `DISCOVERY_VALUE_SAFE`** now that the polls request them. The existing sweeps caught the overlap.
+
+### Measured
+
+The secondary-carrier column order is measured rather than inferred. RSRQ, RSRP and RSSI are related by definition as `RSRQ = RSRP − RSSI + 10·log₁₀(N)`, and solving for N across twelve samples gave **99.4 resource blocks with a spread of 2.3** — 100 RB, a 20 MHz carrier. No other assignment of the six fields yields a physically possible N. Fields five and six are deliberately unpublished: one is constant at 0, the other was seen changing from 2 to 4, and neither is understood.
+
+### Notes
+
+- The provisioning probe cannot share a request with anything else, because a refusal replaces the whole response. It costs one round trip per hour, and it is excluded from `_degraded_endpoints()` deliberately — reporting the integration degraded because an hourly diagnostic curiosity failed would train users to ignore the health sensor.
+- The result is held on the coordinator rather than merged into `coordinator.data`. That dict means "what the router said" and feeds the populated counts, the drift check and the sparse-payload check; a synthetic key would skew all three.
+- `diag_check.py` no longer asserts that two runs read the same number of names without a session. That count is an environmental event — another client taking the router's single session, or a chunk timing out — so equality between two runs tests the environment rather than this code. Measured over six spaced passes: one reported eight, five reported none, and all six answered the same 99 names with nothing left unestablished. The check now asserts that a pass which lost its session recovered, which is the property that matters.
 
 ## [3.3.9-dev11] - 2026-09-02 - MC888 Parameter Spellings Supported; Two-Request Core Poll
 

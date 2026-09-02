@@ -188,7 +188,7 @@ This is the second model-dependent branch in the protocol. MD5 here is a vendor 
 ### The batch poll — `multi_data=1`
 
 - **Used**: Yes — this is the main polling call, once per scan interval.
-- **Request**: `GET goform/goform_get_cmd_process?multi_data=1&isTest=false&sms_received_flag_flag=0&cmd=<comma-separated names>`. The core list is 105 names as of `[3.3.9-dev11]` and is served in **two** requests; the extended list is 38 in one. The split is by URL length and is handled by `_split_by_url_budget` — see the budget section below.
+- **Request**: `GET goform/goform_get_cmd_process?multi_data=1&isTest=false&sms_received_flag_flag=0&cmd=<comma-separated names>`. Both lists are split by URL length rather than by a fixed count, so the number of requests follows the number of names — the core list has needed two since `[3.3.9-dev11]`. Deliberately not stating the sizes here: they have been wrong twice. The split is by URL length and is handled by `_split_by_url_budget` — see the budget section below.
 - **Response**: one flat JSON object. **The router does not error on an unknown `cmd` name**, which means a firmware update that drops a field is invisible unless the parse layer checks for it.
 - **Implementation**: `get_all_data`, `api.py:426`.
 
@@ -393,8 +393,8 @@ One group per secondary carrier, semicolon-terminated, six comma-separated field
 | 1     | RSRP              | −87.3 to −90.1 |
 | 2     | RSRQ              | −5.6 to −11.0  |
 | 3     | SNR               | 14.4 to 18.5   |
-| 4     | unknown, constant | 0              |
-| 5     | RSSI              | −57.1 to −63.6 |
+| 4     | RSSI              | −57.1 to −63.6 |
+| 5     | unknown, constant | 0              |
 | 6     | unknown, varies   | 2, then 4      |
 
 **The order is measured, not inferred.** RSRQ, RSRP and RSSI are related by definition as `RSRQ = RSRP − RSSI + 10·log₁₀(N)`, where N is the resource-block count. Solving for N across twelve samples with fields 1, 2 and 4 as RSRP, RSRQ and RSSI gives a mean of **99.4 RB with a spread of 2.3** — 100 RB, a 20 MHz carrier. No other column assignment yields a physically possible N. The identity alone cannot separate RSRQ from RSSI, since it depends on their sum; their ranges do, and they do not overlap.
@@ -405,7 +405,7 @@ The same arithmetic is unstable on the primary cell, which reports integers rath
 
 ### Available but not polled
 
-The 2026-07-29 discovery run probed 183 candidate names. These answered with a value and are **not** in either batch — recorded so the next person asking "what else does this router expose?" can start here rather than re-running the probe. Adding any of them costs URL budget (see above).
+The 2026-07-29 discovery run probed 183 candidate names. These answered with a value and were **not** in either batch at the time — some have since been adopted, and `battery_value`, `hardwarenumber`, `rmcc`, `rmnc` and `wan_connect_status` are now polled. Treat the table as a starting point rather than a current inventory; `docs/all_sensors.md` is generated and authoritative — recorded so the next person asking "what else does this router expose?" can start here rather than re-running the probe. Adding any of them costs URL budget (see above).
 
 | Key | Live value | What it is |
 | :-- | :-- | :-- |
