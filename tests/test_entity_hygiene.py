@@ -564,6 +564,37 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "landed, and the next poll settles it. Only a successful read "
         "reporting the wrong value proves a refusal, and that path raises."
     ),
+    ("diag_check.py", "ruff: noqa: T201"): (
+        "The console report is this script's entire output, exactly as in "
+        "`hardware_check.py`. There is no logger to route it through, and a "
+        "caller reading the transcript is the point. File-level because every "
+        "print in the file is the same deliberate choice."
+    ),
+    ("diag_check.py", "noqa: S104"): (
+        "`0.0.0.0` appears in a set of addresses the leak sweep treats as "
+        "non-identifying, alongside the broadcast and loopback addresses. It "
+        "is matched as text inside a produced file and never bound to: this "
+        "script opens no socket and serves nothing."
+    ),
+    ("diag_check.py", "noqa: SLF001"): (
+        "Two sites, both driving the coordinator's own refresh the way "
+        "`async_force_refresh` does. That method is the public route but goes "
+        "through the debouncer, which needs a running Home Assistant to fire, "
+        "and this script runs none. Setting `_force_refresh_once` and awaiting "
+        "`_async_update_data` performs the same two steps minus the "
+        "scheduling. Adding public surface to the integration for the sake of "
+        "a script HACS never distributes would be the worse trade."
+    ),
+    ("diag_check.py", "noqa: PLW0603"): (
+        "One module-level colour flag, set once from the parsed arguments "
+        "before any output is produced — the same pattern, and the same "
+        "reasoning, as `hardware_check.py`."
+    ),
+    ("diag_check.py", "pragma: no cover"): (
+        "The import guard that tells an operator running the script with the "
+        "wrong interpreter what to do about it. Reachable only when Home "
+        "Assistant is absent, which is never true where the suite runs."
+    ),
     ("hardware_check.py", "ruff: noqa: T201"): (
         "The console report is this script's entire output. There is no logger "
         "to route it through and a caller reading the transcript is the point. "

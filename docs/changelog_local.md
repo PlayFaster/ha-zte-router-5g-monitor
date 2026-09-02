@@ -4,6 +4,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+- [\[3.3.9-dev7\] - 2026-09-02 - Diagnostic Download Canary Field Published; Hardware Verification of the Produced File](#339-dev7---2026-09-02---diagnostic-download-canary-field-published-hardware-verification-of-the-produced-file)
 - [\[3.3.9-dev6\] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization](#339-dev6---2026-09-02---readme-hardware-compatibility-alignment-changelog-header-normalization)
 - [\[3.3.9-dev5\] - 2026-09-02 - Discovery Pass Fresh Login State; Per-Chunk Canary Verification](#339-dev5---2026-09-02---discovery-pass-fresh-login-state-per-chunk-canary-verification)
 - [\[3.3.9-dev4\] - 2026-09-02 - Diagnostic Download Time Reduced from 60s to 6s; False Re-Login Fix](#339-dev4---2026-09-02---diagnostic-download-time-reduced-from-60s-to-6s-false-re-login-fix)
@@ -211,6 +212,33 @@ All changes to this project will be documented in this file. This is the detaile
 - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.9-dev7] - 2026-09-02 - Diagnostic Download Canary Field Published; Hardware Verification of the Produced File
+
+### Summary
+
+The `canary` field added in dev5 never reached a download. It was recorded by `run_discovery`, asserted by five passing unit tests, and dropped on the way out by an allow-list in `_sanitize_discovery` that was never extended to name it. Three downloads taken from the reference MC7010 on 2026-09-02 carry the full mining trace and no canary at all, and the omission was found by a human reading the files rather than by any check. The field records whether a pass could detect its own degradation, so without it `probed_no_answer` cannot be read: "these names do not exist on this firmware" and "we may not have been logged in" become indistinguishable.
+
+The cause is that every test for the discovery pass asserts on what the API returns, while the user receives what the sanitizer publishes. Branch coverage cannot close that gap — the allow-list is data, and the loop over it runs either way.
+
+### Fixed
+
+- **`canary` is published in the download.** Named in `DISCOVERY_METADATA_PUBLISHED` alongside the fields that were already reaching the file. Confirmed on hardware: the reference MC7010 now reports `canary: network_type` in the produced artefact.
+- **Discovery notes are swept before publication.** `run_discovery` interpolates the exception into `discovery aborted: {err}`, and an aiohttp connection failure names the host it could not reach — so the one published field carrying free text was also the one able to leak the LAN address that every other occurrence in the file has tokenized. Swept rather than blanked, so a reader still sees that a connection failed.
+
+### Added
+
+- **`scripts/diag_check.py`**: builds a real coordinator against the live router, calls the real `async_get_config_entry_diagnostics`, and asserts over the file it produces — required fields, internally consistent counts, and no unredacted identifier. It then does the whole thing twice and diffs the two, ignoring radio and counter drift; that is the check that found the dev4 truncation, performed by hand at the time. Not part of CI: it needs the hardware, and it logs the router out. Wired into `dev-workbench/workbench/tasks.json` as **Hardware: Check Diagnostics Download**.
+- **`tests/test_diagnostics_artefact.py`**: ten tests that assert on the artefact rather than the return value, including a parity test requiring every field `run_discovery` produces to be classified as published or gated. A new field now fails the suite until that decision is made deliberately.
+
+### Changed
+
+- **`_sanitize_discovery` copies through named module-level sets** rather than an inline tuple, so the allow-list is addressable by the test that guards it. It remains an allow-list rather than a passthrough: a future field could carry a router value, and deny-by-default is the direction an omission should fail in.
+- **`AGENTS.md` and `docs/DEVELOPMENT.md`** record the seam, the sweep that guards it, and the script that verifies it on hardware.
+
+### Known Issues
+
+- **A discovery pass intermittently answers a fraction of what it should.** Measured across six consecutive `diag_check.py` runs on the reference MC7010: passes answering 90 names, and passes answering 16, 11 and 0, with the canary populated and `session_alive_after` reporting `True` in every case. The dev5 canary detects a session lost partway; it does not detect this. The degraded runs correlate with a longer elapsed time (roughly 25 s against 9 s) rather than a shorter one. Not diagnosed, and deliberately not theorized about here — the two hypotheses offered for the dev4 slowdown were both wrong and cost a release each. Tracing per-request timing and state is the next piece of work.
 
 ## [3.3.9-dev6] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization
 

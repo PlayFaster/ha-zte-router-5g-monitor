@@ -25,6 +25,7 @@ The integration follows the standard Home Assistant Custom Component pattern, op
 ### Operator Tooling (`scripts/`)
 
 - **`hardware_check.py`**: exercises the write path against a real router and records what it answers. Not part of CI — it needs the hardware. Round-trips every safe write (including with the session deliberately invalidated), asserts the device assumptions the write path rests on, and captures observed payloads to `tests/fixtures/` with `--capture`. Run before a release and after any firmware update. See §5 for why the unit suite cannot do this job.
+- **`diag_check.py`**: produces two real diagnostics downloads from the device, asserts over the files and diffs them. Not part of CI — it needs the hardware. The unit suite asserts on what `run_discovery` returns, while the user receives what `_sanitize_discovery` publishes; the two are separated by an allow-list, and a field missing from it is dropped in silence. `canary` shipped that way in v3.3.9-dev5 and was found by a human reading downloads. Run before a release, and whenever a field is added to the discovery result. It logs the router out.
 
 ## 3. Historical Architectural Shifts
 
