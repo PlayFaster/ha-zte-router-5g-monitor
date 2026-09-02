@@ -1518,7 +1518,7 @@ async def capture_reference_payloads(api: ZTERouterAPI, report: Report) -> None:
 
 
 # Values that may appear in a capture. Everything else must be a key *name*, so
-# a future check cannot quietly start recording telemetry.
+# a future check cannot quietly start recording sensor values.
 _ALLOWED_CAPTURE_VALUES = {"", "failure", "0", "1", "ppp_connected"}
 
 # Substrings of keys whose *values* must never be recorded, whatever they hold.

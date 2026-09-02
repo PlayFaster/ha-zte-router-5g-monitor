@@ -303,7 +303,7 @@ def test_subscriber_aliases_are_redacted() -> None:
 
 
 def test_byte_counters_are_not_mistaken_for_identifiers() -> None:
-    """The digit sweep must not mask ordinary telemetry.
+    """The digit sweep must not mask ordinary sensor data.
 
     Byte counters, uptime seconds and channel numbers are all bare digits.
     The threshold is what separates them from an identifier, and it is chosen

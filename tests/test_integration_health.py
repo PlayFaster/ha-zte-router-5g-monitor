@@ -157,7 +157,7 @@ async def test_attributes_are_unrecorded(health) -> None:
 async def test_drift_is_published_on_health_and_raises_no_repair(
     health, coordinator, hass: HomeAssistant
 ) -> None:
-    """Contract drift belongs on the health sensor, not the Repairs panel.
+    """Missing router data belongs on the health sensor, not the Repairs panel.
 
     It raised a repair until the 2026-08-25 repair-set alignment. The family
     policy is that a Repair requires user agency: drift is a code or firmware

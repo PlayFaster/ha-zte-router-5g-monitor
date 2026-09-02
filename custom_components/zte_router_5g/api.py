@@ -34,7 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 # length of roughly 2,048 characters, not by a number of names. A single list
 # had grown to within ~160 characters of that ceiling, where the next addition
 # would have truncated the response — which presents as missing fields and is
-# indistinguishable from firmware contract drift.
+# indistinguishable from firmware key changes.
 #
 # The split is by criticality, not alphabetically:
 #

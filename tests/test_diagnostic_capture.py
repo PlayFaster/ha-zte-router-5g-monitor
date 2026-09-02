@@ -927,7 +927,7 @@ async def test_a_goform_response_key_is_never_probed(mock_aiohttp_client):
 
 @pytest.mark.asyncio
 async def test_a_goform_response_key_is_never_harvested(mock_aiohttp_client):
-    """A refused chunk echoes `result` back, and it is not telemetry.
+    """A refused chunk echoes `result` back, and it is not sensor data.
 
     Excluding it from the mined names is not enough: the router returns it in
     the probe response itself.

@@ -1490,7 +1490,7 @@ async def test_batch_poll_urls_stay_within_the_router_budget(
 
     The router accepts a GET of roughly 2,048 characters and truncates past
     it — which presents as missing fields and is indistinguishable from
-    firmware contract drift. `_batch_get` now splits a list that would exceed
+    firmware key changes. `_batch_get` now splits a list that would exceed
     `BATCH_URL_MAX_CHARS`, so this asserts the property that matters: **every
     request issued** stays inside the ceiling, however long the list grows.
     """
