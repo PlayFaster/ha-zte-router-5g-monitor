@@ -390,6 +390,16 @@ class ZTEIntegrationHealthSensor(
             "repairs",
             "last_good_update",
             "consecutive_failures",
+            # The uptime counter's measured drift. Every constant in the
+            # boot-time latch was set from one device over one week, and this
+            # is what lets a field report carry the device's own rate instead
+            # of requiring a recorder database extraction.
+            "drift_rate_pct",
+            "drift_rate_min_pct",
+            "drift_rate_max_pct",
+            "drift_intervals",
+            "drift_measured_seconds",
+            "drift_deficit_seconds",
         }
     )
 
@@ -436,6 +446,7 @@ class ZTEIntegrationHealthSensor(
                     "repairs": snapshot.get("repairs", []),
                     "last_good_update": snapshot.get("last_good_update"),
                     "consecutive_failures": snapshot.get("consecutive_failures", 0),
+                    **self.coordinator.uptime_diagnostics,
                 }
             )
             or {}

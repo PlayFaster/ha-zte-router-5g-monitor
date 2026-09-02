@@ -127,6 +127,10 @@ def diagnostics_entry(mock_config_entry):
     coordinator.last_update_success_time = None
     coordinator.update_interval = None
     coordinator.health_snapshot = {"problem": False, "issues": [], "severity": "ok"}
+    # The boot-time latch's own state, published in the download since
+    # `[3.3.10-dev1]`. A mock without it serializes a MagicMock.
+    coordinator.uptime_state = {"drift_rate_pct": None, "boot_time": None}
+    coordinator.uptime_diagnostics = {"drift_rate_pct": None}
     coordinator.endpoint_failures = {}
     mock_config_entry.runtime_data = coordinator
 
@@ -279,6 +283,10 @@ async def test_handles_an_empty_payload(mock_config_entry) -> None:
     coordinator.last_update_success_time = None
     coordinator.update_interval = None
     coordinator.health_snapshot = {"problem": True, "issues": ["no data"]}
+    # The boot-time latch's own state, published in the download since
+    # `[3.3.10-dev1]`. A mock without it serializes a MagicMock.
+    coordinator.uptime_state = {"drift_rate_pct": None, "boot_time": None}
+    coordinator.uptime_diagnostics = {"drift_rate_pct": None}
     coordinator.endpoint_failures = {}
     mock_config_entry.runtime_data = coordinator
 

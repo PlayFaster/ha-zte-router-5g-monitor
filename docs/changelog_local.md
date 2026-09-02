@@ -6,6 +6,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
   - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)
+  - [\[3.3.10-dev1\] - 2026-09-02 - Uptime Counter Drift Measured Per Installation; Boot-Time Latch Rebuilt Around It](#3310-dev1---2026-09-02---uptime-counter-drift-measured-per-installation-boot-time-latch-rebuilt-around-it)
   - [\[3.3.9-dev12\] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported](#339-dev12---2026-09-02---fourteen-diagnostic-sensors-added-operator-provisioning-reported)
   - [\[3.3.9-dev11\] - 2026-09-02 - MC888 Parameter Spellings Supported; Two-Request Core Poll](#339-dev11---2026-09-02---mc888-parameter-spellings-supported-two-request-core-poll)
   - [\[3.3.9-dev10\] - 2026-09-02 - Diagnostic Download Declined Parameters Recorded; False Session Losses Removed](#339-dev10---2026-09-02---diagnostic-download-declined-parameters-recorded-false-session-losses-removed)
@@ -243,6 +244,52 @@ All changes to this project will be documented in this file. This is the detaile
 ### Under the hood
 
 - **Reverse Parameter Sweeps & Coverage**: Added automated sweeps asserting every requested parameter is mapped to an entity, with full branch coverage across parameter parsing, URL partitioning, and diagnostic artifact redaction.
+
+## [3.3.10-dev1] - 2026-09-02 - Uptime Counter Drift Measured Per Installation; Boot-Time Latch Rebuilt Around It
+
+### Summary
+
+`[3.3.6-dev1]` fixed the boot timestamp sticking across a Home Assistant restart, and introduced a fixed 600-second tolerance to decide whether a stored boot instant still described the current boot. That tolerance was derived from a crystal-drift estimate. It was wrong by three orders of magnitude: the MC7010's uptime counter was subsequently measured at **4.34% slow** across 105 hours of recorded data, so the boot instant derived as `now() − uptime` walks forward eleven minutes over twelve hours of uptime and four and a half hours over four days. A false reboot signal followed on an ordinary restart.
+
+No fixed tolerance can separate that from a genuine missed reboot, because the divergence scales with uptime while a constant does not. The startup path is rebuilt around a drift rate **measured per installation** from consecutive polls, so each router is judged against its own behavior rather than against a number taken from one device.
+
+### Fixed
+
+- **A restart could move the boot timestamp with no reboot having occurred**: the boot-instant comparison used a fixed `BOOT_MATCH_TOLERANCE` of 600 s, and the drift crosses that after about ten hours of uptime. On 2026-09-01 a restart logged a 671-second divergence against a router that had been running twelve hours and had not rebooted. The `Device Uptime` sensor is documented as moving only on a genuine restart, so anything built on it treats a move as a reboot — this was a false reboot report, not a cosmetic step.
+- **The threshold sat inside the drift band**, which is why the symptom was intermittent: an earlier restart the same day reconciled cleanly at 341 seconds.
+
+### Added
+
+- **Per-installation drift measurement**: each pair of consecutive polls yields `1 − Δcounter / Δwall`, folded into two duration-weighted accumulators. The measurement makes no reference to the boot anchor, which is what keeps it honest — the anchor is what the rate is used to judge, so deriving one from the other would be circular. Intervals under 60 s are excluded, where the counter's whole-second resolution dominates, as are intervals with a negative advance, which are reboots rather than drift.
+- **Duration weighting, and a 30-day cap**: an interval spanning a long pause carries proportionally more evidence than one spanning ninety seconds, which falls out of two running sums with no buffer and no smoothing constant. On exceeding the cap both sums are scaled down together, preserving the ratio while letting newer evidence move it — so a firmware update that corrects the router's timer is followed rather than outvoted by history.
+- **The shortfall test** replaces the boot-instant comparison at startup: `expected = stored_counter + elapsed × (1 − rate)`, with a reboot declared when the live counter falls below that by more than `max(300 s, 2% of elapsed)`. The margin scales because the error it absorbs scales — rate-estimate error multiplied by the gap is 43 s over two hours and 3,000 s over a week. It is deliberately conservative: a real gap reboot produces a shortfall measured in hours, because the expected value still carries everything accumulated before the gap.
+- **A plausibility backstop on every poll**: the observed `counter / elapsed` ratio is compared against the ratio the measured rate predicts. The shortfall test runs only at startup and the running comparison only sees drops as they happen; neither watches for an anchor that has _become_ wrong, which is the failure mode this work exists to prevent. A reset counter against a long-standing anchor collapses the ratio toward zero and is caught on the next poll.
+- **`PLAUSIBILITY_TOLERANCE` (5%)**: how far the observed `counter / elapsed` ratio may sit from the ratio the measured rate predicts. A noise budget, not a drift bound — estimation noise is roughly 0.1% per interval at the default poll rate — and independent of the device only because the anchor is drift-corrected.
+- **`MAX_DRIFT` (20%), used in exactly two places**: clamping the measured rate, and the cold-start check where nothing has been learned yet. It is not a drift estimate but an outer bound, set wide because a healthy anchor yields a ratio between 0.8 and 1.0 while a stale one yields nearly zero — an order of magnitude apart, so headroom costs nothing.
+- **The latched instant is corrected for the counter's drift**: `now - counter` is late by exactly the drift accumulated in that epoch, because the counter under-reports the wall time that has passed. A counter reading four days puts the instant four and a half hours late on this device. `boot_time` is now derived as `now - counter / (1 - rate)` once a rate is known, which makes a latch taken long after the event accurate — and, more importantly, keeps `PLAUSIBILITY_TOLERANCE` a noise budget rather than a second drift bound. Before a rate exists the uncorrected instant is used and self-corrects on the first poll after an hour of accumulation.
+- **Two invariants that override everything else**: a counter drop beyond `UPTIME_REBOOT_MARGIN` is a reboot, vetoed by nothing; and a backward move of the boot instant is never a reboot, because a reboot moves the true boot instant forward and accumulated drift cannot exceed the epoch that produced it.
+- **The store now carries `written_at` and the accumulators** alongside `last_uptime`, so a restart resumes measuring rather than starting cold. The rate is derived from the persisted sums rather than stored, so it cannot disagree with its own inputs. Fields are additive and `UPTIME_STORAGE_VERSION` is unchanged: a missing field already means "nothing learned yet". The write cadence is unchanged at twenty minutes plus each latch, and the record grows from roughly 120 bytes to under 250.
+- **Drift published for diagnosis**: measured rate, the per-interval envelope and the accumulated deficit appear as unrecorded attributes on `Integration Health`, and the diagnostics download gains an `uptime` block carrying those plus the anchor, the stored pair and the reconciliation state. Every constant here was set from one device over one week; without this, a field report carries no rate and the only route to one is a recorder database extraction — which is what this investigation had to do.
+- **A warning whenever the boot time moves without a counter drop.** That is the exact signature of this class of defect. Had it existed a week earlier the drift would have been visible on the first restart rather than after five days of forensics.
+- **A log line for a small backward counter step** rather than absorbing it in silence. Nothing establishes that this counter never steps backward, and the 30-second margin would otherwise leave no trace of it.
+
+### Changed
+
+- **`written_at` is normalized like `boot_time`**: both are read back from disk as strings and both are subtracted from `now()`, and subtracting a naive datetime from an aware one raises. A value that will not parse, or parses naive, is treated as absent — which for `written_at` means the record cannot date the gap and the cold-start path applies.
+- **Diagnostics reads two coordinator properties** rather than reaching into private attributes: `uptime_diagnostics` for the rate summary the health sensor shares, and `uptime_state` for the wider picture the download carries.
+
+### Removed
+
+- **`BOOT_MATCH_TOLERANCE` and `BOOT_FUTURE_TOLERANCE`**: no fixed window can do this job, and the two-sided plausibility and cold-start checks cover what the future-value guard did.
+- **The one-poll deferred decision and `_pending_startup_strike`**: they existed to hedge the boot-instant comparison. With detection driven by counter continuity there is nothing to hedge.
+
+### Testing
+
+- **`tests/test_uptime_latch.py`** rewritten, 51 tests. Driven by a simulated router whose counter advances at a configurable rate, so "no false alarm across thirty days" is asserted rather than approximated: 2,700 polls at 0%, 4.34% and −2% drift, and thirty simulated restarts each carrying the store record forward as a real one would. Covers rate convergence at all three rates, the accumulator exclusions and clamp, the cap following a firmware fix, both failure modes, the plausibility backstop against a stale anchor, the backward-move invariant, cold start with and without a healthy anchor, all four guards, and the store's absent, corrupt, malformed and per-entry cases.
+- **The real device replays as a fixture**: `tests/fixtures/uptime_drift_real_series.json`, captured from `home-assistant_v2.db` before the recorder's ten-day purge. Fifty rows across five days with 4.34% drift, one genuine router reboot inside a thirteen-hour gap, and several Home Assistant outages. The test asserts the reboot is found and that the timestamp moves no more than twice across the whole series — which the superseded design would have failed.
+- **Three diagnostics suites updated**: their mocked coordinators predate `uptime_state` and were serializing a `MagicMock` into the download.
+- **Drift rates above the plausibility tolerance are covered.** The rate sweeps run at 0%, 4.34%, 8%, 12% and -2%, and two cases assert the anchor is drift-corrected and that a stale anchor is corrected once rather than repeatedly. This matters: a suite stopping at the measured 4.34% passed an intermediate build in which any device drifting past 5% re-latched on every poll, because the uncorrected anchor offset the observed ratio from the predicted one by exactly the drift rate. Reverting the correction fails eight of these cases.
+- **1,258 tests pass at 100% coverage.** Ruff, mypy, hassfest and the suppression allow-list are clean.
 
 ## [3.3.9-dev12] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported
 

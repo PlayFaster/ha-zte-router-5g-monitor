@@ -331,6 +331,10 @@ async def async_get_config_entry_diagnostics(
             # Section 19 state: the most useful thing in the file when the
             # complaint is "it stopped working and I don't know why".
             "health": deepcopy(coordinator.health_snapshot),
+            # The boot-time latch and the drift it has measured. No
+            # device data and nothing to redact: counters, a rate and
+            # two timestamps.
+            "uptime": _guarded("uptime", lambda: coordinator.uptime_state, errors),
             "endpoint_failures": coordinator.endpoint_failures,
         },
         "data": payload,
