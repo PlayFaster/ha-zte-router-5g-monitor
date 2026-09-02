@@ -27,6 +27,8 @@ from custom_components.zte_router_5g.api import _CORE_PARAMS, ZTERouterAPI
 from custom_components.zte_router_5g.diagnostics import (
     DISCOVERY_METADATA_GATED,
     DISCOVERY_METADATA_PUBLISHED,
+    _classify,
+    _gate_discovery_value,
     _sanitize_discovery,
     _Tokenizer,
     async_get_config_entry_diagnostics,
@@ -41,11 +43,20 @@ def _discovery_result() -> dict[str, object]:
         "notes": ["js/service.js: 642 names"],
         "values": {"lte_rsrp": "-97"},
         "session": "fresh login",
-        "canary": "network_type",
+        "sessionless_measurement": "measured: 6 keys",
+        "canaries": ["network_type", "signalbar", "ppp_status"],
+        "canary_pool": {
+            "read": 131,
+            "populated": 97,
+            "served_without_a_session": 6,
+            "chosen": 3,
+        },
         "mined_count": 642,
         "mined_names_probed": 501,
         "mined_names_answered": 90,
+        "names_from_union_only": 102,
         "probed_no_answer": ["absent_key"],
+        "not_reprobed": ["never_asked_key"],
         "mined_names": ["lte_rsrp", "absent_key"],
         "write_commands": ["SET_APN"],
         "session_alive_after": True,
@@ -151,20 +162,39 @@ async def test_the_download_records_which_key_guarded_the_pass(diagnostics_entry
 
     result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
 
-    assert result["discovery"]["canary"] == "network_type"
+    assert result["discovery"]["canaries"] == [
+        "network_type",
+        "signalbar",
+        "ppp_status",
+    ]
 
 
 @pytest.mark.asyncio
-async def test_the_download_says_so_when_no_canary_was_available(diagnostics_entry):
-    """A pass that cannot detect its own degradation must admit it."""
-    unguarded = _discovery_result() | {"canary": "unavailable"}
+async def test_the_download_says_why_no_canary_was_available(diagnostics_entry):
+    """A pass that cannot detect its own degradation must admit it, and say why.
+
+    "Nothing answered at all" and "everything that answered is served without
+    a session" both yield no canary and call for different responses. On an
+    unfamiliar device that is the difference between a fixable problem and a
+    firmware that cannot be guarded, so the census publishes either way.
+    """
+    unguarded = _discovery_result() | {
+        "canaries": [],
+        "canary_pool": {
+            "read": 131,
+            "populated": 4,
+            "served_without_a_session": 4,
+            "chosen": 0,
+        },
+    }
     diagnostics_entry.runtime_data.async_run_discovery = AsyncMock(
         return_value=unguarded
     )
 
     result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
 
-    assert result["discovery"]["canary"] == "unavailable"
+    assert result["discovery"]["canaries"] == []
+    assert result["discovery"]["canary_pool"]["served_without_a_session"] == 4
 
 
 @pytest.mark.asyncio
@@ -196,8 +226,9 @@ async def test_the_canary_name_is_not_treated_as_a_discovered_value(
 
     result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
 
-    assert "network_type" not in result["discovery"]["values"]
-    assert "network_type" not in result["discovery"]["verdicts"]
+    for name in _discovery_result()["canaries"]:
+        assert name not in result["discovery"]["values"]
+        assert name not in result["discovery"]["verdicts"]
 
 
 @pytest.mark.asyncio
@@ -228,3 +259,107 @@ def test_an_ordinary_note_is_left_alone() -> None:
     out = _sanitize_discovery(_discovery_result(), _Tokenizer())
 
     assert out["notes"] == ["js/service.js: 642 names"]
+
+
+# ---------------------------------------------------------------------------
+# Withheld values report their kind, never their content
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("1", "<boolean-like (0|1)>"),
+        ("0", "<boolean-like (0|1)>"),
+        ("32", "<numeric integer, 2 chars>"),
+        ("-106", "<numeric integer, 4 chars>"),
+        ("20.0", "<numeric decimal, 4 chars>"),
+        ("WPA2PSK", "<enum-like short token, 7 chars>"),
+        ("auto_select", "<enum-like short token, 11 chars>"),
+        ("", "<empty>"),
+        ("   ", "<empty>"),
+        ("a($)b($)c", "<delimited profile, 3 fields>"),
+        ("3,4,5", "<delimited, 3 items>"),
+        ("9360,4,-9;9360,352,-14", "<delimited, 2 items>"),
+        ("Some Carrier Ltd", "<mixed, 16 chars>"),
+    ],
+)
+def test_a_withheld_value_reports_its_kind(value: str, expected: str) -> None:
+    """The kind is what decides whether a name can become an entity.
+
+    `<alphanumeric, 4 chars>` could be an authentication mode, a band number
+    or a truncated name, and told us none of them apart.
+    """
+    assert _classify(value) == expected
+
+
+def test_a_long_withheld_value_reports_as_a_blob() -> None:
+    """Past the blob ceiling, length is the only thing worth saying."""
+    assert _classify("x" * 400).startswith("<blob, ")
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "MyHomeNetwork",
+        "internet.provider.ie",
+        "hunter2",
+        "27205",
+        "89353081234567890123",
+    ],
+)
+def test_no_withheld_value_survives_its_own_classification(value: str) -> None:
+    """The property that lets this run on names the deny rule refused.
+
+    Asserted over the classification of values that must never be published,
+    rather than over one example, because a leak is by definition the case the
+    example did not cover.
+    """
+    assert value not in _classify(value)
+
+
+def test_the_denied_name_verdict_still_withholds_the_value() -> None:
+    """Richer description must not become a route around the deny rule."""
+    published, verdict = _gate_discovery_value(
+        "wifi_chip1_ssid1_ssid", "MyHomeNetwork", _Tokenizer()
+    )
+
+    assert verdict == "denied-name"
+    assert "MyHomeNetwork" not in published
+    assert published == "<enum-like short token, 13 chars>"
+
+
+# ---------------------------------------------------------------------------
+# Silent and unasked are different claims
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_download_separates_silent_names_from_unasked_ones(
+    diagnostics_entry,
+):
+    """`probed_no_answer` is a claim about the firmware; the other is not.
+
+    A name that could not be re-probed was never put to the device. Publishing
+    it alongside the names that were asked and stayed silent asserts an
+    absence nobody measured, and every conclusion drawn from that absence
+    inherits the error — which is how the MC888 key list this release exists
+    to grow was compiled.
+    """
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+    discovery = result["discovery"]
+
+    assert discovery["probed_no_answer"] == ["absent_key"]
+    assert discovery["not_reprobed"] == ["never_asked_key"]
+    assert not set(discovery["probed_no_answer"]) & set(discovery["not_reprobed"])
+
+
+@pytest.mark.asyncio
+async def test_a_name_that_answered_is_in_neither_absence_field(diagnostics_entry):
+    """Three outcomes, three places, no name in two of them."""
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+    discovery = result["discovery"]
+
+    answered = set(discovery["values"])
+    assert not answered & set(discovery["probed_no_answer"])
+    assert not answered & set(discovery["not_reprobed"])

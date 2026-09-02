@@ -441,6 +441,36 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         return data, sms_cap, messages
 
     async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch data from the API, serialized against a discovery pass.
+
+        The lock is the point. `async_run_discovery` has taken it since the
+        probe was added, with a comment saying the two "take turns" — but this
+        method never acquired it, so nothing was serialized and the guard did
+        nothing at all.
+
+        What that allowed: a scheduled poll running during a diagnostics
+        download shares this coordinator's `ZTERouterAPI`, and a poll that
+        judges the session expired re-logs in. The router permits one session,
+        so the new login invalidates the cookie the discovery pass is
+        replaying. Discovery probes run with `authenticated=False` precisely so
+        that a probe never silently re-authenticates and samples an
+        authenticated response, which means they cannot recover: they simply go
+        blank, and their names are recorded as unanswered.
+
+        Measured directly. With a competing client logging in every 180
+        seconds, 2 of 12 passes came back having read 413 and 445 names without
+        a session against 16 in a healthy pass; with the competitor paused, 0
+        of 12. This closes the same window for the poll inside our own process.
+
+        A discovery pass can hold this for the length of its budget, so a poll
+        may wait. That is the correct trade: a delayed poll holds last known
+        values for one cycle, while an overlapping one corrupts a download the
+        user is waiting on and publishes absences that were never measured.
+        """
+        async with self._async_update_lock:
+            return await self._async_update_data_locked()
+
+    async def _async_update_data_locked(self) -> dict[str, Any]:
         """Fetch data from API with resilience and pausing."""
         # Consume the one-shot force flag before anything can short-circuit.
         forced = self._force_refresh_once

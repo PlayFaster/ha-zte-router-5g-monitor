@@ -577,13 +577,23 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "script opens no socket and serves nothing."
     ),
     ("diag_check.py", "noqa: SLF001"): (
-        "Two sites, both driving the coordinator's own refresh the way "
+        "Five sites. Three replace `_probe_chunk` for the sabotage mode, which "
+        "takes a real session away from a real router partway through a real "
+        "pass — the one thing the unit suite cannot do, because a mock is "
+        "written from the same model the code is. Two more drive the coordinator's own refresh the way "
         "`async_force_refresh` does. That method is the public route but goes "
         "through the debouncer, which needs a running Home Assistant to fire, "
         "and this script runs none. Setting `_force_refresh_once` and awaiting "
         "`_async_update_data` performs the same two steps minus the "
         "scheduling. Adding public surface to the integration for the sake of "
         "a script HACS never distributes would be the worse trade."
+    ),
+    ("diag_check.py", "type: ignore[method-assign]"): (
+        "The sabotage mode replaces `_probe_chunk` on the class so that a real "
+        "pass finds its session gone partway through, which is what another "
+        "client logging into the router does. Assigning to a method is exactly "
+        "the intent, it is restored in a `finally`, and the script is never "
+        "imported by the integration or distributed by HACS."
     ),
     ("diag_check.py", "noqa: PLW0603"): (
         "One module-level colour flag, set once from the parsed arguments "

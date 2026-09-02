@@ -102,7 +102,17 @@ OUTPUT_DIR = (
 _VOLATILE = re.compile(
     r"(?i)(rsrp|rsrq|rssi|snr|sinr|_time|uptime|timestamp|cell_info|sig_info"
     r"|_bars?$|signalbar|realtime|flux_|monthly_|_rx_|_tx_|traffic|volume"
-    r"|_update|_date$|_temp|temperature)"
+    # Carrier aggregation comes and goes with the network, not with us:
+    # observed changing from `ca_activated` to `ca_deconfigured` between two
+    # passes ten seconds apart.
+    r"|lte_ca|_band$|_bandwidth$|_pci$|_arfcn$|cell_id"
+    r"|_update|_date$|_temp|temperature"
+    # This script's own bookkeeping, and the free-text notes, which are a
+    # list compared by position: a pass emitting one extra note shifts every
+    # entry after it and reports a dozen differences for one real one. The
+    # counts those notes carry are asserted directly below instead, which is
+    # the precise form of the same check.
+    r"|^/_elapsed$|^/discovery/notes/)"
 )
 
 # An identifier that reached the file unredacted. The tokenizer replaces these
@@ -119,6 +129,23 @@ _RAW_IDENTIFIER = re.compile(
 # are needed cold on the reference hardware; the rest is headroom, and running
 # out is a failure the shape check reports rather than something to retry past.
 POLL_ATTEMPTS = 6
+
+# How large the unasked list may grow before a pass is judged unhealthy. A few
+# names fail their own request repeatedly on the reference MC7010 — 11 of 538
+# probed — and reporting them as unasked is correct. Hundreds would mean the
+# pass is not completing.
+UNASKED_PROPORTION_LIMIT = 0.05
+
+# How much of a clean pass's harvest a sabotaged pass must still return. Not
+# 1.0: the router's own answers drift, and a name that was populated a minute
+# ago may legitimately be empty now. A recovery that keeps 95% has worked; one
+# that keeps a third has not.
+SABOTAGE_RECOVERY_FLOOR = 0.95
+
+# Default seconds between survey passes. Long enough that two passes are not
+# back-to-back, short enough that a dozen of them is a coffee break rather than
+# an afternoon.
+SURVEY_GAP_SECONDS = 20
 
 # Addresses that are not identifying and appear in the file by design.
 _ALLOWED_ADDRESSES = frozenset(
@@ -219,8 +246,31 @@ class _StubEntry:
         return func
 
 
-async def produce(label: str) -> dict[str, Any]:
-    """Build a coordinator against the live router and return one download."""
+def _sabotaging_chunk(original: Any, sabotage_at: int) -> Any:
+    """Wrap `_probe_chunk` so the nth call finds the session already gone."""
+    state = {"n": 0}
+
+    async def chunk(self: Any, names: list[str], canaries: Any = ()) -> Any:
+        state["n"] += 1
+        if state["n"] == sabotage_at:
+            # A competing login does not clear our cookie; it makes it
+            # meaningless. Replacing the value reproduces that exactly.
+            self.cookies = dict.fromkeys(self.cookies, "0" * 32)
+            print(_dim(f"           [session invalidated before chunk {sabotage_at}]"))
+        return await original(self, names, canaries=canaries)
+
+    return chunk
+
+
+async def produce(label: str, sabotage_at: int = 0) -> dict[str, Any]:
+    """Build a coordinator against the live router and return one download.
+
+    `sabotage_at` invalidates the session before the nth probe chunk, which is
+    exactly what another client logging into the router does to us: the cookie
+    stays in place and stops meaning anything. A pass that recovers answers the
+    same names as a clean one; a pass that does not loses everything after that
+    point and, before this release, published those names as absent.
+    """
     from homeassistant.core import HomeAssistant
 
     options, data, entry_id, title = _credentials()
@@ -283,23 +333,49 @@ async def produce(label: str) -> dict[str, Any]:
             if coordinator.data:
                 break
 
-        result = await async_get_config_entry_diagnostics(hass, entry_as_config)
+        original_chunk = ZTERouterAPI._probe_chunk  # noqa: SLF001
+        if sabotage_at:
+            ZTERouterAPI._probe_chunk = _sabotaging_chunk(  # type: ignore[method-assign]  # noqa: SLF001
+                original_chunk, sabotage_at
+            )
+        try:
+            result = await async_get_config_entry_diagnostics(hass, entry_as_config)
+        finally:
+            ZTERouterAPI._probe_chunk = original_chunk  # type: ignore[method-assign]  # noqa: SLF001
         elapsed = (datetime.now(UTC) - start).total_seconds()
 
         with contextlib.suppress(Exception):
             await api.logout()
 
+    result["_elapsed"] = elapsed
     discovery = result.get("discovery", {})
     print(
         f"  {_cyan(label)}  {elapsed:5.1f}s"
         f"  data={result.get('data_populated')}/{len(result.get('data', {}))}"
         f"  answered={discovery.get('mined_names_answered')}"
-        f"  canary={discovery.get('canary', '<MISSING>')}"
-        f"  alive_after={discovery.get('session_alive_after')}"
+        f"  canaries={len(discovery.get('canaries', []))}"
+        f"  no_session={_note_count(discovery, 'read without a session')}"
+        f"  unasked={len(discovery.get('not_reprobed', []))}"
     )
     for note in discovery.get("notes", []):
         print(_dim(f"           {note}"))
     return result
+
+
+def _note_count(discovery: dict[str, Any], phrase: str) -> int:
+    """Return the leading number of the first note containing `phrase`.
+
+    The probe already records how many names it had to re-read because the
+    canary came back blank — the signature of a session lost mid-pass. It was
+    in every download and simply never surfaced, which is why a degraded pass
+    looked like a mystery rather than an eviction.
+    """
+    for note in discovery.get("notes", []):
+        if isinstance(note, str) and phrase in note:
+            head = note.split(" ", 1)[0]
+            if head.isdigit():
+                return int(head)
+    return 0
 
 
 def _leaves(obj: Any, path: str = "") -> Any:
@@ -384,20 +460,29 @@ def check_discovery(result: dict[str, Any], report: Report) -> None:
     for field in sorted(DISCOVERY_METADATA_PUBLISHED):
         report.record(field in discovery, f"[2] discovery `{field}` published")
 
-    canary = discovery.get("canary")
+    canaries = discovery.get("canaries")
+    census = discovery.get("canary_pool") or {}
     report.record(
-        isinstance(canary, str) and bool(canary),
-        "[2] the pass names the key that guarded it",
-        f"canary={canary!r}",
+        isinstance(canaries, list),
+        "[2] the pass names the keys that guarded it",
+        f"canaries={canaries!r}",
     )
-    # "unavailable" is a legitimate answer and must stay distinguishable from a
+    # An empty list is a legitimate answer and must stay distinguishable from a
     # missing field: a pass that could not guard itself has to say so, because
-    # `probed_no_answer` means nothing without it.
-    if canary == "unavailable":
+    # `probed_no_answer` means nothing without it. The census says which of the
+    # two causes applied.
+    if not canaries:
         report.record(
-            True,
-            "[2] no canary was available, and the file records that",
-            "probed_no_answer is unproven for this run",
+            bool(census),
+            "[2] no canary was available, and the file records why",
+            f"{census.get('populated')} populated, "
+            f"{census.get('served_without_a_session')} served without a session",
+        )
+    else:
+        report.record(
+            census.get("chosen") == len(canaries),
+            "[2] the census agrees with the canaries chosen",
+            f"chosen={census.get('chosen')} of {census.get('populated')} populated",
         )
 
     values = discovery.get("values", {})
@@ -408,8 +493,8 @@ def check_discovery(result: dict[str, Any], report: Report) -> None:
         f"{len(values)} values, {len(verdicts)} verdicts",
     )
     report.record(
-        canary not in values,
-        "[2] the canary is not republished as a discovered value",
+        not (set(canaries or []) & set(values)),
+        "[2] no canary is republished as a discovered value",
     )
 
     answered = discovery.get("mined_names_answered", 0)
@@ -419,9 +504,23 @@ def check_discovery(result: dict[str, Any], report: Report) -> None:
         "[2] answered never exceeds probed",
         f"{answered} of {probed}",
     )
+    silent = set(discovery.get("probed_no_answer", []))
+    unasked = set(discovery.get("not_reprobed", []))
     report.record(
-        not (set(discovery.get("probed_no_answer", [])) & set(values)),
+        not (silent & set(values)),
         "[2] a name that answered is not also listed as silent",
+    )
+    # The distinction the whole release turns on: asked and silent, versus
+    # never asked. A name in both fields would assert an absence that was
+    # never measured, which is what a capped re-probe used to publish.
+    report.record(
+        not (silent & unasked),
+        "[2] silent and unasked are disjoint",
+        f"{len(silent)} silent, {len(unasked)} unasked",
+    )
+    report.record(
+        not (unasked & set(values)),
+        "[2] a name that answered is not also listed as unasked",
     )
 
 
@@ -474,10 +573,39 @@ def check_stability(
         else "differences are radio and counter drift only",
     )
 
-    for field in ("mined_names_answered", "mined_names_probed"):
+    # Not "nothing unasked": a handful of names fail their own request
+    # repeatedly on the reference MC7010 and are honestly unresolvable. What
+    # matters is that they stay a rounding error and stay reported — a pass
+    # that starts leaving hundreds unasked has a problem, and one that reports
+    # them as absent instead has a worse one.
+    discovery = first.get("discovery", {})
+    unasked = len(discovery.get("not_reprobed", []))
+    probed = max(discovery.get("mined_names_probed") or 1, 1)
+    report.record(
+        unasked / probed < UNASKED_PROPORTION_LIMIT,
+        "[4] unasked names are a small fraction of those probed",
+        f"{unasked} of {probed}",
+    )
+
+    for field in (
+        "mined_names_answered",
+        "mined_names_probed",
+        "names_from_union_only",
+    ):
         one = first.get("discovery", {}).get(field)
         two = second.get("discovery", {}).get(field)
         report.record(one == two, f"[4] `{field}` is stable", f"{one} then {two}")
+
+    # Read from the notes rather than diffed as text: these two are the numbers
+    # that separate a healthy pass from one that lost a session, and a pass
+    # that silently starts losing them is the regression this mode exists for.
+    for phrase, label in (
+        ("read without a session", "names read without a session"),
+        ("re-probed singly", "names re-probed singly"),
+    ):
+        one = _note_count(first.get("discovery", {}), phrase)
+        two = _note_count(second.get("discovery", {}), phrase)
+        report.record(one == two, f"[4] {label} is stable", f"{one} then {two}")
 
 
 def _save(result: dict[str, Any], label: str, title: str) -> pathlib.Path:
@@ -491,6 +619,101 @@ def _save(result: dict[str, Any], label: str, title: str) -> pathlib.Path:
     return target
 
 
+async def survey(runs: int, gap: int) -> int:
+    """Run the pass repeatedly and report the spread of what it answered.
+
+    A rate on its own says how often something goes wrong, not what. So each
+    pass also reports how many names it had to re-read because the canary came
+    back blank: that count is the difference between "this firmware does not
+    report these names" and "we were not logged in for part of the pass".
+
+    The router permits one session, so anything else logging into it — a live
+    Home Assistant polling on its own schedule — evicts this pass midway. That
+    is a property of the environment, not of the download, and this mode exists
+    to measure it rather than argue about it.
+    """
+    print(f"survey: {runs} passes, {gap}s apart\n")
+    rows: list[tuple[int, float, int, int, int]] = []
+    for index in range(1, runs + 1):
+        result = await produce(f"pass {index}")
+        discovery = result.get("discovery", {})
+        rows.append(
+            (
+                index,
+                float(result.get("_elapsed", 0.0)),
+                int(discovery.get("mined_names_answered") or 0),
+                _note_count(discovery, "read without a session"),
+                _note_count(discovery, "queued for re-probe"),
+            )
+        )
+        if index < runs:
+            await asyncio.sleep(gap)
+
+    best = max(row[2] for row in rows)
+    degraded = [row for row in rows if row[2] < best]
+    print("\nsummary")
+    print(f"  best pass answered      : {best}")
+    print(f"  degraded passes         : {len(degraded)} of {len(rows)}")
+    if degraded:
+        print(f"  degraded answered       : {sorted(row[2] for row in degraded)}")
+        print(
+            "  no-session names, healthy vs degraded: "
+            f"{sorted(row[3] for row in rows if row[2] == best)} vs "
+            f"{sorted(row[3] for row in degraded)}"
+        )
+    # Reported, never asserted. A survey measures; it is not a pass/fail gate,
+    # and returning failure here would make a rate look like a verdict.
+    return 0
+
+
+async def sabotage_check(gap: int) -> int:
+    """Take the session away mid-pass and require the pass to answer anyway.
+
+    The unit suite cannot falsify this: a mock is written from the model, so a
+    test built on a wrong belief about the device passes while the code is
+    broken. This takes a real session away from a real router at a real point
+    in a real pass.
+    """
+    report = Report()
+    print("clean pass")
+    clean = await produce("clean")
+    await asyncio.sleep(gap)
+    print("\nsabotaged pass")
+    harmed = await produce("sabotaged", sabotage_at=5)
+
+    clean_names = set(clean["discovery"].get("values", {}))
+    harmed_names = set(harmed["discovery"].get("values", {}))
+    lost = clean_names - harmed_names
+
+    report.record(
+        len(harmed_names) >= len(clean_names) * SABOTAGE_RECOVERY_FLOOR,
+        "[5] a pass that lost its session still answers",
+        f"{len(harmed_names)} against {len(clean_names)} clean, "
+        f"{len(lost)} not seen again",
+    )
+    notes = harmed["discovery"].get("notes", [])
+    report.record(
+        any("re-established" in note for note in notes),
+        "[5] the pass recorded re-establishing the session",
+        next((n for n in notes if "re-established" in n), "no such note"),
+    )
+    report.record(
+        not (
+            set(harmed["discovery"].get("probed_no_answer", []))
+            & set(harmed["discovery"].get("not_reprobed", []))
+        ),
+        "[5] the sabotaged pass still separates silent from unasked",
+    )
+
+    total = len(report.checks)
+    passed = total - report.failed
+    if report.failed:
+        print(_red(f"\n✖  Sabotage check: FAILED  ({passed}/{total} passed)"))
+    else:
+        print(_green(f"\n✔  Sabotage check: PASSED  ({passed}/{total})"))
+    return 1 if report.failed else 0
+
+
 async def main() -> int:
     """Produce the artefact, check it, and return a shell exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -498,6 +721,35 @@ async def main() -> int:
         "--once",
         action="store_true",
         help="produce one download instead of two; skips the stability diff",
+    )
+    parser.add_argument(
+        "--survey",
+        type=int,
+        metavar="N",
+        help=(
+            "run N passes with a gap between them and report the spread, "
+            "instead of checking one artefact. For measuring how often a pass "
+            "comes back degraded, and whether the degraded ones lost a session."
+        ),
+    )
+    parser.add_argument(
+        "--gap",
+        type=int,
+        default=SURVEY_GAP_SECONDS,
+        metavar="SECONDS",
+        help=(
+            "seconds between survey passes (default %(default)s). Use a gap "
+            "longer than the competing poll interval to test one pass in "
+            "isolation."
+        ),
+    )
+    parser.add_argument(
+        "--sabotage",
+        action="store_true",
+        help=(
+            "run a clean pass and a pass whose session is invalidated partway, "
+            "and require both to answer the same names"
+        ),
     )
     parser.add_argument(
         "--keep",
@@ -513,6 +765,12 @@ async def main() -> int:
     if args.no_color:
         global _COLOUR  # noqa: PLW0603 - one flag, set once before any output
         _COLOUR = False
+
+    if args.survey:
+        return await survey(args.survey, args.gap)
+
+    if args.sabotage:
+        return await sabotage_check(args.gap)
 
     report = Report()
     print("producing diagnostics against the live router")

@@ -91,6 +91,13 @@ SMS_NUMBER_KEYS = {"number", "number_decoded"}
 _IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _MAC_RE = re.compile(r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b")
 # Identifier-shaped digit runs: IMSI is 15 digits, ICCID 19-20. See `_sweep`.
+# Value-kind rules for `_classify`. Deliberately coarse: they answer "what
+# sort of thing is this" and nothing finer, because the values they run on are
+# ones the deny rule has already refused to publish.
+_SIGNED_NUMERIC_RE = re.compile(r"^-?\d+(?:\.\d+)?$")
+_ENUM_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_\-]*$")
+_APN_PROFILE_SEP = "($)"
+
 _LONG_DIGITS_RE = re.compile(r"\b\d{15,}\b")
 _PDP_RE = re.compile(r"\b(IPv4v6|IPv6|IPv4|PPP|IP)\b")
 
@@ -411,6 +418,42 @@ _BLOB_CHARS = 200
 _VALUE_CAP = 120
 
 
+def _classify(value: str) -> str:
+    """Describe a withheld value by kind, never by content.
+
+    `_describe` reported only a character class and a length, which answers
+    almost nothing: `<alphanumeric, 4 chars>` could be an authentication mode,
+    a band number or a truncated name. What the discovery work actually needs
+    from a withheld value is its *kind* — is this a flag, a counter, an enum,
+    a delimited profile — because that is what decides whether a name can
+    become an entity and which kind.
+
+    Nothing here derives from the content beyond its shape. A boolean reports
+    that it is a boolean, not which of the two values it holds; an enum reports
+    that it is a short token, never the token. The value itself does not
+    survive this function, which is the property that lets it run on names the
+    deny rule has already refused to publish.
+    """
+    text = value.strip()
+    if not text:
+        return "<empty>"
+    if text in {"0", "1"}:
+        return "<boolean-like (0|1)>"
+    if _APN_PROFILE_SEP in text:
+        return f"<delimited profile, {text.count(_APN_PROFILE_SEP) + 1} fields>"
+    if _SIGNED_NUMERIC_RE.match(text):
+        kind = "integer" if text.lstrip("-").isdigit() else "decimal"
+        return f"<numeric {kind}, {len(text)} chars>"
+    for separator, label in ((";", "items"), (",", "items")):
+        if separator in text:
+            return f"<delimited, {text.count(separator) + 1} {label}>"
+    if len(text) > _BLOB_CHARS:
+        return f"<blob, {len(text)} chars>"
+    if _ENUM_RE.match(text):
+        return f"<enum-like short token, {len(text)} chars>"
+    return _describe(value)
+
+
 def _gate_discovery_value(
     key: str, value: str, tokenizer: _Tokenizer
 ) -> tuple[Any, str]:
@@ -440,7 +483,7 @@ def _gate_discovery_value(
         return _sweep(value, tokenizer), "vetted"
 
     if _DENY_NAME_RE.search(key):
-        return _describe(value), "denied-name"
+        return _classify(value), "denied-name"
 
     swept = _sweep(value, tokenizer)
     if swept != value:
@@ -450,7 +493,7 @@ def _gate_discovery_value(
         return tokenizer.token("geo", value), "denied-shape"
 
     if len(value) > _BLOB_CHARS:
-        return _describe(value), "blob"
+        return _classify(value), "blob"
 
     return value[:_VALUE_CAP], "published"
 
@@ -476,15 +519,19 @@ def _gate_discovery_value(
 # values; the values themselves are the gated section.
 DISCOVERY_METADATA_PUBLISHED = frozenset(
     {
-        "canary",
+        "canaries",
+        "canary_pool",
         "mined_count",
         "mined_names",
         "mined_names_answered",
         "mined_names_probed",
+        "names_from_union_only",
+        "not_reprobed",
         "notes",
         "probed_no_answer",
         "session",
         "session_alive_after",
+        "sessionless_measurement",
         "write_commands",
     }
 )

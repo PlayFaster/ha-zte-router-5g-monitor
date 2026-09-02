@@ -734,6 +734,19 @@
       "type": "shell"
     },
     {
+      "command": "[ -f scripts/diag_check.py ] && { mkdir -p .reports && /usr/local/bin/python scripts/diag_check.py --sabotage 2>&1 | tee >(sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/diag_sabotage.txt); } || echo \"[Skipped: no scripts/diag_check.py in this project]\"",
+      "label": "Hardware: Check Diagnostics Recovery",
+      "detail": "Takes the router session away partway through a REAL diagnostics pass and requires it to answer the same names anyway. Needs the hardware; never runs in CI.",
+      "presentation": {
+        "clear": true,
+        "panel": "dedicated",
+        "reveal": "always",
+        "echo": false
+      },
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
       "command": "[ -f scripts/hardware_check.py ] && { mkdir -p .reports && /usr/local/bin/python scripts/hardware_check.py --capture 2>&1 | tee >(sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/hardware_capture.txt); } || echo \"[Skipped: no scripts/hardware_check.py in this project]\"",
       "label": "Hardware: Capture Fixtures",
       "detail": "As Check Device, and re-records tests/fixtures/ from the live device. Refuses to write anything that looks like personal data.",

@@ -5,17 +5,18 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.9-dev9\] - 2026-09-02 - Diagnostic Download Yield 90 → 101; Capped Re-Probe False Absences Fixed](#339-dev9---2026-09-02---diagnostic-download-yield-90--101-capped-re-probe-false-absences-fixed)
   - [\[3.3.9-dev7\] - 2026-09-02 - Diagnostic Download Canary Field Published; Hardware Verification of the Produced File](#339-dev7---2026-09-02---diagnostic-download-canary-field-published-hardware-verification-of-the-produced-file)
   - [\[3.3.9-dev6\] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization](#339-dev6---2026-09-02---readme-hardware-compatibility-alignment-changelog-header-normalization)
-  - [\[3.3.9-dev5\] - 2026-09-02 - Discovery Pass Fresh Login State; Per-Chunk Canary Verification](#339-dev5---2026-09-02---discovery-pass-fresh-login-state-per-chunk-canary-verification)
+  - [\[3.3.9-dev5\] - 2026-09-02 - Diagnostic Download Truncation Fixed; Fresh Login and Per-Chunk Canary Verification](#339-dev5---2026-09-02---diagnostic-download-truncation-fixed-fresh-login-and-per-chunk-canary-verification)
   - [\[3.3.9-dev4\] - 2026-09-02 - Diagnostic Download Time Reduced from 60s to 6s; False Re-Login Fix](#339-dev4---2026-09-02---diagnostic-download-time-reduced-from-60s-to-6s-false-re-login-fix)
   - [\[3.3.9-dev3\] - 2026-09-01 - Discovery Probe Duration Reduced to 37s; Write Command Exclusion](#339-dev3---2026-09-01---discovery-probe-duration-reduced-to-37s-write-command-exclusion)
-  - [\[3.3.9-dev2\] - 2026-09-01 - Wider Web UI Extraction; Unanswered Parameter Diagnostics](#339-dev2---2026-09-01---wider-web-ui-extraction-unanswered-parameter-diagnostics)
+  - [\[3.3.9-dev2\] - 2026-09-01 - Diagnostic Download Mined Parameter Names Raised 383 → 642; Unanswered Names Published](#339-dev2---2026-09-01---diagnostic-download-mined-parameter-names-raised-383--642-unanswered-names-published)
   - [\[3.3.9-dev1\] - 2026-09-01 - Batch Polling URL Character Limit Partitioning; Request Overflow Prevention](#339-dev1---2026-09-01---batch-polling-url-character-limit-partitioning-request-overflow-prevention)
   - [\[3.3.8-dev2\] - 2026-09-01 - Firmware Update Diagnostic Sensors Added; Discovery Carrier Redaction](#338-dev2---2026-09-01---firmware-update-diagnostic-sensors-added-discovery-carrier-redaction)
   - [\[3.3.8-dev1\] - 2026-09-01 - Web UI Automated Parameter Discovery; Concept-Based Drift Tolerance](#338-dev1---2026-09-01---web-ui-automated-parameter-discovery-concept-based-drift-tolerance)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
-  - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
+  - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Symlink Link Checker Added](#337-dev3---2026-08-31---local-ci-symlink-link-checker-added)
   - [\[3.3.7-dev2\] - 2026-08-31 - Data Limit Write Control Form Aliases; Diagnostics Redaction Sweep](#337-dev2---2026-08-31---data-limit-write-control-form-aliases-diagnostics-redaction-sweep)
   - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Dynamic Cookie Authentication; Startup Key Discovery](#337-dev1---2026-08-31---mc888-pro-dynamic-cookie-authentication-startup-key-discovery)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
@@ -45,7 +46,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -103,7 +104,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -111,7 +112,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -214,6 +215,47 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.9-dev9] - 2026-09-02 - Diagnostic Download Yield 90 → 101; Capped Re-Probe False Absences Fixed
+
+### Summary
+
+A diagnostics download reported names as unsupported by the firmware when the pass had simply stopped asking about them. Three separate mechanisms produced that outcome: a re-probe queue capped at 120 names, with the discarded remainder published as established absences; a probe that could lose its session and had no way to recover, so every subsequent chunk read blank; and a candidate list drawn only from each device's own web UI, conflating "this firmware does not mention the name" with "this firmware does not answer it".
+
+Measured on the reference MC7010, the cap discarded about a hundred names on every pass, and an ordinary healthy pass loses its session twice through chunk timeouts alone. The MC888 Pro key conclusions in `.notes/issues/other_router_access/` were derived from downloads carrying all three defects and are withdrawn in §6 of that document.
+
+### Added
+
+- **Cross-device probing (`known_names.py`).** Every device is probed with the union of names observed on any device — 758 names, from the MC7010's 658 and the MC888 Pro's 196, write commands excluded — as well as with its own mined set. Whether a device's JavaScript references a name and whether the device answers it are independent facts. Measured: the reference MC7010 now answers **101 names against 90**, including `flux_clear_date`, `flux_auto_clear_flow_data_switch` and `flux_data_volume_limit_switch`, none of which its own web UI mentions.
+- **`not_reprobed`.** Names the pass could not put to the device properly, published separately from those it asked and found silent. `probed_no_answer` now means asked alone and silent, and nothing else.
+- **Session recovery.** A detected loss triggers an explicit logout and login, proved by reading the canaries back — a login that returns cleanly while the canaries stay silent is recorded as a failure, not assumed to have worked. Bounded per probe phase, and the file says when the limit was reached and that later names were read without a confirmed session.
+- **Value kinds.** A withheld value now reports what sort of thing it is — `<boolean-like (0|1)>`, `<numeric integer, 4 chars>`, `<enum-like short token, 7 chars>`, `<delimited profile, 3 fields>` — rather than a character count. Derived from shape alone; the deny list is unchanged and no value is published that was not published before.
+- **`scripts/diag_check.py --sabotage`** takes the session away partway through a real pass, as a competing login does, and requires the pass to answer the same names. Measured: 136 against 136 clean, none lost. **`--survey N`** reports the spread across N passes.
+
+### Fixed
+
+- **The poll and the discovery pass now genuinely serialize.** `async_run_discovery` had taken `_async_update_lock` since the probe was added, with a comment saying the two take turns, but `_async_update_data` never acquired it — so nothing was serialized. A poll re-logging in mid-pass invalidates the cookie the probe is replaying, and the probe cannot recover by design. The test that was supposed to cover this took the lock itself in a helper and could not detect whether the poll path did.
+- **The re-probe cap is gone.** The wall-clock budget is the only bound, and it is the only one that scales: the MC888 probes 602 names against the MC7010's 501. Outstanding names are re-probed in rounds until nothing new resolves, the rounds ceiling is reached, or the budget expires.
+- **Canary selection is measured, not assumed.** Candidates are now checked against a reading taken during the logout the pass already performs, rather than a stored set that falls back to five names measured on one MC7010. On an MC888 Pro that constant is wrong — it serves `network_type` and `ppp_status` without a session — so a canary chosen against it could be a key that answers whether or not we are logged in.
+- **Three canaries, not one,** drawn from both polls, with a session declared lost only when all of them go silent. One key emptying during a band change is not an eviction.
+- **Discovery notes are swept** before publication: `discovery aborted: {err}` interpolates an exception that, for a connection failure, names the router's address.
+
+### Changed
+
+- `canary` becomes `canaries`, alongside `canary_pool`, which records why no canary was available — nothing answered, or everything that answered is served without a session. Those call for different responses, and on an unfamiliar device the difference matters.
+- A device that can offer no canary at all confirms its session out of band after a blank chunk, at most once every eight, so detection exists even where nothing in the request can prove it.
+
+### Measured
+
+|                                     |            Before |      After |
+| :---------------------------------- | ----------------: | ---------: |
+| Names answered, MC7010              |                90 |        101 |
+| Names discarded and reported absent |     ~100 per pass |          0 |
+| Names reported as not established   | not distinguished |         11 |
+| Pass duration                       |             ~10 s |   ~15-20 s |
+| Sabotaged pass, names answered      |       dozens lost | 136 of 136 |
+
+Across eight consecutive passes, seven were identical and one reported 115 names in `not_reprobed` — visible as an incomplete harvest rather than as a hundred false absences. The wall-clock budget of 240 seconds is not binding at these durations and is unchanged.
+
 ## [3.3.9-dev7] - 2026-09-02 - Diagnostic Download Canary Field Published; Hardware Verification of the Produced File
 
 ### Summary
@@ -260,7 +302,7 @@ Updated README hardware compatibility and diagnostic download guidance, and stan
 - **`changelog_format.md` (v1.3.0)**: Added explicit _Lead with the visible outcome or feature impact, not the internal code detail_ guidance to §2, forbidding low-level code parameter names or abstract assertions alone without stating the user or system change.
 - **`changelog_upd_gen.md` (v1.4.2)**: Updated drafting instructions in Step 2 with outcome-first negative patterns.
 
-## [3.3.9-dev5] - 2026-09-02 - Discovery Pass Fresh Login State; Per-Chunk Canary Verification
+## [3.3.9-dev5] - 2026-09-02 - Diagnostic Download Truncation Fixed; Fresh Login and Per-Chunk Canary Verification
 
 ### Summary
 
@@ -326,7 +368,7 @@ A review of the first 3.3.9-dev2 download found that 81 of the 520 names probed 
 - 1112 tests, 100% branch coverage. New: write commands are recorded and never probed; an uppercase read name is not excluded.
 - Test Depth passes — the rename clears the one undriven-gate finding.
 
-## [3.3.9-dev2] - 2026-09-01 - Wider Web UI Extraction; Unanswered Parameter Diagnostics
+## [3.3.9-dev2] - 2026-09-01 - Diagnostic Download Mined Parameter Names Raised 383 → 642; Unanswered Names Published
 
 ### Summary
 
@@ -475,7 +517,7 @@ The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`
 
 - **Alias Classification Sweep & Symlink Link Checker**: Enforced test coverage ensuring all redacted and pseudonymized concepts cover all parameter aliases, and added repository link validation tooling for Markdown documentation.
 
-## [3.3.7-dev3] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added
+## [3.3.7-dev3] - 2026-08-31 - Local CI Symlink Link Checker Added
 
 ### Added
 

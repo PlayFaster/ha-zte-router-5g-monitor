@@ -199,6 +199,39 @@ SMS_MAX_CHARS_UNICODE = 335
 # single call.
 BATCH_URL_MAX_CHARS = 1600
 
+# How many canaries a probe carries. One key is a single point of failure in
+# both directions: a metric that legitimately empties reads as a lost session,
+# and a key that turns out to be served without one reports a healthy session
+# through an eviction. Three makes a false positive require a simultaneous
+# coincidence across unrelated keys, at a cost of two names per request.
+CANARY_COUNT = 3
+
+# How many blank chunks may pass between out-of-band session checks on a device
+# that offers no canary at all. Such a device answers every key it has without
+# a session, so no key carried in the request can prove one — detection has to
+# leave the request, and that costs an extra round trip. Most probed names are
+# genuinely absent, so blank chunks are the common case and checking every one
+# would roughly double the pass. Eight bounds the loss: at most eight chunks,
+# 64 names at the discovery chunk size, are attributed to the firmware before
+# the session behind them is confirmed.
+CANARY_FALLBACK_EVERY = 8
+
+# How many times one pass may re-establish a session it detected as lost.
+# Bounded because the cause is usually another client holding the single
+# session this hardware permits, and racing it indefinitely would burn the
+# whole budget re-logging in. Three is enough to survive an isolated eviction —
+# a user opening the router's web page while a download runs — and short enough
+# that a sustained competitor is reported as one rather than fought.
+#
+# Counted per probe phase, and a pass runs two — the static list and the mined
+# one — so a pass may re-establish up to six times in total. Measured on the
+# reference MC7010: a healthy pass re-establishes twice, because a chunk that
+# times out clears the session locally and the next chunk finds it gone. That
+# is the same 16 names that have appeared as "read without a session" in every
+# download taken since the canary was introduced; until now they were requeued
+# and frequently discarded by the re-probe cap rather than recovered.
+DISCOVERY_RELOGIN_LIMIT = 3
+
 DISCOVERY_CHUNK_SIZE = 16
 
 # Mined names are unvalidated by definition, so their chunks are smaller: a
@@ -216,12 +249,12 @@ DISCOVERY_CHUNK_TIMEOUT = 5
 # firmware could make a diagnostics download take minutes.
 DISCOVERY_BUDGET_SECONDS = 240
 
-# Ceiling on the single-name re-probe. A chunk that answers nothing queues
-# every name in it, and the wider extraction makes most chunks legitimately
-# empty — 208 names were queued on one MC7010 run, which exhausted the budget
-# before the list was finished. Bounded so the re-probe cannot crowd out the
-# chunks that have not run yet.
-DISCOVERY_REPROBE_LIMIT = 120
+# How many convergence rounds a pass may run over names it could not resolve.
+# A round re-probes each outstanding name once; a round that resolves nothing
+# new ends the loop, so this is a ceiling rather than a target. The wall-clock
+# budget is the real bound — this exists so a device that answers erratically
+# cannot spin.
+DISCOVERY_MAX_ROUNDS = 4
 
 # Pause after a discovery pass before returning. Several hundred requests in
 # under a minute left an MC7010 refusing the next write with an empty

@@ -28,6 +28,11 @@ from custom_components.zte_router_5g.api import (
     ZTERouterAPI,
     _classify_session,
 )
+from custom_components.zte_router_5g.const import (
+    CANARY_FALLBACK_EVERY,
+    DISCOVERY_MAX_ROUNDS,
+    DISCOVERY_RELOGIN_LIMIT,
+)
 from custom_components.zte_router_5g.diagnostics import (
     async_get_config_entry_diagnostics,
 )
@@ -464,7 +469,7 @@ async def test_a_failing_discovery_chunk_does_not_stop_the_rest(mock_aiohttp_cli
     answers += [ZTEConnectionError("chunk refused")] * 60
     mock_aiohttp_client.get.side_effect = answers
 
-    found, notes = await api.probe_names(
+    found, notes, _unasked = await api.probe_names(
         names, chunk_size=16, deadline=monotonic() + 30
     )
 
@@ -481,7 +486,7 @@ async def test_a_non_dict_discovery_response_is_skipped(mock_aiohttp_client):
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data=["not", "a", "dict"])
 
-    found, _notes = await api.probe_names(
+    found, _notes, _unasked = await api.probe_names(
         ["lte_band"], chunk_size=8, deadline=monotonic() + 30
     )
     assert found == {}
@@ -618,7 +623,7 @@ async def test_a_timed_out_chunk_is_reprobed_singly(mock_aiohttp_client):
         api.session_active = True
 
     with patch.object(api, "login", side_effect=_relogin):
-        found, notes = await api.probe_names(names, chunk_size=3)
+        found, notes, _unasked = await api.probe_names(names, chunk_size=3)
 
     assert found == {"b_two": "42"}
     assert any("re-probed singly" in note for note in notes)
@@ -636,7 +641,7 @@ async def test_the_discovery_budget_curtails_and_records_it(mock_aiohttp_client)
     api.last_activity = datetime.now(UTC)
     mock_aiohttp_client.get.return_value = MockResponse(json_data={})
 
-    found, notes = await api.probe_names(
+    found, notes, _unasked = await api.probe_names(
         ["a_one", "b_two"], chunk_size=1, deadline=monotonic() - 1
     )
 
@@ -844,13 +849,13 @@ async def test_the_budget_stops_the_single_name_reprobe_too(mock_aiohttp_client)
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
-    async def _fail_then_stall(chunk, canary=None):
+    async def _fail_then_stall(chunk, canaries=()):
         # The first chunk fails, queueing its names; by the time the re-probe
         # starts the deadline has passed.
         await asyncio.sleep(0.05)
 
     with patch.object(api, "_probe_chunk", side_effect=_fail_then_stall):
-        found, notes = await api.probe_names(
+        found, notes, _unasked = await api.probe_names(
             ["a_one", "b_two", "c_three"],
             chunk_size=3,
             deadline=monotonic() + 0.02,
@@ -940,7 +945,7 @@ async def test_a_goform_response_key_is_never_harvested(mock_aiohttp_client):
         json_data={"result": "failure", "lte_band": "20"}
     )
 
-    found, _notes = await api.probe_names(["lte_band"], chunk_size=1)
+    found, _notes, _unasked = await api.probe_names(["lte_band"], chunk_size=1)
 
     assert found == {"lte_band": "20"}
 
@@ -1057,33 +1062,123 @@ def test_the_measurement_note_is_set_before_anything_runs() -> None:
 
 
 @pytest.mark.asyncio
-async def test_the_single_name_reprobe_is_capped(mock_aiohttp_client):
-    """A wider net makes most chunks legitimately empty.
+async def test_every_queued_name_is_re_probed(mock_aiohttp_client):
+    """No count cap: the wall-clock budget is the only bound that scales.
 
-    Each queues every name in it for a single re-probe, and 208 were queued on
-    one MC7010 run — enough to exhaust the budget before the remaining chunks
-    had run. The cap stops the re-probe crowding out work not yet done.
+    A wider net makes most chunks legitimately empty, and each queues every
+    name in it for a single re-probe. `DISCOVERY_REPROBE_LIMIT` used to discard
+    the queue past 120 names, and those names were then published in
+    `probed_no_answer` as though the device had been asked and had said
+    nothing. On the reference MC7010 that discarded about a hundred names on
+    every pass, and the MC888 key list this work exists to grow was read off
+    downloads that did it.
     """
-    from custom_components.zte_router_5g.const import DISCOVERY_REPROBE_LIMIT
-
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
-    names = [f"a_name_{i:04d}" for i in range(DISCOVERY_REPROBE_LIMIT * 2)]
+    names = [f"a_name_{i:04d}" for i in range(240)]
     probed: list[list[str]] = []
 
-    async def _record(chunk, canary=None):
+    async def _record(chunk, canaries=()):
         probed.append(chunk)
         return {}
 
     with patch.object(api, "_probe_chunk", side_effect=_record):
-        _found, notes = await api.probe_names(names, chunk_size=8)
+        _found, notes, unasked = await api.probe_names(names, chunk_size=8)
 
     singles = [c for c in probed if len(c) == 1]
-    assert len(singles) == DISCOVERY_REPROBE_LIMIT
-    assert any("capped at" in note for note in notes)
+    assert len(singles) == len(names), "every queued name is asked on its own"
+    assert unasked == [], "nothing was left unasked, so nothing is unproven"
+    assert any("re-probed singly over 1 rounds" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_a_name_left_unasked_is_never_reported_as_absent(mock_aiohttp_client):
+    """Out of budget is not an answer, and must not read like one."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    async def _blank(chunk, canaries=()):
+        return {}
+
+    with patch.object(api, "_probe_chunk", side_effect=_blank):
+        _found, notes, unasked = await api.probe_names(
+            [f"a_name_{i:03d}" for i in range(64)],
+            chunk_size=8,
+            # Already spent: the chunk loop runs, the re-probe cannot.
+            deadline=monotonic() - 1,
+        )
+
+    assert unasked == [f"a_name_{i:03d}" for i in range(64)]
+    assert any("budget exhausted" in note for note in notes)
+    # The names come back as unasked, not as absent — an exhausted budget is
+    # not an answer and must not read like one.
+
+
+@pytest.mark.asyncio
+async def test_a_failing_name_is_retried_to_the_rounds_ceiling(mock_aiohttp_client):
+    """Another round would ask the same names the same way."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    attempts: list[list[str]] = []
+
+    async def _fail(chunk, canaries=()):
+        attempts.append(chunk)
+        # A failed request is not an answer, so the name goes round again.
+        return None if len(chunk) == 1 else {}
+
+    with patch.object(api, "_probe_chunk", side_effect=_fail):
+        _found, notes, unasked = await api.probe_names(
+            [f"a_name_{i:03d}" for i in range(16)], chunk_size=8
+        )
+
+    singles = [c for c in attempts if len(c) == 1]
+    # Every single request fails, so the queue never shortens and the rounds
+    # ceiling is what stops it. The names are reported as unasked, because a
+    # request that failed is not an answer about the firmware.
+    assert len(singles) == 16 * DISCOVERY_MAX_ROUNDS
+    assert len(unasked) == 16
+    assert any(f"over {DISCOVERY_MAX_ROUNDS} rounds, resolving 0" in n for n in notes)
+
+
+@pytest.mark.asyncio
+async def test_a_round_that_settles_names_earns_another(mock_aiohttp_client):
+    """Progress is the queue shortening, by any route.
+
+    A round that establishes fifty names are silent has settled fifty names.
+    Ending the loop because none of them *answered* would abandon the few whose
+    requests merely failed, which are the ones a retry exists for — and they
+    would then be reported as unasked despite being retryable.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    seen: list[str] = []
+
+    async def _one_stubborn_name(chunk, canaries=()):
+        if len(chunk) > 1:
+            return {}
+        seen.append(chunk[0])
+        # Everything settles as silent except one, which fails until round 3.
+        if chunk[0] != "a_name_003":
+            return {}
+        return None if seen.count("a_name_003") < 3 else {"a_name_003": "42"}
+
+    with patch.object(api, "_probe_chunk", side_effect=_one_stubborn_name):
+        found, notes, unasked = await api.probe_names(
+            [f"a_name_{i:03d}" for i in range(16)], chunk_size=8
+        )
+
+    assert found == {"a_name_003": "42"}
+    assert unasked == []
+    assert any("over 3 rounds" in note for note in notes)
 
 
 @pytest.mark.asyncio
@@ -1153,7 +1248,7 @@ async def test_an_empty_probe_response_is_not_read_as_an_expired_session(
         json_data={"a_one": "", "b_two": ""}
     )
 
-    found, _notes = await api.probe_names(["a_one", "b_two"], chunk_size=2)
+    found, _notes, _unasked = await api.probe_names(["a_one", "b_two"], chunk_size=2)
 
     assert found == {}
     # No login was posted, and the session was left alone. The chunk and its
@@ -1206,7 +1301,7 @@ async def test_the_session_is_checked_after_a_discovery_pass(mock_aiohttp_client
 
     assert result["session_alive_after"] is True
     # The canary is chosen from what the device answered, never hardcoded.
-    assert result["canary"] == _CORE_PARAMS[0]
+    assert result["canaries"][0] == _CORE_PARAMS[0]
 
 
 @pytest.mark.asyncio
@@ -1255,10 +1350,15 @@ async def test_a_chunk_read_without_a_session_is_not_recorded_as_absent(
         json_data={"a_one": "", "b_two": "", "lte_rsrp": ""}
     )
 
-    found, notes = await api.probe_names(
-        ["a_one", "b_two"], chunk_size=2, canary="lte_rsrp"
-    )
+    with patch.object(
+        api, "_reestablish_session", AsyncMock(return_value=True)
+    ) as recover:
+        found, notes, _unasked = await api.probe_names(
+            ["a_one", "b_two"], chunk_size=2, canaries=["lte_rsrp"]
+        )
 
+    # A detected loss is not merely recorded — the pass tries to recover it.
+    assert recover.await_count == 1
     assert found == {}
     assert any("without a session" in note for note in notes)
 
@@ -1274,8 +1374,8 @@ async def test_a_live_canary_lets_a_blank_chunk_stand(mock_aiohttp_client):
         json_data={"a_one": "", "b_two": "", "lte_rsrp": "-96"}
     )
 
-    found, notes = await api.probe_names(
-        ["a_one", "b_two"], chunk_size=2, canary="lte_rsrp"
+    found, notes, _unasked = await api.probe_names(
+        ["a_one", "b_two"], chunk_size=2, canaries=["lte_rsrp"]
     )
 
     assert found == {}
@@ -1295,7 +1395,9 @@ async def test_the_canary_is_never_published_as_a_discovered_value(
         json_data={"a_one": "20", "lte_rsrp": "-96"}
     )
 
-    found, _notes = await api.probe_names(["a_one"], chunk_size=1, canary="lte_rsrp")
+    found, _notes, _unasked = await api.probe_names(
+        ["a_one"], chunk_size=1, canaries=["lte_rsrp"]
+    )
 
     assert found == {"a_one": "20"}
 
@@ -1321,7 +1423,7 @@ async def test_no_canary_is_recorded_rather_than_assumed(mock_aiohttp_client):
     ):
         result = await api.run_discovery()
 
-    assert result["canary"] == "unavailable"
+    assert result["canaries"] == []
 
 
 @pytest.mark.asyncio
@@ -1339,6 +1441,331 @@ async def test_an_unauthenticated_key_is_never_chosen_as_the_canary(
     payload["signalbar"] = "4"
     mock_aiohttp_client.get.return_value = MockResponse(json_data=payload)
 
-    canary = await api._pick_canary(None)
+    canary, _census = await api._pick_canaries(None)
 
-    assert canary == "signalbar"
+    assert canary == ["signalbar"]
+
+
+@pytest.mark.asyncio
+async def test_the_measured_set_overrides_the_stored_one_for_the_canary(
+    mock_aiohttp_client,
+):
+    """The measurement taken this pass wins over the one taken at setup.
+
+    The stored set falls back to five names measured on a single MC7010 when
+    no measurement was ever trusted. An MC888 Pro answers `network_type` and
+    `ppp_status` without a session (issue #56), so against the constant those
+    look like valid canaries — and a canary the device serves unauthenticated
+    answers in every chunk, reporting a healthy session for the whole of a
+    pass that lost one.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    # What setup stored, and what this device actually does, disagree.
+    api.unauthenticated_keys = frozenset({"imei"})
+    payload = dict.fromkeys(_CORE_PARAMS, "")
+    payload["network_type"] = "LTE"
+    payload["signalbar"] = "4"
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=payload)
+
+    against_stored, _s = await api._pick_canaries(None)
+    against_measured, _m = await api._pick_canaries(
+        None, sessionless=frozenset({"imei", "network_type"})
+    )
+
+    assert against_stored[0] == "network_type", "the stored set allows it"
+    assert "network_type" not in against_measured, "the measurement rules it out"
+
+
+@pytest.mark.asyncio
+async def test_a_pass_measures_the_sessionless_keys_before_logging_back_in(
+    mock_aiohttp_client,
+):
+    """The measurement is only honest inside the pass's own logout window."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get_response = MockResponse(
+        json_data={_CORE_PARAMS[0]: "value", "wan_connect_status": "connected"}
+    )
+    order: list[str] = []
+
+    async def _measure(timeout_sec=None):
+        order.append("measured")
+        api.measurement_note = "measured: 6 keys"
+        return frozenset({"imei"})
+
+    async def _login(*_args, **_kwargs):
+        order.append("login")
+
+    with (
+        patch.object(api, "logout", AsyncMock()),
+        patch.object(api, "login", side_effect=_login),
+        patch.object(api, "measure_unauthenticated_keys", side_effect=_measure),
+    ):
+        result = await api.run_discovery()
+
+    assert order[:2] == ["measured", "login"]
+    assert result["sessionless_measurement"] == "measured: 6 keys"
+    # The fresh reading replaces whatever setup left behind.
+    assert api.unauthenticated_keys == frozenset({"imei"})
+
+
+@pytest.mark.asyncio
+async def test_one_canary_going_quiet_is_not_a_lost_session(mock_aiohttp_client):
+    """A single key emptying is a radio changing state, not an eviction.
+
+    With one canary that reads as a lost session, and several hundred names
+    are re-probed for nothing. Requiring every canary to go silent makes a
+    false positive need a simultaneous coincidence across unrelated keys.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"a_one": "", "b_two": "", "lte_rsrp": "", "signalbar": "4"}
+    )
+
+    found, notes, _unasked = await api.probe_names(
+        ["a_one", "b_two"], chunk_size=2, canaries=["lte_rsrp", "signalbar"]
+    )
+
+    assert found == {}
+    assert not any("read without a session" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_every_canary_going_quiet_is_a_lost_session(mock_aiohttp_client):
+    """All silent together is the signature an eviction actually leaves."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"a_one": "", "b_two": "", "lte_rsrp": "", "signalbar": ""}
+    )
+
+    with patch.object(api, "_reestablish_session", AsyncMock(return_value=True)):
+        _found, notes, _unasked = await api.probe_names(
+            ["a_one", "b_two"], chunk_size=2, canaries=["lte_rsrp", "signalbar"]
+        )
+
+    assert any("2 names read without a session" in note for note in notes)
+    assert any("session re-established 1 times" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_the_canary_census_says_why_none_was_found(mock_aiohttp_client):
+    """No canary has two causes, and they call for different responses."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    payload = dict.fromkeys(_CORE_PARAMS, "")
+    payload["network_type"] = "LTE"
+    payload["ppp_status"] = "connected"
+    mock_aiohttp_client.get.return_value = MockResponse(json_data=payload)
+
+    canaries, census = await api._pick_canaries(
+        None, sessionless=frozenset({"network_type", "ppp_status"})
+    )
+
+    assert canaries == []
+    assert census["populated"] == 2
+    assert census["served_without_a_session"] == 2
+    assert census["chosen"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_canaryless_device_confirms_the_session_out_of_band(
+    mock_aiohttp_client,
+):
+    """No canary means no proof inside the request, so the check leaves it.
+
+    Such a device answers every key it has without a session — which is why
+    nothing qualified as a canary — so a blank chunk is indistinguishable from
+    an evicted one until something else is asked.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"a": "", "b": ""})
+
+    with (
+        patch.object(api, "_session_still_alive", AsyncMock(return_value=False)),
+        patch.object(api, "_reestablish_session", AsyncMock(return_value=False)),
+    ):
+        _found, notes, _unasked = await api.probe_names(
+            [f"name_{n}" for n in range(CANARY_FALLBACK_EVERY * 2)],
+            chunk_size=2,
+            canaries=[],
+        )
+
+    assert any("session confirmed out of band" in note for note in notes)
+    assert any("read without a session" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_the_out_of_band_check_is_rate_limited(mock_aiohttp_client):
+    """Blank chunks are the common case; checking every one doubles the pass."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"a": "", "b": ""})
+    alive = AsyncMock(return_value=True)
+
+    with patch.object(api, "_session_still_alive", alive):
+        await api.probe_names(
+            [f"name_{n}" for n in range(CANARY_FALLBACK_EVERY * 4)],
+            chunk_size=2,
+            canaries=[],
+        )
+
+    # Two checks for sixteen blank chunks, not sixteen.
+    assert alive.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_a_device_with_canaries_never_pays_for_the_fallback(
+    mock_aiohttp_client,
+):
+    """The extra round trip is confined to devices that cannot be guarded."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"a": "", "b": "", "signalbar": "4"}
+    )
+    alive = AsyncMock(return_value=True)
+
+    with patch.object(api, "_session_still_alive", alive):
+        await api.probe_names(
+            [f"name_{n}" for n in range(CANARY_FALLBACK_EVERY * 4)],
+            chunk_size=2,
+            canaries=["signalbar"],
+        )
+
+    assert alive.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_a_re_established_session_is_proved_before_it_is_believed(
+    mock_aiohttp_client,
+):
+    """`session_active` is a flag this code sets; the canaries are evidence.
+
+    Believing the flag is the whole class of fault this release is unpicking,
+    so a login is read back through the same canaries that detected the loss.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"signalbar": "4"})
+
+    with (
+        patch.object(api, "logout", AsyncMock()),
+        patch.object(api, "login", AsyncMock()),
+    ):
+        assert await api._reestablish_session(["signalbar"]) is True
+
+
+@pytest.mark.asyncio
+async def test_a_login_whose_canaries_stay_silent_is_not_a_session(
+    mock_aiohttp_client,
+):
+    """A login that returns cleanly and changes nothing is still a failure."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"signalbar": ""})
+
+    with (
+        patch.object(api, "logout", AsyncMock()),
+        patch.object(api, "login", AsyncMock()),
+    ):
+        assert await api._reestablish_session(["signalbar"]) is False
+
+
+@pytest.mark.asyncio
+async def test_a_failed_recovery_is_recorded_and_the_pass_continues(
+    mock_aiohttp_client,
+):
+    """A download must produce a file whatever the router does."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"a_one": "", "b_two": "", "lte_rsrp": ""}
+    )
+
+    with patch.object(api, "_reestablish_session", AsyncMock(return_value=False)):
+        _found, notes, _unasked = await api.probe_names(
+            ["a_one", "b_two"], chunk_size=2, canaries=["lte_rsrp"]
+        )
+
+    assert any("could not be re-established 1 times" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_the_relogin_limit_is_reported_when_it_is_reached(
+    mock_aiohttp_client,
+):
+    """A sustained competitor is reported, not fought to the budget's end.
+
+    Something else holding the single session this hardware permits will win
+    every race, and the names read after that point were read without a
+    confirmed session — which the file has to say.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data=dict.fromkeys(["a", "b", "lte_rsrp"], "")
+    )
+
+    with patch.object(
+        api, "_reestablish_session", AsyncMock(return_value=False)
+    ) as recover:
+        _found, notes, _unasked = await api.probe_names(
+            [f"name_{n}" for n in range(DISCOVERY_RELOGIN_LIMIT * 4)],
+            chunk_size=2,
+            canaries=["lte_rsrp"],
+        )
+
+    assert recover.await_count == DISCOVERY_RELOGIN_LIMIT
+    assert any("re-login limit reached" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_a_canaryless_device_recovers_through_the_out_of_band_check(
+    mock_aiohttp_client,
+):
+    """No canary still gets a recovery — it is just proved differently."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"a": "", "b": ""})
+
+    with (
+        patch.object(api, "_session_still_alive", AsyncMock(return_value=False)),
+        patch.object(api, "_reestablish_session", AsyncMock(return_value=True)),
+    ):
+        _found, notes, _unasked = await api.probe_names(
+            [f"name_{n}" for n in range(CANARY_FALLBACK_EVERY * 4)],
+            chunk_size=2,
+            canaries=[],
+        )
+
+    assert any("session re-established" in note for note in notes)
