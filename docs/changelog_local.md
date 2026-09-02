@@ -5,17 +5,18 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.9-dev6\] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization](#339-dev6---2026-09-02---readme-hardware-compatibility-alignment-changelog-header-normalization)
   - [\[3.3.9-dev5\] - 2026-09-02 - Discovery Pass Fresh Login State; Per-Chunk Canary Verification](#339-dev5---2026-09-02---discovery-pass-fresh-login-state-per-chunk-canary-verification)
   - [\[3.3.9-dev4\] - 2026-09-02 - Diagnostic Download Time Reduced from 60s to 6s; False Re-Login Fix](#339-dev4---2026-09-02---diagnostic-download-time-reduced-from-60s-to-6s-false-re-login-fix)
-  - [\[3.3.9-dev3\] - 2026-09-01 - Write Commands Excluded From Probing](#339-dev3---2026-09-01---write-commands-excluded-from-probing)
+  - [\[3.3.9-dev3\] - 2026-09-01 - Discovery Probe Duration Reduced to 37s; Write Command Exclusion](#339-dev3---2026-09-01---discovery-probe-duration-reduced-to-37s-write-command-exclusion)
   - [\[3.3.9-dev2\] - 2026-09-01 - Wider Web UI Extraction; Unanswered Parameter Diagnostics](#339-dev2---2026-09-01---wider-web-ui-extraction-unanswered-parameter-diagnostics)
-  - [\[3.3.9-dev1\] - 2026-09-01 - Batch Reads Split By URL Budget](#339-dev1---2026-09-01---batch-reads-split-by-url-budget)
-  - [\[3.3.8-dev2\] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors](#338-dev2---2026-09-01---carrier-identity-withheld-in-discovery-mined-aliases-firmware-update-sensors)
-  - [\[3.3.8-dev1\] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys](#338-dev1---2026-09-01---key-discovery-from-the-routers-own-web-ui-concept-based-contract-keys)
+  - [\[3.3.9-dev1\] - 2026-09-01 - Batch Polling URL Character Limit Partitioning; Request Overflow Prevention](#339-dev1---2026-09-01---batch-polling-url-character-limit-partitioning-request-overflow-prevention)
+  - [\[3.3.8-dev2\] - 2026-09-01 - Firmware Update Diagnostic Sensors Added; Discovery Carrier Redaction](#338-dev2---2026-09-01---firmware-update-diagnostic-sensors-added-discovery-carrier-redaction)
+  - [\[3.3.8-dev1\] - 2026-09-01 - Web UI Automated Parameter Discovery; Concept-Based Drift Tolerance](#338-dev1---2026-09-01---web-ui-automated-parameter-discovery-concept-based-drift-tolerance)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
   - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
-  - [\[3.3.7-dev2\] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep](#337-dev2---2026-08-31---data-limit-form-aliases-classified-concept-alias-sweep)
-  - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery](#337-dev1---2026-08-31---mc888-pro-session-cookie-per-device-unauthenticated-key-set-key-discovery)
+  - [\[3.3.7-dev2\] - 2026-08-31 - Data Limit Write Control Form Aliases; Diagnostics Redaction Sweep](#337-dev2---2026-08-31---data-limit-write-control-form-aliases-diagnostics-redaction-sweep)
+  - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Dynamic Cookie Authentication; Startup Key Discovery](#337-dev1---2026-08-31---mc888-pro-dynamic-cookie-authentication-startup-key-discovery)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
   - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Stale Boot Time Reconciliation Across Restarts](#336-dev1---2026-08-31---device-uptime-stale-boot-time-reconciliation-across-restarts)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
@@ -24,13 +25,13 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.4-dev26\] - 2026-08-30 - Login Form Order Aligned With Reference Implementation](#334-dev26---2026-08-30---login-form-order-aligned-with-reference-implementation)
   - [\[3.3.4-dev25\] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing](#334-dev25---2026-08-30---login-session-without-a-stok-cookie-session-state-pairing)
-  - [\[3.3.4-dev24\] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README](#334-dev24---2026-08-30---ci-bump-ruff-spelling-actions-screenshot-for-readme)
+  - [\[3.3.4-dev24\] - 2026-08-30 - Ruff Tooling Bump; README Actions Visuals](#334-dev24---2026-08-30---ruff-tooling-bump-readme-actions-visuals)
   - [\[3.3.4-dev23\] - 2026-08-27 - Project Structure Reference Sync; Ha-Compatibility and Test Harness Additions](#334-dev23---2026-08-27---project-structure-reference-sync-ha-compatibility-and-test-harness-additions)
-  - [\[3.3.4-dev22\] - 2026-08-27 - Ruff rules aligned; Repairs info in README; AGENTS align](#334-dev22---2026-08-27---ruff-rules-aligned-repairs-info-in-readme-agents-align)
+  - [\[3.3.4-dev22\] - 2026-08-27 - Ruff Rules Alignment; README and AGENTS Synchronization](#334-dev22---2026-08-27---ruff-rules-alignment-readme-and-agents-synchronization)
   - [\[3.3.4-dev21\] - 2026-08-26 - Documentation: README Repairs and Health Section Alignment](#334-dev21---2026-08-26---documentation-readme-repairs-and-health-section-alignment)
   - [\[3.3.4-dev20\] - 2026-08-26 - Contract Sweep Naming And Vacuity Guards; Queue References Removed](#334-dev20---2026-08-26---contract-sweep-naming-and-vacuity-guards-queue-references-removed)
   - [\[3.3.4-dev19\] - 2026-08-26 - README Repairs Section Rewritten](#334-dev19---2026-08-26---readme-repairs-section-rewritten)
-  - [\[3.3.4-dev18\] - 2026-08-26 - SMS Storage Off Integration Health; Sensor Enabled By Default](#334-dev18---2026-08-26---sms-storage-off-integration-health-sensor-enabled-by-default)
+  - [\[3.3.4-dev18\] - 2026-08-26 - SMS Full Status Decoupled from Integration Health; Sensor Enabled by Default](#334-dev18---2026-08-26---sms-full-status-decoupled-from-integration-health-sensor-enabled-by-default)
   - [\[3.3.4-dev17\] - 2026-08-26 - SMS Storage Fill Comparison; Hardware Check in Validate All](#334-dev17---2026-08-26---sms-storage-fill-comparison-hardware-check-in-validate-all)
   - [\[3.3.4-dev16\] - 2026-08-26 - Repair Translation Schema: Fixable Issue Exclusivity](#334-dev16---2026-08-26---repair-translation-schema-fixable-issue-exclusivity)
   - [\[3.3.4-dev15\] - 2026-08-26 - Documentation: Public CHANGELOG.md Release Header and Table of Contents Standardization](#334-dev15---2026-08-26---documentation-public-changelogmd-release-header-and-table-of-contents-standardization)
@@ -41,14 +42,14 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev10\] - 2026-08-26 - Suppression Allow-List Sweep; Health \& Repair Contract Tests; Silent-Failure Audit](#334-dev10---2026-08-26---suppression-allow-list-sweep-health--repair-contract-tests-silent-failure-audit)
   - [\[3.3.4-dev9\] - 2026-08-26 - Publish-Moment State Capture Tests; Real APN Payloads in Select Tests](#334-dev9---2026-08-26---publish-moment-state-capture-tests-real-apn-payloads-in-select-tests)
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
-  - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Reauth Repair Flow; Frequency Unit Selector; Separate Drift Strike Budget; SMS Log Privacy](#334-dev7---2026-08-25---interactive-reauth-repair-flow-frequency-unit-selector-separate-drift-strike-budget-sms-log-privacy)
+  - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Chore Verification: C-006, C-011, C-016, C-017, C-018, C-021](#334-dev5---2026-08-25---cross-project-chore-verification-c-006-c-011-c-016-c-017-c-018-c-021)
-  - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: Bridge-Mode Verification Task; APN Auto-Mode Analysis](#334-dev4---2026-08-24---documentation-bridge-mode-verification-task-apn-auto-mode-analysis)
-  - [\[3.3.4-dev3\] - 2026-08-24 - Documentation: Task Queue Organization; Roadmap Task Alignment](#334-dev3---2026-08-24---documentation-task-queue-organization-roadmap-task-alignment)
-  - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; Documentation Updates](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-documentation-updates)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
+  - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
+  - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
   - [\[3.3.4-dev1\] - 2026-08-08 - Documentation: Changelog Format Refinements; US Spelling Standardization](#334-dev1---2026-08-08---documentation-changelog-format-refinements-us-spelling-standardization)
-  - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
+  - [\[3.3.3\] - 2026-08-08 - Release: SMS Emoji Decoding, Polling Resilience, and Repair Isolation](#333---2026-08-08---release-sms-emoji-decoding-polling-resilience-and-repair-isolation)
   - [\[3.3.3-dev12\] - 2026-08-07 - Write Token Validation; Config-Flow Session Release; Timing Probe Measurements](#333-dev12---2026-08-07---write-token-validation-config-flow-session-release-timing-probe-measurements)
   - [\[3.3.3-dev11\] - 2026-08-07 - API Domain Error Handling; Force-Refresh Flag Reset; SMS Bank Counter Tests](#333-dev11---2026-08-07---api-domain-error-handling-force-refresh-flag-reset-sms-bank-counter-tests)
   - [\[3.3.3-dev10\] - 2026-08-07 - Write Action Error Isolation; Partial Multi-Recipient SMS Reporting; ID-Less Message Deletion Guard](#333-dev10---2026-08-07---write-action-error-isolation-partial-multi-recipient-sms-reporting-id-less-message-deletion-guard)
@@ -212,6 +213,25 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.9-dev6] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization
+
+### Summary
+
+Updated README hardware compatibility and diagnostic download guidance, and standardized historical changelog headers across recent dev cycles to outcome-first noun phrases with synchronized table of contents links.
+
+### Changed
+
+- **Hardware Compatibility Tiering in `README.md`**: Updated `## 🔧 Compatibility & Tested Devices` with an explicit two-tier verification hierarchy distinguishing between **Live Hardware Verified** (`ZTE MC7010`) and **Diagnostic Capture Verified** (`ZTE MC888 Pro`).
+- **Diagnostic Download Duration Callout**: Added a prominent `> [!TIP]` callout in `README.md` under Compatibility inviting users of unverified models to share sanitized diagnostics, providing explicit advance notice of the ~1 minute duration with no browser progress bar.
+- **Troubleshooting FAQ Alignment**: Refined the diagnostic tip in `README.md` troubleshooting FAQ to focus on attaching diagnostics when reporting issues, removing redundant general solicitation text.
+- **Changelog Header Normalization**: Normalized headings across `docs/changelog_local.md` (`3.3.9-dev3`, `3.3.9-dev1`, `3.3.8-dev2`, `3.3.8-dev1`, `3.3.7-dev2`, `3.3.7-dev1`, `3.3.4-dev24`, `3.3.4-dev22`, `3.3.4-dev18`, `3.3.4-dev7`, `3.3.4-dev5`, `3.3.4-dev4`, `3.3.4-dev3`, `3.3.4-dev2`) and `CHANGELOG.md` (`3.3.3`) to conform strictly to outcome-first 3–10 word noun phrases and two-clause limits.
+- **Table of Contents Synchronization**: Synchronized all 204 Table of Contents anchor links in `docs/changelog_local.md` to match the normalized section headers.
+
+### Documentation
+
+- **`changelog_format.md` (v1.3.0)**: Added explicit _Lead with the visible outcome or feature impact, not the internal code detail_ guidance to §2, forbidding low-level code parameter names or abstract assertions alone without stating the user or system change.
+- **`changelog_upd_gen.md` (v1.4.2)**: Updated drafting instructions in Step 2 with outcome-first negative patterns.
+
 ## [3.3.9-dev5] - 2026-09-02 - Discovery Pass Fresh Login State; Per-Chunk Canary Verification
 
 ### Summary
@@ -261,7 +281,7 @@ A discovery pass took about a minute and logged a login failure on every run. Tr
 
 Two earlier hypotheses were measured and rejected before this one. Not clearing the session on a probe failure would have changed nothing — the trace shows `session_active` true before and after every failure. Rate-limiting the probe would have added delay to a problem that was not load-related: 124 of 142 failures completed in about 0.13 seconds, which is a re-login and a replay rather than a timeout.
 
-## [3.3.9-dev3] - 2026-09-01 - Write Commands Excluded From Probing
+## [3.3.9-dev3] - 2026-09-01 - Discovery Probe Duration Reduced to 37s; Write Command Exclusion
 
 ### Summary
 
@@ -315,7 +335,7 @@ The index page on the reference MC7010 names no scripts, so bundle discovery fal
 
 A login failure is logged during a full discovery pass — `Result: failure` on a re-login after a timed-out chunk — and the pass completes regardless. Not investigated.
 
-## [3.3.9-dev1] - 2026-09-01 - Batch Reads Split By URL Budget
+## [3.3.9-dev1] - 2026-09-01 - Batch Polling URL Character Limit Partitioning; Request Overflow Prevention
 
 ### Summary
 
@@ -338,7 +358,7 @@ The mandatory poll was one request bounded by the router's URL length, and it ha
 
 The split is inert today and exists for what follows: ten alias additions planned for this release take the core list to roughly 1,795 characters, past the budget and into two requests. A second round trip costs about 30 ms against a 180-second interval.
 
-## [3.3.8-dev2] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors
+## [3.3.8-dev2] - 2026-09-01 - Firmware Update Diagnostic Sensors Added; Discovery Carrier Redaction
 
 ### Summary
 
@@ -371,7 +391,7 @@ The core batch is 95 keys and 1,551 characters after these additions. Measured o
 
 `web_version` is recorded as a known field and not adopted — it reports the web UI build, and the firmware version already identifies the build.
 
-## [3.3.8-dev1] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys
+## [3.3.8-dev1] - 2026-09-01 - Web UI Automated Parameter Discovery; Concept-Based Drift Tolerance
 
 ### Summary
 
@@ -436,7 +456,7 @@ The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`
   - **Task Integration**:
     - `dev-workbench/workbench/tasks.json`: Added `Markdown: Check Repo Links` task, wired into `Validate All` dependencies and `Show: Results Summary`.
 
-## [3.3.7-dev2] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep
+## [3.3.7-dev2] - 2026-08-31 - Data Limit Write Control Form Aliases; Diagnostics Redaction Sweep
 
 ### Summary
 
@@ -453,7 +473,7 @@ Two items of the 3.3.7 sweep were reported complete in dev1 and were not. `DATA_
 - **`test_every_flux_spelling_requested_is_aliased_somewhere`**: a `flux_` name in the request list that nothing reads costs URL budget on every poll, and the budget is what bounds the batch.
 - **`test_every_classified_concept_covers_all_its_aliases`**: an alias of a redacted, address or cell-identifier concept must itself be classified. `TO_REDACT`, `IP_KEYS` and `CELL_KEYS` enumerate by exact name, so a new spelling is invisible to them. This is the test that found the `Z5g_CELL_ID` leak.
 
-## [3.3.7-dev1] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery
+## [3.3.7-dev1] - 2026-08-31 - MC888 Pro Dynamic Cookie Authentication; Startup Key Discovery
 
 ### Summary
 
@@ -693,7 +713,7 @@ Issue #56: an MC888 Pro on firmware `CR_ABPLMC888PROV1.0.1B04` answers a success
 - **`scripts/hardware_check.py`**: `_kill_session()` and the logout replay set the whole pair; the six `api.stok = await api.login()` assignments follow the new signature. Check [1] now scores that the pair agrees after a kill and re-login, and records whether the device issues a `stok` cookie at all.
 - **`tests/conftest.py`**: `MockResponse.headers` is a `CIMultiDict` rather than a plain dict, which is what aiohttp returns and what `getall` requires.
 
-## [3.3.4-dev24] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README
+## [3.3.4-dev24] - 2026-08-30 - Ruff Tooling Bump; README Actions Visuals
 
 ### Bumps
 
@@ -714,7 +734,7 @@ Synchronized `.notes/proj_structure.md` with current repository architecture, re
 
 - **Project Structure Mapping**: Updated `.notes/proj_structure.md` (v1.1.7) to record `repairs.py`, `docs/ha_compatibility.md`, 8 new test suites and test harness (`test_health_contract.py`, `test_publish_moment.py`, `test_repairs.py`, `test_session_detection.py`, `test_transport_seam.py`, `test_write_classification.py`, `test_write_payload_shapes.py`, `transport.py`), and internal notes directories (`test_pytest_issues/`, `whatsnext.md`).
 
-## [3.3.4-dev22] - 2026-08-27 - Ruff rules aligned; Repairs info in README; AGENTS align
+## [3.3.4-dev22] - 2026-08-27 - Ruff Rules Alignment; README and AGENTS Synchronization
 
 ### Changed
 
@@ -783,7 +803,7 @@ The Repairs section opened by explaining the boundary between Repairs and Integr
 
 - **`huawei_router_5g` carried the same wording and received the same rewrite**, recorded there as `[1.2.2-dev2]`. Its version omits the SMS clause differences; both now read identically apart from the entity names.
 
-## [3.3.4-dev18] - 2026-08-26 - SMS Storage Off Integration Health; Sensor Enabled By Default
+## [3.3.4-dev18] - 2026-08-26 - SMS Full Status Decoupled from Integration Health; Sensor Enabled by Default
 
 ### Summary
 
@@ -1093,7 +1113,7 @@ Both were found because the mutation run reported them as uncaught. Neither woul
 - **Five `api.py` mutations verified**, each restored by checksum: the login stops reading the `stok` cookie; the dead-session rule weakened; HTML detection disabled on the content-type branch; `not_ready` collapsed into `expired`; and the classifier ignoring unauthenticated keys. **All five are inside `api.py`** — that is the point, because none of them would fail a suite built on an API-object mock.
 - `Tests: Depth Check`: 2 of 2 driven, `REACH mode: coverage contexts`, 0 gates undriven, 0 orphanable, 0 self-healing. **2 stubbed publishes and 2 seams remain** and are the next phase.
 
-## [3.3.4-dev7] - 2026-08-25 - Interactive Reauth Repair Flow; Frequency Unit Selector; Separate Drift Strike Budget; SMS Log Privacy
+## [3.3.4-dev7] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy
 
 Aligned repair workflows, privacy standards, and entity configurations across four cross-project chores and one cross-project issue.
 
@@ -1161,7 +1181,7 @@ Tooling, dependencies, and documentation updates. Bumped shared CI and linters, 
 
 - **`python-typing-update`**: Dropped as HA has moved to enforcing these rules via `ruff`.
 
-## [3.3.4-dev5] - 2026-08-25 - Cross-Project Chore Verification: C-006, C-011, C-016, C-017, C-018, C-021
+## [3.3.4-dev5] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md
 
 Documentation and issue tracking queue update. A second cross-project chore assessment pass completed against `x_proj_chores.md`, verifying the remaining unassessed chores against the ZTE codebase and test baseline.
 
@@ -1174,7 +1194,7 @@ Documentation and issue tracking queue update. A second cross-project chore asse
 - **`C-018` (Hardware check script output)**: Marked `DONE`. `scripts/hardware_check.py:59` outputs to console and tees to `.reports/hardware_check.txt`; supports `--capture` for sanitized payload inspection.
 - **`C-021` (Drive declared outcomes via transport mock)**: Marked `DONE`. Live `.workbench/check_test_depth.py` run confirms 3 of 3 declared outcomes driven through transport mocks (`test_coordinator_resilience.py`), with the deepest test driving 12 consecutive polls.
 
-## [3.3.4-dev4] - 2026-08-24 - Documentation: Bridge-Mode Verification Task; APN Auto-Mode Analysis
+## [3.3.4-dev4] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure
 
 Documentation update. Documented APN auto-mode profile resolution behavior in development notes, added a bridge-mode payload verification task for future hardware testing, and updated `.notes/` structure tracking.
 
@@ -1187,7 +1207,7 @@ Documentation only. A second sweep over the `.notes/` folders the first migratio
 - **The screenshots entry stays in `todo.md`.** A documentation chore with no exit criterion beyond doing it is what that list is for.
 - **`.notes/proj_structure.md` corrected** — `tasks/` added, `issues/` re-described, and `info/` updated after `expansion_plan_202607/` and `updates_202608/` moved to `tasks/closed/`.
 
-## [3.3.4-dev3] - 2026-08-24 - Documentation: Task Queue Organization; Roadmap Task Alignment
+## [3.3.4-dev3] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure
 
 Documentation reorganization. Structured project internal notes under `.notes/tasks/`, archived completed July/August plans, and aligned billing-cycle tasks with `docs/ROADMAP.md`.
 
@@ -1212,7 +1232,7 @@ Documentation only. `tasks_folder_migrate` run against this project, in two pass
 - **`expansion_plan_202607/`** — `Z5g_snr` and `Z5g_CELL_ID` are at `api.py:137-138`, and the six-call-site aliasing is `_get_first` in `sensor.py`.
 - **`updates_202608/status_plan.md`** — all six phases run and nine review findings implemented across `[3.3.3-dev8]`–`[3.3.3-dev11]`. Its Phase 5 is recorded `PARTIAL` and deliberately not to be re-run; the stamp says so, because "partial and closed" reads as unfinished.
 
-## [3.3.4-dev2] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; Documentation Updates
+## [3.3.4-dev2] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements
 
 Tooling and documentation updates. Bumped validation dependencies (Zizmor, MyPy, JSONSchema, PHACC) and updated `AGENTS.md` and `CHANGELOG.md` for clarity and consistency.
 
@@ -1236,7 +1256,7 @@ Documentation refinements. Minor changelog formatting fixes and US English spell
 
 -**Changelog**: Minor tweaks to changelog(s) plus spelling fixes.
 
-## [3.3.3] - 2026-08-08 - Release - SMS Bugfix
+## [3.3.3] - 2026-08-08 - Release: SMS Emoji Decoding, Polling Resilience, and Repair Isolation
 
 ### Summary
 

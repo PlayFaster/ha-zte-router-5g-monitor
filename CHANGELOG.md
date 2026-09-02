@@ -138,7 +138,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.3] - 2026-08-08 - Release: SMS Bugfix and Polling Resilience
+## [3.3.3] - 2026-08-08 - Release: SMS Emoji Decoding, Polling Resilience, and Repair Isolation
 
 ### Summary
 
@@ -477,7 +477,7 @@ Entry structure — headers, titles, category headings and the split between thi
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
-  - [\[3.3.3\] - 2026-08-08 - Release: SMS Bugfix and Polling Resilience](#333---2026-08-08---release-sms-bugfix-and-polling-resilience)
+  - [\[3.3.3\] - 2026-08-08 - Release: SMS Emoji Decoding, Polling Resilience, and Repair Isolation](#333---2026-08-08---release-sms-emoji-decoding-polling-resilience-and-repair-isolation)
   - [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Telemetry](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-and-health-telemetry)
   - [\[3.2.5\] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening](#325---2026-07-03---release-refresh-now-button-display-units-and-config-flow-hardening)
   - [\[3.2.4\] - 2026-06-15 - Release: Shared CI Validation v2.0.3](#324---2026-06-15---release-shared-ci-validation-v203)
