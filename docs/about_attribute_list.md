@@ -102,7 +102,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G RSSI | Sensor | `z5g_rssi` | Total received power across the 5G channel, in dBm, including noise and interference. Use 5G RSRP for a cleaner measure of your own cell's strength. |
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 
-## System (31)
+## System (32)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -129,6 +129,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Uptime Duration | Sensor | `realtime_time` | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp, which is usually the easier one to automate against. |
 | SIM ICCID | Sensor | `sim_iccid` | Integrated Circuit Card ID - the SIM card's own serial number, printed on the card itself. Useful for identifying which SIM is in the router without opening it. |
 | SIM IMSI | Sensor | `sim_imsi` | International Mobile Subscriber Identity - the unique number identifying your SIM's subscription on the network, as distinct from the IMEI which identifies the hardware. |
+| SIM Lock State | Sensor | `sim_lock_state` | Whether the SIM is asking for its PIN. A SIM waiting on a PIN presents as no service, which otherwise reads as a coverage fault, and the attempt counters only say how many tries are left rather than whether one is being asked for. |
 | SIM PIN Attempts Remaining | Sensor | `sim_pin_attempts` | PIN attempts left before the SIM locks and needs the PUK. A SIM that has locked presents as no service, which otherwise looks like a coverage or connection fault. |
 | SIM PUK Attempts Remaining | Sensor | `sim_puk_attempts` | PUK attempts left before the SIM is permanently blocked and has to be replaced by the operator. |
 | Time Server (SNTP) | Sensor | `sntp_server` | The time server the router synchronizes its clock from. An unreachable time server can make the timestamps on SMS messages and logs wrong, so it is worth checking if dates look implausible. |

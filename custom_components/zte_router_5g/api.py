@@ -312,6 +312,12 @@ _EXTENDED_PARAMS: list[str] = [
     "network_simcard_roam",
     "mc_modem_main_state",
     "sim_pinnumber",
+    # Added in [3.3.10-dev3], from the same download. The two masks back the
+    # 5G band-lock sensors, which shipped with no source that any device had
+    # ever populated; `sim_pin_status` backs a new sensor.
+    "Z5g_lockband_nsa_mask",
+    "Z5g_lockband_sa_mask",
+    "sim_pin_status",
 ]
 
 

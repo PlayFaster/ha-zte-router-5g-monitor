@@ -305,6 +305,9 @@
       "system_sim_imsi": {
         "name": "SIM IMSI"
       },
+      "system_sim_lock_state": {
+        "name": "SIM Lock State"
+      },
       "system_sim_pin_attempts": {
         "name": "SIM PIN Attempts Remaining"
       },

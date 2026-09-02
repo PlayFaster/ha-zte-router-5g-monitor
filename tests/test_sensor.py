@@ -1454,6 +1454,56 @@ def test_the_reported_band_name_is_stripped() -> None:
     assert description.value_fn({"wan_active_band": "   "}) is None
 
 
+def test_each_5g_band_lock_reads_the_mask_spelling() -> None:
+    """The only spelling of these that any device has populated.
+
+    Both sensors shipped in `[3.3.9-dev12]` reading a bare name that the
+    MC7010 leaves absent and the MC888 Pro leaves empty, so until now neither
+    had a source with a reading behind it.
+    """
+    mask = "1,3,7,8,20,38,41,77,78"
+    nsa = next(d for d in SENSOR_TYPES if d.key == "nr5g_nsa_band_lock")
+    sa = next(d for d in SENSOR_TYPES if d.key == "nr5g_sa_band_lock")
+
+    assert nsa.value_fn({"Z5g_lockband_nsa_mask": mask}) == mask
+    assert sa.value_fn({"Z5g_lockband_sa_mask": mask}) == mask
+    assert nsa.value_fn({"nr5g_nsa_band_lock": "0x1", "Z5g_lockband_nsa_mask": mask})
+    assert nsa.value_fn({"nr5g_nsa_band_lock": "", "Z5g_lockband_nsa_mask": ""}) is None
+
+
+def test_the_two_band_locks_do_not_share_a_mask() -> None:
+    """NSA and SA read the same value on an unlocked router, not the same key.
+
+    They are separate settings that happen to agree while nothing is locked,
+    so each sensor must resolve its own name — crossing them would go
+    unnoticed for exactly as long as no lock is set.
+    """
+    nsa = next(d for d in SENSOR_TYPES if d.key == "nr5g_nsa_band_lock")
+    sa = next(d for d in SENSOR_TYPES if d.key == "nr5g_sa_band_lock")
+    data = {"Z5g_lockband_nsa_mask": "1,3", "Z5g_lockband_sa_mask": "78"}
+
+    assert nsa.value_fn(data) == "1,3"
+    assert sa.value_fn(data) == "78"
+
+
+def test_sim_lock_state_publishes_the_value_unmapped() -> None:
+    """Only `0` has been observed, so a mapping would be a guess.
+
+    The spelling this firmware uses for a PIN-required state is unknown, and a
+    mapped state would report the wrong thing for every value never seen —
+    the call already made for Network Mode Config.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "sim_lock_state")
+
+    assert description.value_fn({"sim_pin_status": "0"}) == "0"
+    assert description.value_fn({"sim_pin_status": "2"}) == "2"
+    assert description.value_fn({"sim_pin_status": ""}) is None
+    assert description.value_fn({}) is None
+    assert description.state_class is None
+    assert description.entity_registry_enabled_default is False
+    assert description.group == "system"
+
+
 def test_the_rejected_mc888_spellings_are_not_polled() -> None:
     """Two names the 2026-09-02 download answered are deliberately unused.
 

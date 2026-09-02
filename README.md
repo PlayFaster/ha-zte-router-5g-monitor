@@ -53,7 +53,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 - **Verified Models**:
   - **ZTE MC7010** (5G Outdoor CPE) — **Live Hardware Verified** on firmware `V1.0.0B01` and `V1.0.0B03`.
-  - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Diagnostic Capture Verified** on firmware `V1.0.1B04`, where a reporter's own installation polls the router successfully and reports no integration problem, with 76 of the 156 requested parameters populated.
+  - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Diagnostic Capture Verified** on firmware `V1.0.1B04`.
 
 - **Expected Compatible (ZTE `goform` API Family)**:
   - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
@@ -370,7 +370,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **111 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **112 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -380,7 +380,7 @@ This integration provides **111 entities** (depending on your firmware) organize
 
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
-| ⚙️ **System** | 41 | 29 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, Refresh Now, Reboot, Polling Controls | 25, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM PIN and PUK Attempts Remaining |
+| ⚙️ **System** | 42 | 30 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, Refresh Now, Reboot, Polling Controls | 26, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining |
 | 📶 **Signal** | 50 | 46 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 20, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, Roaming State, Network Mode Config, LTE Band Lock Mask |
 | 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |

@@ -258,6 +258,19 @@ _ALIAS_ROAMING: Final = ("simcard_roam", "network_simcard_roam")
 _ALIAS_MODEM_STATE: Final = ("modem_main_state", "mc_modem_main_state")
 _ALIAS_PIN_ATTEMPTS: Final = ("pinnumber", "sim_pinnumber")
 
+# The 5G band locks. Neither bare spelling has been populated by any device
+# seen so far, so unlike every other tuple here the alternate is the only
+# spelling with a reading behind it. The bare name still leads: it is the
+# spelling this integration has always requested, and demoting it would make
+# the reference device's path depend on a name no MC7010 has answered.
+#
+# The two masks read identically on the MC888 Pro. That is the expected state
+# of a router with nothing locked - a router free to use every band it
+# supports reports every band it supports under both - and not evidence that
+# they report anything other than the lock.
+_ALIAS_NSA_BAND_LOCK: Final = ("nr5g_nsa_band_lock", "Z5g_lockband_nsa_mask")
+_ALIAS_SA_BAND_LOCK: Final = ("nr5g_sa_band_lock", "Z5g_lockband_sa_mask")
+
 
 def _scell_field(data: dict[str, Any], index: int) -> float | None:
     """Return one field of the first secondary carrier, or None.
@@ -1365,6 +1378,25 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         value_fn=lambda data: _safe_int(get_first(data, _ALIAS_PIN_ATTEMPTS)),
     ),
     ZTESensorEntityDescription(
+        key="sim_lock_state",
+        about=(
+            "Whether the SIM is asking for its PIN. A SIM waiting on a PIN "
+            "presents as no service, which otherwise reads as a coverage "
+            "fault, and the attempt counters only say how many tries are "
+            "left rather than whether one is being asked for."
+        ),
+        translation_key="system_sim_lock_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        # Published raw. Only `0` has been observed - on an MC888 Pro with an
+        # unlocked SIM - and the spelling this firmware uses for a PIN-required
+        # state is unknown. Mapping now would mean guessing that spelling and
+        # reporting the wrong state for every value never seen, which is the
+        # call already made for Network Mode Config.
+        value_fn=lambda data: _safe_str(data.get("sim_pin_status")),
+    ),
+    ZTESensorEntityDescription(
         key="sim_puk_attempts",
         about=(
             "PUK attempts left before the SIM is permanently blocked and has "
@@ -1429,7 +1461,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
-        value_fn=lambda data: data.get("nr5g_nsa_band_lock") or None,
+        value_fn=lambda data: get_first(data, _ALIAS_NSA_BAND_LOCK) or None,
     ),
     ZTESensorEntityDescription(
         key="nr5g_sa_band_lock",
@@ -1441,7 +1473,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
-        value_fn=lambda data: data.get("nr5g_sa_band_lock") or None,
+        value_fn=lambda data: get_first(data, _ALIAS_SA_BAND_LOCK) or None,
     ),
     ZTESensorEntityDescription(
         key="ppp_status",

@@ -6,6 +6,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
   - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)
+  - [\[3.3.10-dev3\] - 2026-09-02 - 5G Band Locks Given Their Only Populated Spelling; SIM Lock State Added](#3310-dev3---2026-09-02---5g-band-locks-given-their-only-populated-spelling-sim-lock-state-added)
   - [\[3.3.10-dev2\] - 2026-09-02 - Thirteen MC888 Sensors Given a Source; Second `network_` Vocabulary Adopted](#3310-dev2---2026-09-02---thirteen-mc888-sensors-given-a-source-second-network_-vocabulary-adopted)
   - [\[3.3.10-dev1\] - 2026-09-02 - Uptime Counter Drift Measured Per Installation; Boot-Time Latch Rebuilt Around It](#3310-dev1---2026-09-02---uptime-counter-drift-measured-per-installation-boot-time-latch-rebuilt-around-it)
   - [\[3.3.9-dev12\] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported](#339-dev12---2026-09-02---fourteen-diagnostic-sensors-added-operator-provisioning-reported)
@@ -52,7 +53,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -110,7 +111,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -118,7 +119,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -245,6 +246,34 @@ All changes to this project will be documented in this file. This is the detaile
 ### Under the hood
 
 - **Reverse Parameter Sweeps & Coverage**: Added automated sweeps asserting every requested parameter is mapped to an entity, with full branch coverage across parameter parsing, URL partitioning, and diagnostic artifact redaction.
+
+## [3.3.10-dev3] - 2026-09-02 - 5G Band Locks Given Their Only Populated Spelling; SIM Lock State Added
+
+### Summary
+
+Three parameters from the 2026-09-02 MC888 Pro download. Two give the 5G band-lock sensors a source that some device has actually populated — until now both read a name the MC7010 leaves absent and the MC888 Pro leaves empty, so neither had ever shown a value on any hardware seen. The third adds one sensor.
+
+The entity count moves from 111 to 112.
+
+### Added
+
+- **SIM Lock State**, a diagnostic sensor on the System sub-device, disabled by default, from `sim_pin_status`. A SIM waiting on its PIN presents as no service, which otherwise reads as a coverage fault; the attempt counters added in `[3.3.9-dev12]` say how many tries remain but not whether one is being asked for.
+- **`Z5g_lockband_nsa_mask` and `Z5g_lockband_sa_mask`** as the alternate spellings behind **5G NSA Band Lock** and **5G SA Band Lock**. The bare spellings still lead, as in every other alias tuple, even though neither has ever been populated: they are what this integration has always requested, and demoting them would make the reference device's path depend on a name no MC7010 has answered.
+
+### Changed
+
+- **Three names added to the extended batch.** It stays within its URL budget at one request.
+
+### Measured
+
+The two masks read identically on the MC888 Pro, at `1,3,7,8,20,38,41,77,78`. That is the expected state of a router with nothing locked — one free to use every band it supports reports every band it supports under both settings — and not evidence that they report something other than the lock. They are separate settings that agree while nothing is locked, so each sensor resolves its own name and a test asserts they are not crossed, which would otherwise go unnoticed for exactly as long as no lock is set.
+
+The value is a comma-separated band list where the LTE Band Lock Mask sensor carries a hex mask on both devices, so the 5G sensors read differently from their LTE sibling. That is a difference in how the firmware represents the setting, not in which setting is being read.
+
+### Notes
+
+- SIM Lock State publishes its value unmapped. Only `0` has been observed, on a device with an unlocked SIM, and the spelling this firmware uses for a PIN-required state is unknown — a mapped state would have to guess it and would report the wrong state for every value never seen. This follows Network Mode Config in `[3.3.9-dev12]`.
+- All three names are silent on the reference MC7010, measured against three held canaries, so all three entities stay blank there.
 
 ## [3.3.10-dev2] - 2026-09-02 - Thirteen MC888 Sensors Given a Source; Second `network_` Vocabulary Adopted
 

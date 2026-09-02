@@ -11,8 +11,8 @@ A complete list of the static entities and service actions provided by the integ
 | **Data**   | 15           | Data entities.         |
 | **SMS**    | 5            | SMS entities.          |
 | **Signal** | 50           | Signal entities.       |
-| **System** | 41           | System entities.       |
-| **Total**  | **111**      | Total static entities. |
+| **System** | 42           | System entities.       |
+| **Total**  | **112**      | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
 
@@ -99,7 +99,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G RSSI | `z5g_rssi` | Sensor | dBm | - | LTS: `measurement` |
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 
-## System Sub-Device (41 Entities)
+## System Sub-Device (42 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -135,6 +135,7 @@ A complete list of the static entities and service actions provided by the integ
 | Uptime Duration | `realtime_time` | Sensor | s | - | **Disabled by default.** |
 | SIM ICCID | `sim_iccid` | Sensor | - | Diagnostic | **Disabled by default.** |
 | SIM IMSI | `sim_imsi` | Sensor | - | Diagnostic | **Disabled by default.** |
+| SIM Lock State | `sim_lock_state` | Sensor | - | Diagnostic | **Disabled by default.** |
 | SIM PIN Attempts Remaining | `sim_pin_attempts` | Sensor | - | Diagnostic | **Disabled by default.** |
 | SIM PUK Attempts Remaining | `sim_puk_attempts` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Time Server (SNTP) | `sntp_server` | Sensor | - | Diagnostic | **Disabled by default.** |

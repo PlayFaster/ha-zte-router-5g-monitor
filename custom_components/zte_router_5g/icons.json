@@ -272,6 +272,9 @@
       "system_sim_imsi": {
         "default": "mdi:sim"
       },
+      "system_sim_lock_state": {
+        "default": "mdi:sim-outline"
+      },
       "system_sim_pin_attempts": {
         "default": "mdi:sim"
       },
