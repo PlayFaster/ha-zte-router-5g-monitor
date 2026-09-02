@@ -1766,7 +1766,7 @@ class ZTERouterAPI:
             return _SESSION_LOST
         # `result` is the key a `goform` response carries its outcome in, and
         # a refused chunk echoes it back. It is not a router field, and
-        # harvesting it would publish `failure` as though it were telemetry.
+        # harvesting it would publish `failure` as though it were sensor data.
         return {
             k: v
             for k, v in payload.items()

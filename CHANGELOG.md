@@ -4,13 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.8] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Concept-Based Drift Tolerance
+## [3.3.8] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Firmware Key Changes
 
 ### Summary
 
 - **Web UI Parameter Mining**: Diagnostics downloads now automatically inspect the router's web interface JavaScript to discover all parameters supported by the firmware.
 - **New Firmware Update Sensors**: Added `Firmware Update Available` and `Firmware Update State` sensors under the System sub-device.
-- **Concept-Based Contract Drift**: Contract drift evaluation now recognizes equivalent parameter aliases across router models, preventing false drift warnings.
+- **Concept-Based Field Changes**: Integration Health now recognizes equivalent parameter aliases across router models, preventing false warnings when firmware keys change.
 - **Diagnostic Privacy & Timeout Resilience**: Enhanced diagnostics redaction for carrier/APN identity and isolated discovery requests to prevent interference with live polling.
 
 ### Added
@@ -21,7 +21,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Concept-Based Contract Drift**: Contract drift evaluation in Integration Health now evaluates parameter concepts rather than strict key names, ensuring models that report connection state or uptime under alternate keys (e.g. `ppp_status` or `flux_realtime_time`) remain fully compliant.
+- **Concept-Based Router Field Handling**: Integration Health now evaluates parameter concepts rather than strict key names, ensuring models that report connection state or uptime under alternate keys (e.g. `ppp_status` or `flux_realtime_time`) remain fully compliant.
 - **Dynamic Session Sentinels**: Session verification sentinels are now dynamically selected based on measured unauthenticated keys to prevent false alive signals on models returning connection status unauthenticated.
 - **Carrier Identity Redaction in Discovery**: Ensured carrier profile names, SPN, and PLMN values discovered during parameter mining are sanitized and withheld in diagnostics downloads.
 - **Discovery Lock Isolation**: Parameter discovery now synchronizes with the coordinator's update lock, preventing large diagnostic downloads from causing transient timeouts or missed polling cycles.
@@ -39,7 +39,7 @@ All notable changes to this project will be documented in this file.
 - **Dynamic Session Cookie Compatibility**: The integration now retains and replays all session cookies set by the router (such as `zsidn` on the MC888 Pro) rather than requiring a literal `stok` cookie.
 - **Dynamic Unauthenticated Key Discovery**: The unauthenticated key set is now measured per device at startup, ensuring accurate session-expiry detection across varying router firmwares.
 - **Data Limit Control Compatibility**: Added alternate parameter aliases (including `flux_` variants) to the data limit write form, restoring data limit settings functionality on newer router models.
-- **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal telemetry.
+- **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal sensor data.
 
 ### Added
 
@@ -47,8 +47,8 @@ All notable changes to this project will be documented in this file.
 - **Per-Device Session Classification**: Session health monitoring now dynamically probes which keys the router answers without authentication during setup, preventing firmwares that report network status unauthenticated from causing session classification mismatches.
 - **Data Limit Settings Controls**: Added `flux_` parameter aliases to `DATA_LIMIT_SETTING` form writes, ensuring data limit configuration switches and thresholds are writable on routers using modern firmware schemas.
 - **Diagnostics Privacy**: Ensured alternate cell identifier key spellings (`Z5g_CELL_ID`) are pseudonymized in diagnostic downloads alongside primary keys.
-- **Sparse Payload Telemetry Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded telemetry baseline.
-- **Firmware Parameter Discovery**: Added a startup discovery probe that safely tests candidate parameter names to discover available telemetry keys across router models and publishes safe results in diagnostics.
+- **Sparse Payload Diagnostic Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded baseline.
+- **Firmware Parameter Discovery**: Added a startup discovery probe that safely tests candidate parameter names to discover available status keys across router models and publishes safe results in diagnostics.
 
 ### Under the hood
 
@@ -122,7 +122,7 @@ All notable changes to this project will be documented in this file.
 - **Repairs Alignment**: Retired non-actionable repair cards (`firmware_contract_drift` and `sms_storage_full`). Schema changes are now tracked via `drift` on Integration Health, while message capacity is tracked by the new binary sensor. Renamed unreachable router issue to `conn_error`.
 - **Bandwidth Sensor Unit Conversion**: LTE Carrier Aggregation bandwidth sensors (`lte_ca_pcell_bandwidth` and `lte_ca_scell_bandwidth`) now declare `device_class: frequency`, allowing unit switching (MHz/GHz/kHz) in the Home Assistant UI.
 - **SMS Logging Privacy**: The sender's phone number is no longer logged at `INFO` level when receiving SMS messages; the internal message index is logged instead.
-- **Health Telemetry Drift Limit**: Split the contract drift strike limit into an independent budget (`HEALTH_DRIFT_STRIKE_LIMIT = 3`) separate from poll fetch failures.
+- **Missing Router Data Strike Limit**: Split the missing or changed router data strike limit into an independent budget (`HEALTH_DRIFT_STRIKE_LIMIT = 3`) separate from poll fetch failures.
 
 ### Fixed
 
@@ -170,7 +170,7 @@ A Send SMS fix, plus several resilience and robustness changes for edge case beh
 
 ---
 
-## [3.3.2] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Telemetry
+## [3.3.2] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Status Diagnostics
 
 ### Summary
 
@@ -194,7 +194,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 - **Data usage tracking follows router Data Management settings.** Exposes the router's configured **Clear Date**, **Data Plan** cap, and **Limit Reminder** as **Reset Day**, **Allowance**, and **Alert Threshold** entities. If Data Management is disabled on the router, tracking defaults automatically to the calendar month.
   - Alongside these, a new **Projected Cycle Usage** sensor forecasts total end-of-cycle data consumption based on observed daily run rates, providing `confidence`, `basis`, `cycle_day`, `cycle_start`, and `cycle_source` attributes.
 
-- **Integration Health sensor**: A new diagnostic problem sensor on the System device that alerts on connectivity failures, empty data responses, and contract drift, carrying `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, and `consecutive_failures` attributes.
+- **Integration Health sensor**: A new diagnostic problem sensor on the System device that alerts on connectivity failures, empty data responses, and missing router data, carrying `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, and `consecutive_failures` attributes.
 
 - **Built-in explanations on entities**: Most entities now carry an `about` attribute providing clear operational guidance, expected signal ranges, and threshold interpretations without persisting to recorder history.
 
@@ -418,7 +418,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 
 - **Standard Names**: Changed specific sensor names (with ID tag) to standard names.
 
-## [1.4.4] - 2026-03-28 - Telemetry: Router Attribute Exposure as Entities
+## [1.4.4] - 2026-03-28 - Release: Router Attribute Exposure as Entities
 
 ### Added
 
@@ -445,7 +445,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 - **Hybrid Resilience**: Implemented a "one-cycle grace period" where sensors hold their last known value during a single failed poll before marking as unavailable.
 - **GitHub**: Initial release to GitHub repository.
 
-## [1.4.0] - 2026-03-26 - Telemetry: Core Signal and Cellular Data Sensors
+## [1.4.0] - 2026-03-26 - Release: Core Signal and Cellular Data Sensors
 
 ### Added
 
@@ -472,13 +472,13 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
-  - [\[3.3.8\] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Concept-Based Drift Tolerance](#338---2026-09-01---release-web-ui-parameter-mining-firmware-update-sensors-and-concept-based-drift-tolerance)
+  - [\[3.3.8\] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Firmware Key Changes](#338---2026-09-01---release-web-ui-parameter-mining-firmware-update-sensors-and-firmware-key-changes)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.3\] - 2026-08-08 - Release: SMS Emoji Decoding, Polling Resilience, and Repair Isolation](#333---2026-08-08---release-sms-emoji-decoding-polling-resilience-and-repair-isolation)
-  - [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Telemetry](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-and-health-telemetry)
+  - [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, and Health Status Diagnostics](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-and-health-status-diagnostics)
   - [\[3.2.5\] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening](#325---2026-07-03---release-refresh-now-button-display-units-and-config-flow-hardening)
   - [\[3.2.4\] - 2026-06-15 - Release: Shared CI Validation v2.0.3](#324---2026-06-15---release-shared-ci-validation-v203)
   - [\[3.2.3\] - 2026-06-14 - Maintenance: Shared CodeQL Permissions Alignment for Zizmor](#323---2026-06-14---maintenance-shared-codeql-permissions-alignment-for-zizmor)
@@ -497,10 +497,10 @@ Entry structure — headers, titles, category headings and the split between thi
   - [\[1.5.7\] - 2026-03-28 - UI: ZTE Brand Icons and Sub-Device Sensor Naming](#157---2026-03-28---ui-zte-brand-icons-and-sub-device-sensor-naming)
   - [\[1.5.1\] - 2026-03-28 - Maintenance: Home Assistant Integration Naming Alignment](#151---2026-03-28---maintenance-home-assistant-integration-naming-alignment)
   - [\[1.4.5\] - 2026-03-28 - Documentation: Local Changelog Addition and Standard Sensor Names](#145---2026-03-28---documentation-local-changelog-addition-and-standard-sensor-names)
-  - [\[1.4.4\] - 2026-03-28 - Telemetry: Router Attribute Exposure as Entities](#144---2026-03-28---telemetry-router-attribute-exposure-as-entities)
+  - [\[1.4.4\] - 2026-03-28 - Release: Router Attribute Exposure as Entities](#144---2026-03-28---release-router-attribute-exposure-as-entities)
   - [\[1.4.3\] - 2026-03-28 - Controls: Pause Polling Switch and Polling Interval Number Entity](#143---2026-03-28---controls-pause-polling-switch-and-polling-interval-number-entity)
   - [\[1.4.2\] - 2026-03-27 - Feature: SMS Inbox Monitoring and Initial GitHub Release](#142---2026-03-27---feature-sms-inbox-monitoring-and-initial-github-release)
-  - [\[1.4.0\] - 2026-03-26 - Telemetry: Core Signal and Cellular Data Sensors](#140---2026-03-26---telemetry-core-signal-and-cellular-data-sensors)
+  - [\[1.4.0\] - 2026-03-26 - Release: Core Signal and Cellular Data Sensors](#140---2026-03-26---release-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-for-zte-mc7010)
 
 ---

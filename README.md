@@ -2151,7 +2151,7 @@ This integration is specifically optimized as a high-performance, async-native m
 If ZTE Router 5G Monitor does not work for your specific router model or deployment setup, several excellent alternative Home Assistant integrations exist depending on your hardware type:
 
 - 📶 **[`Kajkac/ZTE-MC-Home-assistant-repo`](https://github.com/Kajkac/ZTE-MC-Home-assistant-repo)** by @Kajkac  
-  _Best for:_ ZTE MC801A, MC888, MC889, and G5 Ultra routers. Provides broad signal telemetry, data usage, SMS, and Wi-Fi/LAN device tracking.
+  _Best for:_ ZTE MC801A, MC888, MC889, and G5 Ultra routers. Provides broad signal metrics, data usage, SMS, and Wi-Fi/LAN device tracking.
 
 - ⚡ **[`rosenrot00/ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router)** by @rosenrot00  
   _Best for:_ ZTE Next-Gen (NG) 5G CPEs (G5TC, G5TS, G5C, G5 Max). Connects via ZTE's OpenWrt-derived `/ubus/` JSON-RPC API backend.

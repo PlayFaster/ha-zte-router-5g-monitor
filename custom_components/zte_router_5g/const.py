@@ -311,7 +311,7 @@ DISCOVERY_CANDIDATES: list[str] = [
 # `diagnostics._sanitize_payload` classifies by exact key name, and `_sweep`
 # catches only address- and identifier-shaped strings — so a name it does not
 # know falls through with its value intact. These are the names judged to
-# carry radio telemetry, counters or enumerations rather than identity,
+# carry radio metrics, counters or enumerations rather than identity,
 # location or third-party content. The excluded ones are: static WAN address,
 # NR cell id, carrier long name, service-provider name data, two firmware
 # version strings, and the two free-text blobs `network_information` and

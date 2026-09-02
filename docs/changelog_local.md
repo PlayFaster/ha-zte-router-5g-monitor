@@ -4,212 +4,211 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-- [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.9-dev6\] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization](#339-dev6---2026-09-02---readme-hardware-compatibility-alignment-changelog-header-normalization)
-  - [\[3.3.9-dev5\] - 2026-09-02 - Discovery Pass Fresh Login State; Per-Chunk Canary Verification](#339-dev5---2026-09-02---discovery-pass-fresh-login-state-per-chunk-canary-verification)
-  - [\[3.3.9-dev4\] - 2026-09-02 - Diagnostic Download Time Reduced from 60s to 6s; False Re-Login Fix](#339-dev4---2026-09-02---diagnostic-download-time-reduced-from-60s-to-6s-false-re-login-fix)
-  - [\[3.3.9-dev3\] - 2026-09-01 - Discovery Probe Duration Reduced to 37s; Write Command Exclusion](#339-dev3---2026-09-01---discovery-probe-duration-reduced-to-37s-write-command-exclusion)
-  - [\[3.3.9-dev2\] - 2026-09-01 - Wider Web UI Extraction; Unanswered Parameter Diagnostics](#339-dev2---2026-09-01---wider-web-ui-extraction-unanswered-parameter-diagnostics)
-  - [\[3.3.9-dev1\] - 2026-09-01 - Batch Polling URL Character Limit Partitioning; Request Overflow Prevention](#339-dev1---2026-09-01---batch-polling-url-character-limit-partitioning-request-overflow-prevention)
-  - [\[3.3.8-dev2\] - 2026-09-01 - Firmware Update Diagnostic Sensors Added; Discovery Carrier Redaction](#338-dev2---2026-09-01---firmware-update-diagnostic-sensors-added-discovery-carrier-redaction)
-  - [\[3.3.8-dev1\] - 2026-09-01 - Web UI Automated Parameter Discovery; Concept-Based Drift Tolerance](#338-dev1---2026-09-01---web-ui-automated-parameter-discovery-concept-based-drift-tolerance)
-  - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
-  - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
-  - [\[3.3.7-dev2\] - 2026-08-31 - Data Limit Write Control Form Aliases; Diagnostics Redaction Sweep](#337-dev2---2026-08-31---data-limit-write-control-form-aliases-diagnostics-redaction-sweep)
-  - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Dynamic Cookie Authentication; Startup Key Discovery](#337-dev1---2026-08-31---mc888-pro-dynamic-cookie-authentication-startup-key-discovery)
-  - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
-  - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Stale Boot Time Reconciliation Across Restarts](#336-dev1---2026-08-31---device-uptime-stale-boot-time-reconciliation-across-restarts)
-  - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
-  - [\[3.3.5-dev2\] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll](#335-dev2---2026-08-31---session-verdict-evidence-diagnostics-capture-on-a-failed-poll)
-  - [\[3.3.5-dev1\] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation](#335-dev1---2026-08-30---multi-user-login-payload-aligned-with-reference-implementation)
-  - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
-  - [\[3.3.4-dev26\] - 2026-08-30 - Login Form Order Aligned With Reference Implementation](#334-dev26---2026-08-30---login-form-order-aligned-with-reference-implementation)
-  - [\[3.3.4-dev25\] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing](#334-dev25---2026-08-30---login-session-without-a-stok-cookie-session-state-pairing)
-  - [\[3.3.4-dev24\] - 2026-08-30 - Ruff Tooling Bump; README Actions Visuals](#334-dev24---2026-08-30---ruff-tooling-bump-readme-actions-visuals)
-  - [\[3.3.4-dev23\] - 2026-08-27 - Project Structure Reference Sync; Ha-Compatibility and Test Harness Additions](#334-dev23---2026-08-27---project-structure-reference-sync-ha-compatibility-and-test-harness-additions)
-  - [\[3.3.4-dev22\] - 2026-08-27 - Ruff Rules Alignment; README and AGENTS Synchronization](#334-dev22---2026-08-27---ruff-rules-alignment-readme-and-agents-synchronization)
-  - [\[3.3.4-dev21\] - 2026-08-26 - Documentation: README Repairs and Health Section Alignment](#334-dev21---2026-08-26---documentation-readme-repairs-and-health-section-alignment)
-  - [\[3.3.4-dev20\] - 2026-08-26 - Contract Sweep Naming And Vacuity Guards; Queue References Removed](#334-dev20---2026-08-26---contract-sweep-naming-and-vacuity-guards-queue-references-removed)
-  - [\[3.3.4-dev19\] - 2026-08-26 - README Repairs Section Rewritten](#334-dev19---2026-08-26---readme-repairs-section-rewritten)
-  - [\[3.3.4-dev18\] - 2026-08-26 - SMS Full Status Decoupled from Integration Health; Sensor Enabled by Default](#334-dev18---2026-08-26---sms-full-status-decoupled-from-integration-health-sensor-enabled-by-default)
-  - [\[3.3.4-dev17\] - 2026-08-26 - SMS Storage Fill Comparison; Hardware Check in Validate All](#334-dev17---2026-08-26---sms-storage-fill-comparison-hardware-check-in-validate-all)
-  - [\[3.3.4-dev16\] - 2026-08-26 - Repair Translation Schema: Fixable Issue Exclusivity](#334-dev16---2026-08-26---repair-translation-schema-fixable-issue-exclusivity)
-  - [\[3.3.4-dev15\] - 2026-08-26 - Documentation: Public CHANGELOG.md Release Header and Table of Contents Standardization](#334-dev15---2026-08-26---documentation-public-changelogmd-release-header-and-table-of-contents-standardization)
-  - [\[3.3.4-dev14\] - 2026-08-26 - Documentation: Comprehensive Changelog Readability and Historical Header Standardization](#334-dev14---2026-08-26---documentation-comprehensive-changelog-readability-and-historical-header-standardization)
-  - [\[3.3.4-dev13\] - 2026-08-26 - Repairs Documentation: Repair Eligibility Criteria and Health Sensor Mapping](#334-dev13---2026-08-26---repairs-documentation-repair-eligibility-criteria-and-health-sensor-mapping)
-  - [\[3.3.4-dev12\] - 2026-08-26 - Entity Configuration: Frequency Unit Selector Dependence on Device Class](#334-dev12---2026-08-26---entity-configuration-frequency-unit-selector-dependence-on-device-class)
-  - [\[3.3.4-dev11\] - 2026-08-26 - Documentation Reconciliation: Repair Set, Quality Scale, and Frequency Units](#334-dev11---2026-08-26---documentation-reconciliation-repair-set-quality-scale-and-frequency-units)
-  - [\[3.3.4-dev10\] - 2026-08-26 - Suppression Allow-List Sweep; Health \& Repair Contract Tests; Silent-Failure Audit](#334-dev10---2026-08-26---suppression-allow-list-sweep-health--repair-contract-tests-silent-failure-audit)
-  - [\[3.3.4-dev9\] - 2026-08-26 - Publish-Moment State Capture Tests; Real APN Payloads in Select Tests](#334-dev9---2026-08-26---publish-moment-state-capture-tests-real-apn-payloads-in-select-tests)
-  - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
-  - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
-  - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
-  - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
-  - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
-  - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
-  - [\[3.3.4-dev1\] - 2026-08-08 - Documentation: Changelog Format Refinements; US Spelling Standardization](#334-dev1---2026-08-08---documentation-changelog-format-refinements-us-spelling-standardization)
-  - [\[3.3.3\] - 2026-08-08 - Release: SMS Emoji Decoding, Polling Resilience, and Repair Isolation](#333---2026-08-08---release-sms-emoji-decoding-polling-resilience-and-repair-isolation)
-  - [\[3.3.3-dev12\] - 2026-08-07 - Write Token Validation; Config-Flow Session Release; Timing Probe Measurements](#333-dev12---2026-08-07---write-token-validation-config-flow-session-release-timing-probe-measurements)
-  - [\[3.3.3-dev11\] - 2026-08-07 - API Domain Error Handling; Force-Refresh Flag Reset; SMS Bank Counter Tests](#333-dev11---2026-08-07---api-domain-error-handling-force-refresh-flag-reset-sms-bank-counter-tests)
-  - [\[3.3.3-dev10\] - 2026-08-07 - Write Action Error Isolation; Partial Multi-Recipient SMS Reporting; ID-Less Message Deletion Guard](#333-dev10---2026-08-07---write-action-error-isolation-partial-multi-recipient-sms-reporting-id-less-message-deletion-guard)
-  - [\[3.3.3-dev9\] - 2026-08-07 - SMS UTF-16BE Hex Decoding; Emoji Surrogate Pair Support](#333-dev9---2026-08-07---sms-utf-16be-hex-decoding-emoji-surrogate-pair-support)
-  - [\[3.3.3-dev8\] - 2026-08-07 - Data Allowance Sensor Availability; Empty SMS Bank Handling](#333-dev8---2026-08-07---data-allowance-sensor-availability-empty-sms-bank-handling)
-  - [\[3.3.3-dev7\] - 2026-08-07 - Mutation Test Baseline; Billing-Cycle Boundary and Diagnostics Sanitizer Tests](#333-dev7---2026-08-07---mutation-test-baseline-billing-cycle-boundary-and-diagnostics-sanitizer-tests)
-  - [\[3.3.3-dev6\] - 2026-08-07 - Sweep Test Documentation in AGENTS.md; Mutation Testing Scoping](#333-dev6---2026-08-07---sweep-test-documentation-in-agentsmd-mutation-testing-scoping)
-  - [\[3.3.3-dev5\] - 2026-08-07 - Entry-Scoped Repair IDs; Repair Cleanup on Unload and Removal](#333-dev5---2026-08-07---entry-scoped-repair-ids-repair-cleanup-on-unload-and-removal)
-  - [\[3.3.3-dev4\] - 2026-08-07 - Test Suite Baseline: 100% Branch Coverage and Zero Unaccounted Assertions](#333-dev4---2026-08-07---test-suite-baseline-100-branch-coverage-and-zero-unaccounted-assertions)
-  - [\[3.3.3-dev3\] - 2026-08-07 - Ruff Linting Compliance; Coordinator Endpoint Failure Isolation](#333-dev3---2026-08-07---ruff-linting-compliance-coordinator-endpoint-failure-isolation)
-  - [\[3.3.3-dev1\] - 2026-08-07 - Shared CI Bump to v2.0.10; Release Zip Asset Workflow; Branch Coverage Setup](#333-dev1---2026-08-07---shared-ci-bump-to-v2010-release-zip-asset-workflow-branch-coverage-setup)
-  - [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, Extended SMS Length, and Entity About Notes](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-extended-sms-length-and-entity-about-notes)
-  - [\[3.3.2-rc15\] - 2026-08-02 - Shared CI Bump to v2.0.9; Table of Contents and Sensor Manifest Sync](#332-rc15---2026-08-02---shared-ci-bump-to-v209-table-of-contents-and-sensor-manifest-sync)
-  - [\[3.3.2-rc14\] - 2026-08-01 - README Quality Review; SMS Action Parameters and Alert Formatting Fixes](#332-rc14---2026-08-01---readme-quality-review-sms-action-parameters-and-alert-formatting-fixes)
-  - [\[3.3.2-rc13\] - 2026-08-01 - Numeric Sensor Guard Band Verification; Cumulative Counter Floor Tests](#332-rc13---2026-08-01---numeric-sensor-guard-band-verification-cumulative-counter-floor-tests)
-  - [\[3.3.2-rc12\] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Contract Drift Invariant Tests](#332-rc12---2026-08-01---repair-title-neutrality-signal-guidance-alignment-contract-drift-invariant-tests)
-  - [\[3.3.2-rc11\] - 2026-07-31 - Session Expiry Classification via Unauthenticated Key Verification](#332-rc11---2026-07-31---session-expiry-classification-via-unauthenticated-key-verification)
-  - [\[3.3.2-rc10\] - 2026-07-31 - Live Sensor Review Reconciliation; Router APN Profile Selection Documentation](#332-rc10---2026-07-31---live-sensor-review-reconciliation-router-apn-profile-selection-documentation)
-  - [\[3.3.2-rc9\] - 2026-07-31 - Write Payload Shape Lock Tests; Interactive SMS and Reboot Hardware Verification](#332-rc9---2026-07-31---write-payload-shape-lock-tests-interactive-sms-and-reboot-hardware-verification)
-  - [\[3.3.2-rc8\] - 2026-07-31 - APN Profile Name Resolution; APN Select and Data Limit Switch Hardware Tests](#332-rc8---2026-07-31---apn-profile-name-resolution-apn-select-and-data-limit-switch-hardware-tests)
-  - [\[3.3.2-rc7\] - 2026-07-31 - APN Mode Selection Read-Modify-Write Payload Construction](#332-rc7---2026-07-31---apn-mode-selection-read-modify-write-payload-construction)
-  - [\[3.3.2-rc6\] - 2026-07-30 - Write Command Safety Tiering; Data Limit and Logout Verification Checks](#332-rc6---2026-07-30---write-command-safety-tiering-data-limit-and-logout-verification-checks)
-  - [\[3.3.2-rc5\] - 2026-07-30 - Targeted Post-Write Read-Back Verification; Concurrent Write Serialization](#332-rc5---2026-07-30---targeted-post-write-read-back-verification-concurrent-write-serialization)
-  - [\[3.3.2-rc4\] - 2026-07-30 - Toolchain Migration to Home Assistant 2026.8; Ruff Keyword-Only Argument Fixes](#332-rc4---2026-07-30---toolchain-migration-to-home-assistant-20268-ruff-keyword-only-argument-fixes)
-  - [\[3.3.2-rc3\] - 2026-07-30 - Tooling Bumps: Ruff, Zizmor, PHACC; Pre-Release Documentation Sync](#332-rc3---2026-07-30---tooling-bumps-ruff-zizmor-phacc-pre-release-documentation-sync)
-  - [\[3.3.2-rc2\] - 2026-07-30 - Sensor State Class Policy Enforcement; Ban on TOTAL State Class](#332-rc2---2026-07-30---sensor-state-class-policy-enforcement-ban-on-total-state-class)
-  - [\[3.3.2-rc1\] - 2026-07-30 - Device-Registry Compatibility Shims and Test Harness Alignment for HA 2026.8](#332-rc1---2026-07-30---device-registry-compatibility-shims-and-test-harness-alignment-for-ha-20268)
-  - [\[3.3.1-dev20\] - 2026-07-30 - Allowance Sensor Enabled by Default; Alert Threshold Entity Renaming](#331-dev20---2026-07-30---allowance-sensor-enabled-by-default-alert-threshold-entity-renaming)
-  - [\[3.3.1-dev19\] - 2026-07-30 - Carrier Aggregation and LTE Band Lock Mask Diagnostic Decodes](#331-dev19---2026-07-30---carrier-aggregation-and-lte-band-lock-mask-diagnostic-decodes)
-  - [\[3.3.1-dev18\] - 2026-07-29 - Default Entity State Review and Entity About Note Corrections](#331-dev18---2026-07-29---default-entity-state-review-and-entity-about-note-corrections)
-  - [\[3.3.1-dev17\] - 2026-07-29 - Monthly Byte Counter State Class Fix and Allowance Sensor Addition](#331-dev17---2026-07-29---monthly-byte-counter-state-class-fix-and-allowance-sensor-addition)
-  - [\[3.3.1-dev16\] - 2026-07-29 - Technical Rationale Corrections for Declined Router Write Controls](#331-dev16---2026-07-29---technical-rationale-corrections-for-declined-router-write-controls)
-  - [\[3.3.1-dev15\] - 2026-07-29 - Projected Cycle Usage Fallback Logic and Long-Term Statistics Policy](#331-dev15---2026-07-29---projected-cycle-usage-fallback-logic-and-long-term-statistics-policy)
-  - [\[3.3.1-dev14\] - 2026-07-29 - Documentation Reconciliation: Entity Counts, Unpolled Parameters, and Development Debts](#331-dev14---2026-07-29---documentation-reconciliation-entity-counts-unpolled-parameters-and-development-debts)
-  - [\[3.3.1-dev13\] - 2026-07-29 - Coordinator Batch Poll Split: Core Mandatory and Extended Optional Fetch](#331-dev13---2026-07-29---coordinator-batch-poll-split-core-mandatory-and-extended-optional-fetch)
-  - [\[3.3.1-dev12\] - 2026-07-29 - Data Limit Switch Read-Modify-Write Fix and Batch Poll URL Budget Limit Tests](#331-dev12---2026-07-29---data-limit-switch-read-modify-write-fix-and-batch-poll-url-budget-limit-tests)
-  - [\[3.3.1-dev11\] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Telemetry](#331-dev11---2026-07-29---billing-cycle-tracking-usage-projection-sensor-and-diagnostic-telemetry)
-  - [\[3.3.1-dev10\] - 2026-07-29 - Documentation: Roadmap Revision and Architectural Prioritization in Future.md](#331-dev10---2026-07-29---documentation-roadmap-revision-and-architectural-prioritization-in-futuremd)
-  - [\[3.3.1-dev9\] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Telemetry Coverage](#331-dev9---2026-07-29---entity-about-notes-expansion-select-platform-support-and-control-telemetry-coverage)
-  - [\[3.3.1-dev8\] - 2026-07-29 - Encoding-Aware SMS Length Limits: GSM-7 (765 Chars) and UCS-2 (335 Chars)](#331-dev8---2026-07-29---encoding-aware-sms-length-limits-gsm-7-765-chars-and-ucs-2-335-chars)
-  - [\[3.3.1-dev7\] - 2026-07-29 - API Dead-Session Sweep Test Suite: Dying, Refusing, and Drifting Session Fault Injection](#331-dev7---2026-07-29---api-dead-session-sweep-test-suite-dying-refusing-and-drifting-session-fault-injection)
-  - [\[3.3.1-dev6\] - 2026-07-29 - Authenticated Activity Clock Tracking and Write Action Response Validation](#331-dev6---2026-07-29---authenticated-activity-clock-tracking-and-write-action-response-validation)
-  - [\[3.3.1-dev5\] - 2026-07-29 - Thermal Diagnostic Telemetry Set: Modem and 5G Radio Temperature Sensors](#331-dev5---2026-07-29---thermal-diagnostic-telemetry-set-modem-and-5g-radio-temperature-sensors)
-  - [\[3.3.1-dev4\] - 2026-07-28 - Version Bump to 3.3.1 and API Login Type Refactoring](#331-dev4---2026-07-28---version-bump-to-331-and-api-login-type-refactoring)
-  - [\[3.3.1-dev3\] - 2026-07-28 - Cross-Model Sensor Key Aliasing, ARFCN Band Resolvers, and Thermal Entities](#331-dev3---2026-07-28---cross-model-sensor-key-aliasing-arfcn-band-resolvers-and-thermal-entities)
-  - [\[3.3.1-dev2\] - 2026-07-28 - Cross-Model API Batch Parameters, Login Form Fallback, and SMS GSM-7 Encoding](#331-dev2---2026-07-28---cross-model-api-batch-parameters-login-form-fallback-and-sms-gsm-7-encoding)
-  - [\[3.3.1-dev1\] - 2026-07-28 - GSM 03.38 Character Inspector and 3GPP Channel-to-Band Resolvers](#331-dev1---2026-07-28---gsm-0338-character-inspector-and-3gpp-channel-to-band-resolvers)
-  - [\[3.3.0-rc5\] - 2026-07-28 - Documentation: Router Compatibility Guide and Entity About Attribute Manifest](#330-rc5---2026-07-28---documentation-router-compatibility-guide-and-entity-about-attribute-manifest)
-  - [\[3.3.0-rc4\] - 2026-07-28 - README Automation Glitch Guards, Collapsible Layout, and Float Rounding](#330-rc4---2026-07-28---readme-automation-glitch-guards-collapsible-layout-and-float-rounding)
-  - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
-  - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
-  - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
-  - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
-  - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
-  - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
-  - [\[3.3.0-dev9\] - 2026-07-27 - Security Hardening: Stored Secret Schema Pre-fill Prevention Tests](#330-dev9---2026-07-27---security-hardening-stored-secret-schema-pre-fill-prevention-tests)
-  - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
-  - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
-  - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Contract Drift Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-contract-drift-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
-  - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
-  - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
-  - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
-  - [\[3.3.0-dev1\] - 2026-07-27 - PlayFaster Architectural Standards Conformance Pass: Health Sensor, Force Refresh, and Sanitizer](#330-dev1---2026-07-27---playfaster-architectural-standards-conformance-pass-health-sensor-force-refresh-and-sanitizer)
-  - [\[3.2.6-dev8\] - 2026-07-26 - Project Hygiene: Icons, Branding Refresh, and AGENTS.md Modularization](#326-dev8---2026-07-26---project-hygiene-icons-branding-refresh-and-agentsmd-modularization)
-  - [\[3.2.6-dev7\] - 2026-07-12 - Test Suite: 100% Pytest Coverage and Codespell Alignment](#326-dev7---2026-07-12---test-suite-100-pytest-coverage-and-codespell-alignment)
-  - [\[3.2.6-dev6\] - 2026-07-12 - Tooling Bump: PHACC 0.13.346 and Documentation Device Clarifications](#326-dev6---2026-07-12---tooling-bump-phacc-013346-and-documentation-device-clarifications)
-  - [\[3.2.6-dev5\] - 2026-07-06 - CI Infrastructure: Shared CI Workflow Bump to v2.0.6](#326-dev5---2026-07-06---ci-infrastructure-shared-ci-workflow-bump-to-v206)
-  - [\[3.2.6-dev4\] - 2026-07-05 - Test Suite: Pytest Restoration to 100% Coverage Post-Ruff Extension](#326-dev4---2026-07-05---test-suite-pytest-restoration-to-100-coverage-post-ruff-extension)
-  - [\[3.2.6-dev3\] - 2026-07-05 - Static Analysis: Ruff Lint and Rule Alignment with Home Assistant Core](#326-dev3---2026-07-05---static-analysis-ruff-lint-and-rule-alignment-with-home-assistant-core)
-  - [\[3.2.6-dev2\] - 2026-07-05 - Integration Quality Scale: IQS Static Check and test-before-setup Auth Handling](#326-dev2---2026-07-05---integration-quality-scale-iqs-static-check-and-test-before-setup-auth-handling)
-  - [\[3.2.6-dev1\] - 2026-07-03 - Tooling: Check-Drift Script Handling for Ahead-of-Local Home Assistant Core](#326-dev1---2026-07-03---tooling-check-drift-script-handling-for-ahead-of-local-home-assistant-core)
-  - [\[3.2.5\] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening](#325---2026-07-03---release-refresh-now-button-display-units-and-config-flow-hardening)
-  - [\[3.2.5-dev12\] - 2026-07-03 - Service Architecture: SMS Actions Auto-Targeting Single Configured Router](#325-dev12---2026-07-03---service-architecture-sms-actions-auto-targeting-single-configured-router)
-  - [\[3.2.5-dev-11\] - 2026-07-03 - Test Suite: Coverage Restoration to 100%](#325-dev-11---2026-07-03---test-suite-coverage-restoration-to-100)
-  - [\[3.2.5-dev10\] - 2026-07-03 - Documentation: High-Resolution Screenshots and Sensor Inventory Verification](#325-dev10---2026-07-03---documentation-high-resolution-screenshots-and-sensor-inventory-verification)
-  - [\[3.2.5-dev9\] - 2026-07-02 - Coordinator: Explicit ConfigEntry Reference and Polling Option Support](#325-dev9---2026-07-02---coordinator-explicit-configentry-reference-and-polling-option-support)
-  - [\[3.2.5-dev8\] - 2026-07-02 - Entity Hygiene: Suggested Display Units and Precision for 16 Sensors](#325-dev8---2026-07-02---entity-hygiene-suggested-display-units-and-precision-for-16-sensors)
-  - [\[3.2.5-dev7\] - 2026-07-02 - User Interface: Config Flow Host Normalization, Password Masking, and Refresh Button](#325-dev7---2026-07-02---user-interface-config-flow-host-normalization-password-masking-and-refresh-button)
-  - [\[3.2.5-dev6\] - 2026-07-01 - Tooling Bump: Ruff 0.15.19](#325-dev6---2026-07-01---tooling-bump-ruff-01519)
-  - [\[3.2.5-dev5\] - 2026-06-29 - Tooling Bump: Ruff 0.15.18](#325-dev5---2026-06-29---tooling-bump-ruff-01518)
-  - [\[3.2.5-dev4\] - 2026-06-29 - Linter Alignment: YAML Lint Rules and Document Start Configuration](#325-dev4---2026-06-29---linter-alignment-yaml-lint-rules-and-document-start-configuration)
-  - [\[3.2.5-dev3\] - 2026-06-18 - CI Infrastructure: Migration to Dev-Workbench Validation System](#325-dev3---2026-06-18---ci-infrastructure-migration-to-dev-workbench-validation-system)
-  - [\[3.2.5-dev1\] - 2026-06-15 - Task Runner: Local Tasks Ordering and Status Colors](#325-dev1---2026-06-15---task-runner-local-tasks-ordering-and-status-colors)
-  - [\[3.2.4\] - 2026-06-15 - Release: Shared CI Validation Infrastructure v2.0.3](#324---2026-06-15---release-shared-ci-validation-infrastructure-v203)
-  - [\[3.2.4-dev3\] - 2026-06-15 - CI Infrastructure: Shared CI v2.0.3 and Coverage Badge Streamlining](#324-dev3---2026-06-15---ci-infrastructure-shared-ci-v203-and-coverage-badge-streamlining)
-  - [\[3.2.4-dev2\] - 2026-06-15 - CI Infrastructure: Shared CI Workflow Bump to v2.0.2](#324-dev2---2026-06-15---ci-infrastructure-shared-ci-workflow-bump-to-v202)
-  - [\[3.2.4-dev1\] - 2026-06-15 - CI Infrastructure: Shared CI Extension to Theme Projects](#324-dev1---2026-06-15---ci-infrastructure-shared-ci-extension-to-theme-projects)
-  - [\[3.2.3\] - 2026-06-14 - Release: Shared CodeQL Permissions Alignment for Zizmor](#323---2026-06-14---release-shared-codeql-permissions-alignment-for-zizmor)
-  - [\[3.2.2\] - 2026-06-14 - Release: Shared CodeQL Security Scanning Configuration](#322---2026-06-14---release-shared-codeql-security-scanning-configuration)
-  - [\[3.2.1\] - 2026-06-14 - Release: CI Validation Infrastructure Test Release](#321---2026-06-14---release-ci-validation-infrastructure-test-release)
-  - [\[3.2.1-dev9\] - 2026-06-14 - Tooling: Prettier JSON Configuration Adoption](#321-dev9---2026-06-14---tooling-prettier-json-configuration-adoption)
-  - [\[3.2.1-dev8\] - 2026-06-14 - Tooling: Link-Check Path Exclusions and Prettier Config Migration](#321-dev8---2026-06-14---tooling-link-check-path-exclusions-and-prettier-config-migration)
-  - [\[3.2.1-dev7\] - 2026-06-14 - Project Hygiene: Dependabot Bumps and AGENTS.md Introduction](#321-dev7---2026-06-14---project-hygiene-dependabot-bumps-and-agentsmd-introduction)
-  - [\[3.2.1-dev4\] - 2026-06-10 - Tooling Architecture: Dev-Workbench Tool Version Synchronization System](#321-dev4---2026-06-10---tooling-architecture-dev-workbench-tool-version-synchronization-system)
-  - [\[3.2.1-dev1\] - 2026-06-08 - Bug Fix: Unawaited Login Coroutine Warnings and Mypy Core Alignment](#321-dev1---2026-06-08---bug-fix-unawaited-login-coroutine-warnings-and-mypy-core-alignment)
-  - [\[3.2.0\] - 2026-05-28 - Release: APN Profile Control, Network Mode Select, and Diagnostic Entities](#320---2026-05-28---release-apn-profile-control-network-mode-select-and-diagnostic-entities)
-  - [\[3.1.1-dev11\] - 2026-05-27 - Test Suite: 57 New Tests and 99% Coverage Across Platforms](#311-dev11---2026-05-27---test-suite-57-new-tests-and-99-coverage-across-platforms)
-  - [\[3.1.1-dev10\] - 2026-05-27 - Type Checking: Mypy Binary Sensor Entity List Annotation Fix](#311-dev10---2026-05-27---type-checking-mypy-binary-sensor-entity-list-annotation-fix)
-  - [\[3.1.1-dev9\] - 2026-05-27 - Controls Architecture: APN Profile Select, Network Modes, and ODU LED Controls](#311-dev9---2026-05-27---controls-architecture-apn-profile-select-network-modes-and-odu-led-controls)
-  - [\[3.1.1-dev8\] - 2026-05-25 - Python Compatibility: Bare-Tuple Exception Syntax Corrections](#311-dev8---2026-05-25---python-compatibility-bare-tuple-exception-syntax-corrections)
-  - [\[3.1.1-dev7\] - 2026-05-25 - Task Lifecycle: HA-Tracked Debounced Polling Task and Exception Fixes](#311-dev7---2026-05-25---task-lifecycle-ha-tracked-debounced-polling-task-and-exception-fixes)
-  - [\[3.1.1-dev6\] - 2026-05-25 - Test Depth: 17 Boundary and Error-Handling Tests with Exception Tuple Fixes](#311-dev6---2026-05-25---test-depth-17-boundary-and-error-handling-tests-with-exception-tuple-fixes)
-  - [\[3.1.1-dev5\] - 2026-05-25 - Recorder Optimization: Long-Term Statistics State Class Removal for 8 Sensors](#311-dev5---2026-05-25---recorder-optimization-long-term-statistics-state-class-removal-for-8-sensors)
-  - [\[3.1.1-dev4\] - 2026-05-25 - Test Fixtures: Session-Reset Mock Handling and 100% Coverage on API and Coordinator](#311-dev4---2026-05-25---test-fixtures-session-reset-mock-handling-and-100-coverage-on-api-and-coordinator)
-  - [\[3.1.1-dev3\] - 2026-05-25 - Session Management: Proactive Inactivity Reset and Post-Login Initialization GET](#311-dev3---2026-05-25---session-management-proactive-inactivity-reset-and-post-login-initialization-get)
-  - [\[3.1.1-dev2\] - 2026-05-24 - Documentation: README Automation Examples and Icon Enhancements](#311-dev2---2026-05-24---documentation-readme-automation-examples-and-icon-enhancements)
-  - [\[3.1.1-dev1\] - 2026-05-24 - Tooling Bump: Dependabot Shared Validation, Zizmor, and Typing Updates](#311-dev1---2026-05-24---tooling-bump-dependabot-shared-validation-zizmor-and-typing-updates)
-  - [\[3.1.0\] - 2026-05-24 - Release: SMS Service Actions, Received Bus Events, and Storage Full Repairs](#310---2026-05-24---release-sms-service-actions-received-bus-events-and-storage-full-repairs)
-  - [\[3.0.2-dev11\] - 2026-05-24 - Documentation: README SMS Action Guides and Automation Patterns](#302-dev11---2026-05-24---documentation-readme-sms-action-guides-and-automation-patterns)
-  - [\[3.0.2-dev10\] - 2026-05-23 - Stability: Reboot-Detection Uptime Boot Latch and CLAUDE.md Agent Guide](#302-dev10---2026-05-23---stability-reboot-detection-uptime-boot-latch-and-claudemd-agent-guide)
-  - [\[3.0.2-dev9\] - 2026-05-23 - Service Events: SMS Received Bus Event and 100% Init Module Coverage](#302-dev9---2026-05-23---service-events-sms-received-bus-event-and-100-init-module-coverage)
-  - [\[3.0.2-dev8\] - 2026-05-23 - SMS Platform: Send, Delete, and List Service Actions with Hex Encoding](#302-dev8---2026-05-23---sms-platform-send-delete-and-list-service-actions-with-hex-encoding)
-  - [\[3.0.2-dev7\] - 2026-05-23 - Coordinator: Boot Timestamp State Restoration Across Home Assistant Restarts](#302-dev7---2026-05-23---coordinator-boot-timestamp-state-restoration-across-home-assistant-restarts)
-  - [\[3.0.2-dev6\] - 2026-05-23 - Test Suite: 14 New Tests and 100% Coverage for API and Coordinator](#302-dev6---2026-05-23---test-suite-14-new-tests-and-100-coverage-for-api-and-coordinator)
-  - [\[3.0.2-dev5\] - 2026-05-23 - Type Checking: Mypy Strict EntityCategory Imports and Unused Import Cleanup](#302-dev5---2026-05-23---type-checking-mypy-strict-entitycategory-imports-and-unused-import-cleanup)
-  - [\[3.0.2-dev4\] - 2026-05-23 - Type Checking: Resolution of 43 Mypy Strict Errors Across Core Modules](#302-dev4---2026-05-23---type-checking-resolution-of-43-mypy-strict-errors-across-core-modules)
-  - [\[3.0.2-dev3\] - 2026-05-22 - API Architecture: Centralized Async Request Helper and Uptime Duration Sensor](#302-dev3---2026-05-22---api-architecture-centralized-async-request-helper-and-uptime-duration-sensor)
-  - [\[3.0.2-dev2\] - 2026-05-13 - Repairs and UI: SMS Storage Full Repair Issue and Dynamic State Icons](#302-dev2---2026-05-13---repairs-and-ui-sms-storage-full-repair-issue-and-dynamic-state-icons)
-  - [\[3.0.2-dev1\] - 2026-05-13 - Devcontainer Architecture: Volume Mount Consolidation and Mypy Strict Setup](#302-dev1---2026-05-13---devcontainer-architecture-volume-mount-consolidation-and-mypy-strict-setup)
-  - [\[3.0.1\] - 2026-05-10 - Release: README Documentation Overhaul and Architecture Alignment](#301---2026-05-10---release-readme-documentation-overhaul-and-architecture-alignment)
-  - [\[3.0.1-rc1\] - 2026-05-10 - Documentation: README Structure Reordering and Section Expansions](#301-rc1---2026-05-10---documentation-readme-structure-reordering-and-section-expansions)
-  - [\[3.0.1-dev8\] - 2026-05-10 - Hardening: Get RD Login Guard, Unawaited Coroutine Fixes, and Protocol Fallback Logs](#301-dev8---2026-05-10---hardening-get-rd-login-guard-unawaited-coroutine-fixes-and-protocol-fallback-logs)
-  - [\[3.0.1-dev6\] - 2026-05-10 - Type Checking: 24 Mypy Strict Error Fixes in API and 100% Component Coverage](#301-dev6---2026-05-10---type-checking-24-mypy-strict-error-fixes-in-api-and-100-component-coverage)
-  - [\[3.0.1-dev5\] - 2026-05-10 - Config Flow: Reconfiguration Support and Hierarchical Translation Strategy](#301-dev5---2026-05-10---config-flow-reconfiguration-support-and-hierarchical-translation-strategy)
-  - [\[3.0.1-dev4\] - 2026-05-09 - Project Tooling: Project-Agnostic pyproject.toml and tasks.json Configurations](#301-dev4---2026-05-09---project-tooling-project-agnostic-pyprojecttoml-and-tasksjson-configurations)
-  - [\[3.0.1-dev3\] - 2026-05-09 - CI Architecture: Shared Reusable GitHub Actions CI Workflow Creation](#301-dev3---2026-05-09---ci-architecture-shared-reusable-github-actions-ci-workflow-creation)
-  - [\[3.0.0\] - 2026-05-08 - Major Release: Native Async Rewrite, Sub-Device Architecture, and IMEI Identity](#300---2026-05-08---major-release-native-async-rewrite-sub-device-architecture-and-imei-identity)
-  - [\[3.0.0-rc1\] - 2026-05-08 - Entity Architecture: Category Visibility Refinements and Bridge Mode Rename](#300-rc1---2026-05-08---entity-architecture-category-visibility-refinements-and-bridge-mode-rename)
-  - [\[3.0.0-dev22\] - 2026-05-08 - Bug Fix: Hassfest Translation Schema and Reauth Placeholder Substitution](#300-dev22---2026-05-08---bug-fix-hassfest-translation-schema-and-reauth-placeholder-substitution)
-  - [\[3.0.0-dev21\] - 2026-05-08 - Documentation: Comprehensive Gold Standard README and Missing Translations](#300-dev21---2026-05-08---documentation-comprehensive-gold-standard-readme-and-missing-translations)
-  - [\[3.0.0-dev16\] - 2026-05-07 - Code Review: Shared Device Info Helper, Translation Naming, and Exception Hardening](#300-dev16---2026-05-07---code-review-shared-device-info-helper-translation-naming-and-exception-hardening)
-  - [\[3.0.0-dev15\] - 2026-05-07 - Telemetry: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor](#300-dev15---2026-05-07---telemetry-12-new-sensors-guard-bands-and-imei-hardware-identity-anchor)
-  - [\[3.0.0-dev14\] - 2026-05-07 - Diagnostics and Security: Diagnostics Platform and Reauthentication Flow](#300-dev14---2026-05-07---diagnostics-and-security-diagnostics-platform-and-reauthentication-flow)
-  - [\[3.0.0-dev11\] - 2026-05-07 - Documentation: README Badge Links](#300-dev11---2026-05-07---documentation-readme-badge-links)
-  - [\[3.0.0-dev10\] - 2026-05-02 - Architecture: Sub-Device Partitioning and Badge Link Repairs](#300-dev10---2026-05-02---architecture-sub-device-partitioning-and-badge-link-repairs)
-  - [\[3.0.0-dev8\] - 2026-04-29 - Entity Standardization: Sub-Device Architecture and Native Unit Alignment](#300-dev8---2026-04-29---entity-standardization-sub-device-architecture-and-native-unit-alignment)
-  - [\[3.0.0-dev5\] - 2026-04-07 - Entity Engine: Declarative Guard Bands and Custom Device Prefix Naming](#300-dev5---2026-04-07---entity-engine-declarative-guard-bands-and-custom-device-prefix-naming)
-  - [\[3.0.0-dev3\] - 2026-04-07 - Core Architecture: Declarative Entity Engine and Non-Blocking Startup](#300-dev3---2026-04-07---core-architecture-declarative-entity-engine-and-non-blocking-startup)
-  - [\[3.0.0-dev2\] - 2026-04-07 - Lifecycle Architecture: Local Hardware Cache, Non-Blocking Setup, and Mypy Strict](#300-dev2---2026-04-07---lifecycle-architecture-local-hardware-cache-non-blocking-setup-and-mypy-strict)
-  - [\[3.0.0-dev1\] - 2026-04-01 - Core Architecture: Native Async Migration to aiohttp](#300-dev1---2026-04-01---core-architecture-native-async-migration-to-aiohttp)
-  - [\[2.3.1\] - 2026-04-01 - Release: DataUpdateCoordinator Migration and HACS Branding Assets](#231---2026-04-01---release-dataupdatecoordinator-migration-and-hacs-branding-assets)
-  - [\[2.2.4\] - 2026-03-30 - Test Suite: Pytest Coverage Expansion and Code Clean-up](#224---2026-03-30---test-suite-pytest-coverage-expansion-and-code-clean-up)
-  - [\[2.2.3\] - 2026-03-30 - Test Suite: Python Pytest Introduction and Manifest Repairs](#223---2026-03-30---test-suite-python-pytest-introduction-and-manifest-repairs)
-  - [\[2.1.1\] - 2026-03-29 - Error Handling: Diagnostic Logging Improvements](#211---2026-03-29---error-handling-diagnostic-logging-improvements)
-  - [\[2.0.1\] - 2026-03-29 - Config Flow: Options Flow for Dynamic Reconfiguration](#201---2026-03-29---config-flow-options-flow-for-dynamic-reconfiguration)
-  - [\[1.9.4\] - 2026-03-29 - Device Discovery: Hardware Model Reading and Session Management](#194---2026-03-29---device-discovery-hardware-model-reading-and-session-management)
-  - [\[1.8.1\] - 2026-03-29 - Localization: Standard Translation Directory Structure](#181---2026-03-29---localization-standard-translation-directory-structure)
-  - [\[1.7.3\] - 2026-03-29 - Entity Hygiene: Standardized Entity Naming](#173---2026-03-29---entity-hygiene-standardized-entity-naming)
-  - [\[1.6.3\] - 2026-03-28 - Lifecycle: Non-Blocking Async Startup for Offline Routers](#163---2026-03-28---lifecycle-non-blocking-async-startup-for-offline-routers)
-  - [\[1.5.7\] - 2026-03-28 - Branding and Entity Structure: ZTE Icons and Sub-Device Sensor Naming](#157---2026-03-28---branding-and-entity-structure-zte-icons-and-sub-device-sensor-naming)
-  - [\[1.5.1\] - 2026-03-28 - Integration Hygiene: Home Assistant Integration Naming Alignment](#151---2026-03-28---integration-hygiene-home-assistant-integration-naming-alignment)
-  - [\[1.4.5\] - 2026-03-28 - Documentation and Sensors: Local Changelog Addition and Standard Sensor Names](#145---2026-03-28---documentation-and-sensors-local-changelog-addition-and-standard-sensor-names)
-  - [\[1.4.4\] - 2026-03-28 - Telemetry Expansion: Comprehensive Router Attribute Exposure](#144---2026-03-28---telemetry-expansion-comprehensive-router-attribute-exposure)
-  - [\[1.4.3\] - 2026-03-28 - Polling Controls: Pause Polling Switch and Polling Interval Number Entity](#143---2026-03-28---polling-controls-pause-polling-switch-and-polling-interval-number-entity)
-  - [\[1.4.2\] - 2026-03-27 - Feature Release: SMS Inbox Monitoring and Initial GitHub Release](#142---2026-03-27---feature-release-sms-inbox-monitoring-and-initial-github-release)
-  - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
-  - [\[1.4.0\] - 2026-03-26 - Telemetry Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---telemetry-platform-core-signal-and-cellular-data-sensors)
-  - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+- [\[3.3.9-dev6\] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization](#339-dev6---2026-09-02---readme-hardware-compatibility-alignment-changelog-header-normalization)
+- [\[3.3.9-dev5\] - 2026-09-02 - Discovery Pass Fresh Login State; Per-Chunk Canary Verification](#339-dev5---2026-09-02---discovery-pass-fresh-login-state-per-chunk-canary-verification)
+- [\[3.3.9-dev4\] - 2026-09-02 - Diagnostic Download Time Reduced from 60s to 6s; False Re-Login Fix](#339-dev4---2026-09-02---diagnostic-download-time-reduced-from-60s-to-6s-false-re-login-fix)
+- [\[3.3.9-dev3\] - 2026-09-01 - Discovery Probe Duration Reduced to 37s; Write Command Exclusion](#339-dev3---2026-09-01---discovery-probe-duration-reduced-to-37s-write-command-exclusion)
+- [\[3.3.9-dev2\] - 2026-09-01 - Wider Web UI Extraction; Unanswered Parameter Diagnostics](#339-dev2---2026-09-01---wider-web-ui-extraction-unanswered-parameter-diagnostics)
+- [\[3.3.9-dev1\] - 2026-09-01 - Batch Polling URL Character Limit Partitioning; Request Overflow Prevention](#339-dev1---2026-09-01---batch-polling-url-character-limit-partitioning-request-overflow-prevention)
+- [\[3.3.8-dev2\] - 2026-09-01 - Firmware Update Diagnostic Sensors Added; Discovery Carrier Redaction](#338-dev2---2026-09-01---firmware-update-diagnostic-sensors-added-discovery-carrier-redaction)
+- [\[3.3.8-dev1\] - 2026-09-01 - Web UI Automated Parameter Discovery; Concept-Based Drift Tolerance](#338-dev1---2026-09-01---web-ui-automated-parameter-discovery-concept-based-drift-tolerance)
+- [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
+- [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
+- [\[3.3.7-dev2\] - 2026-08-31 - Data Limit Write Control Form Aliases; Diagnostics Redaction Sweep](#337-dev2---2026-08-31---data-limit-write-control-form-aliases-diagnostics-redaction-sweep)
+- [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Dynamic Cookie Authentication; Startup Key Discovery](#337-dev1---2026-08-31---mc888-pro-dynamic-cookie-authentication-startup-key-discovery)
+- [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
+- [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Stale Boot Time Reconciliation Across Restarts](#336-dev1---2026-08-31---device-uptime-stale-boot-time-reconciliation-across-restarts)
+- [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
+- [\[3.3.5-dev2\] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll](#335-dev2---2026-08-31---session-verdict-evidence-diagnostics-capture-on-a-failed-poll)
+- [\[3.3.5-dev1\] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation](#335-dev1---2026-08-30---multi-user-login-payload-aligned-with-reference-implementation)
+- [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
+- [\[3.3.4-dev26\] - 2026-08-30 - Login Form Order Aligned With Reference Implementation](#334-dev26---2026-08-30---login-form-order-aligned-with-reference-implementation)
+- [\[3.3.4-dev25\] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing](#334-dev25---2026-08-30---login-session-without-a-stok-cookie-session-state-pairing)
+- [\[3.3.4-dev24\] - 2026-08-30 - Ruff Tooling Bump; README Actions Visuals](#334-dev24---2026-08-30---ruff-tooling-bump-readme-actions-visuals)
+- [\[3.3.4-dev23\] - 2026-08-27 - Project Structure Reference Sync; Ha-Compatibility and Test Harness Additions](#334-dev23---2026-08-27---project-structure-reference-sync-ha-compatibility-and-test-harness-additions)
+- [\[3.3.4-dev22\] - 2026-08-27 - Ruff Rules Alignment; README and AGENTS Synchronization](#334-dev22---2026-08-27---ruff-rules-alignment-readme-and-agents-synchronization)
+- [\[3.3.4-dev21\] - 2026-08-26 - Documentation: README Repairs and Health Section Alignment](#334-dev21---2026-08-26---documentation-readme-repairs-and-health-section-alignment)
+- [\[3.3.4-dev20\] - 2026-08-26 - Contract Sweep Naming And Vacuity Guards; Queue References Removed](#334-dev20---2026-08-26---contract-sweep-naming-and-vacuity-guards-queue-references-removed)
+- [\[3.3.4-dev19\] - 2026-08-26 - README Repairs Section Rewritten](#334-dev19---2026-08-26---readme-repairs-section-rewritten)
+- [\[3.3.4-dev18\] - 2026-08-26 - SMS Full Status Decoupled from Integration Health; Sensor Enabled by Default](#334-dev18---2026-08-26---sms-full-status-decoupled-from-integration-health-sensor-enabled-by-default)
+- [\[3.3.4-dev17\] - 2026-08-26 - SMS Storage Fill Comparison; Hardware Check in Validate All](#334-dev17---2026-08-26---sms-storage-fill-comparison-hardware-check-in-validate-all)
+- [\[3.3.4-dev16\] - 2026-08-26 - Repair Translation Schema: Fixable Issue Exclusivity](#334-dev16---2026-08-26---repair-translation-schema-fixable-issue-exclusivity)
+- [\[3.3.4-dev15\] - 2026-08-26 - Documentation: Public CHANGELOG.md Release Header and Table of Contents Standardization](#334-dev15---2026-08-26---documentation-public-changelogmd-release-header-and-table-of-contents-standardization)
+- [\[3.3.4-dev14\] - 2026-08-26 - Documentation: Comprehensive Changelog Readability and Historical Header Standardization](#334-dev14---2026-08-26---documentation-comprehensive-changelog-readability-and-historical-header-standardization)
+- [\[3.3.4-dev13\] - 2026-08-26 - Repairs Documentation: Repair Eligibility Criteria and Health Sensor Mapping](#334-dev13---2026-08-26---repairs-documentation-repair-eligibility-criteria-and-health-sensor-mapping)
+- [\[3.3.4-dev12\] - 2026-08-26 - Entity Configuration: Frequency Unit Selector Dependence on Device Class](#334-dev12---2026-08-26---entity-configuration-frequency-unit-selector-dependence-on-device-class)
+- [\[3.3.4-dev11\] - 2026-08-26 - Documentation Reconciliation: Repair Set, Quality Scale, and Frequency Units](#334-dev11---2026-08-26---documentation-reconciliation-repair-set-quality-scale-and-frequency-units)
+- [\[3.3.4-dev10\] - 2026-08-26 - Suppression Allow-List Sweep; Health & Repair Contract Tests; Silent-Failure Audit](#334-dev10---2026-08-26---suppression-allow-list-sweep-health-repair-contract-tests-silent-failure-audit)
+- [\[3.3.4-dev9\] - 2026-08-26 - Publish-Moment State Capture Tests; Real APN Payloads in Select Tests](#334-dev9---2026-08-26---publish-moment-state-capture-tests-real-apn-payloads-in-select-tests)
+- [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
+- [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
+- [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
+- [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-xprojchoresmd)
+- [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
+- [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
+- [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
+- [\[3.3.4-dev1\] - 2026-08-08 - Documentation: Changelog Format Refinements; US Spelling Standardization](#334-dev1---2026-08-08---documentation-changelog-format-refinements-us-spelling-standardization)
+- [\[3.3.3\] - 2026-08-08 - Release: SMS Emoji Decoding, Polling Resilience, and Repair Isolation](#333---2026-08-08---release-sms-emoji-decoding-polling-resilience-and-repair-isolation)
+- [\[3.3.3-dev12\] - 2026-08-07 - Write Token Validation; Config-Flow Session Release; Timing Probe Measurements](#333-dev12---2026-08-07---write-token-validation-config-flow-session-release-timing-probe-measurements)
+- [\[3.3.3-dev11\] - 2026-08-07 - API Domain Error Handling; Force-Refresh Flag Reset; SMS Bank Counter Tests](#333-dev11---2026-08-07---api-domain-error-handling-force-refresh-flag-reset-sms-bank-counter-tests)
+- [\[3.3.3-dev10\] - 2026-08-07 - Write Action Error Isolation; Partial Multi-Recipient SMS Reporting; ID-Less Message Deletion Guard](#333-dev10---2026-08-07---write-action-error-isolation-partial-multi-recipient-sms-reporting-id-less-message-deletion-guard)
+- [\[3.3.3-dev9\] - 2026-08-07 - SMS UTF-16BE Hex Decoding; Emoji Surrogate Pair Support](#333-dev9---2026-08-07---sms-utf-16be-hex-decoding-emoji-surrogate-pair-support)
+- [\[3.3.3-dev8\] - 2026-08-07 - Data Allowance Sensor Availability; Empty SMS Bank Handling](#333-dev8---2026-08-07---data-allowance-sensor-availability-empty-sms-bank-handling)
+- [\[3.3.3-dev7\] - 2026-08-07 - Mutation Test Baseline; Billing-Cycle Boundary and Diagnostics Sanitizer Tests](#333-dev7---2026-08-07---mutation-test-baseline-billing-cycle-boundary-and-diagnostics-sanitizer-tests)
+- [\[3.3.3-dev6\] - 2026-08-07 - Sweep Test Documentation in AGENTS.md; Mutation Testing Scoping](#333-dev6---2026-08-07---sweep-test-documentation-in-agentsmd-mutation-testing-scoping)
+- [\[3.3.3-dev5\] - 2026-08-07 - Entry-Scoped Repair IDs; Repair Cleanup on Unload and Removal](#333-dev5---2026-08-07---entry-scoped-repair-ids-repair-cleanup-on-unload-and-removal)
+- [\[3.3.3-dev4\] - 2026-08-07 - Test Suite Baseline: 100% Branch Coverage and Zero Unaccounted Assertions](#333-dev4---2026-08-07---test-suite-baseline-100-branch-coverage-and-zero-unaccounted-assertions)
+- [\[3.3.3-dev3\] - 2026-08-07 - Ruff Linting Compliance; Coordinator Endpoint Failure Isolation](#333-dev3---2026-08-07---ruff-linting-compliance-coordinator-endpoint-failure-isolation)
+- [\[3.3.3-dev1\] - 2026-08-07 - Shared CI Bump to v2.0.10; Release Zip Asset Workflow; Branch Coverage Setup](#333-dev1---2026-08-07---shared-ci-bump-to-v2010-release-zip-asset-workflow-branch-coverage-setup)
+- [\[3.3.2\] - 2026-08-02 - Release: Expanded Model Support, Billing Cycle Tracking, Extended SMS Length, and Entity About Notes](#332---2026-08-02---release-expanded-model-support-billing-cycle-tracking-extended-sms-length-and-entity-about-notes)
+- [\[3.3.2-rc15\] - 2026-08-02 - Shared CI Bump to v2.0.9; Table of Contents and Sensor Manifest Sync](#332-rc15---2026-08-02---shared-ci-bump-to-v209-table-of-contents-and-sensor-manifest-sync)
+- [\[3.3.2-rc14\] - 2026-08-01 - README Quality Review; SMS Action Parameters and Alert Formatting Fixes](#332-rc14---2026-08-01---readme-quality-review-sms-action-parameters-and-alert-formatting-fixes)
+- [\[3.3.2-rc13\] - 2026-08-01 - Numeric Sensor Guard Band Verification; Cumulative Counter Floor Tests](#332-rc13---2026-08-01---numeric-sensor-guard-band-verification-cumulative-counter-floor-tests)
+- [\[3.3.2-rc12\] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Missing Field Invariant Tests](#332-rc12---2026-08-01---repair-title-neutrality-signal-guidance-alignment-missing-field-invariant-tests)
+- [\[3.3.2-rc11\] - 2026-07-31 - Session Expiry Classification via Unauthenticated Key Verification](#332-rc11---2026-07-31---session-expiry-classification-via-unauthenticated-key-verification)
+- [\[3.3.2-rc10\] - 2026-07-31 - Live Sensor Review Reconciliation; Router APN Profile Selection Documentation](#332-rc10---2026-07-31---live-sensor-review-reconciliation-router-apn-profile-selection-documentation)
+- [\[3.3.2-rc9\] - 2026-07-31 - Write Payload Shape Lock Tests; Interactive SMS and Reboot Hardware Verification](#332-rc9---2026-07-31---write-payload-shape-lock-tests-interactive-sms-and-reboot-hardware-verification)
+- [\[3.3.2-rc8\] - 2026-07-31 - APN Profile Name Resolution; APN Select and Data Limit Switch Hardware Tests](#332-rc8---2026-07-31---apn-profile-name-resolution-apn-select-and-data-limit-switch-hardware-tests)
+- [\[3.3.2-rc7\] - 2026-07-31 - APN Mode Selection Read-Modify-Write Payload Construction](#332-rc7---2026-07-31---apn-mode-selection-read-modify-write-payload-construction)
+- [\[3.3.2-rc6\] - 2026-07-30 - Write Command Safety Tiering; Data Limit and Logout Verification Checks](#332-rc6---2026-07-30---write-command-safety-tiering-data-limit-and-logout-verification-checks)
+- [\[3.3.2-rc5\] - 2026-07-30 - Targeted Post-Write Read-Back Verification; Concurrent Write Serialization](#332-rc5---2026-07-30---targeted-post-write-read-back-verification-concurrent-write-serialization)
+- [\[3.3.2-rc4\] - 2026-07-30 - Toolchain Migration to Home Assistant 2026.8; Ruff Keyword-Only Argument Fixes](#332-rc4---2026-07-30---toolchain-migration-to-home-assistant-20268-ruff-keyword-only-argument-fixes)
+- [\[3.3.2-rc3\] - 2026-07-30 - Tooling Bumps: Ruff, Zizmor, PHACC; Pre-Release Documentation Sync](#332-rc3---2026-07-30---tooling-bumps-ruff-zizmor-phacc-pre-release-documentation-sync)
+- [\[3.3.2-rc2\] - 2026-07-30 - Sensor State Class Policy Enforcement; Ban on TOTAL State Class](#332-rc2---2026-07-30---sensor-state-class-policy-enforcement-ban-on-total-state-class)
+- [\[3.3.2-rc1\] - 2026-07-30 - Device-Registry Compatibility Shims and Test Harness Alignment for HA 2026.8](#332-rc1---2026-07-30---device-registry-compatibility-shims-and-test-harness-alignment-for-ha-20268)
+- [\[3.3.1-dev20\] - 2026-07-30 - Allowance Sensor Enabled by Default; Alert Threshold Entity Renaming](#331-dev20---2026-07-30---allowance-sensor-enabled-by-default-alert-threshold-entity-renaming)
+- [\[3.3.1-dev19\] - 2026-07-30 - Carrier Aggregation and LTE Band Lock Mask Diagnostic Decodes](#331-dev19---2026-07-30---carrier-aggregation-and-lte-band-lock-mask-diagnostic-decodes)
+- [\[3.3.1-dev18\] - 2026-07-29 - Default Entity State Review and Entity About Note Corrections](#331-dev18---2026-07-29---default-entity-state-review-and-entity-about-note-corrections)
+- [\[3.3.1-dev17\] - 2026-07-29 - Monthly Byte Counter State Class Fix and Allowance Sensor Addition](#331-dev17---2026-07-29---monthly-byte-counter-state-class-fix-and-allowance-sensor-addition)
+- [\[3.3.1-dev16\] - 2026-07-29 - Technical Rationale Corrections for Declined Router Write Controls](#331-dev16---2026-07-29---technical-rationale-corrections-for-declined-router-write-controls)
+- [\[3.3.1-dev15\] - 2026-07-29 - Projected Cycle Usage Fallback Logic and Long-Term Statistics Policy](#331-dev15---2026-07-29---projected-cycle-usage-fallback-logic-and-long-term-statistics-policy)
+- [\[3.3.1-dev14\] - 2026-07-29 - Documentation Reconciliation: Entity Counts, Unpolled Parameters, and Development Debts](#331-dev14---2026-07-29---documentation-reconciliation-entity-counts-unpolled-parameters-and-development-debts)
+- [\[3.3.1-dev13\] - 2026-07-29 - Coordinator Batch Poll Split: Core Mandatory and Extended Optional Fetch](#331-dev13---2026-07-29---coordinator-batch-poll-split-core-mandatory-and-extended-optional-fetch)
+- [\[3.3.1-dev12\] - 2026-07-29 - Data Limit Switch Read-Modify-Write Fix and Batch Poll URL Budget Limit Tests](#331-dev12---2026-07-29---data-limit-switch-read-modify-write-fix-and-batch-poll-url-budget-limit-tests)
+- [\[3.3.1-dev11\] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Entities](#331-dev11---2026-07-29---billing-cycle-tracking-usage-projection-sensor-and-diagnostic-entities)
+- [\[3.3.1-dev10\] - 2026-07-29 - Documentation: Roadmap Revision and Architectural Prioritization in Future.md](#331-dev10---2026-07-29---documentation-roadmap-revision-and-architectural-prioritization-in-futuremd)
+- [\[3.3.1-dev9\] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Sensor Coverage](#331-dev9---2026-07-29---entity-about-notes-expansion-select-platform-support-and-control-sensor-coverage)
+- [\[3.3.1-dev8\] - 2026-07-29 - Encoding-Aware SMS Length Limits: GSM-7 (765 Chars) and UCS-2 (335 Chars)](#331-dev8---2026-07-29---encoding-aware-sms-length-limits-gsm-7-765-chars-and-ucs-2-335-chars)
+- [\[3.3.1-dev7\] - 2026-07-29 - API Dead-Session Sweep Test Suite: Dying, Refusing, and Drifting Session Fault Injection](#331-dev7---2026-07-29---api-dead-session-sweep-test-suite-dying-refusing-and-drifting-session-fault-injection)
+- [\[3.3.1-dev6\] - 2026-07-29 - Authenticated Activity Clock Tracking and Write Action Response Validation](#331-dev6---2026-07-29---authenticated-activity-clock-tracking-and-write-action-response-validation)
+- [\[3.3.1-dev5\] - 2026-07-29 - Thermal Diagnostic Sensor Suite: Modem and 5G Radio Temperature Sensors](#331-dev5---2026-07-29---thermal-diagnostic-sensor-suite-modem-and-5g-radio-temperature-sensors)
+- [\[3.3.1-dev4\] - 2026-07-28 - Version Bump to 3.3.1 and API Login Type Refactoring](#331-dev4---2026-07-28---version-bump-to-331-and-api-login-type-refactoring)
+- [\[3.3.1-dev3\] - 2026-07-28 - Cross-Model Sensor Key Aliasing, ARFCN Band Resolvers, and Thermal Entities](#331-dev3---2026-07-28---cross-model-sensor-key-aliasing-arfcn-band-resolvers-and-thermal-entities)
+- [\[3.3.1-dev2\] - 2026-07-28 - Cross-Model API Batch Parameters, Login Form Fallback, and SMS GSM-7 Encoding](#331-dev2---2026-07-28---cross-model-api-batch-parameters-login-form-fallback-and-sms-gsm-7-encoding)
+- [\[3.3.1-dev1\] - 2026-07-28 - GSM 03.38 Character Inspector and 3GPP Channel-to-Band Resolvers](#331-dev1---2026-07-28---gsm-0338-character-inspector-and-3gpp-channel-to-band-resolvers)
+- [\[3.3.0-rc5\] - 2026-07-28 - Documentation: Router Compatibility Guide and Entity About Attribute Manifest](#330-rc5---2026-07-28---documentation-router-compatibility-guide-and-entity-about-attribute-manifest)
+- [\[3.3.0-rc4\] - 2026-07-28 - README Automation Glitch Guards, Collapsible Layout, and Float Rounding](#330-rc4---2026-07-28---readme-automation-glitch-guards-collapsible-layout-and-float-rounding)
+- [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
+- [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
+- [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
+- [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-projstructuremd)
+- [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
+- [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
+- [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
+- [\[3.3.0-dev9\] - 2026-07-27 - Security Hardening: Stored Secret Schema Pre-fill Prevention Tests](#330-dev9---2026-07-27---security-hardening-stored-secret-schema-pre-fill-prevention-tests)
+- [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
+- [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
+- [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
+- [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-ztehowtoaccessmd)
+- [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
+- [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
+- [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
+- [\[3.3.0-dev1\] - 2026-07-27 - PlayFaster Architectural Standards Conformance Pass: Health Sensor, Force Refresh, and Sanitizer](#330-dev1---2026-07-27---playfaster-architectural-standards-conformance-pass-health-sensor-force-refresh-and-sanitizer)
+- [\[3.2.6-dev8\] - 2026-07-26 - Project Hygiene: Icons, Branding Refresh, and AGENTS.md Modularization](#326-dev8---2026-07-26---project-hygiene-icons-branding-refresh-and-agentsmd-modularization)
+- [\[3.2.6-dev7\] - 2026-07-12 - Test Suite: 100% Pytest Coverage and Codespell Alignment](#326-dev7---2026-07-12---test-suite-100-pytest-coverage-and-codespell-alignment)
+- [\[3.2.6-dev6\] - 2026-07-12 - Tooling Bump: PHACC 0.13.346 and Documentation Device Clarifications](#326-dev6---2026-07-12---tooling-bump-phacc-013346-and-documentation-device-clarifications)
+- [\[3.2.6-dev5\] - 2026-07-06 - CI Infrastructure: Shared CI Workflow Bump to v2.0.6](#326-dev5---2026-07-06---ci-infrastructure-shared-ci-workflow-bump-to-v206)
+- [\[3.2.6-dev4\] - 2026-07-05 - Test Suite: Pytest Restoration to 100% Coverage Post-Ruff Extension](#326-dev4---2026-07-05---test-suite-pytest-restoration-to-100-coverage-post-ruff-extension)
+- [\[3.2.6-dev3\] - 2026-07-05 - Static Analysis: Ruff Lint and Rule Alignment with Home Assistant Core](#326-dev3---2026-07-05---static-analysis-ruff-lint-and-rule-alignment-with-home-assistant-core)
+- [\[3.2.6-dev2\] - 2026-07-05 - Integration Quality Scale: IQS Static Check and test-before-setup Auth Handling](#326-dev2---2026-07-05---integration-quality-scale-iqs-static-check-and-test-before-setup-auth-handling)
+- [\[3.2.6-dev1\] - 2026-07-03 - Tooling: Check-Drift Script Handling for Ahead-of-Local Home Assistant Core](#326-dev1---2026-07-03---tooling-check-drift-script-handling-for-ahead-of-local-home-assistant-core)
+- [\[3.2.5\] - 2026-07-03 - Release: Refresh Now Button, Display Units, and Config Flow Hardening](#325---2026-07-03---release-refresh-now-button-display-units-and-config-flow-hardening)
+- [\[3.2.5-dev12\] - 2026-07-03 - Service Architecture: SMS Actions Auto-Targeting Single Configured Router](#325-dev12---2026-07-03---service-architecture-sms-actions-auto-targeting-single-configured-router)
+- [\[3.2.5-dev-11\] - 2026-07-03 - Test Suite: Coverage Restoration to 100%](#325-dev-11---2026-07-03---test-suite-coverage-restoration-to-100)
+- [\[3.2.5-dev10\] - 2026-07-03 - Documentation: High-Resolution Screenshots and Sensor Inventory Verification](#325-dev10---2026-07-03---documentation-high-resolution-screenshots-and-sensor-inventory-verification)
+- [\[3.2.5-dev9\] - 2026-07-02 - Coordinator: Explicit ConfigEntry Reference and Polling Option Support](#325-dev9---2026-07-02---coordinator-explicit-configentry-reference-and-polling-option-support)
+- [\[3.2.5-dev8\] - 2026-07-02 - Entity Hygiene: Suggested Display Units and Precision for 16 Sensors](#325-dev8---2026-07-02---entity-hygiene-suggested-display-units-and-precision-for-16-sensors)
+- [\[3.2.5-dev7\] - 2026-07-02 - User Interface: Config Flow Host Normalization, Password Masking, and Refresh Button](#325-dev7---2026-07-02---user-interface-config-flow-host-normalization-password-masking-and-refresh-button)
+- [\[3.2.5-dev6\] - 2026-07-01 - Tooling Bump: Ruff 0.15.19](#325-dev6---2026-07-01---tooling-bump-ruff-01519)
+- [\[3.2.5-dev5\] - 2026-06-29 - Tooling Bump: Ruff 0.15.18](#325-dev5---2026-06-29---tooling-bump-ruff-01518)
+- [\[3.2.5-dev4\] - 2026-06-29 - Linter Alignment: YAML Lint Rules and Document Start Configuration](#325-dev4---2026-06-29---linter-alignment-yaml-lint-rules-and-document-start-configuration)
+- [\[3.2.5-dev3\] - 2026-06-18 - CI Infrastructure: Migration to Dev-Workbench Validation System](#325-dev3---2026-06-18---ci-infrastructure-migration-to-dev-workbench-validation-system)
+- [\[3.2.5-dev1\] - 2026-06-15 - Task Runner: Local Tasks Ordering and Status Colors](#325-dev1---2026-06-15---task-runner-local-tasks-ordering-and-status-colors)
+- [\[3.2.4\] - 2026-06-15 - Release: Shared CI Validation Infrastructure v2.0.3](#324---2026-06-15---release-shared-ci-validation-infrastructure-v203)
+- [\[3.2.4-dev3\] - 2026-06-15 - CI Infrastructure: Shared CI v2.0.3 and Coverage Badge Streamlining](#324-dev3---2026-06-15---ci-infrastructure-shared-ci-v203-and-coverage-badge-streamlining)
+- [\[3.2.4-dev2\] - 2026-06-15 - CI Infrastructure: Shared CI Workflow Bump to v2.0.2](#324-dev2---2026-06-15---ci-infrastructure-shared-ci-workflow-bump-to-v202)
+- [\[3.2.4-dev1\] - 2026-06-15 - CI Infrastructure: Shared CI Extension to Theme Projects](#324-dev1---2026-06-15---ci-infrastructure-shared-ci-extension-to-theme-projects)
+- [\[3.2.3\] - 2026-06-14 - Release: Shared CodeQL Permissions Alignment for Zizmor](#323---2026-06-14---release-shared-codeql-permissions-alignment-for-zizmor)
+- [\[3.2.2\] - 2026-06-14 - Release: Shared CodeQL Security Scanning Configuration](#322---2026-06-14---release-shared-codeql-security-scanning-configuration)
+- [\[3.2.1\] - 2026-06-14 - Release: CI Validation Infrastructure Test Release](#321---2026-06-14---release-ci-validation-infrastructure-test-release)
+- [\[3.2.1-dev9\] - 2026-06-14 - Tooling: Prettier JSON Configuration Adoption](#321-dev9---2026-06-14---tooling-prettier-json-configuration-adoption)
+- [\[3.2.1-dev8\] - 2026-06-14 - Tooling: Link-Check Path Exclusions and Prettier Config Migration](#321-dev8---2026-06-14---tooling-link-check-path-exclusions-and-prettier-config-migration)
+- [\[3.2.1-dev7\] - 2026-06-14 - Project Hygiene: Dependabot Bumps and AGENTS.md Introduction](#321-dev7---2026-06-14---project-hygiene-dependabot-bumps-and-agentsmd-introduction)
+- [\[3.2.1-dev4\] - 2026-06-10 - Tooling Architecture: Dev-Workbench Tool Version Synchronization System](#321-dev4---2026-06-10---tooling-architecture-dev-workbench-tool-version-synchronization-system)
+- [\[3.2.1-dev1\] - 2026-06-08 - Bug Fix: Unawaited Login Coroutine Warnings and Mypy Core Alignment](#321-dev1---2026-06-08---bug-fix-unawaited-login-coroutine-warnings-and-mypy-core-alignment)
+- [\[3.2.0\] - 2026-05-28 - Release: APN Profile Control, Network Mode Select, and Diagnostic Entities](#320---2026-05-28---release-apn-profile-control-network-mode-select-and-diagnostic-entities)
+- [\[3.1.1-dev11\] - 2026-05-27 - Test Suite: 57 New Tests and 99% Coverage Across Platforms](#311-dev11---2026-05-27---test-suite-57-new-tests-and-99-coverage-across-platforms)
+- [\[3.1.1-dev10\] - 2026-05-27 - Type Checking: Mypy Binary Sensor Entity List Annotation Fix](#311-dev10---2026-05-27---type-checking-mypy-binary-sensor-entity-list-annotation-fix)
+- [\[3.1.1-dev9\] - 2026-05-27 - Controls Architecture: APN Profile Select, Network Modes, and ODU LED Controls](#311-dev9---2026-05-27---controls-architecture-apn-profile-select-network-modes-and-odu-led-controls)
+- [\[3.1.1-dev8\] - 2026-05-25 - Python Compatibility: Bare-Tuple Exception Syntax Corrections](#311-dev8---2026-05-25---python-compatibility-bare-tuple-exception-syntax-corrections)
+- [\[3.1.1-dev7\] - 2026-05-25 - Task Lifecycle: HA-Tracked Debounced Polling Task and Exception Fixes](#311-dev7---2026-05-25---task-lifecycle-ha-tracked-debounced-polling-task-and-exception-fixes)
+- [\[3.1.1-dev6\] - 2026-05-25 - Test Depth: 17 Boundary and Error-Handling Tests with Exception Tuple Fixes](#311-dev6---2026-05-25---test-depth-17-boundary-and-error-handling-tests-with-exception-tuple-fixes)
+- [\[3.1.1-dev5\] - 2026-05-25 - Recorder Optimization: Long-Term Statistics State Class Removal for 8 Sensors](#311-dev5---2026-05-25---recorder-optimization-long-term-statistics-state-class-removal-for-8-sensors)
+- [\[3.1.1-dev4\] - 2026-05-25 - Test Fixtures: Session-Reset Mock Handling and 100% Coverage on API and Coordinator](#311-dev4---2026-05-25---test-fixtures-session-reset-mock-handling-and-100-coverage-on-api-and-coordinator)
+- [\[3.1.1-dev3\] - 2026-05-25 - Session Management: Proactive Inactivity Reset and Post-Login Initialization GET](#311-dev3---2026-05-25---session-management-proactive-inactivity-reset-and-post-login-initialization-get)
+- [\[3.1.1-dev2\] - 2026-05-24 - Documentation: README Automation Examples and Icon Enhancements](#311-dev2---2026-05-24---documentation-readme-automation-examples-and-icon-enhancements)
+- [\[3.1.1-dev1\] - 2026-05-24 - Tooling Bump: Dependabot Shared Validation, Zizmor, and Typing Updates](#311-dev1---2026-05-24---tooling-bump-dependabot-shared-validation-zizmor-and-typing-updates)
+- [\[3.1.0\] - 2026-05-24 - Release: SMS Service Actions, Received Bus Events, and Storage Full Repairs](#310---2026-05-24---release-sms-service-actions-received-bus-events-and-storage-full-repairs)
+- [\[3.0.2-dev11\] - 2026-05-24 - Documentation: README SMS Action Guides and Automation Patterns](#302-dev11---2026-05-24---documentation-readme-sms-action-guides-and-automation-patterns)
+- [\[3.0.2-dev10\] - 2026-05-23 - Stability: Reboot-Detection Uptime Boot Latch and CLAUDE.md Agent Guide](#302-dev10---2026-05-23---stability-reboot-detection-uptime-boot-latch-and-claudemd-agent-guide)
+- [\[3.0.2-dev9\] - 2026-05-23 - Service Events: SMS Received Bus Event and 100% Init Module Coverage](#302-dev9---2026-05-23---service-events-sms-received-bus-event-and-100-init-module-coverage)
+- [\[3.0.2-dev8\] - 2026-05-23 - SMS Platform: Send, Delete, and List Service Actions with Hex Encoding](#302-dev8---2026-05-23---sms-platform-send-delete-and-list-service-actions-with-hex-encoding)
+- [\[3.0.2-dev7\] - 2026-05-23 - Coordinator: Boot Timestamp State Restoration Across Home Assistant Restarts](#302-dev7---2026-05-23---coordinator-boot-timestamp-state-restoration-across-home-assistant-restarts)
+- [\[3.0.2-dev6\] - 2026-05-23 - Test Suite: 14 New Tests and 100% Coverage for API and Coordinator](#302-dev6---2026-05-23---test-suite-14-new-tests-and-100-coverage-for-api-and-coordinator)
+- [\[3.0.2-dev5\] - 2026-05-23 - Type Checking: Mypy Strict EntityCategory Imports and Unused Import Cleanup](#302-dev5---2026-05-23---type-checking-mypy-strict-entitycategory-imports-and-unused-import-cleanup)
+- [\[3.0.2-dev4\] - 2026-05-23 - Type Checking: Resolution of 43 Mypy Strict Errors Across Core Modules](#302-dev4---2026-05-23---type-checking-resolution-of-43-mypy-strict-errors-across-core-modules)
+- [\[3.0.2-dev3\] - 2026-05-22 - API Architecture: Centralized Async Request Helper and Uptime Duration Sensor](#302-dev3---2026-05-22---api-architecture-centralized-async-request-helper-and-uptime-duration-sensor)
+- [\[3.0.2-dev2\] - 2026-05-13 - Repairs and UI: SMS Storage Full Repair Issue and Dynamic State Icons](#302-dev2---2026-05-13---repairs-and-ui-sms-storage-full-repair-issue-and-dynamic-state-icons)
+- [\[3.0.2-dev1\] - 2026-05-13 - Devcontainer Architecture: Volume Mount Consolidation and Mypy Strict Setup](#302-dev1---2026-05-13---devcontainer-architecture-volume-mount-consolidation-and-mypy-strict-setup)
+- [\[3.0.1\] - 2026-05-10 - Release: README Documentation Overhaul and Architecture Alignment](#301---2026-05-10---release-readme-documentation-overhaul-and-architecture-alignment)
+- [\[3.0.1-rc1\] - 2026-05-10 - Documentation: README Structure Reordering and Section Expansions](#301-rc1---2026-05-10---documentation-readme-structure-reordering-and-section-expansions)
+- [\[3.0.1-dev8\] - 2026-05-10 - Hardening: Get RD Login Guard, Unawaited Coroutine Fixes, and Protocol Fallback Logs](#301-dev8---2026-05-10---hardening-get-rd-login-guard-unawaited-coroutine-fixes-and-protocol-fallback-logs)
+- [\[3.0.1-dev6\] - 2026-05-10 - Type Checking: 24 Mypy Strict Error Fixes in API and 100% Component Coverage](#301-dev6---2026-05-10---type-checking-24-mypy-strict-error-fixes-in-api-and-100-component-coverage)
+- [\[3.0.1-dev5\] - 2026-05-10 - Config Flow: Reconfiguration Support and Hierarchical Translation Strategy](#301-dev5---2026-05-10---config-flow-reconfiguration-support-and-hierarchical-translation-strategy)
+- [\[3.0.1-dev4\] - 2026-05-09 - Project Tooling: Project-Agnostic pyproject.toml and tasks.json Configurations](#301-dev4---2026-05-09---project-tooling-project-agnostic-pyprojecttoml-and-tasksjson-configurations)
+- [\[3.0.1-dev3\] - 2026-05-09 - CI Architecture: Shared Reusable GitHub Actions CI Workflow Creation](#301-dev3---2026-05-09---ci-architecture-shared-reusable-github-actions-ci-workflow-creation)
+- [\[3.0.0\] - 2026-05-08 - Major Release: Native Async Rewrite, Sub-Device Architecture, and IMEI Identity](#300---2026-05-08---major-release-native-async-rewrite-sub-device-architecture-and-imei-identity)
+- [\[3.0.0-rc1\] - 2026-05-08 - Entity Architecture: Category Visibility Refinements and Bridge Mode Rename](#300-rc1---2026-05-08---entity-architecture-category-visibility-refinements-and-bridge-mode-rename)
+- [\[3.0.0-dev22\] - 2026-05-08 - Bug Fix: Hassfest Translation Schema and Reauth Placeholder Substitution](#300-dev22---2026-05-08---bug-fix-hassfest-translation-schema-and-reauth-placeholder-substitution)
+- [\[3.0.0-dev21\] - 2026-05-08 - Documentation: Comprehensive Gold Standard README and Missing Translations](#300-dev21---2026-05-08---documentation-comprehensive-gold-standard-readme-and-missing-translations)
+- [\[3.0.0-dev16\] - 2026-05-07 - Code Review: Shared Device Info Helper, Translation Naming, and Exception Hardening](#300-dev16---2026-05-07---code-review-shared-device-info-helper-translation-naming-and-exception-hardening)
+- [\[3.0.0-dev15\] - 2026-05-07 - Sensor Expansion: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor](#300-dev15---2026-05-07---sensor-expansion-12-new-sensors-guard-bands-and-imei-hardware-identity-anchor)
+- [\[3.0.0-dev14\] - 2026-05-07 - Diagnostics and Security: Diagnostics Platform and Reauthentication Flow](#300-dev14---2026-05-07---diagnostics-and-security-diagnostics-platform-and-reauthentication-flow)
+- [\[3.0.0-dev11\] - 2026-05-07 - Documentation: README Badge Links](#300-dev11---2026-05-07---documentation-readme-badge-links)
+- [\[3.0.0-dev10\] - 2026-05-02 - Architecture: Sub-Device Partitioning and Badge Link Repairs](#300-dev10---2026-05-02---architecture-sub-device-partitioning-and-badge-link-repairs)
+- [\[3.0.0-dev8\] - 2026-04-29 - Entity Standardization: Sub-Device Architecture and Native Unit Alignment](#300-dev8---2026-04-29---entity-standardization-sub-device-architecture-and-native-unit-alignment)
+- [\[3.0.0-dev5\] - 2026-04-07 - Entity Engine: Declarative Guard Bands and Custom Device Prefix Naming](#300-dev5---2026-04-07---entity-engine-declarative-guard-bands-and-custom-device-prefix-naming)
+- [\[3.0.0-dev3\] - 2026-04-07 - Core Architecture: Declarative Entity Engine and Non-Blocking Startup](#300-dev3---2026-04-07---core-architecture-declarative-entity-engine-and-non-blocking-startup)
+- [\[3.0.0-dev2\] - 2026-04-07 - Lifecycle Architecture: Local Hardware Cache, Non-Blocking Setup, and Mypy Strict](#300-dev2---2026-04-07---lifecycle-architecture-local-hardware-cache-non-blocking-setup-and-mypy-strict)
+- [\[3.0.0-dev1\] - 2026-04-01 - Core Architecture: Native Async Migration to aiohttp](#300-dev1---2026-04-01---core-architecture-native-async-migration-to-aiohttp)
+- [\[2.3.1\] - 2026-04-01 - Release: DataUpdateCoordinator Migration and HACS Branding Assets](#231---2026-04-01---release-dataupdatecoordinator-migration-and-hacs-branding-assets)
+- [\[2.2.4\] - 2026-03-30 - Test Suite: Pytest Coverage Expansion and Code Clean-up](#224---2026-03-30---test-suite-pytest-coverage-expansion-and-code-clean-up)
+- [\[2.2.3\] - 2026-03-30 - Test Suite: Python Pytest Introduction and Manifest Repairs](#223---2026-03-30---test-suite-python-pytest-introduction-and-manifest-repairs)
+- [\[2.1.1\] - 2026-03-29 - Error Handling: Diagnostic Logging Improvements](#211---2026-03-29---error-handling-diagnostic-logging-improvements)
+- [\[2.0.1\] - 2026-03-29 - Config Flow: Options Flow for Dynamic Reconfiguration](#201---2026-03-29---config-flow-options-flow-for-dynamic-reconfiguration)
+- [\[1.9.4\] - 2026-03-29 - Device Discovery: Hardware Model Reading and Session Management](#194---2026-03-29---device-discovery-hardware-model-reading-and-session-management)
+- [\[1.8.1\] - 2026-03-29 - Localization: Standard Translation Directory Structure](#181---2026-03-29---localization-standard-translation-directory-structure)
+- [\[1.7.3\] - 2026-03-29 - Entity Hygiene: Standardized Entity Naming](#173---2026-03-29---entity-hygiene-standardized-entity-naming)
+- [\[1.6.3\] - 2026-03-28 - Lifecycle: Non-Blocking Async Startup for Offline Routers](#163---2026-03-28---lifecycle-non-blocking-async-startup-for-offline-routers)
+- [\[1.5.7\] - 2026-03-28 - Branding and Entity Structure: ZTE Icons and Sub-Device Sensor Naming](#157---2026-03-28---branding-and-entity-structure-zte-icons-and-sub-device-sensor-naming)
+- [\[1.5.1\] - 2026-03-28 - Integration Hygiene: Home Assistant Integration Naming Alignment](#151---2026-03-28---integration-hygiene-home-assistant-integration-naming-alignment)
+- [\[1.4.5\] - 2026-03-28 - Documentation and Sensors: Local Changelog Addition and Standard Sensor Names](#145---2026-03-28---documentation-and-sensors-local-changelog-addition-and-standard-sensor-names)
+- [\[1.4.4\] - 2026-03-28 - Sensor Expansion: Comprehensive Router Attribute Exposure](#144---2026-03-28---sensor-expansion-comprehensive-router-attribute-exposure)
+- [\[1.4.3\] - 2026-03-28 - Polling Controls: Pause Polling Switch and Polling Interval Number Entity](#143---2026-03-28---polling-controls-pause-polling-switch-and-polling-interval-number-entity)
+- [\[1.4.2\] - 2026-03-27 - Feature Release: SMS Inbox Monitoring and Initial GitHub Release](#142---2026-03-27---feature-release-sms-inbox-monitoring-and-initial-github-release)
+- [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
+- [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
+- [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
 
@@ -367,7 +366,7 @@ The first discovery download from the reference MC7010 published the operator's 
 ### Fixed
 
 - **Carrier identity is withheld in the discovery block**: `profile_name`, `provider`, `spn`, `plmn`, `fullname` and `shortname` join the deny-pattern. `network_provider` and `wan_apn` are in `CARRIER_KEYS`, so publishing `profile_name_ui`, `m_profile_name`, `strFullName`, `strShortName`, `network_provider_fullname`, `spn_name_data` and `rplmn_num` was inconsistent as well as revealing — `rplmn_num` carries MCC and MNC in one value. Verified on hardware: all seven now report shape only, and neither the profile name nor the PLMN appears anywhere in the file.
-- **`result` is neither mined nor harvested**: it is the key a `goform` response carries its outcome in, and it reads as a `cmd` literal in the bundles. Excluding it from mined names was not enough — a refused chunk echoes it back in the response, so it was published as though it were telemetry.
+- **`result` is neither mined nor harvested**: it is the key a `goform` response carries its outcome in, and it reads as a `cmd` literal in the bundles. Excluding it from mined names was not enough — a refused chunk echoes it back in the response, so it was published as though it were sensor data.
 
 ### Added
 
@@ -432,7 +431,7 @@ The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`
 - **Dynamic Session Cookie Compatibility**: The integration now retains and replays all session cookies set by the router (such as `zsidn` on the MC888 Pro) rather than requiring a literal `stok` cookie.
 - **Dynamic Unauthenticated Key Discovery**: The unauthenticated key set is now measured per device at startup, ensuring accurate session-expiry detection across varying router firmwares.
 - **Data Limit Control Compatibility**: Added alternate parameter aliases (including `flux_` variants) to the data limit write form, restoring data limit settings functionality on newer router models.
-- **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal telemetry.
+- **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal sensor data.
 
 ### Added
 
@@ -440,8 +439,8 @@ The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`
 - **Per-Device Session Classification**: Session health monitoring now dynamically probes which keys the router answers without authentication during setup, preventing firmwares that report network status unauthenticated from causing session classification mismatches.
 - **Data Limit Settings Controls**: Added `flux_` parameter aliases to `DATA_LIMIT_SETTING` form writes, ensuring data limit configuration switches and thresholds are writable on routers using modern firmware schemas.
 - **Diagnostics Privacy**: Ensured alternate cell identifier key spellings (`Z5g_CELL_ID`) are pseudonymized in diagnostic downloads alongside primary keys.
-- **Sparse Payload Telemetry Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded telemetry baseline.
-- **Firmware Parameter Discovery**: Added a startup discovery probe that safely tests candidate parameter names to discover available telemetry keys across router models and publishes safe results in diagnostics.
+- **Sparse Payload Diagnostic Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded sensor baseline.
+- **Firmware Parameter Discovery**: Added a startup discovery probe that safely tests candidate parameter names to discover available status keys across router models and publishes safe results in diagnostics.
 
 ### Under the hood
 
@@ -495,7 +494,7 @@ Issue #56 is resolved. The reporter's diagnostics download showed the MC888 Pro 
 ### Changed
 
 - **`api.stok` becomes `api.cookies`**, a mapping. Five consumers updated, `scripts/hardware_check.py` included.
-- **`_sweep` masks digit runs of 15 or more**, catching IMSI (15) and ICCID (19-20). Not lower: an 11-digit byte counter is pinned by test, so anything below 12 would mask ordinary telemetry.
+- **`_sweep` masks digit runs of 15 or more**, catching IMSI (15) and ICCID (19-20). Not lower: an 11-digit byte counter is pinned by test, so anything below 12 would mask ordinary sensor data.
 - **`imsi` and `iccid` added to `TO_REDACT`** in the same change that put them in the request list.
 - **Background setup** runs both probes once, then restores the session. Login is awaited twice by design: the measurement can only be taken with no session.
 
@@ -660,7 +659,7 @@ The change is not testable on available hardware. The MC7010 refuses `LOGIN_MULT
 - **Repairs Alignment**: Retired non-actionable repair cards (`firmware_contract_drift` and `sms_storage_full`). Schema changes are now tracked via `drift` on Integration Health, while message capacity is tracked by the new binary sensor. Renamed unreachable router issue to `conn_error`.
 - **Bandwidth Sensor Unit Conversion**: LTE Carrier Aggregation bandwidth sensors (`lte_ca_pcell_bandwidth` and `lte_ca_scell_bandwidth`) now declare `device_class: frequency`, allowing unit switching (MHz/GHz/kHz) in the Home Assistant UI.
 - **SMS Logging Privacy**: The sender's phone number is no longer logged at `INFO` level when receiving SMS messages; the internal message index is logged instead.
-- **Health Telemetry Drift Limit**: Split the contract drift strike limit into an independent budget (`HEALTH_DRIFT_STRIKE_LIMIT = 3`) separate from poll fetch failures.
+- **Missing Router Data Strike Limit**: Split the missing or changed router data strike limit into an independent budget (`HEALTH_DRIFT_STRIKE_LIMIT = 3`) separate from poll fetch failures.
 
 ### Fixed
 
@@ -943,7 +942,7 @@ Documentation only. No code, no tests, no entity changes.
 
 ### Summary
 
-Documentation pass. Clarified Home Assistant repair criteria in `README.md`, contrasting actionable repairs with telemetry surfaces like Integration Health and diagnostic binary sensors.
+Documentation pass. Clarified Home Assistant repair criteria in `README.md`, contrasting actionable repairs with diagnostic surfaces like Integration Health and binary sensors.
 
 Documentation only. No code, no tests, no entity changes.
 
@@ -1092,7 +1091,7 @@ Tests and test tooling only; no shipped code changed. Closes the re-opened chore
 ### Added
 
 - **`tests/transport.py`** — the router faked at the HTTP layer over `aioclient_mock`, which `pytest-homeassistant-custom-component` already ships. No dependency added, and it is the seam Home Assistant's own suite uses. Before this the project had **zero** uses of it: every suite built on a `MagicMock` standing in for `ZTERouterAPI`, so anything the payload _derives_ was supplied by the fixture rather than computed.
-- **`tests/test_transport_seam.py`** — 10 tests. Both declared outcomes (`conn_error`, `auth_failed`) driven end to end, plus the fault set: unreachable, timeout, credentials rejected, expired session, router still booting, contract drift, and an HTML page served where JSON was expected.
+- **`tests/test_transport_seam.py`** — 10 tests. Both declared outcomes (`conn_error`, `auth_failed`) driven end to end, plus the fault set: unreachable, timeout, credentials rejected, expired session, router still booting, missing router fields, and an HTML page served where JSON was expected.
 
 ### Notes on the fake, because three of them are not obvious
 
@@ -1122,7 +1121,7 @@ Worked as a single pass over the source so the tree is measured once rather than
 ### Changed
 
 - **The repair set is now the family's two keys** (`x_project` issue _Repair set alignment_, policy §2). `router_unreachable` becomes **`conn_error`**, keeping its text verbatim — the same condition under the canonical key. `firmware_contract_drift` and `sms_storage_full` leave the Repairs panel entirely. The rule they failed is _agency_: a schema change is not something a user can fix, and a full message store is an operational state to automate on. Both conditions are unchanged in substance — drift still publishes `severity: warning` and a `drift` finding on the Integration Health sensor, and storage still publishes a health finding.
-- **`HEALTH_DRIFT_STRIKE_LIMIT = 3`** in `const.py`, applied at `coordinator.py:691` (chore **C-015**). `FETCH_STRIKE_LIMIT` was serving both fetch failures and contract drift. Both budgets are 3 today and the value did not move; what changed is that moving one no longer silently moves the other. Matches `huawei_router_5g`, `wifi_ssid_monitor` and `unifi_network_monitor`. The test patches the drift budget to 5 and asserts drift stays quiet at 4 — with one shared constant that assertion cannot pass, which is the only way to tell a real split from a renamed one.
+- **`HEALTH_DRIFT_STRIKE_LIMIT = 3`** in `const.py`, applied at `coordinator.py:691` (chore **C-015**). `FETCH_STRIKE_LIMIT` was serving both fetch failures and missing router data. Both budgets are 3 today and the value did not move; what changed is that moving one no longer silently moves the other. Matches `huawei_router_5g`, `wifi_ssid_monitor` and `unifi_network_monitor`. The test patches the drift budget to 5 and asserts drift stays quiet at 4 — with one shared constant that assertion cannot pass, which is the only way to tell a real split from a renamed one.
 - **The two bandwidth sensors offer Home Assistant's unit selector** (chore **C-012**). `native_unit_of_measurement="MHz"` as a raw string renders correctly and is inert: with no `device_class` there is no conversion table, so no dropdown. Now `UnitOfFrequency.MEGAHERTZ` plus `SensorDeviceClass.FREQUENCY`. **Neither carries a `state_class`, and the test asserts that** — but for the guard-band exemption, not for the selector. See the correction in `[3.3.4-dev12]`: the belief that `state_class` suppresses the selector was checked against Home Assistant's source on 2026-08-26 and is false.
 - **The SMS sender's number no longer reaches the log** (chore **C-020**, §20). `coordinator.py` logged it at `INFO` on every new message. The number still reaches automations on the `zte_router_5g_sms_received` bus event, which is scoped to the entry; the log is not, and is copied into every diagnostics download and issue report. The line now carries the message id, which is enough to correlate a log entry with an event.
 - **Three log lines hardcoded the strike budget as `/3`** while it is a constant, so they would have lied the moment it moved. They interpolate `FETCH_STRIKE_LIMIT`.
@@ -1823,7 +1822,7 @@ Category E of `sensor_review.md` had two directions — does the documented enti
 
 All 35 temporarily-enabled entities re-disabled and confirmed from the live entity list at 57.
 
-## [3.3.2-rc12] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Contract Drift Invariant Tests
+## [3.3.2-rc12] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Missing Field Invariant Tests
 
 ### Bumps
 
@@ -1831,7 +1830,7 @@ All 35 temporarily-enabled entities re-disabled and confirmed from the live enti
 
 ### Summary
 
-Repair wording and test invariant updates. Rephrased repair titles to report observed conditions neutrally rather than guessing root causes, aligned signal entity guidance notes with `README.md`, and added tests guaranteeing contract drift checks never fire on unsupported hardware.
+Repair wording and test invariant updates. Rephrased repair titles to report observed conditions neutrally rather than guessing root causes, aligned signal entity guidance notes with `README.md`, and added tests guaranteeing missing field checks never fire on unsupported hardware.
 
 ### Changed — repair titles no longer assert a cause
 
@@ -2416,7 +2415,7 @@ Documentation only. Closes the gap between what this session built and what the 
 
 ### Summary
 
-Coordinator polling performance and resilience overhaul. Split `get_all_data()` into a mandatory core poll (75 keys) and an optional extended poll (41 keys) with dedicated failure budgets, preventing URL length overflows (~2048 bytes) and isolating diagnostic failures from core telemetry.
+Coordinator polling performance and resilience overhaul. Split `get_all_data()` into a mandatory core poll (75 keys) and an optional extended poll (41 keys) with dedicated failure budgets, preventing URL length overflows (~2048 bytes) and isolating diagnostic failures from core sensor polling.
 
 The batch poll had grown to 1,889 characters against a ~2,048-character URL ceiling. Rather than keep trading one key away to make room for the next, the request is now two.
 
@@ -2459,7 +2458,7 @@ Acts on the router-facing agent's answers in `.notes/info/zte_element_discovery_
 
 ### Added
 
-- **`test_batch_poll_url_stays_within_the_router_budget`.** The batch limit is a **URL length of roughly 2,048 characters**, not a number of names, and the poll had grown to ~1,885 without anything watching. Past the ceiling the response truncates, which presents as missing fields and is indistinguishable from firmware contract drift. The test carries a soft threshold ahead of the hard one, so the warning arrives before the failure.
+- **`test_batch_poll_url_stays_within_the_router_budget`.** The batch limit is a **URL length of roughly 2,048 characters**, not a number of names, and the poll had grown to ~1,885 without anything watching. Past the ceiling the response truncates, which presents as missing fields and is indistinguishable from firmware key changes. The test carries a soft threshold ahead of the hard one, so the warning arrives before the failure.
 - `data_volume_limit_unit` and `data_volume_limit_size` to the batch poll — the write path cannot echo back a field it never reads. `test_every_data_volume_field_is_polled` keeps the two in step.
 
 ### Changed
@@ -2475,7 +2474,7 @@ Acts on the router-facing agent's answers in `.notes/info/zte_element_discovery_
 - Two decisions to publish a raw string rather than parse it were vindicated by the answers. The field order given for `lte_multi_ca_scell_info` has **positions 4 and 5 transposed** — the sample reads `…,20,6300,…`, and EARFCN 6300 falls inside band 20's allocation while `20` is not a valid EARFCN. And `sntp_timezone` rests on a single sample from a UTC+0 unit with a sign convention that runs backwards from expectation. Parsing either would have shipped a wrong value.
 - **`battery_value` returns a hardcoded `100`**, not an empty string. An earlier probe reported it empty because its batch chunk contained fictional names and timed out. The `about` note calling the value meaningless on a mains-powered unit was right all along.
 
-## [3.3.1-dev11] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Telemetry
+## [3.3.1-dev11] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Entities
 
 ### Summary
 
@@ -2506,7 +2505,7 @@ Acts on `.notes/info/zte_element_discovery_report.md`, a two-step discovery run 
 Live MC7010 (`IRL_H3G_MC7010DV1.0.0B03`), read from a diagnostics download after a full restart.
 
 - **All 15 new keys answered.** `traffic_clear_date` returned `1` — the discovery report's spelling is the right one. The two `data_volume_*` spellings returned `""`, meaning the firmware knows the names but does not populate them on this model; `_safe_int` treats present-but-empty as absent, so the resolution is clean and the disagreement warning does not fire.
-- **No truncation.** 131 keys came back with every pre-existing field intact, closing the risk that a longer `cmd` list would silently drop data and look like firmware contract drift.
+- **No truncation.** 131 keys came back with every pre-existing field intact, closing the risk that a longer `cmd` list would silently drop data and look like firmware key changes.
 - **The projection is coherent against real usage** — 1107.75 GB on day 29 of 31 projected to 1200.5 GB, `confidence: high`.
 - 91 entities registered, 7 of the 9 new ones disabled by default.
 
@@ -2544,7 +2543,7 @@ Integration roadmap and architectural review. Rewrote `docs/Future.md` to docume
 - **Open items folded in from `DEVELOPMENT.md`** (§15 SMS toggle, custom triggers, the thermal keep-or-remove question, the migration handler) so `Future.md` is a complete forward view rather than a partial one that silently omits known work.
 - **Version Control** section — the document had none, which is why a two-month-old roadmap gave no signal that it was stale.
 
-## [3.3.1-dev9] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Telemetry Coverage
+## [3.3.1-dev9] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Sensor Coverage
 
 ### Summary
 
@@ -2572,7 +2571,7 @@ Reconciled the `about` note suite against the running instance with `sensor_revi
 
 ### Changed
 
-- **`Firmware Version` simplified.** It explained field renaming and contract drift — accurate, but far more machinery than a firmware string warrants in a tooltip. Cut to one sentence; the contract-drift explanation belongs to the README and the Integration Health sensor, which both already carry it.
+- **`Firmware Version` simplified.** It explained field renaming and missing router fields — accurate, but far more machinery than a firmware string warrants in a tooltip. Cut to one sentence; the missing-field explanation belongs to the README and the Integration Health sensor, which both already carry it.
 - **`docs/all_sensors.md`**: `About` column refreshed, 68 → 74 ticks.
 - **`docs/about_attribute_list.md`**: regenerated from live — System 21, Signal 39, Data 12, SMS 2. The `ᴰ` legend moved from the foot to the top, where a reader meets the marker. Removed a footer claim that a test enforced the file: that test had been deleted, and a guarantee that is not real is worse than none because it stops people checking.
 
@@ -2660,13 +2659,13 @@ Session expiry and write action verification fixes. Restricted session activity 
 
 Both defects were present in the released **3.2.5**, so by the "would a user on the last release have hit this?" test they qualify for a `Fixed` bullet in `CHANGELOG.md` `[3.3.1]`. Recorded here as an open decision rather than assumed either way.
 
-## [3.3.1-dev5] - 2026-07-29 - Thermal Diagnostic Telemetry Set: Modem and 5G Radio Temperature Sensors
+## [3.3.1-dev5] - 2026-07-29 - Thermal Diagnostic Sensor Suite: Modem and 5G Radio Temperature Sensors
 
 ### Summary
 
-Thermal telemetry sensor expansion. Added modem and 5G radio temperature diagnostic sensors (`pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`) disabled by default with guard bands (-40 to 125 °C), completing the 5-sensor thermal suite.
+Thermal sensor expansion. Added modem and 5G radio temperature diagnostic sensors (`pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`) disabled by default with guard bands (-40 to 125 °C), completing the 5-sensor thermal suite.
 
-Completes the thermal telemetry set following independent verification of the source research. The set is now defined by a statable rule rather than by which keys the research document happened to name.
+Completes the thermal sensor set following independent verification of the source research. The set is now defined by a statable rule rather than by which keys the research document happened to name.
 
 ### Added
 
@@ -2749,7 +2748,7 @@ Phase 2 of the cross-model compatibility expansion. behavior on the MC7010 is un
 
 ### Added
 
-- **`api.py` cross-model batch-poll keys**: Added ten keys to `get_all_data()` — `5g_rsrp`, `nr5g_rsrp`, `5g_sinr`, `nr5g_sinr`, `Z5g_snr`, `Z5g_CELL_ID`, `flux_monthly_tx_bytes`, `flux_monthly_rx_bytes`, `pm_sensor_pa1`, `pm_sensor_ambient`. These are the alternative spellings other `goform` models use, plus optional thermal telemetry. Requesting a key the router does not know is safe: it is simply absent from the response rather than an error, and an absent key cannot trip the "every value is an empty string" expired-session rule.
+- **`api.py` cross-model batch-poll keys**: Added ten keys to `get_all_data()` — `5g_rsrp`, `nr5g_rsrp`, `5g_sinr`, `nr5g_sinr`, `Z5g_snr`, `Z5g_CELL_ID`, `flux_monthly_tx_bytes`, `flux_monthly_rx_bytes`, `pm_sensor_pa1`, `pm_sensor_ambient`. These are the alternative spellings other `goform` models use, plus optional thermal sensors. Requesting a key the router does not know is safe: it is simply absent from the response rather than an error, and an absent key cannot trip the "every value is an empty string" expired-session rule.
 - **`api.py` best-effort login form fallback**: The login POST is now `_attempt_login()`, and `login()` retries once with the alternate `goformId` when the first form yields no session. Which form a router accepts is a per-model quirk and the tested-model list covers only MC801 and MC7010, so an unlisted router could previously be rejected purely for using the wrong form. A credentials rejection is **not** retried — the password is wrong whichever form carries it, and a second attempt only counts against routers that lock out.
 - **`tests/test_api.py`**: Fallback fires in both directions, does not fire on a credentials rejection, does not fire when the primary form already worked, reports an auth error the fallback uncovers, and keeps a double unclassified failure as a connection error rather than an auth one. Plus SMS encoding selection, and a guard asserting every aliased key is actually requested and that no key is requested twice.
 
@@ -3109,11 +3108,11 @@ Implements `dev_standards` §14 as revised at **Standard Version 1.12.0**: `_unr
 
   Re-verified by mutation after both fixes: removing a single key from `_unrecorded_attributes` fails the sweep.
 
-## [3.3.0-dev6] - 2026-07-27 - Integration Health: Firmware Contract Drift Attribute Publication
+## [3.3.0-dev6] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication
 
 ### Summary
 
-Integration health telemetry enhancement. Added the `drift` attribute to the Integration Health problem binary sensor under `dev_standards` §19, exposing contract drift states directly to templates and automations.
+Integration health enhancement. Added the `drift` attribute to the Integration Health problem binary sensor under `dev_standards` §19, exposing missing or changed router data states directly to templates and automations.
 
 Closes the gap flagged in `[3.3.0-dev5]`. **393 tests passing, 100% coverage, ruff clean, mypy strict clean.**
 
@@ -3561,7 +3560,7 @@ Coordinator lifecycle update. Passed `config_entry` explicitly to `DataUpdateCoo
 
 ### Summary
 
-Entity telemetry formatting. Applied `suggested_unit_of_measurement` and `suggested_display_precision` to 16 sensors (converting byte throughput and storage to GB and Mbit/s in the UI while preserving native units for statistics).
+Entity formatting. Applied `suggested_unit_of_measurement` and `suggested_display_precision` to 16 sensors (converting byte throughput and storage to GB and Mbit/s in the UI while preserving native units for statistics).
 
 - **Suggested Display Units & Precision**: Applied Home Assistant's `suggested_unit_of_measurement` / `suggested_display_precision` to 16 sensors so the UI shows friendly units and sensible decimal places while native values (used for long-term statistics) stay canonical.
 
@@ -3932,7 +3931,7 @@ Test depth and resilience engineering. Added 17 unit tests covering combinatoria
 
 ### Summary
 
-Recorder storage optimization. Removed `state_class` declarations from 8 high-frequency telemetry sensors to prevent database bloat from unwanted long-term statistics.
+Recorder storage optimization. Removed `state_class` declarations from 8 high-frequency sensors to prevent database bloat from unwanted long-term statistics.
 
 ### Changed
 
@@ -4119,7 +4118,7 @@ Static type verification. Resolved 43 mypy strict typing errors across all platf
 
 ### Summary
 
-Core request refactoring and telemetry additions. Routed all API calls through a centralized async `_request` helper with automatic session recovery, and added the uptime duration sensor.
+Core request refactoring and sensor additions. Routed all API calls through a centralized async `_request` helper with automatic session recovery, and added the uptime duration sensor.
 
 ### Added
 
@@ -4389,11 +4388,11 @@ Code quality and robustness pass. Extracted shared `device_info` helper, transit
 
 - **Duplicate `PARALLEL_UPDATES = 0`**: Removed second declaration from `sensor.py`, `binary_sensor.py`, `switch.py`, `number.py`. Fixes Low #1.
 
-## [3.0.0-dev15] - 2026-05-07 - Telemetry: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor
+## [3.0.0-dev15] - 2026-05-07 - Sensor Expansion: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor
 
 ### Summary
 
-Telemetry expansion and identity anchoring. Added 12 new sensors, configured out-of-range value guard bands, and adopted hardware IMEI as the stable device identifier.
+Sensor expansion and identity anchoring. Added 12 new sensors, configured out-of-range value guard bands, and adopted hardware IMEI as the stable device identifier.
 
 ### Added
 
@@ -4738,11 +4737,11 @@ Documentation update. Added local changelog tracking and standardized sensor nam
 
 - **Standard Names**: Changed specific sensor names (with ID tag) to standard names.
 
-## [1.4.4] - 2026-03-28 - Telemetry Expansion: Comprehensive Router Attribute Exposure
+## [1.4.4] - 2026-03-28 - Sensor Expansion: Comprehensive Router Attribute Exposure
 
 ### Summary
 
-Telemetry expansion. Exposed all available router status and diagnostic attributes as Home Assistant sensors.
+Sensor expansion. Exposed all available router status and diagnostic attributes as Home Assistant sensors.
 
 ### Added
 
@@ -4788,11 +4787,11 @@ Architecture refactoring. Refactored coordinator and added automatic HTTP/HTTPS 
 - Refactored `DataUpdateCoordinator` to handle centralized data fetching for all platforms.
 - Improved API login reliability with automatic protocol detection (HTTP/HTTPS).
 
-## [1.4.0] - 2026-03-26 - Telemetry Platform: Core Signal and Cellular Data Sensors
+## [1.4.0] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors
 
 ### Summary
 
-Telemetry platform. Implemented core cellular signal strength and data traffic monitoring sensors.
+Sensor platform. Implemented core cellular signal strength and data traffic monitoring sensors.
 
 ### Added
 

@@ -35,7 +35,7 @@ Every request carries `Referer: {base}index.html`. The router rejects requests w
 Login is a challenge-response over SHA-256, not a credential POST. Four steps, in order (`api.py:287`):
 
 1. **`GET goform_get_cmd_process?cmd=LD`** → returns `LD`, a per-session salt. Upper-cased on receipt.
-2. **`GET goform_get_cmd_process?cmd=wa_inner_version`** → the firmware version string. Fetched here because it determines _which login form to use_ (below), not for telemetry.
+2. **`GET goform_get_cmd_process?cmd=wa_inner_version`** → the firmware version string. Fetched here because it determines _which login form to use_ (below), not for sensor data.
 3. **Hash twice.** `SHA256(password)` → uppercase → concatenate `LD` → `SHA256` again → uppercase. Both uppercase steps are required; the router rejects lowercase digests.
 4. **`POST goform_set_cmd_process`** with `goformId=LOGIN` or `LOGIN_MULTI_USER` and `password=<the double hash>`. The two forms take the username under different names, and only the multi-user form carries a token:
 
@@ -71,7 +71,7 @@ This is the first of two places where model detection changes the protocol. It i
 
 ### The post-login initialization GET
 
-Immediately after a successful login the client issues a throwaway `GET goform_get_cmd_process?cmd=wa_inner_version` carrying the new cookie (`api.py:358`). This is not telemetry — **some ZTE firmware rejects the first POST of a session unless a GET has preceded it.** Its failure is caught and logged at debug only; the session is usable either way on firmware that does not need it.
+Immediately after a successful login the client issues a throwaway `GET goform_get_cmd_process?cmd=wa_inner_version` carrying the new cookie (`api.py:358`). This is not a sensor read — **some ZTE firmware rejects the first POST of a session unless a GET has preceded it.** Its failure is caught and logged at debug only; the session is usable either way on firmware that does not need it.
 
 ### One session at a time
 
@@ -225,7 +225,7 @@ Cross-model aliases stay in the **core** request even though the MC7010 answers 
 
 This changes the standing advice in two ways.
 
-**It is no longer free.** Past the budget the response truncates, which presents as missing fields and looks exactly like firmware contract drift. Budget before adding, and put a new key in whichever batch matches how badly it is needed — `test_batch_poll_urls_stay_within_the_router_budget` covers both halves and fails well before the hard ceiling.
+**It is no longer free.** Past the budget the response truncates, which presents as missing fields and looks exactly like firmware key changes. Budget before adding, and put a new key in whichever batch matches how badly it is needed — `test_batch_poll_urls_stay_within_the_router_budget` covers both halves and fails well before the hard ceiling.
 
 **It is not unconditionally safe either.** The rule that an unknown `cmd` is simply absent holds for names **in the firmware's dictionary**, and the integration's current 127 all are — verified 2026-07-29, where every requested name came back, 46 of them empty and **none absent**. A name that is _not_ in the dictionary is a different matter: a discovery probe mixing fictional candidates into a batch saw **the whole chunk time out and fall back to empty defaults**, taking a genuinely populated key down with it. So a speculative spelling copied from another project should be probed on its own before it joins the poll, not dropped straight into the batch.
 
@@ -398,7 +398,7 @@ Full probe results, and the router-facing agent's answers on encodings and write
 
 ### `cmd=LD`, `cmd=RD`, `cmd=wa_inner_version`
 
-Used, but as protocol machinery rather than telemetry — see [Authentication](#-authentication) and [The `AD` token](#-the-ad-token--required-for-every-write). `LD` and `wa_inner_version` are fetched **unauthenticated** (`authenticated=False`), which is what makes the login chain possible; `RD` requires a session.
+Used, but as protocol machinery rather than sensor data — see [Authentication](#-authentication) and [The `AD` token](#-the-ad-token--required-for-every-write). `LD` and `wa_inner_version` are fetched **unauthenticated** (`authenticated=False`), which is what makes the login chain possible; `RD` requires a session.
 
 `wa_inner_version` appears twice by design: once unauthenticated during login, and again inside the batch poll as a normal sensor value.
 
@@ -548,11 +548,11 @@ Where the read side is useful it is still exposed — `opms_wan_mode` ships read
 
 Documented for reference — these exist on the interface but are deliberately not called.
 
-### Per-field reads (`cmd=<single_name>`) — for telemetry
+### Per-field reads (`cmd=<single_name>`) — for sensor readings
 
-- **Used**: **No** for telemetry (the three protocol commands and the two uses below are the exceptions).
-- **Rationale**: every telemetry field this integration needs is already in the batch. A targeted read purely to fetch something already in hand would add a round trip to a single-session device.
-- **Where a targeted read _is_ used**, both on the write path rather than for telemetry: `get_params()` confirming a control after a write, and `_ensure_session()` before one. Measured 2026-07-30 — a single-key read costs **16 ms median, 22 ms p90, 27 ms max**, against **30 ms median** for the full 75-key core batch, so the cost is the round trip, not the payload. Reading one key is barely cheaper than reading everything; the reason to do it is precision, not speed.
+- **Used**: **No** for general sensor polling (the three protocol commands and the two uses below are the exceptions).
+- **Rationale**: every sensor field this integration needs is already in the batch. A targeted read purely to fetch something already in hand would add a round trip to a single-session device.
+- **Where a targeted read _is_ used**, both on the write path rather than for sensor polling: `get_params()` confirming a control after a write, and `_ensure_session()` before one. Measured 2026-07-30 — a single-key read costs **16 ms median, 22 ms p90, 27 ms max**, against **30 ms median** for the full 75-key core batch, so the cost is the round trip, not the payload. Reading one key is barely cheaper than reading everything; the reason to do it is precision, not speed.
 
 ### Connected-device / station listing
 
@@ -685,7 +685,7 @@ The client enforces this in three layers, each covering a shape the others miss:
 | Guard | Catches | Where |
 | :-- | :-- | :-- |
 | Expiry detection in `_request` | A body whose values are **all** empty strings — the dead-session shape | `api.py:_request` |
-| `_require_contract(data, key, cmd)` | A populated body missing the key the caller needs — firmware drift, or a partial session | reads (`get_sms_messages`, `get_sms_capacity`, …) |
+| `_require_contract(data, key, cmd)` | A populated body missing the key the caller needs — missing router fields, or a partial session | reads (`get_sms_messages`, `get_sms_capacity`, …) |
 | `_require_success(data, cmd)` | An explicit `{"result":"failure"}` on an otherwise healthy session | all eight write commands |
 
 They are deliberately separate: the first raises before the others are reached, so a single guard cannot stand in for the rest. `tests/test_dead_session_sweep.py` drives every public API method against all three fault shapes and asserts that each either succeeds or raises — never returns a success-shaped result having done nothing.

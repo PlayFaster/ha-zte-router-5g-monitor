@@ -535,7 +535,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_int(data.get("battery_value")),
     ),
-    # Thermal telemetry. This is the set of thermal keys the sibling project
+    # Thermal sensors. This is the set of thermal keys the sibling project
     # `Kajkac/ZTE-MC-Home-assistant-repo` polls with °C units, verified against
     # its `const.py` and live batch `cmd=` strings — not a hand-picked subset.
     #
