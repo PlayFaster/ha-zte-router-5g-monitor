@@ -809,6 +809,7 @@ class ZTERouterAPI:
         timeout_sec: int | None = None,
         authenticated: bool = True,
         requested: list[str] | None = None,
+        classify: bool = True,
         _retry: bool = True,
         _after_relogin: bool = False,
     ) -> Any:
@@ -953,8 +954,17 @@ class ZTERouterAPI:
             # why the difference matters. `undecidable` keeps the older rule for
             # the SMS endpoints, which carry no unauthenticated key to compare
             # against — the case that rule was written for and still handles.
-            verdict = _classify_session(
-                resp_json, requested, self.unauthenticated_key_set()
+            # A discovery probe asks for names the device may not implement,
+            # so every value coming back blank is the expected answer — it
+            # means "this firmware does not report these", not "the session
+            # died". Classifying it cost a re-login and a replay per empty
+            # chunk: 142 of 187 chunks failed that way on the reference
+            # MC7010, and suppressing the verdict took a pass from 63 seconds
+            # to 16 with the same 90 names answered.
+            verdict = (
+                _classify_session(resp_json, requested, self.unauthenticated_key_set())
+                if classify
+                else "live"
             )
             self._record_verdict(verdict, resp_json, requested)
             is_status_expired = verdict == "expired" or (
@@ -1565,6 +1575,19 @@ class ZTERouterAPI:
             and n not in goform_ids
         }, notes
 
+    async def _session_still_alive(self) -> bool:
+        """Confirm the session survived a discovery pass.
+
+        One classified read, because the pass itself ran unclassified. Any
+        failure answers the question in the negative rather than raising: this
+        runs inside a diagnostics download.
+        """
+        try:
+            await self.get_params([_CORE_PARAMS[0]])
+        except Exception:  # noqa: BLE001 - the answer is the point, not the error
+            return False
+        return True
+
     async def _discover_bundles(
         self, timeout_sec: int | None, notes: list[str]
     ) -> list[str]:
@@ -1680,7 +1703,10 @@ class ZTERouterAPI:
         )
         try:
             payload = await self._request(
-                "GET", path, timeout_sec=DISCOVERY_CHUNK_TIMEOUT
+                "GET",
+                path,
+                timeout_sec=DISCOVERY_CHUNK_TIMEOUT,
+                classify=False,
             )
         except Exception as err:  # noqa: BLE001 - a note, never a failure
             _LOGGER.debug("Probe chunk starting %s failed: %s", chunk[0], err)
@@ -1747,6 +1773,14 @@ class ZTERouterAPI:
             # The device's own vocabulary, useful even where nothing answered.
             result["mined_names"] = sorted(mined)
             result["write_commands"] = list(self.goform_ids)
+
+            # Classification was suppressed for every chunk above, so a
+            # session that died partway would have gone unnoticed and
+            # everything after it recorded as "no answer". One classified read
+            # at the end says whether that happened. Recorded, not raised: the
+            # download must produce a file either way, and a reader can weigh
+            # the result knowing the session was or was not alive at the end.
+            result["session_alive_after"] = await self._session_still_alive()
         except Exception as err:  # noqa: BLE001 - a note, never a failure
             result["notes"].append(f"discovery aborted: {type(err).__name__}: {err}")
         return result

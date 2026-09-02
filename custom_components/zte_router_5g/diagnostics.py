@@ -491,6 +491,7 @@ def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]
         "mined_names",
         "write_commands",
         "session",
+        "session_alive_after",
     ):
         if field in discovery:
             out[field] = discovery[field]

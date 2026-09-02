@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.9-dev4\] - 2026-09-02 - Discovery Probes Are Not Session Evidence](#339-dev4---2026-09-02---discovery-probes-are-not-session-evidence)
   - [\[3.3.9-dev3\] - 2026-09-01 - Write Commands Excluded From Probing](#339-dev3---2026-09-01---write-commands-excluded-from-probing)
   - [\[3.3.9-dev2\] - 2026-09-01 - Wider Web UI Extraction; Unanswered Parameter Diagnostics](#339-dev2---2026-09-01---wider-web-ui-extraction-unanswered-parameter-diagnostics)
   - [\[3.3.9-dev1\] - 2026-09-01 - Batch Reads Split By URL Budget](#339-dev1---2026-09-01---batch-reads-split-by-url-budget)
@@ -209,6 +210,29 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.9-dev4] - 2026-09-02 - Discovery Probes Are Not Session Evidence
+
+### Summary
+
+A discovery pass took about a minute and logged a login failure on every run. Tracing it found the cause was self-inflicted: a chunk of names the firmware does not implement answers every value blank, and `_classify_session` read that as an expired session. Each such chunk cost a re-login and a replay. On the reference MC7010, 142 of 187 chunks failed that way — none of them from a timeout, and none of them clearing the session, which is why the first two hypotheses about the cause were both wrong.
+
+### Fixed
+
+- **`_request` takes a `classify` flag, and discovery probes set it false.** An all-blank response to a probe is the expected answer — "this firmware does not report these names" — not evidence about the session. Measured on the reference device: **63.1 seconds to 5.9**, chunks succeeding 45 to 186, chunks failing 142 to 1, with the same 90 names answered and the same 444 silent. The `Login failed: no session established` line that appeared in every pass is gone.
+
+### Added
+
+- **`session_alive_after`** in the download. The pass now runs unclassified, so a session dying partway would go unnoticed and everything after it would record as "no answer" — which reads as firmware that does not report those names. One classified read at the end tells the two apart. Recorded rather than raised: the download must produce a file either way.
+
+### Testing
+
+- 1116 tests, 100% branch coverage. New: an empty probe response posts no login and leaves the session untouched; a mandatory read still classifies an empty response; the session is checked after a pass; a dead session afterwards is recorded, not raised.
+- **Hardware, 17 of 17.** Two timed passes at 5.9 and 7.6 seconds.
+
+### Notes
+
+Two earlier hypotheses were measured and rejected before this one. Not clearing the session on a probe failure would have changed nothing — the trace shows `session_active` true before and after every failure. Rate-limiting the probe would have added delay to a problem that was not load-related: 124 of 142 failures completed in about 0.13 seconds, which is a re-login and a replay rather than a timeout.
 
 ## [3.3.9-dev3] - 2026-09-01 - Write Commands Excluded From Probing
 

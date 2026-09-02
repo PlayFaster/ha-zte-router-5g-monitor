@@ -1986,7 +1986,7 @@ Attach this file to GitHub issues so maintainers can inspect router firmware res
 
 > [!NOTE]
 >
-> **This takes about a minute, and the browser gives no progress.** The download makes several hundred requests to your router while it works, so be patient and do not cancel it. It logs you out of the router's own web page if you are signed in there — sign back in afterwards. Nothing about your router is changed: every request is a read.
+> **This takes a little longer than a normal download, and the browser gives no progress.** The download makes several hundred requests to your router while it works, so be patient and do not cancel it. It logs you out of the router's own web page if you are signed in there — sign back in afterwards. Nothing about your router is changed: every request is a read.
 
 Anything discovered this way is put through the same redaction as everything else, and values that look like credentials, locations, network names or subscriber identifiers are withheld — each field carries a note saying whether its value was published or held back.
 

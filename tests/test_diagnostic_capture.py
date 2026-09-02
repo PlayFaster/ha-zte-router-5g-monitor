@@ -1111,3 +1111,93 @@ async def test_an_uppercase_read_name_is_not_excluded(mock_aiohttp_client):
 
     assert {"Z5g_CELL_ID", "ODU_led_switch", "DIAG_URL"} <= names
     assert "ADD_PORT_MAP" not in names
+
+
+# ---------------------------------------------------------------------------
+# Discovery probes are not session evidence (v3.3.9-dev4)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_empty_probe_response_is_not_read_as_an_expired_session(
+    mock_aiohttp_client,
+):
+    """A chunk of names the firmware does not implement answers blank.
+
+    That is the expected answer — "this device does not report these" — and
+    classifying it cost a re-login and a replay per chunk. On the reference
+    MC7010, 142 of 187 chunks failed that way; suppressing the verdict took a
+    pass from 63 seconds to 16 with the same 90 names answered.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={"a_one": "", "b_two": ""}
+    )
+
+    found, _notes = await api.probe_names(["a_one", "b_two"], chunk_size=2)
+
+    assert found == {}
+    # No login was posted, and the session was left alone. The chunk and its
+    # two single re-probes are the only reads; the four-request shape was one
+    # chunk plus a login plus a replay.
+    assert mock_aiohttp_client.post.call_count == 0
+    assert api.session_active
+    assert api.cookies == {"stok": "live"}
+
+
+@pytest.mark.asyncio
+async def test_the_poll_still_classifies_an_empty_response(mock_aiohttp_client):
+    """Suppression is for the probe alone, never for a mandatory read."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "dead"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data=dict.fromkeys(_CORE_PARAMS, "")
+    )
+    mock_aiohttp_client.post.return_value = MockResponse(
+        cookies={"stok": MagicMock(value="fresh")}
+    )
+
+    with pytest.raises(ZTEConnectionError):
+        await api.get_all_data()
+
+
+@pytest.mark.asyncio
+async def test_the_session_is_checked_after_a_discovery_pass(mock_aiohttp_client):
+    """The pass runs unclassified, so a death partway would go unnoticed.
+
+    Everything after it would record as "no answer", which reads as firmware
+    that does not report those names. One classified read at the end says
+    which happened.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={_CORE_PARAMS[0]: "value", "wan_connect_status": "connected"}
+    )
+
+    result = await api.run_discovery()
+
+    assert result["session_alive_after"] is True
+
+
+@pytest.mark.asyncio
+async def test_a_dead_session_after_the_pass_is_recorded_not_raised(
+    mock_aiohttp_client,
+):
+    """The download must produce a file whatever the answer."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    with patch.object(api, "get_params", side_effect=OSError("gone")):
+        result = await api.run_discovery()
+
+    assert result["session_alive_after"] is False
