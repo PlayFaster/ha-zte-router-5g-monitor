@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.9] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching
+
+### Summary
+
+- **Operator Provisioning & Firmware Status**: Adds new default diagnostic entities (`Operator Provisioned` binary sensor and `Firmware Update Result` sensor) to report TR-069 management locks and firmware upgrade outcomes.
+- **Advanced Diagnostic Sensors**: Introduces 12 new diagnostic sensors (disabled by default, can be enabled in Home Assistant as needed) covering per-antenna 5G signal levels, secondary carrier aggregation metrics, SIM PIN/PUK attempt counters, and connection failure counts.
+- **MC888 Model Compatibility**: Adds alternate parameter aliases for MC888-series routers, enabling signal sensors, switches, and data limit controls.
+- **Diagnostics Reliability**: Diagnostics downloads now feature automatic session recovery and distinguish refused management settings from unsupported parameters.
+
+### Added
+
+- **Enabled-by-Default Diagnostic Entities**: Added `binary_sensor.*_operator_provisioned` (reports whether local settings are restricted by operator TR-069 management profiles) and `sensor.*_firmware_update_result` under the System sub-device.
+- **Diagnostic Signal & Antenna Sensors (Disabled by default)**: Added separate receive antenna sensors `sensor.*_5g_rsrp_antenna_1` and `sensor.*_5g_rsrp_antenna_2`, secondary carrier aggregation metrics (RSRP, RSRQ, SNR, RSSI from `lte_multi_ca_scell_sig_info`), 5G NSA/SA band locks, and network mode configuration. These can be enabled in entity settings for advanced signal debugging.
+- **System & SIM Diagnostic Sensors (Disabled by default)**: Added `sensor.*_sim_pin_attempts_remaining`, `sensor.*_sim_puk_attempts_remaining`, `sensor.*_modem_state`, `sensor.*_connection_failure_count`, and `sensor.*_roaming_state`.
+- **MC888 Parameter Aliases**: Added `network_` and `flux_` parameter aliases for LTE signal metrics, network mode selection, data volume switches, and cycle reset dates, enabling increased entity support on MC888 Pro models.
+
+### Changed
+
+- **Diagnostics Parameter Mining & Session Resilience**: Diagnostic downloads now probe up to 758 candidate parameters with active canary tracking, automatic session re-establishment, and distinct classification of operator-refused fields.
+- **URL Length Batch Partitioning**: Coordinator polling requests exceeding 1,600 characters are automatically split into sequential requests and merged, preventing response truncation as supported device schemas expand.
+
+### Under the hood
+
+- **Reverse Parameter Sweeps & Coverage**: Added automated sweeps asserting every requested parameter is mapped to an entity, with full branch coverage across parameter parsing, URL partitioning, and diagnostic artifact redaction.
+
+---
+
 ## [3.3.8] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Firmware Key Changes
 
 ### Summary
@@ -67,7 +94,7 @@ All notable changes to this project will be documented in this file.
 - **Stale Boot Time Across Restarts**: Fixed a bug where a router reboot occurring during a Home Assistant restart, host power cycle, or system update was not detected on startup, causing `Device Uptime` to freeze on the prior boot time indefinitely. Startup now cross-checks the live uptime counter and calculated boot instant against persisted history to reconcile reboots accurately.
   - This issue could be seen when:
     - HA restarted after a long downtime, during which time the router had rebooted.
-    - HA and the ROuter restarted at the same time, after a power outaage.
+    - HA and the Router restarted at the same time, after a power outage.
 
 ### Under the hood
 
@@ -472,6 +499,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)
   - [\[3.3.8\] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Firmware Key Changes](#338---2026-09-01---release-web-ui-parameter-mining-firmware-update-sensors-and-firmware-key-changes)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)

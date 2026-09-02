@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)
   - [\[3.3.9-dev12\] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported](#339-dev12---2026-09-02---fourteen-diagnostic-sensors-added-operator-provisioning-reported)
   - [\[3.3.9-dev11\] - 2026-09-02 - MC888 Parameter Spellings Supported; Two-Request Core Poll](#339-dev11---2026-09-02---mc888-parameter-spellings-supported-two-request-core-poll)
   - [\[3.3.9-dev10\] - 2026-09-02 - Diagnostic Download Declined Parameters Recorded; False Session Losses Removed](#339-dev10---2026-09-02---diagnostic-download-declined-parameters-recorded-false-session-losses-removed)
@@ -217,6 +218,31 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.9] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching
+
+### Summary
+
+- **Operator Provisioning & Firmware Status**: Adds new default diagnostic entities (`Operator Provisioned` binary sensor and `Firmware Update Result` sensor) to report TR-069 management locks and firmware upgrade outcomes.
+- **Advanced Diagnostic Sensors**: Introduces 12 new diagnostic sensors (disabled by default, can be enabled in Home Assistant as needed) covering per-antenna 5G signal levels, secondary carrier aggregation metrics, SIM PIN/PUK attempt counters, and connection failure counts.
+- **MC888 Model Compatibility**: Adds alternate parameter aliases for MC888-series routers, enabling signal sensors, switches, and data limit controls.
+- **Diagnostics Reliability**: Diagnostics downloads now feature automatic session recovery and distinguish refused management settings from unsupported parameters.
+
+### Added
+
+- **Enabled-by-Default Diagnostic Entities**: Added `binary_sensor.*_operator_provisioned` (reports whether local settings are restricted by operator TR-069 management profiles) and `sensor.*_firmware_update_result` under the System sub-device.
+- **Diagnostic Signal & Antenna Sensors (Disabled by default)**: Added separate receive antenna sensors `sensor.*_5g_rsrp_antenna_1` and `sensor.*_5g_rsrp_antenna_2`, secondary carrier aggregation metrics (RSRP, RSRQ, SNR, RSSI from `lte_multi_ca_scell_sig_info`), 5G NSA/SA band locks, and network mode configuration. These can be enabled in entity settings for advanced signal debugging.
+- **System & SIM Diagnostic Sensors (Disabled by default)**: Added `sensor.*_sim_pin_attempts_remaining`, `sensor.*_sim_puk_attempts_remaining`, `sensor.*_modem_state`, `sensor.*_connection_failure_count`, and `sensor.*_roaming_state`.
+- **MC888 Parameter Aliases**: Added `network_` and `flux_` parameter aliases for LTE signal metrics, network mode selection, data volume switches, and cycle reset dates, enabling increased entity support on MC888 Pro models.
+
+### Changed
+
+- **Diagnostics Parameter Mining & Session Resilience**: Diagnostic downloads now probe up to 758 candidate parameters with active canary tracking, automatic session re-establishment, and distinct classification of operator-refused fields.
+- **URL Length Batch Partitioning**: Coordinator polling requests exceeding 1,600 characters are automatically split into sequential requests and merged, preventing response truncation as supported device schemas expand.
+
+### Under the hood
+
+- **Reverse Parameter Sweeps & Coverage**: Added automated sweeps asserting every requested parameter is mapped to an entity, with full branch coverage across parameter parsing, URL partitioning, and diagnostic artifact redaction.
 
 ## [3.3.9-dev12] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported
 
