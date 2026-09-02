@@ -188,6 +188,9 @@
       "signal_signalbar": {
         "default": "mdi:signal-cellular-3"
       },
+      "signal_sinr": {
+        "default": "mdi:waveform"
+      },
       "signal_wan_active_band": {
         "default": "mdi:antenna"
       },

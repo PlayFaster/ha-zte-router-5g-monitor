@@ -203,6 +203,9 @@
       "signal_rssi": {
         "name": "Legacy RSSI"
       },
+      "signal_sinr": {
+        "name": "SINR"
+      },
       "signal_signalbar": {
         "name": "Signal Bars"
       },

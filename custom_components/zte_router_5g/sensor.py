@@ -236,11 +236,9 @@ _ALIAS_LIMIT_SWITCH: Final = (
 # channel numbers landed in the LTE and NR-ARFCN ranges for the bands reported
 # alongside them.
 #
-# `network_rssi` is excluded on purpose - see the note in `api.py`. So is
-# `network_sinr`: 3.8 is a plausible dB figure and the name is right, but it
-# has been seen on one device once and there is no second reading to check it
-# against, and a wrong SNR is worse than an empty one because it reads as a
-# measurement.
+# `network_rssi` and `network_sinr` are adopted separately, in
+# [3.3.10-dev4]. They belong to the generic half of this family rather than
+# to the LTE half - see `_ALIAS_RSSI`.
 _ALIAS_CELL_ID: Final = ("cell_id", "network_cell_id")
 _ALIAS_LTE_PCI: Final = ("lte_pci", "network_Z_PCI")
 _ALIAS_ACTIVE_BAND: Final = ("wan_active_band", "network_ZCELLINFO_band")
@@ -257,6 +255,27 @@ _ALIAS_ROAMING: Final = ("simcard_roam", "network_simcard_roam")
 # answered against the names it left empty.
 _ALIAS_MODEM_STATE: Final = ("modem_main_state", "mc_modem_main_state")
 _ALIAS_PIN_ATTEMPTS: Final = ("pinnumber", "sim_pinnumber")
+
+# The `network_` family splits the way the bare vocabulary does, into names
+# carrying a technology (`network_lte_rsrp`, `network_Z5g_PCI`) and names
+# carrying none (`network_cell_id`, `network_signalbar`, `network_simcard_roam`
+# and these two). The MC888 Pro supports three bearers - 5G, LTE and WCDMA -
+# so a generic set describing whichever radio is serving is what that firmware
+# needs, and the unqualified names are that set rather than an ambiguity.
+#
+# `network_rssi` reports the magnitude without the sign: 73 for -73 dBm. The
+# `RSRQ = RSRP - RSSI + 10*log10(N)` identity settles it. At the reported
+# RSRP of -105 on a 20 MHz carrier, -73 implies an RSRQ of -12 dB, mid-range;
+# +73 implies -158 dB, which is not a physical value. Inverted, RSRQ can only
+# land in its valid range if RSSI falls between about -82 and -65 dBm.
+#
+# The transform is `-abs()` rather than a negation, so a firmware that reports
+# the sign correctly is left alone instead of being flipped to positive.
+#
+# `network_sinr` gets no tuple. There is no bare `sinr` in any vocabulary
+# either device publishes, and inventing one to lead with would put a name in
+# the poll that no firmware has ever been seen to use.
+_ALIAS_RSSI: Final = ("rssi", "network_rssi")
 
 # The 5G band locks. Neither bare spelling has been populated by any device
 # seen so far, so unlike every other tuple here the alternate is the only
@@ -468,6 +487,19 @@ def _monthly_total_bytes(data: dict[str, Any]) -> int | None:
     if tx is None or rx is None:
         return None
     return tx + rx
+
+
+def _negative_dbm(value: Any) -> float | None:
+    """Return a dBm reading as a negative number, whatever sign it arrived with.
+
+    `network_rssi` reports the magnitude alone. Taking the negative of the
+    absolute value rather than negating means a firmware that does report the
+    sign is returned unchanged rather than inverted.
+    """
+    number = _safe_float(value)
+    if number is None:
+        return None
+    return -abs(number)
 
 
 def _band_or_channel_fallback(
@@ -1181,7 +1213,28 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         max_limit=-20,
         group="signal",
         source=ENDPOINT_EXTENDED,
-        value_fn=lambda data: _safe_float(data.get("rssi")),
+        value_fn=lambda data: _negative_dbm(get_first(data, _ALIAS_RSSI)),
+    ),
+    ZTESensorEntityDescription(
+        key="sinr",
+        about=(
+            "Signal to Noise Ratio for the cell currently serving the router, "
+            "in dB - how far the wanted signal sits above the noise and "
+            "interference around it. Reported by the router without saying "
+            "which radio it measured, so it is separate from LTE SNR and from "
+            "5G SINR, which the router names individually. Higher is better; "
+            "below about 0 dB the connection is struggling."
+        ),
+        translation_key="signal_sinr",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        suggested_display_precision=1,
+        entity_registry_enabled_default=False,
+        min_limit=-20,
+        max_limit=50,
+        group="signal",
+        source=ENDPOINT_EXTENDED,
+        value_fn=lambda data: _safe_float(data.get("network_sinr")),
     ),
     ZTESensorEntityDescription(
         key="rscp",

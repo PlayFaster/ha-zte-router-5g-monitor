@@ -18,7 +18,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > - **If you have a ZTE 5G/LTE Router in the MC7010, MC801, MC888, MC889, MF266, MF286 or MF289 family** and want to monitor your 5G/LTE connection quality, data usage, and manage SMS messages directly from Home Assistant, then **yes**.
 > - **This integration is for you if** you want:
->   - **Advanced Signal Diagnostics** — SNR, RSRP, RSRQ and RSSI for both LTE and 5G, refreshed as often as every 30 seconds.
+>   - **Advanced Signal Diagnostics** — SNR, RSRP, RSRQ and RSSI for LTE and 5G, as reported by your router, refreshed as often as every 30 seconds.
 >   - **Data Usage Monitoring** — Track data usage and projected usage per month or per bill, and set alerts for high use.
 >   - **SMS Management** — View the most recently received message content and send SMS messages directly in HA.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
@@ -109,7 +109,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 ### 📡 Advanced 5G/LTE Diagnostics
 
-Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower details, and active carrier bands — as often as every 30 seconds.
+Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower details, and active carrier bands — as often as every 30 seconds. Which metrics your router reports depends on its firmware.
 
 <details>
 
@@ -117,10 +117,10 @@ Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower detail
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-- **Detailed Signal Metrics**: SNR, RSRP, RSRQ and RSSI for both the 5G NR and the LTE anchor cell tower.
+- **Detailed Signal Metrics**: SNR, RSRP, RSRQ and RSSI for the 5G NR and the LTE anchor cell tower, as far as your router reports them — firmware differs on which it fills in.
 - **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active bands. See the [Cell Tower Change Alert](#-cell-tower-change-alert) example.
 - **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use. See the [Signal Quality Alert](#-signal-quality-alert) example.
-- **Per-Carrier and Per-Antenna Detail** _(disabled by default)_: RSRP, RSRQ, SNR and RSSI for the aggregated secondary cell, RSRP for each of the two 5G receivers, and the 5G NSA and SA band locks.
+- **Per-Carrier and Per-Antenna Detail** _(disabled by default)_: RSRP, RSRQ, SNR and RSSI for the aggregated secondary cell, RSRP for each of the two 5G receivers, and the 5G NSA and SA band locks. Confirmed on the MC7010; other models report a subset.
 
 ![Signal Sensors](.github/images/zte_5g_signal_sensors.png)
 
@@ -175,12 +175,16 @@ RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
 
 These are **disabled by default** — enable them from the device's Entities tab. Each carries an about note explaining what it shows.
 
+Which of them your router fills in depends on its firmware. Enable the ones you want and see; an entity the router does not report simply stays empty.
+
 | Entity | Shows |
 | :-- | :-- |
 | `CA Secondary Cell RSRP`, `CA Secondary Cell RSRQ`, `CA Secondary Cell SNR`, `CA Secondary Cell RSSI` | The aggregated second carrier, separately from the primary. Its SNR is often the better of the two, which the headline `LTE SNR` does not show |
 | `5G RSRP Antenna 1`, `5G RSRP Antenna 2` | The two 5G receivers separately. A steady gap between them points at placement or an obstruction rather than at the network |
 | `5G NSA Band Lock`, `5G SA Band Lock` | Which 5G bands the router may use, alongside the existing `LTE Band Lock Mask` |
 | `Roaming State`, `Network Mode Config` | Whether the SIM is roaming, and whether the router picks its network mode itself |
+| `RSSI`, `SINR` | Signal strength and signal-to-noise for whichever radio is serving, where the router reports them without naming the technology. Seen on the MC888 Pro; the MC7010 leaves both empty |
+| `SIM Lock State`, `SIM PIN Attempts Remaining`, `SIM PUK Attempts Remaining` | Whether the SIM is asking for its PIN, and how many tries are left. A locked SIM otherwise looks like a coverage fault |
 
 ---
 
@@ -370,7 +374,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **112 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **113 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -381,7 +385,7 @@ This integration provides **112 entities** (depending on your firmware) organize
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
 | ⚙️ **System** | 42 | 30 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, Refresh Now, Reboot, Polling Controls | 26, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining |
-| 📶 **Signal** | 50 | 46 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 20, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, Roaming State, Network Mode Config, LTE Band Lock Mask |
+| 📶 **Signal** | 51 | 47 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 21, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask |
 | 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
 | 🛠️ **Actions** | 4 | — | Send, Delete, Bulk-Delete and List SMS | — |

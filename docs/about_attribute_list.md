@@ -48,7 +48,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Recent Msg | Sensor | `msg_recent` | The most recently received message. Sender, date and storage index are in the attributes; the index is what the delete action needs to remove this specific message. |
 | Total Msg | Sensor | `msg_total` | Total messages held across every storage area - router memory and SIM, inbox, sent and drafts. The breakdown per area is in this sensor's attributes. Storage filling up stops new messages arriving. |
 
-## Signal (49)
+## Signal (50)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -92,6 +92,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Legacy RSCP | Sensor | `rscp` | Received Signal Code Power, in dBm - a 3G/UMTS measurement. Only meaningful if the router has fallen back to 3G, which on a 5G CPE usually signals a coverage problem. |
 | Legacy RSSI | Sensor | `rssi` | Combined signal strength across all active radio frequencies, in dBm. Technology-specific LTE and 5G RSRP metrics provide more diagnostic detail. |
 | Signal Bars | Sensor | `signalbar` | The router's own signal rating, 0 to 5, the same one shown on its web page. It is a coarse summary - for anything precise use RSRP or SNR, which is what the bars are derived from. |
+| SINR | Sensor | `sinr` | Signal to Noise Ratio for the cell currently serving the router, in dB - how far the wanted signal sits above the noise and interference around it. Reported by the router without saying which radio it measured, so it is separate from LTE SNR and from 5G SINR, which the router names individually. Higher is better; below about 0 dB the connection is struggling. |
 | LTE Active Band | Sensor | `wan_active_band` | The frequency band currently carrying your connection. Which band you land on is decided by the network, and it affects both range and speed. |
 | LTE Active Channel | Sensor | `wan_active_channel` | The specific radio channel number in use within the active band. Mainly of interest when comparing against neighboring cells or diagnosing interference. |
 | Network APN | Sensor | `wan_apn` | Access Point Name - the gateway the router is actually connected with. This is the authoritative answer: while APN Selection Mode is auto the router uses the network's own default, which may not be one of your stored profiles, so the APN Profile selector can differ from this or read unknown. A wrong APN is a common cause of a router that has good signal but no working data. |

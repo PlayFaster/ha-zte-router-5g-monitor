@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10-dev4\] - 2026-09-02 - MC888 Compatibility - Generic RSSI Sourced; SINR Sensor Added](#3310-dev4---2026-09-02---mc888-compatibility---generic-rssi-sourced-sinr-sensor-added)
   - [\[3.3.10-dev3\] - 2026-09-02 - MC888 Compatibility - 5G Band Locks; SIM Lock State Added](#3310-dev3---2026-09-02---mc888-compatibility---5g-band-locks-sim-lock-state-added)
   - [\[3.3.10-dev2\] - 2026-09-02 - Thirteen MC888 Sensors Given a Source; Second `network_` Vocabulary Adopted](#3310-dev2---2026-09-02---thirteen-mc888-sensors-given-a-source-second-network_-vocabulary-adopted)
   - [\[3.3.10-dev1\] - 2026-09-02 - Uptime Counter Drift Measured Per Installation; Boot-Time Latch Rebuilt Around It](#3310-dev1---2026-09-02---uptime-counter-drift-measured-per-installation-boot-time-latch-rebuilt-around-it)
@@ -221,6 +222,33 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.10-dev4] - 2026-09-02 - MC888 Compatibility - Generic RSSI Sourced; SINR Sensor Added
+
+### Summary
+
+Two parameters from the 2026-09-02 MC888 Pro download, both belonging to the generic half of the `network_` family. The entity count moves from 112 to 113.
+
+### Added
+
+- **SINR**, a sensor on the Signal sub-device, disabled by default, from `network_sinr`. The signal-to-noise figure for whichever radio is serving, reported by the router without naming the technology — distinct from LTE SNR and 5G SINR, which that firmware names separately.
+- **`network_rssi` as the alternate spelling behind RSSI**, a sensor that no device had ever populated.
+
+### Changed
+
+- **Two names added to the extended batch.** It stays within its URL budget at one request.
+
+### Measured
+
+`network_rssi` reports the magnitude without the sign: 73 for −73 dBm. The `RSRQ = RSRP − RSSI + 10·log₁₀(N)` identity settles it. At the reported RSRP of −105 on a 20 MHz carrier, −73 implies an RSRQ of **−12 dB**, mid-range; +73 implies **−158 dB**, which is not a physical value. Inverted, RSRQ can only reach its valid range if RSSI falls between about −82 and −65 dBm, and the reported magnitude sits in the middle of that window. The transform is therefore `−abs()` rather than a negation, so a firmware reporting the sign correctly is left alone instead of being flipped.
+
+The `network_` family splits the way the bare vocabulary does, into names carrying a technology — `network_lte_rsrp`, `network_Z5g_PCI` — and names carrying none: `network_cell_id`, `network_signalbar`, `network_simcard_roam` and these two. The MC888 Pro supports three bearers, so a generic set describing whichever radio is serving is what that firmware needs. That placement is what identifies these two, not the values: the unqualified names are a deliberate group, three of whose members were already adopted in `[3.3.10-dev2]`.
+
+### Notes
+
+- `network_sinr` gets no alias tuple. No bare `sinr` appears in any vocabulary either device publishes, and inventing one to lead with would put a name in the poll that no firmware has been seen to use.
+- Neither name is answered by the reference MC7010, measured against three held canaries, so both entities stay blank there.
+- The MC888 Pro leaves `lte_rsrq`, `lte_rssi` and `lte_snr` empty although its own web pages request all three by name, and the whole bare LTE set is empty there while the `network_` set carries the LTE RSRP. After this release the one signal metric that device reports under no spelling in either namespace is **RSRQ**.
 
 ## [3.3.10-dev3] - 2026-09-02 - MC888 Compatibility - 5G Band Locks; SIM Lock State Added
 

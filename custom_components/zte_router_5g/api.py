@@ -318,6 +318,12 @@ _EXTENDED_PARAMS: list[str] = [
     "Z5g_lockband_nsa_mask",
     "Z5g_lockband_sa_mask",
     "sim_pin_status",
+    # Added in [3.3.10-dev4]. Both belong to the generic half of the
+    # `network_` family - the names carrying no technology, alongside
+    # `network_signalbar` and `network_cell_id` - so they describe whichever
+    # radio is serving rather than the 4G or 5G carrier specifically.
+    "network_rssi",
+    "network_sinr",
 ]
 
 

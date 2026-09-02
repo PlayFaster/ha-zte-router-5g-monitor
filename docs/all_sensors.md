@@ -10,9 +10,9 @@ A complete list of the static entities and service actions provided by the integ
 | :--------- | :----------- | :--------------------- |
 | **Data**   | 15           | Data entities.         |
 | **SMS**    | 5            | SMS entities.          |
-| **Signal** | 50           | Signal entities.       |
+| **Signal** | 51           | Signal entities.       |
 | **System** | 42           | System entities.       |
-| **Total**  | **112**      | Total static entities. |
+| **Total**  | **113**      | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
 
@@ -44,7 +44,7 @@ A complete list of the static entities and service actions provided by the integ
 | Total Msg | `msg_total` | Sensor | - | - | LTS: `measurement` |
 | Unread Msg | `sms_unread_num` | Sensor | - | - | LTS: `measurement` |
 
-## Signal Sub-Device (50 Entities)
+## Signal Sub-Device (51 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -89,6 +89,7 @@ A complete list of the static entities and service actions provided by the integ
 | Legacy RSCP | `rscp` | Sensor | dBm | - | **Disabled by default.** |
 | Legacy RSSI | `rssi` | Sensor | dBm | - | **Disabled by default.** |
 | Signal Bars | `signalbar` | Sensor | - | - | LTS: `measurement` |
+| SINR | `sinr` | Sensor | dB | - | **Disabled by default.** LTS: `measurement` |
 | LTE Active Band | `wan_active_band` | Sensor | - | Diagnostic | - |
 | LTE Active Channel | `wan_active_channel` | Sensor | - | Diagnostic | - |
 | Network APN | `wan_apn` | Sensor | - | Diagnostic | - |

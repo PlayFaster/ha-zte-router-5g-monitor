@@ -1504,18 +1504,46 @@ def test_sim_lock_state_publishes_the_value_unmapped() -> None:
     assert description.group == "system"
 
 
-def test_the_rejected_mc888_spellings_are_not_polled() -> None:
-    """Two names the 2026-09-02 download answered are deliberately unused.
+def test_rssi_is_published_as_a_negative_dbm_reading() -> None:
+    """The MC888 reports the magnitude alone: 73 for -73 dBm.
 
-    `network_rssi` read 73 where RSRP read -105, so it is a bar or percentage
-    scale rather than dBm. `network_sinr` is plausible but single-sighted, and
-    a wrong SNR is worse than an empty one because it reads as a measurement.
-    Requesting either would invite a later change wiring it up on the strength
-    of it already being in the list.
+    Established by the `RSRQ = RSRP - RSSI + 10*log10(N)` identity. At the
+    reported RSRP of -105 on a 20 MHz carrier, -73 implies an RSRQ of -12 dB;
+    +73 implies -158 dB, which is not a physical value.
     """
-    requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+    description = next(d for d in SENSOR_TYPES if d.key == "rssi")
 
-    assert not requested & {"network_rssi", "network_sinr"}
+    assert description.value_fn({"network_rssi": "73"}) == -73.0
+    assert description.value_fn({"rssi": "-69"}) == -69.0
+    assert description.value_fn({"network_rssi": ""}) is None
+    assert description.value_fn({}) is None
+
+
+def test_a_correctly_signed_reading_is_left_alone() -> None:
+    """The transform is `-abs()`, not a negation.
+
+    A firmware that reports the sign the way the MC7010 does must not be
+    flipped to positive by the fix for one that does not.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "rssi")
+
+    assert description.value_fn({"network_rssi": "-73"}) == -73.0
+
+
+def test_sinr_is_separate_from_the_two_named_snr_sensors() -> None:
+    """The router names three, and this is the one carrying no technology.
+
+    On the MC888 Pro `network_sinr` read 3.8 on a poll where `Z5g_SINR` read
+    15.5, so it is not the 5G figure under another name, and `lte_snr` is a
+    separate key this sensor never reads.
+    """
+    sinr = next(d for d in SENSOR_TYPES if d.key == "sinr")
+    lte = next(d for d in SENSOR_TYPES if d.key == "lte_snr")
+    data = {"network_sinr": "3.8", "lte_snr": "1.0", "Z5g_SINR": "15.5"}
+
+    assert sinr.value_fn(data) == 3.8
+    assert lte.value_fn(data) == 1.0
+    assert sinr.value_fn({"lte_snr": "1.0"}) is None
 
 
 @pytest.mark.parametrize(("primary", "alias", "value"), _MC888_ALIASES)
