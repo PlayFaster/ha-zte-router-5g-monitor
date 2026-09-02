@@ -14,6 +14,12 @@ from homeassistant.const import (
 )
 from homeassistant.util import dt as dt_util
 
+from custom_components.zte_router_5g.api import (
+    _CONTRACT_CONCEPTS,
+    _CORE_PARAMS,
+    _EXTENDED_PARAMS,
+    ZTERouterAPI,
+)
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import (
     _ALIAS_5G_PCI,
@@ -27,11 +33,11 @@ from custom_components.zte_router_5g.sensor import (
     ZTESensorEntityDescription,
     _clear_day,
     _data_allowance_bytes,
-    _get_first,
     _get_total_sms,
     _projected_bytes,
     _projection,
     async_setup_entry,
+    get_first,
 )
 
 from .conftest import assert_is_root, assert_links_to_parent
@@ -570,26 +576,26 @@ def _value_for(key, data):
     return description.value_fn(data)
 
 
-def test_get_first_prefers_the_earliest_populated_key():
+def testget_first_prefers_the_earliest_populated_key():
     """The MC7010 spelling is first, so its path is unchanged."""
-    assert _get_first({"a": "1", "b": "2"}, ("a", "b")) == "1"
+    assert get_first({"a": "1", "b": "2"}, ("a", "b")) == "1"
 
 
-def test_get_first_skips_keys_that_are_present_but_empty():
+def testget_first_skips_keys_that_are_present_but_empty():
     """A present-but-empty value means unsupported, not zero."""
-    assert _get_first({"a": "", "b": "2"}, ("a", "b")) == "2"
-    assert _get_first({"a": None, "b": "2"}, ("a", "b")) == "2"
+    assert get_first({"a": "", "b": "2"}, ("a", "b")) == "2"
+    assert get_first({"a": None, "b": "2"}, ("a", "b")) == "2"
 
 
-def test_get_first_returns_none_when_nothing_is_populated():
+def testget_first_returns_none_when_nothing_is_populated():
     """No spelling present means unknown, not zero."""
-    assert _get_first({"a": ""}, ("a", "b")) is None
-    assert _get_first({}, ("a", "b")) is None
+    assert get_first({"a": ""}, ("a", "b")) is None
+    assert get_first({}, ("a", "b")) is None
 
 
-def test_get_first_keeps_a_genuine_zero():
+def testget_first_keeps_a_genuine_zero():
     """Zero is a real reading; only '' and None mean absent."""
-    assert _get_first({"a": 0}, ("a", "b")) == 0
+    assert get_first({"a": 0}, ("a", "b")) == 0
 
 
 @pytest.mark.parametrize(
@@ -1127,7 +1133,7 @@ def test_total_sms_treats_an_empty_bank_as_zero_not_as_a_failure():
     `int("")` raises, so one empty bank sent the entire sensor to `unknown`
     and took its attribute breakdown with it — which reads as "no messages",
     the opposite of what an unreadable bank means. Present-but-empty is absent,
-    the rule `_get_first` applies everywhere else in this module.
+    the rule `get_first` applies everywhere else in this module.
 
     Distinct from the missing-key case above: that exercises the key being
     gone, this exercises the key being present and blank. Mutation testing
@@ -1198,7 +1204,7 @@ def _router_keys_referenced(body: str, sensor_src: str) -> set[str]:
 
     A description rarely names its keys inline. `value_fn` may be a lambda
     calling `data.get("x")`, a module-level helper whose body holds the keys,
-    or `_get_first(data, _ALIAS_X)` where the names live in a tuple constant.
+    or `get_first(data, _ALIAS_X)` where the names live in a tuple constant.
     Scanning the description text alone sees only the first of those — which is
     why the first version of this sweep passed while `data_allowance`, whose
     keys sit inside `_data_allowance_bytes`, carried the very defect the sweep
@@ -1353,3 +1359,215 @@ def test_bandwidth_sensors_offer_the_unit_selector() -> None:
             "statistics and ends its _UNGUARDED_BY_DESIGN exemption, which "
             "rests on it staying out. Add guard bands, or leave it off."
         )
+
+
+# ---------------------------------------------------------------------------
+# The MC888 vocabulary
+# ---------------------------------------------------------------------------
+
+_MC888_ALIASES = (
+    ("lte_rsrp", "network_lte_rsrp", "-106"),
+    ("lte_ca_pcell_band", "network_lte_ca_pcell_band", "3"),
+    ("lte_ca_pcell_bandwidth", "network_lte_ca_pcell_bandwidth", "20.0"),
+    ("lte_ca_scell_band", "network_lte_ca_scell_band", "0"),
+    ("lte_ca_scell_bandwidth", "network_lte_ca_scell_bandwidth", "0.0"),
+    ("net_select", "network_net_select", "WL_AND_5G"),
+    ("net_select_mode", "network_net_select_mode", "auto_select"),
+    ("wan_auto_clear_flow_data_switch", "flux_auto_clear_flow_data_switch", "on"),
+    ("data_volume_limit_switch", "flux_data_volume_limit_switch", "0"),
+    ("traffic_clear_date", "flux_clear_date", "1"),
+)
+
+
+@pytest.mark.parametrize(("primary", "alias", "value"), _MC888_ALIASES)
+def test_each_mc888_alias_resolves_when_the_primary_is_empty(
+    primary: str, alias: str, value: str
+) -> None:
+    """The alternate answers where the leader does not.
+
+    Every pair here was read from the issue #56 diagnostics download, where the
+    `network_` or `flux_` spelling is populated and the spelling this
+    integration polls is empty.
+    """
+    data = {primary: "", alias: value}
+
+    assert get_first(data, (primary, alias)) == value
+
+
+@pytest.mark.parametrize(("primary", "alias", "value"), _MC888_ALIASES)
+def test_the_primary_still_wins_when_both_are_populated(
+    primary: str, alias: str, value: str
+) -> None:
+    """Order is the tie-break, so the reference device's path is unchanged."""
+    data = {primary: "leader", alias: value}
+
+    assert get_first(data, (primary, alias)) == "leader"
+
+
+def test_no_alternate_spelling_stands_alone_as_a_contract_concept() -> None:
+    """A concept must survive the loss of its alternate spelling.
+
+    The contract keys decide whether a poll counts as live. If a `network_` or
+    `flux_` spelling were the only spelling of one, a device answering the bare
+    name would fail the check it is meant to pass.
+    """
+    for concept, keys in _CONTRACT_CONCEPTS.items():
+        bare = [k for k in keys if not k.startswith(("network_", "flux_"))]
+        assert bare, f"{concept} has only alternate spellings: {keys}"
+
+
+def test_every_data_volume_field_reaches_its_aliases() -> None:
+    """The write form is all-or-nothing and is built from the last poll.
+
+    A field whose spellings are not all requested cannot be echoed back, and
+    the router answers `{"result":"failure"}` for a payload missing any field —
+    so on a device using the alternate spellings the data-limit controls would
+    not degrade, they would be unwritable.
+    """
+    requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+
+    for field, aliases in ZTERouterAPI.DATA_VOLUME_FIELDS.items():
+        missing = [key for key in aliases if key not in requested]
+        assert not missing, f"{field} names unrequested spellings: {missing}"
+
+
+def test_network_mode_config_reports_the_routers_own_setting() -> None:
+    """The value is the router's Automatic-or-Manual radio button, unmapped.
+
+    Published raw because only the automatic value has been observed —
+    `auto_select` on the reference MC7010 — and the spelling the firmware uses
+    for Manual is unknown. A mapped state would have to guess it, and would
+    report Manual for any third value it had never seen.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "net_select_config")
+
+    assert description.value_fn({"net_select_mode": "auto_select"}) == "auto_select"
+    assert (
+        description.value_fn({"net_select_mode": "", "network_net_select_mode": "x"})
+        == "x"
+    )
+    assert description.value_fn({}) is None
+    assert description.entity_registry_enabled_default is False
+
+
+# ---------------------------------------------------------------------------
+# Diagnostic sensors added in [3.3.9-dev12]
+# ---------------------------------------------------------------------------
+
+# The live MC7010 reading on 2026-09-02, one secondary carrier.
+_SCELL = "-89.1,-11.0,17.2,-58.1,0.0,2.0"
+
+
+@pytest.mark.parametrize(
+    ("key", "expected"),
+    [
+        ("ca_scell_rsrp", -89.1),
+        ("ca_scell_rsrq", -11.0),
+        ("ca_scell_snr", 17.2),
+        ("ca_scell_rssi", -58.1),
+    ],
+)
+def test_the_secondary_carrier_fields_are_read_in_the_measured_order(
+    key: str, expected: float
+) -> None:
+    """The column order is measured, and the sensors must match it.
+
+    RSRQ, RSRP and RSSI are related by definition as
+    `RSRQ = RSRP - RSSI + 10*log10(N)`. Solving for N across twelve samples on
+    2026-09-02 gave 99.4 resource blocks with a spread of 2.3 - 100 RB, a
+    20 MHz carrier - for this assignment and no other. Fields five and six are
+    deliberately unpublished.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+
+    assert description.value_fn({"lte_multi_ca_scell_sig_info": _SCELL}) == expected
+
+
+def test_the_secondary_carrier_parser_reads_only_the_first_group() -> None:
+    """A device aggregating two secondary carriers reports two groups.
+
+    Nothing here reads past the first, but the parser must not assume there is
+    only ever one - a whole-string split would take the second carrier's RSRP
+    as this carrier's RSRQ.
+    """
+    two = "-89.1,-11.0,17.2,-58.1,0.0,2.0;-70.5,-8.0,20.1,-50.2,0.0,4.0"
+    description = next(d for d in SENSOR_TYPES if d.key == "ca_scell_rsrp")
+
+    assert description.value_fn({"lte_multi_ca_scell_sig_info": two}) == -89.1
+
+
+@pytest.mark.parametrize(
+    "raw", ["", "   ", "not,enough", "nonsense", ";", "a,b,c,d,e,f"]
+)
+def test_a_malformed_secondary_carrier_string_reports_nothing(raw: str) -> None:
+    """Absent, short and unparsable all report unknown rather than a number."""
+    description = next(d for d in SENSOR_TYPES if d.key == "ca_scell_rssi")
+
+    assert description.value_fn({"lte_multi_ca_scell_sig_info": raw}) is None
+    assert description.value_fn({}) is None
+
+
+@pytest.mark.parametrize(
+    ("key", "data", "expected"),
+    [
+        ("upgrade_result", {"upgrade_result": "error"}, "error"),
+        ("upgrade_result", {"upgrade_result": ""}, None),
+        ("5g_rsrp_antenna_1", {"5g_rx0_rsrp": "-97"}, -97.0),
+        ("5g_rsrp_antenna_2", {"5g_rx1_rsrp": "-95"}, -95.0),
+        ("sim_pin_attempts", {"pinnumber": "3"}, 3),
+        ("sim_puk_attempts", {"puknumber": "10"}, 10),
+        (
+            "modem_state",
+            {"modem_main_state": "modem_init_complete"},
+            "modem_init_complete",
+        ),
+        ("connection_failure_count", {"ppp_dial_conn_fail_counter": "0"}, 0),
+        ("roaming_state", {"simcard_roam": "Home"}, "Home"),
+        (
+            "nr5g_nsa_band_lock",
+            {"nr5g_nsa_band_lock": "1,3,7,28,77,78"},
+            "1,3,7,28,77,78",
+        ),
+        (
+            "nr5g_sa_band_lock",
+            {"nr5g_sa_band_lock": "1,3,7,20,28,38,77,78"},
+            "1,3,7,20,28,38,77,78",
+        ),
+    ],
+)
+def test_each_new_diagnostic_sensor_reads_its_live_value(
+    key: str, data: dict, expected: object
+) -> None:
+    """Every value here was read from the reference MC7010 on 2026-09-02."""
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+
+    assert description.value_fn(data) == expected
+
+
+def test_the_new_diagnostic_sensors_are_disabled_by_default() -> None:
+    """All but the firmware result, which reports a fault nothing else shows.
+
+    The reference device reads `error` while both existing firmware entities
+    report benign states, so that one is worth surfacing without the user
+    having to go looking for it.
+    """
+    off_by_default = {
+        "5g_rsrp_antenna_1",
+        "5g_rsrp_antenna_2",
+        "ca_scell_rsrp",
+        "ca_scell_rsrq",
+        "ca_scell_snr",
+        "ca_scell_rssi",
+        "sim_pin_attempts",
+        "sim_puk_attempts",
+        "modem_state",
+        "connection_failure_count",
+        "roaming_state",
+        "nr5g_nsa_band_lock",
+        "nr5g_sa_band_lock",
+    }
+    by_key = {d.key: d for d in SENSOR_TYPES}
+
+    for key in off_by_default:
+        assert by_key[key].entity_registry_enabled_default is False, key
+    assert by_key["upgrade_result"].entity_registry_enabled_default is not False

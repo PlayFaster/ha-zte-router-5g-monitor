@@ -169,3 +169,20 @@ def assert_is_root(info) -> None:
     """Assert a `DeviceInfo` is the root device — no parent link, either shape."""
     assert "via_device" not in info
     assert "via_device_id" not in info
+
+
+def scripted(*responses: Any) -> Any:
+    """Return a `side_effect` that plays `responses` then repeats the last.
+
+    A fixed list pins a test to how many requests a poll happens to make, and
+    the mandatory batch is served in as many requests as the URL budget allows
+    — one today, two once a device's alternate spellings are added. The
+    scripted ordering is the thing under test; the number of trailing batch
+    requests is not.
+    """
+    remaining = list(responses)
+
+    def _next(*_args: Any, **_kwargs: Any) -> Any:
+        return remaining.pop(0) if len(remaining) > 1 else remaining[0]
+
+    return _next

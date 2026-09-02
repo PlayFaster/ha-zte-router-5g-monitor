@@ -22,6 +22,7 @@ from .api import ZTEAuthError, ZTECredentialsError, ZTERouterAPI
 from .const import (
     CONF_SCAN_INTERVAL,
     CONF_STOP_POLLING,
+    DISCOVERY_SETTLE_SECONDS,
     DOMAIN,
     FETCH_STRIKE_LIMIT,
     HEALTH_DRIFT_STRIKE_LIMIT,
@@ -84,6 +85,21 @@ ENDPOINT_SMS_MESSAGES = "sms_messages"
 # at ~2048 characters; optional because it carries only diagnostics and
 # disabled-by-default entities, so a failure must not blank Signal and Data.
 ENDPOINT_EXTENDED = "extended_data"
+ENDPOINT_PROVISIONING = "provisioning"
+
+# How often the operator-provisioning probe runs. A refusal replaces the whole
+# response, so this read can never share a request with anything else and costs
+# one round trip whenever it fires. Gated on elapsed time rather than a poll
+# count, following `UPTIME_WRITE_INTERVAL`: a count behaves differently for
+# every user, since twenty polls is ten minutes at a 30-second interval and
+# over five hours at 960.
+PROVISIONING_READ_INTERVAL = timedelta(hours=1)
+
+# The key the probe reads. Declined by an operator-supplied MC7010 and answered
+# plainly by a self-purchased MC888 Pro, which is the asymmetry the sensor
+# reports. Any of the eleven declined names would serve; this one is a plain
+# configuration string rather than a credential.
+PROVISIONING_PROBE_KEY = "tr069_ServerURL"
 
 # Every repair this integration can raise. The names double as `translation_key`
 # values, which stay bare; only the registry **id** carries the entry (see
@@ -177,6 +193,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._store: Store[dict[str, Any]] | None = None
         self._stored_last_uptime: int | None = None
         self._last_counter_write: datetime | None = None
+        self._last_provisioning_read: datetime | None = None
+        # None until the first successful read, so the sensor reports unknown
+        # rather than a confident guess on a device that has never answered.
+        self.provisioning_restricted: bool | None = None
         self.last_sms_timestamp: str | None = None
         self.fired_sms_hashes: set[str] = set()
 
@@ -440,6 +460,36 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         return data, sms_cap, messages
 
     async def _async_update_data(self) -> dict[str, Any]:
+        """Fetch data from the API, serialized against a discovery pass.
+
+        The lock is the point. `async_run_discovery` has taken it since the
+        probe was added, with a comment saying the two "take turns" — but this
+        method never acquired it, so nothing was serialized and the guard did
+        nothing at all.
+
+        What that allowed: a scheduled poll running during a diagnostics
+        download shares this coordinator's `ZTERouterAPI`, and a poll that
+        judges the session expired re-logs in. The router permits one session,
+        so the new login invalidates the cookie the discovery pass is
+        replaying. Discovery probes run with `authenticated=False` precisely so
+        that a probe never silently re-authenticates and samples an
+        authenticated response, which means they cannot recover: they simply go
+        blank, and their names are recorded as unanswered.
+
+        Measured directly. With a competing client logging in every 180
+        seconds, 2 of 12 passes came back having read 413 and 445 names without
+        a session against 16 in a healthy pass; with the competitor paused, 0
+        of 12. This closes the same window for the poll inside our own process.
+
+        A discovery pass can hold this for the length of its budget, so a poll
+        may wait. That is the correct trade: a delayed poll holds last known
+        values for one cycle, while an overlapping one corrupts a download the
+        user is waiting on and publishes absences that were never measured.
+        """
+        async with self._async_update_lock:
+            return await self._async_update_data_locked()
+
+    async def _async_update_data_locked(self) -> dict[str, Any]:
         """Fetch data from API with resilience and pausing."""
         # Consume the one-shot force flag before anything can short-circuit.
         forced = self._force_refresh_once
@@ -558,6 +608,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     )
                 self._record_health_success(data)
                 self._check_new_sms(messages)
+                await self._read_provisioning(forced=forced)
                 return data
 
         except TimeoutError as err:
@@ -920,6 +971,40 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             lambda: {"last_uptime": seconds}, UPTIME_SAVE_DELAY
         )
 
+    async def _read_provisioning(self, *, forced: bool) -> None:
+        """Read whether the router declines its provisioning configuration.
+
+        One request, and it cannot ride an existing one: a refusal replaces the
+        entire response, so a declined name shares a request with nothing. It
+        runs hourly, and on any forced refresh — Refresh Now is what a user
+        presses after changing something, so it is the right moment to re-ask.
+
+        The result is held on the coordinator rather than merged into
+        `coordinator.data`. That dict means "what the router said" and feeds the
+        populated counts, the drift check and the sparse-payload check; a
+        synthetic key would skew all three.
+        """
+        now = dt_util.now()
+        if (
+            not forced
+            and self._last_provisioning_read is not None
+            and now - self._last_provisioning_read < PROVISIONING_READ_INTERVAL
+        ):
+            return
+
+        async def _probe() -> bool:
+            answer = await self.api.get_params([PROVISIONING_PROBE_KEY])
+            # A declined request carries none of the requested keys. A present
+            # name — populated or empty — means the router served it.
+            return PROVISIONING_PROBE_KEY not in answer
+
+        restricted = await self._fetch_optional(
+            ENDPOINT_PROVISIONING, _probe, self.provisioning_restricted
+        )
+        if restricted is not None:
+            self.provisioning_restricted = bool(restricted)
+            self._last_provisioning_read = now
+
     def _degraded_endpoints(self) -> list[str]:
         """Return the friendly names of endpoints that have exhausted strikes.
 
@@ -934,10 +1019,14 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             ENDPOINT_SMS_MESSAGES: "SMS messages",
             ENDPOINT_EXTENDED: "Extended diagnostics",
         }
+        # `ENDPOINT_PROVISIONING` is deliberately absent from the map and
+        # excluded below. It feeds one diagnostic sensor that is disabled by
+        # default, and reporting the integration degraded because an hourly
+        # curiosity failed would train users to ignore the health sensor.
         return [
             friendly.get(source, source)
             for source, failures in self._endpoint_failures.items()
-            if failures > FETCH_STRIKE_LIMIT
+            if failures > FETCH_STRIKE_LIMIT and source != ENDPOINT_PROVISIONING
         ]
 
     def _active_repairs(self, drift: bool) -> list[str]:
@@ -1060,7 +1149,15 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         pressed Download Diagnostics. The lock makes the two take turns.
         """
         async with self._async_update_lock:
-            return await self.api.run_discovery()
+            result = await self.api.run_discovery()
+            # A pass issues several hundred requests in under a minute, and a
+            # write attempted immediately afterwards was once refused with an
+            # empty transport error on the reference MC7010 — once in two
+            # runs, not reproducible on the next. The pause is held inside the
+            # lock so the next poll waits for it too, and the user is already
+            # waiting for a download.
+            await asyncio.sleep(DISCOVERY_SETTLE_SECONDS)
+            return result
 
     def _sparse_payload_finding(self, data: dict[str, Any]) -> str | None:
         """Report a poll that succeeded while answering almost nothing.

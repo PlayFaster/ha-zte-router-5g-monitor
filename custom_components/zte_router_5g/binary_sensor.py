@@ -88,6 +88,13 @@ INTEGRATION_HEALTH_DESCRIPTION = ZTEBinarySensorEntityDescription(
     group="system",
 )
 
+OPERATOR_PROVISIONED_DESCRIPTION = ZTEBinarySensorEntityDescription(
+    key="operator_provisioned",
+    translation_key="system_operator_provisioned",
+    entity_category=EntityCategory.DIAGNOSTIC,
+    group="system",
+)
+
 BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ZTEBinarySensorEntityDescription(
         key="sms_storage_full",
@@ -221,6 +228,9 @@ async def async_setup_entry(
     entities: list[BinarySensorEntity] = [
         ZTEBestConnectionSensor(coordinator, entry, BEST_CONN_DESCRIPTION),
         ZTEIntegrationHealthSensor(coordinator, entry, INTEGRATION_HEALTH_DESCRIPTION),
+        ZTEOperatorProvisionedSensor(
+            coordinator, entry, OPERATOR_PROVISIONED_DESCRIPTION
+        ),
     ]
     entities.extend(
         [
@@ -286,6 +296,56 @@ class ZTEBestConnectionSensor(
         return build_device_info(
             self.coordinator, self._entry, self.entity_description.group
         )
+
+
+class ZTEOperatorProvisionedSensor(
+    ZTEAboutEntity,
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    BinarySensorEntity,
+):
+    """Reports whether the router declines to serve its own TR-069 settings.
+
+    TR-069 is the standard an operator uses to configure a router remotely. A
+    router supplied by an operator is commonly locked so that those settings
+    cannot be read or changed locally, and this device says so plainly: asking
+    for one of them answers `{"result": "failure"}` rather than a value, in
+    40 to 60 milliseconds. A self-purchased router answers them.
+
+    Reads `coordinator.provisioning_restricted` rather than
+    `coordinator.data`, because that dict means "what the router said" and
+    feeds the populated counts, the drift check and the sparse-payload check —
+    a synthetic key would skew all three.
+
+    Unknown until the probe first succeeds, so a device that has never answered
+    reports nothing rather than a confident guess.
+    """
+
+    _attr_about = (
+        "On when the router refuses to hand over its remote-management "
+        "(TR-069) settings, which is usual on a unit supplied by a network "
+        "operator and is why some settings cannot be changed locally. Off when "
+        "it serves them. Re-checked hourly and whenever Refresh Now is pressed."
+    )
+
+    _attr_has_entity_name = True
+    entity_description: ZTEBinarySensorEntityDescription
+
+    def __init__(
+        self,
+        coordinator: ZTERouterDataUpdateCoordinator,
+        entry: ConfigEntry,
+        description: ZTEBinarySensorEntityDescription,
+    ) -> None:
+        """Initialize the provisioning sensor."""
+        super().__init__(coordinator)
+        self.entity_description = description
+        self._entry = entry
+        self._attr_unique_id = f"{entry.unique_id}_{description.key}"
+
+    @property
+    def is_on(self) -> bool | None:
+        """Return True when the router declines its provisioning settings."""
+        return self.coordinator.provisioning_restricted
 
 
 class ZTEIntegrationHealthSensor(

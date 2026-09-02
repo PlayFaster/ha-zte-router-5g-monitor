@@ -91,6 +91,13 @@ SMS_NUMBER_KEYS = {"number", "number_decoded"}
 _IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _MAC_RE = re.compile(r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b")
 # Identifier-shaped digit runs: IMSI is 15 digits, ICCID 19-20. See `_sweep`.
+# Value-kind rules for `_classify`. Deliberately coarse: they answer "what
+# sort of thing is this" and nothing finer, because the values they run on are
+# ones the deny rule has already refused to publish.
+_SIGNED_NUMERIC_RE = re.compile(r"^-?\d+(?:\.\d+)?$")
+_ENUM_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_\-]*$")
+_APN_PROFILE_SEP = "($)"
+
 _LONG_DIGITS_RE = re.compile(r"\b\d{15,}\b")
 _PDP_RE = re.compile(r"\b(IPv4v6|IPv6|IPv4|PPP|IP)\b")
 
@@ -144,7 +151,7 @@ def _sweep(value: str, tokenizer: _Tokenizer) -> str:
     The digit threshold is 15, not lower. An IMSI is 15 digits and an ICCID
     19 or 20, so 15 catches both; a byte counter is not an identifier, and
     `test_byte_counters_are_not_mistaken_for_identifiers` pins an 11-digit
-    one, so anything below 12 would mask ordinary telemetry.
+    one, so anything below 12 would mask ordinary sensor data.
     """
     value = _IP_RE.sub(lambda m: tokenizer.token("ip", m.group(0)), value)
     value = _MAC_RE.sub(lambda m: tokenizer.token("mac", m.group(0)), value)
@@ -327,6 +334,13 @@ async def async_get_config_entry_diagnostics(
             "endpoint_failures": coordinator.endpoint_failures,
         },
         "data": payload,
+        # Counted here so a vocabulary mismatch is visible without diffing two
+        # downloads: a device spelling concepts differently answers most of
+        # the request empty.
+        "data_populated": sum(
+            1 for value in payload.values() if value not in ("", None, {})
+        ),
+        "data_empty": sum(1 for value in payload.values() if value in ("", None)),
         # `data` is empty until the first successful poll, which is exactly
         # the case this file is usually requested for. These two carry the
         # evidence that would otherwise be reachable only from raw logs.
@@ -341,6 +355,7 @@ async def async_get_config_entry_diagnostics(
         # Measured rather than assumed: which keys this device answers
         # without a session. Names only. Empty means no measurement passed
         # validation and the module constant is in force.
+        "setup_completed": _scalar(getattr(coordinator.api, "setup_completed", None)),
         "measurement_note": _scalar(getattr(coordinator.api, "measurement_note", None)),
         "logout_acknowledged": _scalar(
             getattr(coordinator.api, "logout_acknowledged", None)
@@ -403,6 +418,42 @@ _BLOB_CHARS = 200
 _VALUE_CAP = 120
 
 
+def _classify(value: str) -> str:
+    """Describe a withheld value by kind, never by content.
+
+    `_describe` reported only a character class and a length, which answers
+    almost nothing: `<alphanumeric, 4 chars>` could be an authentication mode,
+    a band number or a truncated name. What the discovery work actually needs
+    from a withheld value is its *kind* — is this a flag, a counter, an enum,
+    a delimited profile — because that is what decides whether a name can
+    become an entity and which kind.
+
+    Nothing here derives from the content beyond its shape. A boolean reports
+    that it is a boolean, not which of the two values it holds; an enum reports
+    that it is a short token, never the token. The value itself does not
+    survive this function, which is the property that lets it run on names the
+    deny rule has already refused to publish.
+    """
+    text = value.strip()
+    if not text:
+        return "<empty>"
+    if text in {"0", "1"}:
+        return "<boolean-like (0|1)>"
+    if _APN_PROFILE_SEP in text:
+        return f"<delimited profile, {text.count(_APN_PROFILE_SEP) + 1} fields>"
+    if _SIGNED_NUMERIC_RE.match(text):
+        kind = "integer" if text.lstrip("-").isdigit() else "decimal"
+        return f"<numeric {kind}, {len(text)} chars>"
+    for separator, label in ((";", "items"), (",", "items")):
+        if separator in text:
+            return f"<delimited, {text.count(separator) + 1} {label}>"
+    if len(text) > _BLOB_CHARS:
+        return f"<blob, {len(text)} chars>"
+    if _ENUM_RE.match(text):
+        return f"<enum-like short token, {len(text)} chars>"
+    return _describe(value)
+
+
 def _gate_discovery_value(
     key: str, value: str, tokenizer: _Tokenizer
 ) -> tuple[Any, str]:
@@ -432,7 +483,7 @@ def _gate_discovery_value(
         return _sweep(value, tokenizer), "vetted"
 
     if _DENY_NAME_RE.search(key):
-        return _describe(value), "denied-name"
+        return _classify(value), "denied-name"
 
     swept = _sweep(value, tokenizer)
     if swept != value:
@@ -442,9 +493,53 @@ def _gate_discovery_value(
         return tokenizer.token("geo", value), "denied-shape"
 
     if len(value) > _BLOB_CHARS:
-        return _describe(value), "blob"
+        return _classify(value), "blob"
 
     return value[:_VALUE_CAP], "published"
+
+
+# Metadata fields of a discovery result that are published verbatim. These are
+# produced by this integration rather than read from the router, with one
+# exception noted below, so an allow-list here is about sanitisation and not
+# about hiding detail from the reader.
+#
+# It is an allow-list rather than a passthrough because a future field could
+# carry a router value, and deny-by-default is the direction an omission should
+# fail in. The cost of that choice is that adding a field to `run_discovery` is
+# a two-file change, and the second file has been forgotten twice:
+# `session_alive_after` was caught before release, `canary` was not and shipped
+# in v3.3.9-dev5 recorded by the API and absent from every download. Branch
+# coverage cannot see it — this is data, and the loop runs either way.
+#
+# `test_every_discovery_field_is_classified` closes that by asserting the two
+# sets below partition an actual `run_discovery` result, so a new field fails
+# the suite until it is classified deliberately.
+#
+# `probed_no_answer` and `mined_names` are router-derived *names*, never
+# values; the values themselves are the gated section.
+DISCOVERY_METADATA_PUBLISHED = frozenset(
+    {
+        "canaries",
+        "canary_pool",
+        "mined_count",
+        "mined_names",
+        "mined_names_answered",
+        "mined_names_probed",
+        "names_from_union_only",
+        "not_reprobed",
+        "notes",
+        "probed_no_answer",
+        "refused",
+        "session",
+        "session_alive_after",
+        "sessionless_measurement",
+        "write_commands",
+    }
+)
+
+# Fields `_sanitize_discovery` handles itself rather than copying: `values` is
+# gated key by key and republished alongside `verdicts`.
+DISCOVERY_METADATA_GATED = frozenset({"values"})
 
 
 def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]:
@@ -474,9 +569,21 @@ def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]
         published[key], verdicts[key] = _gate_discovery_value(key, value, tokenizer)
 
     out: dict[str, Any] = {"values": published, "verdicts": verdicts}
-    for field in ("notes", "mined_count", "mined_names_probed", "mined_names_answered"):
+    for field in sorted(DISCOVERY_METADATA_PUBLISHED):
         if field in discovery:
             out[field] = discovery[field]
+
+    # Notes are the one published field carrying free text rather than a name
+    # or a count, and `run_discovery` interpolates the exception into
+    # `discovery aborted: {err}`. An aiohttp connection error names the host it
+    # failed to reach, so an unswept note publishes the router's LAN address in
+    # a file where every other occurrence of it is tokenized.
+    # `_sanitize_rejection` sweeps `body_preview` for the same reason.
+    if isinstance(out.get("notes"), list):
+        out["notes"] = [
+            _sweep(note, tokenizer) if isinstance(note, str) else note
+            for note in out["notes"]
+        ]
     return out
 
 

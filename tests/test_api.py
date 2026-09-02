@@ -9,14 +9,16 @@ import pytest
 
 from custom_components.zte_router_5g import sensor
 from custom_components.zte_router_5g.api import (
+    _BATCH_PATH_PREFIX,
     _CORE_PARAMS,
     _EXTENDED_PARAMS,
     ZTEAuthError,
     ZTEConnectionError,
     ZTERouterAPI,
 )
+from custom_components.zte_router_5g.const import BATCH_URL_MAX_CHARS
 
-from .conftest import MockResponse
+from .conftest import MockResponse, scripted
 
 
 def test_api_hash():
@@ -162,10 +164,10 @@ async def test_api_get_all_data_expired_session(mock_aiohttp_client):
 
     # 1. Expired response (empty network_type/signalbar)
     # 2. Success response after re-login
-    mock_aiohttp_client.get.side_effect = [
+    mock_aiohttp_client.get.side_effect = scripted(
         MockResponse(json_data={"network_type": "", "signalbar": ""}),
         MockResponse(json_data={"network_type": "LTE", "signalbar": "4"}),
-    ]
+    )
 
     with patch.object(api, "login") as mock_login:
         data = await api.get_all_data()
@@ -1488,8 +1490,9 @@ async def test_batch_poll_urls_stay_within_the_router_budget(
 
     The router accepts a GET of roughly 2,048 characters and truncates past
     it — which presents as missing fields and is indistinguishable from
-    firmware contract drift. A single list had reached ~1,890 characters,
-    which is why the poll is split in two; this keeps both halves honest.
+    firmware key changes. `_batch_get` now splits a list that would exceed
+    `BATCH_URL_MAX_CHARS`, so this asserts the property that matters: **every
+    request issued** stays inside the ceiling, however long the list grows.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "test"}
@@ -1499,9 +1502,12 @@ async def test_batch_poll_urls_stay_within_the_router_budget(
 
     await getattr(api, method)()
 
-    path = mock_aiohttp_client.get.call_args[0][0]
+    # Every request, not just the last: a split list issues several.
+    paths = [call[0][0] for call in mock_aiohttp_client.get.call_args_list]
     # A hostname is longer than the dotted-quad used here, so leave room for one.
-    url_length = len(path) + len("http://a-long-router-hostname.local/")
+    url_length = max(
+        len(path) + len("http://a-long-router-hostname.local/") for path in paths
+    )
 
     assert url_length < 2048, (
         f"{method} URL is {url_length} characters, over the router's ~2048 "
@@ -1972,3 +1978,103 @@ def test_empty_hex_is_empty_not_an_error():
     """An absent field is not a failure — it is an empty message body."""
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
     assert api._hex_decode("") == ""
+
+
+# ---------------------------------------------------------------------------
+# Splitting a mandatory batch by URL budget
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_list_within_the_budget_is_one_request(mock_aiohttp_client):
+    """Splitting must not cost a round trip where none is needed."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"a_one": "1"})
+
+    await api._batch_get(["a_one", "b_two"])
+
+    assert mock_aiohttp_client.get.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_a_list_past_the_budget_is_split_and_merged(mock_aiohttp_client):
+    """The caller sees one mapping however many requests it took."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    names = [f"a_long_parameter_name_{i:03d}" for i in range(120)]
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={names[0]: "first"}),
+        MockResponse(json_data={names[-1]: "last"}),
+        MockResponse(json_data={"extra": "third"}),
+    ]
+
+    merged = await api._batch_get(names)
+
+    assert mock_aiohttp_client.get.call_count > 1
+    assert merged[names[0]] == "first"
+    assert merged[names[-1]] == "last"
+
+
+def test_no_chunk_exceeds_the_budget() -> None:
+    """The budget is a property of every request, not of the list."""
+    api = ZTERouterAPI(MagicMock(), "a-long-router-hostname.local", None, "pw")
+    names = [f"a_long_parameter_name_{i:03d}" for i in range(200)]
+
+    for chunk in api._split_by_url_budget(names):
+        url = f"{api.referer}{_BATCH_PATH_PREFIX}{','.join(chunk)}"
+        assert len(url) <= BATCH_URL_MAX_CHARS, f"{len(url)} characters"
+
+
+def test_a_single_name_longer_than_the_budget_still_gets_a_request() -> None:
+    """A chunk is never empty, or the name would be dropped silently."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", None, "pw")
+
+    chunks = api._split_by_url_budget(["x" * (BATCH_URL_MAX_CHARS * 2)])
+
+    assert chunks == [["x" * (BATCH_URL_MAX_CHARS * 2)]]
+
+
+@pytest.mark.asyncio
+async def test_a_failing_chunk_fails_the_whole_batch(mock_aiohttp_client):
+    """Per-chunk tolerance belongs to discovery, not to a mandatory read.
+
+    Tolerating a failed chunk here would serve half the entities from a
+    partial response and score the poll a success — the silent-failure shape
+    this integration has closed twice.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    names = [f"a_long_parameter_name_{i:03d}" for i in range(120)]
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={names[0]: "first"}),
+        aiohttp.ClientError("chunk refused"),
+    ]
+
+    with pytest.raises(ZTEConnectionError):
+        await api._batch_get(names)
+
+
+@pytest.mark.asyncio
+async def test_a_non_object_chunk_response_contributes_nothing(mock_aiohttp_client):
+    """A JSON list or scalar is not a payload to merge.
+
+    `_request` returns the body as it parsed it, and a batch that answered
+    something other than an object has nothing to contribute — merging it
+    would raise inside the read path rather than at the call site.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data=["not", "an", "object"]
+    )
+
+    assert await api._batch_get(["a_one"]) == {}

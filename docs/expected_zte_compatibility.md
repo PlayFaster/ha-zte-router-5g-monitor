@@ -8,7 +8,7 @@ This document details hardware compatibility, API protocol families, and integra
 
 ## 🎯 Core Scope & Design Philosophy
 
-ZRM is designed specifically as a **cellular WAN, signal, data usage, and SMS telemetry monitor** for ZTE 5G/4G CPE routers (optimized for outdoor or indoor bridge-mode deployments).
+ZRM is designed specifically as a **cellular WAN, signal, data usage, and SMS monitor** for ZTE 5G/4G CPE routers (optimized for outdoor or indoor bridge-mode deployments).
 
 > [!IMPORTANT] **What ZRM does NOT do:** ZRM deliberately **excludes LAN/Wi-Fi client device tracking**. In bridge mode (e.g. MC7010 connected to a downstream UniFi, OPNSense, or pfSense firewall), DHCP and client tracking are handled by the primary router. Excluding client tracking keeps ZRM lightweight, prevents API polling collisions, and maintains compliance with Home Assistant architectural standards.
 
@@ -51,7 +51,7 @@ The following ZTE 5G and 4G CPE models use the **ZTE `goform` HTTP API** (`gofor
 - **Alternative field names**: the same measurement is spelled differently across firmware releases. Signal and data-usage sensors try each known spelling in turn and take whichever the router populated — `Z5g_rsrp` / `5g_rsrp` / `nr5g_rsrp`, `Z5g_SINR` / `Z5g_snr`, `nr5g_pci` / `Z5g_CELL_ID`, `monthly_*_bytes` / `flux_monthly_*_bytes`. The MC7010 spelling is always tried first, so its behavior is unchanged.
 - **Login form fallback**: which form a `goform` router accepts is a per-model quirk, and the tested-model list covers only MC801 and MC7010. If the first form yields no session, ZRM retries once with the other (`LOGIN` ↔ `LOGIN_MULTI_USER`). A credentials rejection is **not** retried — a wrong password is wrong on either form, and a second attempt only counts against routers that lock out.
 - **Band name from channel number**: where a router reports `wan_active_channel` / `nr5g_action_channel` but leaves the band name blank, ZRM derives it from the 3GPP EARFCN/NR-ARFCN tables. A band name the router reports always wins. NR ranges overlap (n78 sits inside n77), so the derived NR band is best-effort.
-- **Optional thermal telemetry**: five temperature sensors (`pm_sensor_pa1`, `pm_sensor_ambient`, `pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`), all **disabled by default**. The MC7010 returns an empty value for every one and no model is yet confirmed to populate them.
+- **Optional thermal sensors**: five temperature sensors (`pm_sensor_pa1`, `pm_sensor_ambient`, `pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`), all **disabled by default**. The MC7010 returns an empty value for every one and no model is yet confirmed to populate them.
 
 > [!NOTE] **None of the above is verified on hardware.** It is derived from other open-source `goform` projects and from published 3GPP tables. Every path tries the MC7010 behavior first, so the realistic failure mode on an untested model is that a fallback quietly does nothing — not that anything regresses on a tested one. Reports from other models are welcome.
 
@@ -75,7 +75,7 @@ ZRM will **NOT** work with the following router families because they use fundam
   - **Other Landline Models**: `AX3000`, `E2631`, `SR7410`, `ZTE FIBRA6S` (Orange Spain Livebox 6s)
 - **Reason for Incompatibility**:
   1. **Different API Protocol**: These devices use ZTE's legacy web console (`?_type=menuData` or `?_type=hiddenData`), calling internal Lua scripts (`accessdev_landevs_lua.lua`, `wan_internetstatus_lua.lua`) returning XML or JSON responses.
-  2. **Lack of Cellular Telemetry**: Landline fiber/DSL ONTs do not expose 5G/LTE cellular signal metrics (RSRP, RSRQ, SNR, EARFCN/ARFCN, carrier aggregation).
+  2. **Lack of Cellular Metrics**: Landline fiber/DSL ONTs do not expose 5G/LTE cellular signal metrics (RSRP, RSRQ, SNR, EARFCN/ARFCN, carrier aggregation).
   3. **LAN Device Focus**: These integrations focus heavily on Wi-Fi/LAN client tracking and mesh node topology discovery, which ZRM explicitly excludes.
 - **Recommended Integrations**:
   - For general ZTE landline/fiber routers & mesh topology: Use **[`juacas/zte_tracker`](https://github.com/juacas/zte_tracker)** by @juacas.
@@ -91,7 +91,7 @@ ZRM will **NOT** work with the following router families because they use fundam
 
 | Router Family | Representative Models | API Protocol | Primary Focus | ZRM Compatibility | Alternative Integration |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| **ZTE 5G/4G CPE (MC Series)** | MC7010, MC801A, MC888, MC889 | `goform` HTTP API | 5G/LTE Signal, WAN Telemetry, SMS | ✅ **Supported** (MC7010 tested) | **ZRM** (`zte_router_5g`) |
+| **ZTE 5G/4G CPE (MC Series)** | MC7010, MC801A, MC888, MC889 | `goform` HTTP API | 5G/LTE Signal, WAN Status, SMS | ✅ **Supported** (MC7010 tested) | **ZRM** (`zte_router_5g`) |
 | **ZTE Next-Gen 5G CPE (G5 Series)** | G5TC, G5TS, G5C, G5 Max | `ubus` JSON-RPC API | 5G Signal & Router Status | ❌ Incompatible | [`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router) |
 | **ZTE Landline Broadband / Fiber ONTs** | F6640, F680, H288A, H388X, FIBRA6S | `_type=` Lua / XML API | LAN Device Tracking & Mesh Topology | ❌ Incompatible | [`zte_tracker`](https://github.com/juacas/zte_tracker) / [`ha-zte-fibra`](https://github.com/AldenDana/ha-zte-fibra) |
 

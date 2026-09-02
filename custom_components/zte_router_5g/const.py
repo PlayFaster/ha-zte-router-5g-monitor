@@ -91,7 +91,7 @@ UNREACHABLE_STRIKE_LIMIT = 10
 
 # The canonical repair keys, named to match `huawei_router_5g`. The Repairs
 # panel carries only conditions that require the user to act and will not clear
-# themselves; everything else — contract drift, degraded capabilities — belongs
+# themselves; everything else — missing router data, degraded capabilities — belongs
 # on the Integration Health sensor, and message-store capacity on a binary
 # sensor.
 REPAIR_AUTH_FAILED = "auth_failed"
@@ -185,6 +185,57 @@ SMS_MAX_CHARS_UNICODE = 335
 # Names per discovery request. Small deliberately: a chunk carrying a name
 # outside the firmware's dictionary can time out entirely, and a smaller chunk
 # loses less when it does.
+# Characters a single batch request may reach before it is split. The router
+# bounds a GET by URL length rather than by name count, and the ceiling
+# measured on an MC7010 is roughly 2,048 — but that is one device's, and a
+# firmware with a lower one truncates the response rather than erroring, which
+# presents as missing fields. The margin is deliberate.
+#
+# The list grows with every model supported, not with every feature added: a
+# device that spells a concept differently needs both spellings requested.
+# Named for what it is rather than as a "budget": `check_test_depth.py`
+# reserves that suffix for accumulation gates — strike counters a test has to
+# reach by polling repeatedly — and this is a size threshold decided within a
+# single call.
+BATCH_URL_MAX_CHARS = 1600
+
+# How many canaries a probe carries. One key is a single point of failure in
+# both directions: a metric that legitimately empties reads as a lost session,
+# and a key that turns out to be served without one reports a healthy session
+# through an eviction. Three makes a false positive require a simultaneous
+# coincidence across unrelated keys, at a cost of two names per request.
+CANARY_COUNT = 3
+
+# How many blank chunks may pass between out-of-band session checks on a device
+# that offers no canary at all. Such a device answers every key it has without
+# a session, so no key carried in the request can prove one — detection has to
+# leave the request, and that costs an extra round trip. Most probed names are
+# genuinely absent, so blank chunks are the common case and checking every one
+# would roughly double the pass. Eight bounds the loss: at most eight chunks,
+# 64 names at the discovery chunk size, are attributed to the firmware before
+# the session behind them is confirmed.
+CANARY_FALLBACK_EVERY = 8
+
+# How many times one pass may re-establish a session it detected as lost.
+# Bounded because the cause is usually another client holding the single
+# session this hardware permits, and racing it indefinitely would burn the
+# whole budget re-logging in. Three is enough to survive an isolated eviction —
+# a user opening the router's web page while a download runs — and short enough
+# that a sustained competitor is reported as one rather than fought.
+#
+# Counted per probe phase, so a pass may re-establish several times in total.
+# Measured on the reference MC7010: a healthy pass now re-establishes zero
+# times.
+#
+# It re-established twice per pass until v3.3.9-dev10, and the cause was not a
+# lost session. A chunk carrying a name the router declines answers
+# `{"result": "failure"}`, which carries none of the requested keys and none of
+# the canaries, so an unhandled refusal was indistinguishable from an eviction.
+# Twelve `tr069_` names sort contiguously and spanned two chunks, which is the
+# 16 names that appeared as "read without a session" in every download taken
+# between the canary being introduced and the refusal being handled.
+DISCOVERY_RELOGIN_LIMIT = 3
+
 DISCOVERY_CHUNK_SIZE = 16
 
 # Mined names are unvalidated by definition, so their chunks are smaller: a
@@ -195,12 +246,25 @@ MINED_CHUNK_SIZE = 8
 # Per-chunk timeout. A healthy 75-key batch answers in about 30 ms, so eight
 # seconds is generous for a chunk that will succeed and short for one that
 # will not.
-DISCOVERY_CHUNK_TIMEOUT = 8
+DISCOVERY_CHUNK_TIMEOUT = 5
 
 # Wall-clock ceiling for the whole discovery pass. A timed-out chunk clears
 # the session, so the next pays a full login; without a ceiling a hostile
 # firmware could make a diagnostics download take minutes.
-DISCOVERY_BUDGET_SECONDS = 90
+DISCOVERY_BUDGET_SECONDS = 240
+
+# How many convergence rounds a pass may run over names it could not resolve.
+# A round re-probes each outstanding name once; a round that resolves nothing
+# new ends the loop, so this is a ceiling rather than a target. The wall-clock
+# budget is the real bound — this exists so a device that answers erratically
+# cannot spin.
+DISCOVERY_MAX_ROUNDS = 4
+
+# Pause after a discovery pass before returning. Several hundred requests in
+# under a minute left an MC7010 refusing the next write with an empty
+# transport error — once in two runs. The user is already waiting for the
+# download; two seconds is not what they will notice.
+DISCOVERY_SETTLE_SECONDS = 2
 
 # Bundles the router serves for its own admin UI, which is a client of this
 # same API. `docs/zte_how_to_access.md` names these as the sources the
@@ -214,8 +278,6 @@ JS_BUNDLES: tuple[str, ...] = (
 )
 
 DISCOVERY_CANDIDATES: list[str] = [
-    "5g_rx0_rsrp",
-    "5g_rx1_rsrp",
     "Lte_ca_status",
     "Z5g_dlEarfcn",
     "ZCELLINFO_band",
@@ -234,7 +296,6 @@ DISCOVERY_CANDIDATES: list[str] = [
     "lte_ca_scell_arfcn",
     "lte_ca_scell_info",
     "lte_earfcn_lock",
-    "lte_multi_ca_scell_sig_info",
     "lte_pci_lock",
     "lte_rsrp_1",
     "lte_rsrp_2",
@@ -244,29 +305,24 @@ DISCOVERY_CANDIDATES: list[str] = [
     "lte_snr_2",
     "lte_snr_3",
     "lte_snr_4",
-    "modem_main_state",
     "monthly_time",
     "network_information",
     "network_provider_fullname",
     "ngbr_cell_info",
     "nr5g_action_nsa_band",
     "nr5g_cell_id",
-    "nr5g_nsa_band_lock",
-    "nr5g_sa_band_lock",
     "nr_ca_pcell_band",
     "nr_ca_pcell_freq",
     "nr_multi_ca_scell_info",
     "pdp_type",
     "pdp_type_ui",
     "pin_status",
-    "ppp_dial_conn_fail_counter",
     "pppoe_status",
     "roam_setting_option",
     "rscp_1",
     "rscp_2",
     "rscp_3",
     "rscp_4",
-    "simcard_roam",
     "sms_received_flag",
     "spn_b1_flag",
     "spn_b2_flag",
@@ -284,15 +340,13 @@ DISCOVERY_CANDIDATES: list[str] = [
 # `diagnostics._sanitize_payload` classifies by exact key name, and `_sweep`
 # catches only address- and identifier-shaped strings — so a name it does not
 # know falls through with its value intact. These are the names judged to
-# carry radio telemetry, counters or enumerations rather than identity,
+# carry radio metrics, counters or enumerations rather than identity,
 # location or third-party content. The excluded ones are: static WAN address,
 # NR cell id, carrier long name, service-provider name data, two firmware
 # version strings, and the two free-text blobs `network_information` and
 # `ngbr_cell_info`, which carry neighbouring-cell detail.
 DISCOVERY_VALUE_SAFE: frozenset[str] = frozenset(
     {
-        "5g_rx0_rsrp",
-        "5g_rx1_rsrp",
         "Lte_ca_status",
         "Z5g_dlEarfcn",
         "ZCELLINFO_band",
@@ -310,7 +364,6 @@ DISCOVERY_VALUE_SAFE: frozenset[str] = frozenset(
         "lte_ca_scell_arfcn",
         "lte_ca_scell_info",
         "lte_earfcn_lock",
-        "lte_multi_ca_scell_sig_info",
         "lte_pci_lock",
         "lte_rsrp_1",
         "lte_rsrp_2",
@@ -320,25 +373,20 @@ DISCOVERY_VALUE_SAFE: frozenset[str] = frozenset(
         "lte_snr_2",
         "lte_snr_3",
         "lte_snr_4",
-        "modem_main_state",
         "monthly_time",
         "nr5g_action_nsa_band",
-        "nr5g_nsa_band_lock",
-        "nr5g_sa_band_lock",
         "nr_ca_pcell_band",
         "nr_ca_pcell_freq",
         "nr_multi_ca_scell_info",
         "pdp_type",
         "pdp_type_ui",
         "pin_status",
-        "ppp_dial_conn_fail_counter",
         "pppoe_status",
         "roam_setting_option",
         "rscp_1",
         "rscp_2",
         "rscp_3",
         "rscp_4",
-        "simcard_roam",
         "sms_received_flag",
         "spn_b1_flag",
         "spn_b2_flag",

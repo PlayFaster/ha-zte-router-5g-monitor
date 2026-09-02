@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Final
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.config_entries import ConfigEntry
@@ -18,7 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import APN_PROFILE_SLOTS, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import ZTEAboutEntity, build_device_info
+from .helpers import ZTEAboutEntity, build_device_info, get_first
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -26,6 +26,11 @@ _LOGGER = logging.getLogger(__name__)
 # correct for the read-only platforms; a platform that commands this
 # single-session router must not issue concurrent `goform` writes.
 PARALLEL_UPDATES = 1
+
+
+# The MC888 Pro answers `network_net_select`; the bare spelling leads because
+# the reference MC7010 answers on it. See `helpers.get_first`.
+_ALIAS_NET_SELECT: Final = ("net_select", "network_net_select")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -167,7 +172,7 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
         group="signal",
         options_fn=lambda data: ["4G_AND_5G", "LTE_AND_5G", "Only_5G", "Only_LTE"],
-        value_fn=lambda data: data.get("net_select") if data else None,
+        value_fn=lambda data: get_first(data, _ALIAS_NET_SELECT) if data else None,
         setter_fn=lambda api, option, data: api.set_bearer_preference(option),
     ),
 )

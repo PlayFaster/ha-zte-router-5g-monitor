@@ -47,6 +47,7 @@ from .helpers import (
     build_device_info,
     cycle_bounds,
     earfcn_to_band,
+    get_first,
     project_cycle_usage,
 )
 
@@ -102,7 +103,7 @@ def _get_total_sms(data: Any) -> int | None:
         "sms_sim_draftbox_total",
     ]
     try:
-        # Present-but-empty is absent, the same rule `_get_first` applies. A
+        # Present-but-empty is absent, the same rule `get_first` applies. A
         # router that reports one bank as `""` was otherwise blanking the whole
         # sensor and its attribute breakdown, which reads as "no messages" —
         # the opposite of what an unreadable bank means. A genuinely
@@ -149,24 +150,6 @@ def _safe_str(val: Any) -> str | None:
     return str(val)
 
 
-def _get_first(data: dict[str, Any], keys: tuple[str, ...]) -> Any:
-    """Return the first key in `keys` that the router actually populated.
-
-    Members of the `goform` family spell the same measurement differently, so
-    a sensor names every spelling it knows and takes whichever one arrives.
-    A key that is present but empty counts as absent — this API answers with
-    `""` for fields the hardware does not support, so `in data` alone is not
-    enough to tell "supported" from "reported".
-
-    Every key named here must also be requested in `api.py:get_all_data()`;
-    an alias for a key that is never asked for can never fire.
-    """
-    return next(
-        (data[key] for key in keys if key in data and data[key] not in ("", None)),
-        None,
-    )
-
-
 # Cross-model key aliases. The first entry is the spelling the MC7010 uses, so
 # its execution path is unchanged; later entries only come into play on
 # hardware that does not populate the first.
@@ -178,7 +161,7 @@ _ALIAS_MONTHLY_RX: Final = ("monthly_rx_bytes", "flux_monthly_rx_bytes")
 
 # The `flux_` prefix is a parallel vocabulary across this API, not a quirk of
 # the monthly counters. The bare spelling leads because the reference MC7010
-# answers on it; order is the tie-break, see `_get_first`.
+# answers on it; order is the tie-break, see `get_first`.
 _ALIAS_REALTIME_TX_BYTES: Final = ("realtime_tx_bytes", "flux_realtime_tx_bytes")
 _ALIAS_REALTIME_RX_BYTES: Final = ("realtime_rx_bytes", "flux_realtime_rx_bytes")
 _ALIAS_REALTIME_TX_THRPT: Final = ("realtime_tx_thrpt", "flux_realtime_tx_thrpt")
@@ -205,19 +188,83 @@ _ALIAS_ALERT_PERCENT: Final = (
 # Day of the month on which the router zeroes its monthly counters. Three
 # spellings are in circulation across the goform family; `traffic_clear_date` is
 # the one a live MC7010 probe answered on, so it leads. Order is the tie-break —
-# see `_get_first`.
+# see `get_first`.
 _ALIAS_CLEAR_DAY: Final = (
     "traffic_clear_date",
     "data_volume_clear_date",
     "data_volume_clear_day",
+    "flux_clear_date",
 )
+
+
+# The `network_` prefix is a third parallel vocabulary, observed on the MC888
+# Pro in issue #56 and on no other device. Each of these keys is populated
+# there while the bare spelling this integration polls is empty, which is the
+# test a fallback has to pass — the alternate answers where the leader does
+# not. The bare spellings lead because the reference MC7010 answers on them.
+#
+# The family is partial. `network_lte_rsrq`, `network_lte_snr` and
+# `network_lte_rssi` appear in no mined set from either device, so three of the
+# four primary signal metrics have no `network_` equivalent to fall back to.
+_ALIAS_LTE_RSRP: Final = ("lte_rsrp", "network_lte_rsrp")
+_ALIAS_CA_PCELL_BAND: Final = ("lte_ca_pcell_band", "network_lte_ca_pcell_band")
+_ALIAS_CA_PCELL_BW: Final = (
+    "lte_ca_pcell_bandwidth",
+    "network_lte_ca_pcell_bandwidth",
+)
+_ALIAS_CA_SCELL_BAND: Final = ("lte_ca_scell_band", "network_lte_ca_scell_band")
+_ALIAS_CA_SCELL_BW: Final = (
+    "lte_ca_scell_bandwidth",
+    "network_lte_ca_scell_bandwidth",
+)
+_ALIAS_NET_SELECT: Final = ("net_select", "network_net_select")
+_ALIAS_NET_SELECT_MODE: Final = ("net_select_mode", "network_net_select_mode")
+_ALIAS_AUTO_CLEAR_SWITCH: Final = (
+    "wan_auto_clear_flow_data_switch",
+    "flux_auto_clear_flow_data_switch",
+)
+_ALIAS_LIMIT_SWITCH: Final = (
+    "data_volume_limit_switch",
+    "flux_data_volume_limit_switch",
+)
+
+
+def _scell_field(data: dict[str, Any], index: int) -> float | None:
+    """Return one field of the first secondary carrier, or None.
+
+    `lte_multi_ca_scell_sig_info` carries one comma-separated group per
+    secondary carrier, semicolon-terminated. A live MC7010 reading with one
+    carrier: `-89.1,-11.0,17.2,-58.1,0.0,2.0`.
+
+    Fields one to four are RSRP, RSRQ, SNR and RSSI. That order is measured
+    rather than inferred: RSRQ, RSRP and RSSI are related by definition as
+    `RSRQ = RSRP - RSSI + 10*log10(N)`, and solving for N across twelve samples
+    on 2026-09-02 gave 99.4 resource blocks with a spread of 2.3 - 100 RB, a
+    20 MHz carrier. No other assignment yields a physically possible N, and the
+    ranges separate RSRQ from RSSI, which the identity alone cannot. Fields
+    five and six are not published: one is constant at 0 and the other was seen
+    changing from 2 to 4, and neither is understood.
+
+    The first group only. A device aggregating two secondary carriers reports
+    two groups, and reading past the first would need entities that do not
+    exist - but the parser must not assume there is only ever one, which is why
+    the split is on `;` rather than a whole-string parse.
+    """
+    raw = data.get("lte_multi_ca_scell_sig_info")
+    if not isinstance(raw, str) or not raw.strip():
+        return None
+    first = raw.strip().rstrip(";").split(";")[0]
+    fields = first.split(",")
+    if len(fields) <= index:
+        return None
+    return _safe_float(fields[index])
 
 
 def _clear_day(data: dict[str, Any]) -> int | None:
     """Return the monthly counter reset day, 1-31, or None.
 
     Warns when more than one spelling is populated with *different* values.
-    `_get_first` would silently take the leader, and a silent disagreement
+    `get_first` would silently take the leader, and a silent disagreement
     between two firmware spellings of the same setting is precisely the kind of
     thing that surfaces months later as "the projection is a week out".
     """
@@ -256,10 +303,10 @@ def _data_allowance_bytes(data: dict[str, Any]) -> int | None:
     router can limit by hours instead of bytes, and a duration is not an
     allowance this sensor can report.
     """
-    if _get_first(data, _ALIAS_LIMIT_UNIT) == "time":
+    if get_first(data, _ALIAS_LIMIT_UNIT) == "time":
         return None
 
-    raw = _safe_str(_get_first(data, _ALIAS_LIMIT_SIZE))
+    raw = _safe_str(get_first(data, _ALIAS_LIMIT_SIZE))
     if raw is None or raw.count("_") != 1:
         return None
 
@@ -314,7 +361,7 @@ def _projection(data: dict[str, Any]) -> _Projection | None:
     # in this API use "0"/"1", and casing is not guaranteed. An exact match on
     # one spelling silently treats every other "disabled" form as enabled and
     # projects against a cycle the router is not keeping.
-    if str(data.get("wan_auto_clear_flow_data_switch", "")).strip().lower() in (
+    if str(get_first(data, _ALIAS_AUTO_CLEAR_SWITCH) or "").strip().lower() in (
         "off",
         "0",
         "false",
@@ -373,8 +420,8 @@ def _monthly_total_bytes(data: dict[str, Any]) -> int | None:
     individual TX/RX sensors on hardware that uses the `flux_` spelling —
     a divergence that would look like real data rather than a bug.
     """
-    tx = _safe_int(_get_first(data, _ALIAS_MONTHLY_TX))
-    rx = _safe_int(_get_first(data, _ALIAS_MONTHLY_RX))
+    tx = _safe_int(get_first(data, _ALIAS_MONTHLY_TX))
+    rx = _safe_int(get_first(data, _ALIAS_MONTHLY_RX))
     if tx is None or rx is None:
         return None
     return tx + rx
@@ -467,7 +514,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="system",
         min_limit=0,
-        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_TIME)),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_REALTIME_TIME)),
     ),
     ZTESensorEntityDescription(
         key="last_updated",
@@ -495,7 +542,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="system_hardware_version",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
-        value_fn=lambda data: _get_first(data, _ALIAS_HARDWARE),
+        value_fn=lambda data: get_first(data, _ALIAS_HARDWARE),
     ),
     ZTESensorEntityDescription(
         key="new_version_state",
@@ -535,7 +582,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_int(data.get("battery_value")),
     ),
-    # Thermal telemetry. This is the set of thermal keys the sibling project
+    # Thermal sensors. This is the set of thermal keys the sibling project
     # `Kajkac/ZTE-MC-Home-assistant-repo` polls with °C units, verified against
     # its `const.py` and live batch `cmd=` strings — not a hand-picked subset.
     #
@@ -690,7 +737,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_wan_apn",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(_get_first(data, _ALIAS_WAN_APN)),
+        value_fn=lambda data: _safe_str(get_first(data, _ALIAS_WAN_APN)),
     ),
     ZTESensorEntityDescription(
         key="network_type",
@@ -703,7 +750,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         ),
         translation_key="signal_network_type",
         group="signal",
-        value_fn=lambda data: _safe_str(_get_first(data, _ALIAS_NETWORK_TYPE)),
+        value_fn=lambda data: _safe_str(get_first(data, _ALIAS_NETWORK_TYPE)),
     ),
     ZTESensorEntityDescription(
         key="signalbar",
@@ -728,7 +775,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_network_provider",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(_get_first(data, _ALIAS_PROVIDER)),
+        value_fn=lambda data: _safe_str(get_first(data, _ALIAS_PROVIDER)),
     ),
     ZTESensorEntityDescription(
         key="mdm_mcc",
@@ -799,7 +846,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-140,
         max_limit=-30,
         group="signal",
-        value_fn=lambda data: _safe_float(data.get("lte_rsrp")),
+        value_fn=lambda data: _safe_float(get_first(data, _ALIAS_LTE_RSRP)),
     ),
     ZTESensorEntityDescription(
         key="lte_rsrq",
@@ -897,7 +944,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_lte_ca_pcell_band",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("lte_ca_pcell_band"),
+        value_fn=lambda data: get_first(data, _ALIAS_CA_PCELL_BAND),
     ),
     ZTESensorEntityDescription(
         key="lte_ca_pcell_bandwidth",
@@ -911,7 +958,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=0,
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_float(data.get("lte_ca_pcell_bandwidth")),
+        value_fn=lambda data: _safe_float(get_first(data, _ALIAS_CA_PCELL_BW)),
     ),
     ZTESensorEntityDescription(
         key="lte_ca_scell_band",
@@ -924,7 +971,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="signal",
         source=ENDPOINT_EXTENDED,
-        value_fn=lambda data: data.get("lte_ca_scell_band") or None,
+        value_fn=lambda data: get_first(data, _ALIAS_CA_SCELL_BAND) or None,
     ),
     ZTESensorEntityDescription(
         key="lte_ca_scell_bandwidth",
@@ -940,7 +987,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="signal",
         source=ENDPOINT_EXTENDED,
-        value_fn=lambda data: _safe_float(data.get("lte_ca_scell_bandwidth")),
+        value_fn=lambda data: _safe_float(get_first(data, _ALIAS_CA_SCELL_BW)),
     ),
     ZTESensorEntityDescription(
         key="wan_active_band",
@@ -983,7 +1030,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-140,
         max_limit=-30,
         group="signal",
-        value_fn=lambda data: _safe_float(_get_first(data, _ALIAS_5G_RSRP)),
+        value_fn=lambda data: _safe_float(get_first(data, _ALIAS_5G_RSRP)),
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrq",
@@ -1031,7 +1078,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=-20,
         max_limit=50,
         group="signal",
-        value_fn=lambda data: _safe_float(_get_first(data, _ALIAS_5G_SINR)),
+        value_fn=lambda data: _safe_float(get_first(data, _ALIAS_5G_SINR)),
     ),
     ZTESensorEntityDescription(
         key="nr5g_pci",
@@ -1042,7 +1089,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_nr5g_pci",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(_get_first(data, _ALIAS_5G_PCI)),
+        value_fn=lambda data: _safe_str(get_first(data, _ALIAS_5G_PCI)),
     ),
     ZTESensorEntityDescription(
         key="nr5g_action_band",
@@ -1128,7 +1175,238 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_net_select",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: data.get("net_select"),
+        value_fn=lambda data: get_first(data, _ALIAS_NET_SELECT),
+    ),
+    ZTESensorEntityDescription(
+        key="net_select_config",
+        about=(
+            "Whether the router picks its network mode itself or holds the one "
+            "you chose - the Automatic or Manual setting on its own network "
+            "selection page. Automatic lets it fall back as coverage changes; "
+            "Manual keeps the Network Mode you set until you change it."
+        ),
+        translation_key="signal_net_select_config",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: get_first(data, _ALIAS_NET_SELECT_MODE),
+    ),
+    ZTESensorEntityDescription(
+        key="upgrade_result",
+        about=(
+            "The outcome of the router's last firmware update attempt. Reads "
+            "error where an update was tried and did not complete, which the "
+            "update-state entities do not show."
+        ),
+        translation_key="system_upgrade_result",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        value_fn=lambda data: data.get("upgrade_result") or None,
+    ),
+    ZTESensorEntityDescription(
+        key="5g_rsrp_antenna_1",
+        about=(
+            "Reference signal strength at the first 5G receiver, in dBm. The "
+            "two receivers see the same cell through different antennas, so a "
+            "persistent gap between them points at placement or an obstruction "
+            "rather than at the network."
+        ),
+        translation_key="signal_5g_rsrp_antenna_1",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        suggested_display_precision=0,
+        min_limit=-140,
+        max_limit=-40,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("5g_rx0_rsrp")),
+    ),
+    ZTESensorEntityDescription(
+        key="5g_rsrp_antenna_2",
+        about=(
+            "Reference signal strength at the second 5G receiver, in dBm. "
+            "Compare with the first: a steady difference is an antenna or "
+            "placement effect, not a change in coverage."
+        ),
+        translation_key="signal_5g_rsrp_antenna_2",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        suggested_display_precision=0,
+        min_limit=-140,
+        max_limit=-40,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _safe_float(data.get("5g_rx1_rsrp")),
+    ),
+    ZTESensorEntityDescription(
+        key="ca_scell_rsrp",
+        about=(
+            "Reference signal strength on the aggregated secondary carrier, in "
+            "dBm. Carrier aggregation adds a second band alongside the primary "
+            "one; this is how strong that second band is."
+        ),
+        translation_key="signal_ca_scell_rsrp",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        suggested_display_precision=0,
+        min_limit=-140,
+        max_limit=-40,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _scell_field(data, 0),
+    ),
+    ZTESensorEntityDescription(
+        key="ca_scell_rsrq",
+        about=(
+            "Reference signal quality on the aggregated secondary carrier, in "
+            "dB. Typically -10 or better is good, below -15 poor."
+        ),
+        translation_key="signal_ca_scell_rsrq",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        suggested_display_precision=1,
+        min_limit=-40,
+        max_limit=0,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _scell_field(data, 1),
+    ),
+    ZTESensorEntityDescription(
+        key="ca_scell_snr",
+        about=(
+            "Signal-to-noise ratio on the aggregated secondary carrier, in dB. "
+            "Worth comparing against the primary: the secondary band often "
+            "carries the cleaner signal, which the headline SNR does not show."
+        ),
+        translation_key="signal_ca_scell_snr",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        suggested_display_precision=1,
+        min_limit=-20,
+        max_limit=50,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _scell_field(data, 2),
+    ),
+    ZTESensorEntityDescription(
+        key="ca_scell_rssi",
+        about=(
+            "Total received power on the aggregated secondary carrier, in dBm - "
+            "wanted signal, interference and noise together."
+        ),
+        translation_key="signal_ca_scell_rssi",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        suggested_display_precision=0,
+        min_limit=-120,
+        max_limit=-20,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: _scell_field(data, 3),
+    ),
+    ZTESensorEntityDescription(
+        key="sim_pin_attempts",
+        about=(
+            "PIN attempts left before the SIM locks and needs the PUK. A SIM "
+            "that has locked presents as no service, which otherwise looks "
+            "like a coverage or connection fault."
+        ),
+        translation_key="system_sim_pin_attempts",
+        min_limit=0,
+        max_limit=10,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_int(data.get("pinnumber")),
+    ),
+    ZTESensorEntityDescription(
+        key="sim_puk_attempts",
+        about=(
+            "PUK attempts left before the SIM is permanently blocked and has "
+            "to be replaced by the operator."
+        ),
+        translation_key="system_sim_puk_attempts",
+        min_limit=0,
+        max_limit=10,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_int(data.get("puknumber")),
+    ),
+    ZTESensorEntityDescription(
+        key="modem_state",
+        about=(
+            "What the modem itself reports about its own startup, separately "
+            "from whether a connection is up. Useful when the router answers "
+            "but nothing is passing traffic."
+        ),
+        translation_key="system_modem_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: data.get("modem_main_state") or None,
+    ),
+    ZTESensorEntityDescription(
+        key="connection_failure_count",
+        about=(
+            "How many times the router has failed to establish the mobile data "
+            "connection since it last restarted. A rising count with the "
+            "connection apparently up means it is dropping and recovering."
+        ),
+        translation_key="system_connection_failure_count",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        min_limit=0,
+        max_limit=10000,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_int(data.get("ppp_dial_conn_fail_counter")),
+    ),
+    ZTESensorEntityDescription(
+        key="roaming_state",
+        about=(
+            "Whether the SIM is on its home network or roaming. Roaming can "
+            "carry different charges and different speed limits."
+        ),
+        translation_key="signal_roaming_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: data.get("simcard_roam") or None,
+    ),
+    ZTESensorEntityDescription(
+        key="nr5g_nsa_band_lock",
+        about=(
+            "The 5G bands the router may use in non-standalone mode, where 5G "
+            "runs alongside a 4G anchor. The counterpart to LTE Band Lock."
+        ),
+        translation_key="signal_nr5g_nsa_band_lock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: data.get("nr5g_nsa_band_lock") or None,
+    ),
+    ZTESensorEntityDescription(
+        key="nr5g_sa_band_lock",
+        about=(
+            "The 5G bands the router may use in standalone mode, where 5G runs "
+            "without a 4G anchor."
+        ),
+        translation_key="signal_nr5g_sa_band_lock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=lambda data: data.get("nr5g_sa_band_lock") or None,
     ),
     ZTESensorEntityDescription(
         key="ppp_status",
@@ -1163,7 +1441,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="data",
         # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
         min_limit=0,
-        value_fn=lambda data: _get_bytes_to_gb(_get_first(data, _ALIAS_MONTHLY_TX)),
+        value_fn=lambda data: _get_bytes_to_gb(get_first(data, _ALIAS_MONTHLY_TX)),
     ),
     ZTESensorEntityDescription(
         key="monthly_rx_bytes",
@@ -1179,7 +1457,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="data",
         # Divided by 1_000_000_000 to match decimal GB (UnitOfInformation.GIGABYTES)
         min_limit=0,
-        value_fn=lambda data: _get_bytes_to_gb(_get_first(data, _ALIAS_MONTHLY_RX)),
+        value_fn=lambda data: _get_bytes_to_gb(get_first(data, _ALIAS_MONTHLY_RX)),
     ),
     ZTESensorEntityDescription(
         key="monthly_total_bytes",
@@ -1212,7 +1490,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=1,
         group="data",
         min_limit=0,
-        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_MONTHLY_TX)),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_MONTHLY_TX)),
     ),
     ZTESensorEntityDescription(
         key="monthly_rx_bytes_raw",
@@ -1229,7 +1507,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=1,
         group="data",
         min_limit=0,
-        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_MONTHLY_RX)),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_MONTHLY_RX)),
     ),
     ZTESensorEntityDescription(
         key="monthly_total_bytes_raw",
@@ -1271,7 +1549,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=2,
         min_limit=0,
         group="data",
-        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_TX_THRPT)),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_REALTIME_TX_THRPT)),
     ),
     ZTESensorEntityDescription(
         key="realtime_rx_thrpt",
@@ -1287,7 +1565,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=2,
         min_limit=0,
         group="data",
-        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_RX_THRPT)),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_REALTIME_RX_THRPT)),
     ),
     ZTESensorEntityDescription(
         key="realtime_tx_bytes",
@@ -1303,7 +1581,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=2,
         min_limit=0,
         group="data",
-        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_TX_BYTES)),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_REALTIME_TX_BYTES)),
     ),
     ZTESensorEntityDescription(
         key="realtime_rx_bytes",
@@ -1318,7 +1596,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_display_precision=2,
         min_limit=0,
         group="data",
-        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_REALTIME_RX_BYTES)),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_REALTIME_RX_BYTES)),
     ),
     # --- SMS Sub-device ---
     ZTESensorEntityDescription(
@@ -1421,7 +1699,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         min_limit=0,
         max_limit=100,
         group="data",
-        value_fn=lambda data: _safe_int(_get_first(data, _ALIAS_ALERT_PERCENT)),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_ALERT_PERCENT)),
     ),
     ZTESensorEntityDescription(
         key="sntp_server",

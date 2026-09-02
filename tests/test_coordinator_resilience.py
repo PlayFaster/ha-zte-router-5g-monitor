@@ -6,6 +6,7 @@ once a strike budget is exhausted, and whether a success clears the verdict in
 the same cycle. The success path says nothing about any of it.
 """
 
+import asyncio
 from contextlib import suppress
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -708,20 +709,59 @@ async def test_drift_uses_its_own_strike_budget_not_the_fetch_one(
 
 
 @pytest.mark.asyncio
-async def test_a_diagnostics_probe_does_not_strike_the_coordinator(coordinator) -> None:
-    """The probe shares this coordinator's client and can clear the session.
+async def test_a_poll_started_during_a_discovery_pass_waits(coordinator) -> None:
+    """The poll must not run beside the probe — it must queue behind it.
 
-    Run beside a live poll, a chunk timing out could score that poll expired,
-    and repeated across chunks it could reach `FETCH_STRIKE_LIMIT` — marking
-    entities unavailable because the user pressed Download Diagnostics. The
-    update lock makes the two take turns.
+    Both use this coordinator's `ZTERouterAPI` and its single router session.
+    A poll that judges the session expired re-logs in, the router permits one
+    session, and the new login invalidates the cookie the pass is replaying.
+    The probe cannot recover: it runs with `authenticated=False` so that it
+    never silently re-authenticates, so its requests simply come back blank and
+    their names are recorded as unanswered.
+
+    The previous version of this test asserted that a helper could take
+    `_async_update_lock` after the pass finished. That proved the lock existed
+    and nothing else: `_async_update_data` never acquired it, so a real poll
+    overlapped freely for as long as the guard was believed to be in place.
+    This one starts a poll while the pass is genuinely in flight.
     """
-    coordinator.api.run_discovery = AsyncMock(return_value={"values": {}})
+    order: list[str] = []
+    probing = asyncio.Event()
+    release = asyncio.Event()
 
-    async def _poll_while_probing():
-        async with coordinator._async_update_lock:
-            return "poll held the lock"
+    async def _slow_discovery():
+        order.append("discovery started")
+        probing.set()
+        await release.wait()
+        order.append("discovery finished")
+        return {"values": {}}
 
-    await coordinator.async_run_discovery()
-    assert await _poll_while_probing() == "poll held the lock"
-    assert coordinator.api.run_discovery.await_count == 1
+    async def _record_poll():
+        order.append("poll ran")
+        return {}
+
+    coordinator.api.run_discovery = _slow_discovery
+    coordinator._async_update_data_locked = _record_poll
+
+    with patch(
+        "custom_components.zte_router_5g.coordinator.DISCOVERY_SETTLE_SECONDS", 0
+    ):
+        pass_task = asyncio.create_task(coordinator.async_run_discovery())
+        await probing.wait()
+
+        poll_task = asyncio.create_task(coordinator._async_update_data())
+        # Yield generously. An unserialized poll needs only one loop iteration
+        # to run to completion here, so reaching the assertion with the pass
+        # still held is the evidence.
+        for _ in range(10):
+            await asyncio.sleep(0)
+
+        assert order == ["discovery started"], (
+            f"the poll ran while the pass held the lock: {order}"
+        )
+
+        release.set()
+        await pass_task
+        await poll_task
+
+    assert order == ["discovery started", "discovery finished", "poll ran"]

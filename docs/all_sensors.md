@@ -10,9 +10,9 @@ A complete list of the static entities and service actions provided by the integ
 | :--------- | :----------- | :--------------------- |
 | **Data**   | 15           | Data entities.         |
 | **SMS**    | 5            | SMS entities.          |
-| **Signal** | 40           | Signal entities.       |
-| **System** | 35           | System entities.       |
-| **Total**  | **95**       | Total static entities. |
+| **Signal** | 50           | Signal entities.       |
+| **System** | 41           | System entities.       |
+| **Total**  | **111**      | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
 
@@ -44,7 +44,7 @@ A complete list of the static entities and service actions provided by the integ
 | Total Msg | `msg_total` | Sensor | - | - | LTS: `measurement` |
 | Unread Msg | `sms_unread_num` | Sensor | - | - | LTS: `measurement` |
 
-## Signal Sub-Device (40 Entities)
+## Signal Sub-Device (50 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -52,6 +52,12 @@ A complete list of the static entities and service actions provided by the integ
 | APN Selection Mode | `apn_mode` | Select | - | Config | - |
 | APN Profile | `apn_profile` | Select | - | Config | - |
 | Network Mode Selection | `net_select` | Select | - | Config | - |
+| 5G RSRP Antenna 1 | `5g_rsrp_antenna_1` | Sensor | dBm | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| 5G RSRP Antenna 2 | `5g_rsrp_antenna_2` | Sensor | dBm | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| CA Secondary Cell RSRP | `ca_scell_rsrp` | Sensor | dBm | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| CA Secondary Cell RSRQ | `ca_scell_rsrq` | Sensor | dB | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| CA Secondary Cell RSSI | `ca_scell_rssi` | Sensor | dBm | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| CA Secondary Cell SNR | `ca_scell_snr` | Sensor | dB | Diagnostic | **Disabled by default.** LTS: `measurement` |
 | Cell ID | `cell_id` | Sensor | - | Diagnostic | - |
 | eNodeB ID | `enodeb_id` | Sensor | - | Diagnostic | - |
 | LTE Band Lock Mask | `lte_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
@@ -68,14 +74,18 @@ A complete list of the static entities and service actions provided by the integ
 | MDM MCC | `mdm_mcc` | Sensor | - | Diagnostic | **Disabled by default.** |
 | MDM MNC | `mdm_mnc` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Network Mode | `net_select` | Sensor | - | Diagnostic | - |
+| Network Mode Config | `net_select_config` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Network Provider | `network_provider` | Sensor | - | Diagnostic | - |
 | Network Type | `network_type` | Sensor | - | - | - |
 | 5G Active Band | `nr5g_action_band` | Sensor | - | Diagnostic | - |
 | 5G Active Channel | `nr5g_action_channel` | Sensor | - | Diagnostic | - |
+| 5G NSA Band Lock | `nr5g_nsa_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
 | 5G PCI | `nr5g_pci` | Sensor | - | Diagnostic | - |
+| 5G SA Band Lock | `nr5g_sa_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Bridge Mode | `ppp_status` | Sensor | - | Diagnostic | - |
 | Roaming MCC | `rmcc` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Roaming MNC | `rmnc` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Roaming State | `roaming_state` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Legacy RSCP | `rscp` | Sensor | dBm | - | **Disabled by default.** |
 | Legacy RSSI | `rssi` | Sensor | dBm | - | **Disabled by default.** |
 | Signal Bars | `signalbar` | Sensor | - | - | LTS: `measurement` |
@@ -89,11 +99,12 @@ A complete list of the static entities and service actions provided by the integ
 | 5G RSSI | `z5g_rssi` | Sensor | dBm | - | LTS: `measurement` |
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 
-## System Sub-Device (35 Entities)
+## System Sub-Device (41 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | Integration Health | `integration_health` | Binary Sensor | - | Diagnostic | - |
+| Operator Provisioned | `operator_provisioned` | Binary Sensor | - | Diagnostic | - |
 | Reboot Schedule | `reboot_schedule` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
 | SIP ALG Enabled | `sip_alg_enabled` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
 | UPnP Enabled | `upnp_enabled` | Binary Sensor | - | Diagnostic | **Disabled by default.** |
@@ -104,6 +115,7 @@ A complete list of the static entities and service actions provided by the integ
 | Polling Interval | `polling_interval` | Number | s | Config | - |
 | APN Interface Version | `apn_interface_version` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Battery | `battery_value` | Sensor | % | - | **Disabled by default.** |
+| Connection Failure Count | `connection_failure_count` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | Firmware Update State | `current_upgrade_state` | Sensor | - | Diagnostic | - |
 | Device Uptime | `device_uptime` | Sensor | - | - | - |
 | Hardware Version | `hardware_version` | Sensor | - | Diagnostic | - |
@@ -111,6 +123,7 @@ A complete list of the static entities and service actions provided by the integ
 | LAN IP Address | `lan_ipaddr` | Sensor | - | Diagnostic | - |
 | Last Updated | `last_updated` | Sensor | - | - | - |
 | Model Name | `model_name` | Sensor | - | Diagnostic | - |
+| Modem State | `modem_state` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Firmware Update Available | `new_version_state` | Sensor | - | Diagnostic | - |
 | WAN Fallback Mode | `opms_wan_auto_mode` | Sensor | - | Diagnostic | **Disabled by default.** |
 | WAN Operating Mode | `opms_wan_mode` | Sensor | - | Diagnostic | **Disabled by default.** |
@@ -122,8 +135,11 @@ A complete list of the static entities and service actions provided by the integ
 | Uptime Duration | `realtime_time` | Sensor | s | - | **Disabled by default.** |
 | SIM ICCID | `sim_iccid` | Sensor | - | Diagnostic | **Disabled by default.** |
 | SIM IMSI | `sim_imsi` | Sensor | - | Diagnostic | **Disabled by default.** |
+| SIM PIN Attempts Remaining | `sim_pin_attempts` | Sensor | - | Diagnostic | **Disabled by default.** |
+| SIM PUK Attempts Remaining | `sim_puk_attempts` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Time Server (SNTP) | `sntp_server` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Router Timezone | `sntp_timezone` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Firmware Update Result | `upgrade_result` | Sensor | - | Diagnostic | - |
 | Firmware Version | `wa_inner_version` | Sensor | - | Diagnostic | - |
 | WAN IP Address | `wan_ipaddr` | Sensor | - | Diagnostic | - |
 | ODU LED Switch | `odu_led_switch` | Switch | - | Config | **Disabled by default.** |

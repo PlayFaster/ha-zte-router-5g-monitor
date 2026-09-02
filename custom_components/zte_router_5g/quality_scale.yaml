@@ -187,10 +187,11 @@ rules:
       ConfirmRepairFlow, whose Fix button deletes the card without touching the
       credentials. A lapsed session is not this — only ZTECredentialsError reaches it.
       Three conditions were assessed against the same rule and deliberately do NOT raise
-      a repair, because the user cannot act on them in that panel. Contract drift and
-      degraded capabilities publish on the Integration Health sensor, and a full message
-      store on binary_sensor.*_sms_storage_full. Their retired ids are swept at setup
-      and at removal via RETIRED_REPAIR_NAMES, so no card is left stranded.
+      a repair, because the user cannot act on them in that panel. Missing or changed
+      router data and degraded capabilities publish on the Integration Health sensor,
+      and a full message store on binary_sensor.*_sms_storage_full. Their retired ids
+      are swept at setup and at removal via RETIRED_REPAIR_NAMES, so no card is left
+      stranded.
   stale-devices:
     status: exempt
     comment:

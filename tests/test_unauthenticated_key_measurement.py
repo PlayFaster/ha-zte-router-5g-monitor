@@ -303,7 +303,7 @@ def test_subscriber_aliases_are_redacted() -> None:
 
 
 def test_byte_counters_are_not_mistaken_for_identifiers() -> None:
-    """The digit sweep must not mask ordinary telemetry.
+    """The digit sweep must not mask ordinary sensor data.
 
     Byte counters, uptime seconds and channel numbers are all bare digits.
     The threshold is what separates them from an identifier, and it is chosen
@@ -558,7 +558,7 @@ def test_a_mined_alias_resolves_when_its_primary_is_empty(primary, fallback) -> 
     pair = next(t for t in tuples if t[0] == primary)
 
     assert fallback in pair
-    assert sensor._get_first({primary: "", fallback: "value"}, pair) == "value"
+    assert sensor.get_first({primary: "", fallback: "value"}, pair) == "value"
 
 
 def test_the_firmware_update_sensors_report_the_router_value() -> None:

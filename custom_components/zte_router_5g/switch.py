@@ -6,7 +6,7 @@ import asyncio
 import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from homeassistant.components.switch import (
     SwitchEntity,
@@ -27,7 +27,7 @@ from .const import (
     WRITE_VERIFY_TIMEOUT,
 )
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import ZTEAboutEntity, build_device_info
+from .helpers import ZTEAboutEntity, build_device_info, get_first
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +38,15 @@ _LOGGER = logging.getLogger(__name__)
 # overlapping writes are exactly how a session gets torn down. Rapid toggling
 # now queues instead of racing.
 PARALLEL_UPDATES = 1
+
+
+# The MC888 Pro answers `flux_data_volume_limit_switch` and leaves the bare
+# spelling empty. The bare spelling leads because the reference MC7010 answers
+# on it; order is the tie-break, see `helpers.get_first`.
+_ALIAS_LIMIT_SWITCH: Final = (
+    "data_volume_limit_switch",
+    "flux_data_volume_limit_switch",
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -63,6 +72,18 @@ class ZTESwitchEntityDescription(SwitchEntityDescription):
     # it is not always the entity key — `data_limit_switch` reads from
     # `data_volume_limit_switch`.
     state_key: str | None = None
+    # Alternate spellings of `state_key` on other firmware, in the same
+    # leader-first order the sensor aliases use. The MC888 Pro answers
+    # `flux_data_volume_limit_switch` and leaves the bare spelling empty, so a
+    # switch reading only `state_key` there has no position to report and its
+    # write cannot be verified.
+    state_aliases: tuple[str, ...] = ()
+
+    @property
+    def state_keys(self) -> tuple[str, ...]:
+        """Every spelling this switch's position may arrive under."""
+        return ((self.state_key,) if self.state_key else ()) + self.state_aliases
+
     # Whether to confirm a write by reading `state_key` straight back.
     #
     # Opt-in, and deliberately NOT set on anything that disturbs the radio. The
@@ -105,6 +126,7 @@ SWITCH_TYPES: tuple[ZTESwitchEntityDescription, ...] = (
     ZTESwitchEntityDescription(
         key="data_limit_switch",
         state_key="data_volume_limit_switch",
+        state_aliases=("flux_data_volume_limit_switch",),
         verify_after_write=True,
         about=(
             "Turns on the router's own monthly data cap. When the limit is "
@@ -117,7 +139,10 @@ SWITCH_TYPES: tuple[ZTESwitchEntityDescription, ...] = (
         group="data",
         entity_registry_enabled_default=False,
         value_fn=lambda data: (
-            data.get("data_volume_limit_switch") == "1" if data else False
+            str(get_first(data, _ALIAS_LIMIT_SWITCH) or "").strip().lower()
+            in ("1", "on", "true")
+            if data
+            else False
         ),
         setter_fn=lambda api, state, data: api.set_data_limit_switch(
             "1" if state else "0", data or {}
@@ -194,8 +219,8 @@ class ZTERouterSwitch(
         value_fn = self.entity_description.value_fn
         if data is None or value_fn is None:
             return
-        state_key = self.entity_description.state_key
-        if state_key is not None and state_key not in data:
+        state_keys = self.entity_description.state_keys
+        if state_keys and not any(key in data for key in state_keys):
             return
         self._last_known = value_fn(data)
 
@@ -280,9 +305,9 @@ class ZTERouterSwitch(
         command may well have landed, and the next poll will settle it. Only a
         successful read reporting the wrong value proves a refusal.
         """
-        state_key = self.entity_description.state_key
+        state_keys = self.entity_description.state_keys
         value_fn = self.entity_description.value_fn
-        if state_key is None or value_fn is None:
+        if not state_keys or value_fn is None:
             return
 
         for attempt in range(2):
@@ -293,7 +318,7 @@ class ZTERouterSwitch(
                 await asyncio.sleep(WRITE_VERIFY_RETRY_DELAY)
             try:
                 data = await self.coordinator.api.get_params(
-                    [state_key], timeout_sec=WRITE_VERIFY_TIMEOUT
+                    list(state_keys), timeout_sec=WRITE_VERIFY_TIMEOUT
                 )
             except Exception as err:  # noqa: BLE001 - unverified, not failed
                 _LOGGER.debug(
@@ -303,7 +328,7 @@ class ZTERouterSwitch(
                     err,
                 )
                 return
-            if state_key not in data:
+            if not any(key in data for key in state_keys):
                 return
             if value_fn(data) is state:
                 self._last_known = state

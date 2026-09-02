@@ -5,27 +5,39 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.8-dev2\] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors](#338-dev2---2026-09-01---carrier-identity-withheld-in-discovery-mined-aliases-firmware-update-sensors)
-  - [\[3.3.8-dev1\] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys](#338-dev1---2026-09-01---key-discovery-from-the-routers-own-web-ui-concept-based-contract-keys)
+  - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)
+  - [\[3.3.9-dev12\] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported](#339-dev12---2026-09-02---fourteen-diagnostic-sensors-added-operator-provisioning-reported)
+  - [\[3.3.9-dev11\] - 2026-09-02 - MC888 Parameter Spellings Supported; Two-Request Core Poll](#339-dev11---2026-09-02---mc888-parameter-spellings-supported-two-request-core-poll)
+  - [\[3.3.9-dev10\] - 2026-09-02 - Diagnostic Download Declined Parameters Recorded; False Session Losses Removed](#339-dev10---2026-09-02---diagnostic-download-declined-parameters-recorded-false-session-losses-removed)
+  - [\[3.3.9-dev9\] - 2026-09-02 - Diagnostic Download Yield 90 → 101; Capped Re-Probe False Absences Fixed](#339-dev9---2026-09-02---diagnostic-download-yield-90--101-capped-re-probe-false-absences-fixed)
+  - [\[3.3.9-dev7\] - 2026-09-02 - Diagnostic Download Canary Field Published; Hardware Verification of the Produced File](#339-dev7---2026-09-02---diagnostic-download-canary-field-published-hardware-verification-of-the-produced-file)
+  - [\[3.3.9-dev6\] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization](#339-dev6---2026-09-02---readme-hardware-compatibility-alignment-changelog-header-normalization)
+  - [\[3.3.9-dev5\] - 2026-09-02 - Diagnostic Download Truncation Fixed; Fresh Login and Per-Chunk Canary Verification](#339-dev5---2026-09-02---diagnostic-download-truncation-fixed-fresh-login-and-per-chunk-canary-verification)
+  - [\[3.3.9-dev4\] - 2026-09-02 - Diagnostic Download Time Reduced from 60s to 6s; False Re-Login Fix](#339-dev4---2026-09-02---diagnostic-download-time-reduced-from-60s-to-6s-false-re-login-fix)
+  - [\[3.3.9-dev3\] - 2026-09-01 - Discovery Probe Duration Reduced to 37s; Write Command Exclusion](#339-dev3---2026-09-01---discovery-probe-duration-reduced-to-37s-write-command-exclusion)
+  - [\[3.3.9-dev2\] - 2026-09-01 - Diagnostic Download Mined Parameter Names Raised 383 → 642; Unanswered Names Published](#339-dev2---2026-09-01---diagnostic-download-mined-parameter-names-raised-383--642-unanswered-names-published)
+  - [\[3.3.9-dev1\] - 2026-09-01 - Batch Polling URL Character Limit Partitioning; Request Overflow Prevention](#339-dev1---2026-09-01---batch-polling-url-character-limit-partitioning-request-overflow-prevention)
+  - [\[3.3.8-dev2\] - 2026-09-01 - Firmware Update Diagnostic Sensors Added; Discovery Carrier Redaction](#338-dev2---2026-09-01---firmware-update-diagnostic-sensors-added-discovery-carrier-redaction)
+  - [\[3.3.8-dev1\] - 2026-09-01 - Web UI Automated Parameter Discovery; Concept-Based Drift Tolerance](#338-dev1---2026-09-01---web-ui-automated-parameter-discovery-concept-based-drift-tolerance)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
-  - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added](#337-dev3---2026-08-31---local-ci-validation-symmlink-link-checker-added)
-  - [\[3.3.7-dev2\] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep](#337-dev2---2026-08-31---data-limit-form-aliases-classified-concept-alias-sweep)
-  - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery](#337-dev1---2026-08-31---mc888-pro-session-cookie-per-device-unauthenticated-key-set-key-discovery)
+  - [\[3.3.7-dev3\] - 2026-08-31 - Local CI Symlink Link Checker Added](#337-dev3---2026-08-31---local-ci-symlink-link-checker-added)
+  - [\[3.3.7-dev2\] - 2026-08-31 - Data Limit Write Control Form Aliases; Diagnostics Redaction Sweep](#337-dev2---2026-08-31---data-limit-write-control-form-aliases-diagnostics-redaction-sweep)
+  - [\[3.3.7-dev1\] - 2026-08-31 - MC888 Pro Dynamic Cookie Authentication; Startup Key Discovery](#337-dev1---2026-08-31---mc888-pro-dynamic-cookie-authentication-startup-key-discovery)
   - [\[3.3.6\] - 2026-08-31 - Release: Device Uptime Boot Timestamp Reconciliation Across Restarts](#336---2026-08-31---release-device-uptime-boot-timestamp-reconciliation-across-restarts)
-  - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Could Hold a Stale Boot Time Across a Home Assistant Restart](#336-dev1---2026-08-31---device-uptime-could-hold-a-stale-boot-time-across-a-home-assistant-restart)
+  - [\[3.3.6-dev1\] - 2026-08-31 - Device Uptime Stale Boot Time Reconciliation Across Restarts](#336-dev1---2026-08-31---device-uptime-stale-boot-time-reconciliation-across-restarts)
   - [\[3.3.5\] - 2026-08-31 - Release: Diagnostics Capture on Setup Failures and Multi-User Login Alignment](#335---2026-08-31---release-diagnostics-capture-on-setup-failures-and-multi-user-login-alignment)
   - [\[3.3.5-dev2\] - 2026-08-31 - Session Verdict Evidence; Diagnostics Capture on a Failed Poll](#335-dev2---2026-08-31---session-verdict-evidence-diagnostics-capture-on-a-failed-poll)
   - [\[3.3.5-dev1\] - 2026-08-30 - Multi-User Login Payload Aligned With Reference Implementation](#335-dev1---2026-08-30---multi-user-login-payload-aligned-with-reference-implementation)
   - [\[3.3.4\] - 2026-08-30 - Release: Re-authentication Repair Flow, SMS Storage Sensor, and Login Compatibility](#334---2026-08-30---release-re-authentication-repair-flow-sms-storage-sensor-and-login-compatibility)
   - [\[3.3.4-dev26\] - 2026-08-30 - Login Form Order Aligned With Reference Implementation](#334-dev26---2026-08-30---login-form-order-aligned-with-reference-implementation)
   - [\[3.3.4-dev25\] - 2026-08-30 - Login Session Without a stok Cookie; Session State Pairing](#334-dev25---2026-08-30---login-session-without-a-stok-cookie-session-state-pairing)
-  - [\[3.3.4-dev24\] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README](#334-dev24---2026-08-30---ci-bump-ruff-spelling-actions-screenshot-for-readme)
+  - [\[3.3.4-dev24\] - 2026-08-30 - Ruff Tooling Bump; README Actions Visuals](#334-dev24---2026-08-30---ruff-tooling-bump-readme-actions-visuals)
   - [\[3.3.4-dev23\] - 2026-08-27 - Project Structure Reference Sync; Ha-Compatibility and Test Harness Additions](#334-dev23---2026-08-27---project-structure-reference-sync-ha-compatibility-and-test-harness-additions)
-  - [\[3.3.4-dev22\] - 2026-08-27 - Ruff rules aligned; Repairs info in README; AGENTS align](#334-dev22---2026-08-27---ruff-rules-aligned-repairs-info-in-readme-agents-align)
+  - [\[3.3.4-dev22\] - 2026-08-27 - Ruff Rules Alignment; README and AGENTS Synchronization](#334-dev22---2026-08-27---ruff-rules-alignment-readme-and-agents-synchronization)
   - [\[3.3.4-dev21\] - 2026-08-26 - Documentation: README Repairs and Health Section Alignment](#334-dev21---2026-08-26---documentation-readme-repairs-and-health-section-alignment)
   - [\[3.3.4-dev20\] - 2026-08-26 - Contract Sweep Naming And Vacuity Guards; Queue References Removed](#334-dev20---2026-08-26---contract-sweep-naming-and-vacuity-guards-queue-references-removed)
   - [\[3.3.4-dev19\] - 2026-08-26 - README Repairs Section Rewritten](#334-dev19---2026-08-26---readme-repairs-section-rewritten)
-  - [\[3.3.4-dev18\] - 2026-08-26 - SMS Storage Off Integration Health; Sensor Enabled By Default](#334-dev18---2026-08-26---sms-storage-off-integration-health-sensor-enabled-by-default)
+  - [\[3.3.4-dev18\] - 2026-08-26 - SMS Full Status Decoupled from Integration Health; Sensor Enabled by Default](#334-dev18---2026-08-26---sms-full-status-decoupled-from-integration-health-sensor-enabled-by-default)
   - [\[3.3.4-dev17\] - 2026-08-26 - SMS Storage Fill Comparison; Hardware Check in Validate All](#334-dev17---2026-08-26---sms-storage-fill-comparison-hardware-check-in-validate-all)
   - [\[3.3.4-dev16\] - 2026-08-26 - Repair Translation Schema: Fixable Issue Exclusivity](#334-dev16---2026-08-26---repair-translation-schema-fixable-issue-exclusivity)
   - [\[3.3.4-dev15\] - 2026-08-26 - Documentation: Public CHANGELOG.md Release Header and Table of Contents Standardization](#334-dev15---2026-08-26---documentation-public-changelogmd-release-header-and-table-of-contents-standardization)
@@ -36,14 +48,14 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev10\] - 2026-08-26 - Suppression Allow-List Sweep; Health \& Repair Contract Tests; Silent-Failure Audit](#334-dev10---2026-08-26---suppression-allow-list-sweep-health--repair-contract-tests-silent-failure-audit)
   - [\[3.3.4-dev9\] - 2026-08-26 - Publish-Moment State Capture Tests; Real APN Payloads in Select Tests](#334-dev9---2026-08-26---publish-moment-state-capture-tests-real-apn-payloads-in-select-tests)
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
-  - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Reauth Repair Flow; Frequency Unit Selector; Separate Drift Strike Budget; SMS Log Privacy](#334-dev7---2026-08-25---interactive-reauth-repair-flow-frequency-unit-selector-separate-drift-strike-budget-sms-log-privacy)
+  - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Chore Verification: C-006, C-011, C-016, C-017, C-018, C-021](#334-dev5---2026-08-25---cross-project-chore-verification-c-006-c-011-c-016-c-017-c-018-c-021)
-  - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: Bridge-Mode Verification Task; APN Auto-Mode Analysis](#334-dev4---2026-08-24---documentation-bridge-mode-verification-task-apn-auto-mode-analysis)
-  - [\[3.3.4-dev3\] - 2026-08-24 - Documentation: Task Queue Organization; Roadmap Task Alignment](#334-dev3---2026-08-24---documentation-task-queue-organization-roadmap-task-alignment)
-  - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; Documentation Updates](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-documentation-updates)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
+  - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
+  - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
   - [\[3.3.4-dev1\] - 2026-08-08 - Documentation: Changelog Format Refinements; US Spelling Standardization](#334-dev1---2026-08-08---documentation-changelog-format-refinements-us-spelling-standardization)
-  - [\[3.3.3\] - 2026-08-08 - Release - SMS Bugfix](#333---2026-08-08---release---sms-bugfix)
+  - [\[3.3.3\] - 2026-08-08 - Release: SMS Emoji Decoding, Polling Resilience, and Repair Isolation](#333---2026-08-08---release-sms-emoji-decoding-polling-resilience-and-repair-isolation)
   - [\[3.3.3-dev12\] - 2026-08-07 - Write Token Validation; Config-Flow Session Release; Timing Probe Measurements](#333-dev12---2026-08-07---write-token-validation-config-flow-session-release-timing-probe-measurements)
   - [\[3.3.3-dev11\] - 2026-08-07 - API Domain Error Handling; Force-Refresh Flag Reset; SMS Bank Counter Tests](#333-dev11---2026-08-07---api-domain-error-handling-force-refresh-flag-reset-sms-bank-counter-tests)
   - [\[3.3.3-dev10\] - 2026-08-07 - Write Action Error Isolation; Partial Multi-Recipient SMS Reporting; ID-Less Message Deletion Guard](#333-dev10---2026-08-07---write-action-error-isolation-partial-multi-recipient-sms-reporting-id-less-message-deletion-guard)
@@ -59,7 +71,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.2-rc15\] - 2026-08-02 - Shared CI Bump to v2.0.9; Table of Contents and Sensor Manifest Sync](#332-rc15---2026-08-02---shared-ci-bump-to-v209-table-of-contents-and-sensor-manifest-sync)
   - [\[3.3.2-rc14\] - 2026-08-01 - README Quality Review; SMS Action Parameters and Alert Formatting Fixes](#332-rc14---2026-08-01---readme-quality-review-sms-action-parameters-and-alert-formatting-fixes)
   - [\[3.3.2-rc13\] - 2026-08-01 - Numeric Sensor Guard Band Verification; Cumulative Counter Floor Tests](#332-rc13---2026-08-01---numeric-sensor-guard-band-verification-cumulative-counter-floor-tests)
-  - [\[3.3.2-rc12\] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Contract Drift Invariant Tests](#332-rc12---2026-08-01---repair-title-neutrality-signal-guidance-alignment-contract-drift-invariant-tests)
+  - [\[3.3.2-rc12\] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Missing Field Invariant Tests](#332-rc12---2026-08-01---repair-title-neutrality-signal-guidance-alignment-missing-field-invariant-tests)
   - [\[3.3.2-rc11\] - 2026-07-31 - Session Expiry Classification via Unauthenticated Key Verification](#332-rc11---2026-07-31---session-expiry-classification-via-unauthenticated-key-verification)
   - [\[3.3.2-rc10\] - 2026-07-31 - Live Sensor Review Reconciliation; Router APN Profile Selection Documentation](#332-rc10---2026-07-31---live-sensor-review-reconciliation-router-apn-profile-selection-documentation)
   - [\[3.3.2-rc9\] - 2026-07-31 - Write Payload Shape Lock Tests; Interactive SMS and Reboot Hardware Verification](#332-rc9---2026-07-31---write-payload-shape-lock-tests-interactive-sms-and-reboot-hardware-verification)
@@ -80,13 +92,13 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.1-dev14\] - 2026-07-29 - Documentation Reconciliation: Entity Counts, Unpolled Parameters, and Development Debts](#331-dev14---2026-07-29---documentation-reconciliation-entity-counts-unpolled-parameters-and-development-debts)
   - [\[3.3.1-dev13\] - 2026-07-29 - Coordinator Batch Poll Split: Core Mandatory and Extended Optional Fetch](#331-dev13---2026-07-29---coordinator-batch-poll-split-core-mandatory-and-extended-optional-fetch)
   - [\[3.3.1-dev12\] - 2026-07-29 - Data Limit Switch Read-Modify-Write Fix and Batch Poll URL Budget Limit Tests](#331-dev12---2026-07-29---data-limit-switch-read-modify-write-fix-and-batch-poll-url-budget-limit-tests)
-  - [\[3.3.1-dev11\] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Telemetry](#331-dev11---2026-07-29---billing-cycle-tracking-usage-projection-sensor-and-diagnostic-telemetry)
+  - [\[3.3.1-dev11\] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Entities](#331-dev11---2026-07-29---billing-cycle-tracking-usage-projection-sensor-and-diagnostic-entities)
   - [\[3.3.1-dev10\] - 2026-07-29 - Documentation: Roadmap Revision and Architectural Prioritization in Future.md](#331-dev10---2026-07-29---documentation-roadmap-revision-and-architectural-prioritization-in-futuremd)
-  - [\[3.3.1-dev9\] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Telemetry Coverage](#331-dev9---2026-07-29---entity-about-notes-expansion-select-platform-support-and-control-telemetry-coverage)
+  - [\[3.3.1-dev9\] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Sensor Coverage](#331-dev9---2026-07-29---entity-about-notes-expansion-select-platform-support-and-control-sensor-coverage)
   - [\[3.3.1-dev8\] - 2026-07-29 - Encoding-Aware SMS Length Limits: GSM-7 (765 Chars) and UCS-2 (335 Chars)](#331-dev8---2026-07-29---encoding-aware-sms-length-limits-gsm-7-765-chars-and-ucs-2-335-chars)
   - [\[3.3.1-dev7\] - 2026-07-29 - API Dead-Session Sweep Test Suite: Dying, Refusing, and Drifting Session Fault Injection](#331-dev7---2026-07-29---api-dead-session-sweep-test-suite-dying-refusing-and-drifting-session-fault-injection)
   - [\[3.3.1-dev6\] - 2026-07-29 - Authenticated Activity Clock Tracking and Write Action Response Validation](#331-dev6---2026-07-29---authenticated-activity-clock-tracking-and-write-action-response-validation)
-  - [\[3.3.1-dev5\] - 2026-07-29 - Thermal Diagnostic Telemetry Set: Modem and 5G Radio Temperature Sensors](#331-dev5---2026-07-29---thermal-diagnostic-telemetry-set-modem-and-5g-radio-temperature-sensors)
+  - [\[3.3.1-dev5\] - 2026-07-29 - Thermal Diagnostic Sensor Suite: Modem and 5G Radio Temperature Sensors](#331-dev5---2026-07-29---thermal-diagnostic-sensor-suite-modem-and-5g-radio-temperature-sensors)
   - [\[3.3.1-dev4\] - 2026-07-28 - Version Bump to 3.3.1 and API Login Type Refactoring](#331-dev4---2026-07-28---version-bump-to-331-and-api-login-type-refactoring)
   - [\[3.3.1-dev3\] - 2026-07-28 - Cross-Model Sensor Key Aliasing, ARFCN Band Resolvers, and Thermal Entities](#331-dev3---2026-07-28---cross-model-sensor-key-aliasing-arfcn-band-resolvers-and-thermal-entities)
   - [\[3.3.1-dev2\] - 2026-07-28 - Cross-Model API Batch Parameters, Login Form Fallback, and SMS GSM-7 Encoding](#331-dev2---2026-07-28---cross-model-api-batch-parameters-login-form-fallback-and-sms-gsm-7-encoding)
@@ -103,7 +115,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev9\] - 2026-07-27 - Security Hardening: Stored Secret Schema Pre-fill Prevention Tests](#330-dev9---2026-07-27---security-hardening-stored-secret-schema-pre-fill-prevention-tests)
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
-  - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Contract Drift Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-contract-drift-attribute-publication)
+  - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
   - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
@@ -177,7 +189,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.0.0-dev22\] - 2026-05-08 - Bug Fix: Hassfest Translation Schema and Reauth Placeholder Substitution](#300-dev22---2026-05-08---bug-fix-hassfest-translation-schema-and-reauth-placeholder-substitution)
   - [\[3.0.0-dev21\] - 2026-05-08 - Documentation: Comprehensive Gold Standard README and Missing Translations](#300-dev21---2026-05-08---documentation-comprehensive-gold-standard-readme-and-missing-translations)
   - [\[3.0.0-dev16\] - 2026-05-07 - Code Review: Shared Device Info Helper, Translation Naming, and Exception Hardening](#300-dev16---2026-05-07---code-review-shared-device-info-helper-translation-naming-and-exception-hardening)
-  - [\[3.0.0-dev15\] - 2026-05-07 - Telemetry: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor](#300-dev15---2026-05-07---telemetry-12-new-sensors-guard-bands-and-imei-hardware-identity-anchor)
+  - [\[3.0.0-dev15\] - 2026-05-07 - Sensor Expansion: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor](#300-dev15---2026-05-07---sensor-expansion-12-new-sensors-guard-bands-and-imei-hardware-identity-anchor)
   - [\[3.0.0-dev14\] - 2026-05-07 - Diagnostics and Security: Diagnostics Platform and Reauthentication Flow](#300-dev14---2026-05-07---diagnostics-and-security-diagnostics-platform-and-reauthentication-flow)
   - [\[3.0.0-dev11\] - 2026-05-07 - Documentation: README Badge Links](#300-dev11---2026-05-07---documentation-readme-badge-links)
   - [\[3.0.0-dev10\] - 2026-05-02 - Architecture: Sub-Device Partitioning and Badge Link Repairs](#300-dev10---2026-05-02---architecture-sub-device-partitioning-and-badge-link-repairs)
@@ -198,16 +210,360 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.5.7\] - 2026-03-28 - Branding and Entity Structure: ZTE Icons and Sub-Device Sensor Naming](#157---2026-03-28---branding-and-entity-structure-zte-icons-and-sub-device-sensor-naming)
   - [\[1.5.1\] - 2026-03-28 - Integration Hygiene: Home Assistant Integration Naming Alignment](#151---2026-03-28---integration-hygiene-home-assistant-integration-naming-alignment)
   - [\[1.4.5\] - 2026-03-28 - Documentation and Sensors: Local Changelog Addition and Standard Sensor Names](#145---2026-03-28---documentation-and-sensors-local-changelog-addition-and-standard-sensor-names)
-  - [\[1.4.4\] - 2026-03-28 - Telemetry Expansion: Comprehensive Router Attribute Exposure](#144---2026-03-28---telemetry-expansion-comprehensive-router-attribute-exposure)
+  - [\[1.4.4\] - 2026-03-28 - Sensor Expansion: Comprehensive Router Attribute Exposure](#144---2026-03-28---sensor-expansion-comprehensive-router-attribute-exposure)
   - [\[1.4.3\] - 2026-03-28 - Polling Controls: Pause Polling Switch and Polling Interval Number Entity](#143---2026-03-28---polling-controls-pause-polling-switch-and-polling-interval-number-entity)
   - [\[1.4.2\] - 2026-03-27 - Feature Release: SMS Inbox Monitoring and Initial GitHub Release](#142---2026-03-27---feature-release-sms-inbox-monitoring-and-initial-github-release)
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
-  - [\[1.4.0\] - 2026-03-26 - Telemetry Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---telemetry-platform-core-signal-and-cellular-data-sensors)
+  - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
 
-## [3.3.8-dev2] - 2026-09-01 - Carrier Identity Withheld in Discovery; Mined Aliases; Firmware Update Sensors
+## [3.3.9] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching
+
+### Summary
+
+- **Operator Provisioning & Firmware Status**: Adds new default diagnostic entities (`Operator Provisioned` binary sensor and `Firmware Update Result` sensor) to report TR-069 management locks and firmware upgrade outcomes.
+- **Advanced Diagnostic Sensors**: Introduces 12 new diagnostic sensors (disabled by default, can be enabled in Home Assistant as needed) covering per-antenna 5G signal levels, secondary carrier aggregation metrics, SIM PIN/PUK attempt counters, and connection failure counts.
+- **MC888 Model Compatibility**: Adds alternate parameter aliases for MC888-series routers, enabling signal sensors, switches, and data limit controls.
+- **Diagnostics Reliability**: Diagnostics downloads now feature automatic session recovery and distinguish refused management settings from unsupported parameters.
+
+### Added
+
+- **Enabled-by-Default Diagnostic Entities**: Added `binary_sensor.*_operator_provisioned` (reports whether local settings are restricted by operator TR-069 management profiles) and `sensor.*_firmware_update_result` under the System sub-device.
+- **Diagnostic Signal & Antenna Sensors (Disabled by default)**: Added separate receive antenna sensors `sensor.*_5g_rsrp_antenna_1` and `sensor.*_5g_rsrp_antenna_2`, secondary carrier aggregation metrics (RSRP, RSRQ, SNR, RSSI from `lte_multi_ca_scell_sig_info`), 5G NSA/SA band locks, and network mode configuration. These can be enabled in entity settings for advanced signal debugging.
+- **System & SIM Diagnostic Sensors (Disabled by default)**: Added `sensor.*_sim_pin_attempts_remaining`, `sensor.*_sim_puk_attempts_remaining`, `sensor.*_modem_state`, `sensor.*_connection_failure_count`, and `sensor.*_roaming_state`.
+- **MC888 Parameter Aliases**: Added `network_` and `flux_` parameter aliases for LTE signal metrics, network mode selection, data volume switches, and cycle reset dates, enabling increased entity support on MC888 Pro models.
+
+### Changed
+
+- **Diagnostics Parameter Mining & Session Resilience**: Diagnostic downloads now probe up to 758 candidate parameters with active canary tracking, automatic session re-establishment, and distinct classification of operator-refused fields.
+- **URL Length Batch Partitioning**: Coordinator polling requests exceeding 1,600 characters are automatically split into sequential requests and merged, preventing response truncation as supported device schemas expand.
+
+### Under the hood
+
+- **Reverse Parameter Sweeps & Coverage**: Added automated sweeps asserting every requested parameter is mapped to an entity, with full branch coverage across parameter parsing, URL partitioning, and diagnostic artifact redaction.
+
+## [3.3.9-dev12] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported
+
+### Summary
+
+A diagnostics download from the reference MC7010 answers 137 keys that no entity reads. Most are static configuration a user sets once, but fourteen carry something they would act on, and one of them reports a fault the existing entities do not: `upgrade_result` reads `error` while both firmware-update sensors report benign states.
+
+### Added
+
+- **Operator Provisioned**, a diagnostic binary sensor on the System sub-device, enabled by default. On when the router declines to serve its remote-management (TR-069) settings, which is usual on an operator-supplied unit and is why some settings cannot be changed locally. Read hourly and on any forced refresh, because Refresh Now is what a user presses after changing something.
+- **Firmware Update Result** from `upgrade_result`, System, enabled by default.
+- **5G RSRP Antenna 1** and **Antenna 2** from `5g_rx0_rsrp` and `5g_rx1_rsrp`, Signal, disabled by default. Two genuine receive paths, established across twenty samples where the aggregate held −96 throughout while these ranged −98 to −97 and −95, a gap that never closed below 2 dB.
+- **CA Secondary Cell RSRP, RSRQ, SNR and RSSI**, parsed from `lte_multi_ca_scell_sig_info`, Signal, disabled by default. The reference device reports a 20 MHz secondary carrier while `lte_ca_scell_bandwidth` is empty, and that carrier's SNR ran 14 to 18 dB while the primary ran −2.4 to 2.6 — the headline SNR shows the worse of the two.
+- **SIM PIN Attempts Remaining** and **SIM PUK Attempts Remaining**, System, disabled by default. A locked SIM presents as no service, which otherwise reads as a coverage fault.
+- **Modem State**, **Connection Failure Count** and **Roaming State**, disabled by default.
+- **5G NSA Band Lock** and **5G SA Band Lock**, Signal, disabled by default, the counterparts to the existing LTE Band Lock.
+
+### Changed
+
+- **Eleven keys added to the polls**: `upgrade_result` to the core batch, the other ten to the extended batch. Core is 106 names in two requests, extended 48 in one. Measured on the reference device: 108 keys populated of 158 requested, against 97 of 147 before.
+- **Eight names removed from `DISCOVERY_CANDIDATES` and `DISCOVERY_VALUE_SAFE`** now that the polls request them. The existing sweeps caught the overlap.
+
+### Measured
+
+The secondary-carrier column order is measured rather than inferred. RSRQ, RSRP and RSSI are related by definition as `RSRQ = RSRP − RSSI + 10·log₁₀(N)`, and solving for N across twelve samples gave **99.4 resource blocks with a spread of 2.3** — 100 RB, a 20 MHz carrier. No other assignment of the six fields yields a physically possible N. Fields five and six are deliberately unpublished: one is constant at 0, the other was seen changing from 2 to 4, and neither is understood.
+
+### Notes
+
+- The provisioning probe cannot share a request with anything else, because a refusal replaces the whole response. It costs one round trip per hour, and it is excluded from `_degraded_endpoints()` deliberately — reporting the integration degraded because an hourly diagnostic curiosity failed would train users to ignore the health sensor.
+- The result is held on the coordinator rather than merged into `coordinator.data`. That dict means "what the router said" and feeds the populated counts, the drift check and the sparse-payload check; a synthetic key would skew all three.
+- `diag_check.py` no longer asserts that two runs read the same number of names without a session. That count is an environmental event — another client taking the router's single session, or a chunk timing out — so equality between two runs tests the environment rather than this code. Measured over six spaced passes: one reported eight, five reported none, and all six answered the same 99 names with nothing left unestablished. The check now asserts that a pass which lost its session recovered, which is the property that matters.
+
+## [3.3.9-dev11] - 2026-09-02 - MC888 Parameter Spellings Supported; Two-Request Core Poll
+
+### Summary
+
+The MC888 Pro in issue #56 answers a `network_` and `flux_` vocabulary where this integration polls the bare spellings, and leaves every bare spelling empty. Ten sensors, selects and switches had nothing to read on that device. Each pair was read from the diagnostics download attached to that issue: the alternate is populated and the primary is empty in all ten cases.
+
+Adding the alternates takes the core list past the URL budget, so the mandatory poll is now served in two requests.
+
+### Added
+
+- **Ten alternate spellings**, as alias tuples resolving to one entity: `network_lte_rsrp`, `network_lte_ca_pcell_band`, `network_lte_ca_pcell_bandwidth`, `network_lte_ca_scell_band`, `network_lte_ca_scell_bandwidth`, `network_net_select`, `network_net_select_mode`, `flux_clear_date`, `flux_auto_clear_flow_data_switch` and `flux_data_volume_limit_switch`. The bare spelling leads in every tuple, so the reference MC7010's path is unchanged.
+- **`state_aliases` on switch descriptions.** A switch reads its position from `state_key` and verifies a write by reading it back, so one spelling left it with no position to report and no way to confirm a write on that hardware.
+- **Every data-cycle spelling in `DATA_VOLUME_FIELDS`.** The write form is all-or-nothing and is built read-modify-write from the last poll, so a field whose spelling is not requested cannot be echoed back and the router refuses the whole form.
+- **Network Mode Config**, a diagnostic sensor in the Signal group, disabled by default, reporting whether the router picks its network mode itself or holds the one the user chose. `net_select_mode` was polled on every device and read by nothing, and its MC888 spelling was added beside it before that was noticed. The value publishes raw — `auto_select` on the reference MC7010 — because only the automatic value has been observed and the spelling the firmware uses for Manual is unknown.
+- **A reverse sweep, `test_every_polled_key_is_read_by_something`.** The alias sweeps run one way, asserting that every key an entity names is requested; nothing ran the other way. A key counts as read when an entity names it, when it belongs to an alias tuple some entity uses, when it feeds the data-volume write form, when it belongs to a prefix-matched family such as `APN_config0` through `APN_config9`, or when it is listed in `POLLED_WITHOUT_AN_ENTITY` with the reason it is requested anyway — the contract keys and the two session sentinels.
+
+### Changed
+
+- **`helpers.get_first`** replaces `sensor._get_first`. Switches and selects need the same resolution and cannot import from a sibling platform.
+- **The core poll is served in two requests.** `_split_by_url_budget` has handled this since `[3.3.9-dev1]` and needed no change; the list simply crossed 1,600 characters.
+
+### Fixed
+
+- **A session verdict is drawn only where it could mean something.** `_batch_get` classifies a chunk holding a sentinel or an unauthenticated key, and skips one holding neither. A chunk of names a device does not support answers every name empty, which is indistinguishable from an expired session: measured on the reference MC7010, where the second core chunk held ten names that device leaves blank, every poll was scored expired and `data` came back empty.
+
+### Measured
+
+|                          | Before | After |
+| :----------------------- | -----: | ----: |
+| Core poll requests       |      1 |     2 |
+| Core keys returned       |    137 |   147 |
+| Keys populated, MC7010   |     97 |    97 |
+| Discovery names answered |    102 |   102 |
+
+The reference MC7010 answers none of the ten alternates, so nothing on that device changes beyond the request count. Whether they populate on the MC888 Pro is **not verified** — no reachable device answers those spellings, and the download requested after release is what settles it.
+
+### Documentation
+
+- The `network_` family is recorded as partial: `network_lte_rsrq`, `network_lte_snr` and `network_lte_rssi` appear in no mined set from either device, so three of the four primary signal metrics have no alternate to fall back to.
+- **`docs/zte_how_to_access.md`**: a requested name comes back in **four** states, not three. The fourth is a refusal — `{"result": "failure"}` carrying none of the requested keys — which replaces the whole response and takes the session canaries with it. Records that an invented name is echoed back empty rather than dropped, so absence is not the ordinary signal for a name the firmware does not know. Adds two key families that are not what their names suggest: `lte_rsrp_1` through `lte_snr_4` are a rolling history of the aggregate rather than four antennas, measured across twenty samples with the aggregate appearing in the next sample's array 19 times of 19, while `5g_rx0_rsrp` and `5g_rx1_rsrp` are genuine receive paths. Adds the measured column order of `lte_multi_ca_scell_sig_info`, established by solving the RSRQ identity across twelve samples. Mining figures refreshed from 383 names to 642, the cross-device union recorded, and the batch-poll request line corrected to 105 core names in two requests.
+- **`docs/DEVELOPMENT.md` (v3.4.0)**: new **§6, supporting a router model nobody here owns** — the eight-step procedure this work produced, so the next model does not need it re-derived. Two §5 pitfalls added: a session verdict is only meaningful on a request that could carry one, with the two plausible fixes that make it worse recorded alongside; and a polled key with no consumer is invisible, with the two reasons the sweep written to catch it passed while blind. Sections renumbered, Environment Constraints and Technical Debt moving to 7 and 8.
+- **`docs/ROADMAP.md` (v3.4.0)**: Cross-model verification moved to Done with the MC889 gap stated, Custom triggers deleted as owned by the cross-project item at `.shared/issues/x_project/custom_trigger_options.md`, and the now-empty Blocked group removed.
+
+## [3.3.9-dev10] - 2026-09-02 - Diagnostic Download Declined Parameters Recorded; False Session Losses Removed
+
+### Summary
+
+Every diagnostics pass re-established the router session twice, and recorded sixteen names as read without a session. Neither had happened. A name the router declines answers `{"result": "failure"}`, which carries none of the requested keys and none of the canaries, so a refusal was indistinguishable from an eviction.
+
+Measured on the reference MC7010 on 2026-09-02: a name this firmware does not have is echoed back empty, while eleven `tr069_` configuration keys answer `{"result": "failure"}` in 40 to 60 milliseconds. Those are opposite facts. The refusal also replaces the whole response, so one declined name in a request cost every other name in it.
+
+### Added
+
+- **`refused`, a fourth outcome for a probed name.** A name asked in a request of its own that the router declines is a statement about the firmware — it knows the name and will not serve it — and belongs neither with the names that answered nothing nor with the names the pass could not ask about. All four fields are now asserted pairwise disjoint on hardware.
+- **`REFUSABLE_NAMES` in `known_names.py`**, holding names observed to be declined by any device, probed one per request so a refusal cannot reach another name. Holding a name there is not a claim that it will be declined: one that answers is recorded in `values` like any other.
+
+### Fixed
+
+- **A declined request is no longer read as a lost session.** Detected before the canary check, because the refusal blanks the canaries along with everything else. A read cannot signal an expired session this way — `_ensure_session` records from repeated hardware runs that a dead session echoes every requested key back empty — so a non-success `result` carrying none of the requested names is unambiguous.
+- **A name declined in a request of its own is settled there**, rather than being requeued and asked again to receive the same refusal.
+- **Sentinel comparison is by identity.** Both sentinels are empty dictionaries, and so is a successful read whose only populated keys were the canaries, so an equality test reported that read as a lost session.
+
+### Measured
+
+|                                    |            Before | After |
+| :--------------------------------- | ----------------: | ----: |
+| Names read without a session       |                16 |     0 |
+| Session re-establishments per pass |                 2 |     0 |
+| Names not established              |                11 |     0 |
+| Names recorded as declined         | not distinguished |    11 |
+| Re-probe rounds                    |                 4 |     1 |
+| Names answered                     |               101 |   101 |
+
+`tr069_ReqURL` answers with a live ACS callback URL on port 7547 while its eleven siblings are declined. The MC888 Pro in issue #56, self-purchased rather than operator-supplied, answers five of those keys plainly. That asymmetry is consistent with an operator-supplied unit withholding its provisioning configuration, and is not established: there is one device on each side of the comparison.
+
+## [3.3.9-dev9] - 2026-09-02 - Diagnostic Download Yield 90 → 101; Capped Re-Probe False Absences Fixed
+
+### Summary
+
+A diagnostics download reported names as unsupported by the firmware when the pass had simply stopped asking about them. Three separate mechanisms produced that outcome: a re-probe queue capped at 120 names, with the discarded remainder published as established absences; a probe that could lose its session and had no way to recover, so every subsequent chunk read blank; and a candidate list drawn only from each device's own web UI, conflating "this firmware does not mention the name" with "this firmware does not answer it".
+
+Measured on the reference MC7010, the cap discarded about a hundred names on every pass, and an ordinary healthy pass loses its session twice through chunk timeouts alone. The MC888 Pro key conclusions in `.notes/issues/other_router_access/` were derived from downloads carrying all three defects and are withdrawn in §6 of that document.
+
+### Added
+
+- **Cross-device probing (`known_names.py`).** Every device is probed with the union of names observed on any device — 758 names, from the MC7010's 658 and the MC888 Pro's 196, write commands excluded — as well as with its own mined set. Whether a device's JavaScript references a name and whether the device answers it are independent facts. Measured: the reference MC7010 now answers **101 names against 90**, including `DDNS_Enable`, five `dlna_*` keys, `gre_enable`, `net_link_detect_enable`, `tr069_ReqURL`, `user_ip_addr` and `voice_work_type`, none of which its own web UI mentions.
+- **`not_reprobed`.** Names the pass could not put to the device properly, published separately from those it asked and found silent. `probed_no_answer` now means asked alone and silent, and nothing else.
+- **Session recovery.** A detected loss triggers an explicit logout and login, proved by reading the canaries back — a login that returns cleanly while the canaries stay silent is recorded as a failure, not assumed to have worked. Bounded per probe phase, and the file says when the limit was reached and that later names were read without a confirmed session.
+- **Value kinds.** A withheld value now reports what sort of thing it is — `<boolean-like (0|1)>`, `<numeric integer, 4 chars>`, `<enum-like short token, 7 chars>`, `<delimited profile, 3 fields>` — rather than a character count. Derived from shape alone; the deny list is unchanged and no value is published that was not published before.
+- **`scripts/diag_check.py --sabotage`** takes the session away partway through a real pass, as a competing login does, and requires the pass to answer the same names. Measured: 136 against 136 clean, none lost. **`--survey N`** reports the spread across N passes.
+
+### Fixed
+
+- **The poll and the discovery pass now genuinely serialize.** `async_run_discovery` had taken `_async_update_lock` since the probe was added, with a comment saying the two take turns, but `_async_update_data` never acquired it — so nothing was serialized. A poll re-logging in mid-pass invalidates the cookie the probe is replaying, and the probe cannot recover by design. The test that was supposed to cover this took the lock itself in a helper and could not detect whether the poll path did.
+- **The re-probe cap is gone.** The wall-clock budget is the only bound, and it is the only one that scales: the MC888 probes 602 names against the MC7010's 501. Outstanding names are re-probed in rounds until nothing new resolves, the rounds ceiling is reached, or the budget expires.
+- **Canary selection is measured, not assumed.** Candidates are now checked against a reading taken during the logout the pass already performs, rather than a stored set that falls back to five names measured on one MC7010. On an MC888 Pro that constant is wrong — it serves `network_type` and `ppp_status` without a session — so a canary chosen against it could be a key that answers whether or not we are logged in.
+- **Three canaries, not one,** drawn from both polls, with a session declared lost only when all of them go silent. One key emptying during a band change is not an eviction.
+- **Discovery notes are swept** before publication: `discovery aborted: {err}` interpolates an exception that, for a connection failure, names the router's address.
+
+### Changed
+
+- `canary` becomes `canaries`, alongside `canary_pool`, which records why no canary was available — nothing answered, or everything that answered is served without a session. Those call for different responses, and on an unfamiliar device the difference matters.
+- A device that can offer no canary at all confirms its session out of band after a blank chunk, at most once every eight, so detection exists even where nothing in the request can prove it.
+
+### Measured
+
+|                                     |            Before |      After |
+| :---------------------------------- | ----------------: | ---------: |
+| Names answered, MC7010              |                90 |        101 |
+| Names discarded and reported absent |     ~100 per pass |          0 |
+| Names reported as not established   | not distinguished |         11 |
+| Pass duration                       |             ~10 s |   ~15-20 s |
+| Sabotaged pass, names answered      |       dozens lost | 136 of 136 |
+
+Across eight consecutive passes, seven were identical and one reported 115 names in `not_reprobed` — visible as an incomplete harvest rather than as a hundred false absences. The wall-clock budget of 240 seconds is not binding at these durations and is unchanged.
+
+## [3.3.9-dev7] - 2026-09-02 - Diagnostic Download Canary Field Published; Hardware Verification of the Produced File
+
+### Summary
+
+The `canary` field added in dev5 never reached a download. It was recorded by `run_discovery`, asserted by five passing unit tests, and dropped on the way out by an allow-list in `_sanitize_discovery` that was never extended to name it. Three downloads taken from the reference MC7010 on 2026-09-02 carry the full mining trace and no canary at all, and the omission was found by a human reading the files rather than by any check. The field records whether a pass could detect its own degradation, so without it `probed_no_answer` cannot be read: "these names do not exist on this firmware" and "we may not have been logged in" become indistinguishable.
+
+The cause is that every test for the discovery pass asserts on what the API returns, while the user receives what the sanitizer publishes. Branch coverage cannot close that gap — the allow-list is data, and the loop over it runs either way.
+
+### Fixed
+
+- **`canary` is published in the download.** Named in `DISCOVERY_METADATA_PUBLISHED` alongside the fields that were already reaching the file. Confirmed on hardware: the reference MC7010 now reports `canary: network_type` in the produced artefact.
+- **Discovery notes are swept before publication.** `run_discovery` interpolates the exception into `discovery aborted: {err}`, and an aiohttp connection failure names the host it could not reach — so the one published field carrying free text was also the one able to leak the LAN address that every other occurrence in the file has tokenized. Swept rather than blanked, so a reader still sees that a connection failed.
+
+### Added
+
+- **`scripts/diag_check.py`**: builds a real coordinator against the live router, calls the real `async_get_config_entry_diagnostics`, and asserts over the file it produces — required fields, internally consistent counts, and no unredacted identifier. It then does the whole thing twice and diffs the two, ignoring radio and counter drift; that is the check that found the dev4 truncation, performed by hand at the time. Not part of CI: it needs the hardware, and it logs the router out. Wired into `dev-workbench/workbench/tasks.json` as **Hardware: Check Diagnostics Download**.
+- **`tests/test_diagnostics_artefact.py`**: ten tests that assert on the artefact rather than the return value, including a parity test requiring every field `run_discovery` produces to be classified as published or gated. A new field now fails the suite until that decision is made deliberately.
+
+### Changed
+
+- **`_sanitize_discovery` copies through named module-level sets** rather than an inline tuple, so the allow-list is addressable by the test that guards it. It remains an allow-list rather than a passthrough: a future field could carry a router value, and deny-by-default is the direction an omission should fail in.
+- **`AGENTS.md` and `docs/DEVELOPMENT.md`** record the seam, the sweep that guards it, and the script that verifies it on hardware.
+
+### Known Issues
+
+- **A discovery pass intermittently answers a fraction of what it should.** Measured across six consecutive `diag_check.py` runs on the reference MC7010: passes answering 90 names, and passes answering 16, 11 and 0, with the canary populated and `session_alive_after` reporting `True` in every case. The dev5 canary detects a session lost partway; it does not detect this. The degraded runs correlate with a longer elapsed time (roughly 25 s against 9 s) rather than a shorter one. Not diagnosed, and deliberately not theorized about here — the two hypotheses offered for the dev4 slowdown were both wrong and cost a release each. Tracing per-request timing and state is the next piece of work.
+
+## [3.3.9-dev6] - 2026-09-02 - README Hardware Compatibility Alignment; Changelog Header Normalization
+
+### Summary
+
+Updated README hardware compatibility and diagnostic download guidance, and standardized historical changelog headers across recent dev cycles to outcome-first noun phrases with synchronized table of contents links.
+
+### Changed
+
+- **Hardware Compatibility Tiering in `README.md`**: Updated `## 🔧 Compatibility & Tested Devices` with an explicit two-tier verification hierarchy distinguishing between **Live Hardware Verified** (`ZTE MC7010`) and **Diagnostic Capture Verified** (`ZTE MC888 Pro`).
+- **Diagnostic Download Duration Callout**: Added a prominent `> [!TIP]` callout in `README.md` under Compatibility inviting users of unverified models to share sanitized diagnostics, providing explicit advance notice of the ~1 minute duration with no browser progress bar.
+- **Troubleshooting FAQ Alignment**: Refined the diagnostic tip in `README.md` troubleshooting FAQ to focus on attaching diagnostics when reporting issues, removing redundant general solicitation text.
+- **Changelog Header Normalization**: Normalized headings across `docs/changelog_local.md` (`3.3.9-dev3`, `3.3.9-dev1`, `3.3.8-dev2`, `3.3.8-dev1`, `3.3.7-dev2`, `3.3.7-dev1`, `3.3.4-dev24`, `3.3.4-dev22`, `3.3.4-dev18`, `3.3.4-dev7`, `3.3.4-dev5`, `3.3.4-dev4`, `3.3.4-dev3`, `3.3.4-dev2`) and `CHANGELOG.md` (`3.3.3`) to conform strictly to outcome-first 3–10 word noun phrases and two-clause limits.
+- **Table of Contents Synchronization**: Synchronized all 204 Table of Contents anchor links in `docs/changelog_local.md` to match the normalized section headers.
+
+### Documentation
+
+- **`changelog_format.md` (v1.3.0)**: Added explicit _Lead with the visible outcome or feature impact, not the internal code detail_ guidance to §2, forbidding low-level code parameter names or abstract assertions alone without stating the user or system change.
+- **`changelog_upd_gen.md` (v1.4.2)**: Updated drafting instructions in Step 2 with outcome-first negative patterns.
+
+## [3.3.9-dev5] - 2026-09-02 - Diagnostic Download Truncation Fixed; Fresh Login and Per-Chunk Canary Verification
+
+### Summary
+
+Two downloads taken a minute apart from the same device differed by 6 kB. One answered 3 names, the other 90. The first ran on a session the router had already discarded: with classification suppressed since dev4, every blank chunk read as "this firmware does not report these" rather than "we were not logged in", and it recorded 559 names that way. The `session_alive_after` check added in dev4 reported `True` for it, because a classified read at the end re-establishes the session and proves nothing about the pass.
+
+### Fixed
+
+- **Every pass now begins with an explicit logout and a fresh login.** `session_active` is a flag, not a fact — the router can discard a session without saying so, and the probe suppresses the classification that would otherwise find out. Four requests buy a starting state that is known rather than assumed, and a diagnostics download is a deliberate, infrequent act where that trade is worth making. Reproduced and confirmed: a pass started from a deliberately invalidated session answered 25 names before this change and 90 after.
+- **Every chunk carries a canary.** A name this device answered moments ago, needing a session — chosen from its own response rather than hardcoded, because a fixed name would be an assumption about one model. When the canary comes back blank the chunk was read unauthenticated, so its names are re-probed instead of being recorded as absent. Measured on the reference MC7010: 16 names caught that way in a healthy pass.
+- **A device with no canary to offer is recorded, not assumed.** One that answers almost nothing has no key that proves a session, and a reader should know a pass could not detect a session lost partway.
+
+### Changed
+
+- **`discovery.session` always reads `fresh login`.** The `existing` case is gone with the reuse it described.
+- **`_probe_chunk` distinguishes three outcomes** — the request failed, it answered blank, or the canary went silent. The last must never be recorded as a firmware that does not report those names.
+
+### Testing
+
+- 1121 tests, 100% branch coverage. New: a chunk read without a session is not recorded as absent; a live canary lets a blank chunk stand; the canary is never published as a discovered value; no canary is recorded rather than assumed; an unauthenticated key is never chosen as the canary.
+- **Hardware.** A healthy pass and a deliberately sabotaged one now both answer 90 names in about 6 seconds.
+
+### Notes
+
+The mechanism behind the original 01:11 download is confirmed in class and not in particulars. A router refusing reads after a reload, or rate-limiting the setup sequence, would leave the same fingerprint as a discarded session, and the file cannot separate them. Both fixes are chosen not to depend on which it was.
+
+## [3.3.9-dev4] - 2026-09-02 - Diagnostic Download Time Reduced from 60s to 6s; False Re-Login Fix
+
+### Summary
+
+A discovery pass took about a minute and logged a login failure on every run. Tracing it found the cause was self-inflicted: a chunk of names the firmware does not implement answers every value blank, and `_classify_session` read that as an expired session. Each such chunk cost a re-login and a replay. On the reference MC7010, 142 of 187 chunks failed that way — none of them from a timeout, and none of them clearing the session, which is why the first two hypotheses about the cause were both wrong.
+
+### Fixed
+
+- **`_request` takes a `classify` flag, and discovery probes set it false.** An all-blank response to a probe is the expected answer — "this firmware does not report these names" — not evidence about the session. Measured on the reference device: **63.1 seconds to 5.9**, chunks succeeding 45 to 186, chunks failing 142 to 1, with the same 90 names answered and the same 444 silent. The `Login failed: no session established` line that appeared in every pass is gone.
+
+### Added
+
+- **`session_alive_after`** in the download. The pass now runs unclassified, so a session dying partway would go unnoticed and everything after it would record as "no answer" — which reads as firmware that does not report those names. One classified read at the end tells the two apart. Recorded rather than raised: the download must produce a file either way.
+
+### Testing
+
+- 1116 tests, 100% branch coverage. New: an empty probe response posts no login and leaves the session untouched; a mandatory read still classifies an empty response; the session is checked after a pass; a dead session afterwards is recorded, not raised.
+- **Hardware, 17 of 17.** Two timed passes at 5.9 and 7.6 seconds.
+
+### Notes
+
+Two earlier hypotheses were measured and rejected before this one. Not clearing the session on a probe failure would have changed nothing — the trace shows `session_active` true before and after every failure. Rate-limiting the probe would have added delay to a problem that was not load-related: 124 of 142 failures completed in about 0.13 seconds, which is a re-login and a replay rather than a timeout.
+
+## [3.3.9-dev3] - 2026-09-01 - Discovery Probe Duration Reduced to 37s; Write Command Exclusion
+
+### Summary
+
+A review of the first 3.3.9-dev2 download found that 81 of the 520 names probed on the reference MC7010 were `goformId` write commands rather than read fields. The wider extraction harvests them as quoted strings like any other name, and they answered nothing while consuming probe budget and re-probe slots.
+
+### Changed
+
+- **`goformId` literals are extracted and subtracted from the read candidates.** Subtracted by name rather than by shape: excluding every uppercase token would have dropped `Z5g_CELL_ID`, `ODU_led_switch` and `DIAG_URL`, which are read fields this integration already requests. Measured on the reference device: 75 write commands removed, 501 names probed against 576, the pass down from 49 to 37 seconds, and one more name answered.
+- **`write_commands` is published in the download.** `docs/zte_how_to_access.md` records that a `goformId` cannot be discovered by probing — an unknown one fails exactly as a refused one does — so the bundles are the only source, and the inventory is worth keeping.
+- **`BATCH_URL_BUDGET` renamed to `BATCH_URL_MAX_CHARS`.** `check_test_depth.py` reserves the `_BUDGET` suffix for accumulation gates, which a test must reach by polling repeatedly; this is a size threshold decided within a single call, and the name claimed otherwise.
+
+### Testing
+
+- 1112 tests, 100% branch coverage. New: write commands are recorded and never probed; an uppercase read name is not excluded.
+- Test Depth passes — the rename clears the one undriven-gate finding.
+
+## [3.3.9-dev2] - 2026-09-01 - Diagnostic Download Mined Parameter Names Raised 383 → 642; Unanswered Names Published
+
+### Summary
+
+The mining regex required the literal token `cmd` before a name, and the bundles mostly do not write them that way. Measured on the reference MC7010: 383 names from that form against 642 unioned with two others — and `lte_rsrq`, `lte_snr`, `signalbar` and `cell_id` appear only in the forms we were not reading. Those are precisely the LTE metrics missing on the MC888.
+
+### Changed
+
+- **Three extraction forms, not one**: the `cmd=` literal, quoted names in array literals, and object-literal keys seeded blank. On the reference device the whole pass now yields 694 names across five bundles, against 383 before.
+- **The bundle list is read from the router's index page** where it names its scripts, unioned with the static list rather than replacing it, since a page may load through a module loader and name only an entry point. On the reference MC7010 the index names no scripts and the static list is used; the note records which happened.
+- **`_NOT_ROUTER_FIELDS` widened**: a wider net harvests function names, CSS classes and element ids alongside fields, so the filter carries more weight than when only the `cmd=` form was read.
+- **Per-chunk timeout 8s to 5s, budget 90s to 240s**: the first measured run exhausted the budget with names still unprobed. It now completes in about 49 seconds.
+- **The single-name re-probe is capped at 120.** A chunk answering nothing queues every name in it, and the wider extraction makes most chunks legitimately empty — 208 were queued on one run, enough to crowd out chunks that had not run.
+- **A two-second settle follows a discovery pass**, held inside the coordinator's update lock. A pass now issues several hundred requests in under a minute, and a write attempted immediately afterwards was once refused with an empty transport error — once in two runs, not reproducible on the next.
+
+### Added
+
+- **`probed_no_answer`**: the names probed that answered nothing, names only. A name the router's own UI uses but the device leaves empty is a different fact from a name that does not exist, and only the first was visible. On the reference device that is 520 names.
+- **`mined_names`**: the device's own vocabulary, useful where nothing answered.
+- **`data_populated` and `data_empty`** counts beside the payload, so a vocabulary mismatch is visible without diffing two downloads.
+- **`setup_completed`** on the API client, published in the download.
+
+### Fixed
+
+- **`measurement_note` is now set.** It was published from 3.3.8 while never being assigned, so the field read `null` where it should have carried a reason — the reporter's download showed exactly that. It is set at construction, on each refusal, on a failed probe and on success, and a test asserts it is a non-empty string before anything runs.
+
+### Testing
+
+- 1110 tests, 100% branch coverage across every module. New: names in array and object literals are found; JavaScript scaffolding is never probed; the bundle list comes from the index page; an unreadable index falls back to the static list; probed names that answered nothing are published; the re-probe cap holds.
+- **Hardware, 17 of 17** after a re-run. The first run failed one safe write immediately after the discovery pass, which is the observation behind the settle.
+
+### Notes
+
+The index page on the reference MC7010 names no scripts, so bundle discovery falls back there. It is retained because a different firmware may name them.
+
+A login failure is logged during a full discovery pass — `Result: failure` on a re-login after a timed-out chunk — and the pass completes regardless. Not investigated.
+
+## [3.3.9-dev1] - 2026-09-01 - Batch Polling URL Character Limit Partitioning; Request Overflow Prevention
+
+### Summary
+
+The mandatory poll was one request bounded by the router's URL length, and it had reached 1,551 characters against a ceiling of roughly 2,048. That ceiling had become a design constraint: the request list grows with every model supported rather than with every feature added, because a device spelling a concept differently needs both spellings requested. `_batch_get` now splits a list that would exceed the budget and merges the responses.
+
+### Changed
+
+- **`_batch_get` splits by URL length**: a list longer than `BATCH_URL_BUDGET` becomes several requests, merged into one mapping. The caller sees no difference. The budget is 1,600 characters, below the measured ceiling — that ceiling is one device's, and a firmware with a lower one truncates the response rather than erroring, which presents as missing fields.
+- **The overhead is measured, not assumed**: the fixed query is a constant and the host comes from `self.referer`, because a hostname is longer than an IP and the budget is a property of the whole URL.
+- **Every chunk is required.** A mandatory batch that tolerated a failed chunk would serve half its entities from a partial response and score the poll a success. Per-chunk tolerance belongs to discovery, which is diagnostics-only.
+- **Each chunk carries its own key list** into `_classify_session`, so the absent-key guard judges a response against what that request actually asked for.
+
+### Testing
+
+- 1103 tests, 100% branch coverage. `test_batch_poll_urls_stay_within_the_router_budget` now asserts the property that matters — every request issued stays inside the ceiling, however long the list grows — rather than checking a single URL.
+- New: a list within the budget is one request; a list past it is split and merged; no chunk exceeds the budget for a long hostname; a single name longer than the budget still gets a request rather than being dropped; a failing chunk fails the whole batch; a non-object chunk response contributes nothing.
+- **Hardware, 17 of 17.** Measured on the reference MC7010: the current lists still fit in one request each — core 95 keys, extended 38 — and no requested key is absent from the response.
+
+### Notes
+
+The split is inert today and exists for what follows: ten alias additions planned for this release take the core list to roughly 1,795 characters, past the budget and into two requests. A second round trip costs about 30 ms against a 180-second interval.
+
+## [3.3.8-dev2] - 2026-09-01 - Firmware Update Diagnostic Sensors Added; Discovery Carrier Redaction
 
 ### Summary
 
@@ -216,7 +572,7 @@ The first discovery download from the reference MC7010 published the operator's 
 ### Fixed
 
 - **Carrier identity is withheld in the discovery block**: `profile_name`, `provider`, `spn`, `plmn`, `fullname` and `shortname` join the deny-pattern. `network_provider` and `wan_apn` are in `CARRIER_KEYS`, so publishing `profile_name_ui`, `m_profile_name`, `strFullName`, `strShortName`, `network_provider_fullname`, `spn_name_data` and `rplmn_num` was inconsistent as well as revealing — `rplmn_num` carries MCC and MNC in one value. Verified on hardware: all seven now report shape only, and neither the profile name nor the PLMN appears anywhere in the file.
-- **`result` is neither mined nor harvested**: it is the key a `goform` response carries its outcome in, and it reads as a `cmd` literal in the bundles. Excluding it from mined names was not enough — a refused chunk echoes it back in the response, so it was published as though it were telemetry.
+- **`result` is neither mined nor harvested**: it is the key a `goform` response carries its outcome in, and it reads as a `cmd` literal in the bundles. Excluding it from mined names was not enough — a refused chunk echoes it back in the response, so it was published as though it were sensor data.
 
 ### Added
 
@@ -240,7 +596,7 @@ The core batch is 95 keys and 1,551 characters after these additions. Measured o
 
 `web_version` is recorded as a known field and not adopted — it reports the web UI build, and the firmware version already identifies the build.
 
-## [3.3.8-dev1] - 2026-09-01 - Key Discovery From the Router's Own Web UI; Concept-Based Contract Keys
+## [3.3.8-dev1] - 2026-09-01 - Web UI Automated Parameter Discovery; Concept-Based Drift Tolerance
 
 ### Summary
 
@@ -281,7 +637,7 @@ The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`
 - **Dynamic Session Cookie Compatibility**: The integration now retains and replays all session cookies set by the router (such as `zsidn` on the MC888 Pro) rather than requiring a literal `stok` cookie.
 - **Dynamic Unauthenticated Key Discovery**: The unauthenticated key set is now measured per device at startup, ensuring accurate session-expiry detection across varying router firmwares.
 - **Data Limit Control Compatibility**: Added alternate parameter aliases (including `flux_` variants) to the data limit write form, restoring data limit settings functionality on newer router models.
-- **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal telemetry.
+- **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal sensor data.
 
 ### Added
 
@@ -289,14 +645,14 @@ The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`
 - **Per-Device Session Classification**: Session health monitoring now dynamically probes which keys the router answers without authentication during setup, preventing firmwares that report network status unauthenticated from causing session classification mismatches.
 - **Data Limit Settings Controls**: Added `flux_` parameter aliases to `DATA_LIMIT_SETTING` form writes, ensuring data limit configuration switches and thresholds are writable on routers using modern firmware schemas.
 - **Diagnostics Privacy**: Ensured alternate cell identifier key spellings (`Z5g_CELL_ID`) are pseudonymized in diagnostic downloads alongside primary keys.
-- **Sparse Payload Telemetry Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded telemetry baseline.
-- **Firmware Parameter Discovery**: Added a startup discovery probe that safely tests candidate parameter names to discover available telemetry keys across router models and publishes safe results in diagnostics.
+- **Sparse Payload Diagnostic Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded sensor baseline.
+- **Firmware Parameter Discovery**: Added a startup discovery probe that safely tests candidate parameter names to discover available status keys across router models and publishes safe results in diagnostics.
 
 ### Under the hood
 
 - **Alias Classification Sweep & Symlink Link Checker**: Enforced test coverage ensuring all redacted and pseudonymized concepts cover all parameter aliases, and added repository link validation tooling for Markdown documentation.
 
-## [3.3.7-dev3] - 2026-08-31 - Local CI Validation SymmLink Link Checker Added
+## [3.3.7-dev3] - 2026-08-31 - Local CI Symlink Link Checker Added
 
 ### Added
 
@@ -305,7 +661,7 @@ The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`
   - **Task Integration**:
     - `dev-workbench/workbench/tasks.json`: Added `Markdown: Check Repo Links` task, wired into `Validate All` dependencies and `Show: Results Summary`.
 
-## [3.3.7-dev2] - 2026-08-31 - Data-Limit Form Aliases; Classified-Concept Alias Sweep
+## [3.3.7-dev2] - 2026-08-31 - Data Limit Write Control Form Aliases; Diagnostics Redaction Sweep
 
 ### Summary
 
@@ -322,7 +678,7 @@ Two items of the 3.3.7 sweep were reported complete in dev1 and were not. `DATA_
 - **`test_every_flux_spelling_requested_is_aliased_somewhere`**: a `flux_` name in the request list that nothing reads costs URL budget on every poll, and the budget is what bounds the batch.
 - **`test_every_classified_concept_covers_all_its_aliases`**: an alias of a redacted, address or cell-identifier concept must itself be classified. `TO_REDACT`, `IP_KEYS` and `CELL_KEYS` enumerate by exact name, so a new spelling is invisible to them. This is the test that found the `Z5g_CELL_ID` leak.
 
-## [3.3.7-dev1] - 2026-08-31 - MC888 Pro Session Cookie; Per-Device Unauthenticated Key Set; Key Discovery
+## [3.3.7-dev1] - 2026-08-31 - MC888 Pro Dynamic Cookie Authentication; Startup Key Discovery
 
 ### Summary
 
@@ -344,7 +700,7 @@ Issue #56 is resolved. The reporter's diagnostics download showed the MC888 Pro 
 ### Changed
 
 - **`api.stok` becomes `api.cookies`**, a mapping. Five consumers updated, `scripts/hardware_check.py` included.
-- **`_sweep` masks digit runs of 15 or more**, catching IMSI (15) and ICCID (19-20). Not lower: an 11-digit byte counter is pinned by test, so anything below 12 would mask ordinary telemetry.
+- **`_sweep` masks digit runs of 15 or more**, catching IMSI (15) and ICCID (19-20). Not lower: an 11-digit byte counter is pinned by test, so anything below 12 would mask ordinary sensor data.
 - **`imsi` and `iccid` added to `TO_REDACT`** in the same change that put them in the request list.
 - **Background setup** runs both probes once, then restores the session. Login is awaited twice by design: the measurement can only be taken with no session.
 
@@ -376,7 +732,7 @@ The cookieless-session path added in 3.3.5-dev25 is retained but is no longer ev
 
 - **Startup Reconciliation Test Suite**: Added 34 tests verifying startup reconciliation across multi-week offline gaps, clock skew, un-synchronized host clocks, and storage error conditions.
 
-## [3.3.6-dev1] - 2026-08-31 - Device Uptime Could Hold a Stale Boot Time Across a Home Assistant Restart
+## [3.3.6-dev1] - 2026-08-31 - Device Uptime Stale Boot Time Reconciliation Across Restarts
 
 ### Summary
 
@@ -509,7 +865,7 @@ The change is not testable on available hardware. The MC7010 refuses `LOGIN_MULT
 - **Repairs Alignment**: Retired non-actionable repair cards (`firmware_contract_drift` and `sms_storage_full`). Schema changes are now tracked via `drift` on Integration Health, while message capacity is tracked by the new binary sensor. Renamed unreachable router issue to `conn_error`.
 - **Bandwidth Sensor Unit Conversion**: LTE Carrier Aggregation bandwidth sensors (`lte_ca_pcell_bandwidth` and `lte_ca_scell_bandwidth`) now declare `device_class: frequency`, allowing unit switching (MHz/GHz/kHz) in the Home Assistant UI.
 - **SMS Logging Privacy**: The sender's phone number is no longer logged at `INFO` level when receiving SMS messages; the internal message index is logged instead.
-- **Health Telemetry Drift Limit**: Split the contract drift strike limit into an independent budget (`HEALTH_DRIFT_STRIKE_LIMIT = 3`) separate from poll fetch failures.
+- **Missing Router Data Strike Limit**: Split the missing or changed router data strike limit into an independent budget (`HEALTH_DRIFT_STRIKE_LIMIT = 3`) separate from poll fetch failures.
 
 ### Fixed
 
@@ -562,7 +918,7 @@ Issue #56: an MC888 Pro on firmware `CR_ABPLMC888PROV1.0.1B04` answers a success
 - **`scripts/hardware_check.py`**: `_kill_session()` and the logout replay set the whole pair; the six `api.stok = await api.login()` assignments follow the new signature. Check [1] now scores that the pair agrees after a kill and re-login, and records whether the device issues a `stok` cookie at all.
 - **`tests/conftest.py`**: `MockResponse.headers` is a `CIMultiDict` rather than a plain dict, which is what aiohttp returns and what `getall` requires.
 
-## [3.3.4-dev24] - 2026-08-30 - CI Bump Ruff; Spelling; Actions Screenshot for README
+## [3.3.4-dev24] - 2026-08-30 - Ruff Tooling Bump; README Actions Visuals
 
 ### Bumps
 
@@ -583,7 +939,7 @@ Synchronized `.notes/proj_structure.md` with current repository architecture, re
 
 - **Project Structure Mapping**: Updated `.notes/proj_structure.md` (v1.1.7) to record `repairs.py`, `docs/ha_compatibility.md`, 8 new test suites and test harness (`test_health_contract.py`, `test_publish_moment.py`, `test_repairs.py`, `test_session_detection.py`, `test_transport_seam.py`, `test_write_classification.py`, `test_write_payload_shapes.py`, `transport.py`), and internal notes directories (`test_pytest_issues/`, `whatsnext.md`).
 
-## [3.3.4-dev22] - 2026-08-27 - Ruff rules aligned; Repairs info in README; AGENTS align
+## [3.3.4-dev22] - 2026-08-27 - Ruff Rules Alignment; README and AGENTS Synchronization
 
 ### Changed
 
@@ -652,7 +1008,7 @@ The Repairs section opened by explaining the boundary between Repairs and Integr
 
 - **`huawei_router_5g` carried the same wording and received the same rewrite**, recorded there as `[1.2.2-dev2]`. Its version omits the SMS clause differences; both now read identically apart from the entity names.
 
-## [3.3.4-dev18] - 2026-08-26 - SMS Storage Off Integration Health; Sensor Enabled By Default
+## [3.3.4-dev18] - 2026-08-26 - SMS Full Status Decoupled from Integration Health; Sensor Enabled by Default
 
 ### Summary
 
@@ -792,7 +1148,7 @@ Documentation only. No code, no tests, no entity changes.
 
 ### Summary
 
-Documentation pass. Clarified Home Assistant repair criteria in `README.md`, contrasting actionable repairs with telemetry surfaces like Integration Health and diagnostic binary sensors.
+Documentation pass. Clarified Home Assistant repair criteria in `README.md`, contrasting actionable repairs with diagnostic surfaces like Integration Health and binary sensors.
 
 Documentation only. No code, no tests, no entity changes.
 
@@ -941,7 +1297,7 @@ Tests and test tooling only; no shipped code changed. Closes the re-opened chore
 ### Added
 
 - **`tests/transport.py`** — the router faked at the HTTP layer over `aioclient_mock`, which `pytest-homeassistant-custom-component` already ships. No dependency added, and it is the seam Home Assistant's own suite uses. Before this the project had **zero** uses of it: every suite built on a `MagicMock` standing in for `ZTERouterAPI`, so anything the payload _derives_ was supplied by the fixture rather than computed.
-- **`tests/test_transport_seam.py`** — 10 tests. Both declared outcomes (`conn_error`, `auth_failed`) driven end to end, plus the fault set: unreachable, timeout, credentials rejected, expired session, router still booting, contract drift, and an HTML page served where JSON was expected.
+- **`tests/test_transport_seam.py`** — 10 tests. Both declared outcomes (`conn_error`, `auth_failed`) driven end to end, plus the fault set: unreachable, timeout, credentials rejected, expired session, router still booting, missing router fields, and an HTML page served where JSON was expected.
 
 ### Notes on the fake, because three of them are not obvious
 
@@ -962,7 +1318,7 @@ Both were found because the mutation run reported them as uncaught. Neither woul
 - **Five `api.py` mutations verified**, each restored by checksum: the login stops reading the `stok` cookie; the dead-session rule weakened; HTML detection disabled on the content-type branch; `not_ready` collapsed into `expired`; and the classifier ignoring unauthenticated keys. **All five are inside `api.py`** — that is the point, because none of them would fail a suite built on an API-object mock.
 - `Tests: Depth Check`: 2 of 2 driven, `REACH mode: coverage contexts`, 0 gates undriven, 0 orphanable, 0 self-healing. **2 stubbed publishes and 2 seams remain** and are the next phase.
 
-## [3.3.4-dev7] - 2026-08-25 - Interactive Reauth Repair Flow; Frequency Unit Selector; Separate Drift Strike Budget; SMS Log Privacy
+## [3.3.4-dev7] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy
 
 Aligned repair workflows, privacy standards, and entity configurations across four cross-project chores and one cross-project issue.
 
@@ -971,7 +1327,7 @@ Worked as a single pass over the source so the tree is measured once rather than
 ### Changed
 
 - **The repair set is now the family's two keys** (`x_project` issue _Repair set alignment_, policy §2). `router_unreachable` becomes **`conn_error`**, keeping its text verbatim — the same condition under the canonical key. `firmware_contract_drift` and `sms_storage_full` leave the Repairs panel entirely. The rule they failed is _agency_: a schema change is not something a user can fix, and a full message store is an operational state to automate on. Both conditions are unchanged in substance — drift still publishes `severity: warning` and a `drift` finding on the Integration Health sensor, and storage still publishes a health finding.
-- **`HEALTH_DRIFT_STRIKE_LIMIT = 3`** in `const.py`, applied at `coordinator.py:691` (chore **C-015**). `FETCH_STRIKE_LIMIT` was serving both fetch failures and contract drift. Both budgets are 3 today and the value did not move; what changed is that moving one no longer silently moves the other. Matches `huawei_router_5g`, `wifi_ssid_monitor` and `unifi_network_monitor`. The test patches the drift budget to 5 and asserts drift stays quiet at 4 — with one shared constant that assertion cannot pass, which is the only way to tell a real split from a renamed one.
+- **`HEALTH_DRIFT_STRIKE_LIMIT = 3`** in `const.py`, applied at `coordinator.py:691` (chore **C-015**). `FETCH_STRIKE_LIMIT` was serving both fetch failures and missing router data. Both budgets are 3 today and the value did not move; what changed is that moving one no longer silently moves the other. Matches `huawei_router_5g`, `wifi_ssid_monitor` and `unifi_network_monitor`. The test patches the drift budget to 5 and asserts drift stays quiet at 4 — with one shared constant that assertion cannot pass, which is the only way to tell a real split from a renamed one.
 - **The two bandwidth sensors offer Home Assistant's unit selector** (chore **C-012**). `native_unit_of_measurement="MHz"` as a raw string renders correctly and is inert: with no `device_class` there is no conversion table, so no dropdown. Now `UnitOfFrequency.MEGAHERTZ` plus `SensorDeviceClass.FREQUENCY`. **Neither carries a `state_class`, and the test asserts that** — but for the guard-band exemption, not for the selector. See the correction in `[3.3.4-dev12]`: the belief that `state_class` suppresses the selector was checked against Home Assistant's source on 2026-08-26 and is false.
 - **The SMS sender's number no longer reaches the log** (chore **C-020**, §20). `coordinator.py` logged it at `INFO` on every new message. The number still reaches automations on the `zte_router_5g_sms_received` bus event, which is scoped to the entry; the log is not, and is copied into every diagnostics download and issue report. The line now carries the message id, which is enough to correlate a log entry with an event.
 - **Three log lines hardcoded the strike budget as `/3`** while it is a constant, so they would have lied the moment it moved. They interpolate `FETCH_STRIKE_LIMIT`.
@@ -1030,7 +1386,7 @@ Tooling, dependencies, and documentation updates. Bumped shared CI and linters, 
 
 - **`python-typing-update`**: Dropped as HA has moved to enforcing these rules via `ruff`.
 
-## [3.3.4-dev5] - 2026-08-25 - Cross-Project Chore Verification: C-006, C-011, C-016, C-017, C-018, C-021
+## [3.3.4-dev5] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md
 
 Documentation and issue tracking queue update. A second cross-project chore assessment pass completed against `x_proj_chores.md`, verifying the remaining unassessed chores against the ZTE codebase and test baseline.
 
@@ -1043,7 +1399,7 @@ Documentation and issue tracking queue update. A second cross-project chore asse
 - **`C-018` (Hardware check script output)**: Marked `DONE`. `scripts/hardware_check.py:59` outputs to console and tees to `.reports/hardware_check.txt`; supports `--capture` for sanitized payload inspection.
 - **`C-021` (Drive declared outcomes via transport mock)**: Marked `DONE`. Live `.workbench/check_test_depth.py` run confirms 3 of 3 declared outcomes driven through transport mocks (`test_coordinator_resilience.py`), with the deepest test driving 12 consecutive polls.
 
-## [3.3.4-dev4] - 2026-08-24 - Documentation: Bridge-Mode Verification Task; APN Auto-Mode Analysis
+## [3.3.4-dev4] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure
 
 Documentation update. Documented APN auto-mode profile resolution behavior in development notes, added a bridge-mode payload verification task for future hardware testing, and updated `.notes/` structure tracking.
 
@@ -1056,7 +1412,7 @@ Documentation only. A second sweep over the `.notes/` folders the first migratio
 - **The screenshots entry stays in `todo.md`.** A documentation chore with no exit criterion beyond doing it is what that list is for.
 - **`.notes/proj_structure.md` corrected** — `tasks/` added, `issues/` re-described, and `info/` updated after `expansion_plan_202607/` and `updates_202608/` moved to `tasks/closed/`.
 
-## [3.3.4-dev3] - 2026-08-24 - Documentation: Task Queue Organization; Roadmap Task Alignment
+## [3.3.4-dev3] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure
 
 Documentation reorganization. Structured project internal notes under `.notes/tasks/`, archived completed July/August plans, and aligned billing-cycle tasks with `docs/ROADMAP.md`.
 
@@ -1081,7 +1437,7 @@ Documentation only. `tasks_folder_migrate` run against this project, in two pass
 - **`expansion_plan_202607/`** — `Z5g_snr` and `Z5g_CELL_ID` are at `api.py:137-138`, and the six-call-site aliasing is `_get_first` in `sensor.py`.
 - **`updates_202608/status_plan.md`** — all six phases run and nine review findings implemented across `[3.3.3-dev8]`–`[3.3.3-dev11]`. Its Phase 5 is recorded `PARTIAL` and deliberately not to be re-run; the stamp says so, because "partial and closed" reads as unfinished.
 
-## [3.3.4-dev2] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; Documentation Updates
+## [3.3.4-dev2] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements
 
 Tooling and documentation updates. Bumped validation dependencies (Zizmor, MyPy, JSONSchema, PHACC) and updated `AGENTS.md` and `CHANGELOG.md` for clarity and consistency.
 
@@ -1105,7 +1461,7 @@ Documentation refinements. Minor changelog formatting fixes and US English spell
 
 -**Changelog**: Minor tweaks to changelog(s) plus spelling fixes.
 
-## [3.3.3] - 2026-08-08 - Release - SMS Bugfix
+## [3.3.3] - 2026-08-08 - Release: SMS Emoji Decoding, Polling Resilience, and Repair Isolation
 
 ### Summary
 
@@ -1672,7 +2028,7 @@ Category E of `sensor_review.md` had two directions — does the documented enti
 
 All 35 temporarily-enabled entities re-disabled and confirmed from the live entity list at 57.
 
-## [3.3.2-rc12] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Contract Drift Invariant Tests
+## [3.3.2-rc12] - 2026-08-01 - Repair Title Neutrality; Signal Guidance Alignment; Missing Field Invariant Tests
 
 ### Bumps
 
@@ -1680,7 +2036,7 @@ All 35 temporarily-enabled entities re-disabled and confirmed from the live enti
 
 ### Summary
 
-Repair wording and test invariant updates. Rephrased repair titles to report observed conditions neutrally rather than guessing root causes, aligned signal entity guidance notes with `README.md`, and added tests guaranteeing contract drift checks never fire on unsupported hardware.
+Repair wording and test invariant updates. Rephrased repair titles to report observed conditions neutrally rather than guessing root causes, aligned signal entity guidance notes with `README.md`, and added tests guaranteeing missing field checks never fire on unsupported hardware.
 
 ### Changed — repair titles no longer assert a cause
 
@@ -2265,7 +2621,7 @@ Documentation only. Closes the gap between what this session built and what the 
 
 ### Summary
 
-Coordinator polling performance and resilience overhaul. Split `get_all_data()` into a mandatory core poll (75 keys) and an optional extended poll (41 keys) with dedicated failure budgets, preventing URL length overflows (~2048 bytes) and isolating diagnostic failures from core telemetry.
+Coordinator polling performance and resilience overhaul. Split `get_all_data()` into a mandatory core poll (75 keys) and an optional extended poll (41 keys) with dedicated failure budgets, preventing URL length overflows (~2048 bytes) and isolating diagnostic failures from core sensor polling.
 
 The batch poll had grown to 1,889 characters against a ~2,048-character URL ceiling. Rather than keep trading one key away to make room for the next, the request is now two.
 
@@ -2308,7 +2664,7 @@ Acts on the router-facing agent's answers in `.notes/info/zte_element_discovery_
 
 ### Added
 
-- **`test_batch_poll_url_stays_within_the_router_budget`.** The batch limit is a **URL length of roughly 2,048 characters**, not a number of names, and the poll had grown to ~1,885 without anything watching. Past the ceiling the response truncates, which presents as missing fields and is indistinguishable from firmware contract drift. The test carries a soft threshold ahead of the hard one, so the warning arrives before the failure.
+- **`test_batch_poll_url_stays_within_the_router_budget`.** The batch limit is a **URL length of roughly 2,048 characters**, not a number of names, and the poll had grown to ~1,885 without anything watching. Past the ceiling the response truncates, which presents as missing fields and is indistinguishable from firmware key changes. The test carries a soft threshold ahead of the hard one, so the warning arrives before the failure.
 - `data_volume_limit_unit` and `data_volume_limit_size` to the batch poll — the write path cannot echo back a field it never reads. `test_every_data_volume_field_is_polled` keeps the two in step.
 
 ### Changed
@@ -2324,7 +2680,7 @@ Acts on the router-facing agent's answers in `.notes/info/zte_element_discovery_
 - Two decisions to publish a raw string rather than parse it were vindicated by the answers. The field order given for `lte_multi_ca_scell_info` has **positions 4 and 5 transposed** — the sample reads `…,20,6300,…`, and EARFCN 6300 falls inside band 20's allocation while `20` is not a valid EARFCN. And `sntp_timezone` rests on a single sample from a UTC+0 unit with a sign convention that runs backwards from expectation. Parsing either would have shipped a wrong value.
 - **`battery_value` returns a hardcoded `100`**, not an empty string. An earlier probe reported it empty because its batch chunk contained fictional names and timed out. The `about` note calling the value meaningless on a mains-powered unit was right all along.
 
-## [3.3.1-dev11] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Telemetry
+## [3.3.1-dev11] - 2026-07-29 - Billing Cycle Tracking, Usage Projection Sensor, and Diagnostic Entities
 
 ### Summary
 
@@ -2355,7 +2711,7 @@ Acts on `.notes/info/zte_element_discovery_report.md`, a two-step discovery run 
 Live MC7010 (`IRL_H3G_MC7010DV1.0.0B03`), read from a diagnostics download after a full restart.
 
 - **All 15 new keys answered.** `traffic_clear_date` returned `1` — the discovery report's spelling is the right one. The two `data_volume_*` spellings returned `""`, meaning the firmware knows the names but does not populate them on this model; `_safe_int` treats present-but-empty as absent, so the resolution is clean and the disagreement warning does not fire.
-- **No truncation.** 131 keys came back with every pre-existing field intact, closing the risk that a longer `cmd` list would silently drop data and look like firmware contract drift.
+- **No truncation.** 131 keys came back with every pre-existing field intact, closing the risk that a longer `cmd` list would silently drop data and look like firmware key changes.
 - **The projection is coherent against real usage** — 1107.75 GB on day 29 of 31 projected to 1200.5 GB, `confidence: high`.
 - 91 entities registered, 7 of the 9 new ones disabled by default.
 
@@ -2393,7 +2749,7 @@ Integration roadmap and architectural review. Rewrote `docs/Future.md` to docume
 - **Open items folded in from `DEVELOPMENT.md`** (§15 SMS toggle, custom triggers, the thermal keep-or-remove question, the migration handler) so `Future.md` is a complete forward view rather than a partial one that silently omits known work.
 - **Version Control** section — the document had none, which is why a two-month-old roadmap gave no signal that it was stale.
 
-## [3.3.1-dev9] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Telemetry Coverage
+## [3.3.1-dev9] - 2026-07-29 - Entity About Notes Expansion: Select Platform Support and Control Sensor Coverage
 
 ### Summary
 
@@ -2421,7 +2777,7 @@ Reconciled the `about` note suite against the running instance with `sensor_revi
 
 ### Changed
 
-- **`Firmware Version` simplified.** It explained field renaming and contract drift — accurate, but far more machinery than a firmware string warrants in a tooltip. Cut to one sentence; the contract-drift explanation belongs to the README and the Integration Health sensor, which both already carry it.
+- **`Firmware Version` simplified.** It explained field renaming and missing router fields — accurate, but far more machinery than a firmware string warrants in a tooltip. Cut to one sentence; the missing-field explanation belongs to the README and the Integration Health sensor, which both already carry it.
 - **`docs/all_sensors.md`**: `About` column refreshed, 68 → 74 ticks.
 - **`docs/about_attribute_list.md`**: regenerated from live — System 21, Signal 39, Data 12, SMS 2. The `ᴰ` legend moved from the foot to the top, where a reader meets the marker. Removed a footer claim that a test enforced the file: that test had been deleted, and a guarantee that is not real is worse than none because it stops people checking.
 
@@ -2509,13 +2865,13 @@ Session expiry and write action verification fixes. Restricted session activity 
 
 Both defects were present in the released **3.2.5**, so by the "would a user on the last release have hit this?" test they qualify for a `Fixed` bullet in `CHANGELOG.md` `[3.3.1]`. Recorded here as an open decision rather than assumed either way.
 
-## [3.3.1-dev5] - 2026-07-29 - Thermal Diagnostic Telemetry Set: Modem and 5G Radio Temperature Sensors
+## [3.3.1-dev5] - 2026-07-29 - Thermal Diagnostic Sensor Suite: Modem and 5G Radio Temperature Sensors
 
 ### Summary
 
-Thermal telemetry sensor expansion. Added modem and 5G radio temperature diagnostic sensors (`pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`) disabled by default with guard bands (-40 to 125 °C), completing the 5-sensor thermal suite.
+Thermal sensor expansion. Added modem and 5G radio temperature diagnostic sensors (`pm_sensor_mdm`, `pm_modem_5g`, `pm_sensor_5g`) disabled by default with guard bands (-40 to 125 °C), completing the 5-sensor thermal suite.
 
-Completes the thermal telemetry set following independent verification of the source research. The set is now defined by a statable rule rather than by which keys the research document happened to name.
+Completes the thermal sensor set following independent verification of the source research. The set is now defined by a statable rule rather than by which keys the research document happened to name.
 
 ### Added
 
@@ -2598,7 +2954,7 @@ Phase 2 of the cross-model compatibility expansion. behavior on the MC7010 is un
 
 ### Added
 
-- **`api.py` cross-model batch-poll keys**: Added ten keys to `get_all_data()` — `5g_rsrp`, `nr5g_rsrp`, `5g_sinr`, `nr5g_sinr`, `Z5g_snr`, `Z5g_CELL_ID`, `flux_monthly_tx_bytes`, `flux_monthly_rx_bytes`, `pm_sensor_pa1`, `pm_sensor_ambient`. These are the alternative spellings other `goform` models use, plus optional thermal telemetry. Requesting a key the router does not know is safe: it is simply absent from the response rather than an error, and an absent key cannot trip the "every value is an empty string" expired-session rule.
+- **`api.py` cross-model batch-poll keys**: Added ten keys to `get_all_data()` — `5g_rsrp`, `nr5g_rsrp`, `5g_sinr`, `nr5g_sinr`, `Z5g_snr`, `Z5g_CELL_ID`, `flux_monthly_tx_bytes`, `flux_monthly_rx_bytes`, `pm_sensor_pa1`, `pm_sensor_ambient`. These are the alternative spellings other `goform` models use, plus optional thermal sensors. Requesting a key the router does not know is safe: it is simply absent from the response rather than an error, and an absent key cannot trip the "every value is an empty string" expired-session rule.
 - **`api.py` best-effort login form fallback**: The login POST is now `_attempt_login()`, and `login()` retries once with the alternate `goformId` when the first form yields no session. Which form a router accepts is a per-model quirk and the tested-model list covers only MC801 and MC7010, so an unlisted router could previously be rejected purely for using the wrong form. A credentials rejection is **not** retried — the password is wrong whichever form carries it, and a second attempt only counts against routers that lock out.
 - **`tests/test_api.py`**: Fallback fires in both directions, does not fire on a credentials rejection, does not fire when the primary form already worked, reports an auth error the fallback uncovers, and keeps a double unclassified failure as a connection error rather than an auth one. Plus SMS encoding selection, and a guard asserting every aliased key is actually requested and that no key is requested twice.
 
@@ -2958,11 +3314,11 @@ Implements `dev_standards` §14 as revised at **Standard Version 1.12.0**: `_unr
 
   Re-verified by mutation after both fixes: removing a single key from `_unrecorded_attributes` fails the sweep.
 
-## [3.3.0-dev6] - 2026-07-27 - Integration Health: Firmware Contract Drift Attribute Publication
+## [3.3.0-dev6] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication
 
 ### Summary
 
-Integration health telemetry enhancement. Added the `drift` attribute to the Integration Health problem binary sensor under `dev_standards` §19, exposing contract drift states directly to templates and automations.
+Integration health enhancement. Added the `drift` attribute to the Integration Health problem binary sensor under `dev_standards` §19, exposing missing or changed router data states directly to templates and automations.
 
 Closes the gap flagged in `[3.3.0-dev5]`. **393 tests passing, 100% coverage, ruff clean, mypy strict clean.**
 
@@ -3410,7 +3766,7 @@ Coordinator lifecycle update. Passed `config_entry` explicitly to `DataUpdateCoo
 
 ### Summary
 
-Entity telemetry formatting. Applied `suggested_unit_of_measurement` and `suggested_display_precision` to 16 sensors (converting byte throughput and storage to GB and Mbit/s in the UI while preserving native units for statistics).
+Entity formatting. Applied `suggested_unit_of_measurement` and `suggested_display_precision` to 16 sensors (converting byte throughput and storage to GB and Mbit/s in the UI while preserving native units for statistics).
 
 - **Suggested Display Units & Precision**: Applied Home Assistant's `suggested_unit_of_measurement` / `suggested_display_precision` to 16 sensors so the UI shows friendly units and sensible decimal places while native values (used for long-term statistics) stay canonical.
 
@@ -3781,7 +4137,7 @@ Test depth and resilience engineering. Added 17 unit tests covering combinatoria
 
 ### Summary
 
-Recorder storage optimization. Removed `state_class` declarations from 8 high-frequency telemetry sensors to prevent database bloat from unwanted long-term statistics.
+Recorder storage optimization. Removed `state_class` declarations from 8 high-frequency sensors to prevent database bloat from unwanted long-term statistics.
 
 ### Changed
 
@@ -3968,7 +4324,7 @@ Static type verification. Resolved 43 mypy strict typing errors across all platf
 
 ### Summary
 
-Core request refactoring and telemetry additions. Routed all API calls through a centralized async `_request` helper with automatic session recovery, and added the uptime duration sensor.
+Core request refactoring and sensor additions. Routed all API calls through a centralized async `_request` helper with automatic session recovery, and added the uptime duration sensor.
 
 ### Added
 
@@ -4238,11 +4594,11 @@ Code quality and robustness pass. Extracted shared `device_info` helper, transit
 
 - **Duplicate `PARALLEL_UPDATES = 0`**: Removed second declaration from `sensor.py`, `binary_sensor.py`, `switch.py`, `number.py`. Fixes Low #1.
 
-## [3.0.0-dev15] - 2026-05-07 - Telemetry: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor
+## [3.0.0-dev15] - 2026-05-07 - Sensor Expansion: 12 New Sensors, Guard Bands, and IMEI Hardware Identity Anchor
 
 ### Summary
 
-Telemetry expansion and identity anchoring. Added 12 new sensors, configured out-of-range value guard bands, and adopted hardware IMEI as the stable device identifier.
+Sensor expansion and identity anchoring. Added 12 new sensors, configured out-of-range value guard bands, and adopted hardware IMEI as the stable device identifier.
 
 ### Added
 
@@ -4587,11 +4943,11 @@ Documentation update. Added local changelog tracking and standardized sensor nam
 
 - **Standard Names**: Changed specific sensor names (with ID tag) to standard names.
 
-## [1.4.4] - 2026-03-28 - Telemetry Expansion: Comprehensive Router Attribute Exposure
+## [1.4.4] - 2026-03-28 - Sensor Expansion: Comprehensive Router Attribute Exposure
 
 ### Summary
 
-Telemetry expansion. Exposed all available router status and diagnostic attributes as Home Assistant sensors.
+Sensor expansion. Exposed all available router status and diagnostic attributes as Home Assistant sensors.
 
 ### Added
 
@@ -4637,11 +4993,11 @@ Architecture refactoring. Refactored coordinator and added automatic HTTP/HTTPS 
 - Refactored `DataUpdateCoordinator` to handle centralized data fetching for all platforms.
 - Improved API login reliability with automatic protocol detection (HTTP/HTTPS).
 
-## [1.4.0] - 2026-03-26 - Telemetry Platform: Core Signal and Cellular Data Sensors
+## [1.4.0] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors
 
 ### Summary
 
-Telemetry platform. Implemented core cellular signal strength and data traffic monitoring sensors.
+Sensor platform. Implemented core cellular signal strength and data traffic monitoring sensors.
 
 ### Added
 

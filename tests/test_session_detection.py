@@ -38,6 +38,7 @@ from custom_components.zte_router_5g.api import (
     ZTECredentialsError,
     ZTERouterAPI,
     _classify_session,
+    _is_classifiable,
 )
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.coordinator import (
@@ -86,6 +87,37 @@ DEAD_SESSION_CORE = {
 # ---------------------------------------------------------------------------
 # The invariant the rule depends on
 # ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "params"),
+    [("core", _CORE_PARAMS), ("extended", _EXTENDED_PARAMS)],
+)
+def test_at_least_one_chunk_per_batch_can_be_classified(
+    name: str, params: list[str], mock_aiohttp_client
+) -> None:
+    """A batch that draws no verdict at all cannot detect a dead session.
+
+    `_batch_get` classifies a chunk only when it holds both classes of key,
+    because a chunk of only authenticated names answers every one empty on a
+    device that does not support them — the shape of an expired session.
+    Measured when the MC888 aliases created a second core chunk of ten names
+    the reference MC7010 leaves blank: every poll was scored expired and
+    returned nothing. Skipping that chunk is right; skipping every chunk is
+    not.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    chunks = api._split_by_url_budget(list(params))
+    classifiable = [
+        c
+        for c in chunks
+        if (_UNAUTHENTICATED_KEYS & set(c)) and (set(c) - _UNAUTHENTICATED_KEYS)
+    ]
+
+    assert classifiable, (
+        f"no {name} chunk holds both classes, so this batch can never detect "
+        f"an expired session"
+    )
 
 
 @pytest.mark.parametrize(
@@ -198,10 +230,18 @@ async def test_expired_session_triggers_a_relogin(mock_aiohttp_client) -> None:
     # a shape the router does not produce, and the classifier now declines to
     # rule on a response that dropped most of its request.
     dead_full = _full_core_response()
-    mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data=dead_full),
-        MockResponse(json_data={**dead_full, "signalbar": "4"}),
-    ]
+    # A response per request rather than a fixed pair: the core list is served
+    # in as many requests as the URL budget allows, so counting them here
+    # would pin the test to today's key count.
+    calls = {"n": 0}
+
+    def _dead_then_live(*_args, **_kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return MockResponse(json_data=dead_full)
+        return MockResponse(json_data={**dead_full, "signalbar": "4"})
+
+    mock_aiohttp_client.get.side_effect = _dead_then_live
 
     with patch.object(api, "login", AsyncMock(return_value="stok=fresh")) as login:
         result = await api.get_all_data()
@@ -341,3 +381,36 @@ async def test_drift_can_now_fire(coordinator) -> None:
     assert verdicts == [False, False, True], (
         "drift must require FETCH_STRIKE_LIMIT consecutive bad polls, not one"
     )
+
+
+# ---------------------------------------------------------------------------
+# Which requests a session verdict may be drawn from
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("chunk", "expected", "why"),
+    [
+        (["wan_connect_status", "ODU_led_switch"], True, "carries a sentinel"),
+        (["ODU_led_switch", "imei"], True, "carries an unauthenticated key"),
+        (
+            ["network_lte_rsrp", "flux_clear_date"],
+            False,
+            "neither, so empty means unsupported as readily as expired",
+        ),
+        (["imei", "model_name"], False, "only unauthenticated, never looks expired"),
+    ],
+)
+def test_a_verdict_is_only_drawn_where_it_could_mean_something(
+    chunk: list[str], expected: bool, why: str
+) -> None:
+    """A request with neither a sentinel nor an unauthenticated key is mute.
+
+    Every name in it comes back empty both when the session is gone and when
+    the firmware does not support those names, so a verdict drawn on it is a
+    coin toss reported as a fact. Measured on the reference MC7010 once the
+    MC888 aliases pushed the core list into two requests: the second chunk
+    held ten names that device leaves blank, every poll scored expired, and
+    the poll returned nothing at all.
+    """
+    assert _is_classifiable(chunk, _UNAUTHENTICATED_KEYS) is expected, why

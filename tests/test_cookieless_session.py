@@ -26,7 +26,7 @@ from custom_components.zte_router_5g.api import (
     ZTERouterAPI,
 )
 
-from .conftest import MockResponse
+from .conftest import MockResponse, scripted
 
 
 def _stok_cookie(value="test_stok"):
@@ -434,14 +434,14 @@ async def test_the_cookie_and_the_flag_move_together_on_every_renewal(
         return
 
     fresh = MockResponse(json_data={"network_type": "LTE", "signalbar": "4"})
-    mock_aiohttp_client.get.side_effect = [
+    mock_aiohttp_client.get.side_effect = scripted(
         dead[trigger],
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
         MockResponse(json_data={"RD": "RD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
         fresh,
-    ]
+    )
     mock_aiohttp_client.post.return_value = MockResponse(
         cookies={"stok": _stok_cookie("renewed")}
     )
@@ -464,13 +464,13 @@ async def test_the_idle_reset_clears_both_fields(mock_aiohttp_client):
     api.session_active = True
     api.last_activity = datetime.now(UTC) - timedelta(seconds=1000)
 
-    mock_aiohttp_client.get.side_effect = [
+    mock_aiohttp_client.get.side_effect = scripted(
         MockResponse(json_data={"LD": "LD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
         MockResponse(json_data={"RD": "RD"}),
         MockResponse(json_data={"wa_inner_version": "MC7010_V1"}),
         MockResponse(json_data={"network_type": "LTE", "signalbar": "4"}),
-    ]
+    )
     mock_aiohttp_client.post.return_value = MockResponse(
         cookies={"stok": _stok_cookie("after_idle")}
     )

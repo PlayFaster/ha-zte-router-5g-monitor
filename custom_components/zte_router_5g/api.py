@@ -5,7 +5,7 @@ import hashlib
 import logging
 import re
 import urllib.parse
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from time import monotonic
 from typing import Any, NamedTuple, cast
@@ -15,15 +15,21 @@ import aiohttp
 from .const import (
     ABSENT_KEY_PROPORTION_LIMIT,
     APN_PROFILE_SLOTS,
+    BATCH_URL_MAX_CHARS,
+    CANARY_COUNT,
+    CANARY_FALLBACK_EVERY,
     DISCOVERY_BUDGET_SECONDS,
     DISCOVERY_CANDIDATES,
     DISCOVERY_CHUNK_SIZE,
     DISCOVERY_CHUNK_TIMEOUT,
+    DISCOVERY_MAX_ROUNDS,
+    DISCOVERY_RELOGIN_LIMIT,
     JS_BUNDLES,
     MINED_CHUNK_SIZE,
     SESSION_IDLE_RESET_SECONDS,
 )
 from .helpers import is_gsm7
+from .known_names import EXPECTED_NAMES, KNOWN_NAMES, REFUSABLE_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -32,7 +38,7 @@ _LOGGER = logging.getLogger(__name__)
 # length of roughly 2,048 characters, not by a number of names. A single list
 # had grown to within ~160 characters of that ceiling, where the next addition
 # would have truncated the response — which presents as missing fields and is
-# indistinguishable from firmware contract drift.
+# indistinguishable from firmware key changes.
 #
 # The split is by criticality, not alphabetically:
 #
@@ -184,6 +190,29 @@ _CORE_PARAMS: list[str] = [
     # been found, and whether one is running.
     "current_upgrade_state",
     "new_version_state",
+    # Alternate spellings observed on the MC888 Pro in issue #56, where each is
+    # populated and the bare spelling this list already carries is empty. They
+    # sit in the core batch rather than the extended one because four of them
+    # feed controls, and §22 forbids a control's position coming from a
+    # degradable endpoint — a stale diagnostic is cosmetic, a stale control
+    # position invites a write composed from a reading that is no longer true.
+    #
+    # This takes the core list past `BATCH_URL_MAX_CHARS`, so it is served in
+    # two requests. `_split_by_url_budget` handles that with no other change.
+    "network_lte_rsrp",
+    "network_lte_ca_pcell_band",
+    "network_lte_ca_pcell_bandwidth",
+    "network_lte_ca_scell_band",
+    "network_lte_ca_scell_bandwidth",
+    "network_net_select",
+    "network_net_select_mode",
+    "flux_clear_date",
+    "flux_auto_clear_flow_data_switch",
+    "flux_data_volume_limit_switch",
+    # Firmware update outcome, distinct from the two update-state keys already
+    # here: those report whether an update is available or running, this
+    # reports whether the last attempt completed.
+    "upgrade_result",
 ]
 
 _EXTENDED_PARAMS: list[str] = [
@@ -240,6 +269,19 @@ _EXTENDED_PARAMS: list[str] = [
     "pm_sensor_mdm",
     "pm_modem_5g",
     "pm_sensor_5g",
+    # Diagnostic detail added in [3.3.9-dev12]. All disabled by default,
+    # so the cost on a device that answers them is one entry each in a
+    # request that already runs.
+    "5g_rx0_rsrp",
+    "5g_rx1_rsrp",
+    "lte_multi_ca_scell_sig_info",
+    "pinnumber",
+    "puknumber",
+    "modem_main_state",
+    "ppp_dial_conn_fail_counter",
+    "simcard_roam",
+    "nr5g_nsa_band_lock",
+    "nr5g_sa_band_lock",
 ]
 
 
@@ -255,19 +297,105 @@ _LOGIN_SUCCESS = frozenset({"success", "0", "ok"})
 # and absent from `r.cookies`.
 _SET_COOKIE_RE = re.compile(r'\s*([^=;,\s]+)\s*=\s*("?[^";,]*"?)')
 
-# `cmd=` literals in the router's own JavaScript. Matches the name that
-# follows, in either quoting style the bundles use.
+# Three ways the bundles name a `cmd` field, because they use all three and
+# the first alone finds a third of them. Measured on the MC7010 bundle:
+# 383 names from the `cmd=` form, 311 from quoted tokens, 67 from object
+# literals, 642 unioned. `lte_rsrq`, `lte_snr`, `signalbar` and `cell_id`
+# appear only in the second and third forms — the LTE metrics missing on the
+# MC888 are exactly what a narrower extraction cannot reach.
 _JS_CMD_RE = re.compile(r"cmd['\"]?\s*[:=]\s*['\"]([A-Za-z_][A-Za-z0-9_,]*)")
 
-# A mined token is only probed when it looks like a `cmd` name. The 2026-07-29
-# artefact contains the literal `1`, and both probe paths interpolate names
-# straight into a URL — a token carrying `&` or `=` would corrupt the request.
+# `"wan_active_band","nr5g_pci","lte_snr"` — a quoted name in an array.
+_JS_QUOTED_RE = re.compile(r"['\"]([A-Za-z_][A-Za-z0-9_]{2,})['\"]")
+
+# `cell_id:"",lte_snr:"",wan_active_band:""` — an object literal seeded blank.
+_JS_OBJKEY_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]{2,})\s*:\s*['\"]{2}")
+
+# `goformId` literals — the *write* commands. Extracted so they can be
+# subtracted from the read candidates: the wider extraction harvests them as
+# quoted strings like any other, and 81 of 520 names probed on an MC7010 were
+# write commands answering nothing. They cost probe budget and re-probe slots,
+# and `docs/zte_how_to_access.md` warns that a name the firmware does not
+# accept as a `cmd` can time out the chunk carrying it.
+#
+# Subtracted by name rather than by shape: excluding every uppercase token
+# would risk dropping a genuine read name.
+_JS_GOFORM_RE = re.compile(r"goformId['\"]?\s*[:=]\s*['\"]([A-Za-z_][A-Za-z0-9_]*)")
+
+# A mined token is only probed when it looks like a `cmd` name. The wider
+# extraction harvests function names, CSS classes and element ids alongside
+# the fields, so this filter and `_NOT_ROUTER_FIELDS` carry more weight than
+# they did when only the `cmd=` form was read.
 _SAFE_CMD_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
 
-# Tokens that survive the filter but are not router fields. `result` is the
-# key a `goform` response carries its outcome in, and reads as a `cmd` literal
-# in the bundles.
-_NOT_ROUTER_FIELDS = frozenset({"result", "cmd", "isTest", "goformId"})
+# `<script src="js/service.js">` on the router's own index page.
+_HTML_SCRIPT_RE = re.compile(r"""<script[^>]+src\s*=\s*["']([^"']+)["']""")
+
+# Tokens that survive the identifier filter and are not router fields.
+# `result` is the key a `goform` response carries its outcome in; the rest are
+# query parameters and JavaScript scaffolding the wider extraction reaches.
+# Returned by `_probe_chunk` when the canary went silent. A distinct object
+# rather than `None`, because "the request failed" and "we were not logged in"
+# need different handling: the second must never be recorded as a firmware
+# that does not report those names.
+_SESSION_LOST: dict[str, str] = {}
+
+# Returned by `_probe_chunk` when the router declined the request outright.
+# Measured on the reference MC7010 on 2026-09-02: a name the firmware does not
+# have is echoed back empty (`{"zzz_not_a_real_key": ""}`), while a name it
+# declines answers `{"result": "failure"}` in 40-60 ms and carries none of the
+# requested keys. The two are opposite facts and the second is the more
+# informative, so it needs its own outcome.
+#
+# The refusal replaces the whole response, so one declined name loses every
+# other name in the same request. It also takes the canaries with it, which is
+# why an unhandled refusal reads as a lost session — the cause of the two
+# spurious mid-pass re-establishments seen in every pass before this release.
+#
+# A read cannot signal an expired session this way: `_ensure_session` records,
+# from repeated hardware runs, that a dead session echoes every requested key
+# back empty. `{"result": "failure"}` on a read is unambiguous.
+_REQUEST_REFUSED: dict[str, str] = {}
+
+_NOT_ROUTER_FIELDS = frozenset(
+    {
+        "result",
+        "cmd",
+        "isTest",
+        "goformId",
+        "multi_data",
+        "sms_received_flag_flag",
+        "function",
+        "return",
+        "prototype",
+        "undefined",
+        "length",
+        "value",
+        "true",
+        "false",
+        "null",
+        "type",
+        "data",
+        "name",
+        "class",
+        "style",
+        "html",
+        "text",
+        "href",
+        "src",
+        "click",
+        "change",
+        "submit",
+    }
+)
+
+# The fixed part of a batch query, before any `cmd` name. The host is measured
+# separately from `self.referer`, because a hostname is longer than an IP and
+# the budget is a property of the whole URL.
+_BATCH_PATH_PREFIX = (
+    "goform/goform_get_cmd_process?multi_data=1&isTest=false"
+    "&sms_received_flag_flag=0&cmd="
+)
 
 
 # Appended to every targeted read so an all-empty response still distinguishes
@@ -456,6 +584,31 @@ class _LoginAttempt(NamedTuple):
     conn_error: str | None
 
 
+def _is_classifiable(chunk: list[str], unauthenticated: frozenset[str]) -> bool:
+    """Whether a session verdict drawn on this chunk could mean anything.
+
+    Two ways a request can carry the distinction:
+
+    * It holds a **sentinel** — a key whose emptiness is the definition of a
+      dead session. `get_params` appends one to every single-key read for this
+      reason, so a one-key write read-back is still classified.
+    * It holds an **unauthenticated key**, which stays populated when the
+      session goes. The extended poll carries no sentinel and is classified on
+      this basis.
+
+    A chunk with neither cannot tell "no session" from "this firmware does not
+    support these names", and answers every name empty in both cases. Measured
+    on the reference MC7010 once the MC888 aliases pushed the core list into
+    two requests: the second chunk held ten names that device leaves blank,
+    every poll was scored expired, and the poll returned nothing at all.
+    """
+    names = set(chunk)
+    if not names - unauthenticated:
+        # Only unauthenticated keys: this can never look expired.
+        return False
+    return bool(names & set(_SESSION_SENTINELS)) or bool(names & unauthenticated)
+
+
 class ZTERouterAPI:
     """Async wrapper for the ZTE Router goform API using aiohttp."""
 
@@ -498,6 +651,19 @@ class ZTERouterAPI:
         # assumed. Empty until a measurement passes validation; the module
         # constant is used until then.
         self.unauthenticated_keys: frozenset[str] = frozenset()
+        # Why the measured key set is or is not in force. An empty set says
+        # nothing about whether the measurement was skipped, refused or never
+        # reached, and a download carrying only the empty set left that
+        # ambiguous.
+        self.measurement_note = "not attempted: setup did not reach it"
+        # Whether background setup ran to completion, for the same reason.
+        self.setup_completed = False
+        # Write commands recovered from the router's own JavaScript. Recorded
+        # for the diagnostics download, and subtracted from the read
+        # candidates — `zte_how_to_access.md` notes these cannot be discovered
+        # by probing, because an unknown `goformId` fails exactly as a refused
+        # one does.
+        self.goform_ids: list[str] = []
         # Which candidate `cmd` names this device answers. Populated once per
         # setup and published in the diagnostics download; never read by
         # runtime logic.
@@ -731,6 +897,7 @@ class ZTERouterAPI:
         timeout_sec: int | None = None,
         authenticated: bool = True,
         requested: list[str] | None = None,
+        classify: bool = True,
         _retry: bool = True,
         _after_relogin: bool = False,
     ) -> Any:
@@ -875,8 +1042,17 @@ class ZTERouterAPI:
             # why the difference matters. `undecidable` keeps the older rule for
             # the SMS endpoints, which carry no unauthenticated key to compare
             # against — the case that rule was written for and still handles.
-            verdict = _classify_session(
-                resp_json, requested, self.unauthenticated_key_set()
+            # A discovery probe asks for names the device may not implement,
+            # so every value coming back blank is the expected answer — it
+            # means "this firmware does not report these", not "the session
+            # died". Classifying it cost a re-login and a replay per empty
+            # chunk: 142 of 187 chunks failed that way on the reference
+            # MC7010, and suppressing the verdict took a pass from 63 seconds
+            # to 16 with the same 90 names answered.
+            verdict = (
+                _classify_session(resp_json, requested, self.unauthenticated_key_set())
+                if classify
+                else "live"
             )
             self._record_verdict(verdict, resp_json, requested)
             is_status_expired = verdict == "expired" or (
@@ -1315,6 +1491,11 @@ class ZTERouterAPI:
         be trusted. The caller keeps using the constant in that case.
         """
         if self.session_active or not self.logout_acknowledged:
+            self.measurement_note = (
+                "not measured: session still active"
+                if self.session_active
+                else "not measured: the router did not acknowledge the logout"
+            )
             _LOGGER.debug(
                 "Not measuring unauthenticated keys: session_active=%s, "
                 "logout_acknowledged=%s",
@@ -1340,15 +1521,19 @@ class ZTERouterAPI:
                     authenticated=False,
                 )
             except (ZTEAuthError, ZTEConnectionError) as err:
+                self.measurement_note = f"probe failed: {type(err).__name__}"
                 _LOGGER.debug("Unauthenticated probe failed: %s", err)
                 return frozenset()
             if not isinstance(payload, dict):
+                self.measurement_note = "probe answered a non-object body"
                 return frozenset()
             measured |= {k for k, v in payload.items() if v not in ("", None)}
 
         if not self._measurement_is_usable(measured):
+            self.measurement_note = f"rejected: {len(measured)} keys answered"
             return frozenset()
 
+        self.measurement_note = f"measured: {len(measured)} keys"
         _LOGGER.info(
             "Measured %d keys this router answers without a session",
             len(measured),
@@ -1437,8 +1622,10 @@ class ZTERouterAPI:
         useful where one that fails to generate is not.
         """
         names: set[str] = set()
+        goform_ids: set[str] = set()
         notes: list[str] = []
-        for bundle in JS_BUNDLES:
+        bundles = await self._discover_bundles(timeout_sec, notes)
+        for bundle in bundles:
             try:
                 async with self.session.get(
                     f"{self.referer}{bundle}",
@@ -1459,14 +1646,160 @@ class ZTERouterAPI:
                 for m in _JS_CMD_RE.finditer(body)
                 for part in m.group(1).split(",")
             }
+            found |= {m.group(1) for m in _JS_QUOTED_RE.finditer(body)}
+            found |= {m.group(1) for m in _JS_OBJKEY_RE.finditer(body)}
+            goform_ids |= {m.group(1) for m in _JS_GOFORM_RE.finditer(body)}
             names |= found
             notes.append(f"{bundle}: {len(found)} names")
 
+        if goform_ids:
+            notes.append(f"{len(goform_ids)} write commands excluded from probing")
+        self.goform_ids = sorted(goform_ids)
         return {
             n
             for n in names
-            if _SAFE_CMD_RE.fullmatch(n) and n not in _NOT_ROUTER_FIELDS
+            if _SAFE_CMD_RE.fullmatch(n)
+            and n not in _NOT_ROUTER_FIELDS
+            and n not in goform_ids
         }, notes
+
+    async def _pick_canaries(
+        self, timeout_sec: int | None, sessionless: frozenset[str] | None = None
+    ) -> tuple[list[str], dict[str, int]]:
+        """Return keys this device answers and a session is required for.
+
+        Read classified, so this doubles as proof the fresh session works. An
+        empty list where nothing qualifies — a device answering almost nothing
+        has no canary to offer, which is recorded rather than papered over.
+
+        `sessionless` is this device's own answer, measured moments ago while
+        the pass held no session. It is preferred over
+        `unauthenticated_key_set()` because that falls back to a constant
+        measured on one MC7010, and a canary drawn against the wrong exclusion
+        set is worse than none: a key the device serves unauthenticated answers
+        in every chunk, so the guard reports a healthy session throughout a
+        pass that lost one.
+
+        The pool census is returned alongside. Where no canary is found, the
+        counts say *why* — nothing answered at all, or everything that answered
+        is served without a session — and those call for different responses
+        from whoever reads the download.
+        """
+        unauthenticated = (
+            sessionless if sessionless is not None else self.unauthenticated_key_set()
+        )
+        # Both polls, not just the core one. A device answering few core keys
+        # has a thin pool to choose from, and that is exactly the device most
+        # likely to need a canary: the MC888 Pro answered 62 of 128 core keys
+        # on first contact. The extended poll costs one more request here and
+        # widens the pool by every key it carries.
+        payload: dict[str, Any] = {}
+        for params in (_CORE_PARAMS, _EXTENDED_PARAMS):
+            try:
+                payload.update(await self._batch_get(params, timeout_sec=timeout_sec))
+            except Exception as err:  # noqa: BLE001 - no canary is a valid answer
+                # One poll failing still leaves the other's keys to choose
+                # from, and no canary at all is recorded rather than raised.
+                _LOGGER.debug("Canary pool read failed: %s", err)
+                continue
+
+        populated = [
+            key for key, value in payload.items() if isinstance(value, str) and value
+        ]
+        eligible = [key for key in populated if key not in unauthenticated]
+        census = {
+            "read": len(payload),
+            "populated": len(populated),
+            "served_without_a_session": len(populated) - len(eligible),
+            "chosen": min(len(eligible), CANARY_COUNT),
+        }
+        return eligible[:CANARY_COUNT], census
+
+    async def _reestablish_session(self, canaries: Sequence[str]) -> bool:
+        """Log in again after a detected loss, and prove it before continuing.
+
+        Probes run with `authenticated=False` so that one never silently
+        re-authenticates and samples an authenticated response as though it
+        were a sessionless one. The cost of that decision is that a probe
+        cannot recover on its own: once the session is gone, every remaining
+        chunk reads blank and its names are flagged unreliable until something
+        outside the probe puts a session back. This is that something.
+
+        The login is not taken on trust. `session_active` is a flag this code
+        sets, and the whole class of fault being unpicked here came from
+        believing it — so the canaries are read back, and a login whose canaries
+        stay silent is reported as a failure rather than assumed to have worked.
+        Where no canary exists the out-of-band check stands in.
+        """
+        try:
+            await self.logout()
+            await self.login()
+        except Exception as err:  # noqa: BLE001 - a failed recovery is a result
+            _LOGGER.debug("Session re-establishment failed: %s", err)
+            return False
+        if not canaries:
+            return await self._session_still_alive()
+        answered = await self._probe_chunk([], canaries=canaries)
+        # Identity, never equality: both sentinels are empty dicts, and so is
+        # a successful read whose only answer was the canaries themselves.
+        return (
+            answered is not None
+            and answered is not _SESSION_LOST
+            and answered is not _REQUEST_REFUSED
+        )
+
+    async def _session_still_alive(self) -> bool:
+        """Confirm the session survived a discovery pass.
+
+        One classified read, because the pass itself ran unclassified. Any
+        failure answers the question in the negative rather than raising: this
+        runs inside a diagnostics download.
+        """
+        try:
+            await self.get_params([_CORE_PARAMS[0]])
+        except Exception:  # noqa: BLE001 - the answer is the point, not the error
+            return False
+        return True
+
+    async def _discover_bundles(
+        self, timeout_sec: int | None, notes: list[str]
+    ) -> list[str]:
+        """Read the router's index page for the scripts it actually loads.
+
+        The static list is a guess and is partly wrong: `js/statusBar.js`
+        answers HTTP 404 on both devices seen so far, and a firmware may ship
+        files nobody has named. Asking the page it serves is the only way to
+        know, and costs one request.
+
+        Falls back to the static list when the page cannot be read or names no
+        scripts — a note either way, never an exception.
+        """
+        try:
+            async with self.session.get(
+                self.referer,
+                headers={"Referer": self.referer},
+                timeout=aiohttp.ClientTimeout(total=timeout_sec or 10),
+                ssl=False,
+            ) as r:
+                body = await r.text(errors="replace")
+        except Exception as err:  # noqa: BLE001 - a note, never a failure
+            notes.append(f"index: {type(err).__name__}: {err}; using the static list")
+            return list(JS_BUNDLES)
+
+        found = [
+            m.group(1).lstrip("./")
+            for m in _HTML_SCRIPT_RE.finditer(body)
+            if m.group(1).endswith(".js")
+        ]
+        if not found:
+            notes.append("index: no scripts named; using the static list")
+            return list(JS_BUNDLES)
+
+        # Unioned rather than replaced: the page may load its scripts through a
+        # module loader, naming only the entry point.
+        merged = list(dict.fromkeys(found + list(JS_BUNDLES)))
+        notes.append(f"index: {len(found)} scripts named, {len(merged)} to read")
+        return merged
 
     async def probe_names(
         self,
@@ -1474,7 +1807,8 @@ class ZTERouterAPI:
         *,
         chunk_size: int = DISCOVERY_CHUNK_SIZE,
         deadline: float | None = None,
-    ) -> tuple[dict[str, str], list[str]]:
+        canaries: Sequence[str] = (),
+    ) -> tuple[dict[str, str], list[str], list[str], list[str]]:
         """Read a list of `cmd` names, tolerating anything that goes wrong.
 
         Chunked, and every chunk tolerated on its own.
@@ -1500,56 +1834,256 @@ class ZTERouterAPI:
         found: dict[str, str] = {}
         notes: list[str] = []
         retry: list[str] = []
+        unreliable = 0
+        blank_since_check = 0
+        fallback_checks = 0
+        refused_chunks = 0
+        refused_early: list[str] = []
+        relogins = 0
+        recovered = 0
+        failed_relogins = 0
 
         for start in range(0, len(names), chunk_size):
             if monotonic() > deadline:
                 notes.append(
                     f"budget exhausted with {len(names) - start} names unprobed"
                 )
-                return found, notes
+                return found, notes, names[start:], []
             chunk = names[start : start + chunk_size]
-            answered = await self._probe_chunk(chunk)
+            answered = await self._probe_chunk(chunk, canaries=canaries)
+            if answered is _REQUEST_REFUSED:
+                if len(chunk) == 1:
+                    # Asked alone and declined, so the answer is already
+                    # unambiguous and re-asking it would only repeat the
+                    # refusal. This is the path the refusable phase takes.
+                    refused_early.append(chunk[0])
+                    continue
+                # One declined name takes the whole request with it, so the
+                # other names in this chunk have not been asked. Requeued as a
+                # failure: nothing here is evidence about any of them, and none
+                # of it says anything about the session.
+                refused_chunks += 1
+                retry.extend(chunk)
+                continue
+            if answered is _SESSION_LOST:
+                # Every canary went silent: this chunk was read without a
+                # session, so every name in it came back blank for a reason
+                # that has nothing to do with the firmware. Recording it as
+                # "not reported" would be the lie discovery exists to avoid.
+                unreliable += len(chunk)
+                retry.extend(chunk)
+                if relogins < DISCOVERY_RELOGIN_LIMIT:
+                    relogins += 1
+                    if await self._reestablish_session(canaries):
+                        recovered += 1
+                    else:
+                        failed_relogins += 1
+                continue
             if answered is None:
                 retry.extend(chunk)
                 continue
             found.update(answered)
             if not answered and len(chunk) > 1:
+                # A device with no canary cannot prove a session from inside
+                # the request: every key it answers, it answers without one,
+                # which is what leaves the canary pool empty. So the check
+                # leaves the request. It costs a round trip, and it runs only
+                # on this device, only after a blank chunk, and only once every
+                # `CANARY_FALLBACK_EVERY` of them — blank chunks are the common
+                # case, since most probed names are genuinely absent.
+                #
+                # Without this, an unguarded pass on such a device records
+                # every name it read while logged out as one the firmware does
+                # not report, which is the assertion this whole mechanism
+                # exists to refuse.
+                blank_since_check += 1
+                if not canaries and blank_since_check >= CANARY_FALLBACK_EVERY:
+                    blank_since_check = 0
+                    fallback_checks += 1
+                    if not await self._session_still_alive():
+                        unreliable += len(chunk)
+                        retry.extend(chunk)
+                        if relogins < DISCOVERY_RELOGIN_LIMIT:
+                            relogins += 1
+                            if await self._reestablish_session(canaries):
+                                recovered += 1
+                            else:
+                                failed_relogins += 1
+                        continue
                 retry.extend(chunk)
 
-        for name in retry:
-            if monotonic() > deadline:
-                notes.append("budget exhausted during single-name re-probe")
-                break
-            answered = await self._probe_chunk([name])
-            if answered:
-                found.update(answered)
+        if unreliable:
+            notes.append(f"{unreliable} names read without a session and re-probed")
+        if recovered:
+            notes.append(f"session re-established {recovered} times mid-pass")
+        if failed_relogins:
+            notes.append(f"session could not be re-established {failed_relogins} times")
+        if relogins >= DISCOVERY_RELOGIN_LIMIT:
+            notes.append(
+                "re-login limit reached; later names were read without a "
+                "confirmed session"
+            )
+        if refused_chunks:
+            notes.append(
+                f"{refused_chunks} shared requests declined by the router and "
+                "re-probed one name at a time"
+            )
+        if fallback_checks:
+            notes.append(
+                f"no canary available: session confirmed out of band "
+                f"{fallback_checks} times"
+            )
+
+        found_again, refused, never_reprobed, rounds = await self._reprobe_singly(
+            retry, canaries=canaries, deadline=deadline, notes=notes
+        )
+        found.update(found_again)
         if retry:
-            notes.append(f"{len(retry)} names re-probed singly")
+            notes.append(
+                f"{len(retry)} names re-probed singly over {len(rounds)} rounds, "
+                f"resolving {sum(rounds)}"
+            )
+        if never_reprobed:
+            notes.append(
+                f"{len(never_reprobed)} names could not be re-probed and are "
+                "not reported as absent"
+            )
+        refused = refused_early + refused
+        if refused:
+            notes.append(f"{len(refused)} names declined by the router")
 
-        return found, notes
+        return found, notes, never_reprobed, sorted(refused)
 
-    async def _probe_chunk(self, chunk: list[str]) -> dict[str, str] | None:
-        """Read one chunk. `None` means it failed; `{}` means it answered blank."""
+    async def _reprobe_singly(
+        self,
+        names: list[str],
+        *,
+        canaries: Sequence[str],
+        deadline: float,
+        notes: list[str],
+    ) -> tuple[dict[str, str], list[str], list[str], list[int]]:
+        """Re-probe one name at a time until the answers stop changing.
+
+        Returns what was resolved, the names the router declined, the names
+        that could never be asked, and how many each round resolved.
+        """
+        found: dict[str, str] = {}
+        refused: list[str] = []
+        # Convergence. Names reach the queue because a chunk failed, answered
+        # blank, or was read without a session — never because the firmware
+        # said anything about them individually. Re-probing one at a time turns
+        # a chunk-level failure into per-name truth: a name that answers
+        # nothing to its own request has been asked properly and is silent,
+        # while a name whose request *failed* has still not been asked and goes
+        # round again.
+        #
+        # The loop ends when a round resolves nothing new, when the rounds
+        # ceiling is reached, or when the wall-clock budget expires — which is
+        # the only bound that scales. `DISCOVERY_REPROBE_LIMIT` used to discard
+        # the queue past 120 names, and those names were then published in
+        # `probed_no_answer` as though the device had been asked and had not
+        # answered. On the reference MC7010 that discarded about a hundred
+        # names on every pass, and every conclusion drawn from an absence in
+        # one of those downloads rested on it.
+        queue = list(names)
+        never_reprobed: list[str] = []
+        rounds: list[int] = []
+        while queue and len(rounds) < DISCOVERY_MAX_ROUNDS:
+            resolved = 0
+            still: list[str] = []
+            out_of_budget = False
+            for index, name in enumerate(queue):
+                if monotonic() > deadline:
+                    never_reprobed.extend(queue[index:])
+                    notes.append(
+                        f"budget exhausted with {len(queue) - index} names "
+                        "still to re-probe"
+                    )
+                    out_of_budget = True
+                    break
+                answered = await self._probe_chunk([name], canaries=canaries)
+                if answered is _REQUEST_REFUSED:
+                    # Asked on its own and declined. That is a statement about
+                    # the firmware, not a failure to ask, so the name is
+                    # settled here rather than queued for another round.
+                    refused.append(name)
+                elif answered is _SESSION_LOST or answered is None:
+                    # Not asked, as far as this device is concerned.
+                    still.append(name)
+                elif answered:
+                    found.update(answered)
+                    resolved += 1
+                # An empty dict is a real answer: asked alone, and silent.
+            rounds.append(resolved)
+            if out_of_budget:
+                break
+            # No early exit on "resolved nothing". A round that establishes
+            # fifty names are silent has settled fifty of them, and only the
+            # ones whose *requests failed* come round again — a set that
+            # shrinks fast and is worth retrying, since a failure here is a
+            # timeout rather than an answer. The rounds ceiling and the
+            # wall-clock budget are the bounds; on the reference MC7010 the
+            # queue falls from 222 to a handful after one round, so later
+            # rounds are nearly free.
+            queue = still
+        else:
+            never_reprobed.extend(queue)
+
+        return found, refused, never_reprobed, rounds
+
+    async def _probe_chunk(
+        self, chunk: list[str], canaries: Sequence[str] = ()
+    ) -> dict[str, str] | None:
+        """Read one chunk.
+
+        `None` means the request failed, `{}` that it answered blank, and
+        `_SESSION_LOST` that every canary went silent — the chunk was read
+        without a session and says nothing about the firmware.
+
+        Several canaries rather than one, because a single key is a single
+        point of failure in both directions. A radio metric that empties during
+        a band change is not a lost session, and treating it as one re-probes
+        hundreds of names for nothing. Requiring *all* of them to go silent
+        makes a false positive need a simultaneous coincidence across
+        unrelated keys, while a genuine eviction still blanks every one.
+        """
+        request = list(chunk)
+        request.extend(c for c in canaries if c not in request)
         path = (
             "goform/goform_get_cmd_process?multi_data=1&isTest=false"
-            f"&sms_received_flag_flag=0&cmd={','.join(chunk)}"
+            f"&sms_received_flag_flag=0&cmd={','.join(request)}"
         )
         try:
             payload = await self._request(
-                "GET", path, timeout_sec=DISCOVERY_CHUNK_TIMEOUT
+                "GET",
+                path,
+                timeout_sec=DISCOVERY_CHUNK_TIMEOUT,
+                classify=False,
             )
         except Exception as err:  # noqa: BLE001 - a note, never a failure
             _LOGGER.debug("Probe chunk starting %s failed: %s", chunk[0], err)
             return None
         if not isinstance(payload, dict):
             return None
+        # Before the canary check, because a refusal blanks the canaries too
+        # and would otherwise be read as a session this pass never lost.
+        if self._is_refusal(payload) and not any(k in payload for k in request):
+            return _REQUEST_REFUSED
+        # Each canary is a key this device answered moments ago and that needs
+        # a session. All silent means the chunk was read unauthenticated, so
+        # every blank in it is about the session and not about the firmware.
+        if canaries and not any(payload.get(c) for c in canaries):
+            return _SESSION_LOST
         # `result` is the key a `goform` response carries its outcome in, and
         # a refused chunk echoes it back. It is not a router field, and
-        # harvesting it would publish `failure` as though it were telemetry.
+        # harvesting it would publish `failure` as though it were sensor data.
         return {
             k: v
             for k, v in payload.items()
-            if isinstance(v, str) and v and k not in _NOT_ROUTER_FIELDS
+            if isinstance(v, str)
+            and v
+            and k not in _NOT_ROUTER_FIELDS
+            and k not in canaries
         }
 
     async def run_discovery(self, timeout_sec: int | None = None) -> dict[str, Any]:
@@ -1563,15 +2097,62 @@ class ZTERouterAPI:
         deadline = monotonic() + DISCOVERY_BUDGET_SECONDS
         result: dict[str, Any] = {"notes": [], "values": {}}
         try:
+            # Always a fresh session, never the one we happen to hold.
+            # `session_active` is a flag, not a fact: the router can discard a
+            # session without telling us, and the probe suppresses the
+            # classification that would otherwise discover it. A pass run that
+            # way answered 3 names instead of 90 and still reported the
+            # session alive at the end, recording 559 names as "this firmware
+            # does not report these" when the truth was "we were not logged
+            # in".
+            #
             # The user pressed Download Diagnostics, which authorises using
-            # the router. Logging in evicts whoever holds the single session
-            # this hardware permits, and that is acceptable — declining to
-            # log in would return less exactly when the download matters most.
-            if self.session_active:
-                result["session"] = "existing"
-            else:
-                await self.login(timeout_sec=timeout_sec)
-                result["session"] = "fresh login"
+            # the router. This evicts whoever holds the single session the
+            # hardware permits, and four requests is a cheap price for a
+            # starting state that is known rather than assumed.
+            await self.logout()
+
+            # The pass is genuinely sessionless right here, and that window is
+            # the only place this can be measured honestly. Canary selection
+            # depends on knowing which keys this device answers *without* a
+            # session, and asking `unauthenticated_key_set()` instead trusts a
+            # measurement taken at setup that may have been refused — in which
+            # case it returns five names measured on one MC7010 and asserted
+            # about every device since. On an MC888 Pro that constant is wrong:
+            # it answers `network_type` and `ppp_status` with no session
+            # (issue #56), so a canary chosen against the constant could be a
+            # key that answers whether or not we are logged in. Silent, and
+            # exactly backwards.
+            #
+            # Two requests, inside a window the pass already opens, and the
+            # method validates its own reading before returning anything.
+            sessionless = await self.measure_unauthenticated_keys(
+                timeout_sec=timeout_sec
+            )
+            result["sessionless_measurement"] = self.measurement_note
+            if sessionless:
+                # A fresh reading beats the one taken at setup, which may be
+                # hours old and was taken through whatever conditions held then.
+                self.unauthenticated_keys = sessionless
+
+            await self.login(timeout_sec=timeout_sec)
+            result["session"] = "fresh login"
+
+            # A name this device answers *now*, carried in every chunk so a
+            # session lost partway is caught where it happens. Chosen from the
+            # device's own response rather than hardcoded: a fixed name would
+            # be an assumption about one model, which is the class of mistake
+            # this release keeps unpicking.
+            canaries, census = await self._pick_canaries(
+                timeout_sec, sessionless=sessionless or None
+            )
+            result["canaries"] = canaries
+            # Why, not just whether. "Nothing answered" and "everything that
+            # answered is served without a session" both yield no canary and
+            # call for different responses from a reader, and on an unfamiliar
+            # device that distinction is the difference between a fixable
+            # problem and a firmware that cannot be guarded.
+            result["canary_pool"] = census
 
             mined, notes = await self.mine_candidate_names(timeout_sec=timeout_sec)
             result["notes"].extend(notes)
@@ -1579,21 +2160,111 @@ class ZTERouterAPI:
 
             requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
             static = [n for n in DISCOVERY_CANDIDATES if n not in requested]
-            unknown = sorted(mined - requested - set(static))
+            # Every device is probed with the union of names seen on any
+            # device, not only the ones its own web UI mentions. Those are
+            # independent facts: the MC888 Pro answered 102 names that appear
+            # nowhere in the MC7010's mined set, and a name absent from a
+            # device's JavaScript may still be answered by it. Probing only
+            # what a device mentions conflates "not referenced here" with "not
+            # supported here", which is the same conflation `probed_no_answer`
+            # exists to avoid one layer down.
+            candidates = (mined | KNOWN_NAMES | EXPECTED_NAMES) - set(self.goform_ids)
+            # Held out of the chunked phases entirely. A declined name replaces
+            # the whole response, so one of these inside a chunk costs every
+            # other name in it — measured on the reference MC7010, two chunks
+            # per pass and sixteen names re-probed for nothing.
+            refusable = sorted((candidates & REFUSABLE_NAMES) - requested)
+            candidates -= REFUSABLE_NAMES
+            unknown = sorted(candidates - requested - set(static))
+            result["names_from_union_only"] = len(
+                (KNOWN_NAMES - mined) - requested - set(static)
+            )
 
             # The static list is not belt-and-braces: 52 of its 62 names do not
             # appear in the mined artefact at all, so the two sources barely
             # overlap and both are needed.
-            static_found, static_notes = await self.probe_names(
-                static, chunk_size=DISCOVERY_CHUNK_SIZE, deadline=deadline
+            (
+                static_found,
+                static_notes,
+                static_unasked,
+                static_refused,
+            ) = await self.probe_names(
+                static,
+                chunk_size=DISCOVERY_CHUNK_SIZE,
+                deadline=deadline,
+                canaries=canaries,
             )
-            mined_found, mined_notes = await self.probe_names(
-                unknown, chunk_size=MINED_CHUNK_SIZE, deadline=deadline
+            # One name per request: a refusal here cannot reach anything else,
+            # and a name that answers is recorded like any other.
+            (
+                refusable_found,
+                refusable_notes,
+                refusable_unasked,
+                refused,
+            ) = await self.probe_names(
+                refusable,
+                chunk_size=1,
+                deadline=deadline,
+                canaries=canaries,
             )
-            result["notes"].extend(static_notes + mined_notes)
-            result["values"] = {**static_found, **mined_found}
+            (
+                mined_found,
+                mined_notes,
+                mined_unasked,
+                mined_refused,
+            ) = await self.probe_names(
+                unknown,
+                chunk_size=MINED_CHUNK_SIZE,
+                deadline=deadline,
+                canaries=canaries,
+            )
+            result["notes"].extend(static_notes + mined_notes + refusable_notes)
+            result["values"] = {**static_found, **mined_found, **refusable_found}
+            # A name the router declined outright. Not silence and not a
+            # failure to ask: the firmware knows the name and will not serve
+            # it, which is the most informative of the four outcomes and was
+            # previously indistinguishable from a lost session.
+            result["refused"] = sorted(
+                set(refused) | set(static_refused) | set(mined_refused)
+            )
             result["mined_names_probed"] = len(unknown)
             result["mined_names_answered"] = len(mined_found)
+
+            # Three outcomes, three fields, because collapsing any two of them
+            # asserts something that was never measured.
+            #
+            # `not_reprobed` is a name this pass could not ask properly — the
+            # budget ran out, or every attempt was made without a confirmed
+            # session. Publishing it beside the silent names would claim the
+            # device was asked and said nothing, and every conclusion drawn
+            # from an absence would inherit that claim. The MC888 key list this
+            # release exists to grow was read off downloads that made exactly
+            # that mistake for about a hundred names a pass.
+            unasked = set(static_unasked) | set(mined_unasked) | set(refusable_unasked)
+            result["not_reprobed"] = sorted(unasked)
+
+            # A name the UI uses that the device leaves empty is a different
+            # fact from a name that does not exist, and only the first was
+            # visible before. Names only — these were asked and answered
+            # nothing.
+            result["probed_no_answer"] = sorted(
+                n
+                for n in unknown + static + refusable
+                if n not in result["values"]
+                and n not in unasked
+                and n not in result["refused"]
+            )
+            # The device's own vocabulary, useful even where nothing answered.
+            result["mined_names"] = sorted(mined)
+            result["write_commands"] = list(self.goform_ids)
+
+            # Classification was suppressed for every chunk above, so a
+            # session that died partway would have gone unnoticed and
+            # everything after it recorded as "no answer". One classified read
+            # at the end says whether that happened. Recorded, not raised: the
+            # download must produce a file either way, and a reader can weigh
+            # the result knowing the session was or was not alive at the end.
+            result["session_alive_after"] = await self._session_still_alive()
         except Exception as err:  # noqa: BLE001 - a note, never a failure
             result["notes"].append(f"discovery aborted: {type(err).__name__}: {err}")
         return result
@@ -1641,21 +2312,92 @@ class ZTERouterAPI:
         finally:
             self._clear_session(clear_cookies=True)
 
+    def _split_by_url_budget(self, params: list[str]) -> list[list[str]]:
+        """Split a `cmd` list into requests that fit the router's URL limit.
+
+        The limit is a **URL length**, not a name count — see
+        `docs/zte_how_to_access.md`. A single list had reached 1,795 characters
+        against a ceiling of roughly 2,048 on the reference MC7010, and alias
+        expansion for other models keeps adding to it: a device that spells a
+        concept differently needs both spellings requested, so the list grows
+        with every model supported rather than with every feature added.
+
+        `BATCH_URL_MAX_CHARS` is set below the measured ceiling deliberately. The
+        ceiling is one device's, and a firmware with a lower one would
+        otherwise truncate — which this API signals by returning the response
+        short, not by erroring.
+
+        Splitting never changes what a caller gets: the chunks are merged and
+        every one is required. See `_batch_get`.
+        """
+        # Measured from this entry's own address rather than assumed: a
+        # hostname is longer than an IP, and the budget is a property of the
+        # whole URL.
+        overhead = len(self.referer) + len(_BATCH_PATH_PREFIX)
+        chunks: list[list[str]] = [[]]
+        length = overhead
+        for name in params:
+            addition = len(name) + 1
+            if chunks[-1] and length + addition > BATCH_URL_MAX_CHARS:
+                chunks.append([])
+                length = overhead
+            chunks[-1].append(name)
+            length += addition
+
+        # Deliberately no attempt to give every chunk both classes of key.
+        # Duplicating an unauthenticated name into a chunk that lacks one was
+        # tried and is worse: it makes a chunk of otherwise-unsupported names
+        # *look* classifiable, and it then classifies as expired, because every
+        # authenticated name in it is empty and the borrowed one is populated.
+        # That is what a dead session looks like. Measured on the reference
+        # MC7010 with the MC888 aliases in place: every poll scored expired and
+        # returned nothing. `_batch_get` skips a chunk it cannot classify
+        # instead.
+        return chunks
+
     async def _batch_get(
         self, params: list[str], *, timeout_sec: int | None = None
     ) -> dict[str, Any]:
-        """Issue one `multi_data` batch read for the given `cmd` names."""
-        cmd = ",".join(params)
-        path = (
-            "goform/goform_get_cmd_process?multi_data=1&isTest=false"
-            f"&sms_received_flag_flag=0&cmd={cmd}"
-        )
-        # The key list travels with the request so the session classifier can
-        # tell a key that came back empty from one that never came back.
-        data = await self._request(
-            "GET", path, timeout_sec=timeout_sec, requested=params
-        )
-        return cast(dict[str, Any], data)
+        """Read the given `cmd` names, in as many requests as the URL allows.
+
+        **Every chunk is required.** A mandatory batch that tolerated a failed
+        chunk would serve half its entities from a partial response and score
+        the poll a success — the silent-failure shape this integration has
+        closed twice already. Per-chunk tolerance belongs to discovery, which
+        is diagnostics-only; here a failure propagates and fails the poll
+        exactly as one oversized request would.
+
+        Each chunk carries its own key list into `_classify_session`, so the
+        absent-key guard judges a response against what that request actually
+        asked for.
+        """
+        merged: dict[str, Any] = {}
+        unauthenticated = self.unauthenticated_key_set()
+        for chunk in self._split_by_url_budget(params):
+            # Classified only where the verdict can mean anything. A chunk
+            # holding no unauthenticated key answers every name empty on a
+            # device that does not support them, which is the exact shape of
+            # an expired session. Measured: the MC888 aliases created a second
+            # core chunk of ten names the reference MC7010 leaves blank, every
+            # poll was scored expired, and the poll returned nothing at all.
+            #
+            # `classify=False`, not `requested=None`: the request list only
+            # controls the absent-key guard, and dropping it makes an expired
+            # verdict *more* likely rather than suppressing one.
+            #
+            # Skipping such a chunk loses no detection. A genuinely dead
+            # session blanks the classifiable chunks too, and those still
+            # carry the contract keys.
+            data = await self._request(
+                "GET",
+                f"{_BATCH_PATH_PREFIX}{','.join(chunk)}",
+                timeout_sec=timeout_sec,
+                requested=chunk,
+                classify=_is_classifiable(chunk, unauthenticated),
+            )
+            if isinstance(data, dict):
+                merged.update(data)
+        return merged
 
     async def get_params(
         self, params: list[str], *, timeout_sec: int | None = None
@@ -2153,7 +2895,10 @@ class ZTERouterAPI:
     # Every field `DATA_LIMIT_SETTING` expects, and the response key each is
     # read back from. The router refuses a payload missing any of them.
     DATA_VOLUME_FIELDS: dict[str, tuple[str, ...]] = {
-        "data_volume_limit_switch": ("data_volume_limit_switch",),
+        "data_volume_limit_switch": (
+            "data_volume_limit_switch",
+            "flux_data_volume_limit_switch",
+        ),
         # The `flux_` spellings matter more here than on a sensor. This is an
         # all-or-nothing form: the router refuses it outright when a field is
         # missing, and this method raises rather than guessing, so on a device
@@ -2171,11 +2916,15 @@ class ZTERouterAPI:
             "data_volume_alert_percent",
             "flux_data_volume_alert_percent",
         ),
-        "wan_auto_clear_flow_data_switch": ("wan_auto_clear_flow_data_switch",),
+        "wan_auto_clear_flow_data_switch": (
+            "wan_auto_clear_flow_data_switch",
+            "flux_auto_clear_flow_data_switch",
+        ),
         "traffic_clear_date": (
             "traffic_clear_date",
             "data_volume_clear_date",
             "data_volume_clear_day",
+            "flux_clear_date",
         ),
     }
 

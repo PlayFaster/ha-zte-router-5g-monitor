@@ -5,6 +5,7 @@ to regress silently, because nothing fails at runtime when an attribute starts
 being recorded or a sensor starts storing twelve decimal places.
 """
 
+import ast
 import json
 import pathlib
 import re
@@ -17,6 +18,11 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.zte_router_5g.api import (
+    _CORE_PARAMS,
+    _EXTENDED_PARAMS,
+    ZTERouterAPI,
+)
 from custom_components.zte_router_5g.binary_sensor import ZTEIntegrationHealthSensor
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import ZTERouterSensor, _safe_float
@@ -564,6 +570,47 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "landed, and the next poll settles it. Only a successful read "
         "reporting the wrong value proves a refusal, and that path raises."
     ),
+    ("diag_check.py", "ruff: noqa: T201"): (
+        "The console report is this script's entire output, exactly as in "
+        "`hardware_check.py`. There is no logger to route it through, and a "
+        "caller reading the transcript is the point. File-level because every "
+        "print in the file is the same deliberate choice."
+    ),
+    ("diag_check.py", "noqa: S104"): (
+        "`0.0.0.0` appears in a set of addresses the leak sweep treats as "
+        "non-identifying, alongside the broadcast and loopback addresses. It "
+        "is matched as text inside a produced file and never bound to: this "
+        "script opens no socket and serves nothing."
+    ),
+    ("diag_check.py", "noqa: SLF001"): (
+        "Five sites. Three replace `_probe_chunk` for the sabotage mode, which "
+        "takes a real session away from a real router partway through a real "
+        "pass — the one thing the unit suite cannot do, because a mock is "
+        "written from the same model the code is. Two more drive the coordinator's own refresh the way "
+        "`async_force_refresh` does. That method is the public route but goes "
+        "through the debouncer, which needs a running Home Assistant to fire, "
+        "and this script runs none. Setting `_force_refresh_once` and awaiting "
+        "`_async_update_data` performs the same two steps minus the "
+        "scheduling. Adding public surface to the integration for the sake of "
+        "a script HACS never distributes would be the worse trade."
+    ),
+    ("diag_check.py", "type: ignore[method-assign]"): (
+        "The sabotage mode replaces `_probe_chunk` on the class so that a real "
+        "pass finds its session gone partway through, which is what another "
+        "client logging into the router does. Assigning to a method is exactly "
+        "the intent, it is restored in a `finally`, and the script is never "
+        "imported by the integration or distributed by HACS."
+    ),
+    ("diag_check.py", "noqa: PLW0603"): (
+        "One module-level colour flag, set once from the parsed arguments "
+        "before any output is produced — the same pattern, and the same "
+        "reasoning, as `hardware_check.py`."
+    ),
+    ("diag_check.py", "pragma: no cover"): (
+        "The import guard that tells an operator running the script with the "
+        "wrong interpreter what to do about it. Reachable only when Home "
+        "Assistant is absent, which is never true where the suite runs."
+    ),
     ("hardware_check.py", "ruff: noqa: T201"): (
         "The console report is this script's entire output. There is no logger "
         "to route it through and a caller reading the transcript is the point. "
@@ -745,4 +792,138 @@ def test_every_allowed_suppression_states_a_reason() -> None:
     )
     assert not thin, "allow-list entries with no real justification:\n" + "\n".join(
         thin
+    )
+
+
+# ---------------------------------------------------------------------------
+# Every polled key is read by something
+# ---------------------------------------------------------------------------
+
+# Polled keys with no entity behind them, each with the reason it is requested.
+# The sweep below asks the reverse question to the alias sweeps: those check
+# that every key an entity names is requested, this checks that every key
+# requested is read. `net_select_mode` was polled on every device and read by
+# nothing, and an alias for it was added to the MC888 work before anyone
+# noticed — a second key in every request feeding the same nothing.
+POLLED_WITHOUT_AN_ENTITY: dict[str, str] = {
+    "network_type": (
+        "Contract key. `coordinator.CORE_CONCEPTS` judges payload drift on it, "
+        "and `_classify_session` needs it to tell a dead session from a quiet "
+        "one. Also read by the Network Type sensor through an alias tuple."
+    ),
+    "wan_connect_status": (
+        "Session sentinel. `get_params` appends it to single-key reads so a "
+        "write read-back can still be classified."
+    ),
+    "ppp_status": "Session sentinel, the second spelling of the same concept.",
+}
+
+# Families consumed by prefix rather than by name. `APN_config0` through
+# `APN_config9` are read by `key.startswith("APN_config")` in the diagnostics
+# sanitizer and by the APN profile builder, so a literal-name search finds
+# nothing for any of them.
+POLLED_PREFIX_FAMILIES: tuple[str, ...] = ("APN_config",)
+
+
+# The batch definitions themselves. Their members are the question the sweep
+# asks, so counting them as reads would make every polled key look consumed —
+# which is what the first version of this test did, and it passed while
+# `net_select_mode` sat unread.
+BATCH_DEFINITIONS: frozenset[str] = frozenset({"_CORE_PARAMS", "_EXTENDED_PARAMS"})
+
+# Modules that catalogue parameter names rather than read them. `known_names.py`
+# is the cross-device vocabulary the discovery probe asks for; every name in it
+# appears as a string literal and none of them is a consumer. Counting those
+# literals as reads is what made the first version of this sweep pass while
+# `net_select_mode` sat unread — the name was in `KNOWN_NAMES`, so it looked
+# consumed.
+VOCABULARY_MODULES: frozenset[str] = frozenset({"known_names.py"})
+
+# Name catalogues inside modules that do have consumers. Same reasoning.
+VOCABULARY_NAMES: frozenset[str] = frozenset(
+    {"DISCOVERY_CANDIDATES", "DISCOVERY_VALUE_SAFE"}
+)
+
+
+def _alias_tuples_and_reads(tree: ast.AST) -> tuple[dict[str, set[str]], set[str]]:
+    """Return module-level string tuples, and every other string used."""
+    tuples: dict[str, set[str]] = {}
+    declared: set[str] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign | ast.AnnAssign):
+            continue
+        target = node.targets[0] if isinstance(node, ast.Assign) else node.target
+        value = node.value
+        if not isinstance(target, ast.Name):
+            continue
+        if not isinstance(value, ast.Tuple | ast.List):
+            continue
+        members = {
+            el.value
+            for el in value.elts
+            if isinstance(el, ast.Constant) and isinstance(el.value, str)
+        }
+        if not members:
+            continue
+        if target.id in BATCH_DEFINITIONS | VOCABULARY_NAMES:
+            declared |= members
+        elif isinstance(value, ast.Tuple):
+            tuples[target.id] = members
+
+    in_tuples = {s for members in tuples.values() for s in members}
+    reads = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    return tuples, reads - in_tuples - declared
+
+
+def test_every_polled_key_is_read_by_something() -> None:
+    """A key in the request that nothing reads is a round trip for nothing.
+
+    The alias sweeps run one way — every key an entity names must be polled.
+    Nothing ran the other way, so `net_select_mode` sat in `_CORE_PARAMS`
+    unread, and `network_net_select_mode` was added beside it to let a second
+    device answer the same unread key.
+
+    A key counts as read when an entity names it, when it belongs to an alias
+    tuple some entity uses, when it feeds the data-volume write form, when it
+    belongs to a prefix-matched family, or when it is listed above with the
+    reason it is requested anyway.
+    """
+    root = pathlib.Path(__file__).resolve().parent.parent / "custom_components"
+    package = root / "zte_router_5g"
+
+    consumed: set[str] = set()
+    for path in sorted(package.glob("*.py")):
+        if path.name in VOCABULARY_MODULES:
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tuples, reads = _alias_tuples_and_reads(tree)
+        consumed |= reads
+        used_names = {
+            node.id
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+        }
+        for name, members in tuples.items():
+            if name in used_names:
+                consumed |= members
+
+    for field, aliases in ZTERouterAPI.DATA_VOLUME_FIELDS.items():
+        consumed.add(field)
+        consumed |= set(aliases)
+
+    polled = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+    unread = {
+        key
+        for key in polled - consumed - set(POLLED_WITHOUT_AN_ENTITY)
+        if not key.startswith(POLLED_PREFIX_FAMILIES)
+    }
+
+    assert not unread, (
+        f"polled but read by nothing: {sorted(unread)}. Either give the key a "
+        f"consumer, drop it from the batch, or list it in "
+        f"POLLED_WITHOUT_AN_ENTITY with the reason it is requested."
     )

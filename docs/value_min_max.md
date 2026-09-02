@@ -36,6 +36,12 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 | Data       | `realtime_tx_thrpt`         |    `0` |                  — | B/s  |
 | SMS        | `msg_total`                 |    `0` |             `1000` | —    |
 | SMS        | `sms_unread_num`            |    `0` |             `1000` | —    |
+| Signal     | `5g_rsrp_antenna_1`         | `-140` |              `-40` | dBm  |
+| Signal     | `5g_rsrp_antenna_2`         | `-140` |              `-40` | dBm  |
+| Signal     | `ca_scell_rsrp`             | `-140` |              `-40` | dBm  |
+| Signal     | `ca_scell_rsrq`             |  `-40` |                `0` | dB   |
+| Signal     | `ca_scell_rssi`             | `-120` |              `-20` | dBm  |
+| Signal     | `ca_scell_snr`              |  `-20` |               `50` | dB   |
 | Signal     | `lte_rsrp`                  | `-140` |              `-30` | dBm  |
 | Signal     | `lte_rsrq`                  |  `-40` |                `0` | dB   |
 | Signal     | `lte_rssi`                  | `-120` |              `-20` | dBm  |
@@ -48,12 +54,15 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 | Signal     | `z5g_rssi`                  | `-120` |              `-20` | dBm  |
 | Signal     | `z5g_sinr`                  |  `-20` |               `50` | dB   |
 | System     | `battery_value`             |    `0` |              `100` | %    |
+| System     | `connection_failure_count`  |    `0` |            `10000` | —    |
 | System     | `pm_modem_5g`               |  `-40` |              `125` | °C   |
 | System     | `pm_sensor_5g`              |  `-40` |              `125` | °C   |
 | System     | `pm_sensor_ambient`         |  `-40` |              `125` | °C   |
 | System     | `pm_sensor_mdm`             |  `-40` |              `125` | °C   |
 | System     | `pm_sensor_pa1`             |  `-40` |              `125` | °C   |
 | System     | `realtime_time`             |    `0` |                  — | s    |
+| System     | `sim_pin_attempts`          |    `0` |               `10` | —    |
+| System     | `sim_puk_attempts`          |    `0` |               `10` | —    |
 
 <!-- GENERATED:end -->
 
