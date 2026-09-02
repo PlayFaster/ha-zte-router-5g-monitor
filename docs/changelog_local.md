@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.9-dev11\] - 2026-09-02 - MC888 Parameter Spellings Supported; Two-Request Core Poll](#339-dev11---2026-09-02---mc888-parameter-spellings-supported-two-request-core-poll)
   - [\[3.3.9-dev10\] - 2026-09-02 - Diagnostic Download Declined Parameters Recorded; False Session Losses Removed](#339-dev10---2026-09-02---diagnostic-download-declined-parameters-recorded-false-session-losses-removed)
   - [\[3.3.9-dev9\] - 2026-09-02 - Diagnostic Download Yield 90 → 101; Capped Re-Probe False Absences Fixed](#339-dev9---2026-09-02---diagnostic-download-yield-90--101-capped-re-probe-false-absences-fixed)
   - [\[3.3.9-dev7\] - 2026-09-02 - Diagnostic Download Canary Field Published; Hardware Verification of the Produced File](#339-dev7---2026-09-02---diagnostic-download-canary-field-published-hardware-verification-of-the-produced-file)
@@ -216,6 +217,49 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.9-dev11] - 2026-09-02 - MC888 Parameter Spellings Supported; Two-Request Core Poll
+
+### Summary
+
+The MC888 Pro in issue #56 answers a `network_` and `flux_` vocabulary where this integration polls the bare spellings, and leaves every bare spelling empty. Ten sensors, selects and switches had nothing to read on that device. Each pair was read from the diagnostics download attached to that issue: the alternate is populated and the primary is empty in all ten cases.
+
+Adding the alternates takes the core list past the URL budget, so the mandatory poll is now served in two requests.
+
+### Added
+
+- **Ten alternate spellings**, as alias tuples resolving to one entity: `network_lte_rsrp`, `network_lte_ca_pcell_band`, `network_lte_ca_pcell_bandwidth`, `network_lte_ca_scell_band`, `network_lte_ca_scell_bandwidth`, `network_net_select`, `network_net_select_mode`, `flux_clear_date`, `flux_auto_clear_flow_data_switch` and `flux_data_volume_limit_switch`. The bare spelling leads in every tuple, so the reference MC7010's path is unchanged.
+- **`state_aliases` on switch descriptions.** A switch reads its position from `state_key` and verifies a write by reading it back, so one spelling left it with no position to report and no way to confirm a write on that hardware.
+- **Every data-cycle spelling in `DATA_VOLUME_FIELDS`.** The write form is all-or-nothing and is built read-modify-write from the last poll, so a field whose spelling is not requested cannot be echoed back and the router refuses the whole form.
+- **Network Mode Config**, a diagnostic sensor in the Signal group, disabled by default, reporting whether the router picks its network mode itself or holds the one the user chose. `net_select_mode` was polled on every device and read by nothing, and its MC888 spelling was added beside it before that was noticed. The value publishes raw — `auto_select` on the reference MC7010 — because only the automatic value has been observed and the spelling the firmware uses for Manual is unknown.
+- **A reverse sweep, `test_every_polled_key_is_read_by_something`.** The alias sweeps run one way, asserting that every key an entity names is requested; nothing ran the other way. A key counts as read when an entity names it, when it belongs to an alias tuple some entity uses, when it feeds the data-volume write form, when it belongs to a prefix-matched family such as `APN_config0` through `APN_config9`, or when it is listed in `POLLED_WITHOUT_AN_ENTITY` with the reason it is requested anyway — the contract keys and the two session sentinels.
+
+### Changed
+
+- **`helpers.get_first`** replaces `sensor._get_first`. Switches and selects need the same resolution and cannot import from a sibling platform.
+- **The core poll is served in two requests.** `_split_by_url_budget` has handled this since `[3.3.9-dev1]` and needed no change; the list simply crossed 1,600 characters.
+
+### Fixed
+
+- **A session verdict is drawn only where it could mean something.** `_batch_get` classifies a chunk holding a sentinel or an unauthenticated key, and skips one holding neither. A chunk of names a device does not support answers every name empty, which is indistinguishable from an expired session: measured on the reference MC7010, where the second core chunk held ten names that device leaves blank, every poll was scored expired and `data` came back empty.
+
+### Measured
+
+|                          | Before | After |
+| :----------------------- | -----: | ----: |
+| Core poll requests       |      1 |     2 |
+| Core keys returned       |    137 |   147 |
+| Keys populated, MC7010   |     97 |    97 |
+| Discovery names answered |    102 |   102 |
+
+The reference MC7010 answers none of the ten alternates, so nothing on that device changes beyond the request count. Whether they populate on the MC888 Pro is **not verified** — no reachable device answers those spellings, and the download requested after release is what settles it.
+
+### Documentation
+
+- The `network_` family is recorded as partial: `network_lte_rsrq`, `network_lte_snr` and `network_lte_rssi` appear in no mined set from either device, so three of the four primary signal metrics have no alternate to fall back to.
+- **`docs/zte_how_to_access.md`**: a requested name comes back in **four** states, not three. The fourth is a refusal — `{"result": "failure"}` carrying none of the requested keys — which replaces the whole response and takes the session canaries with it. Records that an invented name is echoed back empty rather than dropped, so absence is not the ordinary signal for a name the firmware does not know. Adds two key families that are not what their names suggest: `lte_rsrp_1` through `lte_snr_4` are a rolling history of the aggregate rather than four antennas, measured across twenty samples with the aggregate appearing in the next sample's array 19 times of 19, while `5g_rx0_rsrp` and `5g_rx1_rsrp` are genuine receive paths. Adds the measured column order of `lte_multi_ca_scell_sig_info`, established by solving the RSRQ identity across twelve samples. Mining figures refreshed from 383 names to 642, the cross-device union recorded, and the batch-poll request line corrected to 105 core names in two requests.
+- **`docs/DEVELOPMENT.md` (v3.4.0)**: new **§6, supporting a router model nobody here owns** — the eight-step procedure this work produced, so the next model does not need it re-derived. Two §5 pitfalls added: a session verdict is only meaningful on a request that could carry one, with the two plausible fixes that make it worse recorded alongside; and a polled key with no consumer is invisible, with the two reasons the sweep written to catch it passed while blind. Sections renumbered, Environment Constraints and Technical Debt moving to 7 and 8.
+- **`docs/ROADMAP.md` (v3.4.0)**: Cross-model verification moved to Done with the MC889 gap stated, Custom triggers deleted as owned by the cross-project item at `.shared/issues/x_project/custom_trigger_options.md`, and the now-empty Blocked group removed.
+
 ## [3.3.9-dev10] - 2026-09-02 - Diagnostic Download Declined Parameters Recorded; False Session Losses Removed
 
 ### Summary
@@ -258,7 +302,7 @@ Measured on the reference MC7010, the cap discarded about a hundred names on eve
 
 ### Added
 
-- **Cross-device probing (`known_names.py`).** Every device is probed with the union of names observed on any device — 758 names, from the MC7010's 658 and the MC888 Pro's 196, write commands excluded — as well as with its own mined set. Whether a device's JavaScript references a name and whether the device answers it are independent facts. Measured: the reference MC7010 now answers **101 names against 90**, including `flux_clear_date`, `flux_auto_clear_flow_data_switch` and `flux_data_volume_limit_switch`, none of which its own web UI mentions.
+- **Cross-device probing (`known_names.py`).** Every device is probed with the union of names observed on any device — 758 names, from the MC7010's 658 and the MC888 Pro's 196, write commands excluded — as well as with its own mined set. Whether a device's JavaScript references a name and whether the device answers it are independent facts. Measured: the reference MC7010 now answers **101 names against 90**, including `DDNS_Enable`, five `dlna_*` keys, `gre_enable`, `net_link_detect_enable`, `tr069_ReqURL`, `user_ip_addr` and `voice_work_type`, none of which its own web UI mentions.
 - **`not_reprobed`.** Names the pass could not put to the device properly, published separately from those it asked and found silent. `probed_no_answer` now means asked alone and silent, and nothing else.
 - **Session recovery.** A detected loss triggers an explicit logout and login, proved by reading the canaries back — a login that returns cleanly while the canaries stay silent is recorded as a failure, not assumed to have worked. Bounded per probe phase, and the file says when the limit was reached and that later names were read without a confirmed session.
 - **Value kinds.** A withheld value now reports what sort of thing it is — `<boolean-like (0|1)>`, `<numeric integer, 4 chars>`, `<enum-like short token, 7 chars>`, `<delimited profile, 3 fields>` — rather than a character count. Derived from shape alone; the deny list is unchanged and no value is published that was not published before.

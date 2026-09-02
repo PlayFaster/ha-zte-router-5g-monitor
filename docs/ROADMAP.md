@@ -74,6 +74,18 @@ Two of the three polled endpoints exist solely for SMS, so a user who never send
 
 Needs a `CONF_ENABLE_SMS` option, guards on both `_fetch_optional` calls, and an exclusion in `_degraded_endpoints()` — without the last, Integration Health reports "degraded" for a capability the user deliberately switched off. `dev_standards` §15.
 
+### Entity defaults matched to the router model
+
+#### **Value ⭐⭐ · Effort Medium**
+
+Every model answers a different subset of the parameter set, so a user sees entities their hardware never populates. Today the defaults are chosen by category — 28 diagnostic entities ship disabled regardless of model — and a per-model list would instead disable the entities that model is known to leave empty.
+
+Measured on the reference MC7010: 40 of 137 requested keys are empty, nine sensor descriptions read only empty keys, and all nine are already disabled by default. Across binary sensors, switches, selects and numbers, the count of enabled entities whose keys are all empty is zero. On the one device that can be measured today, this would suppress nothing.
+
+The lists would be curated from diagnostics downloads rather than measured at runtime, so they carry none of the hazards of runtime suppression — no key read empty while the modem is still initialising, no altering an entity that already exists. Unknown hardware keeps the category defaults. It only makes sense once downloads are held for several models, since a list built from one device is the category system with extra steps. `Kajkac/ZTE-MC-Home-assistant-repo` implements the per-model form and shows the failure mode: its MC801A and MC888 lists are byte-identical and its G5 Ultra list is derived from MC801A, so three of four models share one list that nobody has revisited. Any version here would be generated from the downloads and checked by a test that regenerates and compares, so a stale list fails rather than persists.
+
+**Would be justified by:** downloads from several models showing enabled entities that stay empty on that hardware. Comparison detail is `.notes/info/other_zte_projects/divergence_review.md` §4.4.
+
 ### Reboot-on-degradation blueprint
 
 #### **Value ⭐⭐ · Effort Low**
@@ -91,32 +103,6 @@ The README carries an auto-reboot example with the necessary glitch guards. A sh
 `helpers.project_cycle_usage()` already accepts a `prior_rate` argument. What is missing is the store. **Design detail is `.notes/info/data_cycle_and_projection_plan.md` §2.4**; that file is reference and this entry owns the work.
 
 **Would be justified by:** the early-cycle volatility actually causing a bad automation decision. It is a known cosmetic weakness until then.
-
----
-
-## Blocked
-
-### Cross-model verification
-
-#### **Value ⭐⭐⭐⭐ · Effort Low once unblocked**
-
-Release 3.3.1 added alternative key spellings, a login-form fallback and channel-to-band resolution for other `goform` routers — **none of it exercised on hardware**, because only an MC7010 is available here.
-
-**Blocked by:** no access to an MC888 or MC889, and no user has supplied a diagnostics download. Both are outside this project's control, and no amount of time spent will change either. `diagnostics.py` already sanitizes the vendor payload, so a single download would settle the question — the only available action is to ask for one, through the issue tracker, a README note or the Home Assistant forum.
-
-**What it would and would not change.** It would confirm that the compatibility claims in the README are true rather than inferred, and it might reveal keys other models populate that this integration does not poll at all — which is the real prize, and the reason the value is high.
-
-It would **not** trigger removal of the three speculative alias spellings (`5g_rsrp`, `5g_sinr`, `nr5g_sinr`). `DEVELOPMENT.md` records that decision as settled: an alias that never fires costs nothing, so they stay whether or not anyone confirms them. The same applies to the five thermal keys, where the entry is explicit that confirmation would be useful information rather than a trigger for action.
-
-**Nothing is waiting on this.** It is worth doing and cannot be done; no other work is gated by it.
-
-### Custom triggers for `zte_router_5g_sms_received`
-
-#### **Value ⭐⭐ · Effort Low once unblocked**
-
-Would make the SMS event a GUI-discoverable trigger instead of something a user has to know the event name to use.
-
-**Blocked by:** the Home Assistant trigger platform is a 2026.x construct, against this integration's declared floor of 2024.8.0, and is undocumented. Unblocks if the floor rises or the platform is documented. Analysis in `.shared/issues/x_project/custom_trigger_options.md`.
 
 ---
 
@@ -178,15 +164,14 @@ Not doing it. Both are network plumbing set once at installation, and neither be
 
 Forward work only. Declined and Revisit items are recorded above and are not work in progress.
 
-| Item                               | Group      | Value    | Effort             |
-| :--------------------------------- | :--------- | :------- | :----------------- |
-| Cross-model verification           | Blocked    | ⭐⭐⭐⭐ | Low once unblocked |
-| Billing-cycle write controls       | To Be Done | ⭐⭐⭐   | Low                |
-| Long-term history for text sensors | To Be Done | ⭐⭐⭐   | Medium             |
-| SMS feature-group toggle           | Maybe      | ⭐⭐⭐   | Medium             |
-| Projection accuracy from history   | Maybe      | ⭐⭐     | Medium             |
-| Reboot-on-degradation blueprint    | Maybe      | ⭐⭐     | Low                |
-| Custom triggers                    | Blocked    | ⭐⭐     | Low once unblocked |
+| Item                               | Group      | Value  | Effort |
+| :--------------------------------- | :--------- | :----- | :----- |
+| Billing-cycle write controls       | To Be Done | ⭐⭐⭐ | Low    |
+| Long-term history for text sensors | To Be Done | ⭐⭐⭐ | Medium |
+| SMS feature-group toggle           | Maybe      | ⭐⭐⭐ | Medium |
+| Projection accuracy from history   | Maybe      | ⭐⭐   | Medium |
+| Entity defaults matched to model   | Maybe      | ⭐⭐   | Medium |
+| Reboot-on-degradation blueprint    | Maybe      | ⭐⭐   | Low    |
 
 **Current state.** 92 entities across four sub-devices, 86 carrying `about` notes. 817 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
@@ -202,12 +187,15 @@ Items that were on this roadmap and have since been built. Detail is in `CHANGEL
 | **Carrier aggregation metrics** | Original item | `wan_lte_ca`, `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth`, `nr5g_action_channel`. Shipped as a sensor, not the proposed binary sensor — the router reports the aggregation _configuration_, and an on/off would have discarded it. |
 | **Data-usage projection** | Added 2026-07-29 | `Projected Cycle Usage` and `Reset Day` on the Data sub-device, cycle-relative rather than calendar-relative — the router's counters reset on its own billing day. |
 | **Immediate refresh after a write** | Original item | Every write action routes through `async_force_refresh()`. The originally proposed `async_request_refresh()` would have been wrong: it is silently swallowed while Pause Polling is on. |
+| **Cross-model verification** | Original item, merged 2026-08-01 | Three diagnostics downloads arrived from an MC888 Pro through issue #56. The README moved from an inferred compatibility claim to **Diagnostic Capture Verified** for that model, and the prize the entry predicted — keys another model populates that this integration does not poll — produced ten alias spellings in `[3.3.9-dev11]`. **MC889 remains unverified**: no download exists for it, and no hardware is reachable. Whether the ten aliases populate on the MC888 is confirmed by the next download rather than by this item. |
 | **Band lock — read side** | Original item | `LTE Band Lock Mask` (`lte_band_lock`), disabled by default. `Network Mode Selection` covers the adjacent bearer preference. The write side is declined — see below. |
 
 ---
 
 ## Version Control
 
+- **v3.4.0** (2026-09-02) — **Cross-model verification moved to Done, and Custom triggers removed.** The verification item's blocker was a volunteer diagnostics download, and three arrived from an MC888 Pro through issue #56; both outcomes it named followed — the README compatibility claim became evidence-backed, and ten alias spellings shipped in `[3.3.9-dev11]`. Recorded with the MC889 gap stated, since no download exists for that model. **Blocked is now empty and its heading is removed**, per `roadmap_format.md` — an absent group means empty. **Custom triggers for `zte_router_5g_sms_received` is deleted rather than filed under a group.** It restated the blocker and the analysis pointer of the family-wide item at `.shared/issues/x_project/custom_trigger_options.md`, which carries a `zte_router_5g` cell and owns the work. Declined would have been untrue — nothing has been decided against — and the format has no group for an item another tracker owns, so the transfer is recorded here instead. **"Refresh Now" always re-logs in stays in Revisit.** Its trigger is a silent logged-out fault, which `roadmap_format.md` requires to be realistically achievable for Revisit rather than Declined; it has occurred twice, and every session fault found during 3.3.9 was a _false_ report of session loss, which re-logging in does not address.
+- **v3.3.0** (2026-09-02) — Added **Entity defaults matched to the router model** to Maybe, after reading `Kajkac/ZTE-MC-Home-assistant-repo`'s per-model disable lists directly. Recorded with the measurement that argues against building it now: on the reference MC7010, nine sensor descriptions read only empty keys and all nine are already disabled by category, while no binary sensor, switch, select or number is both enabled and fed solely by empty keys — so the feature would currently suppress nothing. Entered as a Maybe rather than declined because the condition it addresses is real and unmeasurable on one device: it needs downloads from several models to be worth more than the category defaults. Notes the failure mode observed in the reference implementation, whose MC801A and MC888 lists are byte-identical and whose G5 Ultra list is derived from MC801A, and states that any version here would be generated from downloads and guarded by a regenerate-and-compare test.
 - **v3.2.1** (2026-08-01) — Added a **Prior art** subsection to the text-sensor history item, recording that Home Assistant has no native mechanism and that the gap is recognized rather than obscure: long-term statistics are numeric-only by design, retention is global rather than per-entity, and the community workarounds (external time-series database, a blanket `purge_keep_days` rise, helper entities, `homeassistant-historical-sensor`) each fail this case for a stated reason. Includes the nuance that a helper's current value persists indefinitely while its history does not, flags the monotonic-counter idea as untested reasoning rather than observed practice, and notes the `update` entity domain as the nearest core concept. Dated so it does not get re-searched.
 - **v3.2.0** (2026-08-01) — Added **Long-term history for key text sensors** to To Be Done. Long-term statistics only accept numeric sensors with a `state_class`, so `Firmware Version` and every other text sensor is capped at the recorder's retention window — ten days by default — and the record of a firmware change is gone by the time anyone asks what changed. Recorded as intended work with the mechanism explicitly undecided: a `.storage` store of transitions, or a monotonic `TOTAL_INCREASING` change counter that reaches LTS without the value needing to be ordinal. Notes that encoding the version string itself is a dead end, and that the store half is the same infrastructure the projection-history item needs.
 - **v3.1.0** (2026-08-01) — **Cross-model verification merged with "Diagnostics-driven compatibility reporting" and moved to Blocked.** The two were one item: the diagnostics procedure existed only to feed the verification, and its own entry admitted it did nothing alone. Effort had been scored **Low**, which measured the work of editing a few alias tuples once data arrives rather than the difficulty of obtaining the data — and that difficulty is not effort at all. Neither MC888/MC889 hardware nor a volunteer diagnostics download is within this project's reach, so the item is Blocked with asking recorded as the only available action. Also recorded, after checking `DEVELOPMENT.md`, that **nothing is waiting on it**: the three speculative aliases and the five thermal keys are settled decisions to keep regardless, so confirmation is information rather than a trigger. The entry previously read as though work were pending on them. Summary table corrected — SMS feature-group toggle was listed as To Be Done while the body had moved it to Maybe.

@@ -6,6 +6,8 @@ This document details how this integration navigates the ZTE `goform` interface 
 
 Everything below is drawn from `custom_components/zte_router_5g/api.py` and verified against live hardware. Where a claim was confirmed against a specific model or firmware, that is stated.
 
+**Last verified against hardware:** 2026-09-02, MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`, at `[3.3.9-dev11]`.
+
 ---
 
 ## 📐 The shape of this API — read this first
@@ -186,7 +188,7 @@ This is the second model-dependent branch in the protocol. MD5 here is a vendor 
 ### The batch poll — `multi_data=1`
 
 - **Used**: Yes — this is the main polling call, once per scan interval.
-- **Request**: `GET goform/goform_get_cmd_process?multi_data=1&isTest=false&sms_received_flag_flag=0&cmd=<100 comma-separated names>`
+- **Request**: `GET goform/goform_get_cmd_process?multi_data=1&isTest=false&sms_received_flag_flag=0&cmd=<comma-separated names>`. The core list is 105 names as of `[3.3.9-dev11]` and is served in **two** requests; the extended list is 38 in one. The split is by URL length and is handled by `_split_by_url_budget` — see the budget section below.
 - **Response**: one flat JSON object. **The router does not error on an unknown `cmd` name**, which means a firmware update that drops a field is invisible unless the parse layer checks for it.
 - **Implementation**: `get_all_data`, `api.py:426`.
 
@@ -198,9 +200,26 @@ This is not a binary, and treating it as one has caused defects here before:
 | :-- | :-- | :-- |
 | **Populated** | `"key": "value"` | Supported and in use. |
 | **Present but empty** | `"key": ""` | The firmware **knows the name** but this model or configuration does not populate it. |
-| **Absent** | key not in the object at all | The name is not in the firmware's dictionary. |
+| **Absent** | key not in the object at all | Rare. See below — an unknown name is usually echoed back empty rather than dropped. |
+| **Refused** | `{"result": "failure"}` and **none** of the requested keys | The firmware knows the name and declines to serve it. |
 
-The middle state is the one that surprises. On the MC7010, `data_volume_clear_date`, `data_volume_clear_day`, all five `pm_*` thermal keys and `night_mode_switch` all answer `""` — the names are real, the hardware simply has nothing to report. By contrast `SET_DATA_VOLUME_LIMIT`, `clear_data_day`, `clean_date`, `reset_date` and `cycle_start_date` are genuinely absent: invented names that no firmware knows.
+The middle state is the one that surprises. On the MC7010, `data_volume_clear_date`, `data_volume_clear_day`, all five `pm_*` thermal keys and `night_mode_switch` all answer `""` — the names are real, the hardware simply has nothing to report.
+
+**An invented name is echoed back empty, not dropped.** Measured 2026-09-02: `cmd=zzz_not_a_real_key` answers `{"zzz_not_a_real_key": ""}`. So present-but-empty covers both "the firmware knows this and has nothing to report" and "the firmware has never heard of this", and the response cannot separate them. Absence is therefore not the ordinary signal for an unknown name, and any earlier reading of `SET_DATA_VOLUME_LIMIT`, `clear_data_day`, `clean_date`, `reset_date` or `cycle_start_date` as "genuinely absent" should be re-measured before it is relied on.
+
+#### Refusal — the fourth state
+
+Measured 2026-09-02 on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`. Eleven `tr069_` configuration names — `tr069_CPEPortNo`, `tr069_CertEnable`, `tr069_ConnectionRequestPassword`, `tr069_ConnectionRequestUname`, `tr069_DataModule`, `tr069_PeriodicInformEnable`, `tr069_PeriodicInformInterval`, `tr069_ServerPassword`, `tr069_ServerURL`, `tr069_ServerUsername`, `tr069_Webui_DataModuleSupport` — each answer `{"result": "failure"}` in 40 to 60 milliseconds. `tr069_ReqURL` answers normally on the same device, with a live ACS callback URL on port 7547, so the prefix is not refused as a block.
+
+Three consequences, each of which has caused a defect here:
+
+- **A refusal replaces the whole response.** `tr069_CPEPortNo` requested alongside `signalbar` returns `{"result": "failure"}` and nothing else, so one declined name costs every other name in the request.
+- **It removes the session canaries too**, which made an unhandled refusal indistinguishable from an eviction. Every pass re-established a session it had never lost, twice, and recorded sixteen names as read without a session.
+- **It is the opposite fact from an absence.** An unknown name is echoed back empty; a refused name is declined by a firmware that knows it. Recording a refusal as "not reported" states the reverse of what the device said.
+
+`REFUSABLE_NAMES` in `known_names.py` holds the names observed to be declined by any device, and they are probed one per request so a refusal cannot reach another name. A name that answers is recorded like any other — holding it there is a probing strategy, not a claim.
+
+Whether refusal indicates operator provisioning is **not established**. The MC888 Pro in issue #56, self-purchased rather than operator-supplied, answers five of those keys plainly; this MC7010 is operator-supplied and declines them. One device on each side of the comparison fits a difference of model or firmware equally well.
 
 **Any consumer must therefore treat present-but-empty as absent**, which is what `_get_first()` and `_safe_int()` / `_safe_float()` / `_safe_str()` do. `in data` alone is not a support test.
 
@@ -346,6 +365,43 @@ Encodings for the reboot-schedule and timezone fields are under [Field formats](
 - **Implementation**: `get_extended_data`, sharing `_batch_get` with the mandatory fetch.
 
 Entities fed from here carry `source=ENDPOINT_EXTENDED` on their description and gate `available` on it, so once the endpoint exhausts its three strikes they go unavailable rather than showing a value frozen at whatever it was hours ago.
+
+### Two key families that are not what their names suggest
+
+Both were read as something else first, and both cost work before they were measured.
+
+#### `lte_rsrp_1` … `lte_rsrp_4` and `lte_snr_1` … `lte_snr_4` are a history buffer
+
+**Not four antennas.** They are a rolling record of the last four values of the aggregate `lte_rsrp` and `lte_snr`, written round-robin one slot at a time.
+
+Measured 2026-09-02 across twenty samples two seconds apart: the aggregate appeared in the next sample's array **19 times of 19**, and every slot transition took the preceding aggregate — slot 3 to −96 after `lte_rsrp` read −96, slot 1 to −97 after it read −97, and so on, cycling. The same test on SNR gave 14 of 14, with the aggregate matching the minimum of its own sample once in fifteen and the maximum twice.
+
+The practical consequence: the spread across the four values is the same measurement varying over about eight seconds, not one antenna performing worse than another. Sensors built on them would publish a delayed copy of two values Home Assistant already records, under names asserting a physical arrangement the device does not have.
+
+#### `5g_rx0_rsrp` and `5g_rx1_rsrp` are genuine receive paths
+
+The counterpart, and the reason the distinction had to be measured rather than assumed from the naming. Across the same twenty samples `Z5g_rsrp` held −96 throughout, which a history buffer would have reproduced in both slots. Instead `5g_rx0_rsrp` ranged −98 to −97 while `5g_rx1_rsrp` sat at −95, the gap never closing below 2 dB. Two values that persistently differ from the aggregate and from each other, one varying and one steady, are two receivers.
+
+The firmware also carries `ant_switch_enable`, `ant_switch_idx` and `ant_switch_state` — the antenna-selection concept a CPE with external connectors exposes. All three were asked individually on the MC7010 and answered nothing, consistent with a unit whose antennas are integrated, though a build that omits the feature would look identical.
+
+#### `lte_multi_ca_scell_sig_info` — a composite, and its column order
+
+One group per secondary carrier, semicolon-terminated, six comma-separated fields each. A live MC7010 reading: `-89.1,-11.0,17.2,-58.1,0.0,2.0`.
+
+| Field | Meaning           | Observed range |
+| :---- | :---------------- | :------------- |
+| 1     | RSRP              | −87.3 to −90.1 |
+| 2     | RSRQ              | −5.6 to −11.0  |
+| 3     | SNR               | 14.4 to 18.5   |
+| 4     | unknown, constant | 0              |
+| 5     | RSSI              | −57.1 to −63.6 |
+| 6     | unknown, varies   | 2, then 4      |
+
+**The order is measured, not inferred.** RSRQ, RSRP and RSSI are related by definition as `RSRQ = RSRP − RSSI + 10·log₁₀(N)`, where N is the resource-block count. Solving for N across twelve samples with fields 1, 2 and 4 as RSRP, RSRQ and RSSI gives a mean of **99.4 RB with a spread of 2.3** — 100 RB, a 20 MHz carrier. No other column assignment yields a physically possible N. The identity alone cannot separate RSRQ from RSSI, since it depends on their sum; their ranges do, and they do not overlap.
+
+Two things follow. The composite reports a 20 MHz secondary carrier while `lte_ca_scell_bandwidth` is **empty** on the same device, so it carries information the dedicated key does not. And the secondary carrier's SNR ran 14 to 18 dB while the primary ran −2.4 to 2.6 dB across the same samples — the aggregate `lte_snr` shows the worse of the two.
+
+The same arithmetic is unstable on the primary cell, which reports integers rather than one decimal: three consecutive samples gave 100, 79 and 40 RB for a carrier that is 50.
 
 ### Available but not polled
 
@@ -640,7 +696,9 @@ Paired with `data_volume_limit_unit`, which is `data` for a byte cap or `time` f
 
 Both times this interface has been extended, the same two-step method found things that guesswork did not. Recorded so it can be repeated rather than reinvented.
 
-**This is now automated.** `api.mine_candidate_names()` fetches the bundles and extracts their `cmd=` literals when a diagnostics download is generated, and the result is probed and published in that file. Measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-09-01: `js/service.js` carries **383 names, 303 of which this integration has never requested**. On that device `js/statusBar.js` answers HTTP 404 and the other bundles yield nothing, but the list is kept as named below, because a bundle absent on one firmware may be present on another.
+**This is now automated.** `api.mine_candidate_names()` fetches the bundles and extracts their `cmd=` literals when a diagnostics download is generated, and the result is probed and published in that file. Measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-09-02: `js/service.js` carries **642 names**, `home.js` 62, `main.js` 24 and `app.js` 4, for 619 distinct names after write commands are excluded. On that device `js/statusBar.js` answers HTTP 404 and the index page names no scripts, but the static bundle list is kept as named below, because a bundle absent on one firmware may be present on another.
+
+**Mining one device is not enough, and the two facts are independent.** Whether a device's web UI _mentions_ a name and whether the device _answers_ it are separate questions. The MC888 Pro answered 102 names that appear nowhere in the MC7010's mined set, its values or its no-answer list. Every device is therefore probed with the union of names seen anywhere — `known_names.py`, 758 observed names plus 21 that another project expects — as well as with its own mined set. Measured effect on the reference device: 90 names answered before the union, 102 after.
 
 **Step 1 — mine the web UI's JavaScript.** The router serves its own admin UI, and that UI is a client of this same API. Crawl and parse the bundles — `js/service.js` is the main one, alongside `statusBar.js`, `home.js` and the RequireJS modules — and extract every `cmd=` name and every `goformId` literal. This is the **only** reliable source for write commands: a `goformId` cannot be discovered by probing, because an unknown one fails the same way a refused one does. It is also the only source for a command's full **field set**, which is what the `DATA_LIMIT_SETTING` case turned on.
 

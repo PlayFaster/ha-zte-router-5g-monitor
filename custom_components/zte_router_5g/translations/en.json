@@ -53,110 +53,56 @@
   },
   "entity": {
     "sensor": {
-      "system_model_name": {
-        "name": "Model Name"
+      "data_allowance": {
+        "name": "Allowance"
       },
-      "system_wa_inner_version": {
-        "name": "Firmware Version"
+      "data_clear_day": {
+        "name": "Reset Day"
       },
-      "system_wan_ipaddr": {
-        "name": "WAN IP Address"
+      "data_monthly_rx_bytes": {
+        "name": "Monthly Received GB"
       },
-      "system_lan_ipaddr": {
-        "name": "LAN IP Address"
+      "data_monthly_rx_bytes_raw": {
+        "name": "Monthly Received"
       },
-      "system_device_uptime": {
-        "name": "Device Uptime"
+      "data_monthly_total_bytes": {
+        "name": "Monthly Total GB"
       },
-      "system_uptime_duration": {
-        "name": "Uptime Duration"
+      "data_monthly_total_bytes_raw": {
+        "name": "Monthly Total"
       },
-      "system_last_updated": {
-        "name": "Last Updated"
+      "data_monthly_tx_bytes": {
+        "name": "Monthly Sent GB"
       },
-      "system_imei": {
-        "name": "IMEI"
+      "data_monthly_tx_bytes_raw": {
+        "name": "Monthly Sent"
       },
-      "system_hardware_version": {
-        "name": "Hardware Version"
+      "data_projection": {
+        "name": "Projected Cycle Usage"
       },
-      "system_firmware_update_available": {
-        "name": "Firmware Update Available"
+      "data_realtime_rx_bytes": {
+        "name": "Session Received"
       },
-      "system_firmware_update_state": {
-        "name": "Firmware Update State"
+      "data_realtime_rx_thrpt": {
+        "name": "Download Speed"
       },
-      "system_battery_value": {
-        "name": "Battery"
+      "data_realtime_tx_bytes": {
+        "name": "Session Sent"
       },
-      "system_pm_sensor_pa1": {
-        "name": "Power Amplifier Temperature"
+      "data_realtime_tx_thrpt": {
+        "name": "Upload Speed"
       },
-      "system_pm_sensor_ambient": {
-        "name": "Ambient Modem Temperature"
-      },
-      "system_pm_sensor_mdm": {
-        "name": "Modem Temperature"
-      },
-      "system_pm_modem_5g": {
-        "name": "5G Modem Temperature"
-      },
-      "system_pm_sensor_5g": {
-        "name": "5G Radio Temperature"
-      },
-      "system_sim_imsi": {
-        "name": "SIM IMSI"
-      },
-      "system_sim_iccid": {
-        "name": "SIM ICCID"
-      },
-      "signal_wan_connect_status": {
-        "name": "WAN Connect Status"
-      },
-      "signal_wan_apn": {
-        "name": "Network APN"
-      },
-      "signal_network_type": {
-        "name": "Network Type"
-      },
-      "signal_signalbar": {
-        "name": "Signal Bars"
-      },
-      "signal_network_provider": {
-        "name": "Network Provider"
-      },
-      "signal_mdm_mcc": {
-        "name": "MDM MCC"
-      },
-      "signal_mdm_mnc": {
-        "name": "MDM MNC"
-      },
-      "signal_rmcc": {
-        "name": "Roaming MCC"
-      },
-      "signal_rmnc": {
-        "name": "Roaming MNC"
-      },
-      "signal_lte_rsrp": {
-        "name": "LTE RSRP"
-      },
-      "signal_lte_rsrq": {
-        "name": "LTE RSRQ"
-      },
-      "signal_lte_rssi": {
-        "name": "LTE RSSI"
-      },
-      "signal_lte_snr": {
-        "name": "LTE SNR"
-      },
-      "signal_lte_pci": {
-        "name": "LTE PCI"
+      "data_volume_alert_percent": {
+        "name": "Alert Threshold"
       },
       "signal_cell_id": {
         "name": "Cell ID"
       },
-      "signal_wan_lte_ca": {
-        "name": "Carrier Aggregation"
+      "signal_enodeb_id": {
+        "name": "eNodeB ID"
+      },
+      "signal_lte_band_lock": {
+        "name": "LTE Band Lock Mask"
       },
       "signal_lte_ca_pcell_band": {
         "name": "LTE Primary Band"
@@ -170,11 +116,83 @@
       "signal_lte_ca_scell_bandwidth": {
         "name": "LTE Secondary Bandwidth"
       },
+      "signal_lte_multi_ca_scell_info": {
+        "name": "Carrier Aggregation Secondary Cells"
+      },
+      "signal_lte_pci": {
+        "name": "LTE PCI"
+      },
+      "signal_lte_rsrp": {
+        "name": "LTE RSRP"
+      },
+      "signal_lte_rsrq": {
+        "name": "LTE RSRQ"
+      },
+      "signal_lte_rssi": {
+        "name": "LTE RSSI"
+      },
+      "signal_lte_snr": {
+        "name": "LTE SNR"
+      },
+      "signal_mdm_mcc": {
+        "name": "MDM MCC"
+      },
+      "signal_mdm_mnc": {
+        "name": "MDM MNC"
+      },
+      "signal_net_select": {
+        "name": "Network Mode"
+      },
+      "signal_net_select_config": {
+        "name": "Network Mode Config"
+      },
+      "signal_network_provider": {
+        "name": "Network Provider"
+      },
+      "signal_network_type": {
+        "name": "Network Type"
+      },
+      "signal_nr5g_action_band": {
+        "name": "5G Active Band"
+      },
+      "signal_nr5g_action_channel": {
+        "name": "5G Active Channel"
+      },
+      "signal_nr5g_pci": {
+        "name": "5G PCI"
+      },
+      "signal_ppp_status": {
+        "name": "Bridge Mode"
+      },
+      "signal_rmcc": {
+        "name": "Roaming MCC"
+      },
+      "signal_rmnc": {
+        "name": "Roaming MNC"
+      },
+      "signal_rscp": {
+        "name": "Legacy RSCP"
+      },
+      "signal_rssi": {
+        "name": "Legacy RSSI"
+      },
+      "signal_signalbar": {
+        "name": "Signal Bars"
+      },
       "signal_wan_active_band": {
         "name": "LTE Active Band"
       },
       "signal_wan_active_channel": {
         "name": "LTE Active Channel"
+      },
+      "signal_wan_apn": {
+        "name": "Network APN"
+      },
+      "signal_wan_connect_status": {
+        "name": "WAN Connect Status"
+      },
+      "signal_wan_lte_ca": {
+        "name": "Carrier Aggregation"
       },
       "signal_z5g_rsrp": {
         "name": "5G RSRP"
@@ -188,101 +206,86 @@
       "signal_z5g_sinr": {
         "name": "5G SNR"
       },
-      "signal_nr5g_pci": {
-        "name": "5G PCI"
-      },
-      "signal_nr5g_action_band": {
-        "name": "5G Active Band"
-      },
-      "signal_nr5g_action_channel": {
-        "name": "5G Active Channel"
-      },
-      "signal_rssi": {
-        "name": "Legacy RSSI"
-      },
-      "signal_rscp": {
-        "name": "Legacy RSCP"
-      },
-      "signal_enodeb_id": {
-        "name": "eNodeB ID"
-      },
-      "signal_net_select": {
-        "name": "Network Mode"
-      },
-      "signal_ppp_status": {
-        "name": "Bridge Mode"
-      },
-      "data_monthly_tx_bytes": {
-        "name": "Monthly Sent GB"
-      },
-      "data_monthly_rx_bytes": {
-        "name": "Monthly Received GB"
-      },
-      "data_monthly_total_bytes": {
-        "name": "Monthly Total GB"
-      },
-      "data_monthly_tx_bytes_raw": {
-        "name": "Monthly Sent"
-      },
-      "data_monthly_rx_bytes_raw": {
-        "name": "Monthly Received"
-      },
-      "data_monthly_total_bytes_raw": {
-        "name": "Monthly Total"
-      },
-      "data_realtime_tx_thrpt": {
-        "name": "Upload Speed"
-      },
-      "data_realtime_rx_thrpt": {
-        "name": "Download Speed"
-      },
-      "data_realtime_tx_bytes": {
-        "name": "Session Sent"
-      },
-      "data_realtime_rx_bytes": {
-        "name": "Session Received"
-      },
-      "sms_sms_unread_num": {
-        "name": "Unread Msg"
+      "sms_msg_recent": {
+        "name": "Recent Msg"
       },
       "sms_msg_total": {
         "name": "Total Msg"
       },
-      "sms_msg_recent": {
-        "name": "Recent Msg"
-      },
-      "signal_lte_band_lock": {
-        "name": "LTE Band Lock Mask"
-      },
-      "data_volume_alert_percent": {
-        "name": "Alert Threshold"
-      },
-      "system_sntp_server": {
-        "name": "Time Server (SNTP)"
-      },
-      "data_clear_day": {
-        "name": "Reset Day"
-      },
-      "signal_lte_multi_ca_scell_info": {
-        "name": "Carrier Aggregation Secondary Cells"
-      },
-      "system_opms_wan_mode": {
-        "name": "WAN Operating Mode"
-      },
-      "system_opms_wan_auto_mode": {
-        "name": "WAN Fallback Mode"
-      },
-      "system_sntp_timezone": {
-        "name": "Router Timezone"
+      "sms_sms_unread_num": {
+        "name": "Unread Msg"
       },
       "system_apn_interface_version": {
         "name": "APN Interface Version"
       },
-      "data_projection": {
-        "name": "Projected Cycle Usage"
+      "system_battery_value": {
+        "name": "Battery"
       },
-      "data_allowance": {
-        "name": "Allowance"
+      "system_device_uptime": {
+        "name": "Device Uptime"
+      },
+      "system_firmware_update_available": {
+        "name": "Firmware Update Available"
+      },
+      "system_firmware_update_state": {
+        "name": "Firmware Update State"
+      },
+      "system_hardware_version": {
+        "name": "Hardware Version"
+      },
+      "system_imei": {
+        "name": "IMEI"
+      },
+      "system_lan_ipaddr": {
+        "name": "LAN IP Address"
+      },
+      "system_last_updated": {
+        "name": "Last Updated"
+      },
+      "system_model_name": {
+        "name": "Model Name"
+      },
+      "system_opms_wan_auto_mode": {
+        "name": "WAN Fallback Mode"
+      },
+      "system_opms_wan_mode": {
+        "name": "WAN Operating Mode"
+      },
+      "system_pm_modem_5g": {
+        "name": "5G Modem Temperature"
+      },
+      "system_pm_sensor_5g": {
+        "name": "5G Radio Temperature"
+      },
+      "system_pm_sensor_ambient": {
+        "name": "Ambient Modem Temperature"
+      },
+      "system_pm_sensor_mdm": {
+        "name": "Modem Temperature"
+      },
+      "system_pm_sensor_pa1": {
+        "name": "Power Amplifier Temperature"
+      },
+      "system_sim_iccid": {
+        "name": "SIM ICCID"
+      },
+      "system_sim_imsi": {
+        "name": "SIM IMSI"
+      },
+      "system_sntp_server": {
+        "name": "Time Server (SNTP)"
+      },
+      "system_sntp_timezone": {
+        "name": "Router Timezone"
+      },
+      "system_uptime_duration": {
+        "name": "Uptime Duration"
+      },
+      "system_wa_inner_version": {
+        "name": "Firmware Version"
+      },
+      "system_wan_ipaddr": {
+        "name": "WAN IP Address"
       }
     },
     "button": {

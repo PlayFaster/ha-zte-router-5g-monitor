@@ -18,7 +18,7 @@ from custom_components.zte_router_5g.api import (
 )
 from custom_components.zte_router_5g.const import BATCH_URL_MAX_CHARS
 
-from .conftest import MockResponse
+from .conftest import MockResponse, scripted
 
 
 def test_api_hash():
@@ -164,10 +164,10 @@ async def test_api_get_all_data_expired_session(mock_aiohttp_client):
 
     # 1. Expired response (empty network_type/signalbar)
     # 2. Success response after re-login
-    mock_aiohttp_client.get.side_effect = [
+    mock_aiohttp_client.get.side_effect = scripted(
         MockResponse(json_data={"network_type": "", "signalbar": ""}),
         MockResponse(json_data={"network_type": "LTE", "signalbar": "4"}),
-    ]
+    )
 
     with patch.object(api, "login") as mock_login:
         data = await api.get_all_data()

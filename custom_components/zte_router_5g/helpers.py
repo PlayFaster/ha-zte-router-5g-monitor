@@ -22,6 +22,29 @@ if TYPE_CHECKING:
 _KNOWN_MODELS = ["MC7010", "MC801", "MC888", "MC889"]
 
 
+def get_first(data: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    """Return the first key in `keys` that the router actually populated.
+
+    Members of the `goform` family spell the same measurement differently, so
+    an entity names every spelling it knows and takes whichever one arrives.
+    A key that is present but empty counts as absent — this API answers with
+    `""` for fields the hardware does not support, so `in data` alone is not
+    enough to tell "supported" from "reported".
+
+    Every key named here must also be requested in `api.py:get_all_data()`;
+    an alias for a key that is never asked for can never fire.
+
+    Lives here rather than in `sensor.py` because switches need it too: the
+    MC888 Pro answers `flux_data_volume_limit_switch` and leaves the bare
+    spelling empty, so a switch reading one spelling has no position to report
+    on that hardware.
+    """
+    return next(
+        (data[key] for key in keys if key in data and data[key] not in ("", None)),
+        None,
+    )
+
+
 def get_router_model(coordinator_data: dict[str, Any] | None) -> str:
     """Extract the router model from coordinator data.
 

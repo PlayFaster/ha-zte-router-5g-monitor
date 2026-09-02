@@ -14,6 +14,12 @@ from homeassistant.const import (
 )
 from homeassistant.util import dt as dt_util
 
+from custom_components.zte_router_5g.api import (
+    _CONTRACT_CONCEPTS,
+    _CORE_PARAMS,
+    _EXTENDED_PARAMS,
+    ZTERouterAPI,
+)
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import (
     _ALIAS_5G_PCI,
@@ -27,11 +33,11 @@ from custom_components.zte_router_5g.sensor import (
     ZTESensorEntityDescription,
     _clear_day,
     _data_allowance_bytes,
-    _get_first,
     _get_total_sms,
     _projected_bytes,
     _projection,
     async_setup_entry,
+    get_first,
 )
 
 from .conftest import assert_is_root, assert_links_to_parent
@@ -570,26 +576,26 @@ def _value_for(key, data):
     return description.value_fn(data)
 
 
-def test_get_first_prefers_the_earliest_populated_key():
+def testget_first_prefers_the_earliest_populated_key():
     """The MC7010 spelling is first, so its path is unchanged."""
-    assert _get_first({"a": "1", "b": "2"}, ("a", "b")) == "1"
+    assert get_first({"a": "1", "b": "2"}, ("a", "b")) == "1"
 
 
-def test_get_first_skips_keys_that_are_present_but_empty():
+def testget_first_skips_keys_that_are_present_but_empty():
     """A present-but-empty value means unsupported, not zero."""
-    assert _get_first({"a": "", "b": "2"}, ("a", "b")) == "2"
-    assert _get_first({"a": None, "b": "2"}, ("a", "b")) == "2"
+    assert get_first({"a": "", "b": "2"}, ("a", "b")) == "2"
+    assert get_first({"a": None, "b": "2"}, ("a", "b")) == "2"
 
 
-def test_get_first_returns_none_when_nothing_is_populated():
+def testget_first_returns_none_when_nothing_is_populated():
     """No spelling present means unknown, not zero."""
-    assert _get_first({"a": ""}, ("a", "b")) is None
-    assert _get_first({}, ("a", "b")) is None
+    assert get_first({"a": ""}, ("a", "b")) is None
+    assert get_first({}, ("a", "b")) is None
 
 
-def test_get_first_keeps_a_genuine_zero():
+def testget_first_keeps_a_genuine_zero():
     """Zero is a real reading; only '' and None mean absent."""
-    assert _get_first({"a": 0}, ("a", "b")) == 0
+    assert get_first({"a": 0}, ("a", "b")) == 0
 
 
 @pytest.mark.parametrize(
@@ -1127,7 +1133,7 @@ def test_total_sms_treats_an_empty_bank_as_zero_not_as_a_failure():
     `int("")` raises, so one empty bank sent the entire sensor to `unknown`
     and took its attribute breakdown with it — which reads as "no messages",
     the opposite of what an unreadable bank means. Present-but-empty is absent,
-    the rule `_get_first` applies everywhere else in this module.
+    the rule `get_first` applies everywhere else in this module.
 
     Distinct from the missing-key case above: that exercises the key being
     gone, this exercises the key being present and blank. Mutation testing
@@ -1198,7 +1204,7 @@ def _router_keys_referenced(body: str, sensor_src: str) -> set[str]:
 
     A description rarely names its keys inline. `value_fn` may be a lambda
     calling `data.get("x")`, a module-level helper whose body holds the keys,
-    or `_get_first(data, _ALIAS_X)` where the names live in a tuple constant.
+    or `get_first(data, _ALIAS_X)` where the names live in a tuple constant.
     Scanning the description text alone sees only the first of those — which is
     why the first version of this sweep passed while `data_allowance`, whose
     keys sit inside `_data_allowance_bytes`, carried the very defect the sweep
@@ -1353,3 +1359,92 @@ def test_bandwidth_sensors_offer_the_unit_selector() -> None:
             "statistics and ends its _UNGUARDED_BY_DESIGN exemption, which "
             "rests on it staying out. Add guard bands, or leave it off."
         )
+
+
+# ---------------------------------------------------------------------------
+# The MC888 vocabulary
+# ---------------------------------------------------------------------------
+
+_MC888_ALIASES = (
+    ("lte_rsrp", "network_lte_rsrp", "-106"),
+    ("lte_ca_pcell_band", "network_lte_ca_pcell_band", "3"),
+    ("lte_ca_pcell_bandwidth", "network_lte_ca_pcell_bandwidth", "20.0"),
+    ("lte_ca_scell_band", "network_lte_ca_scell_band", "0"),
+    ("lte_ca_scell_bandwidth", "network_lte_ca_scell_bandwidth", "0.0"),
+    ("net_select", "network_net_select", "WL_AND_5G"),
+    ("net_select_mode", "network_net_select_mode", "auto_select"),
+    ("wan_auto_clear_flow_data_switch", "flux_auto_clear_flow_data_switch", "on"),
+    ("data_volume_limit_switch", "flux_data_volume_limit_switch", "0"),
+    ("traffic_clear_date", "flux_clear_date", "1"),
+)
+
+
+@pytest.mark.parametrize(("primary", "alias", "value"), _MC888_ALIASES)
+def test_each_mc888_alias_resolves_when_the_primary_is_empty(
+    primary: str, alias: str, value: str
+) -> None:
+    """The alternate answers where the leader does not.
+
+    Every pair here was read from the issue #56 diagnostics download, where the
+    `network_` or `flux_` spelling is populated and the spelling this
+    integration polls is empty.
+    """
+    data = {primary: "", alias: value}
+
+    assert get_first(data, (primary, alias)) == value
+
+
+@pytest.mark.parametrize(("primary", "alias", "value"), _MC888_ALIASES)
+def test_the_primary_still_wins_when_both_are_populated(
+    primary: str, alias: str, value: str
+) -> None:
+    """Order is the tie-break, so the reference device's path is unchanged."""
+    data = {primary: "leader", alias: value}
+
+    assert get_first(data, (primary, alias)) == "leader"
+
+
+def test_no_alternate_spelling_stands_alone_as_a_contract_concept() -> None:
+    """A concept must survive the loss of its alternate spelling.
+
+    The contract keys decide whether a poll counts as live. If a `network_` or
+    `flux_` spelling were the only spelling of one, a device answering the bare
+    name would fail the check it is meant to pass.
+    """
+    for concept, keys in _CONTRACT_CONCEPTS.items():
+        bare = [k for k in keys if not k.startswith(("network_", "flux_"))]
+        assert bare, f"{concept} has only alternate spellings: {keys}"
+
+
+def test_every_data_volume_field_reaches_its_aliases() -> None:
+    """The write form is all-or-nothing and is built from the last poll.
+
+    A field whose spellings are not all requested cannot be echoed back, and
+    the router answers `{"result":"failure"}` for a payload missing any field —
+    so on a device using the alternate spellings the data-limit controls would
+    not degrade, they would be unwritable.
+    """
+    requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+
+    for field, aliases in ZTERouterAPI.DATA_VOLUME_FIELDS.items():
+        missing = [key for key in aliases if key not in requested]
+        assert not missing, f"{field} names unrequested spellings: {missing}"
+
+
+def test_network_mode_config_reports_the_routers_own_setting() -> None:
+    """The value is the router's Automatic-or-Manual radio button, unmapped.
+
+    Published raw because only the automatic value has been observed —
+    `auto_select` on the reference MC7010 — and the spelling the firmware uses
+    for Manual is unknown. A mapped state would have to guess it, and would
+    report Manual for any third value it had never seen.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "net_select_config")
+
+    assert description.value_fn({"net_select_mode": "auto_select"}) == "auto_select"
+    assert (
+        description.value_fn({"net_select_mode": "", "network_net_select_mode": "x"})
+        == "x"
+    )
+    assert description.value_fn({}) is None
+    assert description.entity_registry_enabled_default is False

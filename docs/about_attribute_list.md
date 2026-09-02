@@ -48,7 +48,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Recent Msg | Sensor | `msg_recent` | The most recently received message. Sender, date and storage index are in the attributes; the index is what the delete action needs to remove this specific message. |
 | Total Msg | Sensor | `msg_total` | Total messages held across every storage area - router memory and SIM, inbox, sent and drafts. The breakdown per area is in this sensor's attributes. Storage filling up stops new messages arriving. |
 
-## Signal (39)
+## Signal (40)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -71,6 +71,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | MDM MCC | Sensor | `mdm_mcc` | Mobile Country Code - a three-digit code identifying the country of the network the modem is attached to (for example 272 = Ireland). |
 | MDM MNC | Sensor | `mdm_mnc` | Mobile Network Code - identifies the individual operator within that country. Together with the MCC it uniquely names the network you are on. |
 | Network Mode | Sensor | `net_select` | The network technology the router is currently allowed to use, as chosen by the Network Mode control. Restricting it can stabilize a connection that keeps switching between 4G and 5G. |
+| Network Mode Config | Sensor | `net_select_config` | Whether the router picks its network mode itself or holds the one you chose - the Automatic or Manual setting on its own network selection page. Automatic lets it fall back as coverage changes; Manual keeps the Network Mode you set until you change it. |
 | Network Provider | Sensor | `network_provider` | The mobile network the router is registered to. This can differ from the SIM's home network while roaming. |
 | Network Type | Sensor | `network_type` | The connection technology in use. ENDC and LTE-NSA are both 5G non-standalone, where a 4G anchor carries the connection alongside a 5G carrier: ENDC means the 5G carrier is actually in use, LTE-NSA means the router is attached for 5G but is running on the 4G anchor alone, which is what weak 5G coverage looks like. Plain LTE means no 5G at all. |
 | 5G Active Band | Sensor | `nr5g_action_band` | The active 5G NR band. Bands below 1 GHz reach furthest, mid-band (around 3.5 GHz) is the usual balance of speed and coverage, and high bands are fastest over the shortest distance. |

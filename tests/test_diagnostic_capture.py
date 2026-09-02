@@ -38,7 +38,11 @@ from custom_components.zte_router_5g.const import (
 from custom_components.zte_router_5g.diagnostics import (
     async_get_config_entry_diagnostics,
 )
-from custom_components.zte_router_5g.known_names import REFUSABLE_NAMES
+from custom_components.zte_router_5g.known_names import (
+    EXPECTED_NAMES,
+    KNOWN_NAMES,
+    REFUSABLE_NAMES,
+)
 
 from .conftest import MockResponse
 
@@ -1892,3 +1896,46 @@ def test_the_two_sentinels_are_distinguished_by_identity() -> None:
     """
     assert _SESSION_LOST is not _REQUEST_REFUSED
     assert _SESSION_LOST == _REQUEST_REFUSED == {}
+
+
+@pytest.mark.asyncio
+async def test_names_another_project_expects_are_probed_too(mock_aiohttp_client):
+    """Weaker evidence is still evidence, and probing settles it per device.
+
+    `EXPECTED_NAMES` comes from another integration's sensor map rather than
+    from a device that answered. Asking costs one entry in a request and turns
+    the question into a measurement.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    mock_aiohttp_client.get_response = MockResponse(
+        json_data={_CORE_PARAMS[0]: "value", "wan_connect_status": "connected"}
+    )
+    asked: set[str] = set()
+
+    async def _record(chunk, canaries=()):
+        asked.update(chunk)
+        return {}
+
+    with (
+        patch.object(api, "logout", AsyncMock()),
+        patch.object(api, "login", AsyncMock()),
+        patch.object(api, "_probe_chunk", side_effect=_record),
+        patch.object(api, "mine_candidate_names", AsyncMock(return_value=(set(), []))),
+    ):
+        await api.run_discovery()
+
+    unasked = EXPECTED_NAMES - asked
+    assert not unasked, f"never put to the device: {sorted(unasked)[:5]}"
+
+
+def test_the_three_name_sets_do_not_overlap() -> None:
+    """Each set carries different evidence, so a name belongs to one.
+
+    `KNOWN_NAMES` was observed on a device, `EXPECTED_NAMES` was reported by
+    another project, and `REFUSABLE_NAMES` is probed alone. A name in two sets
+    would make its provenance unreadable.
+    """
+    assert not (KNOWN_NAMES & EXPECTED_NAMES)
+    assert not (EXPECTED_NAMES & REFUSABLE_NAMES)

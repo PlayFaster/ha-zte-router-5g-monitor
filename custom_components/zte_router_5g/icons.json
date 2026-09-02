@@ -32,86 +32,56 @@
       }
     },
     "sensor": {
-      "system_model_name": {
-        "default": "mdi:router-wireless"
+      "data_allowance": {
+        "default": "mdi:gauge-full"
       },
-      "system_wa_inner_version": {
-        "default": "mdi:information-outline"
+      "data_clear_day": {
+        "default": "mdi:calendar-refresh"
       },
-      "system_wan_ipaddr": {
-        "default": "mdi:ip-network"
+      "data_monthly_rx_bytes": {
+        "default": "mdi:download-network"
       },
-      "system_lan_ipaddr": {
-        "default": "mdi:ip"
+      "data_monthly_rx_bytes_raw": {
+        "default": "mdi:download-network"
       },
-      "system_device_uptime": {
-        "default": "mdi:clock-outline"
+      "data_monthly_total_bytes": {
+        "default": "mdi:network-outline"
       },
-      "system_last_updated": {
-        "default": "mdi:update"
+      "data_monthly_total_bytes_raw": {
+        "default": "mdi:network-outline"
       },
-      "system_imei": {
-        "default": "mdi:cellphone-information"
+      "data_monthly_tx_bytes": {
+        "default": "mdi:upload-network"
       },
-      "system_hardware_version": {
-        "default": "mdi:chip"
+      "data_monthly_tx_bytes_raw": {
+        "default": "mdi:upload-network"
       },
-      "system_battery_value": {
-        "default": "mdi:battery"
+      "data_projection": {
+        "default": "mdi:chart-timeline-variant"
       },
-      "system_sim_imsi": {
-        "default": "mdi:sim"
+      "data_realtime_rx_bytes": {
+        "default": "mdi:download-network"
       },
-      "system_sim_iccid": {
-        "default": "mdi:sim"
+      "data_realtime_rx_thrpt": {
+        "default": "mdi:download-network"
       },
-      "signal_wan_connect_status": {
-        "default": "mdi:connection"
+      "data_realtime_tx_bytes": {
+        "default": "mdi:upload-network"
       },
-      "signal_wan_apn": {
-        "default": "mdi:access-point-network"
+      "data_realtime_tx_thrpt": {
+        "default": "mdi:upload-network"
       },
-      "signal_network_type": {
-        "default": "mdi:network"
-      },
-      "signal_signalbar": {
-        "default": "mdi:signal-cellular-3"
-      },
-      "signal_network_provider": {
-        "default": "mdi:sim-outline"
-      },
-      "signal_mdm_mcc": {
-        "default": "mdi:map-marker"
-      },
-      "signal_mdm_mnc": {
-        "default": "mdi:map-marker"
-      },
-      "signal_rmcc": {
-        "default": "mdi:map-marker-outline"
-      },
-      "signal_rmnc": {
-        "default": "mdi:map-marker-outline"
-      },
-      "signal_lte_rsrp": {
-        "default": "mdi:signal"
-      },
-      "signal_lte_rsrq": {
-        "default": "mdi:signal"
-      },
-      "signal_lte_rssi": {
-        "default": "mdi:signal"
-      },
-      "signal_lte_snr": {
-        "default": "mdi:waveform"
-      },
-      "signal_lte_pci": {
-        "default": "mdi:transmission-tower"
+      "data_volume_alert_percent": {
+        "default": "mdi:alert-outline"
       },
       "signal_cell_id": {
         "default": "mdi:transmission-tower"
       },
-      "signal_wan_lte_ca": {
-        "default": "mdi:plus-network"
+      "signal_enodeb_id": {
+        "default": "mdi:transmission-tower"
+      },
+      "signal_lte_band_lock": {
+        "default": "mdi:lock-pattern"
       },
       "signal_lte_ca_pcell_band": {
         "default": "mdi:antenna"
@@ -125,11 +95,83 @@
       "signal_lte_ca_scell_bandwidth": {
         "default": "mdi:swap-horizontal"
       },
+      "signal_lte_multi_ca_scell_info": {
+        "default": "mdi:signal-cellular-3"
+      },
+      "signal_lte_pci": {
+        "default": "mdi:transmission-tower"
+      },
+      "signal_lte_rsrp": {
+        "default": "mdi:signal"
+      },
+      "signal_lte_rsrq": {
+        "default": "mdi:signal"
+      },
+      "signal_lte_rssi": {
+        "default": "mdi:signal"
+      },
+      "signal_lte_snr": {
+        "default": "mdi:waveform"
+      },
+      "signal_mdm_mcc": {
+        "default": "mdi:map-marker"
+      },
+      "signal_mdm_mnc": {
+        "default": "mdi:map-marker"
+      },
+      "signal_net_select": {
+        "default": "mdi:network"
+      },
+      "signal_net_select_config": {
+        "default": "mdi:tune-variant"
+      },
+      "signal_network_provider": {
+        "default": "mdi:sim-outline"
+      },
+      "signal_network_type": {
+        "default": "mdi:network"
+      },
+      "signal_nr5g_action_band": {
+        "default": "mdi:antenna"
+      },
+      "signal_nr5g_action_channel": {
+        "default": "mdi:numeric"
+      },
+      "signal_nr5g_pci": {
+        "default": "mdi:transmission-tower"
+      },
+      "signal_ppp_status": {
+        "default": "mdi:connection"
+      },
+      "signal_rmcc": {
+        "default": "mdi:map-marker-outline"
+      },
+      "signal_rmnc": {
+        "default": "mdi:map-marker-outline"
+      },
+      "signal_rscp": {
+        "default": "mdi:signal"
+      },
+      "signal_rssi": {
+        "default": "mdi:signal"
+      },
+      "signal_signalbar": {
+        "default": "mdi:signal-cellular-3"
+      },
       "signal_wan_active_band": {
         "default": "mdi:antenna"
       },
       "signal_wan_active_channel": {
         "default": "mdi:numeric"
+      },
+      "signal_wan_apn": {
+        "default": "mdi:access-point-network"
+      },
+      "signal_wan_connect_status": {
+        "default": "mdi:connection"
+      },
+      "signal_wan_lte_ca": {
+        "default": "mdi:plus-network"
       },
       "signal_z5g_rsrp": {
         "default": "mdi:signal-5g"
@@ -143,107 +185,68 @@
       "signal_z5g_sinr": {
         "default": "mdi:waveform"
       },
-      "signal_nr5g_pci": {
-        "default": "mdi:transmission-tower"
-      },
-      "signal_nr5g_action_band": {
-        "default": "mdi:antenna"
-      },
-      "signal_nr5g_action_channel": {
-        "default": "mdi:numeric"
-      },
-      "signal_rssi": {
-        "default": "mdi:signal"
-      },
-      "signal_rscp": {
-        "default": "mdi:signal"
-      },
-      "signal_enodeb_id": {
-        "default": "mdi:transmission-tower"
-      },
-      "signal_net_select": {
-        "default": "mdi:network"
-      },
-      "signal_ppp_status": {
-        "default": "mdi:connection"
-      },
-      "data_monthly_tx_bytes": {
-        "default": "mdi:upload-network"
-      },
-      "data_monthly_rx_bytes": {
-        "default": "mdi:download-network"
-      },
-      "data_monthly_total_bytes": {
-        "default": "mdi:network-outline"
-      },
-      "data_monthly_tx_bytes_raw": {
-        "default": "mdi:upload-network"
-      },
-      "data_monthly_rx_bytes_raw": {
-        "default": "mdi:download-network"
-      },
-      "data_monthly_total_bytes_raw": {
-        "default": "mdi:network-outline"
-      },
-      "data_realtime_tx_thrpt": {
-        "default": "mdi:upload-network"
-      },
-      "data_realtime_rx_thrpt": {
-        "default": "mdi:download-network"
-      },
-      "data_realtime_tx_bytes": {
-        "default": "mdi:upload-network"
-      },
-      "data_realtime_rx_bytes": {
-        "default": "mdi:download-network"
-      },
-      "sms_sms_unread_num": {
-        "default": "mdi:email-mark-as-unread"
+      "sms_msg_recent": {
+        "default": "mdi:email-outline"
       },
       "sms_msg_total": {
         "default": "mdi:email-multiple"
       },
-      "sms_msg_recent": {
-        "default": "mdi:email-outline"
-      },
-      "signal_lte_band_lock": {
-        "default": "mdi:lock-pattern"
-      },
-      "data_volume_alert_percent": {
-        "default": "mdi:alert-outline"
-      },
-      "system_sntp_server": {
-        "default": "mdi:web-clock"
-      },
-      "data_clear_day": {
-        "default": "mdi:calendar-refresh"
-      },
-      "signal_lte_multi_ca_scell_info": {
-        "default": "mdi:signal-cellular-3"
-      },
-      "system_opms_wan_mode": {
-        "default": "mdi:transit-connection-variant"
-      },
-      "system_opms_wan_auto_mode": {
-        "default": "mdi:transit-connection-horizontal"
-      },
-      "system_sntp_timezone": {
-        "default": "mdi:map-clock-outline"
+      "sms_sms_unread_num": {
+        "default": "mdi:email-mark-as-unread"
       },
       "system_apn_interface_version": {
         "default": "mdi:file-code-outline"
       },
-      "data_projection": {
-        "default": "mdi:chart-timeline-variant"
+      "system_battery_value": {
+        "default": "mdi:battery"
       },
-      "data_allowance": {
-        "default": "mdi:gauge-full"
+      "system_device_uptime": {
+        "default": "mdi:clock-outline"
       },
       "system_firmware_update_available": {
         "default": "mdi:package-down"
       },
       "system_firmware_update_state": {
         "default": "mdi:package-variant"
+      },
+      "system_hardware_version": {
+        "default": "mdi:chip"
+      },
+      "system_imei": {
+        "default": "mdi:cellphone-information"
+      },
+      "system_lan_ipaddr": {
+        "default": "mdi:ip"
+      },
+      "system_last_updated": {
+        "default": "mdi:update"
+      },
+      "system_model_name": {
+        "default": "mdi:router-wireless"
+      },
+      "system_opms_wan_auto_mode": {
+        "default": "mdi:transit-connection-horizontal"
+      },
+      "system_opms_wan_mode": {
+        "default": "mdi:transit-connection-variant"
+      },
+      "system_sim_iccid": {
+        "default": "mdi:sim"
+      },
+      "system_sim_imsi": {
+        "default": "mdi:sim"
+      },
+      "system_sntp_server": {
+        "default": "mdi:web-clock"
+      },
+      "system_sntp_timezone": {
+        "default": "mdi:map-clock-outline"
+      },
+      "system_wa_inner_version": {
+        "default": "mdi:information-outline"
+      },
+      "system_wan_ipaddr": {
+        "default": "mdi:ip-network"
       }
     },
     "button": {

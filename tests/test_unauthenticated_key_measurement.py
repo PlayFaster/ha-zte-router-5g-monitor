@@ -558,7 +558,7 @@ def test_a_mined_alias_resolves_when_its_primary_is_empty(primary, fallback) -> 
     pair = next(t for t in tuples if t[0] == primary)
 
     assert fallback in pair
-    assert sensor._get_first({primary: "", fallback: "value"}, pair) == "value"
+    assert sensor.get_first({primary: "", fallback: "value"}, pair) == "value"
 
 
 def test_the_firmware_update_sensors_report_the_router_value() -> None:

@@ -314,6 +314,24 @@ The real argument in favour is insurance — Refresh Now is what a user presses 
 
 If a silent logged-out fault is ever observed again, this decision is the first thing to revisit — see `docs/ROADMAP.md` § Revisit.
 
+### A session verdict is only meaningful on a request that could carry one
+
+`_classify_session` separates "no session" from "nothing to report" by comparing two groups of key, so it needs both present. A request holding neither a session sentinel nor an unauthenticated key answers every name empty **both** when the session is gone and when the firmware does not support those names, and a verdict drawn on it is a coin toss reported as a fact.
+
+Measured. When the MC888 alias spellings pushed the core list past the URL budget, the second chunk held ten names the MC7010 leaves blank. Every poll was scored expired, and `coordinator.data` came back empty on a healthy router.
+
+`_batch_get` therefore passes `classify=` per chunk, true only where the chunk holds a sentinel or an unauthenticated key. `test_at_least_one_chunk_per_batch_can_be_classified` keeps a batch from losing detection entirely, and `_is_classifiable` is tested directly over four chunk shapes.
+
+**Two fixes that look right and are not.** Duplicating an unauthenticated key into a chunk that lacks one makes the chunk _look_ classifiable, and it then classifies as expired — the borrowed key is populated and every one of its own is empty, which is exactly a dead session. And `requested=None` does not suppress classification; it drops the absent-key guard, which makes an expired verdict **more** likely. Both were tried against hardware before the third attempt worked.
+
+### A polled key with no consumer is invisible
+
+The alias sweeps run one way: every key an entity names must be requested. Nothing ran the other way, so `net_select_mode` sat in `_CORE_PARAMS` read by nothing, and its MC888 spelling was added beside it — a second key in every request feeding the same nothing.
+
+`test_every_polled_key_is_read_by_something` closes it. A key counts as read when an entity names it, when it belongs to an alias tuple some entity uses, when it feeds the data-volume write form, when it belongs to a prefix-matched family such as `APN_config0` through `APN_config9`, or when it is listed in `POLLED_WITHOUT_AN_ENTITY` with the reason it is requested anyway — the contract keys and the two session sentinels.
+
+**Writing that sweep is harder than it looks, and it passed twice while blind.** First the poll lists' own literals in `api.py` counted as reads, so every polled key looked consumed. Then `known_names.py` did the same: it catalogues 758 names as string literals, and the unread key was one of them. A sweep of this shape must exclude the modules and constants that _declare_ vocabulary from those that _consume_ it, and must be watched failing on a known case before it is trusted.
+
 ### A document that describes code needs a test, not a review
 
 **`docs/value_min_max.md` specified guard bands for five sensors that had none.** `Signal Bar`, the three monthly byte counters and `Total Count` were all documented with bounds the code never applied. The document told a reader that impossible values were rejected on those sensors. They were not, and a negative monthly total would have been written into long-term statistics permanently.
@@ -407,13 +425,28 @@ Consequences worth remembering:
 
 ---
 
-## 6. Environment Constraints
+## 6. Supporting a router model nobody here owns
+
+The procedure that produced MC888 Pro support, written down so the next model does not need it re-derived. It assumes no hardware access and one diagnostics download.
+
+1. **Obtain a download on the current format.** Ask through the issue tracker. Ask for a diagnostics download and nothing else — never raw logs, never payload inspection. The download is redacted; a log is not.
+2. **Read `canary_pool` before anything else.** It says whether the pass could detect its own degradation. Where `canaries` is empty, the counts say which of the two causes applied — nothing answered, or everything that answered is served without a session — and any absence in that file is unproven.
+3. **Take the four outcome fields at their stated meanings.** `values` is what the device answered. `probed_no_answer` is what it was asked individually and did not answer — the only one of the four that is evidence of absence. `refused` is what it declined. `not_reprobed` is what the pass could not establish, and claims nothing.
+4. **Add an alias tuple wherever a key this integration polls is empty and an alternate is populated.** That is the test a fallback must pass — the alternate answers where the leader does not. The bare spelling leads, so the reference device's path is unchanged. Both spellings go in `_CORE_PARAMS` where the key feeds a control, per §22: a stale diagnostic is cosmetic, a stale control position invites a write composed from a reading that is no longer true.
+5. **Add a genuinely new key only where an entity will read it.** A key nothing reads is a round trip for nothing, and `test_every_polled_key_is_read_by_something` will refuse it. Where the value is unverified on any reachable hardware, ship the entity `entity_registry_enabled_default=False` so the cost on the primary target is zero.
+6. **Add the device's answered names to `known_names.py`,** which extends cross-device probing to every future download. Record provenance: `KNOWN_NAMES` holds names a device was observed to answer or mine, `EXPECTED_NAMES` holds names another project reports without a device having answered them. The two are not equivalent evidence and are kept apart deliberately.
+7. **Re-run `diag_check.py` and `hardware_check.py`** on the reference MC7010. Nothing in this procedure can be verified on the new model, so the only thing measurable here is that the reference device is unharmed.
+8. **Ask for one further download** after the release, to confirm the aliases populate. Until it arrives, the changelog says the model support is unverified rather than measured.
+
+**Not part of this procedure.** Per-model disabled-entity lists are a roadmap Maybe, gated on holding downloads from several models — on the reference device the category defaults already suppress every entity a per-model list would, so the feature currently changes nothing. See `docs/ROADMAP.md` and `.notes/info/other_zte_projects/divergence_review.md` §4.4.
+
+## 7. Environment Constraints
 
 - **Native Async API**: The integration uses `aiohttp` for all network communication, aligning with the Home Assistant event loop. This removes the need for `executor_job` threading and eliminates the maintenance burden of pinning external libraries like `requests`.
 - **SSL Verification**: Local routers typically use self-signed certificates. The `ZTERouterAPI` uses `ssl=False` in its `aiohttp` calls to maintain connectivity.
 - **Shared Session**: The integration uses `async_get_clientsession(hass)` to leverage Home Assistant's optimized, shared connection pool.
 
-## 7. Technical Debt & Future Work
+## 8. Technical Debt & Future Work
 
 - **Deliberately not fixed, from the 2026-08-07 code review.** Four exception handlers in `api.py` are reachable only by patching `_request`, so they read as uncovered. The available "fixes" are deleting the error handling or adding a `# pragma: no cover` — both suppress a real guard to move a coverage number, which `dev_standards` §11 rule 6 rules out. Left as they are, on purpose. Likewise, `async_step_user` validates credentials **before** checking for a duplicate entry: the IMEI that forms the unique id comes from that very fetch, so reordering would risk the dedup logic to save one round trip on a path taken once per install.
 - **The `testing_deeper_lev1_review` pass is partial.** Its first run was narrowed by the operator rather than by the prompt, so the six analysis strategies were not applied evenly; an unbiased re-run produced no output and was abandoned. Four of its six findings were verified and fixed, one was **disproved** on checking, and one area of the project remains unexamined at depth. Recorded in `.notes/info/updates_202608/status_plan.md` §O.
@@ -460,6 +493,7 @@ Consequences worth remembering:
 - **v3.3.1** (2026-07-29) — Cross-model compatibility expansion. Documented the new `helpers.py` utilities (`is_gsm7`, `earfcn_to_band`, `arfcn_to_band`) under Core Files. Added two Technical Debt items: cross-model support is inferred from other projects rather than tested on hardware (including the three speculative alias spellings and the login fallback that never fires on an MC7010), and no model is yet confirmed to populate any of the five thermal keys — with the condition under which they should be removed rather than left indefinitely.
 - **v3.3.0-dev1** (2026-07-27) — `dev_standards` conformance pass. Added success patterns for force-refresh-bypasses-pause, per-endpoint strike budgets, the health snapshot held outside `coordinator.data`, the always-available health sensor, reload-by-default options with a live-apply allow-list, layered diagnostics sanitization, and per-attribute recorder evaluation. Added four pitfalls: `goformId=LOGOUT` needs an `AD` token (and why the obvious web-UI verification cannot detect it), Refresh Now silently swallowed while paused, the options flow changing credentials without applying them, and diagnostics leaking SMS content and cell location. Recorded the §3 root-identity deviation and the config-entry migration-handler constraint under Technical Debt.
 - **v3.3.10** (2026-08-01) — Added the pitfall that a document describing code needs a test rather than a review, after `value_min_max.md` was found specifying guard bands for five sensors that had none and ten numeric sensors were found with no bounds at all. Records why the existing guard-band tests did not catch it (they test the mechanism with synthetic descriptions, never the coverage) and why `sensor_review` structurally could not (a guard band is never published as state or attribute, so no live query can see one). Tabulates this as the third invariant in one release to stop being true unnoticed, and states the three rules that follow: test coverage rather than mechanism, name exemptions and test the names, and read source where a document describes code.
+- **v3.4.0** (2026-09-02) — Added **§6, the procedure for supporting a router model nobody here owns**, written from the MC888 Pro work so the next model does not need it re-derived: obtain a download on the current format, read `canary_pool` before trusting any absence, take the four outcome fields at their stated meanings, add an alias tuple only where an alternate answers and the leader does not, add a new key only where an entity will read it, and record provenance in `known_names.py` separately for names a device answered and names another project merely expects. States that per-model disabled-entity lists are not part of the procedure and why. Sections renumbered — Environment Constraints and Technical Debt move to 7 and 8. Also added two §5 pitfalls: a session verdict is only meaningful on a request that could carry one, with the two plausible fixes that make it worse recorded alongside; and a polled key with no consumer is invisible, with the two reasons the sweep for it passed while blind.
 - **v3.3.9** (2026-08-01) — Recorded that drift can only fire on a router that previously reported the core keys, why the implicit empty-set baseline carries that guarantee, and the test that now pins it. Notes the repair retitle to "ZTE router data has changed unexpectedly" and why the `issue_id` must stay `firmware_contract_drift`.
 - **v3.3.8** (2026-08-01) — Added the pitfall on where debouncing belongs: the slider is debounced, switches and selects are not, and the test is whether intermediate values are artifacts of the input device or intentions of the user. Records the core-practice measurement (106 integrations import `Debouncer`; 68 for coordinator refresh; exactly one for an entity command, a Number), the distinction between the command debounce, the refresh debouncer and `PARALLEL_UPDATES`, and two rejected proposals — throttling the APN selects, and skipping a write that matches the last known state.
 - **v3.3.7** (2026-08-01) — Reference updates only. `docs/Future.md` renamed to `docs/ROADMAP.md` and restructured to the new shared standard at `.shared/dev_std/roadmap_format.md`; the two live pointers here now name the file and the section rather than an item number that no longer exists. Earlier Version Control entries naming `Future.md` are left as written — they record what was true at the time.

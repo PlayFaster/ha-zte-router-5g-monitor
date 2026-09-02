@@ -10,9 +10,9 @@ A complete list of the static entities and service actions provided by the integ
 | :--------- | :----------- | :--------------------- |
 | **Data**   | 15           | Data entities.         |
 | **SMS**    | 5            | SMS entities.          |
-| **Signal** | 40           | Signal entities.       |
+| **Signal** | 41           | Signal entities.       |
 | **System** | 35           | System entities.       |
-| **Total**  | **95**       | Total static entities. |
+| **Total**  | **96**       | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
 
@@ -44,7 +44,7 @@ A complete list of the static entities and service actions provided by the integ
 | Total Msg | `msg_total` | Sensor | - | - | LTS: `measurement` |
 | Unread Msg | `sms_unread_num` | Sensor | - | - | LTS: `measurement` |
 
-## Signal Sub-Device (40 Entities)
+## Signal Sub-Device (41 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -68,6 +68,7 @@ A complete list of the static entities and service actions provided by the integ
 | MDM MCC | `mdm_mcc` | Sensor | - | Diagnostic | **Disabled by default.** |
 | MDM MNC | `mdm_mnc` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Network Mode | `net_select` | Sensor | - | Diagnostic | - |
+| Network Mode Config | `net_select_config` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Network Provider | `network_provider` | Sensor | - | Diagnostic | - |
 | Network Type | `network_type` | Sensor | - | - | - |
 | 5G Active Band | `nr5g_action_band` | Sensor | - | Diagnostic | - |

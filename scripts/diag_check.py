@@ -600,9 +600,13 @@ def check_stability(
     # Read from the notes rather than diffed as text: these two are the numbers
     # that separate a healthy pass from one that lost a session, and a pass
     # that silently starts losing them is the regression this mode exists for.
+    # Not "names re-probed singly": that count follows how many chunks came
+    # back blank, which follows the device's own live values, so it varies
+    # legitimately between two passes a minute apart — measured at 198 and 190.
+    # The counts below do not.
     for phrase, label in (
         ("read without a session", "names read without a session"),
-        ("re-probed singly", "names re-probed singly"),
+        ("declined by the router", "names declined by the router"),
     ):
         one = _note_count(first.get("discovery", {}), phrase)
         two = _note_count(second.get("discovery", {}), phrase)

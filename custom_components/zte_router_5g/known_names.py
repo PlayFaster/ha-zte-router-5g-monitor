@@ -15,11 +15,20 @@ device happens to mention it.
 **Names only.** No values, no sample data, nothing device-specific beyond the
 vocabulary the firmware itself publishes in its web pages.
 
-Provenance:
+Provenance, and the two kinds are not equivalent:
 
-  - MC7010, firmware `IRL_H3G_MC7010DV1.0.0B03`, mined and probed 2026-09-02.
-  - MC888 Pro, firmware `BD_ABPLMC888PROMODV1.0.0B01`, from the diagnostics
-    download attached to issue #56 on 2026-09-01.
+  - **Observed.** A device mined or answered the name.
+      - MC7010, firmware `IRL_H3G_MC7010DV1.0.0B03`, mined and probed
+        2026-09-02.
+      - MC888 Pro, firmware `BD_ABPLMC888PROMODV1.0.0B01`, from the
+        diagnostics download attached to issue #56 on 2026-09-01.
+  - **Reported by another project.** `EXPECTED_NAMES` holds names taken from
+    `Kajkac/ZTE-MC-Home-assistant-repo`'s `SENSOR_NAMES` map, read 2026-09-02.
+    That map is what its integration asks for across the MC801, MC888, MC889
+    and G5 Ultra, which is evidence that ZTE firmware somewhere uses those
+    names. It is not evidence that any device answers them, and a name there
+    that is silent on every device we ever see means the other project carried
+    a name no hardware answers rather than that our probe failed.
 
 Write commands are excluded: `run_discovery` never probes a name that appears
 as a `goformId`, because reading one is at best meaningless and at worst a
@@ -823,5 +832,48 @@ REFUSABLE_NAMES: Final[frozenset[str]] = frozenset(
         "tr069_ServerURL",
         "tr069_ServerUsername",
         "tr069_Webui_DataModuleSupport",
+    }
+)
+
+
+# Names another project expects from ZTE hardware we do not own.
+#
+# Taken from `Kajkac/ZTE-MC-Home-assistant-repo`'s `SENSOR_NAMES` map on
+# 2026-09-02, which carries 219 names shared across its MC801, MC888, MC889
+# and G5 Ultra support. Of those, 168 already appear above and 30 are names
+# this integration polls directly, leaving the 21 here.
+#
+# Kept as a separate set because the evidence behind them is weaker than for
+# `KNOWN_NAMES`: nothing here has been seen answered by a device. Probing them
+# costs one entry in a request each and settles the question per device — a
+# name that answers moves into the download's `values`, one that does not is
+# reported as silent.
+#
+# Two spellings of the same concepts appear together — `Nr_bands` beside
+# `nr_rsrp` — which is the cross-firmware vocabulary difference that alias
+# tuples exist for. Whether either is answered anywhere is unknown.
+EXPECTED_NAMES: Final[frozenset[str]] = frozenset(
+    {
+        "Nr_band_widths",
+        "Nr_bands",
+        "Nr_cell_id",
+        "Nr_fcn",
+        "Nr_pci",
+        "Nr_signal_strength",
+        "Nr_snr",
+        "ip_passthrough_enabled",
+        "nr_rsrp",
+        "nr_rsrq",
+        "nr_rssi",
+        "sms_capacity_left",
+        "sms_dev_unread_num",
+        "sms_sim_received_total",
+        "sms_sim_sent_total",
+        "sms_sim_unread_num",
+        "wifi_chip1_ssid1_access_sta_num",
+        "wifi_chip1_ssid2_access_sta_num",
+        "wifi_chip2_ssid1_access_sta_num",
+        "wifi_chip2_ssid2_access_sta_num",
+        "wifi_chip_temp",
     }
 )

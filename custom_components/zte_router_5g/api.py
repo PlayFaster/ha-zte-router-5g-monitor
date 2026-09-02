@@ -29,7 +29,7 @@ from .const import (
     SESSION_IDLE_RESET_SECONDS,
 )
 from .helpers import is_gsm7
-from .known_names import KNOWN_NAMES, REFUSABLE_NAMES
+from .known_names import EXPECTED_NAMES, KNOWN_NAMES, REFUSABLE_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -190,6 +190,25 @@ _CORE_PARAMS: list[str] = [
     # been found, and whether one is running.
     "current_upgrade_state",
     "new_version_state",
+    # Alternate spellings observed on the MC888 Pro in issue #56, where each is
+    # populated and the bare spelling this list already carries is empty. They
+    # sit in the core batch rather than the extended one because four of them
+    # feed controls, and §22 forbids a control's position coming from a
+    # degradable endpoint — a stale diagnostic is cosmetic, a stale control
+    # position invites a write composed from a reading that is no longer true.
+    #
+    # This takes the core list past `BATCH_URL_MAX_CHARS`, so it is served in
+    # two requests. `_split_by_url_budget` handles that with no other change.
+    "network_lte_rsrp",
+    "network_lte_ca_pcell_band",
+    "network_lte_ca_pcell_bandwidth",
+    "network_lte_ca_scell_band",
+    "network_lte_ca_scell_bandwidth",
+    "network_net_select",
+    "network_net_select_mode",
+    "flux_clear_date",
+    "flux_auto_clear_flow_data_switch",
+    "flux_data_volume_limit_switch",
 ]
 
 _EXTENDED_PARAMS: list[str] = [
@@ -546,6 +565,31 @@ class _LoginAttempt(NamedTuple):
     cookies: dict[str, str]
     auth_error: str | None
     conn_error: str | None
+
+
+def _is_classifiable(chunk: list[str], unauthenticated: frozenset[str]) -> bool:
+    """Whether a session verdict drawn on this chunk could mean anything.
+
+    Two ways a request can carry the distinction:
+
+    * It holds a **sentinel** — a key whose emptiness is the definition of a
+      dead session. `get_params` appends one to every single-key read for this
+      reason, so a one-key write read-back is still classified.
+    * It holds an **unauthenticated key**, which stays populated when the
+      session goes. The extended poll carries no sentinel and is classified on
+      this basis.
+
+    A chunk with neither cannot tell "no session" from "this firmware does not
+    support these names", and answers every name empty in both cases. Measured
+    on the reference MC7010 once the MC888 aliases pushed the core list into
+    two requests: the second chunk held ten names that device leaves blank,
+    every poll was scored expired, and the poll returned nothing at all.
+    """
+    names = set(chunk)
+    if not names - unauthenticated:
+        # Only unauthenticated keys: this can never look expired.
+        return False
+    return bool(names & set(_SESSION_SENTINELS)) or bool(names & unauthenticated)
 
 
 class ZTERouterAPI:
@@ -2107,7 +2151,7 @@ class ZTERouterAPI:
             # what a device mentions conflates "not referenced here" with "not
             # supported here", which is the same conflation `probed_no_answer`
             # exists to avoid one layer down.
-            candidates = (mined | KNOWN_NAMES) - set(self.goform_ids)
+            candidates = (mined | KNOWN_NAMES | EXPECTED_NAMES) - set(self.goform_ids)
             # Held out of the chunked phases entirely. A declined name replaces
             # the whole response, so one of these inside a chunk costs every
             # other name in it — measured on the reference MC7010, two chunks
@@ -2282,6 +2326,16 @@ class ZTERouterAPI:
                 length = overhead
             chunks[-1].append(name)
             length += addition
+
+        # Deliberately no attempt to give every chunk both classes of key.
+        # Duplicating an unauthenticated name into a chunk that lacks one was
+        # tried and is worse: it makes a chunk of otherwise-unsupported names
+        # *look* classifiable, and it then classifies as expired, because every
+        # authenticated name in it is empty and the borrowed one is populated.
+        # That is what a dead session looks like. Measured on the reference
+        # MC7010 with the MC888 aliases in place: every poll scored expired and
+        # returned nothing. `_batch_get` skips a chunk it cannot classify
+        # instead.
         return chunks
 
     async def _batch_get(
@@ -2301,12 +2355,28 @@ class ZTERouterAPI:
         asked for.
         """
         merged: dict[str, Any] = {}
+        unauthenticated = self.unauthenticated_key_set()
         for chunk in self._split_by_url_budget(params):
+            # Classified only where the verdict can mean anything. A chunk
+            # holding no unauthenticated key answers every name empty on a
+            # device that does not support them, which is the exact shape of
+            # an expired session. Measured: the MC888 aliases created a second
+            # core chunk of ten names the reference MC7010 leaves blank, every
+            # poll was scored expired, and the poll returned nothing at all.
+            #
+            # `classify=False`, not `requested=None`: the request list only
+            # controls the absent-key guard, and dropping it makes an expired
+            # verdict *more* likely rather than suppressing one.
+            #
+            # Skipping such a chunk loses no detection. A genuinely dead
+            # session blanks the classifiable chunks too, and those still
+            # carry the contract keys.
             data = await self._request(
                 "GET",
                 f"{_BATCH_PATH_PREFIX}{','.join(chunk)}",
                 timeout_sec=timeout_sec,
                 requested=chunk,
+                classify=_is_classifiable(chunk, unauthenticated),
             )
             if isinstance(data, dict):
                 merged.update(data)
@@ -2808,7 +2878,10 @@ class ZTERouterAPI:
     # Every field `DATA_LIMIT_SETTING` expects, and the response key each is
     # read back from. The router refuses a payload missing any of them.
     DATA_VOLUME_FIELDS: dict[str, tuple[str, ...]] = {
-        "data_volume_limit_switch": ("data_volume_limit_switch",),
+        "data_volume_limit_switch": (
+            "data_volume_limit_switch",
+            "flux_data_volume_limit_switch",
+        ),
         # The `flux_` spellings matter more here than on a sensor. This is an
         # all-or-nothing form: the router refuses it outright when a field is
         # missing, and this method raises rather than guessing, so on a device
@@ -2826,11 +2899,15 @@ class ZTERouterAPI:
             "data_volume_alert_percent",
             "flux_data_volume_alert_percent",
         ),
-        "wan_auto_clear_flow_data_switch": ("wan_auto_clear_flow_data_switch",),
+        "wan_auto_clear_flow_data_switch": (
+            "wan_auto_clear_flow_data_switch",
+            "flux_auto_clear_flow_data_switch",
+        ),
         "traffic_clear_date": (
             "traffic_clear_date",
             "data_volume_clear_date",
             "data_volume_clear_day",
+            "flux_clear_date",
         ),
     }
 
