@@ -133,6 +133,30 @@ async def test_a_new_sms_logs_nothing_that_identifies_the_sender(
     assert "New SMS received" in caplog.text
 
 
+def test_every_boolean_entity_declares_the_keys_it_reads() -> None:
+    """A boolean value function cannot report whether the router answered.
+
+    It returns `False` for an empty payload just as readily as for a real one,
+    so the populated record — which decides whether `reset_entities` may
+    disable an entity that is blank today — has to be told which keys each of
+    these is built from.
+    """
+    from custom_components.zte_router_5g.binary_sensor import BINARY_SENSORS
+    from custom_components.zte_router_5g.switch import SWITCH_TYPES
+
+    undeclared = sorted(
+        d.key
+        for types in (BINARY_SENSORS, SWITCH_TYPES)
+        for d in types
+        if d.value_fn is not None and not d.state_keys
+    )
+
+    assert not undeclared, (
+        f"boolean entities with no state_keys: {undeclared}. Without them "
+        "these count as populated from any payload, including an empty one."
+    )
+
+
 def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
     """Section 14: the default is total — no attribute is recorded.
 

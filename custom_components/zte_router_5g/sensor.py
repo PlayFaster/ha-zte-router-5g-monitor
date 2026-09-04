@@ -1582,13 +1582,13 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "across all its networks. Counts wireless clients only - anything "
             "on a network cable is not included."
         ),
-        translation_key="system_wifi_clients",
+        translation_key="wifi_clients",
         state_class=SensorStateClass.MEASUREMENT,
         min_limit=0,
         max_limit=256,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        group="system",
+        group="wifi",
         source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_int(data.get("wifi_access_sta_num")),
     ),
@@ -1599,10 +1599,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "the router states it, so this reflects the radios rather than "
             "the last command sent to them."
         ),
-        translation_key="system_wifi_enabled",
+        translation_key="wifi_enabled",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        group="system",
+        group="wifi",
         source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_str(data.get("wifi_onoff_state")),
     ),

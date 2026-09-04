@@ -54,7 +54,12 @@ MODEL_OVERLAY: Final[dict[str, dict[str, bool]]] = {
     # The bare LTE vocabulary is present and empty on this firmware — its own
     # web pages request `lte_rsrq`, `lte_rssi` and `lte_snr` and the router
     # answers blank — while the `network_` vocabulary carries the LTE RSRP.
-    # The six disabled here have no spelling that this device populates.
+    # The five disabled here have no spelling that this device populates.
+    #
+    # `enodeb_id` was disabled here when this overlay was written and is not
+    # any more. It was measured blank on the download, but the derivation
+    # added in the same release fills it from the cell identity, so the entry
+    # was suppressing a sensor that works.
     #
     # RSSI and SINR are enabled because the unqualified `network_` names are
     # the only signal-quality figures this device reports. They stay off by
@@ -64,7 +69,6 @@ MODEL_OVERLAY: Final[dict[str, dict[str, bool]]] = {
         "lte_rssi": False,
         "lte_snr": False,
         "z5g_rssi": False,
-        "enodeb_id": False,
         "wan_connect_status": False,
         "rssi": True,
         "sinr": True,

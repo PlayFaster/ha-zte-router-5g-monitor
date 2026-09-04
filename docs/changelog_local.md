@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10-dev10\] - 2026-09-05 - Wi-Fi Sub-Device; Populated Set Corrected; Reset Action Documented](#3310-dev10---2026-09-05---wi-fi-sub-device-populated-set-corrected-reset-action-documented)
   - [\[3.3.10-dev9\] - 2026-09-04 - Reset Entities Action Added](#3310-dev9---2026-09-04---reset-entities-action-added)
   - [\[3.3.10-dev8\] - 2026-09-04 - Transition History for Six Text Values; Populated Set Recorded](#3310-dev8---2026-09-04---transition-history-for-six-text-values-populated-set-recorded)
   - [\[3.3.10-dev7\] - 2026-09-04 - Per-Model Entity Defaults; eNodeB ID Derived; Two Wi-Fi Sensors](#3310-dev7---2026-09-04---per-model-entity-defaults-enodeb-id-derived-two-wi-fi-sensors)
@@ -227,6 +228,28 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.10-dev10] - 2026-09-05 - Wi-Fi Sub-Device; Populated Set Corrected; Reset Action Documented
+
+### Summary
+
+Four corrections to work landed in `[3.3.10-dev7]` through `[3.3.10-dev9]`, none of it released. The entity count is unchanged at 121.
+
+### Fixed
+
+- **Boolean entities no longer count as populated from any payload.** A binary sensor or switch value function returns `False` for an empty payload as readily as for a real one, so nine entities entered the populated record on the first poll of a device that had said nothing. `enable_populated` would have turned all nine on regardless of the hardware — including the outdoor-unit LED switch on an indoor router, the entity `[3.3.10-dev7]` taught to report unavailable. Both boolean platforms now declare the router keys they read, and are judged by whether one is present, which is the rule `ZTERouterSwitch.available` already applies.
+- **eNodeB ID is no longer disabled on the MC888.** The overlay was seeded from the diagnostics download, where the field is empty, but the derivation added in the same release fills it from the cell identity. The entry was suppressing a sensor that works.
+
+### Changed
+
+- **Wi-Fi moves to its own sub-device.** The two aggregates were placed on System, and a third Wi-Fi entity would have made that awkward to undo — entity ids change with the sub-device, which is free before a release and not after. The **WiFi** card is empty on the reference MC7010, which answers neither key; that is the cost of the placement and is stated in the README.
+- **The `reset_entities` action is documented.** It shipped with selectors and defaults and no prose at all, so Home Assistant rendered ten unlabelled toggles. Every field now carries a name and a description, and the three that need it most say what they actually do: `include_ever_populated` explains that the two disable options otherwise protect entities that reported a value before, and the two snapshot flags explain what a saved set is.
+
+### Notes
+
+- **Only the boolean platforms were changed.** `msg_total` also reports a value — zero — from an empty payload, because summing no message banks gives zero. Left alone: it is enabled by default, so its presence in the populated record changes nothing, and altering it would reverse a decision recorded in `test_total_sms_treats_an_empty_bank_as_zero_not_as_a_failure`.
+- **Two mock-based tests had stopped testing anything.** A bare `MagicMock` iterates as empty, so the new `state_keys` guard skipped those descriptions before their value functions were called. Both now set `state_keys` explicitly.
+- **The 5G band locks were considered for the MC888 overlay and rejected.** They were thought to be populated only there; the reference MC7010 answers them too, with a different band list, so there is no model-specific case.
 
 ## [3.3.10-dev9] - 2026-09-04 - Reset Entities Action Added
 

@@ -35,6 +35,12 @@ class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
 
     group: str = "signal"
     value_fn: Callable[[Any], bool] | None = None
+    # The router keys this entity's value is built from. A boolean value
+    # function answers `False` for any input, an empty payload included, so it
+    # cannot say whether the router supplied anything — these can. Used by the
+    # populated record, which exists so that `reset_entities` does not disable
+    # an entity that reported a value yesterday and is merely blank today.
+    state_keys: tuple[str, ...] = ()
     extra_attrs_fn: Callable[[Any], dict[str, Any]] | None = None
     # Optional endpoint this entity's value comes from. When set, the entity
     # goes unavailable once that endpoint exhausts its own strike budget
@@ -99,6 +105,7 @@ OPERATOR_PROVISIONED_DESCRIPTION = ZTEBinarySensorEntityDescription(
 BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ZTEBinarySensorEntityDescription(
         key="sms_storage_full",
+        state_keys=("sms_nv_total", "sms_nv_rev_total"),
         source=ENDPOINT_SMS_CAPACITY,
         about=(
             "On when message storage has no room left. A full store makes the "
@@ -126,6 +133,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="reboot_schedule",
+        state_keys=("reboot_schedule_enable",),
         source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router reboots itself on an internal schedule. Execution "
@@ -160,6 +168,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="web_sleep",
+        state_keys=("web_sleep_switch",),
         source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router puts its web management page to sleep after "
@@ -174,6 +183,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="web_wake",
+        state_keys=("web_wake_switch",),
         source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router's web management interface automatically wakes "
@@ -187,6 +197,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="upnp_enabled",
+        state_keys=("upnpEnabled",),
         source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router lets devices open their own inbound ports. "
@@ -202,6 +213,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="sip_alg_enabled",
+        state_keys=("alg_sip_enable",),
         source=ENDPOINT_EXTENDED,
         about=(
             "SIP ALG rewrites internet-telephony traffic as it passes through. It "

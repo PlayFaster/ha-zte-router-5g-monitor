@@ -184,7 +184,7 @@ Which of them your router fills in depends on its firmware. Enable the ones you 
 | `5G NSA Band Lock`, `5G SA Band Lock` | Which 5G bands the router may use, alongside the existing `LTE Band Lock Mask` |
 | `Roaming State`, `Network Mode Config` | Whether the SIM is roaming, and whether the router picks its network mode itself |
 | `RSSI`, `SINR` | Signal strength and signal-to-noise for whichever radio is serving, where the router reports them without naming the technology. On firmware that leaves `LTE RSSI` and `LTE SNR` blank, these two carry those readings — they are not duplicates of the LTE sensors, and enabling them is how you see quality on such a router |
-| `Wi-Fi Clients Connected`, `Wi-Fi Enabled` | How many wireless devices are connected, and whether the radios are on. Indoor models report these; the MC7010 does not |
+| `Wi-Fi Clients Connected`, `Wi-Fi Enabled` | How many wireless devices are connected, and whether the radios are on. On the **WiFi** sub-device. Indoor models report these; the MC7010 does not, so that card is empty there |
 | `SIM Lock State`, `SIM PIN Attempts Remaining`, `SIM PUK Attempts Remaining` | Whether the SIM is asking for its PIN, and how many tries are left. A locked SIM otherwise looks like a coverage fault |
 
 ---
@@ -376,7 +376,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **121 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **121 entities** (depending on your firmware) organized into five logical devices: **System**, **Signal**, **Data**, **SMS**, and **WiFi**.
 
 <details>
 
@@ -386,10 +386,11 @@ This integration provides **121 entities** (depending on your firmware) organize
 
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
-| ⚙️ **System** | 47 | 35 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 30, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, Wi-Fi Clients Connected, Wi-Fi Enabled, WAN IP Changes, WAN Mode Changes |
+| ⚙️ **System** | 45 | 33 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 28, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes |
 | 📶 **Signal** | 54 | 50 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
 | 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
+| 📡 **WiFi** | 2 | 2 Sensors | Wi-Fi Clients Connected, Wi-Fi Enabled | 2, both — only indoor models report them |
 | 🛠️ **Actions** | 5 | — | Send, Delete, Bulk-Delete and List SMS, **Reset Entities** | — |
 
 > The full list, with the entity key and default state of every one, is in [`docs/all_sensors.md`](docs/all_sensors.md).

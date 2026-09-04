@@ -114,6 +114,15 @@ def entity_keys_with_values(data: dict[str, Any]) -> set[str]:
             value_fn = getattr(description, "value_fn", None)
             if value_fn is None:
                 continue
+            # A boolean entity answers `False` for any input, an empty payload
+            # included, so calling its value function proves nothing about the
+            # router. Nine entities entered this set on the first poll of a
+            # device that had said nothing at all. Judge them the way the
+            # entity does: by whether a key they read is present, which is the
+            # same rule `ZTERouterSwitch.available` applies.
+            keys = getattr(description, "state_keys", ())
+            if keys and not any(data.get(name) not in (None, "") for name in keys):
+                continue
             try:
                 value = value_fn(data)
             except Exception:  # noqa: BLE001, S112 - see below

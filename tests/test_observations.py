@@ -19,6 +19,7 @@ from custom_components.zte_router_5g.observations import (
     HISTORY_CAP,
     TRACKED,
     ObservationRecorder,
+    entity_keys_with_values,
 )
 
 DEVICE = "imei-1"
@@ -205,6 +206,34 @@ def test_entities_reporting_a_value_enter_the_populated_set(
     assert "enodeb_id" in populated
 
 
+def test_a_boolean_entity_needs_its_key_to_count_as_populated(
+    recorder: ObservationRecorder,
+) -> None:
+    """A boolean value function answers `False` for any input.
+
+    Calling it proves nothing about the router: nine entities entered this set
+    on the first poll of a device that had said nothing at all, which would
+    have made `enable_populated` turn on every switch and binary sensor
+    regardless of the hardware. They are judged by whether a key they read is
+    present, the same rule the switch platform uses for availability.
+    """
+    from custom_components.zte_router_5g.binary_sensor import BINARY_SENSORS
+    from custom_components.zte_router_5g.switch import SWITCH_TYPES
+
+    booleans = {d.key for types in (BINARY_SENSORS, SWITCH_TYPES) for d in types}
+
+    assert not entity_keys_with_values({}) & booleans
+
+
+def test_a_boolean_entity_with_its_key_present_does_count(
+    recorder: ObservationRecorder,
+) -> None:
+    """The guard must not lock the boolean platforms out altogether."""
+    found = entity_keys_with_values({"upnpEnabled": "0"})
+
+    assert "upnp_enabled" in found
+
+
 def test_the_populated_set_only_ever_grows(recorder: ObservationRecorder) -> None:
     """A degraded poll must not erase what protects an entity from a reset."""
     recorder.observe(_poll(), DEVICE)
@@ -243,7 +272,7 @@ def test_a_description_with_no_value_function_is_skipped(
     and calling `None` here would raise inside the broad catch below and hide
     a real programming error behind a swallowed exception.
     """
-    valueless = MagicMock(key="valueless", value_fn=None)
+    valueless = MagicMock(key="valueless", value_fn=None, state_keys=())
     with patch(
         "custom_components.zte_router_5g.switch.SWITCH_TYPES",
         (valueless,),
@@ -262,7 +291,12 @@ def test_a_description_that_raises_does_not_stop_the_poll(
     entity's own problem and is surfaced where it lives; letting it escape
     here would mean one bad description stopped every record being kept.
     """
-    broken = MagicMock(key="broken", value_fn=MagicMock(side_effect=ValueError))
+    # `state_keys` is set explicitly: a bare MagicMock iterates as empty,
+    # so the boolean guard above would skip this description before its
+    # value function was ever called, and the test would prove nothing.
+    broken = MagicMock(
+        key="broken", value_fn=MagicMock(side_effect=ValueError), state_keys=()
+    )
     with patch(
         "custom_components.zte_router_5g.sensor.SENSOR_TYPES",
         (broken,),

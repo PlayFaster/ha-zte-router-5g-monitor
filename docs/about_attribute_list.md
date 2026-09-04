@@ -106,7 +106,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G RSSI | Sensor | `z5g_rssi` | Total received power across the 5G channel, in dBm, including noise and interference. Use 5G RSRP for a cleaner measure of your own cell's strength. |
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 
-## System (37)
+## System (35)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -144,9 +144,14 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | WAN IP Changes | Sensor | `wan_ip_changes` | How many times the router's public WAN address has changed. A rising count means your operator is reassigning it, which breaks anything that relied on it staying put. |
 | WAN IP Address | Sensor | `wan_ipaddr` | The address your ISP has given the router on the mobile network - what the internet sees. Often a shared carrier-grade NAT address, which is why inbound connections and port forwarding usually do not work on mobile broadband. |
 | WAN Mode Changes | Sensor | `wan_mode_changes` | How many times the router has switched between bridge and gateway operation. This changes what the router does to your whole network, and an operator can change it remotely. |
+| ODU LED Switch | Switch | `odu_led_switch` | Turns the status light on the outdoor unit on or off. Cosmetic only - the connection is unaffected, so switching it off is safe if the unit is visible from a window or a bedroom. The router reports the light's real state, so this reflects the unit rather than the last command sent. |
+
+## WiFi (2)
+
+| Entity | Platform | Key | Note |
+| :-- | :-- | :-- | :-- |
 | Wi-Fi Clients Connected | Sensor | `wifi_clients` | How many devices are connected to the router's Wi-Fi right now, across all its networks. Counts wireless clients only - anything on a network cable is not included. |
 | Wi-Fi Enabled | Sensor | `wifi_enabled` | Whether the router's Wi-Fi radios are switched on. Reported as the router states it, so this reflects the radios rather than the last command sent to them. |
-| ODU LED Switch | Switch | `odu_led_switch` | Turns the status light on the outdoor unit on or off. Cosmetic only - the connection is unaffected, so switching it off is safe if the unit is visible from a window or a bedroom. The router reports the light's real state, so this reflects the unit rather than the last command sent. |
 
 ## Entities without an `about` note (13)
 

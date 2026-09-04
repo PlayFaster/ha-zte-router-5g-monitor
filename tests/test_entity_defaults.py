@@ -77,7 +77,7 @@ def test_a_matched_model_keeps_defaults_it_says_nothing_about() -> None:
 
 @pytest.mark.parametrize(
     "key",
-    ["lte_rsrq", "lte_rssi", "lte_snr", "z5g_rssi", "enodeb_id", "wan_connect_status"],
+    ["lte_rsrq", "lte_rssi", "lte_snr", "z5g_rssi", "wan_connect_status"],
 )
 def test_the_mc888_disables_what_it_cannot_populate(key: str) -> None:
     """Six enabled sensors are blank on that firmware.
@@ -106,6 +106,19 @@ def test_the_mc888_enables_what_only_it_reports(key: str) -> None:
 
     assert default_enabled(description, MC888) is True
     assert default_enabled(description, MC7010) is False
+
+
+def test_the_enodeb_sensor_is_not_disabled_on_the_mc888() -> None:
+    """It is derived there, not read, so it does populate.
+
+    The overlay disabled it when it was written, from a download taken before
+    the derivation existed. Left in place the entry would suppress a sensor
+    that works, which is the failure mode of seeding an overlay from a
+    measurement and then changing what the code does with it.
+    """
+    description = _description("enodeb_id")
+
+    assert default_enabled(description, MC888) is True
 
 
 def test_the_overlay_matches_the_family_not_the_variant() -> None:

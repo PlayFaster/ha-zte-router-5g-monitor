@@ -118,59 +118,116 @@ get_sms_list:
               value: "10"
 
 reset_entities:
+  description:
+    Bulk-manage which entities this integration has enabled. Use it after enabling
+    everything to see what your router offers, to clean up entities your model does not
+    report, or to save and restore your own set. Runs as a preview by default and
+    changes nothing until you turn Preview off.
   fields:
     entry_id:
+      description:
+        The router to act on. Defaults to your only router; required if more than one is
+        configured.
       required: false
       selector:
         config_entry:
           integration: zte_router_5g
     dry_run:
+      name: Preview only
+      description:
+        Report what would change without changing anything. Leave this on first, read
+        the result, then run again with it off. The preview also lists the entity IDs
+        you may want to put in Keep These Entities.
       required: false
       default: true
       selector:
         boolean:
     reset_to_default:
+      name: Reset to defaults
+      description:
+        Return every entity to the state this integration ships for your router model.
+        This is how to undo enabling everything. It also applies newer defaults to an
+        installation set up before them.
       required: false
       default: true
       selector:
         boolean:
     enable_populated:
+      name: Enable what your router reports
+      description:
+        Turn on every entity your router currently supplies a value for. Answers "show
+        me what this device can actually do". Enables entities the defaults leave off,
+        so expect a longer list than the defaults give.
       required: false
       default: false
       selector:
         boolean:
     disable_unavailable:
+      name: Disable unavailable entities
+      description:
+        Turn off entities currently showing Unavailable. Only affects entities that are
+        already enabled.
       required: false
       default: false
       selector:
         boolean:
     disable_unknown:
+      name: Disable unknown entities
+      description:
+        Turn off entities currently showing Unknown. Only affects entities that are
+        already enabled.
       required: false
       default: false
       selector:
         boolean:
     include_ever_populated:
+      name: Include entities that once had a value
+      description:
+        By default the two Disable options skip entities that have reported a value on
+        this router before, so you do not lose your 5G sensors because the connection
+        has dropped to 4G today. Turn this on to disable those as well. Check the
+        preview before you do.
       required: false
       default: false
       selector:
         boolean:
     preserve_user_customized:
+      name: Keep entities you switched off
+      description:
+        Leave alone any entity you disabled yourself, so a reset does not turn it back
+        on. There is no equivalent for entities you switched on - Home Assistant does
+        not record who enabled an entity - so use Keep These Entities for those.
       required: false
       default: false
       selector:
         boolean:
     exclude_entities:
+      name: Keep these entities
+      description:
+        Entities to leave exactly as they are, whatever else this action does. Use it to
+        carry a few favourites through a reset. Run the preview first and copy the ones
+        you want to keep from its list.
       required: false
       selector:
         entity:
           integration: zte_router_5g
           multiple: true
     save_snapshot:
+      name: Save current set
+      description:
+        Record which entities are enabled right now as your own set, so you can return
+        to it later with Restore Saved Set. Cannot be combined with any option that
+        changes things - set your entities up first, then save.
       required: false
       default: false
       selector:
         boolean:
     restore_snapshot:
+      name: Restore saved set
+      description:
+        Return to the set you saved earlier, instead of this integration's defaults.
+        Entities added by a later update are not in your saved set and keep their normal
+        default.
       required: false
       default: false
       selector:

@@ -11,7 +11,8 @@ A complete list of the static entities and service actions provided by the integ
 | **Data**   | 15           | Data entities.         |
 | **SMS**    | 5            | SMS entities.          |
 | **Signal** | 54           | Signal entities.       |
-| **System** | 47           | System entities.       |
+| **System** | 45           | System entities.       |
+| **WiFi**   | 2            | WiFi entities.         |
 | **Total**  | **121**      | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
@@ -103,7 +104,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G RSSI | `z5g_rssi` | Sensor | dBm | - | LTS: `measurement` |
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 
-## System Sub-Device (47 Entities)
+## System Sub-Device (45 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -150,10 +151,15 @@ A complete list of the static entities and service actions provided by the integ
 | WAN IP Changes | `wan_ip_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | WAN IP Address | `wan_ipaddr` | Sensor | - | Diagnostic | - |
 | WAN Mode Changes | `wan_mode_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
-| Wi-Fi Clients Connected | `wifi_clients` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `measurement` |
-| Wi-Fi Enabled | `wifi_enabled` | Sensor | - | Diagnostic | **Disabled by default.** |
 | ODU LED Switch | `odu_led_switch` | Switch | - | Config | **Disabled by default.** |
 | Pause Polling | `pause_polling` | Switch | - | Config | - |
+
+## WiFi Sub-Device (2 Entities)
+
+| Name | Key | Type | Unit | Category | Notes |
+| :-- | :-- | :-- | :-- | :-- | :-- |
+| Wi-Fi Clients Connected | `wifi_clients` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| Wi-Fi Enabled | `wifi_enabled` | Sensor | - | Diagnostic | **Disabled by default.** |
 
 <!-- GENERATED:end -->
 
