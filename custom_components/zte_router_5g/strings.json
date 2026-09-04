@@ -429,38 +429,50 @@
     }
   },
   "exceptions": {
-    "entry_not_ready": {
-      "message": "The router {title} is not ready. It may still be starting up, or Home Assistant may not have reached it yet."
-    },
-    "no_entries_found": {
-      "message": "No active ZTE Router 5G integration was found. Check that the integration is set up and loaded."
-    },
-    "multiple_entries": {
-      "message": "More than one ZTE router is configured. Specify which one to use with the entry_id field."
-    },
-    "sms_too_long": {
-      "message": "The message is {length} characters, but this router accepts at most {limit} when the text needs {encoding} encoding ({segments} segments). Shorten it, or remove any emoji and special characters to get the longer GSM-7 limit."
-    },
-    "send_sms_failed": {
-      "message": "Failed to send the SMS: {error}. Already sent to: {sent}. Retrying will send again to those recipients."
-    },
-    "delete_sms_failed": {
-      "message": "Failed to delete the SMS: {error}"
+    "delete_all_button_failed": {
+      "message": "Failed to delete all SMS messages: {error}"
     },
     "delete_all_sms_failed": {
       "message": "Failed to delete the SMS messages: {error}"
     },
+    "delete_sms_failed": {
+      "message": "Failed to delete the SMS: {error}"
+    },
+    "entry_not_ready": {
+      "message": "The router {title} is not ready. It may still be starting up, or Home Assistant may not have reached it yet."
+    },
     "get_sms_list_failed": {
       "message": "Failed to fetch the SMS list from the router: {error}"
+    },
+    "multiple_entries": {
+      "message": "More than one ZTE router is configured. Specify which one to use with the entry_id field."
+    },
+    "no_entries_found": {
+      "message": "No active ZTE Router 5G integration was found. Check that the integration is set up and loaded."
     },
     "reboot_failed": {
       "message": "Failed to reboot the router: {error}"
     },
-    "delete_all_button_failed": {
-      "message": "Failed to delete all SMS messages: {error}"
+    "reset_coordinator_unavailable": {
+      "message": "The router is not currently reachable, so what each entity reports cannot be judged. Wait for a successful update and try again."
+    },
+    "reset_no_snapshot": {
+      "message": "No saved snapshot for this router. Run the action with save_snapshot first to record one."
+    },
+    "reset_snapshot_with_changes": {
+      "message": "save_snapshot records what you have now, so it cannot be combined with an operation that changes things. Run it on its own, then run the changes."
+    },
+    "reset_two_baselines": {
+      "message": "Choose one starting point: either reset_to_default or restore_snapshot, not both. They each set a different baseline, so together there is no single meaning."
     },
     "select_set_failed": {
       "message": "Could not change {entity} on the router: {error}"
+    },
+    "send_sms_failed": {
+      "message": "Failed to send the SMS: {error}. Already sent to: {sent}. Retrying will send again to those recipients."
+    },
+    "sms_too_long": {
+      "message": "The message is {length} characters, but this router accepts at most {limit} when the text needs {encoding} encoding ({segments} segments). Shorten it, or remove any emoji and special characters to get the longer GSM-7 limit."
     },
     "switch_set_failed": {
       "message": "Could not change {entity} on the router: {error}"

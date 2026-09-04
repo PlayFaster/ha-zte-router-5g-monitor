@@ -116,3 +116,62 @@ get_sms_list:
               value: "9"
             - label: "Mix Draft"
               value: "10"
+
+reset_entities:
+  fields:
+    entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: zte_router_5g
+    dry_run:
+      required: false
+      default: true
+      selector:
+        boolean:
+    reset_to_default:
+      required: false
+      default: true
+      selector:
+        boolean:
+    enable_populated:
+      required: false
+      default: false
+      selector:
+        boolean:
+    disable_unavailable:
+      required: false
+      default: false
+      selector:
+        boolean:
+    disable_unknown:
+      required: false
+      default: false
+      selector:
+        boolean:
+    include_ever_populated:
+      required: false
+      default: false
+      selector:
+        boolean:
+    preserve_user_customized:
+      required: false
+      default: false
+      selector:
+        boolean:
+    exclude_entities:
+      required: false
+      selector:
+        entity:
+          integration: zte_router_5g
+          multiple: true
+    save_snapshot:
+      required: false
+      default: false
+      selector:
+        boolean:
+    restore_snapshot:
+      required: false
+      default: false
+      selector:
+        boolean:

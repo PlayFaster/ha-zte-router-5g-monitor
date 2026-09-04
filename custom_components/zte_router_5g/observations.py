@@ -92,7 +92,7 @@ def _uptime(data: dict[str, Any]) -> int | None:
     return None
 
 
-def _entity_keys_with_values(data: dict[str, Any]) -> set[str]:
+def entity_keys_with_values(data: dict[str, Any]) -> set[str]:
     """Return the keys of every entity that reports a value from this payload.
 
     Evaluated through each description's own `value_fn` rather than by
@@ -210,6 +210,21 @@ class ObservationRecorder:
             "recording_since": record.get("since"),
         }
 
+    def snapshot(self) -> dict[str, bool]:
+        """Return the user's saved baseline for this device, or an empty map.
+
+        Empty means no snapshot has been taken, which `reset_entities` reports
+        as an error rather than as a run that changed nothing.
+        """
+        record = self._observed.get(self.device_id, {})
+        saved = record.get("snapshot")
+        return dict(saved) if isinstance(saved, dict) else {}
+
+    async def async_save_snapshot(self, enabled: dict[str, bool]) -> None:
+        """Record the enabled state of every entity as this device's baseline."""
+        self._observed.setdefault(self.device_id, {})["snapshot"] = dict(enabled)
+        await self.async_save()
+
     # -- writing ---------------------------------------------------------
 
     def observe(self, data: dict[str, Any], device_id: str) -> bool:
@@ -269,7 +284,7 @@ class ObservationRecorder:
         """
         record = self._observed.setdefault(self.device_id, {})
         known = set(record.get("populated", []))
-        found = _entity_keys_with_values(data)
+        found = entity_keys_with_values(data)
         if found <= known:
             return False
 

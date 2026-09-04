@@ -152,21 +152,21 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 
 The following entities carry no `about` attribute (self-explanatory or intentionally unannotated):
 
-| Entity | Platform | Key | Group |
-| :-- | :-- | :-- | :-- |
-| Delete All | Button | `delete_all` | SMS |
-| Unread Msg | Sensor | `sms_unread_num` | SMS |
-| Best Connection | Binary sensor | `best_connection` | Signal |
-| Integration Health | Binary sensor | `integration_health` | System |
+| Entity               | Platform      | Key                    | Group  |
+| :------------------- | :------------ | :--------------------- | :----- |
+| Delete All           | Button        | `delete_all`           | SMS    |
+| Unread Msg           | Sensor        | `sms_unread_num`       | SMS    |
+| Best Connection      | Binary sensor | `best_connection`      | Signal |
+| Integration Health   | Binary sensor | `integration_health`   | System |
 | Operator Provisioned | Binary sensor | `operator_provisioned` | System |
-| Reboot | Button | `reboot` | System |
-| Refresh Now | Button | `refresh` | System |
-| Polling Interval | Number | `polling_interval` | System |
-| Hardware Version | Sensor | `hardware_version` | System |
-| LAN IP Address | Sensor | `lan_ipaddr` | System |
-| Last Updated | Sensor | `last_updated` | System |
-| Model Name | Sensor | `model_name` | System |
-| Pause Polling | Switch | `pause_polling` | System |
+| Reboot               | Button        | `reboot`               | System |
+| Refresh Now          | Button        | `refresh`              | System |
+| Polling Interval     | Number        | `polling_interval`     | System |
+| Hardware Version     | Sensor        | `hardware_version`     | System |
+| LAN IP Address       | Sensor        | `lan_ipaddr`           | System |
+| Last Updated         | Sensor        | `last_updated`         | System |
+| Model Name           | Sensor        | `model_name`           | System |
+| Pause Polling        | Switch        | `pause_polling`        | System |
 
 <!-- GENERATED:end -->
 

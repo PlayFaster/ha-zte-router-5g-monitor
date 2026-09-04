@@ -273,6 +273,52 @@ def test_a_description_that_raises_does_not_stop_the_poll(
 
 
 # ---------------------------------------------------------------------------
+# The saved snapshot
+# ---------------------------------------------------------------------------
+
+
+def test_no_snapshot_reads_as_an_empty_baseline(
+    recorder: ObservationRecorder,
+) -> None:
+    """Empty is what `reset_entities` turns into an error, not a silent no-op."""
+    assert recorder.snapshot() == {}
+
+
+async def test_a_saved_snapshot_comes_back(recorder: ObservationRecorder) -> None:
+    """The user's own baseline, kept beside the populated record."""
+    recorder.observe(_poll(), DEVICE)
+
+    await recorder.async_save_snapshot({"lte_rsrp": True, "imei": False})
+
+    assert recorder.snapshot() == {"lte_rsrp": True, "imei": False}
+    recorder._observed_store.async_save.assert_awaited()
+
+
+async def test_a_snapshot_belongs_to_one_device(
+    recorder: ObservationRecorder,
+) -> None:
+    """Same shape as the other records, and the same reason."""
+    recorder.observe(_poll(), "imei-1")
+    await recorder.async_save_snapshot({"lte_rsrp": True})
+
+    recorder.device_id = "imei-2"
+    assert recorder.snapshot() == {}
+
+
+async def test_a_corrupt_snapshot_reads_as_absent(
+    recorder: ObservationRecorder,
+) -> None:
+    """A hand-edited store must not become a crash on the next reset."""
+    recorder._observed_store.async_load.return_value = {
+        DEVICE: {"snapshot": "not a mapping"}
+    }
+    await recorder.async_load()
+    recorder.device_id = DEVICE
+
+    assert recorder.snapshot() == {}
+
+
+# ---------------------------------------------------------------------------
 # Storage
 # ---------------------------------------------------------------------------
 

@@ -390,7 +390,7 @@ This integration provides **121 entities** (depending on your firmware) organize
 | 📶 **Signal** | 54 | 50 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
 | 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
-| 🛠️ **Actions** | 4 | — | Send, Delete, Bulk-Delete and List SMS | — |
+| 🛠️ **Actions** | 5 | — | Send, Delete, Bulk-Delete and List SMS, **Reset Entities** | — |
 
 > The full list, with the entity key and default state of every one, is in [`docs/all_sensors.md`](docs/all_sensors.md).
 
@@ -415,6 +415,12 @@ This integration provides **121 entities** (depending on your firmware) organize
 > [!NOTE]
 >
 > Entity Visibility: To keep your Home Assistant UI clean, some entities are disabled by default. You can enable them via the Entities tab in the device settings.
+
+---
+
+> Tidying Up After Exploring: The **Reset Entities** action puts entity enabled states back in bulk, so you never have to click through dozens of them. It **previews by default** — run it, read the list, then run it again with `dry_run: false` to apply. `reset_to_default` returns to the curated set for your model, `disable_unavailable` and `disable_unknown` clear out what your router does not report, `enable_populated` turns on everything it does, and `exclude_entities` carries a handful through untouched. `save_snapshot` records your own set so `restore_snapshot` can bring it back later. Entities that were reporting values before are protected from the disable operations unless you set `include_ever_populated`.
+
+---
 
 > Change History: Six values that change rarely but matter — firmware version, WAN IP, APN, cell ID, network provider and WAN mode — keep their own record of what they changed from and when, on the sensor's `history` attribute. Home Assistant's own history forgets a text value after ten days, so this is what lets you see an operator's silent firmware update months later. **Firmware Changes** is a companion counter, enabled by default, that puts those changes on a long-term statistics graph; the other five counters are disabled by default.
 

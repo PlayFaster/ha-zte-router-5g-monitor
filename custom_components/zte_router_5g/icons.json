@@ -375,6 +375,9 @@
     },
     "get_sms_list": {
       "service": "mdi:message-text"
+    },
+    "reset_entities": {
+      "service": "mdi:playlist-check"
     }
   }
 }

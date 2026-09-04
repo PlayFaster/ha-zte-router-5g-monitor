@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10-dev9\] - 2026-09-04 - Reset Entities Action Added](#3310-dev9---2026-09-04---reset-entities-action-added)
   - [\[3.3.10-dev8\] - 2026-09-04 - Transition History for Six Text Values; Populated Set Recorded](#3310-dev8---2026-09-04---transition-history-for-six-text-values-populated-set-recorded)
   - [\[3.3.10-dev7\] - 2026-09-04 - Per-Model Entity Defaults; eNodeB ID Derived; Two Wi-Fi Sensors](#3310-dev7---2026-09-04---per-model-entity-defaults-enodeb-id-derived-two-wi-fi-sensors)
   - [\[3.3.10-dev6\] - 2026-09-04 - Two-Run Comparison Corrected; Router Refresh Cadence Measured](#3310-dev6---2026-09-04---two-run-comparison-corrected-router-refresh-cadence-measured)
@@ -58,7 +59,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -116,7 +117,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -124,7 +125,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -227,6 +228,38 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.10-dev9] - 2026-09-04 - Reset Entities Action Added
+
+### Summary
+
+A user exploring the integration enables everything to see what is there, and then has to click through dozens of entities to get back to a useful set — or delete and re-add the config entry, which destroys custom names, dashboard bindings and long-term statistics. `zte_router_5g.reset_entities` is the bulk operation that avoids both, and it is the path by which the per-model overlay added in `[3.3.10-dev7]` reaches an installation that already exists.
+
+No entity is added or changed. The count stays at 121.
+
+### Added
+
+- **`zte_router_5g.reset_entities`**, registered with `SupportsResponse.OPTIONAL`. Ten parameters, every default the cautious one, and `dry_run` defaults to **true** — the response says what would change without changing it, which is also how an `exclude_entities` list is built: run it, read `changes.to_disable`, carry the handful worth keeping into the real call.
+- **`reset_to_default`** resolves through `entity_defaults.default_enabled`, the same function each platform calls when it builds an entity. Two readers of different sources would disagree, and a reset would undo the model overlay every time it ran.
+- **`enable_populated`** turns on every entity that reports a value from the last poll. It cannot be built from `hass.states`, because a disabled entity has no state; it shares `observations.entity_keys_with_values`, the same rule the populated record is built with, so the two cannot drift apart.
+- **`disable_unavailable`** and **`disable_unknown`**, which by default **exclude** entities recorded as having reported a value on this device. `include_ever_populated` turns that guard off.
+- **`save_snapshot`** and **`restore_snapshot`**, recording the current enabled state as a personal baseline and returning to it later. `reset_to_default` keeps meaning the resolved default, so the two baselines never blur.
+- **`preserve_user_customized`**, leaving alone every entity the user explicitly disabled.
+- **`exclude_entities`**, an entity picker in the action UI.
+
+### Notes
+
+- **The registry has no `enabled_by`.** An entity the user enabled reads `disabled_by: None`, exactly like one that shipped enabled, and Home Assistant's device page enables every entity at once in a single gesture. So "the user chose this" and "the user was exploring" cannot be told apart, and `preserve_user_customized` deliberately does not try — it acts on `disabled_by == USER` only. `exclude_entities` carries specific entities through a reset; a snapshot carries a whole set.
+- **`disabled_by == INTEGRATION` is not user customization**, even where it now differs from the resolved default. That is an entity registered before a default changed, and resetting it is the point: Home Assistant reads `entity_registry_enabled_default` once, at first registration, so this action is the only way a changed default reaches an existing installation.
+- **Ambiguity is refused rather than resolved by precedence.** `reset_to_default` with `restore_snapshot` raises, because both set a baseline and silently preferring one would make the same call mean different things on different installations. `save_snapshot` with any mutating operation raises, because a snapshot records what the user curated rather than what a call is about to make of it. `restore_snapshot` with nothing saved names the fact.
+- **A run is refused while the router is unreachable.** Every state-driven operation reads what entities report right now, and during an outage that is nothing at all — a run would then disable almost everything, and the dry run that preceded it would have looked the same.
+- **The response carries `populated_history`**, saying how many entities are known to have reported a value and since when. On a fresh installation that record is empty, so the safe default filters nothing while the dry run looks identical to one where it filtered a great deal.
+- **The entity key is recovered from the unique id by prefix length**, not by splitting on the first underscore: the prefix is the router IMEI or its host address, and both can contain underscores.
+- A snapshot names only the entities that existed when it was taken, so anything added by a later release falls through to the resolved default and an upgrade still delivers new entities.
+
+### Cross-project
+
+`reset_entities_action.md` was amended before this work: `enable_populated`, `include_ever_populated`, `save_snapshot` and `restore_snapshot` added to the shared schema, the two `disable_*` semantics amended, `populated_history` added to the response shape, combination rules recorded, and `preserve_user_customized` narrowed to the disable direction with the reason. The two new capability-dependent flags are marked verify-per-project rather than assumed.
+
 ## [3.3.10-dev8] - 2026-09-04 - Transition History for Six Text Values; Populated Set Recorded
 
 ### Summary
@@ -309,14 +342,14 @@ The entity count moves from 113 to 115.
 
 **The MC7010 has no fixed internal refresh cycle.** Its signal figures are live to within about a second, and what limits them is reporting resolution rather than staleness. Measured across 345 samples over 360 seconds at a one-second interval, with `realtime_rx_bytes` as the control at 95% of samples:
 
-| Key | Resolution | Changed on | Median gap |
-| :-- | :-- | ---: | ---: |
-| `Z5g_SINR` | 0.1 dB | 46% of samples | 2.0 s |
-| `lte_snr` | 0.1 dB | 35% | 3.0 s |
-| `lte_rsrq` | 1 dB | 19% | 3.0 s |
-| `lte_rssi` | 1 dB | 14% | 5.0 s |
-| `lte_rsrp` | 1 dB | 7% | 5.0 s |
-| `signalbar` | 0 to 5 | never | — |
+| Key         | Resolution |     Changed on | Median gap |
+| :---------- | :--------- | -------------: | ---------: |
+| `Z5g_SINR`  | 0.1 dB     | 46% of samples |      2.0 s |
+| `lte_snr`   | 0.1 dB     |            35% |      3.0 s |
+| `lte_rsrq`  | 1 dB       |            19% |      3.0 s |
+| `lte_rssi`  | 1 dB       |            14% |      5.0 s |
+| `lte_rsrp`  | 1 dB       |             7% |      5.0 s |
+| `signalbar` | 0 to 5     |          never |          — |
 
 A fixed cycle was the first reading and it is wrong: gaps spread across one to five seconds with no dominant interval, and one-second gaps are common, which a 2.5-second cycle sampled at 1 Hz cannot produce. Change frequency tracks reporting resolution instead — the 0.1 dB keys change five times as often as the 1 dB keys, and the coarsest figure did not move once in six minutes. A refresh cycle would move every key at the same rate whatever its resolution.
 

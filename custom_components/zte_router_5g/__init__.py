@@ -37,6 +37,7 @@ from .observations import (
     HISTORY_STORAGE_VERSION,
     OBSERVED_STORAGE_VERSION,
 )
+from .reset_entities import async_reset_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -66,6 +67,27 @@ SERVICE_DELETE_ALL_SMS_SCHEMA = vol.Schema(
         vol.Optional("keep_last", default=0): vol.All(
             vol.Coerce(int), vol.Range(min=0, max=50)
         ),
+    }
+)
+
+SERVICE_RESET_ENTITIES_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entry_id"): str,
+        # Every default is the cautious one. `dry_run` in particular: this
+        # action can disable dozens of entities in a call, and a user reading
+        # the list first is the whole safety model.
+        vol.Optional("dry_run", default=True): bool,
+        vol.Optional("reset_to_default", default=True): bool,
+        vol.Optional("enable_populated", default=False): bool,
+        vol.Optional("disable_unavailable", default=False): bool,
+        vol.Optional("disable_unknown", default=False): bool,
+        vol.Optional("include_ever_populated", default=False): bool,
+        vol.Optional("preserve_user_customized", default=False): bool,
+        vol.Optional("exclude_entities", default=list): vol.All(
+            cv.ensure_list, [cv.entity_id]
+        ),
+        vol.Optional("save_snapshot", default=False): bool,
+        vol.Optional("restore_snapshot", default=False): bool,
     }
 )
 
@@ -361,6 +383,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def _handle_get_sms_list(call: ServiceCall) -> dict[str, Any]:
         return await async_get_sms_list(hass, call)
 
+    async def _handle_reset_entities(call: ServiceCall) -> dict[str, Any]:
+        return await async_reset_entities(
+            hass, _get_coordinator(hass, call.data), dict(call.data)
+        )
+
     hass.services.async_register(
         DOMAIN,
         "send_sms",
@@ -388,6 +415,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         _handle_get_sms_list,
         schema=SERVICE_GET_SMS_LIST_SCHEMA,
         supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        "reset_entities",
+        _handle_reset_entities,
+        schema=SERVICE_RESET_ENTITIES_SCHEMA,
+        # OPTIONAL rather than ONLY: a user who has read a dry run wants to
+        # apply it from an automation without handling a response.
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     return True

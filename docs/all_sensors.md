@@ -6,13 +6,13 @@ A complete list of the static entities and service actions provided by the integ
 
 ## Summary
 
-| Sub-Device | Entity Count | Description |
-| :-- | :-- | :-- |
-| **Data** | 15 | Data entities. |
-| **SMS** | 5 | SMS entities. |
-| **Signal** | 54 | Signal entities. |
-| **System** | 47 | System entities. |
-| **Total** | **121** | Total static entities. |
+| Sub-Device | Entity Count | Description            |
+| :--------- | :----------- | :--------------------- |
+| **Data**   | 15           | Data entities.         |
+| **SMS**    | 5            | SMS entities.          |
+| **Signal** | 54           | Signal entities.       |
+| **System** | 47           | System entities.       |
+| **Total**  | **121**      | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
 
