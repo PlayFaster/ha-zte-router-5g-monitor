@@ -41,6 +41,7 @@ from .coordinator import (
     ENDPOINT_SMS_MESSAGES,
     ZTERouterDataUpdateCoordinator,
 )
+from .entity_defaults import default_enabled
 from .helpers import (
     ZTEAboutEntity,
     arfcn_to_band,
@@ -500,6 +501,33 @@ def _negative_dbm(value: Any) -> float | None:
     if number is None:
         return None
     return -abs(number)
+
+
+def _enodeb_from_cell(data: dict[str, Any]) -> str | None:
+    """Return the eNodeB ID the router reports, or derive it from the cell id.
+
+    Measured on the reference MC7010 on 2026-09-04: it answers `cell_id` as
+    `c8751` and `enodeb_id` as `c87`, both hex strings with no prefix, and
+    `0xc8751 >> 8` is `0xc87`. The eNodeB ID is the top 20 bits of the 28-bit
+    E-UTRAN Cell Identity and the remaining 8 are the sector — 0x51, 81, on
+    that reading, so a high sector number is ordinary here.
+
+    The MC888 Pro leaves `enodeb_id` empty while populating a cell identity,
+    which is the only case this derivation runs in. That device's cell id is
+    all digits and so cannot be proved hexadecimal from the value alone; it is
+    parsed as hex because every device that answers this field in a form we
+    can read uses hex, and a digits-only hex value is unremarkable.
+    """
+    reported = _safe_str(data.get("enodeb_id"))
+    if reported is not None:
+        return reported
+    cell = _safe_str(get_first(data, _ALIAS_CELL_ID))
+    if cell is None:
+        return None
+    try:
+        return f"{int(cell.strip(), 16) >> 8:x}"
+    except ValueError:
+        return None
 
 
 def _band_or_channel_fallback(
@@ -1264,7 +1292,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_enodeb_id",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("enodeb_id")),
+        value_fn=_enodeb_from_cell,
     ),
     ZTESensorEntityDescription(
         key="net_select",
@@ -1429,6 +1457,43 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="system",
         value_fn=lambda data: _safe_int(get_first(data, _ALIAS_PIN_ATTEMPTS)),
+    ),
+    # Wi-Fi. Answered by the MC888 Pro and by no MC7010, so these are off by
+    # default and the model overlay turns them on where the firmware serves
+    # them. Two aggregates only: the four per-`chip` counters would need the
+    # `chip1` / `chip2` to 2.4 GHz / 5 GHz mapping confirmed, which nothing in
+    # any download states, and a band-labelled sensor showing the other band's
+    # figure is a wrong reading rather than a missing one.
+    ZTESensorEntityDescription(
+        key="wifi_clients",
+        about=(
+            "How many devices are connected to the router's Wi-Fi right now, "
+            "across all its networks. Counts wireless clients only - anything "
+            "on a network cable is not included."
+        ),
+        translation_key="system_wifi_clients",
+        state_class=SensorStateClass.MEASUREMENT,
+        min_limit=0,
+        max_limit=256,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        source=ENDPOINT_EXTENDED,
+        value_fn=lambda data: _safe_int(data.get("wifi_access_sta_num")),
+    ),
+    ZTESensorEntityDescription(
+        key="wifi_enabled",
+        about=(
+            "Whether the router's Wi-Fi radios are switched on. Reported as "
+            "the router states it, so this reflects the radios rather than "
+            "the last command sent to them."
+        ),
+        translation_key="system_wifi_enabled",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        source=ENDPOINT_EXTENDED,
+        value_fn=lambda data: _safe_str(data.get("wifi_onoff_state")),
     ),
     ZTESensorEntityDescription(
         key="sim_lock_state",
@@ -2031,6 +2096,9 @@ class ZTERouterSensor(
         self.entity_description = description
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
 
     @property
     def available(self) -> bool:

@@ -298,6 +298,12 @@
       },
       "system_wan_ipaddr": {
         "default": "mdi:ip-network"
+      },
+      "system_wifi_clients": {
+        "default": "mdi:wifi"
+      },
+      "system_wifi_enabled": {
+        "default": "mdi:wifi-check"
       }
     },
     "button": {

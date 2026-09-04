@@ -334,6 +334,12 @@
       },
       "system_wan_ipaddr": {
         "name": "WAN IP Address"
+      },
+      "system_wifi_clients": {
+        "name": "Wi-Fi Clients Connected"
+      },
+      "system_wifi_enabled": {
+        "name": "Wi-Fi Enabled"
       }
     },
     "button": {

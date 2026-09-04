@@ -23,6 +23,7 @@ from .coordinator import (
     ENDPOINT_SMS_CAPACITY,
     ZTERouterDataUpdateCoordinator,
 )
+from .entity_defaults import default_enabled
 from .helpers import ZTEAboutEntity, build_device_info
 
 PARALLEL_UPDATES = 0
@@ -267,6 +268,9 @@ class ZTEBestConnectionSensor(
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self.entity_description = description
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
         self._entry = entry
 
         # Unique ID generated from description key for registry stability
@@ -339,6 +343,9 @@ class ZTEOperatorProvisionedSensor(
         """Initialize the provisioning sensor."""
         super().__init__(coordinator)
         self.entity_description = description
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
@@ -412,6 +419,9 @@ class ZTEIntegrationHealthSensor(
         """Initialize the health sensor."""
         super().__init__(coordinator)
         self.entity_description = description
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
@@ -497,6 +507,9 @@ class ZTERouterBinarySensor(
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self.entity_description = description
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 

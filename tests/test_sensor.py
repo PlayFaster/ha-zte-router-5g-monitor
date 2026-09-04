@@ -1504,6 +1504,71 @@ def test_sim_lock_state_publishes_the_value_unmapped() -> None:
     assert description.group == "system"
 
 
+def test_enodeb_id_is_reported_when_the_router_gives_it() -> None:
+    """The reported value always wins; the derivation is a fallback only."""
+    description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
+
+    assert description.value_fn({"enodeb_id": "c87", "cell_id": "ffffff"}) == "c87"
+
+
+def test_enodeb_id_is_derived_from_the_cell_identity() -> None:
+    """Measured on the reference MC7010 on 2026-09-04.
+
+    That device answers `cell_id` as `c8751` and `enodeb_id` as `c87`, both
+    hex with no prefix, and `0xc8751 >> 8` is `0xc87`. The derived value is
+    formatted the same way so it is indistinguishable from a native one.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
+
+    assert description.value_fn({"cell_id": "c8751"}) == "c87"
+    assert description.value_fn({"enodeb_id": "", "cell_id": "c8751"}) == "c87"
+
+
+def test_enodeb_id_derives_through_the_cell_alias() -> None:
+    """The MC888 populates `network_cell_id` and leaves `cell_id` empty.
+
+    That device is the only reason this fallback exists, so it has to reach
+    the alias rather than the bare spelling.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
+
+    assert description.value_fn({"network_cell_id": "16512357"}) == "165123"
+
+
+def test_enodeb_id_stays_empty_when_nothing_can_be_derived() -> None:
+    """A cell identity that is not hexadecimal yields nothing, not a guess."""
+    description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
+
+    assert description.value_fn({}) is None
+    assert description.value_fn({"cell_id": ""}) is None
+    assert description.value_fn({"cell_id": "not-a-number"}) is None
+
+
+@pytest.mark.parametrize(
+    ("key", "payload", "expected"),
+    [
+        ("wifi_clients", {"wifi_access_sta_num": "1"}, 1),
+        ("wifi_clients", {"wifi_access_sta_num": ""}, None),
+        ("wifi_clients", {}, None),
+        ("wifi_enabled", {"wifi_onoff_state": "1"}, "1"),
+        ("wifi_enabled", {"wifi_onoff_state": ""}, None),
+        ("wifi_enabled", {}, None),
+    ],
+)
+def test_the_wifi_sensors_read_their_aggregates(
+    key: str, payload: dict[str, str], expected: object
+) -> None:
+    """Two aggregates only.
+
+    The four per-`chip` counters need the `chip1` to 2.4 GHz mapping
+    confirmed, which no download states, and a band-labelled sensor showing
+    the other band's figure is a wrong reading rather than a missing one.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+
+    assert description.value_fn(payload) == expected
+
+
 def test_rssi_is_published_as_a_negative_dbm_reading() -> None:
     """The MC888 reports the magnitude alone: 73 for -73 dBm.
 

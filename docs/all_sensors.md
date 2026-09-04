@@ -6,13 +6,13 @@ A complete list of the static entities and service actions provided by the integ
 
 ## Summary
 
-| Sub-Device | Entity Count | Description            |
-| :--------- | :----------- | :--------------------- |
-| **Data**   | 15           | Data entities.         |
-| **SMS**    | 5            | SMS entities.          |
-| **Signal** | 51           | Signal entities.       |
-| **System** | 42           | System entities.       |
-| **Total**  | **113**      | Total static entities. |
+| Sub-Device | Entity Count | Description |
+| :-- | :-- | :-- |
+| **Data** | 15 | Data entities. |
+| **SMS** | 5 | SMS entities. |
+| **Signal** | 51 | Signal entities. |
+| **System** | 44 | System entities. |
+| **Total** | **115** | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
 
@@ -100,7 +100,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G RSSI | `z5g_rssi` | Sensor | dBm | - | LTS: `measurement` |
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 
-## System Sub-Device (42 Entities)
+## System Sub-Device (44 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -144,6 +144,8 @@ A complete list of the static entities and service actions provided by the integ
 | Firmware Update Result | `upgrade_result` | Sensor | - | Diagnostic | - |
 | Firmware Version | `wa_inner_version` | Sensor | - | Diagnostic | - |
 | WAN IP Address | `wan_ipaddr` | Sensor | - | Diagnostic | - |
+| Wi-Fi Clients Connected | `wifi_clients` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| Wi-Fi Enabled | `wifi_enabled` | Sensor | - | Diagnostic | **Disabled by default.** |
 | ODU LED Switch | `odu_led_switch` | Switch | - | Config | **Disabled by default.** |
 | Pause Polling | `pause_polling` | Switch | - | Config | - |
 

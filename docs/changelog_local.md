@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10-dev7\] - 2026-09-04 - Per-Model Entity Defaults; eNodeB ID Derived; Two Wi-Fi Sensors](#3310-dev7---2026-09-04---per-model-entity-defaults-enodeb-id-derived-two-wi-fi-sensors)
   - [\[3.3.10-dev6\] - 2026-09-04 - Two-Run Comparison Corrected; Router Refresh Cadence Measured](#3310-dev6---2026-09-04---two-run-comparison-corrected-router-refresh-cadence-measured)
   - [\[3.3.10-dev5\] - 2026-09-04 - CI Bump Ruff PHACC](#3310-dev5---2026-09-04---ci-bump-ruff-phacc)
   - [\[3.3.10-dev4\] - 2026-09-02 - MC888 Compatibility - Generic RSSI Sourced; SINR Sensor Added](#3310-dev4---2026-09-02---mc888-compatibility---generic-rssi-sourced-sinr-sensor-added)
@@ -224,6 +225,34 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.10-dev7] - 2026-09-04 - Per-Model Entity Defaults; eNodeB ID Derived; Two Wi-Fi Sensors
+
+### Summary
+
+An entity description carries one `entity_registry_enabled_default`, so identical defaults shipped to every model. On an MC888 Pro that left six enabled sensors permanently blank while RSSI and SINR — the only signal-quality figures that firmware reports — were off. This release adds a per-model overlay, and three entity changes that depend on it or on measurements taken alongside it.
+
+The entity count moves from 113 to 115.
+
+### Added
+
+- **`entity_defaults.default_enabled(description, model)`**, the single resolver for whether an entity is enabled by default. Every platform calls it when building an entity. The `reset_entities` action will call the same function when it restores defaults, because two readers of different sources would disagree and a reset would undo the overlay every time it ran.
+- **`MODEL_OVERLAY`**, matched as a substring of the reported model, longest key first so a variant entry can later override a family one. Family matching is deliberate: the `network_` vocabulary and the `zsidn` session cookie are firmware-family behaviours, and `api._hash` already selects SHA-256 on `MC888` or `MC889` appearing anywhere in the version string.
+- **An MC888 entry**: LTE RSRQ, LTE RSSI, LTE SNR, 5G RSSI, eNodeB ID and WAN Connect Status disabled; RSSI, SINR and the two new Wi-Fi sensors enabled. Seeded from the 2026-09-02 diagnostics download only, never from inference about what a model probably supports.
+- **Wi-Fi Clients Connected** and **Wi-Fi Enabled**, sensors on the System sub-device, disabled by default and enabled by the MC888 overlay, from `wifi_access_sta_num` and `wifi_onoff_state`.
+
+### Changed
+
+- **eNodeB ID is derived when the router leaves it empty.** Measured on the reference MC7010 on 2026-09-04: it answers `cell_id` as `c8751` and `enodeb_id` as `c87`, both hex strings with no prefix, and `0xc8751 >> 8` is `0xc87` with sector `0x51`. The derivation runs only where the field is empty and formats its result the same way, so a derived value is indistinguishable from a native one. It resolves through the cell alias, since the MC888 populates `network_cell_id` and leaves `cell_id` empty.
+- **A switch whose state key is absent reports unavailable rather than Off.** Every switch `value_fn` resolves a missing value to `False`, so a router without the setting — the MC888 Pro is an indoor unit and answers nothing for `ODU_led_switch` — showed a control in a position it had never been told, and would have accepted a write built on it. Availability follows the same alias list the value does, so the data-limit switch stays available on a device answering only the `flux_` spelling.
+- **Two names added to the extended batch**, `wifi_access_sta_num` and `wifi_onoff_state`. It stays within its URL budget at one request.
+
+### Notes
+
+- The overlay takes effect **only at first registration**. Home Assistant reads `entity_registry_enabled_default` when an entity is first added and never again, so an existing installation is unaffected until the `reset_entities` action lands and re-applies the same resolver.
+- The overlay may enable as well as disable. It states the intended suite for a model rather than filtering blanks — plenty of populated fields are low-value and stay off on every model.
+- Only the two Wi-Fi aggregates are read. The four per-`chip` counters would need the `chip1` to 2.4 GHz mapping confirmed, which nothing in any download states, and a band-labelled sensor showing the other band's figure is a wrong reading rather than a missing one.
+- LTE RSSI and LTE SNR stay blank on an MC888 by design. The unqualified `network_rssi` and `network_sinr` describe whichever radio is serving, so they feed the generic RSSI and SINR sensors; putting them into LTE-labelled entities would assert something that firmware does not say.
 
 ## [3.3.10-dev6] - 2026-09-04 - Two-Run Comparison Corrected; Router Refresh Cadence Measured
 

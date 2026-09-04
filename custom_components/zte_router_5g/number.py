@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import CONF_SCAN_INTERVAL
 from .coordinator import ZTERouterDataUpdateCoordinator
+from .entity_defaults import default_enabled
 from .helpers import ZTEAboutEntity, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
@@ -99,6 +100,9 @@ class ZTEPollingInterval(
         super().__init__(coordinator)
         self._entry = entry
         self.entity_description = description
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
 
         # Registry identification
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"

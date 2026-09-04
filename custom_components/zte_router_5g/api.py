@@ -324,6 +324,11 @@ _EXTENDED_PARAMS: list[str] = [
     # radio is serving rather than the 4G or 5G carrier specifically.
     "network_rssi",
     "network_sinr",
+    # Wi-Fi, added in [3.3.10-dev7]. Two aggregates: how many wireless clients
+    # are connected, and whether the radios are on. Answered by the MC888 Pro,
+    # silent on the MC7010.
+    "wifi_access_sta_num",
+    "wifi_onoff_state",
 ]
 
 

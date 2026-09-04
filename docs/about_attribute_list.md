@@ -103,7 +103,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G RSSI | Sensor | `z5g_rssi` | Total received power across the 5G channel, in dBm, including noise and interference. Use 5G RSRP for a cleaner measure of your own cell's strength. |
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 
-## System (32)
+## System (34)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -138,27 +138,29 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Firmware Update Result | Sensor | `upgrade_result` | The outcome of the router's last firmware update attempt. Reads error where an update was tried and did not complete, which the update-state entities do not show. |
 | Firmware Version | Sensor | `wa_inner_version` | The router's firmware build string. Worth recording before a firmware update, so you can tell what changed if the router starts behaving differently afterwards. |
 | WAN IP Address | Sensor | `wan_ipaddr` | The address your ISP has given the router on the mobile network - what the internet sees. Often a shared carrier-grade NAT address, which is why inbound connections and port forwarding usually do not work on mobile broadband. |
+| Wi-Fi Clients Connected | Sensor | `wifi_clients` | How many devices are connected to the router's Wi-Fi right now, across all its networks. Counts wireless clients only - anything on a network cable is not included. |
+| Wi-Fi Enabled | Sensor | `wifi_enabled` | Whether the router's Wi-Fi radios are switched on. Reported as the router states it, so this reflects the radios rather than the last command sent to them. |
 | ODU LED Switch | Switch | `odu_led_switch` | Turns the status light on the outdoor unit on or off. Cosmetic only - the connection is unaffected, so switching it off is safe if the unit is visible from a window or a bedroom. The router reports the light's real state, so this reflects the unit rather than the last command sent. |
 
 ## Entities without an `about` note (13)
 
 The following entities carry no `about` attribute (self-explanatory or intentionally unannotated):
 
-| Entity               | Platform      | Key                    | Group  |
-| :------------------- | :------------ | :--------------------- | :----- |
-| Delete All           | Button        | `delete_all`           | SMS    |
-| Unread Msg           | Sensor        | `sms_unread_num`       | SMS    |
-| Best Connection      | Binary sensor | `best_connection`      | Signal |
-| Integration Health   | Binary sensor | `integration_health`   | System |
+| Entity | Platform | Key | Group |
+| :-- | :-- | :-- | :-- |
+| Delete All | Button | `delete_all` | SMS |
+| Unread Msg | Sensor | `sms_unread_num` | SMS |
+| Best Connection | Binary sensor | `best_connection` | Signal |
+| Integration Health | Binary sensor | `integration_health` | System |
 | Operator Provisioned | Binary sensor | `operator_provisioned` | System |
-| Reboot               | Button        | `reboot`               | System |
-| Refresh Now          | Button        | `refresh`              | System |
-| Polling Interval     | Number        | `polling_interval`     | System |
-| Hardware Version     | Sensor        | `hardware_version`     | System |
-| LAN IP Address       | Sensor        | `lan_ipaddr`           | System |
-| Last Updated         | Sensor        | `last_updated`         | System |
-| Model Name           | Sensor        | `model_name`           | System |
-| Pause Polling        | Switch        | `pause_polling`        | System |
+| Reboot | Button | `reboot` | System |
+| Refresh Now | Button | `refresh` | System |
+| Polling Interval | Number | `polling_interval` | System |
+| Hardware Version | Sensor | `hardware_version` | System |
+| LAN IP Address | Sensor | `lan_ipaddr` | System |
+| Last Updated | Sensor | `last_updated` | System |
+| Model Name | Sensor | `model_name` | System |
+| Pause Polling | Switch | `pause_polling` | System |
 
 <!-- GENERATED:end -->
 
