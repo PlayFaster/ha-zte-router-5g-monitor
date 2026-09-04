@@ -33,6 +33,7 @@ from .const import (
     UNREACHABLE_STRIKE_LIMIT,
 )
 from .helpers import get_router_model
+from .observations import ObservationRecorder
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -311,6 +312,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # Load hardware identity from persistent ConfigEntry data.
         # This ensures device info is stable from boot (The "Flat Identity" pattern).
         self.model = entry.data.get("model", "ZTE Router")
+        self.observations = ObservationRecorder(hass, entry)
         self.sw_version = entry.data.get("sw_version")
         self.imei = entry.data.get("imei")
 
@@ -663,6 +665,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 self._record_health_success(data)
                 self._check_new_sms(messages)
                 await self._read_provisioning(forced=forced)
+                await self._observe(data)
                 return data
 
         except TimeoutError as err:
@@ -851,6 +854,24 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             scale = DRIFT_ACCUMULATOR_CAP / self._drift_sum_wall
             self._drift_sum_wall *= scale
             self._drift_sum_counter *= scale
+
+    async def _observe(self, data: dict[str, Any]) -> None:
+        """Fold a successful poll into the transition and populated records.
+
+        Runs only on the success path, so a degraded or failed poll neither
+        records a transition nor forgets a populated entity. The write is
+        skipped when nothing changed, which is almost every poll.
+
+        The device key is the same identity `build_device_info` uses, so the
+        record belongs to the same device the entities do. It is fixed at
+        setup rather than re-read: `entry.data["imei"]` is written once by the
+        config flow and never updated, and the entry's unique id, the device
+        registry and every entity id are built on it. Re-keying the store on a
+        live reading would detach the history from the entities it describes.
+        """
+        device_id = self.imei or f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
+        if self.observations.observe(data, device_id):
+            await self.observations.async_save()
 
     async def async_load_stored_uptime(self) -> None:
         """Load the persisted counter and drift accumulators. Never raises.

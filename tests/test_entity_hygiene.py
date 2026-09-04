@@ -161,6 +161,13 @@ def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
         # Projection context. `cycle_day` and `cycle_start` are static within a
         # cycle and the other two describe how much of the state rests on
         # observed data — none of it is a measurement whose history is wanted.
+        # Transition history for the six tracked text values. A list that
+        # grows to twenty entries and is re-emitted on every state write, so
+        # recording it would store the same history over and over. The change
+        # counters are the recorded half of that feature.
+        "history",
+        "previous_version",
+        "last_changed",
         "confidence",
         "basis",
         "cycle_day",
@@ -507,6 +514,23 @@ async def test_every_live_entity_has_an_icon_or_a_device_class(
 # reason for each finding, per the chore. Copying Huawei's entries would have
 # been meaningless: they describe that project's library.
 ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
+    ("observations.py", "noqa: BLE001, S112"): (
+        "The populated set is built by evaluating every entity description's "
+        "`value_fn` against the poll, purely to note which entities reported "
+        "something. A description that raises on an unusual payload is that "
+        "entity's own fault and is surfaced where the entity lives; letting "
+        "it escape here would stop a poll from being recorded at all. Silent "
+        "rather than logged on purpose: the same message would repeat every "
+        "polling interval for as long as the condition lasted."
+    ),
+    ("observations.py", "noqa: BLE001"): (
+        "Both stores are advisory, matching the contract the uptime store "
+        'already holds: an unreadable record resolves to "nothing learned" '
+        "and an unwritable one is skipped, because no storage fault may fail "
+        "entry setup or a poll. Narrowing these would let an unanticipated "
+        "exception type take down a coordinator that works perfectly well "
+        "with no history at all."
+    ),
     ("diagnostics.py", "noqa: BLE001"): (
         "`_guarded` catches `Exception` because Home Assistant does not wrap "
         "`config_entry_diagnostics` — an exception escaping this function is "

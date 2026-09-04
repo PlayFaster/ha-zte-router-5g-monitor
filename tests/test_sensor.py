@@ -263,6 +263,18 @@ def test_sensor_value_fn_exception(mock_coordinator, mock_config_entry):
 _UNGUARDED_BY_DESIGN = {
     "lte_ca_pcell_bandwidth",
     "lte_ca_scell_bandwidth",
+    # The six change counters. A guard band exists to reject an implausible
+    # reading from the router, and none of these is read from the router: each
+    # is a count this integration incremented itself, so it can only ever be a
+    # non-negative integer one larger than it was. There is no bad reading to
+    # bound, and a ceiling would eventually silence a device that legitimately
+    # reached it.
+    "firmware_changes",
+    "wan_ip_changes",
+    "apn_changes",
+    "cell_changes",
+    "provider_changes",
+    "wan_mode_changes",
 }
 
 

@@ -10,9 +10,9 @@ A complete list of the static entities and service actions provided by the integ
 | :-- | :-- | :-- |
 | **Data** | 15 | Data entities. |
 | **SMS** | 5 | SMS entities. |
-| **Signal** | 51 | Signal entities. |
-| **System** | 44 | System entities. |
-| **Total** | **115** | Total static entities. |
+| **Signal** | 54 | Signal entities. |
+| **System** | 47 | System entities. |
+| **Total** | **121** | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
 
@@ -44,7 +44,7 @@ A complete list of the static entities and service actions provided by the integ
 | Total Msg | `msg_total` | Sensor | - | - | LTS: `measurement` |
 | Unread Msg | `sms_unread_num` | Sensor | - | - | LTS: `measurement` |
 
-## Signal Sub-Device (51 Entities)
+## Signal Sub-Device (54 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -54,10 +54,12 @@ A complete list of the static entities and service actions provided by the integ
 | Network Mode Selection | `net_select` | Select | - | Config | - |
 | 5G RSRP Antenna 1 | `5g_rsrp_antenna_1` | Sensor | dBm | Diagnostic | **Disabled by default.** LTS: `measurement` |
 | 5G RSRP Antenna 2 | `5g_rsrp_antenna_2` | Sensor | dBm | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| APN Changes | `apn_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | CA Secondary Cell RSRP | `ca_scell_rsrp` | Sensor | dBm | Diagnostic | **Disabled by default.** LTS: `measurement` |
 | CA Secondary Cell RSRQ | `ca_scell_rsrq` | Sensor | dB | Diagnostic | **Disabled by default.** LTS: `measurement` |
 | CA Secondary Cell RSSI | `ca_scell_rssi` | Sensor | dBm | Diagnostic | **Disabled by default.** LTS: `measurement` |
 | CA Secondary Cell SNR | `ca_scell_snr` | Sensor | dB | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| Cell Changes | `cell_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | Cell ID | `cell_id` | Sensor | - | Diagnostic | - |
 | eNodeB ID | `enodeb_id` | Sensor | - | Diagnostic | - |
 | LTE Band Lock Mask | `lte_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
@@ -83,6 +85,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G PCI | `nr5g_pci` | Sensor | - | Diagnostic | - |
 | 5G SA Band Lock | `nr5g_sa_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Bridge Mode | `ppp_status` | Sensor | - | Diagnostic | - |
+| Provider Changes | `provider_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | Roaming MCC | `rmcc` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Roaming MNC | `rmnc` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Roaming State | `roaming_state` | Sensor | - | Diagnostic | **Disabled by default.** |
@@ -100,7 +103,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G RSSI | `z5g_rssi` | Sensor | dBm | - | LTS: `measurement` |
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 
-## System Sub-Device (44 Entities)
+## System Sub-Device (47 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -119,6 +122,7 @@ A complete list of the static entities and service actions provided by the integ
 | Connection Failure Count | `connection_failure_count` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | Firmware Update State | `current_upgrade_state` | Sensor | - | Diagnostic | - |
 | Device Uptime | `device_uptime` | Sensor | - | - | - |
+| Firmware Changes | `firmware_changes` | Sensor | - | Diagnostic | LTS: `total_increasing` |
 | Hardware Version | `hardware_version` | Sensor | - | Diagnostic | - |
 | IMEI | `imei` | Sensor | - | Diagnostic | **Disabled by default.** |
 | LAN IP Address | `lan_ipaddr` | Sensor | - | Diagnostic | - |
@@ -143,7 +147,9 @@ A complete list of the static entities and service actions provided by the integ
 | Router Timezone | `sntp_timezone` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Firmware Update Result | `upgrade_result` | Sensor | - | Diagnostic | - |
 | Firmware Version | `wa_inner_version` | Sensor | - | Diagnostic | - |
+| WAN IP Changes | `wan_ip_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | WAN IP Address | `wan_ipaddr` | Sensor | - | Diagnostic | - |
+| WAN Mode Changes | `wan_mode_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | Wi-Fi Clients Connected | `wifi_clients` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `measurement` |
 | Wi-Fi Enabled | `wifi_enabled` | Sensor | - | Diagnostic | **Disabled by default.** |
 | ODU LED Switch | `odu_led_switch` | Switch | - | Config | **Disabled by default.** |

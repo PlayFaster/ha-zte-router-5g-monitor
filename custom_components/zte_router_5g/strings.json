@@ -101,6 +101,9 @@
       "signal_5g_rsrp_antenna_2": {
         "name": "5G RSRP Antenna 2"
       },
+      "signal_apn_changes": {
+        "name": "APN Changes"
+      },
       "signal_ca_scell_rsrp": {
         "name": "CA Secondary Cell RSRP"
       },
@@ -112,6 +115,9 @@
       },
       "signal_ca_scell_snr": {
         "name": "CA Secondary Cell SNR"
+      },
+      "signal_cell_changes": {
+        "name": "Cell Changes"
       },
       "signal_cell_id": {
         "name": "Cell ID"
@@ -188,6 +194,9 @@
       "signal_ppp_status": {
         "name": "Bridge Mode"
       },
+      "signal_provider_changes": {
+        "name": "Provider Changes"
+      },
       "signal_rmcc": {
         "name": "Roaming MCC"
       },
@@ -203,11 +212,11 @@
       "signal_rssi": {
         "name": "Legacy RSSI"
       },
-      "signal_sinr": {
-        "name": "SINR"
-      },
       "signal_signalbar": {
         "name": "Signal Bars"
+      },
+      "signal_sinr": {
+        "name": "SINR"
       },
       "signal_wan_active_band": {
         "name": "LTE Active Band"
@@ -256,6 +265,9 @@
       },
       "system_device_uptime": {
         "name": "Device Uptime"
+      },
+      "system_firmware_changes": {
+        "name": "Firmware Changes"
       },
       "system_firmware_update_available": {
         "name": "Firmware Update Available"
@@ -332,8 +344,14 @@
       "system_wa_inner_version": {
         "name": "Firmware Version"
       },
+      "system_wan_ip_changes": {
+        "name": "WAN IP Changes"
+      },
       "system_wan_ipaddr": {
         "name": "WAN IP Address"
+      },
+      "system_wan_mode_changes": {
+        "name": "WAN Mode Changes"
       },
       "system_wifi_clients": {
         "name": "Wi-Fi Clients Connected"

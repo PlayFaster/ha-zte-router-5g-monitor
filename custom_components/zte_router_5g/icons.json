@@ -83,6 +83,9 @@
       "signal_5g_rsrp_antenna_2": {
         "default": "mdi:antenna"
       },
+      "signal_apn_changes": {
+        "default": "mdi:counter"
+      },
       "signal_ca_scell_rsrp": {
         "default": "mdi:signal-cellular-2"
       },
@@ -94,6 +97,9 @@
       },
       "signal_ca_scell_snr": {
         "default": "mdi:signal-cellular-2"
+      },
+      "signal_cell_changes": {
+        "default": "mdi:counter"
       },
       "signal_cell_id": {
         "default": "mdi:transmission-tower"
@@ -170,6 +176,9 @@
       "signal_ppp_status": {
         "default": "mdi:connection"
       },
+      "signal_provider_changes": {
+        "default": "mdi:counter"
+      },
       "signal_rmcc": {
         "default": "mdi:map-marker-outline"
       },
@@ -239,6 +248,9 @@
       "system_device_uptime": {
         "default": "mdi:clock-outline"
       },
+      "system_firmware_changes": {
+        "default": "mdi:counter"
+      },
       "system_firmware_update_available": {
         "default": "mdi:package-down"
       },
@@ -296,8 +308,14 @@
       "system_wa_inner_version": {
         "default": "mdi:information-outline"
       },
+      "system_wan_ip_changes": {
+        "default": "mdi:counter"
+      },
       "system_wan_ipaddr": {
         "default": "mdi:ip-network"
+      },
+      "system_wan_mode_changes": {
+        "default": "mdi:counter"
       },
       "system_wifi_clients": {
         "default": "mdi:wifi"

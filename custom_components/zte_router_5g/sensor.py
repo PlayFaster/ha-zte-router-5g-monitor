@@ -51,6 +51,7 @@ from .helpers import (
     get_first,
     project_cycle_usage,
 )
+from .observations import TRACKED
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -76,6 +77,12 @@ class ZTESensorEntityDescription(SensorEntityDescription):
     # say what the value is or what a good value looks like — chiefly the
     # signal metrics, whose names are acronyms.
     about: str | None = None
+    # Set on the change counters. Their value comes from the transition
+    # record rather than from the poll, so `native_value` reads it before
+    # `value_fn` is consulted — a counter has no key in `coordinator.data` to
+    # read, and inventing one would put a synthetic entry in a dict that means
+    # "what the router said".
+    counts_changes_of: str | None = None
 
 
 def _get_bytes_to_gb(val: Any) -> float | None:
@@ -1458,6 +1465,110 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="system",
         value_fn=lambda data: _safe_int(get_first(data, _ALIAS_PIN_ATTEMPTS)),
     ),
+    # Change counters. The transition history lives in an unrecorded attribute
+    # capped at twenty entries, so it answers "what changed last" and produces
+    # no graph and nothing beyond those twenty. These are the recorded half:
+    # a `TOTAL_INCREASING` count gives each tracked value a native long-term
+    # statistics timeline without touching the database.
+    #
+    # The count is kept separately from the history list rather than derived
+    # from its length, because the list is capped and the count must keep
+    # rising after the twenty-first change pushes the first one out.
+    #
+    # Firmware is enabled by default and the rest are not: an operator pushing
+    # an update with no record of it is the case this was built for.
+    ZTESensorEntityDescription(
+        key="firmware_changes",
+        about=(
+            "How many times the router's firmware version has changed since "
+            "this integration started watching. The version sensor itself "
+            "keeps no long-term history, so this is what makes an operator's "
+            "silent update visible months later. The versions and dates are "
+            "on the Firmware Version sensor's history attribute."
+        ),
+        translation_key="system_firmware_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        counts_changes_of="wa_inner_version",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="wan_ip_changes",
+        about=(
+            "How many times the router's public WAN address has changed. A "
+            "rising count means your operator is reassigning it, which breaks "
+            "anything that relied on it staying put."
+        ),
+        translation_key="system_wan_ip_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        counts_changes_of="wan_ipaddr",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="apn_changes",
+        about=(
+            "How many times the APN in use has changed. Usually zero - a "
+            "change you did not make points at the operator reprovisioning "
+            "the connection."
+        ),
+        translation_key="signal_apn_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        counts_changes_of="wan_apn",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="cell_changes",
+        about=(
+            "How many times the router has been handed to a different 4G "
+            "cell. Unlike the others this moves on its own as the network "
+            "balances load, so the useful reading is the rate rather than the "
+            "total - a step change in handovers per day is worth looking at."
+        ),
+        translation_key="signal_cell_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        counts_changes_of="cell_id",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="provider_changes",
+        about=(
+            "How many times the registered network operator has changed. On a "
+            "fixed installation this should be zero unless you have changed "
+            "SIM or the SIM has roamed."
+        ),
+        translation_key="signal_provider_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        counts_changes_of="network_provider",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="wan_mode_changes",
+        about=(
+            "How many times the router has switched between bridge and "
+            "gateway operation. This changes what the router does to your "
+            "whole network, and an operator can change it remotely."
+        ),
+        translation_key="system_wan_mode_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        counts_changes_of="opms_wan_mode",
+        value_fn=lambda data: None,
+    ),
     # Wi-Fi. Answered by the MC888 Pro and by no MC7010, so these are off by
     # default and the model overlay turns them on where the firmware serves
     # them. Two aggregates only: the four per-`chip` counters would need the
@@ -2063,6 +2174,13 @@ class ZTERouterSensor(
     _unrecorded_attributes = frozenset(
         {
             "about",
+            # The transition history, its two summary fields included. It is a
+            # list that grows to twenty entries and repeats on every state
+            # write, so recording it would store the same history hundreds of
+            # times over. The counter entities are the recorded half.
+            "history",
+            "previous_version",
+            "last_changed",
             "sntp_server1",
             "sntp_server2",
             "sntp_dst_enable",
@@ -2116,6 +2234,14 @@ class ZTERouterSensor(
     @property
     def native_value(self) -> Any:
         """Return the value of the sensor."""
+        # Read before the payload guard. A counter's value comes from the
+        # stored record, not from the poll, so it stays readable on a cycle
+        # that returned nothing — including the empty first poll of a paused
+        # entry.
+        tracked = self.entity_description.counts_changes_of
+        if tracked is not None:
+            return self.coordinator.observations.change_count(tracked)
+
         if not self.coordinator.data:
             return None
 
@@ -2158,6 +2284,18 @@ class ZTERouterSensor(
         data = self.coordinator.data
         key = self.entity_description.key
         detail: dict[str, Any] = {}
+
+        # Transition history for the values that carry it. Text entities take
+        # no `state_class` and so produce no long-term statistics; without
+        # this the previous firmware, address or operator is gone as soon as
+        # the recorder purges. Listed in `_unrecorded_attributes`, so the
+        # history itself is never written to the database.
+        if key in TRACKED:
+            entries = self.coordinator.observations.history(key)
+            if entries:
+                detail["history"] = entries
+                detail["previous_version"] = entries[-1]["from"]
+                detail["last_changed"] = entries[-1]["timestamp"]
 
         if data:
             if key == "msg_total":

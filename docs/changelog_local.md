@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10-dev8\] - 2026-09-04 - Transition History for Six Text Values; Populated Set Recorded](#3310-dev8---2026-09-04---transition-history-for-six-text-values-populated-set-recorded)
   - [\[3.3.10-dev7\] - 2026-09-04 - Per-Model Entity Defaults; eNodeB ID Derived; Two Wi-Fi Sensors](#3310-dev7---2026-09-04---per-model-entity-defaults-enodeb-id-derived-two-wi-fi-sensors)
   - [\[3.3.10-dev6\] - 2026-09-04 - Two-Run Comparison Corrected; Router Refresh Cadence Measured](#3310-dev6---2026-09-04---two-run-comparison-corrected-router-refresh-cadence-measured)
   - [\[3.3.10-dev5\] - 2026-09-04 - CI Bump Ruff PHACC](#3310-dev5---2026-09-04---ci-bump-ruff-phacc)
@@ -225,6 +226,39 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.10-dev8] - 2026-09-04 - Transition History for Six Text Values; Populated Set Recorded
+
+### Summary
+
+A text entity cannot carry a `state_class`, so it produces no long-term statistics: when an operator pushes a firmware update or reassigns a WAN address, Home Assistant holds what it changed from and when for ten days and then forgets. Six values now keep their own record of their changes, and each has a counter that puts those changes into long-term statistics.
+
+The same post-poll step records which entities have ever reported a value on this device, which the `reset_entities` action will use so that disabling everything currently unavailable does not turn off entities that were populated yesterday.
+
+The entity count moves from 115 to 121.
+
+### Added
+
+- **Transition history** for `wa_inner_version`, `wan_ipaddr`, `wan_apn`, `cell_id`, `network_provider` and `opms_wan_mode`, exposed on each sensor as unrecorded `history`, `previous_version` and `last_changed` attributes. Each transition holds a UTC timestamp, the value it came from, the value it became, and the router's uptime counter at the time. Capped at 20 events per key, oldest first.
+- **Six change counters**, `TOTAL_INCREASING`, one per tracked value. **Firmware Changes** is enabled by default — an operator updating a router with no record of it is the case this was built for — and WAN IP, APN, Cell, Provider and WAN Mode Changes are disabled.
+- **A populated set**, recording by entity key which entities this device has ever reported a value for, evaluated through each description's own `value_fn` so aliases, the composite secondary-carrier fields and derived values such as the eNodeB fallback are covered by one rule.
+- **`observations.py`**, holding both records and the single post-poll seam that writes them. It runs only on the success path, so a degraded or failed poll neither records a transition nor forgets a populated entity, and it skips the write entirely when nothing changed — which is almost every poll.
+
+### Measured
+
+The two additions to the tracked set beyond the cross-project list are `network_provider` and `opms_wan_mode`. Both change rarely, both change what the connection does, and both can change without the user acting: an operator reassignment and a bridge-versus-gateway reprovisioning each leave no other trace once the recorder purges.
+
+`cell_id` is kept despite turning over on every handover. The 20-event cap then gives a short rolling window rather than years of history, which answers "have I been handed between cells recently" — a real question, and a different one from what the other five answer.
+
+### Notes
+
+- **The count is stored separately from the history list**, not derived from its length. The list is capped, and the count has to keep rising after the twenty-first change pushes the first one out — which is exactly when the long-term view becomes the only record left.
+- **The first reading of a value is not a change.** It is recorded with `from: null` so the series has a start, and does not increment the counter; otherwise every fresh installation would report one change of everything.
+- **`uptime_at_change` is the router's own counter**, read through the `realtime_time` alias so the MC888 populates it. That counter drifts — 4.34% slow on the reference MC7010 — which makes it a poor clock and a reliable reset indicator, and only the second is being asked of it. It records `null` rather than `0` when a poll carried no uptime, since a zero would read as "just rebooted".
+- **The timestamp is when a change was observed, not when it occurred.** It is bounded by the polling interval, and a change that happens while Home Assistant is down is recorded whenever it next polls.
+- **Both stores are keyed by device** and hold a single key here, one entry fronting one router. The key is the identity `build_device_info` uses, fixed at setup: `entry.data["imei"]` is written once by the config flow and never updated, and the entry's unique id, the device registry and every entity id are built on it, so re-keying on a live reading would detach the history from the entities it describes.
+- **Both stores are advisory.** An unreadable record resolves to "nothing learned" and an unwritable one is skipped, matching the contract the uptime store already holds — no storage fault may fail entry setup or a poll. A fault in one store does not skip the other.
+- The history attributes are listed in `_unrecorded_attributes`. The list grows to twenty entries and is re-emitted on every state write, so recording it would store the same history hundreds of times over; the counters are the recorded half.
 
 ## [3.3.10-dev7] - 2026-09-04 - Per-Model Entity Defaults; eNodeB ID Derived; Two Wi-Fi Sensors
 

@@ -33,6 +33,10 @@ from .coordinator import (
     ZTERouterDataUpdateCoordinator,
 )
 from .helpers import is_gsm7
+from .observations import (
+    HISTORY_STORAGE_VERSION,
+    OBSERVED_STORAGE_VERSION,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -451,6 +455,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # record leaves the counter-regression cross-check disabled and the
     # boot-instant check fully functional.
     await coordinator.async_load_stored_uptime()
+    await coordinator.observations.async_load()
 
     # Remember which non-live options this entry was set up with, so the update
     # listener can tell a connection change (reload) from a tuning change
@@ -572,6 +577,14 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await Store(
         hass, UPTIME_STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}_uptime"
     ).async_remove()
+
+    # The transition history and the populated set, same reasoning. Built from
+    # `entry.entry_id` rather than from the coordinator, which is gone by now.
+    for version, suffix in (
+        (HISTORY_STORAGE_VERSION, "history"),
+        (OBSERVED_STORAGE_VERSION, "observed"),
+    ):
+        await Store(hass, version, f"{DOMAIN}_{entry.entry_id}_{suffix}").async_remove()
 
     for name in (*REPAIR_NAMES, *RETIRED_REPAIR_NAMES):
         ir.async_delete_issue(hass, DOMAIN, f"{entry.entry_id}_{name}")
