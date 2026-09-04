@@ -357,6 +357,7 @@ This integration features **dynamic polling**, the ability to pause polling comp
 - **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour, default `180` seconds) via a number entity or automation. See the [Dynamic Polling Interval](#-dynamic-polling-interval) example.
 - **Actions Always Fetch**: Pressing **Refresh Now**, making a settings change (switch/select) or an SMS action fetches immediately **even while paused** — only scheduled polls are suppressed. See the [Morning Signal Report](#-morning-signal-report) example.
 - **Standard System Option**: Also honors Home Assistant's **System options > Enable polling for changes** toggle.
+- **Every Poll Is a Point Sample**: Router signal readings move every few seconds, and each poll captures one instant rather than an average.
 
 ![System Configuration Controls](.github/images/zte_5g_system_config.png)
 

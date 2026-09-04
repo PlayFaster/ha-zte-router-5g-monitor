@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10-dev6\] - 2026-09-04 - Two-Run Comparison Corrected; Router Refresh Cadence Measured](#3310-dev6---2026-09-04---two-run-comparison-corrected-router-refresh-cadence-measured)
   - [\[3.3.10-dev5\] - 2026-09-04 - CI Bump Ruff PHACC](#3310-dev5---2026-09-04---ci-bump-ruff-phacc)
   - [\[3.3.10-dev4\] - 2026-09-02 - MC888 Compatibility - Generic RSSI Sourced; SINR Sensor Added](#3310-dev4---2026-09-02---mc888-compatibility---generic-rssi-sourced-sinr-sensor-added)
   - [\[3.3.10-dev3\] - 2026-09-02 - MC888 Compatibility - 5G Band Locks; SIM Lock State Added](#3310-dev3---2026-09-02---mc888-compatibility---5g-band-locks-sim-lock-state-added)
@@ -223,6 +224,46 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.10-dev6] - 2026-09-04 - Two-Run Comparison Corrected; Router Refresh Cadence Measured
+
+### Summary
+
+`diag_check.py` failed consistently on runs where the second pass lost and re-established its session. Both failures were in the comparison, not in the integration and not in the artefact. Separately, how often the router updates its own signal figures was measured for the first time.
+
+### Fixed
+
+- **The two-run field comparison ignores the discovery notes.** A pass that re-establishes a session writes notes a clean pass does not, and the notes are a positional list, so a longer list read as extra fields. `_VOLATILE` already excluded those paths from the value comparison; `_NOTE_PATH` now excludes them from the field-set comparison as well, so both halves of the check agree. The counts those notes carry are asserted directly by the checks that follow.
+- **Pseudonyms are compared by kind, not by number.** `diagnostics._Tokenizer` allocates tokens in first-seen order and guarantees stability only within one download, so `ip-5` in two files are unrelated values. A pass that read its keys in a different order renumbered them, and three unchanged values were reported as a structural difference. `_comparable()` reduces `ip-N`, `cell-N`, `mac-N` and `phone-N` to their kind before comparison; a token changing kind is still a failure.
+
+### Added
+
+- **`tests/test_diag_check_stability.py`** — nine tests driving `check_stability` directly. Reproducing the fault needs a session loss, which is an environmental event, so the two failing shapes are supplied as inputs instead. Four tests assert what must still fail: a token changing kind, a genuinely extra field, and a real value change under a non-volatile path. Both tolerances were verified to fail against the unfixed comparison rather than only to pass against the fixed one.
+- **`diag_check` announces its expected warnings.** Each pass builds a cold coordinator whose first poll is deferred by design, and on a paused entry that deferred poll logs a warning. Two warnings above a passing run had nothing saying they were normal. The notice is flushed, because the warning it describes goes to stderr unbuffered while stdout is block-buffered when piped to a report file.
+- **`Hardware: Check Diagnostics Download` runs inside `Validate All`**, with a `Diag Check` row in the summary keyed on `Diagnostics check: PASSED`. The task existed and was never run by the full validation, and the summary gave no sign of the omission. The `--sabotage` arm stays manual, since it deliberately breaks the session.
+
+### Measured
+
+**The MC7010 has no fixed internal refresh cycle.** Its signal figures are live to within about a second, and what limits them is reporting resolution rather than staleness. Measured across 345 samples over 360 seconds at a one-second interval, with `realtime_rx_bytes` as the control at 95% of samples:
+
+| Key | Resolution | Changed on | Median gap |
+| :-- | :-- | ---: | ---: |
+| `Z5g_SINR` | 0.1 dB | 46% of samples | 2.0 s |
+| `lte_snr` | 0.1 dB | 35% | 3.0 s |
+| `lte_rsrq` | 1 dB | 19% | 3.0 s |
+| `lte_rssi` | 1 dB | 14% | 5.0 s |
+| `lte_rsrp` | 1 dB | 7% | 5.0 s |
+| `signalbar` | 0 to 5 | never | — |
+
+A fixed cycle was the first reading and it is wrong: gaps spread across one to five seconds with no dominant interval, and one-second gaps are common, which a 2.5-second cycle sampled at 1 Hz cannot produce. Change frequency tracks reporting resolution instead — the 0.1 dB keys change five times as often as the 1 dB keys, and the coarsest figure did not move once in six minutes. A refresh cycle would move every key at the same rate whatever its resolution.
+
+The consequence for consumers is that a poll is a point sample of a moving signal rather than an average, and `signalbar` is heavily smoothed and not a fast indicator.
+
+### Documentation
+
+- **`docs/zte_how_to_access.md`** gains the refresh-cadence section, and its `tr069_` refusal note now records that both sides of the comparison are measurements.
+- **`README.md`** gains one line under the polling controls: each poll captures one instant rather than an average, so a difference between two consecutive readings is usually ordinary variation.
+- **`mc888_pro_compatibility.md`** — a new standing record of what this integration reads on an MC888 Pro, what it does not, and what is parked. Figures are computed from the two downloads and the code rather than inherited from earlier prose.
 
 ## [3.3.10-dev5] - 2026-09-04 - CI Bump Ruff PHACC
 
