@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.10] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion
+
+### Summary
+
+- **Reset Entities Service Action**: Added `zte_router_5g.reset_entities` with dry-run support, allowing users to restore default entity sets, enable populated entities, or save/restore snapshots without re-adding the integration.
+- **Per-Model Entity Defaults**: Entity defaults now adapt dynamically to the connected router model (e.g. enabling Wi-Fi and generic signal metrics on MC888 while disabling unpopulated outdoor sensors).
+- **Configuration Transition History**: Tracked sensors now store rolling history timestamps for firmware, WAN IP, APN, cell ID, provider, and WAN mode changes, backed by long-term statistic change counters.
+- **Derived eNodeB ID & Switch Availability**: eNodeB ID is automatically calculated when omitted by the router, and switches now report unavailable rather than off when unsupported by hardware.
+- **Adaptive Uptime Drift Calibration**: Uptime tracking now calibrates timer drift per installation, eliminating false reboot alerts across Home Assistant restarts.
+
+### Added
+
+- **Reset Entities Action (`zte_router_5g.reset_entities`)**: Added a bulk management action supporting dry-run previews, restoring per-model defaults, enabling populated entities, disabling unavailable/unknown entities, and capturing or restoring custom entity snapshots.
+- **Configuration Change Counters & History**: Added 6 change counter sensors (`TOTAL_INCREASING`) and rolling transition history attributes (`history`, `previous_version`, `last_changed`) for firmware updates (`wa_inner_version`, enabled by default), WAN IP, APN, Cell ID, network provider, and WAN mode.
+- **Per-Model Default Overlays**: Introduced model-aware default entity resolution at initial registration and within the reset action.
+- **MC888 Sensors**: Added generic `SINR` and `RSSI` sensors (`network_sinr`, `network_rssi`), 5G band locks (`Z5g_lockband_nsa_mask`, `sa_mask`), `SIM Lock State` (`sim_pin_status`), `WiFi Clients Connected`, and `WiFi Enabled` on the System sub-device.
+
+### Changed
+
+- **eNodeB ID Derivation**: eNodeB ID is now automatically derived from `cell_id` (or `network_cell_id`) when the router firmware leaves the native parameter unpopulated.
+- **Switch Availability on Unsupported Hardware**: Switches whose backing router keys are absent (such as the outdoor LED switch on indoor routers) now report unavailable instead of off.
+- **Adaptive Uptime Drift Measurement**: Replaced fixed-tolerance reboot detection with duration-weighted drift calibration per installation, accounting for hardware timer variance across restarts.
+- **Firmware Sensor Defaults**: `Firmware Update State` and `Firmware Update Result` sensors are now disabled by default on the System sub-device to keep default dashboards lean.
+
+### Under the hood
+
+- **Unified Device Info Inheritance**: Consolidated duplicated `device_info` implementations across all entity platforms into a shared mixin (`ZTEDeviceEntity`), accompanied by strict registry sweeps ensuring 100% of entities belong to a parent device.
+
+---
+
 ## [3.3.9] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching
 
 ### Summary
@@ -499,6 +529,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
   - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)
   - [\[3.3.8\] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Firmware Key Changes](#338---2026-09-01---release-web-ui-parameter-mining-firmware-update-sensors-and-firmware-key-changes)
   - [\[3.3.7\] - 2026-08-31 - Release: Dynamic Session Cookies, Per-Device Key Discovery, and Data Limit Controls](#337---2026-08-31---release-dynamic-session-cookies-per-device-key-discovery-and-data-limit-controls)
