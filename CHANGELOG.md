@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.11] - 2026-09-05 - Release: Verified SMS Deletion and Diagnostics Data Rate Telemetry
+## [3.3.11] - 2026-09-05 - Release: Verified SMS Deletion and Diagnostics Data Usage Rates
 
 ### Summary
 
@@ -15,7 +15,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - **Sanitized SMS Bank in Diagnostics**: Added an `sms` section to diagnostics downloads containing sanitized message metadata (message IDs, status tags, timestamps, and body lengths without private message content or sender numbers), capacity counters, and last deletion results.
-- **Data Usage Rate Telemetry in Diagnostics**: Added a `data_usage` section to diagnostics downloads computing average upload and download rates against `monthly_time` and `flux_monthly_time` elapsed timers.
+- **Data Usage Rate in Diagnostics**: Added a `data_usage` section to diagnostics downloads computing average upload and download rates against `monthly_time` and `flux_monthly_time` elapsed timers.
 
 ### Fixed
 
@@ -550,7 +550,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
-  - [\[3.3.11\] - 2026-09-05 - Release: Verified SMS Deletion and Diagnostics Data Rate Telemetry](#3311---2026-09-05---release-verified-sms-deletion-and-diagnostics-data-rate-telemetry)
+  - [\[3.3.11\] - 2026-09-05 - Release: Verified SMS Deletion and Diagnostics Data Usage Rates](#3311---2026-09-05---release-verified-sms-deletion-and-diagnostics-data-usage-rates)
   - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
   - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)
   - [\[3.3.8\] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Firmware Key Changes](#338---2026-09-01---release-web-ui-parameter-mining-firmware-update-sensors-and-firmware-key-changes)

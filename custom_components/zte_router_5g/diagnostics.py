@@ -393,9 +393,7 @@ def _uptime_seconds(boot_time: Any, last_poll: str | None) -> float | None:
             booted = datetime.fromisoformat(booted)
         if not isinstance(booted, datetime):
             return None
-        return round(
-            (datetime.fromisoformat(last_poll) - booted).total_seconds(), 3
-        )
+        return round((datetime.fromisoformat(last_poll) - booted).total_seconds(), 3)
     except (ValueError, TypeError):
         # `TypeError` covers the naive/aware mismatch: the subtraction raises
         # rather than returning a wrong answer, and a wrong uptime is worse

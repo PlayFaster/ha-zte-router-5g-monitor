@@ -315,7 +315,10 @@ async def test_the_session_is_measured_against_the_boot_instant(
     [
         "up 3 days",  # not a timestamp at all
         123,  # not a timestamp and not a string
-        datetime(2026, 9, 5, 0, 0, 0),  # naive: subtracting raises TypeError
+        # Naive: subtracting it from an aware instant raises TypeError. Built
+        # by parsing rather than by constructor, which `DTZ001` rejects for
+        # exactly the reason this case exists.
+        datetime.fromisoformat("2026-09-05T00:00:00"),
     ],
 )
 async def test_a_boot_time_that_is_not_usable_yields_no_uptime(
