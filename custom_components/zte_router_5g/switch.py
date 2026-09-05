@@ -16,7 +16,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -28,7 +27,11 @@ from .const import (
 )
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .entity_defaults import default_enabled
-from .helpers import ZTEAboutEntity, build_device_info, get_first
+from .helpers import (
+    ZTEAboutEntity,
+    ZTEDeviceEntity,
+    get_first,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -181,6 +184,7 @@ async def async_setup_entry(
 
 class ZTERouterSwitch(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     SwitchEntity,
 ):
@@ -359,16 +363,10 @@ class ZTERouterSwitch(
             translation_placeholders={"entity": self.entity_description.key},
         )
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )
-
 
 class ZTEPausePollingSwitch(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     SwitchEntity,
 ):
@@ -434,10 +432,3 @@ class ZTEPausePollingSwitch(
         # 2. If we just resumed, trigger an immediate coordinator refresh
         if not state:
             await self.coordinator.async_force_refresh()
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )

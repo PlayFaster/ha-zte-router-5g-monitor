@@ -26,7 +26,6 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -44,8 +43,8 @@ from .coordinator import (
 from .entity_defaults import default_enabled
 from .helpers import (
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     arfcn_to_band,
-    build_device_info,
     cycle_bounds,
     earfcn_to_band,
     get_first,
@@ -2149,7 +2148,10 @@ async def async_setup_entry(
 
 
 class ZTERouterSensor(
-    ZTEAboutEntity, CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity
+    ZTEAboutEntity,
+    ZTEDeviceEntity,
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    SensorEntity,
 ):
     """Representation of a ZTE Router sensor."""
 
@@ -2343,10 +2345,3 @@ class ZTERouterSensor(
                 }
 
         return self._with_about(detail) or {}
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )

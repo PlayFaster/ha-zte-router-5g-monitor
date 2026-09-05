@@ -14,13 +14,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import ZTEAboutEntity, build_device_info
+from .helpers import ZTEAboutEntity, ZTEDeviceEntity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,7 +80,10 @@ async def async_setup_entry(
 
 
 class ZTEButton(
-    ZTEAboutEntity, CoordinatorEntity[ZTERouterDataUpdateCoordinator], ButtonEntity
+    ZTEAboutEntity,
+    ZTEDeviceEntity,
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    ButtonEntity,
 ):
     """Base class for ZTE Router buttons."""
 
@@ -99,13 +101,6 @@ class ZTEButton(
         self.entity_description = description
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )
 
 
 class ZTERefreshButton(ZTEButton):

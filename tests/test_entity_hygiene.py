@@ -506,6 +506,41 @@ async def test_every_live_entity_belongs_to_a_device(
         )
 
 
+def test_device_info_is_declared_once() -> None:
+    """One inherited implementation, not one copy per entity class.
+
+    Ten byte-identical copies across six modules is how
+    `ZTEOperatorProvisionedSensor` came to have none: each copy was somewhere
+    the property could be left out. The sweep above catches the omission;
+    this stops it being available.
+    """
+    import inspect
+
+    from custom_components.zte_router_5g import (
+        binary_sensor,
+        button,
+        number,
+        select,
+        sensor,
+        switch,
+    )
+
+    declaring = [
+        name
+        for module in (binary_sensor, sensor, switch, select, number, button)
+        for name, obj in vars(module).items()
+        if inspect.isclass(obj)
+        and obj.__module__ == module.__name__
+        and "def device_info" in inspect.getsource(obj)
+    ]
+
+    assert not declaring, (
+        "entity classes declaring their own device_info: "
+        + ", ".join(sorted(declaring))
+        + ". Inherit `helpers.ZTEDeviceEntity` instead."
+    )
+
+
 async def test_every_live_entity_has_an_icon_or_a_device_class(
     hass: HomeAssistant,
 ) -> None:

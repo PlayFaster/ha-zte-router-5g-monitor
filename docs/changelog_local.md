@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10-dev12\] - 2026-09-05 - One Inherited `device_info`, Replacing Ten Copies](#3310-dev12---2026-09-05---one-inherited-device_info-replacing-ten-copies)
   - [\[3.3.10-dev11\] - 2026-09-05 - Operator Provisioned Given a Device; Reset Action Corrected](#3310-dev11---2026-09-05---operator-provisioned-given-a-device-reset-action-corrected)
   - [\[3.3.10-dev10\] - 2026-09-05 - Wi-Fi Sub-Device; Populated Set Corrected; Reset Action Documented](#3310-dev10---2026-09-05---wi-fi-sub-device-populated-set-corrected-reset-action-documented)
   - [\[3.3.10-dev9\] - 2026-09-04 - Reset Entities Action Added](#3310-dev9---2026-09-04---reset-entities-action-added)
@@ -229,6 +230,28 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.10-dev12] - 2026-09-05 - One Inherited `device_info`, Replacing Ten Copies
+
+### Summary
+
+`[3.3.10-dev11]` fixed an entity that had no device and added a sweep to catch another. This removes the condition that made the omission possible: ten entity classes across six modules each carried a byte-identical `device_info` property, and every copy was somewhere the property could be left out. There is now one, inherited.
+
+No behaviour change. The entity count, the device assignments and the sensor manifest are unchanged.
+
+### Changed
+
+- **`helpers.ZTEDeviceEntity`**, a mixin resolving an entity's sub-device from `entity_description.group`. All ten classes inherit it and their copies are gone — 13 entity classes now served by one declaration, the shape `wifi_ssid_monitor` already had.
+- **The mixin declares the contract it depends on rather than assuming it.** It reads `coordinator`, `_entry` and `entity_description`, none of which it sets, so all three are declared as annotations. A class inheriting it without setting `_entry` fails type checking instead of failing at first state write. `entity_description` is typed against a `_HasGroup` protocol whose member is read-only, because every description here is a frozen dataclass and a settable protocol member does not match one.
+
+### Added
+
+- **`test_device_info_is_declared_once`**, asserting no entity class declares its own. The dev11 sweep catches the omission; this stops it being available.
+
+### Notes
+
+- **Mutation-checked.** Replacing the mixin's property with one returning `None` makes every entity lose its device, and `test_every_live_entity_belongs_to_a_device` reports it — where before dev11 the same fault in one class reported nothing at all.
+- Cross-project item `every_entity_must_have_a_device.md` records this: `zte_router_5g` now satisfies both halves of the property and its three closing conditions.
 
 ## [3.3.10-dev11] - 2026-09-05 - Operator Provisioned Given a Device; Reset Action Corrected
 

@@ -12,14 +12,17 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import APN_PROFILE_SLOTS, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .entity_defaults import default_enabled
-from .helpers import ZTEAboutEntity, build_device_info, get_first
+from .helpers import (
+    ZTEAboutEntity,
+    ZTEDeviceEntity,
+    get_first,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -195,7 +198,10 @@ async def async_setup_entry(
 
 
 class ZTERouterSelect(
-    ZTEAboutEntity, CoordinatorEntity[ZTERouterDataUpdateCoordinator], SelectEntity
+    ZTEAboutEntity,
+    ZTEDeviceEntity,
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    SelectEntity,
 ):
     """Representation of a ZTE Router select entity."""
 
@@ -269,10 +275,3 @@ class ZTERouterSelect(
                 },
             ) from err
         await self.coordinator.async_force_refresh()
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )

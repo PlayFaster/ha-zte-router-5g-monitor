@@ -14,7 +14,6 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -24,7 +23,7 @@ from .coordinator import (
     ZTERouterDataUpdateCoordinator,
 )
 from .entity_defaults import default_enabled
-from .helpers import ZTEAboutEntity, build_device_info
+from .helpers import ZTEAboutEntity, ZTEDeviceEntity
 
 PARALLEL_UPDATES = 0
 
@@ -256,6 +255,7 @@ async def async_setup_entry(
 
 class ZTEBestConnectionSensor(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -306,16 +306,10 @@ class ZTEBestConnectionSensor(
             and data.get("wan_lte_ca") == "ca_activated"
         )
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )
-
 
 class ZTEOperatorProvisionedSensor(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -362,20 +356,6 @@ class ZTEOperatorProvisionedSensor(
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
     @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support.
-
-        Declared here rather than inherited: every bespoke entity class in
-        this module defines its own, and this one was written without it. It
-        registered against the config entry with no device at all — visible in
-        the entity list, absent from every device card, and counted in Home
-        Assistant's total while belonging to none of the five sub-devices.
-        """
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )
-
-    @property
     def is_on(self) -> bool | None:
         """Return True when the router declines its provisioning settings."""
         return self.coordinator.provisioning_restricted
@@ -383,6 +363,7 @@ class ZTEOperatorProvisionedSensor(
 
 class ZTEIntegrationHealthSensor(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -488,16 +469,10 @@ class ZTEIntegrationHealthSensor(
             or {}
         )
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )
-
 
 class ZTERouterBinarySensor(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -573,11 +548,4 @@ class ZTERouterBinarySensor(
                 self.entity_description.extra_attrs_fn(self.coordinator.data)
             )
             or {}
-        )
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
         )
