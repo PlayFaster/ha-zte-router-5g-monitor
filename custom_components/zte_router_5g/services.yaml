@@ -147,9 +147,10 @@ reset_entities:
       description:
         Return every entity to the state this integration ships for your router model.
         This is how to undo enabling everything. It also applies newer defaults to an
-        installation set up before them.
+        installation set up before them. Off by default, so nothing happens until you
+        choose something.
       required: false
-      default: true
+      default: false
       selector:
         boolean:
     enable_populated:
@@ -217,7 +218,8 @@ reset_entities:
       description:
         Record which entities are enabled right now as your own set, so you can return
         to it later with Restore Saved Set. Cannot be combined with any option that
-        changes things - set your entities up first, then save.
+        changes things - set your entities up first, then save. While Preview Only is
+        on, nothing is written and the result reports "saved false".
       required: false
       default: false
       selector:

@@ -1578,11 +1578,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="wifi_clients",
         about=(
-            "How many devices are connected to the router's Wi-Fi right now, "
+            "How many devices are connected to the router's WiFi right now, "
             "across all its networks. Counts wireless clients only - anything "
             "on a network cable is not included."
         ),
-        translation_key="wifi_clients",
+        translation_key="wifi_clients_connected",
         state_class=SensorStateClass.MEASUREMENT,
         min_limit=0,
         max_limit=256,
@@ -1595,11 +1595,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="wifi_enabled",
         about=(
-            "Whether the router's Wi-Fi radios are switched on. Reported as "
+            "Whether the router's WiFi radios are switched on. Reported as "
             "the router states it, so this reflects the radios rather than "
             "the last command sent to them."
         ),
-        translation_key="wifi_enabled",
+        translation_key="wifi_wifi_enabled",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="wifi",

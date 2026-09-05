@@ -77,7 +77,11 @@ SERVICE_RESET_ENTITIES_SCHEMA = vol.Schema(
         # action can disable dozens of entities in a call, and a user reading
         # the list first is the whole safety model.
         vol.Optional("dry_run", default=True): bool,
-        vol.Optional("reset_to_default", default=True): bool,
+        # False, so that pressing Perform Action with nothing chosen plans
+        # nothing. A default of true meant an untouched form ran a real
+        # operation, and the dry-run default then protected a choice the user
+        # had not made.
+        vol.Optional("reset_to_default", default=False): bool,
         vol.Optional("enable_populated", default=False): bool,
         vol.Optional("disable_unavailable", default=False): bool,
         vol.Optional("disable_unknown", default=False): bool,

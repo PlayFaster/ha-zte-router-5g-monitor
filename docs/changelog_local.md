@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10-dev11\] - 2026-09-05 - Operator Provisioned Given a Device; Reset Action Corrected](#3310-dev11---2026-09-05---operator-provisioned-given-a-device-reset-action-corrected)
   - [\[3.3.10-dev10\] - 2026-09-05 - Wi-Fi Sub-Device; Populated Set Corrected; Reset Action Documented](#3310-dev10---2026-09-05---wi-fi-sub-device-populated-set-corrected-reset-action-documented)
   - [\[3.3.10-dev9\] - 2026-09-04 - Reset Entities Action Added](#3310-dev9---2026-09-04---reset-entities-action-added)
   - [\[3.3.10-dev8\] - 2026-09-04 - Transition History for Six Text Values; Populated Set Recorded](#3310-dev8---2026-09-04---transition-history-for-six-text-values-populated-set-recorded)
@@ -228,6 +229,30 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.10-dev11] - 2026-09-05 - Operator Provisioned Given a Device; Reset Action Corrected
+
+### Summary
+
+Six corrections, five of them found by running the work of the last four releases against real hardware. The entity count is unchanged at 121; one of those 121 now belongs to a device.
+
+### Fixed
+
+- **Operator Provisioned had no device.** Every bespoke entity class in `binary_sensor.py` declares its own `device_info` property, and this one was written without it, so Home Assistant registered it against the config entry with no device: present in the entity list, counted in the integration's total, and shown on none of the five device cards. The System card goes from 44 entities to 45, and the totals reconcile at 121. **A new sweep asserts that every registered entity has a device**, verified by mutation — removing the property makes it report exactly that class. Nothing in the suite could have caught this before: every other test inspects descriptions or entity state, and none looked at the device registry.
+- **The two WiFi entities had duplicated names.** `sensor.zte_5g_wifi_wi_fi_clients_connected` repeated the sub-device in the entity id. They are now **Clients Connected** and **WiFi Enabled**, following `ha-huawei-router-5g-monitor`, whose `wifi` group names its entity `Status` and lets the device supply the rest. That project also writes **WiFi** rather than Wi-Fi throughout, and this integration now does the same in its own prose.
+- **`reset_to_default` no longer defaults to true.** Pressing Perform Action on an untouched form ran a real operation, and the dry-run default was then protecting a choice the user had not made. It defaults to false, so an empty call plans nothing.
+- **Save current set now says whether it saved.** It honoured Preview correctly and wrote nothing, but reported identical counts either way, so the only signal was the `dry_run` field further up. The response's `snapshot` block gains `saved`.
+- **`net_select` exists as both a sensor and a select**, and the action's description lookup was keyed by entity key alone, so one silently resolved against the other's default. Their unique ids are identical too, so the lookup is now keyed by `(platform, key)` and a registry entry is matched by the domain of its entity id.
+
+### Changed
+
+- **Control entities are in scope for the baseline operations and out of scope for the state-driven ones.** The three buttons, the polling-interval number and the Pause Polling switch were invisible to the action entirely — 113 of 118 entities were considered. They are now covered by `reset_to_default`, `save_snapshot` and `restore_snapshot`, and skipped by `enable_populated`, `disable_unavailable` and `disable_unknown`.
+
+  The reason is not tidiness. **A button's state is the timestamp of its last press, so a button never pressed reads `unknown`** — `disable_unknown` would have switched off Refresh Now, Reboot Router and Delete All SMS on any installation where they had not been used, including the button a user would reach for to undo a bad reset. Pause Polling and Polling Interval were safe only because nothing currently makes them unavailable; the rule makes them safe by design.
+
+### Notes
+
+- All three cross-project changes are recorded in `reset_entities_action.md`: the `reset_to_default` default, the `saved` field on the snapshot response, and a new section stating the control-entity rule. Every integration in that group exposes buttons, so the last one applies to all four.
 
 ## [3.3.10-dev10] - 2026-09-05 - Wi-Fi Sub-Device; Populated Set Corrected; Reset Action Documented
 

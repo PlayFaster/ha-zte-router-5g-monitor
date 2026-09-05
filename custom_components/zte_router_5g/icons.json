@@ -317,10 +317,10 @@
       "system_wan_mode_changes": {
         "default": "mdi:counter"
       },
-      "wifi_clients": {
+      "wifi_clients_connected": {
         "default": "mdi:wifi"
       },
-      "wifi_enabled": {
+      "wifi_wifi_enabled": {
         "default": "mdi:wifi-check"
       }
     },

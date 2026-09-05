@@ -362,6 +362,20 @@ class ZTEOperatorProvisionedSensor(
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
     @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information with sub-device support.
+
+        Declared here rather than inherited: every bespoke entity class in
+        this module defines its own, and this one was written without it. It
+        registered against the config entry with no device at all — visible in
+        the entity list, absent from every device card, and counted in Home
+        Assistant's total while belonging to none of the five sub-devices.
+        """
+        return build_device_info(
+            self.coordinator, self._entry, self.entity_description.group
+        )
+
+    @property
     def is_on(self) -> bool | None:
         """Return True when the router declines its provisioning settings."""
         return self.coordinator.provisioning_restricted

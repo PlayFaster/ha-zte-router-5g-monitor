@@ -150,8 +150,8 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
-| Wi-Fi Clients Connected | Sensor | `wifi_clients` | How many devices are connected to the router's Wi-Fi right now, across all its networks. Counts wireless clients only - anything on a network cable is not included. |
-| Wi-Fi Enabled | Sensor | `wifi_enabled` | Whether the router's Wi-Fi radios are switched on. Reported as the router states it, so this reflects the radios rather than the last command sent to them. |
+| Clients Connected | Sensor | `wifi_clients` | How many devices are connected to the router's WiFi right now, across all its networks. Counts wireless clients only - anything on a network cable is not included. |
+| WiFi Enabled | Sensor | `wifi_enabled` | Whether the router's WiFi radios are switched on. Reported as the router states it, so this reflects the radios rather than the last command sent to them. |
 
 ## Entities without an `about` note (13)
 

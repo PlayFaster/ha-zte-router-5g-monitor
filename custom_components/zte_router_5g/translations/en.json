@@ -353,11 +353,11 @@
       "system_wan_mode_changes": {
         "name": "WAN Mode Changes"
       },
-      "wifi_clients": {
-        "name": "Wi-Fi Clients Connected"
+      "wifi_clients_connected": {
+        "name": "Clients Connected"
       },
-      "wifi_enabled": {
-        "name": "Wi-Fi Enabled"
+      "wifi_wifi_enabled": {
+        "name": "WiFi Enabled"
       }
     },
     "button": {

@@ -473,6 +473,39 @@ async def test_no_sensor_uses_the_total_state_class(hass: HomeAssistant) -> None
     assert checked >= 3, f"sweep only inspected {checked} sensors — fixture is stale"
 
 
+async def test_every_live_entity_belongs_to_a_device(
+    hass: HomeAssistant,
+) -> None:
+    """No entity may be registered without a device.
+
+    `ZTEOperatorProvisionedSensor` shipped without a `device_info` property.
+    Home Assistant registered it against the config entry with no device, so
+    it appeared in the entity list, was counted in the integration's total,
+    and showed on none of the five device cards. Nothing in the suite noticed:
+    every other test asserts on descriptions or on entity state, and none of
+    them looked at where an entity lives.
+
+    Each bespoke entity class in this integration declares `device_info` by
+    hand rather than inheriting it, so the omission can recur. This is the
+    check that catches it.
+    """
+    async with _live_entities(hass) as entities:
+        checked = 0
+        homeless: list[str] = []
+        for entity in entities:
+            checked += 1
+            info = entity.device_info
+            if not info or not info.get("identifiers"):
+                homeless.append(type(entity).__name__)
+
+        assert checked > 100, f"only {checked} entities swept"
+        assert not homeless, (
+            "entities registered with no device: "
+            + ", ".join(sorted(set(homeless)))
+            + ". Add a `device_info` property returning `build_device_info`."
+        )
+
+
 async def test_every_live_entity_has_an_icon_or_a_device_class(
     hass: HomeAssistant,
 ) -> None:

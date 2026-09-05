@@ -374,6 +374,96 @@ async def test_disable_unknown_acts_on_an_entity_never_populated(
 
 
 # ---------------------------------------------------------------------------
+# Controls
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("entity_id", "key"),
+    [
+        ("button.zte_5g_system_refresh_now", "refresh"),
+        ("button.zte_5g_system_reboot", "reboot"),
+        ("number.zte_5g_system_polling_interval", "polling_interval"),
+        ("switch.zte_5g_system_pause_polling", "pause_polling"),
+    ],
+)
+async def test_a_control_is_never_disabled_for_being_unknown(
+    hass, coordinator, registry, entity_id: str, key: str
+) -> None:
+    """A button's state is the time it was last pressed.
+
+    One never pressed reads `unknown`, so `disable_unknown` would have
+    switched off Refresh Now, Reboot Router and Delete All SMS on any
+    installation where they had not been used — including the button that
+    fixes a bad reset. A control's state is local and says nothing about the
+    router.
+    """
+    entry = _entry(key)
+    entry.entity_id = entity_id
+    registry.entries.append(entry)
+    hass.states.async_set(entity_id, "unknown")
+
+    result = await async_reset_entities(
+        hass, coordinator, _call(reset_to_default=False, disable_unknown=True)
+    )
+
+    assert result["changes"]["to_disable"] == []
+
+
+async def test_a_control_is_still_reset_to_its_default(
+    hass, coordinator, registry
+) -> None:
+    """Controls are out of scope for the state-driven operations only.
+
+    A default and a saved set should cover every entity, and both are decided
+    by the resolver rather than by what the router reported.
+    """
+    entry = _entry("refresh", disabled_by=er.RegistryEntryDisabler.INTEGRATION)
+    entry.entity_id = "button.zte_5g_system_refresh_now"
+    registry.entries.append(entry)
+
+    result = await async_reset_entities(hass, coordinator, _call(reset_to_default=True))
+
+    assert len(result["changes"]["to_enable"]) == 1
+
+
+async def test_a_control_is_not_enabled_by_enable_populated(
+    hass, coordinator, registry
+) -> None:
+    """It has no router reading to be populated by."""
+    entry = _entry("pause_polling", disabled_by=er.RegistryEntryDisabler.USER)
+    entry.entity_id = "switch.zte_5g_system_pause_polling"
+    registry.entries.append(entry)
+
+    result = await async_reset_entities(
+        hass, coordinator, _call(reset_to_default=False, enable_populated=True)
+    )
+
+    assert result["changes"]["to_enable"] == []
+
+
+async def test_the_two_net_select_entities_resolve_separately(
+    hass, coordinator, registry
+) -> None:
+    """`net_select` is both a sensor and a select, with identical unique ids.
+
+    A lookup keyed by entity key alone resolved one against the other's
+    description, so a change to either default would silently apply to both.
+    """
+    from custom_components.zte_router_5g.reset_entities import (
+        _DESCRIPTIONS,
+        _load_descriptions,
+    )
+
+    _load_descriptions()
+
+    assert (
+        _DESCRIPTIONS["sensor", "net_select"]
+        is not (_DESCRIPTIONS["select", "net_select"])
+    )
+
+
+# ---------------------------------------------------------------------------
 # Snapshots
 # ---------------------------------------------------------------------------
 
@@ -396,7 +486,7 @@ async def test_saving_a_snapshot_records_every_entity_state(
     coordinator.observations.async_save_snapshot.assert_awaited_once_with(
         {"lte_rsrp": True, "imei": False}
     )
-    assert result["snapshot"] == {"entities": 2, "enabled": 1}
+    assert result["snapshot"] == {"entities": 2, "enabled": 1, "saved": True}
 
 
 async def test_a_dry_run_snapshot_writes_nothing(hass, coordinator, registry) -> None:
@@ -408,7 +498,7 @@ async def test_a_dry_run_snapshot_writes_nothing(hass, coordinator, registry) ->
     )
 
     coordinator.observations.async_save_snapshot.assert_not_awaited()
-    assert result["snapshot"]["entities"] == 1
+    assert result["snapshot"] == {"entities": 1, "enabled": 1, "saved": False}
 
 
 async def test_restoring_a_snapshot_returns_to_the_saved_state(

@@ -115,7 +115,7 @@ class _Planner:
         self._snapshot = coordinator.observations.snapshot()
         self._reporting = entity_keys_with_values(coordinator.data or {})
 
-    def _wanted(self, entry: er.RegistryEntry, key: str) -> bool | None:
+    def _wanted(self, entry: er.RegistryEntry, platform: str, key: str) -> bool | None:
         """Return the state this entry should end in, or None to leave it."""
         wanted: bool | None = None
 
@@ -126,7 +126,15 @@ class _Planner:
             if key in self._snapshot:
                 wanted = self._snapshot[key]
         elif self._data["reset_to_default"]:
-            wanted = default_enabled(_DESCRIPTIONS[key], self._coordinator.model)
+            wanted = default_enabled(
+                _DESCRIPTIONS[platform, key], self._coordinator.model
+            )
+
+        # The three state-driven operations judge an entity by what the
+        # router is reporting, and a control has no such reading. They stop
+        # here — see `_CONTROL_PLATFORMS`.
+        if _is_control(platform, key):
+            return wanted
 
         # Reporting a value *now*, not ever: this operation means "show me
         # what my router actually serves". It uses the same rule the populated
@@ -176,9 +184,10 @@ class _Planner:
                 continue
 
             key = _entity_key(entry, self._prefix)
-            if _DESCRIPTIONS.get(key) is None:
+            platform = entry.entity_id.split(".", 1)[0]
+            if _DESCRIPTIONS.get((platform, key)) is None:
                 continue
-            wanted = self._wanted(entry, key)
+            wanted = self._wanted(entry, platform, key)
             if wanted is None or wanted == (entry.disabled_by is None):
                 continue
 
@@ -192,30 +201,66 @@ class _Planner:
         return to_enable, to_disable, unchanged
 
 
-# Every entity description this integration ships, by key. Built lazily
-# because the platform modules import the coordinator.
-_DESCRIPTIONS: dict[str, Any] = {}
+# Every entity description this integration ships.
+#
+# Built lazily because the platform modules import the coordinator. Keyed by
+# `(platform, key)` rather than by key alone: `net_select` exists as both a
+# sensor and a select, and a flat map silently resolved one against the
+# other's default. Their unique ids are identical too, so a registry entry is
+# matched by the domain of its entity id.
+_DESCRIPTIONS: dict[tuple[str, str], Any] = {}
+
+# Entities whose state is local to Home Assistant rather than a reading from
+# the router.
+#
+# A button's state is the timestamp of its last press, so one never pressed
+# reads `unknown`. `disable_unknown` would have switched off Refresh Now,
+# Reboot Router and Delete All SMS on any installation where they had not been
+# used — including the button that fixes a bad reset. Pause Polling and
+# Polling Interval are safe today only because nothing makes them unavailable;
+# this makes them safe by design.
+#
+# They stay in scope for the baseline operations: a default and a saved set
+# should cover every entity, and both are decided by the resolver rather than
+# by what the router reported.
+_CONTROL_PLATFORMS: Final = ("button", "number")
+_CONTROL_KEYS: Final = ("pause_polling",)
+
+
+def _is_control(platform: str, key: str) -> bool:
+    """Return whether this entity's state is local rather than a reading."""
+    return platform in _CONTROL_PLATFORMS or key in _CONTROL_KEYS
 
 
 def _load_descriptions() -> None:
     """Fill the description lookup on first use."""
     if _DESCRIPTIONS:
         return
-    from .binary_sensor import BINARY_SENSORS
+    from .binary_sensor import BINARY_SENSORS, OPERATOR_PROVISIONED_DESCRIPTION
+    from .button import (
+        DELETE_SMS_DESCRIPTION,
+        REBOOT_DESCRIPTION,
+        REFRESH_DESCRIPTION,
+    )
     from .number import POLLING_INTERVAL_DESCRIPTION
     from .select import SELECT_TYPES
     from .sensor import SENSOR_TYPES
-    from .switch import SWITCH_TYPES
+    from .switch import PAUSE_POLLING_DESCRIPTION, SWITCH_TYPES
 
-    for descriptions in (
-        SENSOR_TYPES,
-        BINARY_SENSORS,
-        SWITCH_TYPES,
-        SELECT_TYPES,
-        (POLLING_INTERVAL_DESCRIPTION,),
-    ):
+    catalogue: tuple[tuple[str, tuple[Any, ...]], ...] = (
+        ("sensor", tuple(SENSOR_TYPES)),
+        ("binary_sensor", (*BINARY_SENSORS, OPERATOR_PROVISIONED_DESCRIPTION)),
+        ("switch", (*SWITCH_TYPES, PAUSE_POLLING_DESCRIPTION)),
+        ("select", tuple(SELECT_TYPES)),
+        ("number", (POLLING_INTERVAL_DESCRIPTION,)),
+        (
+            "button",
+            (REFRESH_DESCRIPTION, REBOOT_DESCRIPTION, DELETE_SMS_DESCRIPTION),
+        ),
+    )
+    for platform, descriptions in catalogue:
         for description in descriptions:
-            _DESCRIPTIONS[description.key] = description
+            _DESCRIPTIONS[platform, description.key] = description
 
 
 async def async_reset_entities(
@@ -280,11 +325,12 @@ async def _save(
     dry_run: bool,
 ) -> dict[str, Any]:
     """Record the current enabled state of every entity as a baseline."""
+    prefix = coordinator.entry.unique_id or ""
     captured = {
         key: not entry.disabled_by
         for entry in entries
-        if (key := _entity_key(entry, coordinator.entry.unique_id or ""))
-        in _DESCRIPTIONS
+        if (key := _entity_key(entry, prefix))
+        and (entry.entity_id.split(".", 1)[0], key) in _DESCRIPTIONS
     }
     if not dry_run:
         await coordinator.observations.async_save_snapshot(captured)
@@ -300,8 +346,16 @@ async def _save(
         },
         "changes": {"to_enable": [], "to_disable": []},
         "populated_history": coordinator.observations.populated_history(),
-        # Reported so a snapshot taken mid-exploration is visible as one. A
-        # baseline holding nearly every entity restores nearly every entity,
-        # which is rarely what its author meant.
-        "snapshot": {"entities": len(captured), "enabled": enabled},
+        # `saved` because the two runs were otherwise indistinguishable: a
+        # preview reported the same counts as a real capture, so the only
+        # signal that nothing had been written was the `dry_run` field further
+        # up. Entities and enabled are reported so a snapshot taken
+        # mid-exploration is visible as one — a baseline holding nearly every
+        # entity restores nearly every entity, which is rarely what its author
+        # meant.
+        "snapshot": {
+            "entities": len(captured),
+            "enabled": enabled,
+            "saved": not dry_run,
+        },
     }

@@ -158,8 +158,8 @@ A complete list of the static entities and service actions provided by the integ
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| Wi-Fi Clients Connected | `wifi_clients` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `measurement` |
-| Wi-Fi Enabled | `wifi_enabled` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Clients Connected | `wifi_clients` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| WiFi Enabled | `wifi_enabled` | Sensor | - | Diagnostic | **Disabled by default.** |
 
 <!-- GENERATED:end -->
 
