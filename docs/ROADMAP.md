@@ -4,48 +4,11 @@ Forward view for `ha-zte-router-5g-monitor`, and the record of what has been dec
 
 Format document `roadmap_format.md` used.
 
-**Reviewed 2026-08-01** against the running instance (92 entities) and the current source.
+**Reviewed 2026-09-05** against the running instance (121 entities) and the current source.
 
 ---
 
 ## To Be Done
-
-### Long-term history for key text sensors
-
-#### **Value ⭐⭐⭐ · Effort Medium**
-
-**The mechanism is undecided. The need is not.**
-
-Long-term statistics only accept numeric sensors carrying a `state_class`, so every text sensor here is limited to the recorder's retention window — ten days by default. **Firmware Version** is the case that matters: a firmware change is exactly the event you want to look back at months later, when the router starts behaving differently and the question is _what changed, and when_. The `Firmware Change Notification` automation fires at the moment it happens, but nothing retains the record once history rolls off.
-
-Other candidates once a mechanism exists: `Network Provider`, `Network APN`, `Cell ID`, `eNodeB ID`, `WAN IP Address`.
-
-Two approaches, neither yet chosen:
-
-- **A store in `.storage`** holding a bounded list of `(timestamp, from, to)` transitions, surfaced as attributes on the existing sensor. Keeps the record exact and human-readable. Costs a `Store`, a size cap, and a decision about what happens on entry removal.
-- **A numeric companion that does reach LTS.** Encoding the version string itself is a dead end — firmware strings are not reliably ordinal, and a hash graphs as noise. A **monotonic change counter** works instead: a `TOTAL_INCREASING` sensor incremented whenever the string changes. It answers "when did it change" from the statistics timestamp without the value needing to mean anything, at the cost of not recording _what_ it changed to.
-
-The two are not exclusive — the counter gives a durable timeline, the store gives the detail behind it.
-
-**Worth knowing:** the `.storage` half is the same infrastructure the **Projection accuracy from cycle history** item needs — Phase 4 of `.notes/info/data_cycle_and_projection_plan.md`. Neither exists yet. Whichever is built first should be built to serve both rather than as a one-off.
-
-#### Prior art — there is no native mechanism
-
-Checked 2026-08-01, so it does not need re-searching. **Home Assistant has nothing that solves this**, and the gap is recognized rather than obscure:
-
-- **Long-term statistics are numeric-only by design.** Only `state_class` of `measurement`, `total` or `total_increasing` produces LTS rows. An open architecture discussion asks for binary sensors to be included, which confirms they are not; text sensors are further out still. ([architecture #1268](https://github.com/home-assistant/architecture/discussions/1268))
-- **Retention is global, not per-entity.** Raising `purge_keep_days` for one sensor means raising it for every sensor. Per-entity retention is a standing request, not a feature.
-
-What the community does instead, none of it a clean fit:
-
-| Approach | Why it does not settle this |
-| :-- | :-- |
-| **External time-series database** — InfluxDB, Prometheus, long-retention MariaDB | The usual answer, and it does keep strings. The data leaves Home Assistant's own history UI, which is where a user would look. |
-| **Raise `purge_keep_days` globally** | Grows the whole database to preserve one string. |
-| **A helper written by an automation** (`input_text`, `input_datetime`, `counter`) | Closest native option, with a nuance that matters: the helper's **current value** persists in `.storage` indefinitely and survives restarts, but its **state history** is purged like anything else. Good for "the last change and when"; no use for a multi-year list. |
-| **`homeassistant-historical-sensor`** | A custom component that writes directly into the statistics tables. Real precedent for the idea, but built for numeric series. |
-
-Two notes on confidence. The **monotonic counter** described above is reasoning from how LTS works, **not an observed community pattern** — no evidence was found of anyone doing it, so treat it as untested. And Home Assistant's **`update` entity domain** models `installed_version` / `latest_version`, which is the nearest core concept to firmware tracking; it carries no history either, so it does not solve this, but it is the domain core would expect if firmware ever became a first-class concern here.
 
 ### Billing-cycle write controls
 
@@ -73,18 +36,6 @@ Both keys are already polled, and the switch already drives the projection senso
 Two of the three polled endpoints exist solely for SMS, so a user who never sends one still pays two round trips per cycle. Disabling the sub-device hides the entities without stopping the polling.
 
 Needs a `CONF_ENABLE_SMS` option, guards on both `_fetch_optional` calls, and an exclusion in `_degraded_endpoints()` — without the last, Integration Health reports "degraded" for a capability the user deliberately switched off. `dev_standards` §15.
-
-### Entity defaults matched to the router model
-
-#### **Value ⭐⭐ · Effort Medium**
-
-Every model answers a different subset of the parameter set, so a user sees entities their hardware never populates. Today the defaults are chosen by category — 28 diagnostic entities ship disabled regardless of model — and a per-model list would instead disable the entities that model is known to leave empty.
-
-Measured on the reference MC7010: 40 of 137 requested keys are empty, nine sensor descriptions read only empty keys, and all nine are already disabled by default. Across binary sensors, switches, selects and numbers, the count of enabled entities whose keys are all empty is zero. On the one device that can be measured today, this would suppress nothing.
-
-The lists would be curated from diagnostics downloads rather than measured at runtime, so they carry none of the hazards of runtime suppression — no key read empty while the modem is still initialising, no altering an entity that already exists. Unknown hardware keeps the category defaults. It only makes sense once downloads are held for several models, since a list built from one device is the category system with extra steps. `Kajkac/ZTE-MC-Home-assistant-repo` implements the per-model form and shows the failure mode: its MC801A and MC888 lists are byte-identical and its G5 Ultra list is derived from MC801A, so three of four models share one list that nobody has revisited. Any version here would be generated from the downloads and checked by a test that regenerates and compares, so a stale list fails rather than persists.
-
-**Would be justified by:** downloads from several models showing enabled entities that stay empty on that hardware. Comparison detail is `.notes/info/other_zte_projects/divergence_review.md` §4.4.
 
 ### Reboot-on-degradation blueprint
 
@@ -164,16 +115,14 @@ Not doing it. Both are network plumbing set once at installation, and neither be
 
 Forward work only. Declined and Revisit items are recorded above and are not work in progress.
 
-| Item                               | Group      | Value  | Effort |
-| :--------------------------------- | :--------- | :----- | :----- |
-| Billing-cycle write controls       | To Be Done | ⭐⭐⭐ | Low    |
-| Long-term history for text sensors | To Be Done | ⭐⭐⭐ | Medium |
-| SMS feature-group toggle           | Maybe      | ⭐⭐⭐ | Medium |
-| Projection accuracy from history   | Maybe      | ⭐⭐   | Medium |
-| Entity defaults matched to model   | Maybe      | ⭐⭐   | Medium |
-| Reboot-on-degradation blueprint    | Maybe      | ⭐⭐   | Low    |
+| Item                             | Group      | Value  | Effort |
+| :------------------------------- | :--------- | :----- | :----- |
+| Billing-cycle write controls     | To Be Done | ⭐⭐⭐ | Low    |
+| SMS feature-group toggle         | Maybe      | ⭐⭐⭐ | Medium |
+| Projection accuracy from history | Maybe      | ⭐⭐   | Medium |
+| Reboot-on-degradation blueprint  | Maybe      | ⭐⭐   | Low    |
 
-**Current state.** 92 entities across four sub-devices, 86 carrying `about` notes. 817 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
+**Current state.** 121 entities across five sub-devices, 108 carrying `about` notes. 1420 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
 ---
 
@@ -189,11 +138,14 @@ Items that were on this roadmap and have since been built. Detail is in `CHANGEL
 | **Immediate refresh after a write** | Original item | Every write action routes through `async_force_refresh()`. The originally proposed `async_request_refresh()` would have been wrong: it is silently swallowed while Pause Polling is on. |
 | **Cross-model verification** | Original item, merged 2026-08-01 | Three diagnostics downloads arrived from an MC888 Pro through issue #56. The README moved from an inferred compatibility claim to **Diagnostic Capture Verified** for that model, and the prize the entry predicted — keys another model populates that this integration does not poll — produced ten alias spellings in `[3.3.9-dev11]`. **MC889 remains unverified**: no download exists for it, and no hardware is reachable. Whether the ten aliases populate on the MC888 is confirmed by the next download rather than by this item. |
 | **Band lock — read side** | Original item | `LTE Band Lock Mask` (`lte_band_lock`), disabled by default. `Network Mode Selection` covers the adjacent bearer preference. The write side is declined — see below. |
+| **Long-term history for key text sensors** | Added 2026-09-02 | `[3.3.10-dev8]`. Both approaches the entry left open were built, because they answer different questions: a per-device store holds the last 20 transitions of six values as `timestamp`, `from`, `to` and `uptime_at_change`, surfaced as unrecorded attributes; six `TOTAL_INCREASING` counters put the same changes into long-term statistics, with **Firmware Changes** enabled by default. Tracks `wa_inner_version`, `wan_ipaddr`, `wan_apn`, `cell_id`, `network_provider` and `opms_wan_mode`. **eNodeB ID is deliberately not tracked**: it is derived from the cell identity, so a change of mast already appears in the `cell_id` history. |
+| **Entity defaults matched to the router model** | Added 2026-08-01 | `[3.3.10-dev7]`, corrected at `[3.3.10-dev11]`. `entity_defaults.MODEL_OVERLAY` carries a per-model set matched as a family substring, longest first; `default_enabled` resolves it and both platform setup and the `reset_entities` action call that one function, so a reset cannot undo the overlay and an existing installation can adopt it. The MC888 entry disables five entities that firmware cannot fill and enables four it can. **Two departures from the entry as written**: the overlay enables as well as disables, because on that device RSSI and SINR are the only signal-quality figures it reports; and the list is curated rather than generated, the proposed regenerating test having been dropped as invalid — it would have re-derived the one stale entry that actually occurred, since the download shows `enodeb_id` empty and the derivation fills it. |
 
 ---
 
 ## Version Control
 
+- **v3.5.0** (2026-09-05) — Moved **Long-term history for key text sensors** and **Entity defaults matched to the router model** to Done, at `[3.3.10-dev8]` and `[3.3.10-dev7]`. The history item built both mechanisms its entry left open rather than choosing between them. The defaults item departs from its entry twice, both recorded in the Done row: the overlay enables as well as disables, and the regenerate-and-compare test the v3.3.0 entry proposed was dropped as invalid — its inputs are untracked, it assumes a list that is derivable where the criterion is judgement, and it would have reproduced the one stale entry that actually occurred.
 - **v3.4.0** (2026-09-02) — **Cross-model verification moved to Done, and Custom triggers removed.** The verification item's blocker was a volunteer diagnostics download, and three arrived from an MC888 Pro through issue #56; both outcomes it named followed — the README compatibility claim became evidence-backed, and ten alias spellings shipped in `[3.3.9-dev11]`. Recorded with the MC889 gap stated, since no download exists for that model. **Blocked is now empty and its heading is removed**, per `roadmap_format.md` — an absent group means empty. **Custom triggers for `zte_router_5g_sms_received` is deleted rather than filed under a group.** It restated the blocker and the analysis pointer of the family-wide item at `.shared/issues/x_project/custom_trigger_options.md`, which carries a `zte_router_5g` cell and owns the work. Declined would have been untrue — nothing has been decided against — and the format has no group for an item another tracker owns, so the transfer is recorded here instead. **"Refresh Now" always re-logs in stays in Revisit.** Its trigger is a silent logged-out fault, which `roadmap_format.md` requires to be realistically achievable for Revisit rather than Declined; it has occurred twice, and every session fault found during 3.3.9 was a _false_ report of session loss, which re-logging in does not address.
 - **v3.3.0** (2026-09-02) — Added **Entity defaults matched to the router model** to Maybe, after reading `Kajkac/ZTE-MC-Home-assistant-repo`'s per-model disable lists directly. Recorded with the measurement that argues against building it now: on the reference MC7010, nine sensor descriptions read only empty keys and all nine are already disabled by category, while no binary sensor, switch, select or number is both enabled and fed solely by empty keys — so the feature would currently suppress nothing. Entered as a Maybe rather than declined because the condition it addresses is real and unmeasurable on one device: it needs downloads from several models to be worth more than the category defaults. Notes the failure mode observed in the reference implementation, whose MC801A and MC888 lists are byte-identical and whose G5 Ultra list is derived from MC801A, and states that any version here would be generated from downloads and guarded by a regenerate-and-compare test.
 - **v3.2.1** (2026-08-01) — Added a **Prior art** subsection to the text-sensor history item, recording that Home Assistant has no native mechanism and that the gap is recognized rather than obscure: long-term statistics are numeric-only by design, retention is global rather than per-entity, and the community workarounds (external time-series database, a blanket `purge_keep_days` rise, helper entities, `homeassistant-historical-sensor`) each fail this case for a stated reason. Includes the nuance that a helper's current value persists indefinitely while its history does not, flags the monotonic-counter idea as untested reasoning rather than observed practice, and notes the `update` entity domain as the nearest core concept. Dated so it does not get re-searched.

@@ -102,6 +102,70 @@ def test_router_switch_is_on_no_value_fn(mock_coordinator, mock_config_entry):
     assert switch.is_on is False
 
 
+def test_router_switch_is_unavailable_when_its_key_is_absent(
+    mock_coordinator, mock_config_entry
+):
+    """A missing key is not an Off position.
+
+    Every switch `value_fn` here resolves an absent value to False, so a
+    router that does not have the setting gets a control showing a position it
+    was never told. The MC888 Pro is an indoor unit and answers nothing for
+    `ODU_led_switch`, where the switch previously read a confident Off and
+    would have accepted a write.
+    """
+    mock_coordinator.data = {"unrelated": "1"}
+    desc = SWITCH_TYPES[0]
+
+    switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
+
+    assert switch.available is False
+
+
+def test_router_switch_is_unavailable_when_its_key_is_empty(
+    mock_coordinator, mock_config_entry
+):
+    """Present-but-empty is absent, as it is everywhere else in this code."""
+    mock_coordinator.data = {"ODU_led_switch": ""}
+    desc = SWITCH_TYPES[0]
+
+    switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
+
+    assert switch.available is False
+
+
+def test_router_switch_is_available_when_an_alias_answers(
+    mock_coordinator, mock_config_entry
+):
+    """The data-limit switch reads `flux_data_volume_limit_switch` on an MC888.
+
+    Availability has to follow the same alias list the value does, or the
+    control goes unavailable on the one device the alias was added for.
+    """
+    desc = next(d for d in SWITCH_TYPES if d.key == "data_limit_switch")
+    mock_coordinator.data = {"flux_data_volume_limit_switch": "0"}
+
+    switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
+
+    assert switch.available is True
+    assert switch.is_on is False
+
+
+def test_router_switch_with_no_state_key_stays_available(
+    mock_coordinator, mock_config_entry
+):
+    """A switch reading no router key has nothing to be absent."""
+    mock_coordinator.data = {}
+    desc = ZTESwitchEntityDescription(
+        key="test_switch",
+        translation_key="test_switch",
+        value_fn=lambda data: False,
+    )
+
+    switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
+
+    assert switch.available is True
+
+
 def test_router_switch_is_on_true(mock_coordinator, mock_config_entry):
     """Test ZTERouterSwitch.is_on returns True when data matches."""
     mock_coordinator.data = {"ODU_led_switch": "1"}

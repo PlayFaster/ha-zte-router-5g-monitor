@@ -49,6 +49,7 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 | Signal     | `rscp`                      | `-120` |              `-20` | dBm  |
 | Signal     | `rssi`                      | `-120` |              `-20` | dBm  |
 | Signal     | `signalbar`                 |    `0` |                `5` | —    |
+| Signal     | `sinr`                      |  `-20` |               `50` | dB   |
 | Signal     | `z5g_rsrp`                  | `-140` |              `-30` | dBm  |
 | Signal     | `z5g_rsrq`                  |  `-40` |                `0` | dB   |
 | Signal     | `z5g_rssi`                  | `-120` |              `-20` | dBm  |
@@ -63,6 +64,7 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 | System     | `realtime_time`             |    `0` |                  — | s    |
 | System     | `sim_pin_attempts`          |    `0` |               `10` | —    |
 | System     | `sim_puk_attempts`          |    `0` |               `10` | —    |
+| System     | `wifi_clients`              |    `0` |              `256` | —    |
 
 <!-- GENERATED:end -->
 

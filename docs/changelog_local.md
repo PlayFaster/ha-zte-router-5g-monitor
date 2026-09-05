@@ -5,6 +5,20 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
+  - [\[3.3.10-dev13\] - 2026-09-05 - WiFi Back on System; Firmware Sensors Off by Default; Release Documentation](#3310-dev13---2026-09-05---wifi-back-on-system-firmware-sensors-off-by-default-release-documentation)
+  - [\[3.3.10-dev12\] - 2026-09-05 - One Inherited `device_info`, Replacing Ten Copies](#3310-dev12---2026-09-05---one-inherited-device_info-replacing-ten-copies)
+  - [\[3.3.10-dev11\] - 2026-09-05 - Operator Provisioned Given a Device; Reset Action Corrected](#3310-dev11---2026-09-05---operator-provisioned-given-a-device-reset-action-corrected)
+  - [\[3.3.10-dev10\] - 2026-09-05 - Wi-Fi Sub-Device; Populated Set Corrected; Reset Action Documented](#3310-dev10---2026-09-05---wi-fi-sub-device-populated-set-corrected-reset-action-documented)
+  - [\[3.3.10-dev9\] - 2026-09-04 - Reset Entities Action Added](#3310-dev9---2026-09-04---reset-entities-action-added)
+  - [\[3.3.10-dev8\] - 2026-09-04 - Transition History for Six Text Values; Populated Set Recorded](#3310-dev8---2026-09-04---transition-history-for-six-text-values-populated-set-recorded)
+  - [\[3.3.10-dev7\] - 2026-09-04 - Per-Model Entity Defaults; eNodeB ID Derived; Two Wi-Fi Sensors](#3310-dev7---2026-09-04---per-model-entity-defaults-enodeb-id-derived-two-wi-fi-sensors)
+  - [\[3.3.10-dev6\] - 2026-09-04 - Two-Run Comparison Corrected; Router Refresh Cadence Measured](#3310-dev6---2026-09-04---two-run-comparison-corrected-router-refresh-cadence-measured)
+  - [\[3.3.10-dev5\] - 2026-09-04 - CI Bump Ruff PHACC](#3310-dev5---2026-09-04---ci-bump-ruff-phacc)
+  - [\[3.3.10-dev4\] - 2026-09-02 - MC888 Compatibility - Generic RSSI Sourced; SINR Sensor Added](#3310-dev4---2026-09-02---mc888-compatibility---generic-rssi-sourced-sinr-sensor-added)
+  - [\[3.3.10-dev3\] - 2026-09-02 - MC888 Compatibility - 5G Band Locks; SIM Lock State Added](#3310-dev3---2026-09-02---mc888-compatibility---5g-band-locks-sim-lock-state-added)
+  - [\[3.3.10-dev2\] - 2026-09-02 - Thirteen MC888 Sensors Given a Source; Second `network_` Vocabulary Adopted](#3310-dev2---2026-09-02---thirteen-mc888-sensors-given-a-source-second-network_-vocabulary-adopted)
+  - [\[3.3.10-dev1\] - 2026-09-02 - Uptime Counter Drift Measured Per Installation; Boot-Time Latch Rebuilt Around It](#3310-dev1---2026-09-02---uptime-counter-drift-measured-per-installation-boot-time-latch-rebuilt-around-it)
   - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)
   - [\[3.3.9-dev12\] - 2026-09-02 - Fourteen Diagnostic Sensors Added; Operator Provisioning Reported](#339-dev12---2026-09-02---fourteen-diagnostic-sensors-added-operator-provisioning-reported)
   - [\[3.3.9-dev11\] - 2026-09-02 - MC888 Parameter Spellings Supported; Two-Request Core Poll](#339-dev11---2026-09-02---mc888-parameter-spellings-supported-two-request-core-poll)
@@ -218,6 +232,405 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.10] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion
+
+### Summary
+
+- **Reset Entities Service Action**: Added `zte_router_5g.reset_entities` with dry-run support, allowing users to restore default entity sets, enable populated entities, or save/restore snapshots without re-adding the integration.
+- **Per-Model Entity Defaults**: Entity defaults now adapt dynamically to the connected router model (e.g. enabling Wi-Fi and generic signal metrics on MC888 while disabling unpopulated outdoor sensors).
+- **Configuration Transition History**: Tracked sensors now store rolling history timestamps for firmware, WAN IP, APN, cell ID, provider, and WAN mode changes, backed by long-term statistic change counters.
+- **Derived eNodeB ID & Switch Availability**: eNodeB ID is automatically calculated when omitted by the router, and switches now report unavailable rather than off when unsupported by hardware.
+- **Adaptive Uptime Drift Calibration**: Uptime tracking now calibrates timer drift per installation, eliminating false reboot alerts across Home Assistant restarts.
+
+### Added
+
+- **Reset Entities Action (`zte_router_5g.reset_entities`)**: Added a bulk management action supporting dry-run previews, restoring per-model defaults, enabling populated entities, disabling unavailable/unknown entities, and capturing or restoring custom entity snapshots.
+- **Configuration Change Counters & History**: Added 6 change counter sensors (`TOTAL_INCREASING`) and rolling transition history attributes (`history`, `previous_version`, `last_changed`) for firmware updates (`wa_inner_version`, enabled by default), WAN IP, APN, Cell ID, network provider, and WAN mode.
+- **Per-Model Default Overlays**: Introduced model-aware default entity resolution at initial registration and within the reset action.
+- **MC888 Sensors**: Added generic `SINR` and `RSSI` sensors (`network_sinr`, `network_rssi`), 5G band locks (`Z5g_lockband_nsa_mask`, `sa_mask`), `SIM Lock State` (`sim_pin_status`), `WiFi Clients Connected`, and `WiFi Enabled` on the System sub-device.
+
+### Changed
+
+- **eNodeB ID Derivation**: eNodeB ID is now automatically derived from `cell_id` (or `network_cell_id`) when the router firmware leaves the native parameter unpopulated.
+- **Switch Availability on Unsupported Hardware**: Switches whose backing router keys are absent (such as the outdoor LED switch on indoor routers) now report unavailable instead of off.
+- **Adaptive Uptime Drift Measurement**: Replaced fixed-tolerance reboot detection with duration-weighted drift calibration per installation, accounting for hardware timer variance across restarts.
+- **Firmware Sensor Defaults**: `Firmware Update State` and `Firmware Update Result` sensors are now disabled by default on the System sub-device to keep default dashboards lean.
+
+### Under the hood
+
+- **Unified Device Info Inheritance**: Consolidated duplicated `device_info` implementations across all entity platforms into a shared mixin (`ZTEDeviceEntity`), accompanied by strict registry sweeps ensuring 100% of entities belong to a parent device.
+
+## [3.3.10-dev13] - 2026-09-05 - WiFi Back on System; Firmware Sensors Off by Default; Release Documentation
+
+### Summary
+
+Three entity-default changes and the documentation pass for the `[3.3.10]` release. The entity count is unchanged at 121, now across four sub-devices rather than five.
+
+### Changed
+
+- **The WiFi sub-device is removed and its two sensors move to System.** A device is created when its entities are added, disabled or not, so the WiFi card was drawn on an MC7010 holding two entities that are both blank there. Moving them removes the empty card without conditional entity creation. **WiFi Clients Connected** and **WiFi Enabled**, both diagnostic.
+- **Those two are now enabled by default**, and the overlay disables them on the MC7010, which answers neither key. An unrecognised model keeps them on: a router serving WiFi is the common case, and a blank pair is easier to notice and switch off than a missing pair is to discover. This is the first overlay entry for the MC7010.
+- **Firmware Update State and Firmware Update Result are off by default.** `upgrade_result` shipped enabled in `[3.3.9-dev12]` as the one firmware sensor reporting a fault the other two miss; three firmware sensors on the System card is more than a working router needs on show, and a user chasing an update problem can enable them.
+
+### Documentation
+
+- **`README.md`** gains a **Reset Entities Action** section: what each of the ten options does, the dry-run-then-apply sequence, the two protections that stop it disabling something wanted, and what it refuses rather than guesses. Also a note that entity defaults depend on the router model, and the sub-device table corrected to four devices.
+- **`AGENTS.md`** gains the three modules added in this series and a rule that `device_info` is inherited and never declared on an entity class, with the sweep names that enforce it. Three rows added to the "tests that will stop you" table.
+- **`docs/DEVELOPMENT.md`** documents `entity_defaults.py`, `observations.py` and `reset_entities.py`, and records the temperature finding below.
+- **`docs/zte_how_to_access.md`** gains a section on the three parameter vocabularies, how the `network_` family splits into qualified and unqualified names, and the sign convention on `network_rssi`.
+- **`docs/expected_zte_compatibility.md`** records per-model defaults and the 36 cross-model spellings as supported behaviour, and notes that the WiFi client count is a single figure rather than the device tracking this integration excludes.
+- **`docs/ha_compatibility.md`** — tested against 2026.9.0.
+
+### Measured
+
+**All five `pm_*` temperature sensors stay, and the evidence is now stronger than "unknown".** Three of them — `pm_sensor_pa1`, `pm_sensor_mdm` and `pm_modem_5g` — are referenced in the MC888 Pro's **own web UI** and answered blank, exactly as that firmware answers `lte_rsrq`. So the concept exists in the model and no reachable device populates it. `pm_sensor_ambient` and `pm_sensor_5g` appear in neither device's mined set, and all five are in `Kajkac/ZTE-MC-Home-assistant-repo`'s `SENSOR_NAMES`, four with `°C` units, which is the provenance the closed decision in `DEVELOPMENT.md` cites.
+
+That decision was nearly re-opened on a false reading. `known_names.EXPECTED_NAMES` returns nothing for these names, and that is not evidence of absence — the set holds only the sibling project's names **not already in this integration's vocabulary**, so anything already polled is invisible in it. The caution is recorded beside the decision.
+
+## [3.3.10-dev12] - 2026-09-05 - One Inherited `device_info`, Replacing Ten Copies
+
+### Summary
+
+`[3.3.10-dev11]` fixed an entity that had no device and added a sweep to catch another. This removes the condition that made the omission possible: ten entity classes across six modules each carried a byte-identical `device_info` property, and every copy was somewhere the property could be left out. There is now one, inherited.
+
+No behaviour change. The entity count, the device assignments and the sensor manifest are unchanged.
+
+### Changed
+
+- **`helpers.ZTEDeviceEntity`**, a mixin resolving an entity's sub-device from `entity_description.group`. All ten classes inherit it and their copies are gone — 13 entity classes now served by one declaration, the shape `wifi_ssid_monitor` already had.
+- **The mixin declares the contract it depends on rather than assuming it.** It reads `coordinator`, `_entry` and `entity_description`, none of which it sets, so all three are declared as annotations. A class inheriting it without setting `_entry` fails type checking instead of failing at first state write. `entity_description` is typed against a `_HasGroup` protocol whose member is read-only, because every description here is a frozen dataclass and a settable protocol member does not match one.
+
+### Added
+
+- **`test_device_info_is_declared_once`**, asserting no entity class declares its own. The dev11 sweep catches the omission; this stops it being available.
+
+### Notes
+
+- **Mutation-checked.** Replacing the mixin's property with one returning `None` makes every entity lose its device, and `test_every_live_entity_belongs_to_a_device` reports it — where before dev11 the same fault in one class reported nothing at all.
+- Cross-project item `every_entity_must_have_a_device.md` records this: `zte_router_5g` now satisfies both halves of the property and its three closing conditions.
+
+## [3.3.10-dev11] - 2026-09-05 - Operator Provisioned Given a Device; Reset Action Corrected
+
+### Summary
+
+Six corrections, five of them found by running the work of the last four releases against real hardware. The entity count is unchanged at 121; one of those 121 now belongs to a device.
+
+### Fixed
+
+- **Operator Provisioned had no device.** Every bespoke entity class in `binary_sensor.py` declares its own `device_info` property, and this one was written without it, so Home Assistant registered it against the config entry with no device: present in the entity list, counted in the integration's total, and shown on none of the five device cards. The System card goes from 44 entities to 45, and the totals reconcile at 121. **A new sweep asserts that every registered entity has a device**, verified by mutation — removing the property makes it report exactly that class. Nothing in the suite could have caught this before: every other test inspects descriptions or entity state, and none looked at the device registry.
+- **The two WiFi entities had duplicated names.** `sensor.zte_5g_wifi_wi_fi_clients_connected` repeated the sub-device in the entity id. They are now **Clients Connected** and **WiFi Enabled**, following `ha-huawei-router-5g-monitor`, whose `wifi` group names its entity `Status` and lets the device supply the rest. That project also writes **WiFi** rather than Wi-Fi throughout, and this integration now does the same in its own prose.
+- **`reset_to_default` no longer defaults to true.** Pressing Perform Action on an untouched form ran a real operation, and the dry-run default was then protecting a choice the user had not made. It defaults to false, so an empty call plans nothing.
+- **Save current set now says whether it saved.** It honoured Preview correctly and wrote nothing, but reported identical counts either way, so the only signal was the `dry_run` field further up. The response's `snapshot` block gains `saved`.
+- **`net_select` exists as both a sensor and a select**, and the action's description lookup was keyed by entity key alone, so one silently resolved against the other's default. Their unique ids are identical too, so the lookup is now keyed by `(platform, key)` and a registry entry is matched by the domain of its entity id.
+
+### Changed
+
+- **Control entities are in scope for the baseline operations and out of scope for the state-driven ones.** The three buttons, the polling-interval number and the Pause Polling switch were invisible to the action entirely — 113 of 118 entities were considered. They are now covered by `reset_to_default`, `save_snapshot` and `restore_snapshot`, and skipped by `enable_populated`, `disable_unavailable` and `disable_unknown`.
+
+  The reason is not tidiness. **A button's state is the timestamp of its last press, so a button never pressed reads `unknown`** — `disable_unknown` would have switched off Refresh Now, Reboot Router and Delete All SMS on any installation where they had not been used, including the button a user would reach for to undo a bad reset. Pause Polling and Polling Interval were safe only because nothing currently makes them unavailable; the rule makes them safe by design.
+
+### Notes
+
+- All three cross-project changes are recorded in `reset_entities_action.md`: the `reset_to_default` default, the `saved` field on the snapshot response, and a new section stating the control-entity rule. Every integration in that group exposes buttons, so the last one applies to all four.
+
+## [3.3.10-dev10] - 2026-09-05 - Wi-Fi Sub-Device; Populated Set Corrected; Reset Action Documented
+
+### Summary
+
+Four corrections to work landed in `[3.3.10-dev7]` through `[3.3.10-dev9]`, none of it released. The entity count is unchanged at 121.
+
+### Fixed
+
+- **Boolean entities no longer count as populated from any payload.** A binary sensor or switch value function returns `False` for an empty payload as readily as for a real one, so nine entities entered the populated record on the first poll of a device that had said nothing. `enable_populated` would have turned all nine on regardless of the hardware — including the outdoor-unit LED switch on an indoor router, the entity `[3.3.10-dev7]` taught to report unavailable. Both boolean platforms now declare the router keys they read, and are judged by whether one is present, which is the rule `ZTERouterSwitch.available` already applies.
+- **eNodeB ID is no longer disabled on the MC888.** The overlay was seeded from the diagnostics download, where the field is empty, but the derivation added in the same release fills it from the cell identity. The entry was suppressing a sensor that works.
+
+### Changed
+
+- **Wi-Fi moves to its own sub-device.** The two aggregates were placed on System, and a third Wi-Fi entity would have made that awkward to undo — entity ids change with the sub-device, which is free before a release and not after. The **WiFi** card is empty on the reference MC7010, which answers neither key; that is the cost of the placement and is stated in the README.
+- **The `reset_entities` action is documented.** It shipped with selectors and defaults and no prose at all, so Home Assistant rendered ten unlabelled toggles. Every field now carries a name and a description, and the three that need it most say what they actually do: `include_ever_populated` explains that the two disable options otherwise protect entities that reported a value before, and the two snapshot flags explain what a saved set is.
+
+### Notes
+
+- **Only the boolean platforms were changed.** `msg_total` also reports a value — zero — from an empty payload, because summing no message banks gives zero. Left alone: it is enabled by default, so its presence in the populated record changes nothing, and altering it would reverse a decision recorded in `test_total_sms_treats_an_empty_bank_as_zero_not_as_a_failure`.
+- **Two mock-based tests had stopped testing anything.** A bare `MagicMock` iterates as empty, so the new `state_keys` guard skipped those descriptions before their value functions were called. Both now set `state_keys` explicitly.
+- **The 5G band locks were considered for the MC888 overlay and rejected.** They were thought to be populated only there; the reference MC7010 answers them too, with a different band list, so there is no model-specific case.
+
+## [3.3.10-dev9] - 2026-09-04 - Reset Entities Action Added
+
+### Summary
+
+A user exploring the integration enables everything to see what is there, and then has to click through dozens of entities to get back to a useful set — or delete and re-add the config entry, which destroys custom names, dashboard bindings and long-term statistics. `zte_router_5g.reset_entities` is the bulk operation that avoids both, and it is the path by which the per-model overlay added in `[3.3.10-dev7]` reaches an installation that already exists.
+
+No entity is added or changed. The count stays at 121.
+
+### Added
+
+- **`zte_router_5g.reset_entities`**, registered with `SupportsResponse.OPTIONAL`. Ten parameters, every default the cautious one, and `dry_run` defaults to **true** — the response says what would change without changing it, which is also how an `exclude_entities` list is built: run it, read `changes.to_disable`, carry the handful worth keeping into the real call.
+- **`reset_to_default`** resolves through `entity_defaults.default_enabled`, the same function each platform calls when it builds an entity. Two readers of different sources would disagree, and a reset would undo the model overlay every time it ran.
+- **`enable_populated`** turns on every entity that reports a value from the last poll. It cannot be built from `hass.states`, because a disabled entity has no state; it shares `observations.entity_keys_with_values`, the same rule the populated record is built with, so the two cannot drift apart.
+- **`disable_unavailable`** and **`disable_unknown`**, which by default **exclude** entities recorded as having reported a value on this device. `include_ever_populated` turns that guard off.
+- **`save_snapshot`** and **`restore_snapshot`**, recording the current enabled state as a personal baseline and returning to it later. `reset_to_default` keeps meaning the resolved default, so the two baselines never blur.
+- **`preserve_user_customized`**, leaving alone every entity the user explicitly disabled.
+- **`exclude_entities`**, an entity picker in the action UI.
+
+### Notes
+
+- **The registry has no `enabled_by`.** An entity the user enabled reads `disabled_by: None`, exactly like one that shipped enabled, and Home Assistant's device page enables every entity at once in a single gesture. So "the user chose this" and "the user was exploring" cannot be told apart, and `preserve_user_customized` deliberately does not try — it acts on `disabled_by == USER` only. `exclude_entities` carries specific entities through a reset; a snapshot carries a whole set.
+- **`disabled_by == INTEGRATION` is not user customization**, even where it now differs from the resolved default. That is an entity registered before a default changed, and resetting it is the point: Home Assistant reads `entity_registry_enabled_default` once, at first registration, so this action is the only way a changed default reaches an existing installation.
+- **Ambiguity is refused rather than resolved by precedence.** `reset_to_default` with `restore_snapshot` raises, because both set a baseline and silently preferring one would make the same call mean different things on different installations. `save_snapshot` with any mutating operation raises, because a snapshot records what the user curated rather than what a call is about to make of it. `restore_snapshot` with nothing saved names the fact.
+- **A run is refused while the router is unreachable.** Every state-driven operation reads what entities report right now, and during an outage that is nothing at all — a run would then disable almost everything, and the dry run that preceded it would have looked the same.
+- **The response carries `populated_history`**, saying how many entities are known to have reported a value and since when. On a fresh installation that record is empty, so the safe default filters nothing while the dry run looks identical to one where it filtered a great deal.
+- **The entity key is recovered from the unique id by prefix length**, not by splitting on the first underscore: the prefix is the router IMEI or its host address, and both can contain underscores.
+- A snapshot names only the entities that existed when it was taken, so anything added by a later release falls through to the resolved default and an upgrade still delivers new entities.
+
+### Cross-project
+
+`reset_entities_action.md` was amended before this work: `enable_populated`, `include_ever_populated`, `save_snapshot` and `restore_snapshot` added to the shared schema, the two `disable_*` semantics amended, `populated_history` added to the response shape, combination rules recorded, and `preserve_user_customized` narrowed to the disable direction with the reason. The two new capability-dependent flags are marked verify-per-project rather than assumed.
+
+## [3.3.10-dev8] - 2026-09-04 - Transition History for Six Text Values; Populated Set Recorded
+
+### Summary
+
+A text entity cannot carry a `state_class`, so it produces no long-term statistics: when an operator pushes a firmware update or reassigns a WAN address, Home Assistant holds what it changed from and when for ten days and then forgets. Six values now keep their own record of their changes, and each has a counter that puts those changes into long-term statistics.
+
+The same post-poll step records which entities have ever reported a value on this device, which the `reset_entities` action will use so that disabling everything currently unavailable does not turn off entities that were populated yesterday.
+
+The entity count moves from 115 to 121.
+
+### Added
+
+- **Transition history** for `wa_inner_version`, `wan_ipaddr`, `wan_apn`, `cell_id`, `network_provider` and `opms_wan_mode`, exposed on each sensor as unrecorded `history`, `previous_version` and `last_changed` attributes. Each transition holds a UTC timestamp, the value it came from, the value it became, and the router's uptime counter at the time. Capped at 20 events per key, oldest first.
+- **Six change counters**, `TOTAL_INCREASING`, one per tracked value. **Firmware Changes** is enabled by default — an operator updating a router with no record of it is the case this was built for — and WAN IP, APN, Cell, Provider and WAN Mode Changes are disabled.
+- **A populated set**, recording by entity key which entities this device has ever reported a value for, evaluated through each description's own `value_fn` so aliases, the composite secondary-carrier fields and derived values such as the eNodeB fallback are covered by one rule.
+- **`observations.py`**, holding both records and the single post-poll seam that writes them. It runs only on the success path, so a degraded or failed poll neither records a transition nor forgets a populated entity, and it skips the write entirely when nothing changed — which is almost every poll.
+
+### Measured
+
+The two additions to the tracked set beyond the cross-project list are `network_provider` and `opms_wan_mode`. Both change rarely, both change what the connection does, and both can change without the user acting: an operator reassignment and a bridge-versus-gateway reprovisioning each leave no other trace once the recorder purges.
+
+`cell_id` is kept despite turning over on every handover. The 20-event cap then gives a short rolling window rather than years of history, which answers "have I been handed between cells recently" — a real question, and a different one from what the other five answer.
+
+### Notes
+
+- **The count is stored separately from the history list**, not derived from its length. The list is capped, and the count has to keep rising after the twenty-first change pushes the first one out — which is exactly when the long-term view becomes the only record left.
+- **The first reading of a value is not a change.** It is recorded with `from: null` so the series has a start, and does not increment the counter; otherwise every fresh installation would report one change of everything.
+- **`uptime_at_change` is the router's own counter**, read through the `realtime_time` alias so the MC888 populates it. That counter drifts — 4.34% slow on the reference MC7010 — which makes it a poor clock and a reliable reset indicator, and only the second is being asked of it. It records `null` rather than `0` when a poll carried no uptime, since a zero would read as "just rebooted".
+- **The timestamp is when a change was observed, not when it occurred.** It is bounded by the polling interval, and a change that happens while Home Assistant is down is recorded whenever it next polls.
+- **Both stores are keyed by device** and hold a single key here, one entry fronting one router. The key is the identity `build_device_info` uses, fixed at setup: `entry.data["imei"]` is written once by the config flow and never updated, and the entry's unique id, the device registry and every entity id are built on it, so re-keying on a live reading would detach the history from the entities it describes.
+- **Both stores are advisory.** An unreadable record resolves to "nothing learned" and an unwritable one is skipped, matching the contract the uptime store already holds — no storage fault may fail entry setup or a poll. A fault in one store does not skip the other.
+- The history attributes are listed in `_unrecorded_attributes`. The list grows to twenty entries and is re-emitted on every state write, so recording it would store the same history hundreds of times over; the counters are the recorded half.
+
+## [3.3.10-dev7] - 2026-09-04 - Per-Model Entity Defaults; eNodeB ID Derived; Two Wi-Fi Sensors
+
+### Summary
+
+An entity description carries one `entity_registry_enabled_default`, so identical defaults shipped to every model. On an MC888 Pro that left six enabled sensors permanently blank while RSSI and SINR — the only signal-quality figures that firmware reports — were off. This release adds a per-model overlay, and three entity changes that depend on it or on measurements taken alongside it.
+
+The entity count moves from 113 to 115.
+
+### Added
+
+- **`entity_defaults.default_enabled(description, model)`**, the single resolver for whether an entity is enabled by default. Every platform calls it when building an entity. The `reset_entities` action will call the same function when it restores defaults, because two readers of different sources would disagree and a reset would undo the overlay every time it ran.
+- **`MODEL_OVERLAY`**, matched as a substring of the reported model, longest key first so a variant entry can later override a family one. Family matching is deliberate: the `network_` vocabulary and the `zsidn` session cookie are firmware-family behaviours, and `api._hash` already selects SHA-256 on `MC888` or `MC889` appearing anywhere in the version string.
+- **An MC888 entry**: LTE RSRQ, LTE RSSI, LTE SNR, 5G RSSI, eNodeB ID and WAN Connect Status disabled; RSSI, SINR and the two new Wi-Fi sensors enabled. Seeded from the 2026-09-02 diagnostics download only, never from inference about what a model probably supports.
+- **Wi-Fi Clients Connected** and **Wi-Fi Enabled**, sensors on the System sub-device, disabled by default and enabled by the MC888 overlay, from `wifi_access_sta_num` and `wifi_onoff_state`.
+
+### Changed
+
+- **eNodeB ID is derived when the router leaves it empty.** Measured on the reference MC7010 on 2026-09-04: it answers `cell_id` as `c8751` and `enodeb_id` as `c87`, both hex strings with no prefix, and `0xc8751 >> 8` is `0xc87` with sector `0x51`. The derivation runs only where the field is empty and formats its result the same way, so a derived value is indistinguishable from a native one. It resolves through the cell alias, since the MC888 populates `network_cell_id` and leaves `cell_id` empty.
+- **A switch whose state key is absent reports unavailable rather than Off.** Every switch `value_fn` resolves a missing value to `False`, so a router without the setting — the MC888 Pro is an indoor unit and answers nothing for `ODU_led_switch` — showed a control in a position it had never been told, and would have accepted a write built on it. Availability follows the same alias list the value does, so the data-limit switch stays available on a device answering only the `flux_` spelling.
+- **Two names added to the extended batch**, `wifi_access_sta_num` and `wifi_onoff_state`. It stays within its URL budget at one request.
+
+### Notes
+
+- The overlay takes effect **only at first registration**. Home Assistant reads `entity_registry_enabled_default` when an entity is first added and never again, so an existing installation is unaffected until the `reset_entities` action lands and re-applies the same resolver.
+- The overlay may enable as well as disable. It states the intended suite for a model rather than filtering blanks — plenty of populated fields are low-value and stay off on every model.
+- Only the two Wi-Fi aggregates are read. The four per-`chip` counters would need the `chip1` to 2.4 GHz mapping confirmed, which nothing in any download states, and a band-labelled sensor showing the other band's figure is a wrong reading rather than a missing one.
+- LTE RSSI and LTE SNR stay blank on an MC888 by design. The unqualified `network_rssi` and `network_sinr` describe whichever radio is serving, so they feed the generic RSSI and SINR sensors; putting them into LTE-labelled entities would assert something that firmware does not say.
+
+## [3.3.10-dev6] - 2026-09-04 - Two-Run Comparison Corrected; Router Refresh Cadence Measured
+
+### Summary
+
+`diag_check.py` failed consistently on runs where the second pass lost and re-established its session. Both failures were in the comparison, not in the integration and not in the artefact. Separately, how often the router updates its own signal figures was measured for the first time.
+
+### Fixed
+
+- **The two-run field comparison ignores the discovery notes.** A pass that re-establishes a session writes notes a clean pass does not, and the notes are a positional list, so a longer list read as extra fields. `_VOLATILE` already excluded those paths from the value comparison; `_NOTE_PATH` now excludes them from the field-set comparison as well, so both halves of the check agree. The counts those notes carry are asserted directly by the checks that follow.
+- **Pseudonyms are compared by kind, not by number.** `diagnostics._Tokenizer` allocates tokens in first-seen order and guarantees stability only within one download, so `ip-5` in two files are unrelated values. A pass that read its keys in a different order renumbered them, and three unchanged values were reported as a structural difference. `_comparable()` reduces `ip-N`, `cell-N`, `mac-N` and `phone-N` to their kind before comparison; a token changing kind is still a failure.
+
+### Added
+
+- **`tests/test_diag_check_stability.py`** — nine tests driving `check_stability` directly. Reproducing the fault needs a session loss, which is an environmental event, so the two failing shapes are supplied as inputs instead. Four tests assert what must still fail: a token changing kind, a genuinely extra field, and a real value change under a non-volatile path. Both tolerances were verified to fail against the unfixed comparison rather than only to pass against the fixed one.
+- **`diag_check` announces its expected warnings.** Each pass builds a cold coordinator whose first poll is deferred by design, and on a paused entry that deferred poll logs a warning. Two warnings above a passing run had nothing saying they were normal. The notice is flushed, because the warning it describes goes to stderr unbuffered while stdout is block-buffered when piped to a report file.
+- **`Hardware: Check Diagnostics Download` runs inside `Validate All`**, with a `Diag Check` row in the summary keyed on `Diagnostics check: PASSED`. The task existed and was never run by the full validation, and the summary gave no sign of the omission. The `--sabotage` arm stays manual, since it deliberately breaks the session.
+
+### Measured
+
+**The MC7010 has no fixed internal refresh cycle.** Its signal figures are live to within about a second, and what limits them is reporting resolution rather than staleness. Measured across 345 samples over 360 seconds at a one-second interval, with `realtime_rx_bytes` as the control at 95% of samples:
+
+| Key         | Resolution |     Changed on | Median gap |
+| :---------- | :--------- | -------------: | ---------: |
+| `Z5g_SINR`  | 0.1 dB     | 46% of samples |      2.0 s |
+| `lte_snr`   | 0.1 dB     |            35% |      3.0 s |
+| `lte_rsrq`  | 1 dB       |            19% |      3.0 s |
+| `lte_rssi`  | 1 dB       |            14% |      5.0 s |
+| `lte_rsrp`  | 1 dB       |             7% |      5.0 s |
+| `signalbar` | 0 to 5     |          never |          — |
+
+A fixed cycle was the first reading and it is wrong: gaps spread across one to five seconds with no dominant interval, and one-second gaps are common, which a 2.5-second cycle sampled at 1 Hz cannot produce. Change frequency tracks reporting resolution instead — the 0.1 dB keys change five times as often as the 1 dB keys, and the coarsest figure did not move once in six minutes. A refresh cycle would move every key at the same rate whatever its resolution.
+
+The consequence for consumers is that a poll is a point sample of a moving signal rather than an average, and `signalbar` is heavily smoothed and not a fast indicator.
+
+### Documentation
+
+- **`docs/zte_how_to_access.md`** gains the refresh-cadence section, and its `tr069_` refusal note now records that both sides of the comparison are measurements.
+- **`README.md`** gains one line under the polling controls: each poll captures one instant rather than an average, so a difference between two consecutive readings is usually ordinary variation.
+- **`mc888_pro_compatibility.md`** — a new standing record of what this integration reads on an MC888 Pro, what it does not, and what is parked. Figures are computed from the two downloads and the code rather than inherited from earlier prose.
+
+## [3.3.10-dev5] - 2026-09-04 - CI Bump Ruff PHACC
+
+### Bumps
+
+- **Validate Bump**: Update `ruff` from 0.16.4 to 0.16.5
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.357 to 0.13.363
+
+## [3.3.10-dev4] - 2026-09-02 - MC888 Compatibility - Generic RSSI Sourced; SINR Sensor Added
+
+### Summary
+
+Two parameters from the 2026-09-02 MC888 Pro download, both belonging to the generic half of the `network_` family. The entity count moves from 112 to 113.
+
+### Added
+
+- **SINR**, a sensor on the Signal sub-device, disabled by default, from `network_sinr`. The signal-to-noise figure for whichever radio is serving, reported by the router without naming the technology — distinct from LTE SNR and 5G SINR, which that firmware names separately.
+- **`network_rssi` as the alternate spelling behind RSSI**, a sensor that no device had ever populated.
+
+### Changed
+
+- **Two names added to the extended batch.** It stays within its URL budget at one request.
+
+### Measured
+
+`network_rssi` reports the magnitude without the sign: 73 for −73 dBm. The `RSRQ = RSRP − RSSI + 10·log₁₀(N)` identity settles it. At the reported RSRP of −105 on a 20 MHz carrier, −73 implies an RSRQ of **−12 dB**, mid-range; +73 implies **−158 dB**, which is not a physical value. Inverted, RSRQ can only reach its valid range if RSSI falls between about −82 and −65 dBm, and the reported magnitude sits in the middle of that window. The transform is therefore `−abs()` rather than a negation, so a firmware reporting the sign correctly is left alone instead of being flipped.
+
+The `network_` family splits the way the bare vocabulary does, into names carrying a technology — `network_lte_rsrp`, `network_Z5g_PCI` — and names carrying none: `network_cell_id`, `network_signalbar`, `network_simcard_roam` and these two. The MC888 Pro supports three bearers, so a generic set describing whichever radio is serving is what that firmware needs. That placement is what identifies these two, not the values: the unqualified names are a deliberate group, three of whose members were already adopted in `[3.3.10-dev2]`.
+
+### Notes
+
+- `network_sinr` gets no alias tuple. No bare `sinr` appears in any vocabulary either device publishes, and inventing one to lead with would put a name in the poll that no firmware has been seen to use.
+- Neither name is answered by the reference MC7010, measured against three held canaries, so both entities stay blank there.
+- The MC888 Pro leaves `lte_rsrq`, `lte_rssi` and `lte_snr` empty although its own web pages request all three by name, and the whole bare LTE set is empty there while the `network_` set carries the LTE RSRP. After this release the one signal metric that device reports under no spelling in either namespace is **RSRQ**.
+
+## [3.3.10-dev3] - 2026-09-02 - MC888 Compatibility - 5G Band Locks; SIM Lock State Added
+
+### Summary
+
+Three parameters from the 2026-09-02 MC888 Pro download. Two give the 5G band-lock sensors a source that some device has actually populated — until now both read a name the MC7010 leaves absent and the MC888 Pro leaves empty, so neither had ever shown a value on any hardware seen. The third adds one sensor.
+
+The entity count moves from 111 to 112.
+
+### Added
+
+- **SIM Lock State**, a diagnostic sensor on the System sub-device, disabled by default, from `sim_pin_status`. A SIM waiting on its PIN presents as no service, which otherwise reads as a coverage fault; the attempt counters added in `[3.3.9-dev12]` say how many tries remain but not whether one is being asked for.
+- **`Z5g_lockband_nsa_mask` and `Z5g_lockband_sa_mask`** as the alternate spellings behind **5G NSA Band Lock** and **5G SA Band Lock**. The bare spellings still lead, as in every other alias tuple, even though neither has ever been populated: they are what this integration has always requested, and demoting them would make the reference device's path depend on a name no MC7010 has answered.
+
+### Changed
+
+- **Three names added to the extended batch.** It stays within its URL budget at one request.
+
+### Measured
+
+The two masks read identically on the MC888 Pro, at `1,3,7,8,20,38,41,77,78`. That is the expected state of a router with nothing locked — one free to use every band it supports reports every band it supports under both settings — and not evidence that they report something other than the lock. They are separate settings that agree while nothing is locked, so each sensor resolves its own name and a test asserts they are not crossed, which would otherwise go unnoticed for exactly as long as no lock is set.
+
+The value is a comma-separated band list where the LTE Band Lock Mask sensor carries a hex mask on both devices, so the 5G sensors read differently from their LTE sibling. That is a difference in how the firmware represents the setting, not in which setting is being read.
+
+### Notes
+
+- SIM Lock State publishes its value unmapped. Only `0` has been observed, on a device with an unlocked SIM, and the spelling this firmware uses for a PIN-required state is unknown — a mapped state would have to guess it and would report the wrong state for every value never seen. This follows Network Mode Config in `[3.3.9-dev12]`.
+- All three names are silent on the reference MC7010, measured against three held canaries, so all three entities stay blank there.
+
+## [3.3.10-dev2] - 2026-09-02 - Thirteen MC888 Sensors Given a Source; Second `network_` Vocabulary Adopted
+
+### Summary
+
+A diagnostics download taken on `[3.3.9]` from the MC888 Pro in issue #56 answered 225 parameter names against three held canaries, so an absence in it is a measurement rather than an unproven silence. Thirteen sensors that were blank on that device have a populated source in it under a different spelling. Eleven belong to a second `network_`-prefixed vocabulary, larger than the group adopted in `[3.3.9-dev11]` and not overlapping it; two are the same field under a different prefix each.
+
+No entity is added, removed or renamed. The entity count stays at 111.
+
+### Added
+
+- **Eleven `network_` spellings adopted as fallbacks**, giving Cell ID, LTE PCI, 5G PCI, LTE Band, LTE Channel, 5G Band, 5G Channel, Signal Bars, Registered MCC, Registered MNC and Roaming State a value on the MC888 Pro. Eight back enabled-by-default sensors and ride the core batch; three back disabled ones and ride the extended batch.
+- **Two close matches adopted**: `mc_modem_main_state` for Modem State and `sim_pinnumber` for SIM PIN Attempts Remaining. Neither carries the `network_` prefix, which is why neither was found with the group.
+- **Twenty-seven names added to `KNOWN_NAMES`** with provenance, from the same download.
+
+### Changed
+
+- **The band sensors resolve through alias tuples** rather than a single key each, and the reported band name is now stripped. It is a free-form display string — `LTE BAND 28` on the MC7010, `LTE B3` on the MC888 Pro — and the leading space would otherwise have made the two devices disagree on a value they agree about.
+- **The four `network_` cell-identity spellings are pseudonymized in diagnostics**, alongside the bare spellings they alias. A classified concept that an alias can escape is not classified.
+
+### Measured
+
+Each pair was matched by value as well as by name. The two PCI keys agreed with each other at 167, the cell identity was a plain integer, and the two channel numbers landed in the LTE and NR-ARFCN ranges for the bands reported beside them.
+
+Two names the same download answered are deliberately **not** adopted, and a test asserts they stay unrequested so that a later change cannot wire them up on the strength of already being in the list:
+
+- `network_rssi` read **73** on a device whose RSRP read **-105**. It is a bar or percentage scale, not dBm, and aliasing it to `lte_rssi` would put a positive number into a dBm sensor.
+- `network_sinr` read **3.8**, which is a plausible dB figure under a correct name, but it has been seen on one device once with no second reading to check it against. A wrong SNR is worse than an empty one because it reads as a measurement.
+
+`lte_rsrq` and `lte_rssi` remain empty on that device with no candidate spelling anywhere in the 997 names its web UI publishes, which makes them firmware absences rather than spelling misses.
+
+### Notes
+
+- The eleven `tr069_` names are **not** refused on the MC888 Pro: five answered with values and eight were silent, against a refusal on the reference MC7010. The Operator Provisioned reading added in `[3.3.9-dev12]` therefore distinguishes the two devices, which is the comparison it was built to make.
+- The data-volume write form is composable on that device — all six fields resolve, five through their `flux_` spellings. One of them, `flux_auto_clear_flow_data_switch`, reads `on` rather than `0` or `1`. The form is written read-modify-write, so `on` is echoed back exactly as the router reported it, but it is the only field in that form ever written in a spelling no MC7010 write has exercised.
+
+## [3.3.10-dev1] - 2026-09-02 - Uptime Counter Drift Measured Per Installation; Boot-Time Latch Rebuilt Around It
+
+### Summary
+
+`[3.3.6-dev1]` fixed the boot timestamp sticking across a Home Assistant restart, and introduced a fixed 600-second tolerance to decide whether a stored boot instant still described the current boot. That tolerance was derived from a crystal-drift estimate. It was wrong by three orders of magnitude: the MC7010's uptime counter was subsequently measured at **4.34% slow** across 105 hours of recorded data, so the boot instant derived as `now() − uptime` walks forward eleven minutes over twelve hours of uptime and four and a half hours over four days. A false reboot signal followed on an ordinary restart.
+
+No fixed tolerance can separate that from a genuine missed reboot, because the divergence scales with uptime while a constant does not. The startup path is rebuilt around a drift rate **measured per installation** from consecutive polls, so each router is judged against its own behavior rather than against a number taken from one device.
+
+### Fixed
+
+- **A restart could move the boot timestamp with no reboot having occurred**: the boot-instant comparison used a fixed `BOOT_MATCH_TOLERANCE` of 600 s, and the drift crosses that after about ten hours of uptime. On 2026-09-01 a restart logged a 671-second divergence against a router that had been running twelve hours and had not rebooted. The `Device Uptime` sensor is documented as moving only on a genuine restart, so anything built on it treats a move as a reboot — this was a false reboot report, not a cosmetic step.
+- **The threshold sat inside the drift band**, which is why the symptom was intermittent: an earlier restart the same day reconciled cleanly at 341 seconds.
+
+### Added
+
+- **Per-installation drift measurement**: each pair of consecutive polls yields `1 − Δcounter / Δwall`, folded into two duration-weighted accumulators. The measurement makes no reference to the boot anchor, which is what keeps it honest — the anchor is what the rate is used to judge, so deriving one from the other would be circular. Intervals under 60 s are excluded, where the counter's whole-second resolution dominates, as are intervals with a negative advance, which are reboots rather than drift.
+- **Duration weighting, and a 30-day cap**: an interval spanning a long pause carries proportionally more evidence than one spanning ninety seconds, which falls out of two running sums with no buffer and no smoothing constant. On exceeding the cap both sums are scaled down together, preserving the ratio while letting newer evidence move it — so a firmware update that corrects the router's timer is followed rather than outvoted by history.
+- **The shortfall test** replaces the boot-instant comparison at startup: `expected = stored_counter + elapsed × (1 − rate)`, with a reboot declared when the live counter falls below that by more than `max(300 s, 2% of elapsed)`. The margin scales because the error it absorbs scales — rate-estimate error multiplied by the gap is 43 s over two hours and 3,000 s over a week. It is deliberately conservative: a real gap reboot produces a shortfall measured in hours, because the expected value still carries everything accumulated before the gap.
+- **A plausibility backstop on every poll**: the observed `counter / elapsed` ratio is compared against the ratio the measured rate predicts. The shortfall test runs only at startup and the running comparison only sees drops as they happen; neither watches for an anchor that has _become_ wrong, which is the failure mode this work exists to prevent. A reset counter against a long-standing anchor collapses the ratio toward zero and is caught on the next poll.
+- **`PLAUSIBILITY_TOLERANCE` (5%)**: how far the observed `counter / elapsed` ratio may sit from the ratio the measured rate predicts. A noise budget, not a drift bound — estimation noise is roughly 0.1% per interval at the default poll rate — and independent of the device only because the anchor is drift-corrected.
+- **`MAX_DRIFT` (20%), used in exactly two places**: clamping the measured rate, and the cold-start check where nothing has been learned yet. It is not a drift estimate but an outer bound, set wide because a healthy anchor yields a ratio between 0.8 and 1.0 while a stale one yields nearly zero — an order of magnitude apart, so headroom costs nothing.
+- **The latched instant is corrected for the counter's drift**: `now - counter` is late by exactly the drift accumulated in that epoch, because the counter under-reports the wall time that has passed. A counter reading four days puts the instant four and a half hours late on this device. `boot_time` is now derived as `now - counter / (1 - rate)` once a rate is known, which makes a latch taken long after the event accurate — and, more importantly, keeps `PLAUSIBILITY_TOLERANCE` a noise budget rather than a second drift bound. Before a rate exists the uncorrected instant is used and self-corrects on the first poll after an hour of accumulation.
+- **Two invariants that override everything else**: a counter drop beyond `UPTIME_REBOOT_MARGIN` is a reboot, vetoed by nothing; and a backward move of the boot instant is never a reboot, because a reboot moves the true boot instant forward and accumulated drift cannot exceed the epoch that produced it.
+- **The store now carries `written_at` and the accumulators** alongside `last_uptime`, so a restart resumes measuring rather than starting cold. The rate is derived from the persisted sums rather than stored, so it cannot disagree with its own inputs. Fields are additive and `UPTIME_STORAGE_VERSION` is unchanged: a missing field already means "nothing learned yet". The write cadence is unchanged at twenty minutes plus each latch, and the record grows from roughly 120 bytes to under 250.
+- **Drift published for diagnosis**: measured rate, the per-interval envelope and the accumulated deficit appear as unrecorded attributes on `Integration Health`, and the diagnostics download gains an `uptime` block carrying those plus the anchor, the stored pair and the reconciliation state. Every constant here was set from one device over one week; without this, a field report carries no rate and the only route to one is a recorder database extraction — which is what this investigation had to do.
+- **A warning whenever the boot time moves without a counter drop.** That is the exact signature of this class of defect. Had it existed a week earlier the drift would have been visible on the first restart rather than after five days of forensics.
+- **A log line for a small backward counter step** rather than absorbing it in silence. Nothing establishes that this counter never steps backward, and the 30-second margin would otherwise leave no trace of it.
+
+### Changed
+
+- **`written_at` is normalized like `boot_time`**: both are read back from disk as strings and both are subtracted from `now()`, and subtracting a naive datetime from an aware one raises. A value that will not parse, or parses naive, is treated as absent — which for `written_at` means the record cannot date the gap and the cold-start path applies.
+- **Diagnostics reads two coordinator properties** rather than reaching into private attributes: `uptime_diagnostics` for the rate summary the health sensor shares, and `uptime_state` for the wider picture the download carries.
+
+### Removed
+
+- **`BOOT_MATCH_TOLERANCE` and `BOOT_FUTURE_TOLERANCE`**: no fixed window can do this job, and the two-sided plausibility and cold-start checks cover what the future-value guard did.
+- **The one-poll deferred decision and `_pending_startup_strike`**: they existed to hedge the boot-instant comparison. With detection driven by counter continuity there is nothing to hedge.
+
+### Testing
+
+- **`tests/test_uptime_latch.py`** rewritten, 51 tests. Driven by a simulated router whose counter advances at a configurable rate, so "no false alarm across thirty days" is asserted rather than approximated: 2,700 polls at 0%, 4.34% and −2% drift, and thirty simulated restarts each carrying the store record forward as a real one would. Covers rate convergence at all three rates, the accumulator exclusions and clamp, the cap following a firmware fix, both failure modes, the plausibility backstop against a stale anchor, the backward-move invariant, cold start with and without a healthy anchor, all four guards, and the store's absent, corrupt, malformed and per-entry cases.
+- **The real device replays as a fixture**: `tests/fixtures/uptime_drift_real_series.json`, captured from `home-assistant_v2.db` before the recorder's ten-day purge. Fifty rows across five days with 4.34% drift, one genuine router reboot inside a thirteen-hour gap, and several Home Assistant outages. The test asserts the reboot is found and that the timestamp moves no more than twice across the whole series — which the superseded design would have failed.
+- **Three diagnostics suites updated**: their mocked coordinators predate `uptime_state` and were serializing a `MagicMock` into the download.
+- **Drift rates above the plausibility tolerance are covered.** The rate sweeps run at 0%, 4.34%, 8%, 12% and -2%, and two cases assert the anchor is drift-corrected and that a stale anchor is corrected once rather than repeatedly. This matters: a suite stopping at the measured 4.34% passed an intermediate build in which any device drifting past 5% re-latched on every poll, because the uncorrected anchor offset the observed ratio from the predicted one by exactly the drift rate. Reverting the correction fails eight of these cases.
+- **1,258 tests pass at 100% coverage.** Ruff, mypy, hassfest and the suppression allow-list are clean.
 
 ## [3.3.9] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching
 

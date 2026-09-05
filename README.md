@@ -18,7 +18,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > - **If you have a ZTE 5G/LTE Router in the MC7010, MC801, MC888, MC889, MF266, MF286 or MF289 family** and want to monitor your 5G/LTE connection quality, data usage, and manage SMS messages directly from Home Assistant, then **yes**.
 > - **This integration is for you if** you want:
->   - **Advanced Signal Diagnostics** — SNR, RSRP, RSRQ and RSSI for both LTE and 5G, refreshed as often as every 30 seconds.
+>   - **Advanced Signal Diagnostics** — SNR, RSRP, RSRQ and RSSI for LTE and 5G, as reported by your router, refreshed as often as every 30 seconds.
 >   - **Data Usage Monitoring** — Track data usage and projected usage per month or per bill, and set alerts for high use.
 >   - **SMS Management** — View the most recently received message content and send SMS messages directly in HA.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
@@ -35,6 +35,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
   - [🔍 What You Get](#-what-you-get)
   - [🔘 Controls \& Settings](#-controls--settings)
   - [💬 SMS Actions](#-sms-actions)
+  - [🧹 Reset Entities Action](#-reset-entities-action)
   - [💡 Example Automations](#-example-automations)
   - [📥 Installation](#-installation)
   - [📋 Configuration](#-configuration)
@@ -80,7 +81,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 > [!NOTE]
 >
-> This is a 5G/LTE signal monitor, data use tracker and SMS client. It does not provide LAN/Wi-Fi client device tracking.
+> This is a 5G/LTE signal monitor, data use tracker and SMS client. It does not provide LAN/WiFi client device tracking.
 
 **🌐 Network:**
 
@@ -109,7 +110,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 ### 📡 Advanced 5G/LTE Diagnostics
 
-Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower details, and active carrier bands — as often as every 30 seconds.
+Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower details, and active carrier bands — as often as every 30 seconds. Which metrics your router reports depends on its firmware.
 
 <details>
 
@@ -117,10 +118,10 @@ Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower detail
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-- **Detailed Signal Metrics**: SNR, RSRP, RSRQ and RSSI for both the 5G NR and the LTE anchor cell tower.
+- **Detailed Signal Metrics**: SNR, RSRP, RSRQ and RSSI for the 5G NR and the LTE anchor cell tower, as far as your router reports them — firmware differs on which it fills in.
 - **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active bands. See the [Cell Tower Change Alert](#-cell-tower-change-alert) example.
 - **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use. See the [Signal Quality Alert](#-signal-quality-alert) example.
-- **Per-Carrier and Per-Antenna Detail** _(disabled by default)_: RSRP, RSRQ, SNR and RSSI for the aggregated secondary cell, RSRP for each of the two 5G receivers, and the 5G NSA and SA band locks.
+- **Per-Carrier and Per-Antenna Detail** _(disabled by default)_: RSRP, RSRQ, SNR and RSSI for the aggregated secondary cell, RSRP for each of the two 5G receivers, and the 5G NSA and SA band locks. Confirmed on the MC7010; other models report a subset.
 
 ![Signal Sensors](.github/images/zte_5g_signal_sensors.png)
 
@@ -175,12 +176,18 @@ RSRP, RSRQ and RSSI are negative — **closer to zero is stronger**.
 
 These are **disabled by default** — enable them from the device's Entities tab. Each carries an about note explaining what it shows.
 
+Which of them your router fills in depends on its firmware. Enable the ones you want and see; an entity the router does not report simply stays empty.
+
 | Entity | Shows |
 | :-- | :-- |
 | `CA Secondary Cell RSRP`, `CA Secondary Cell RSRQ`, `CA Secondary Cell SNR`, `CA Secondary Cell RSSI` | The aggregated second carrier, separately from the primary. Its SNR is often the better of the two, which the headline `LTE SNR` does not show |
 | `5G RSRP Antenna 1`, `5G RSRP Antenna 2` | The two 5G receivers separately. A steady gap between them points at placement or an obstruction rather than at the network |
 | `5G NSA Band Lock`, `5G SA Band Lock` | Which 5G bands the router may use, alongside the existing `LTE Band Lock Mask` |
 | `Roaming State`, `Network Mode Config` | Whether the SIM is roaming, and whether the router picks its network mode itself |
+| `RSSI`, `SINR` | Signal strength and signal-to-noise for whichever radio is serving, where the router reports them without naming the technology. On firmware that leaves `LTE RSSI` and `LTE SNR` blank, these two carry those readings — they are not duplicates of the LTE sensors, and enabling them is how you see quality on such a router |
+| `WiFi Clients Connected`, `WiFi Enabled` | How many wireless devices are connected, and whether the radios are on. **Enabled by default** except on the MC7010, which has no WiFi of its own |
+| `Firmware Update State`, `Firmware Update Result` | Whether an update is running, and how the last one ended. Off by default because a working router has nothing to say here |
+| `SIM Lock State`, `SIM PIN Attempts Remaining`, `SIM PUK Attempts Remaining` | Whether the SIM is asking for its PIN, and how many tries are left. A locked SIM otherwise looks like a coverage fault |
 
 ---
 
@@ -353,6 +360,7 @@ This integration features **dynamic polling**, the ability to pause polling comp
 - **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour, default `180` seconds) via a number entity or automation. See the [Dynamic Polling Interval](#-dynamic-polling-interval) example.
 - **Actions Always Fetch**: Pressing **Refresh Now**, making a settings change (switch/select) or an SMS action fetches immediately **even while paused** — only scheduled polls are suppressed. See the [Morning Signal Report](#-morning-signal-report) example.
 - **Standard System Option**: Also honors Home Assistant's **System options > Enable polling for changes** toggle.
+- **Every Poll Is a Point Sample**: Router signal readings move every few seconds, and each poll captures one instant rather than an average.
 
 ![System Configuration Controls](.github/images/zte_5g_system_config.png)
 
@@ -370,7 +378,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **111 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **121 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -380,11 +388,11 @@ This integration provides **111 entities** (depending on your firmware) organize
 
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
-| ⚙️ **System** | 41 | 29 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, Refresh Now, Reboot, Polling Controls | 25, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM PIN and PUK Attempts Remaining |
-| 📶 **Signal** | 50 | 46 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 20, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, Roaming State, Network Mode Config, LTE Band Lock Mask |
+| ⚙️ **System** | 47 | 35 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 30, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
+| 📶 **Signal** | 54 | 50 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
 | 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
-| 🛠️ **Actions** | 4 | — | Send, Delete, Bulk-Delete and List SMS | — |
+| 🛠️ **Actions** | 5 | — | Send, Delete, Bulk-Delete and List SMS, **Reset Entities** | — |
 
 > The full list, with the entity key and default state of every one, is in [`docs/all_sensors.md`](docs/all_sensors.md).
 
@@ -409,6 +417,18 @@ This integration provides **111 entities** (depending on your firmware) organize
 > [!NOTE]
 >
 > Entity Visibility: To keep your Home Assistant UI clean, some entities are disabled by default. You can enable them via the Entities tab in the device settings.
+
+---
+
+> Defaults Match Your Model: Which entities start enabled depends on the router you have. An MC888 Pro reports its signal quality under names an MC7010 does not use, so **RSSI** and **SINR** are on there and off here; an MC7010 has no WiFi of its own, so the two WiFi sensors are off there and on everywhere else. A model nobody has measured gets the standard set. Nothing is hidden — everything is one click away in the Entities tab, and the **Reset Entities** action below moves them in bulk.
+
+---
+
+> Tidying Up After Exploring: The **Reset Entities** action puts entity enabled states back in bulk, so you never have to click through dozens of them. It **previews by default** — run it, read the list, then run it again with `dry_run: false` to apply. `reset_to_default` returns to the curated set for your model, `disable_unavailable` and `disable_unknown` clear out what your router does not report, `enable_populated` turns on everything it does, and `exclude_entities` carries a handful through untouched. `save_snapshot` records your own set so `restore_snapshot` can bring it back later. Entities that were reporting values before are protected from the disable operations unless you set `include_ever_populated`.
+
+---
+
+> Change History: Six values that change rarely but matter — firmware version, WAN IP, APN, cell ID, network provider and WAN mode — keep their own record of what they changed from and when, on the sensor's `history` attribute. Home Assistant's own history forgets a text value after ten days, so this is what lets you see an operator's silent firmware update months later. **Firmware Changes** is a companion counter, enabled by default, that puts those changes on a long-term statistics graph; the other five counters are disabled by default.
 
 ---
 
@@ -836,6 +856,82 @@ See [Alert on incoming SMS](#-alert-on-incoming-sms) example.
 </details>
 
 <br>
+
+## 🧹 Reset Entities Action
+
+`zte_router_5g.reset_entities` manages which entities are enabled, in bulk. It exists because exploring an integration means enabling everything, and getting back to a useful set otherwise means clicking through dozens of entities or deleting and re-adding the config entry — which destroys custom names, dashboard bindings and long-term statistics.
+
+**It previews by default and changes nothing until you say so.** Every run returns what it would do; only `dry_run: false` applies it.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+### What each option does
+
+| Option | Default | Effect |
+| :-- | :-- | :-- |
+| `dry_run` | `true` | Report what would change and change nothing |
+| `reset_to_default` | `false` | Return every entity to the state this integration ships **for your router model** |
+| `enable_populated` | `false` | Turn on every entity your router currently supplies a value for |
+| `disable_unavailable` | `false` | Turn off entities showing Unavailable |
+| `disable_unknown` | `false` | Turn off entities showing Unknown |
+| `include_ever_populated` | `false` | Let the two Disable options also act on entities that have reported a value before |
+| `preserve_user_customized` | `false` | Leave alone any entity **you** switched off |
+| `exclude_entities` | empty | Entities to leave exactly as they are, whatever else runs |
+| `save_snapshot` | `false` | Record which entities are enabled now, as your own set |
+| `restore_snapshot` | `false` | Return to the set you saved earlier |
+
+Nothing happens with every option at its default — a choice has to be made deliberately.
+
+### The usual sequence
+
+Enable everything from the device page to see what your router offers, then:
+
+```yaml
+# 1. See what going back to the defaults would do.
+action: zte_router_5g.reset_entities
+data:
+  reset_to_default: true
+```
+
+Read `changes.to_disable` in the response. If two of them are worth keeping, carry them through:
+
+```yaml
+# 2. Apply it, keeping the two you want.
+action: zte_router_5g.reset_entities
+data:
+  reset_to_default: true
+  dry_run: false
+  exclude_entities:
+    - sensor.zte_5g_signal_lte_band_lock_mask
+    - sensor.zte_5g_system_sim_iccid
+```
+
+Or, once your set is how you want it, save it and return to it whenever:
+
+```yaml
+action: zte_router_5g.reset_entities
+data:
+  save_snapshot: true
+  dry_run: false
+```
+
+### Two protections worth knowing about
+
+**Entities that have reported a value before are not disabled** by `disable_unavailable` or `disable_unknown`. Your 5G sensors are Unavailable whenever the router drops to 4G, and turning them off then is almost never what you meant — nothing turns them back on when 5G returns. Set `include_ever_populated: true` if you genuinely want them gone.
+
+**Controls are never disabled by those options either.** A button's state is the time it was last pressed, so one you have never pressed reads Unknown — without this, `disable_unknown` would switch off Refresh Now, Reboot Router and Delete All SMS, including the button you would reach for to undo it.
+
+### What it refuses
+
+The action stops with an error rather than guessing when the request has no single meaning: `reset_to_default` and `restore_snapshot` together, since each sets a different starting point; `save_snapshot` alongside anything that changes things, since a snapshot records what you have rather than what a call is about to make of it; `restore_snapshot` with nothing saved; and any run while the router is unreachable, since what each entity is reporting cannot be judged during an outage.
+
+</details>
+
+---
 
 ## 💡 Example Automations
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from calendar import monthrange
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from homeassistant.const import CONF_HOST
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -289,6 +289,57 @@ class ZTEAboutEntity:
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Default: expose only the ``about`` note when one is set."""
         return self._with_about(None)
+
+
+class _HasGroup(Protocol):
+    """The one field `ZTEDeviceEntity` reads from an entity description.
+
+    Declared read-only. Every description here is a frozen dataclass, and a
+    protocol member written as a plain attribute requires a settable one.
+    """
+
+    @property
+    def group(self) -> str:
+        """Return the sub-device this entity belongs to."""
+
+
+class ZTEDeviceEntity:
+    """Mixin resolving an entity's sub-device from its description group.
+
+    Ten entity classes across six platform modules each carried a private copy
+    of this property, byte-identical. One of them was written without it:
+    `ZTEOperatorProvisionedSensor` registered against the config entry with no
+    device at all, appearing in the entity list, counted in the integration's
+    total, and shown on none of the device cards. Every copy was an
+    opportunity for that omission, and inheriting one removes the opportunity.
+
+    **The contract this mixin depends on but does not create.** It reads
+    ``self.coordinator``, ``self._entry`` and ``self.entity_description.group``
+    — the coordinator from ``CoordinatorEntity``, the entry and the
+    description set by the entity's own ``__init__``. A class that inherits
+    this without setting the last two will fail at first state write, which
+    `test_every_live_entity_belongs_to_a_device` reports rather than letting
+    it reach a device card.
+
+    List it **before** the platform base, as with ``ZTEAboutEntity``, so this
+    property wins over any the platform supplies.
+    """
+
+    # The contract, declared rather than assumed. These are annotations only —
+    # nothing is assigned, so there is no runtime effect and no interference
+    # with the platform bases that provide them. Stating them here is what
+    # lets a class inheriting this mixin without setting `_entry` fail type
+    # checking instead of failing at first state write.
+    coordinator: ZTERouterDataUpdateCoordinator
+    _entry: ConfigEntry
+    entity_description: _HasGroup
+
+    @property
+    def device_info(self) -> DeviceInfo:
+        """Return device information for this entity's sub-device."""
+        return build_device_info(
+            self.coordinator, self._entry, self.entity_description.group
+        )
 
 
 def build_device_info(

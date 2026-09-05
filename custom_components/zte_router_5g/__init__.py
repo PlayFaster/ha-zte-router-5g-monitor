@@ -33,6 +33,11 @@ from .coordinator import (
     ZTERouterDataUpdateCoordinator,
 )
 from .helpers import is_gsm7
+from .observations import (
+    HISTORY_STORAGE_VERSION,
+    OBSERVED_STORAGE_VERSION,
+)
+from .reset_entities import async_reset_entities
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -62,6 +67,31 @@ SERVICE_DELETE_ALL_SMS_SCHEMA = vol.Schema(
         vol.Optional("keep_last", default=0): vol.All(
             vol.Coerce(int), vol.Range(min=0, max=50)
         ),
+    }
+)
+
+SERVICE_RESET_ENTITIES_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entry_id"): str,
+        # Every default is the cautious one. `dry_run` in particular: this
+        # action can disable dozens of entities in a call, and a user reading
+        # the list first is the whole safety model.
+        vol.Optional("dry_run", default=True): bool,
+        # False, so that pressing Perform Action with nothing chosen plans
+        # nothing. A default of true meant an untouched form ran a real
+        # operation, and the dry-run default then protected a choice the user
+        # had not made.
+        vol.Optional("reset_to_default", default=False): bool,
+        vol.Optional("enable_populated", default=False): bool,
+        vol.Optional("disable_unavailable", default=False): bool,
+        vol.Optional("disable_unknown", default=False): bool,
+        vol.Optional("include_ever_populated", default=False): bool,
+        vol.Optional("preserve_user_customized", default=False): bool,
+        vol.Optional("exclude_entities", default=list): vol.All(
+            cv.ensure_list, [cv.entity_id]
+        ),
+        vol.Optional("save_snapshot", default=False): bool,
+        vol.Optional("restore_snapshot", default=False): bool,
     }
 )
 
@@ -357,6 +387,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def _handle_get_sms_list(call: ServiceCall) -> dict[str, Any]:
         return await async_get_sms_list(hass, call)
 
+    async def _handle_reset_entities(call: ServiceCall) -> dict[str, Any]:
+        return await async_reset_entities(
+            hass, _get_coordinator(hass, call.data), dict(call.data)
+        )
+
     hass.services.async_register(
         DOMAIN,
         "send_sms",
@@ -384,6 +419,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         _handle_get_sms_list,
         schema=SERVICE_GET_SMS_LIST_SCHEMA,
         supports_response=SupportsResponse.ONLY,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        "reset_entities",
+        _handle_reset_entities,
+        schema=SERVICE_RESET_ENTITIES_SCHEMA,
+        # OPTIONAL rather than ONLY: a user who has read a dry run wants to
+        # apply it from an automation without handling a response.
+        supports_response=SupportsResponse.OPTIONAL,
     )
 
     return True
@@ -451,6 +496,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # record leaves the counter-regression cross-check disabled and the
     # boot-instant check fully functional.
     await coordinator.async_load_stored_uptime()
+    await coordinator.observations.async_load()
 
     # Remember which non-live options this entry was set up with, so the update
     # listener can tell a connection change (reload) from a tuning change
@@ -572,6 +618,14 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await Store(
         hass, UPTIME_STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}_uptime"
     ).async_remove()
+
+    # The transition history and the populated set, same reasoning. Built from
+    # `entry.entry_id` rather than from the coordinator, which is gone by now.
+    for version, suffix in (
+        (HISTORY_STORAGE_VERSION, "history"),
+        (OBSERVED_STORAGE_VERSION, "observed"),
+    ):
+        await Store(hass, version, f"{DOMAIN}_{entry.entry_id}_{suffix}").async_remove()
 
     for name in (*REPAIR_NAMES, *RETIRED_REPAIR_NAMES):
         ir.async_delete_issue(hass, DOMAIN, f"{entry.entry_id}_{name}")

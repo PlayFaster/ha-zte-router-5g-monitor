@@ -80,8 +80,19 @@ IP_KEYS = {"wan_ipaddr", "lan_ipaddr", "ipv6_wan_ipaddr"}
 # `sensor._ALIAS_5G_PCI`. It was requested and published untokenized while its
 # sibling was pseudonymized, which `test_every_classified_concept_covers_all
 # _its_aliases` now prevents: an alias of a classified concept is invisible to
-# a set that enumerates by exact name.
-CELL_KEYS = {"cell_id", "enodeb_id", "lte_pci", "nr5g_pci", "Z5g_CELL_ID"}
+# a set that enumerates by exact name. The `network_` spellings are the MC888
+# Pro's, and they reach this set the same way.
+CELL_KEYS = {
+    "cell_id",
+    "enodeb_id",
+    "lte_pci",
+    "nr5g_pci",
+    "Z5g_CELL_ID",
+    "network_cell_id",
+    "network_Z_PCI",
+    "network_Z5g_PCI",
+    "network_Z5g_CELL_ID",
+}
 
 # The SMS block is the highest-sensitivity content in the payload: it is data
 # about a *third party* who never consented to appear in a bug report.
@@ -331,6 +342,10 @@ async def async_get_config_entry_diagnostics(
             # Section 19 state: the most useful thing in the file when the
             # complaint is "it stopped working and I don't know why".
             "health": deepcopy(coordinator.health_snapshot),
+            # The boot-time latch and the drift it has measured. No
+            # device data and nothing to redact: counters, a rate and
+            # two timestamps.
+            "uptime": _guarded("uptime", lambda: coordinator.uptime_state, errors),
             "endpoint_failures": coordinator.endpoint_failures,
         },
         "data": payload,

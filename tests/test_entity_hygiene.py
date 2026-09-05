@@ -133,6 +133,30 @@ async def test_a_new_sms_logs_nothing_that_identifies_the_sender(
     assert "New SMS received" in caplog.text
 
 
+def test_every_boolean_entity_declares_the_keys_it_reads() -> None:
+    """A boolean value function cannot report whether the router answered.
+
+    It returns `False` for an empty payload just as readily as for a real one,
+    so the populated record — which decides whether `reset_entities` may
+    disable an entity that is blank today — has to be told which keys each of
+    these is built from.
+    """
+    from custom_components.zte_router_5g.binary_sensor import BINARY_SENSORS
+    from custom_components.zte_router_5g.switch import SWITCH_TYPES
+
+    undeclared = sorted(
+        d.key
+        for types in (BINARY_SENSORS, SWITCH_TYPES)
+        for d in types
+        if d.value_fn is not None and not d.state_keys
+    )
+
+    assert not undeclared, (
+        f"boolean entities with no state_keys: {undeclared}. Without them "
+        "these count as populated from any payload, including an empty one."
+    )
+
+
 def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
     """Section 14: the default is total — no attribute is recorded.
 
@@ -161,6 +185,13 @@ def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
         # Projection context. `cycle_day` and `cycle_start` are static within a
         # cycle and the other two describe how much of the state rests on
         # observed data — none of it is a measurement whose history is wanted.
+        # Transition history for the six tracked text values. A list that
+        # grows to twenty entries and is re-emitted on every state write, so
+        # recording it would store the same history over and over. The change
+        # counters are the recorded half of that feature.
+        "history",
+        "previous_version",
+        "last_changed",
         "confidence",
         "basis",
         "cycle_day",
@@ -442,6 +473,74 @@ async def test_no_sensor_uses_the_total_state_class(hass: HomeAssistant) -> None
     assert checked >= 3, f"sweep only inspected {checked} sensors — fixture is stale"
 
 
+async def test_every_live_entity_belongs_to_a_device(
+    hass: HomeAssistant,
+) -> None:
+    """No entity may be registered without a device.
+
+    `ZTEOperatorProvisionedSensor` shipped without a `device_info` property.
+    Home Assistant registered it against the config entry with no device, so
+    it appeared in the entity list, was counted in the integration's total,
+    and showed on none of the five device cards. Nothing in the suite noticed:
+    every other test asserts on descriptions or on entity state, and none of
+    them looked at where an entity lives.
+
+    Each bespoke entity class in this integration declares `device_info` by
+    hand rather than inheriting it, so the omission can recur. This is the
+    check that catches it.
+    """
+    async with _live_entities(hass) as entities:
+        checked = 0
+        homeless: list[str] = []
+        for entity in entities:
+            checked += 1
+            info = entity.device_info
+            if not info or not info.get("identifiers"):
+                homeless.append(type(entity).__name__)
+
+        assert checked > 100, f"only {checked} entities swept"
+        assert not homeless, (
+            "entities registered with no device: "
+            + ", ".join(sorted(set(homeless)))
+            + ". Add a `device_info` property returning `build_device_info`."
+        )
+
+
+def test_device_info_is_declared_once() -> None:
+    """One inherited implementation, not one copy per entity class.
+
+    Ten byte-identical copies across six modules is how
+    `ZTEOperatorProvisionedSensor` came to have none: each copy was somewhere
+    the property could be left out. The sweep above catches the omission;
+    this stops it being available.
+    """
+    import inspect
+
+    from custom_components.zte_router_5g import (
+        binary_sensor,
+        button,
+        number,
+        select,
+        sensor,
+        switch,
+    )
+
+    declaring = [
+        name
+        for module in (binary_sensor, sensor, switch, select, number, button)
+        for name, obj in vars(module).items()
+        if inspect.isclass(obj)
+        and obj.__module__ == module.__name__
+        and "def device_info" in inspect.getsource(obj)
+    ]
+
+    assert not declaring, (
+        "entity classes declaring their own device_info: "
+        + ", ".join(sorted(declaring))
+        + ". Inherit `helpers.ZTEDeviceEntity` instead."
+    )
+
+
 async def test_every_live_entity_has_an_icon_or_a_device_class(
     hass: HomeAssistant,
 ) -> None:
@@ -507,6 +606,23 @@ async def test_every_live_entity_has_an_icon_or_a_device_class(
 # reason for each finding, per the chore. Copying Huawei's entries would have
 # been meaningless: they describe that project's library.
 ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
+    ("observations.py", "noqa: BLE001, S112"): (
+        "The populated set is built by evaluating every entity description's "
+        "`value_fn` against the poll, purely to note which entities reported "
+        "something. A description that raises on an unusual payload is that "
+        "entity's own fault and is surfaced where the entity lives; letting "
+        "it escape here would stop a poll from being recorded at all. Silent "
+        "rather than logged on purpose: the same message would repeat every "
+        "polling interval for as long as the condition lasted."
+    ),
+    ("observations.py", "noqa: BLE001"): (
+        "Both stores are advisory, matching the contract the uptime store "
+        'already holds: an unreadable record resolves to "nothing learned" '
+        "and an unwritable one is skipped, because no storage fault may fail "
+        "entry setup or a poll. Narrowing these would let an unanticipated "
+        "exception type take down a coordinator that works perfectly well "
+        "with no history at all."
+    ),
     ("diagnostics.py", "noqa: BLE001"): (
         "`_guarded` catches `Exception` because Home Assistant does not wrap "
         "`config_entry_diagnostics` — an exception escaping this function is "

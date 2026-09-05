@@ -116,6 +116,30 @@ _VOLATILE = re.compile(
     r"|^/_elapsed$|^/discovery/notes/)"
 )
 
+# A pseudonym assigned by `diagnostics._Tokenizer`. Its docstring is explicit
+# that tokens "are allocated in first-seen order" and stable "within one
+# download", so `ip-5` in one file and `ip-5` in the next are not the same
+# value and carry no relationship at all. Comparing them across two runs
+# compares allocation order: a pass that reads its keys in a different order —
+# after a session loss, say — renumbers them and reports a permutation as a
+# difference. Only the *kind* survives across files, so only the kind is
+# compared.
+_TOKEN = re.compile(r"^(ip|cell|mac|phone)-\d+$")
+
+# Leaf paths of the free-text notes list. Kept beside `_VOLATILE`,
+# which excludes the same paths from the value comparison.
+_NOTE_PATH = re.compile(r"^/discovery/notes/\d+$")
+
+
+def _comparable(value: Any) -> Any:
+    """Return a value with any cross-file-unstable pseudonym reduced to its kind."""
+    if isinstance(value, str):
+        match = _TOKEN.match(value)
+        if match:
+            return f"{match.group(1)}-*"
+    return value
+
+
 # An identifier that reached the file unredacted. The tokenizer replaces these
 # with stable pseudonyms, so a raw one is a sanitization failure and not a
 # cosmetic one. IMSI is 15 digits and ICCID 19-20; the reference MC7010 serves
@@ -554,17 +578,27 @@ def check_stability(
     left = dict(_leaves(first))
     right = dict(_leaves(second))
 
+    # The notes are a free-text list compared by position, and a pass that
+    # re-establishes a session emits notes a clean pass does not. That makes
+    # the list longer, which as leaf paths reads as extra fields. The value
+    # comparison below already excludes them for the same reason; excluding
+    # them here as well keeps the two halves of this check consistent. What
+    # the notes carry is asserted directly by the count checks that follow.
+    fields_left = {path for path in left if not _NOTE_PATH.match(path)}
+    fields_right = {path for path in right if not _NOTE_PATH.match(path)}
+
     report.record(
-        set(left) == set(right),
+        fields_left == fields_right,
         "[4] both runs produce the same set of fields",
-        f"only in first: {sorted(set(left) - set(right))[:3]}, "
-        f"only in second: {sorted(set(right) - set(left))[:3]}",
+        f"only in first: {sorted(fields_left - fields_right)[:3]}, "
+        f"only in second: {sorted(fields_right - fields_left)[:3]}",
     )
 
     structural = [
         path
         for path in set(left) & set(right)
-        if left[path] != right[path] and not _VOLATILE.search(path)
+        if _comparable(left[path]) != _comparable(right[path])
+        and not _VOLATILE.search(path)
     ]
     report.record(
         not structural,
@@ -737,6 +771,30 @@ async def sabotage_check(gap: int) -> int:
     return 1 if report.failed else 0
 
 
+def _announce_expected_warnings() -> None:
+    """Say in advance which log lines this run is expected to emit.
+
+    Each pass builds a cold coordinator, whose first poll returns nothing:
+    startup reconciliation defers one cycle, and on a paused entry that
+    deferred poll takes the safe startup bypass and logs a warning. Both are
+    normal here and neither is a fault, but a reader meeting two warnings
+    above a passing run has no way to know that. Naming them first costs two
+    lines and removes the question.
+    """
+    print(
+        _dim(
+            "  expect one 'Initial fetch failed while paused' warning "
+            "per run: each pass starts a cold coordinator, whose first "
+            "poll is deferred by design"
+        ),
+        # Flushed because the warning it describes is written to stderr,
+        # which is unbuffered, while stdout is block-buffered when piped to a
+        # report file. Without this the notice lands after the thing it was
+        # meant to introduce.
+        flush=True,
+    )
+
+
 async def main() -> int:
     """Produce the artefact, check it, and return a shell exit code."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -796,6 +854,7 @@ async def main() -> int:
         return await sabotage_check(args.gap)
 
     report = Report()
+    _announce_expected_warnings()
     print("producing diagnostics against the live router")
     first = await produce("run 1")
 

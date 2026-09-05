@@ -15,7 +15,7 @@ What Home Assistant versions this integration supports and the status of any cha
 | Type | Version / Status | Note |
 | :-- | :-- | :-- |
 | **Minimum** | **2024.8.0** | Declared in `README.md` |
-| **Tested against** | **2026.8.0** | Development container environment |
+| **Tested against** | **2026.9.0** | Development container environment |
 | **Enforced by** | `hacs.json` | `"homeassistant": "2024.8.0"` |
 | **Functional floor** | `ConfigFlowResult`, action schemas | Established in HA 2024.8 |
 

@@ -87,6 +87,18 @@ Data flows in one direction: **`api.py` → `coordinator.py` → platform entiti
 
 - **`diagnostics.py`** — sanitizes rather than key-redacts. `coordinator.data` is the vendor payload verbatim, so it blanks credentials/subscriber IDs/carrier identity, pseudonymizes IPs, cell IDs and SMS senders to stable tokens, summarizes `APN_config*` to its shape, and sweeps everything else for IP/MAC-shaped strings. Identifiers are matched by shape and position only — **never** seed it with real values. Verify changes against a regenerated download with an SMS present, not by reading the code.
 
+### Three modules added in v3.3.10
+
+- **`entity_defaults.py` — one answer to "is this enabled by default", and both callers use it.** `default_enabled(description, model)` overlays a per-model set on the description's own flag. Every platform calls it when building an entity; `reset_entities` calls it when restoring defaults. **Never read `entity_registry_enabled_default` directly in either place** — two readers of different sources disagree, and a reset would undo the overlay every time it ran. It is also the only route by which a changed default reaches an existing installation: Home Assistant reads that flag once, at first registration, and never again.
+
+  The overlay may **enable as well as disable**. Being populated is not the criterion in either direction — plenty of populated fields are low-value and stay off everywhere. Seed it from a diagnostics capture, never from a guess about what a model probably supports.
+
+- **`observations.py` — one post-poll step, on the success path only.** Records transition history for six text values that produce no long-term statistics, and the set of entities that have ever reported a value on this device. A degraded or failed poll neither records a transition nor forgets a populated entity, and the write is skipped entirely when nothing changed — which is almost every poll.
+
+  **A boolean entity answers `False` for any input, an empty payload included**, so `entity_keys_with_values` judges binary sensors and switches by whether a key they declare in `state_keys` is present. Without that, nine entities entered the populated record on the first poll of a device that had said nothing.
+
+- **`reset_entities.py` — the bulk enable/disable action, previewing by default.** Its description lookup is keyed by `(platform, key)`, not by key: `net_select` exists as both a sensor and a select with identical unique ids, and a flat map resolved one against the other's default. **Controls are in scope for the baseline operations and out of scope for the three state-driven ones** — a button's state is the time it was last pressed, so one never pressed reads `unknown`, and `disable_unknown` would otherwise switch off Refresh Now, Reboot Router and Delete All SMS.
+
 ### Device Identity Model ("Flat Identity")
 
 Hardware metadata (`model`, `sw_version`, `imei`) is read once and stored in `entry.data`, so device info is stable from boot before the first poll completes. Entities are grouped into sub-devices (System / Signal / Data / SMS) all linked to a `{prefix}_system` root, where `prefix` is the IMEI (or `host_{host}` fallback). The System device is registered early in `async_setup_entry` to avoid parent-link warnings.
@@ -109,6 +121,16 @@ There is **no** `async_migrate_entry`, which is safe only because the first publ
 ## Key Patterns & Conventions
 
 Shared conventions (ruff/mypy strictness, `_LOGGER` prefixing, `PARALLEL_UPDATES`, `translation_key`, icons, exception tuple syntax, markdown emoji rules) are in [shared conventions §4–5](.shared/dev_std/agent_conventions.md). Nothing in this project deviates.
+
+### `device_info` is inherited, never declared on an entity class
+
+Every entity class inherits `helpers.ZTEDeviceEntity`, which resolves the sub-device from `entity_description.group`. **Do not write a `device_info` property on a new entity class.**
+
+Ten classes across six modules once carried a byte-identical copy, and one — `ZTEOperatorProvisionedSensor` — was written without it. Home Assistant does not reject an entity with no `device_info`: it registered against the config entry with no device, appeared in the entity list, was counted in the integration's total, and showed on none of the device cards. Nothing in the suite noticed, because every test asserted on descriptions or on entity state and none read the device registry.
+
+`test_every_live_entity_belongs_to_a_device` catches the omission and `test_device_info_is_declared_once` stops it being available. Both are in `tests/test_entity_hygiene.py`.
+
+The mixin declares the contract it depends on — `coordinator`, `_entry`, `entity_description` — as annotations rather than suppressing the type errors, so a class inheriting it without setting `_entry` fails type checking rather than failing at first state write.
 
 ### Entity naming — do not repeat the sub-device word
 
@@ -156,6 +178,9 @@ This project has **more sweep tests than any other in the family** — a consequ
 
 | Add or change this | This fails | Do this |
 | :-- | :-- | :-- |
+| An entity class of any kind | `test_every_live_entity_belongs_to_a_device`, `test_device_info_is_declared_once` | Inherit `helpers.ZTEDeviceEntity`. Never write your own `device_info` |
+| A binary sensor or switch | `test_every_boolean_entity_declares_the_keys_it_reads` | Declare `state_keys`. A boolean value function answers `False` for an empty payload, so it cannot say whether the router replied |
+| An entry in `MODEL_OVERLAY` | `test_every_overlay_key_names_a_real_entity`, `test_no_overlay_entry_repeats_the_description_default` | Name a real entity key, and only where the model differs from the shipped default |
 | A sensor with a unit or `state_class` | `test_every_numeric_sensor_has_a_guard_band` | Declare `min_limit` / `max_limit`, or add the key to the unguarded allow-list **with a reason**. Then update `docs/value_min_max.md` — §6 requires it to match the code in both directions. `test_unguarded_allowlist_has_no_dead_entries` fails if an exemption outlives its sensor. |
 | Any sensor at all | `test_no_sensor_uses_the_total_state_class` | Use `TOTAL_INCREASING`. `ALLOWED_TOTAL_STATE_CLASS` is deliberately **empty**, so adding an entry is a reviewable act rather than a typo. Plain `TOTAL` walks long-term statistics backwards on every billing rollover. |
 | Any entity | `test_every_live_entity_has_an_icon_or_a_device_class` | Add an `icons.json` entry **under that entity's own platform**, unless it carries a `device_class`. A live sweep, because descriptions live in a mix of tuples and module-level singletons. |

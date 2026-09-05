@@ -48,7 +48,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Recent Msg | Sensor | `msg_recent` | The most recently received message. Sender, date and storage index are in the attributes; the index is what the delete action needs to remove this specific message. |
 | Total Msg | Sensor | `msg_total` | Total messages held across every storage area - router memory and SIM, inbox, sent and drafts. The breakdown per area is in this sensor's attributes. Storage filling up stops new messages arriving. |
 
-## Signal (49)
+## Signal (53)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -57,10 +57,12 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Network Mode Selection | Select | `net_select` | Which mobile technologies the router may use. These are the router's own web page settings under different names: 4G_AND_5G is Auto, LTE_AND_5G is 5G NSA, Only_5G is 5G SA, Only_LTE is 4G Only. Auto lets it fall back when a signal weakens; the Only options lock it. Locking to 5G can drop the connection entirely where 5G coverage is marginal, so prefer Auto unless you are testing. |
 | 5G RSRP Antenna 1 | Sensor | `5g_rsrp_antenna_1` | Reference signal strength at the first 5G receiver, in dBm. The two receivers see the same cell through different antennas, so a persistent gap between them points at placement or an obstruction rather than at the network. |
 | 5G RSRP Antenna 2 | Sensor | `5g_rsrp_antenna_2` | Reference signal strength at the second 5G receiver, in dBm. Compare with the first: a steady difference is an antenna or placement effect, not a change in coverage. |
+| APN Changes | Sensor | `apn_changes` | How many times the APN in use has changed. Usually zero - a change you did not make points at the operator reprovisioning the connection. |
 | CA Secondary Cell RSRP | Sensor | `ca_scell_rsrp` | Reference signal strength on the aggregated secondary carrier, in dBm. Carrier aggregation adds a second band alongside the primary one; this is how strong that second band is. |
 | CA Secondary Cell RSRQ | Sensor | `ca_scell_rsrq` | Reference signal quality on the aggregated secondary carrier, in dB. Typically -10 or better is good, below -15 poor. |
 | CA Secondary Cell RSSI | Sensor | `ca_scell_rssi` | Total received power on the aggregated secondary carrier, in dBm - wanted signal, interference and noise together. |
 | CA Secondary Cell SNR | Sensor | `ca_scell_snr` | Signal-to-noise ratio on the aggregated secondary carrier, in dB. Worth comparing against the primary: the secondary band often carries the cleaner signal, which the headline SNR does not show. |
+| Cell Changes | Sensor | `cell_changes` | How many times the router has been handed to a different 4G cell. Unlike the others this moves on its own as the network balances load, so the useful reading is the rate rather than the total - a step change in handovers per day is worth looking at. |
 | Cell ID | Sensor | `cell_id` | The identifier of the 4G cell currently serving the router. A change means you have been handed to a different cell, which often explains a sudden change in speed or signal. |
 | eNodeB ID | Sensor | `enodeb_id` | The identifier of the 4G base station (eNodeB) serving you - the mast itself, rather than the individual sector, which is the Cell ID. A change here means you have moved to a different mast. |
 | LTE Band Lock Mask | Sensor | `lte_band_lock` | Hexadecimal bitmask of the 4G bands the modem is permitted to use. Bit 0 is band 1, so bit 2 is band 3 and bit 19 is band 20 - 0x60088080045 means bands 1, 3, 7, 20, 28, 32, 42 and 43. Use it to confirm which bands a band lock has left available; locking to one the router cannot see leaves it with no service. |
@@ -86,12 +88,14 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G PCI | Sensor | `nr5g_pci` | Physical Cell Identity for the 5G cell, from 0 to 1007. A change means the router has been handed to a different 5G sector or mast. |
 | 5G SA Band Lock | Sensor | `nr5g_sa_band_lock` | The 5G bands the router may use in standalone mode, where 5G runs without a 4G anchor. |
 | Bridge Mode | Sensor | `ppp_status` | Whether the router is currently passing the connection straight through in bridge mode - connected means it is. This is the live session, not the configuration: WAN Operating Mode reports which mode the router is set to, bridge or gateway, while this reports whether that session is actually up. It can show disconnected while the radio signal is still strong, which points at an APN or account problem rather than coverage. |
+| Provider Changes | Sensor | `provider_changes` | How many times the registered network operator has changed. On a fixed installation this should be zero unless you have changed SIM or the SIM has roamed. |
 | Roaming MCC | Sensor | `rmcc` | Mobile Country Code of the network the router is registered to, as opposed to the modem's own view. It differs from the modem MCC while roaming. |
 | Roaming MNC | Sensor | `rmnc` | Mobile Network Code of the registered network. Compare with the modem MNC to tell whether the router is roaming. |
 | Roaming State | Sensor | `roaming_state` | Whether the SIM is on its home network or roaming. Roaming can carry different charges and different speed limits. |
 | Legacy RSCP | Sensor | `rscp` | Received Signal Code Power, in dBm - a 3G/UMTS measurement. Only meaningful if the router has fallen back to 3G, which on a 5G CPE usually signals a coverage problem. |
 | Legacy RSSI | Sensor | `rssi` | Combined signal strength across all active radio frequencies, in dBm. Technology-specific LTE and 5G RSRP metrics provide more diagnostic detail. |
 | Signal Bars | Sensor | `signalbar` | The router's own signal rating, 0 to 5, the same one shown on its web page. It is a coarse summary - for anything precise use RSRP or SNR, which is what the bars are derived from. |
+| SINR | Sensor | `sinr` | Signal to Noise Ratio for the cell currently serving the router, in dB - how far the wanted signal sits above the noise and interference around it. Reported by the router without saying which radio it measured, so it is separate from LTE SNR and from 5G SINR, which the router names individually. Higher is better; below about 0 dB the connection is struggling. |
 | LTE Active Band | Sensor | `wan_active_band` | The frequency band currently carrying your connection. Which band you land on is decided by the network, and it affects both range and speed. |
 | LTE Active Channel | Sensor | `wan_active_channel` | The specific radio channel number in use within the active band. Mainly of interest when comparing against neighboring cells or diagnosing interference. |
 | Network APN | Sensor | `wan_apn` | Access Point Name - the gateway the router is actually connected with. This is the authoritative answer: while APN Selection Mode is auto the router uses the network's own default, which may not be one of your stored profiles, so the APN Profile selector can differ from this or read unknown. A wrong APN is a common cause of a router that has good signal but no working data. |
@@ -102,7 +106,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G RSSI | Sensor | `z5g_rssi` | Total received power across the 5G channel, in dBm, including noise and interference. Use 5G RSRP for a cleaner measure of your own cell's strength. |
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 
-## System (31)
+## System (37)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -116,6 +120,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Connection Failure Count | Sensor | `connection_failure_count` | How many times the router has failed to establish the mobile data connection since it last restarted. A rising count with the connection apparently up means it is dropping and recovering. |
 | Firmware Update State | Sensor | `current_upgrade_state` | Whether a firmware update is running. The value is the router's own, reported unchanged. |
 | Device Uptime | Sensor | `device_uptime` | The moment the router last booted, held steady between reboots rather than recalculated each poll. It only moves when the router's own uptime counter drops, so a genuine restart is easy to trigger automations on. |
+| Firmware Changes | Sensor | `firmware_changes` | How many times the router's firmware version has changed since this integration started watching. The version sensor itself keeps no long-term history, so this is what makes an operator's silent update visible months later. The versions and dates are on the Firmware Version sensor's history attribute. |
 | IMEI | Sensor | `imei` | International Mobile Equipment Identity - the modem's unique 15-digit hardware serial, used by networks to identify the device itself rather than the SIM. This integration also uses it as the stable identity for your router, so entity history survives an IP change. |
 | Modem State | Sensor | `modem_state` | What the modem itself reports about its own startup, separately from whether a connection is up. Useful when the router answers but nothing is passing traffic. |
 | Firmware Update Available | Sensor | `new_version_state` | Whether the router has found a firmware update. The value is the router's own, reported unchanged. |
@@ -129,13 +134,18 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Uptime Duration | Sensor | `realtime_time` | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp, which is usually the easier one to automate against. |
 | SIM ICCID | Sensor | `sim_iccid` | Integrated Circuit Card ID - the SIM card's own serial number, printed on the card itself. Useful for identifying which SIM is in the router without opening it. |
 | SIM IMSI | Sensor | `sim_imsi` | International Mobile Subscriber Identity - the unique number identifying your SIM's subscription on the network, as distinct from the IMEI which identifies the hardware. |
+| SIM Lock State | Sensor | `sim_lock_state` | Whether the SIM is asking for its PIN. A SIM waiting on a PIN presents as no service, which otherwise reads as a coverage fault, and the attempt counters only say how many tries are left rather than whether one is being asked for. |
 | SIM PIN Attempts Remaining | Sensor | `sim_pin_attempts` | PIN attempts left before the SIM locks and needs the PUK. A SIM that has locked presents as no service, which otherwise looks like a coverage or connection fault. |
 | SIM PUK Attempts Remaining | Sensor | `sim_puk_attempts` | PUK attempts left before the SIM is permanently blocked and has to be replaced by the operator. |
 | Time Server (SNTP) | Sensor | `sntp_server` | The time server the router synchronizes its clock from. An unreachable time server can make the timestamps on SMS messages and logs wrong, so it is worth checking if dates look implausible. |
 | Router Timezone | Sensor | `sntp_timezone` | The router's configured base timezone and Daylight Saving Time (DST) offset - for example '0-1' represents base offset UTC+0 with DST active. |
 | Firmware Update Result | Sensor | `upgrade_result` | The outcome of the router's last firmware update attempt. Reads error where an update was tried and did not complete, which the update-state entities do not show. |
 | Firmware Version | Sensor | `wa_inner_version` | The router's firmware build string. Worth recording before a firmware update, so you can tell what changed if the router starts behaving differently afterwards. |
+| WAN IP Changes | Sensor | `wan_ip_changes` | How many times the router's public WAN address has changed. A rising count means your operator is reassigning it, which breaks anything that relied on it staying put. |
 | WAN IP Address | Sensor | `wan_ipaddr` | The address your ISP has given the router on the mobile network - what the internet sees. Often a shared carrier-grade NAT address, which is why inbound connections and port forwarding usually do not work on mobile broadband. |
+| WAN Mode Changes | Sensor | `wan_mode_changes` | How many times the router has switched between bridge and gateway operation. This changes what the router does to your whole network, and an operator can change it remotely. |
+| WiFi Clients Connected | Sensor | `wifi_clients` | How many devices are connected to the router's WiFi right now, across all its networks. Counts wireless clients only - anything on a network cable is not included. |
+| WiFi Enabled | Sensor | `wifi_enabled` | Whether the router's WiFi radios are switched on. Reported as the router states it, so this reflects the radios rather than the last command sent to them. |
 | ODU LED Switch | Switch | `odu_led_switch` | Turns the status light on the outdoor unit on or off. Cosmetic only - the connection is unaffected, so switching it off is safe if the unit is visible from a window or a bedroom. The router reports the light's real state, so this reflects the unit rather than the last command sent. |
 
 ## Entities without an `about` note (13)

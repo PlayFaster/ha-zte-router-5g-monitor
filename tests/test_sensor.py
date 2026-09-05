@@ -263,6 +263,18 @@ def test_sensor_value_fn_exception(mock_coordinator, mock_config_entry):
 _UNGUARDED_BY_DESIGN = {
     "lte_ca_pcell_bandwidth",
     "lte_ca_scell_bandwidth",
+    # The six change counters. A guard band exists to reject an implausible
+    # reading from the router, and none of these is read from the router: each
+    # is a count this integration incremented itself, so it can only ever be a
+    # non-negative integer one larger than it was. There is no bad reading to
+    # bound, and a ceiling would eventually silence a device that legitimately
+    # reached it.
+    "firmware_changes",
+    "wan_ip_changes",
+    "apn_changes",
+    "cell_changes",
+    "provider_changes",
+    "wan_mode_changes",
 }
 
 
@@ -1376,7 +1388,239 @@ _MC888_ALIASES = (
     ("wan_auto_clear_flow_data_switch", "flux_auto_clear_flow_data_switch", "on"),
     ("data_volume_limit_switch", "flux_data_volume_limit_switch", "0"),
     ("traffic_clear_date", "flux_clear_date", "1"),
+    # Added in [3.3.10-dev2] from the 2026-09-02 download.
+    ("cell_id", "network_cell_id", "16512357"),
+    ("lte_pci", "network_Z_PCI", "167"),
+    ("nr5g_pci", "network_Z5g_PCI", "167"),
+    ("wan_active_band", "network_ZCELLINFO_band", " LTE B3"),
+    ("wan_active_channel", "network_Z_dl_earfcn", "1800"),
+    ("nr5g_action_band", "network_Z5g_CELLINFO_band", "N78"),
+    ("nr5g_action_channel", "network_Z5g_dlEarfcn", "637440"),
+    ("signalbar", "network_signalbar", "5"),
+    ("rmcc", "network_rmcc", "204"),
+    ("rmnc", "network_rmnc", "16"),
+    ("simcard_roam", "network_simcard_roam", "Home"),
+    ("modem_main_state", "mc_modem_main_state", "modem_init_complete"),
+    ("pinnumber", "sim_pinnumber", "1"),
 )
+
+# The same readings, reached through the entity rather than through
+# `get_first`. The pair test proves the helper picks the alias; this proves the
+# sensor is wired to the helper, which is the failure the 3.3.9 downloads
+# actually showed - the alias existed and the entity did not use it.
+_MC888_ENTITY_READINGS = (
+    ("cell_id", {"network_cell_id": "16512357"}, "16512357"),
+    ("lte_pci", {"network_Z_PCI": "167"}, "167"),
+    ("nr5g_pci", {"network_Z5g_PCI": "167"}, "167"),
+    ("wan_active_band", {"network_ZCELLINFO_band": " LTE B3"}, "LTE B3"),
+    ("wan_active_channel", {"network_Z_dl_earfcn": "1800"}, 1800),
+    ("nr5g_action_band", {"network_Z5g_CELLINFO_band": "N78"}, "N78"),
+    ("nr5g_action_channel", {"network_Z5g_dlEarfcn": "637440"}, 637440),
+    ("signalbar", {"network_signalbar": "5"}, 5),
+    ("rmcc", {"network_rmcc": "204"}, "204"),
+    ("rmnc", {"network_rmnc": "16"}, "16"),
+    ("roaming_state", {"network_simcard_roam": "Home"}, "Home"),
+    (
+        "modem_state",
+        {"mc_modem_main_state": "modem_init_complete"},
+        "modem_init_complete",
+    ),
+    ("sim_pin_attempts", {"sim_pinnumber": "1"}, 1),
+)
+
+
+@pytest.mark.parametrize(("entity_key", "payload", "expected"), _MC888_ENTITY_READINGS)
+def test_each_mc888_entity_reads_its_alias(
+    entity_key: str, payload: dict[str, str], expected: object
+) -> None:
+    """Thirteen sensors that were blank on the MC888 Pro now report a value."""
+    description = next(d for d in SENSOR_TYPES if d.key == entity_key)
+
+    assert description.value_fn(payload) == expected
+
+
+@pytest.mark.parametrize(("entity_key", "payload", "_expected"), _MC888_ENTITY_READINGS)
+def test_each_mc888_entity_is_still_empty_without_its_alias(
+    entity_key: str, payload: dict[str, str], _expected: object
+) -> None:
+    """The alias is the only thing supplying the value.
+
+    Without this the reading test would pass on a sensor that had some other
+    source, and the alias would be untested.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == entity_key)
+
+    assert description.value_fn(dict.fromkeys(payload, "")) is None
+
+
+def test_the_reported_band_name_is_stripped() -> None:
+    """The MC888 answers ` LTE B3` with a leading space; the MC7010 does not.
+
+    A band name is a free-form display string, so the space would otherwise
+    reach the state machine unaltered and make the two devices disagree on a
+    value they agree about.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "wan_active_band")
+
+    assert description.value_fn({"wan_active_band": "  LTE BAND 28  "}) == "LTE BAND 28"
+    assert description.value_fn({"wan_active_band": "   "}) is None
+
+
+def test_each_5g_band_lock_reads_the_mask_spelling() -> None:
+    """The only spelling of these that any device has populated.
+
+    Both sensors shipped in `[3.3.9-dev12]` reading a bare name that the
+    MC7010 leaves absent and the MC888 Pro leaves empty, so until now neither
+    had a source with a reading behind it.
+    """
+    mask = "1,3,7,8,20,38,41,77,78"
+    nsa = next(d for d in SENSOR_TYPES if d.key == "nr5g_nsa_band_lock")
+    sa = next(d for d in SENSOR_TYPES if d.key == "nr5g_sa_band_lock")
+
+    assert nsa.value_fn({"Z5g_lockband_nsa_mask": mask}) == mask
+    assert sa.value_fn({"Z5g_lockband_sa_mask": mask}) == mask
+    assert nsa.value_fn({"nr5g_nsa_band_lock": "0x1", "Z5g_lockband_nsa_mask": mask})
+    assert nsa.value_fn({"nr5g_nsa_band_lock": "", "Z5g_lockband_nsa_mask": ""}) is None
+
+
+def test_the_two_band_locks_do_not_share_a_mask() -> None:
+    """NSA and SA read the same value on an unlocked router, not the same key.
+
+    They are separate settings that happen to agree while nothing is locked,
+    so each sensor must resolve its own name — crossing them would go
+    unnoticed for exactly as long as no lock is set.
+    """
+    nsa = next(d for d in SENSOR_TYPES if d.key == "nr5g_nsa_band_lock")
+    sa = next(d for d in SENSOR_TYPES if d.key == "nr5g_sa_band_lock")
+    data = {"Z5g_lockband_nsa_mask": "1,3", "Z5g_lockband_sa_mask": "78"}
+
+    assert nsa.value_fn(data) == "1,3"
+    assert sa.value_fn(data) == "78"
+
+
+def test_sim_lock_state_publishes_the_value_unmapped() -> None:
+    """Only `0` has been observed, so a mapping would be a guess.
+
+    The spelling this firmware uses for a PIN-required state is unknown, and a
+    mapped state would report the wrong thing for every value never seen —
+    the call already made for Network Mode Config.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "sim_lock_state")
+
+    assert description.value_fn({"sim_pin_status": "0"}) == "0"
+    assert description.value_fn({"sim_pin_status": "2"}) == "2"
+    assert description.value_fn({"sim_pin_status": ""}) is None
+    assert description.value_fn({}) is None
+    assert description.state_class is None
+    assert description.entity_registry_enabled_default is False
+    assert description.group == "system"
+
+
+def test_enodeb_id_is_reported_when_the_router_gives_it() -> None:
+    """The reported value always wins; the derivation is a fallback only."""
+    description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
+
+    assert description.value_fn({"enodeb_id": "c87", "cell_id": "ffffff"}) == "c87"
+
+
+def test_enodeb_id_is_derived_from_the_cell_identity() -> None:
+    """Measured on the reference MC7010 on 2026-09-04.
+
+    That device answers `cell_id` as `c8751` and `enodeb_id` as `c87`, both
+    hex with no prefix, and `0xc8751 >> 8` is `0xc87`. The derived value is
+    formatted the same way so it is indistinguishable from a native one.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
+
+    assert description.value_fn({"cell_id": "c8751"}) == "c87"
+    assert description.value_fn({"enodeb_id": "", "cell_id": "c8751"}) == "c87"
+
+
+def test_enodeb_id_derives_through_the_cell_alias() -> None:
+    """The MC888 populates `network_cell_id` and leaves `cell_id` empty.
+
+    That device is the only reason this fallback exists, so it has to reach
+    the alias rather than the bare spelling.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
+
+    assert description.value_fn({"network_cell_id": "16512357"}) == "165123"
+
+
+def test_enodeb_id_stays_empty_when_nothing_can_be_derived() -> None:
+    """A cell identity that is not hexadecimal yields nothing, not a guess."""
+    description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
+
+    assert description.value_fn({}) is None
+    assert description.value_fn({"cell_id": ""}) is None
+    assert description.value_fn({"cell_id": "not-a-number"}) is None
+
+
+@pytest.mark.parametrize(
+    ("key", "payload", "expected"),
+    [
+        ("wifi_clients", {"wifi_access_sta_num": "1"}, 1),
+        ("wifi_clients", {"wifi_access_sta_num": ""}, None),
+        ("wifi_clients", {}, None),
+        ("wifi_enabled", {"wifi_onoff_state": "1"}, "1"),
+        ("wifi_enabled", {"wifi_onoff_state": ""}, None),
+        ("wifi_enabled", {}, None),
+    ],
+)
+def test_the_wifi_sensors_read_their_aggregates(
+    key: str, payload: dict[str, str], expected: object
+) -> None:
+    """Two aggregates only.
+
+    The four per-`chip` counters need the `chip1` to 2.4 GHz mapping
+    confirmed, which no download states, and a band-labelled sensor showing
+    the other band's figure is a wrong reading rather than a missing one.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+
+    assert description.value_fn(payload) == expected
+
+
+def test_rssi_is_published_as_a_negative_dbm_reading() -> None:
+    """The MC888 reports the magnitude alone: 73 for -73 dBm.
+
+    Established by the `RSRQ = RSRP - RSSI + 10*log10(N)` identity. At the
+    reported RSRP of -105 on a 20 MHz carrier, -73 implies an RSRQ of -12 dB;
+    +73 implies -158 dB, which is not a physical value.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "rssi")
+
+    assert description.value_fn({"network_rssi": "73"}) == -73.0
+    assert description.value_fn({"rssi": "-69"}) == -69.0
+    assert description.value_fn({"network_rssi": ""}) is None
+    assert description.value_fn({}) is None
+
+
+def test_a_correctly_signed_reading_is_left_alone() -> None:
+    """The transform is `-abs()`, not a negation.
+
+    A firmware that reports the sign the way the MC7010 does must not be
+    flipped to positive by the fix for one that does not.
+    """
+    description = next(d for d in SENSOR_TYPES if d.key == "rssi")
+
+    assert description.value_fn({"network_rssi": "-73"}) == -73.0
+
+
+def test_sinr_is_separate_from_the_two_named_snr_sensors() -> None:
+    """The router names three, and this is the one carrying no technology.
+
+    On the MC888 Pro `network_sinr` read 3.8 on a poll where `Z5g_SINR` read
+    15.5, so it is not the 5G figure under another name, and `lte_snr` is a
+    separate key this sensor never reads.
+    """
+    sinr = next(d for d in SENSOR_TYPES if d.key == "sinr")
+    lte = next(d for d in SENSOR_TYPES if d.key == "lte_snr")
+    data = {"network_sinr": "3.8", "lte_snr": "1.0", "Z5g_SINR": "15.5"}
+
+    assert sinr.value_fn(data) == 3.8
+    assert lte.value_fn(data) == 1.0
+    assert sinr.value_fn({"lte_snr": "1.0"}) is None
 
 
 @pytest.mark.parametrize(("primary", "alias", "value"), _MC888_ALIASES)
@@ -1570,4 +1814,11 @@ def test_the_new_diagnostic_sensors_are_disabled_by_default() -> None:
 
     for key in off_by_default:
         assert by_key[key].entity_registry_enabled_default is False, key
-    assert by_key["upgrade_result"].entity_registry_enabled_default is not False
+
+    # `upgrade_result` shipped enabled in `[3.3.9-dev12]` as the one firmware
+    # sensor reporting a fault the others miss. It joined them off by default
+    # in `[3.3.10-dev13]`: three firmware sensors on the System card is more
+    # than a working router needs on show, and a user chasing an update
+    # problem can turn them on.
+    assert by_key["upgrade_result"].entity_registry_enabled_default is False
+    assert by_key["current_upgrade_state"].entity_registry_enabled_default is False

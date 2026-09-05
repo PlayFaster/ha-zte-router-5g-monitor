@@ -26,7 +26,6 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
@@ -41,15 +40,17 @@ from .coordinator import (
     ENDPOINT_SMS_MESSAGES,
     ZTERouterDataUpdateCoordinator,
 )
+from .entity_defaults import default_enabled
 from .helpers import (
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     arfcn_to_band,
-    build_device_info,
     cycle_bounds,
     earfcn_to_band,
     get_first,
     project_cycle_usage,
 )
+from .observations import TRACKED
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -75,6 +76,12 @@ class ZTESensorEntityDescription(SensorEntityDescription):
     # say what the value is or what a good value looks like — chiefly the
     # signal metrics, whose names are acronyms.
     about: str | None = None
+    # Set on the change counters. Their value comes from the transition
+    # record rather than from the poll, so `native_value` reads it before
+    # `value_fn` is consulted — a counter has no key in `coordinator.data` to
+    # read, and inventing one would put a synthetic entry in a dict that means
+    # "what the router said".
+    counts_changes_of: str | None = None
 
 
 def _get_bytes_to_gb(val: Any) -> float | None:
@@ -155,7 +162,7 @@ def _safe_str(val: Any) -> str | None:
 # hardware that does not populate the first.
 _ALIAS_5G_RSRP: Final = ("Z5g_rsrp", "5g_rsrp", "nr5g_rsrp")
 _ALIAS_5G_SINR: Final = ("Z5g_SINR", "Z5g_snr", "5g_sinr", "nr5g_sinr")
-_ALIAS_5G_PCI: Final = ("nr5g_pci", "Z5g_CELL_ID")
+_ALIAS_5G_PCI: Final = ("nr5g_pci", "Z5g_CELL_ID", "network_Z5g_PCI")
 _ALIAS_MONTHLY_TX: Final = ("monthly_tx_bytes", "flux_monthly_tx_bytes")
 _ALIAS_MONTHLY_RX: Final = ("monthly_rx_bytes", "flux_monthly_rx_bytes")
 
@@ -227,6 +234,68 @@ _ALIAS_LIMIT_SWITCH: Final = (
     "data_volume_limit_switch",
     "flux_data_volume_limit_switch",
 )
+
+
+# The rest of the `network_` family, answered by the MC888 Pro on 2026-09-02
+# while the bare spelling this integration polls came back empty. Each was
+# matched to its leader by value as well as by name: the two PCI keys agreed
+# with each other at 167, the cell identity was a plain integer, and the two
+# channel numbers landed in the LTE and NR-ARFCN ranges for the bands reported
+# alongside them.
+#
+# `network_rssi` and `network_sinr` are adopted separately, in
+# [3.3.10-dev4]. They belong to the generic half of this family rather than
+# to the LTE half - see `_ALIAS_RSSI`.
+_ALIAS_CELL_ID: Final = ("cell_id", "network_cell_id")
+_ALIAS_LTE_PCI: Final = ("lte_pci", "network_Z_PCI")
+_ALIAS_ACTIVE_BAND: Final = ("wan_active_band", "network_ZCELLINFO_band")
+_ALIAS_ACTIVE_CHANNEL: Final = ("wan_active_channel", "network_Z_dl_earfcn")
+_ALIAS_NR_BAND: Final = ("nr5g_action_band", "network_Z5g_CELLINFO_band")
+_ALIAS_NR_CHANNEL: Final = ("nr5g_action_channel", "network_Z5g_dlEarfcn")
+_ALIAS_SIGNALBAR: Final = ("signalbar", "network_signalbar")
+_ALIAS_RMCC: Final = ("rmcc", "network_rmcc")
+_ALIAS_RMNC: Final = ("rmnc", "network_rmnc")
+_ALIAS_ROAMING: Final = ("simcard_roam", "network_simcard_roam")
+
+# Two close matches rather than members of a prefix family: the same field
+# under a different prefix each, found by comparing the names the MC888
+# answered against the names it left empty.
+_ALIAS_MODEM_STATE: Final = ("modem_main_state", "mc_modem_main_state")
+_ALIAS_PIN_ATTEMPTS: Final = ("pinnumber", "sim_pinnumber")
+
+# The `network_` family splits the way the bare vocabulary does, into names
+# carrying a technology (`network_lte_rsrp`, `network_Z5g_PCI`) and names
+# carrying none (`network_cell_id`, `network_signalbar`, `network_simcard_roam`
+# and these two). The MC888 Pro supports three bearers - 5G, LTE and WCDMA -
+# so a generic set describing whichever radio is serving is what that firmware
+# needs, and the unqualified names are that set rather than an ambiguity.
+#
+# `network_rssi` reports the magnitude without the sign: 73 for -73 dBm. The
+# `RSRQ = RSRP - RSSI + 10*log10(N)` identity settles it. At the reported
+# RSRP of -105 on a 20 MHz carrier, -73 implies an RSRQ of -12 dB, mid-range;
+# +73 implies -158 dB, which is not a physical value. Inverted, RSRQ can only
+# land in its valid range if RSSI falls between about -82 and -65 dBm.
+#
+# The transform is `-abs()` rather than a negation, so a firmware that reports
+# the sign correctly is left alone instead of being flipped to positive.
+#
+# `network_sinr` gets no tuple. There is no bare `sinr` in any vocabulary
+# either device publishes, and inventing one to lead with would put a name in
+# the poll that no firmware has ever been seen to use.
+_ALIAS_RSSI: Final = ("rssi", "network_rssi")
+
+# The 5G band locks. Neither bare spelling has been populated by any device
+# seen so far, so unlike every other tuple here the alternate is the only
+# spelling with a reading behind it. The bare name still leads: it is the
+# spelling this integration has always requested, and demoting it would make
+# the reference device's path depend on a name no MC7010 has answered.
+#
+# The two masks read identically on the MC888 Pro. That is the expected state
+# of a router with nothing locked - a router free to use every band it
+# supports reports every band it supports under both - and not evidence that
+# they report anything other than the lock.
+_ALIAS_NSA_BAND_LOCK: Final = ("nr5g_nsa_band_lock", "Z5g_lockband_nsa_mask")
+_ALIAS_SA_BAND_LOCK: Final = ("nr5g_sa_band_lock", "Z5g_lockband_sa_mask")
 
 
 def _scell_field(data: dict[str, Any], index: int) -> float | None:
@@ -427,10 +496,50 @@ def _monthly_total_bytes(data: dict[str, Any]) -> int | None:
     return tx + rx
 
 
+def _negative_dbm(value: Any) -> float | None:
+    """Return a dBm reading as a negative number, whatever sign it arrived with.
+
+    `network_rssi` reports the magnitude alone. Taking the negative of the
+    absolute value rather than negating means a firmware that does report the
+    sign is returned unchanged rather than inverted.
+    """
+    number = _safe_float(value)
+    if number is None:
+        return None
+    return -abs(number)
+
+
+def _enodeb_from_cell(data: dict[str, Any]) -> str | None:
+    """Return the eNodeB ID the router reports, or derive it from the cell id.
+
+    Measured on the reference MC7010 on 2026-09-04: it answers `cell_id` as
+    `c8751` and `enodeb_id` as `c87`, both hex strings with no prefix, and
+    `0xc8751 >> 8` is `0xc87`. The eNodeB ID is the top 20 bits of the 28-bit
+    E-UTRAN Cell Identity and the remaining 8 are the sector — 0x51, 81, on
+    that reading, so a high sector number is ordinary here.
+
+    The MC888 Pro leaves `enodeb_id` empty while populating a cell identity,
+    which is the only case this derivation runs in. That device's cell id is
+    all digits and so cannot be proved hexadecimal from the value alone; it is
+    parsed as hex because every device that answers this field in a form we
+    can read uses hex, and a digits-only hex value is unremarkable.
+    """
+    reported = _safe_str(data.get("enodeb_id"))
+    if reported is not None:
+        return reported
+    cell = _safe_str(get_first(data, _ALIAS_CELL_ID))
+    if cell is None:
+        return None
+    try:
+        return f"{int(cell.strip(), 16) >> 8:x}"
+    except ValueError:
+        return None
+
+
 def _band_or_channel_fallback(
     data: dict[str, Any],
-    band_key: str,
-    channel_key: str,
+    band_aliases: tuple[str, ...],
+    channel_aliases: tuple[str, ...],
     resolver: Callable[[int | str | None], str | None],
 ) -> str | None:
     """Prefer the band name the router reports; derive it only if absent.
@@ -438,11 +547,16 @@ def _band_or_channel_fallback(
     Some models report the channel number but leave the band name empty. The
     reported name always wins — the resolver is a fallback, and for NR it is
     an inherently ambiguous one.
+
+    The reported name is stripped. It is a free-form display string that
+    differs by model — `LTE BAND 28` on the MC7010, ` LTE B3` on the MC888 Pro
+    — and the leading space on the latter would otherwise reach the state
+    machine unaltered.
     """
-    reported = _safe_str(data.get(band_key))
+    reported = _safe_str(get_first(data, band_aliases))
     if reported is not None:
-        return reported
-    return resolver(data.get(channel_key))
+        return reported.strip() or None
+    return resolver(get_first(data, channel_aliases))
 
 
 # Technical Router Sensors
@@ -562,6 +676,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "own, reported unchanged."
         ),
         translation_key="system_firmware_update_state",
+        entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
         value_fn=lambda data: _safe_str(data.get("current_upgrade_state")),
@@ -764,7 +879,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="signal",
         min_limit=0,
         max_limit=5,
-        value_fn=lambda data: _safe_int(data.get("signalbar")),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_SIGNALBAR)),
     ),
     ZTESensorEntityDescription(
         key="network_provider",
@@ -813,7 +928,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="signal",
         source=ENDPOINT_EXTENDED,
-        value_fn=lambda data: data.get("rmcc"),
+        value_fn=lambda data: get_first(data, _ALIAS_RMCC),
     ),
     ZTESensorEntityDescription(
         key="rmnc",
@@ -826,7 +941,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_registry_enabled_default=False,
         group="signal",
         source=ENDPOINT_EXTENDED,
-        value_fn=lambda data: data.get("rmnc"),
+        value_fn=lambda data: get_first(data, _ALIAS_RMNC),
     ),
     ZTESensorEntityDescription(
         key="lte_rsrp",
@@ -909,7 +1024,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_lte_pci",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("lte_pci")),
+        value_fn=lambda data: _safe_str(get_first(data, _ALIAS_LTE_PCI)),
     ),
     ZTESensorEntityDescription(
         key="cell_id",
@@ -921,7 +1036,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_cell_id",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("cell_id")),
+        value_fn=lambda data: _safe_str(get_first(data, _ALIAS_CELL_ID)),
     ),
     ZTESensorEntityDescription(
         key="wan_lte_ca",
@@ -999,7 +1114,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
         value_fn=lambda data: _band_or_channel_fallback(
-            data, "wan_active_band", "wan_active_channel", earfcn_to_band
+            data, _ALIAS_ACTIVE_BAND, _ALIAS_ACTIVE_CHANNEL, earfcn_to_band
         ),
     ),
     ZTESensorEntityDescription(
@@ -1012,7 +1127,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_wan_active_channel",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_int(data.get("wan_active_channel")),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_ACTIVE_CHANNEL)),
     ),
     ZTESensorEntityDescription(
         key="z5g_rsrp",
@@ -1102,7 +1217,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
         value_fn=lambda data: _band_or_channel_fallback(
-            data, "nr5g_action_band", "nr5g_action_channel", arfcn_to_band
+            data, _ALIAS_NR_BAND, _ALIAS_NR_CHANNEL, arfcn_to_band
         ),
     ),
     ZTESensorEntityDescription(
@@ -1115,7 +1230,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_nr5g_action_channel",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_int(data.get("nr5g_action_channel")),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_NR_CHANNEL)),
     ),
     ZTESensorEntityDescription(
         key="rssi",
@@ -1133,7 +1248,28 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         max_limit=-20,
         group="signal",
         source=ENDPOINT_EXTENDED,
-        value_fn=lambda data: _safe_float(data.get("rssi")),
+        value_fn=lambda data: _negative_dbm(get_first(data, _ALIAS_RSSI)),
+    ),
+    ZTESensorEntityDescription(
+        key="sinr",
+        about=(
+            "Signal to Noise Ratio for the cell currently serving the router, "
+            "in dB - how far the wanted signal sits above the noise and "
+            "interference around it. Reported by the router without saying "
+            "which radio it measured, so it is separate from LTE SNR and from "
+            "5G SINR, which the router names individually. Higher is better; "
+            "below about 0 dB the connection is struggling."
+        ),
+        translation_key="signal_sinr",
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement="dB",
+        suggested_display_precision=1,
+        entity_registry_enabled_default=False,
+        min_limit=-20,
+        max_limit=50,
+        group="signal",
+        source=ENDPOINT_EXTENDED,
+        value_fn=lambda data: _safe_float(data.get("network_sinr")),
     ),
     ZTESensorEntityDescription(
         key="rscp",
@@ -1163,7 +1299,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="signal_enodeb_id",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
-        value_fn=lambda data: _safe_str(data.get("enodeb_id")),
+        value_fn=_enodeb_from_cell,
     ),
     ZTESensorEntityDescription(
         key="net_select",
@@ -1199,6 +1335,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "update-state entities do not show."
         ),
         translation_key="system_upgrade_result",
+        entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
         value_fn=lambda data: data.get("upgrade_result") or None,
@@ -1327,7 +1464,173 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
-        value_fn=lambda data: _safe_int(data.get("pinnumber")),
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_PIN_ATTEMPTS)),
+    ),
+    # Change counters. The transition history lives in an unrecorded attribute
+    # capped at twenty entries, so it answers "what changed last" and produces
+    # no graph and nothing beyond those twenty. These are the recorded half:
+    # a `TOTAL_INCREASING` count gives each tracked value a native long-term
+    # statistics timeline without touching the database.
+    #
+    # The count is kept separately from the history list rather than derived
+    # from its length, because the list is capped and the count must keep
+    # rising after the twenty-first change pushes the first one out.
+    #
+    # Firmware is enabled by default and the rest are not: an operator pushing
+    # an update with no record of it is the case this was built for.
+    ZTESensorEntityDescription(
+        key="firmware_changes",
+        about=(
+            "How many times the router's firmware version has changed since "
+            "this integration started watching. The version sensor itself "
+            "keeps no long-term history, so this is what makes an operator's "
+            "silent update visible months later. The versions and dates are "
+            "on the Firmware Version sensor's history attribute."
+        ),
+        translation_key="system_firmware_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        counts_changes_of="wa_inner_version",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="wan_ip_changes",
+        about=(
+            "How many times the router's public WAN address has changed. A "
+            "rising count means your operator is reassigning it, which breaks "
+            "anything that relied on it staying put."
+        ),
+        translation_key="system_wan_ip_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        counts_changes_of="wan_ipaddr",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="apn_changes",
+        about=(
+            "How many times the APN in use has changed. Usually zero - a "
+            "change you did not make points at the operator reprovisioning "
+            "the connection."
+        ),
+        translation_key="signal_apn_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        counts_changes_of="wan_apn",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="cell_changes",
+        about=(
+            "How many times the router has been handed to a different 4G "
+            "cell. Unlike the others this moves on its own as the network "
+            "balances load, so the useful reading is the rate rather than the "
+            "total - a step change in handovers per day is worth looking at."
+        ),
+        translation_key="signal_cell_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        counts_changes_of="cell_id",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="provider_changes",
+        about=(
+            "How many times the registered network operator has changed. On a "
+            "fixed installation this should be zero unless you have changed "
+            "SIM or the SIM has roamed."
+        ),
+        translation_key="signal_provider_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        counts_changes_of="network_provider",
+        value_fn=lambda data: None,
+    ),
+    ZTESensorEntityDescription(
+        key="wan_mode_changes",
+        about=(
+            "How many times the router has switched between bridge and "
+            "gateway operation. This changes what the router does to your "
+            "whole network, and an operator can change it remotely."
+        ),
+        translation_key="system_wan_mode_changes",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        counts_changes_of="opms_wan_mode",
+        value_fn=lambda data: None,
+    ),
+    # WiFi. Two aggregates on the System sub-device rather than a group of
+    # their own: a WiFi sub-device would be drawn whether or not its entities
+    # report anything, because a device is created when its entities are
+    # added, disabled or not — so on an MC7010 it was an empty card.
+    #
+    # Enabled by default, and the overlay turns them off on the MC7010, which
+    # answers neither key. An unrecognised model keeps them on: a router that
+    # serves WiFi is the common case, and a blank pair is easier to notice and
+    # switch off than a missing pair is to discover.
+    #
+    # Two aggregates only: the four per-`chip` counters would need the `chip1`
+    # / `chip2` to 2.4 GHz / 5 GHz mapping confirmed, which nothing in any
+    # download states, and a band-labelled sensor showing the other band's
+    # figure is a wrong reading rather than a missing one.
+    ZTESensorEntityDescription(
+        key="wifi_clients",
+        about=(
+            "How many devices are connected to the router's WiFi right now, "
+            "across all its networks. Counts wireless clients only - anything "
+            "on a network cable is not included."
+        ),
+        translation_key="system_wifi_clients_connected",
+        state_class=SensorStateClass.MEASUREMENT,
+        min_limit=0,
+        max_limit=256,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        source=ENDPOINT_EXTENDED,
+        value_fn=lambda data: _safe_int(data.get("wifi_access_sta_num")),
+    ),
+    ZTESensorEntityDescription(
+        key="wifi_enabled",
+        about=(
+            "Whether the router's WiFi radios are switched on. Reported as "
+            "the router states it, so this reflects the radios rather than "
+            "the last command sent to them."
+        ),
+        translation_key="system_wifi_enabled",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="system",
+        source=ENDPOINT_EXTENDED,
+        value_fn=lambda data: _safe_str(data.get("wifi_onoff_state")),
+    ),
+    ZTESensorEntityDescription(
+        key="sim_lock_state",
+        about=(
+            "Whether the SIM is asking for its PIN. A SIM waiting on a PIN "
+            "presents as no service, which otherwise reads as a coverage "
+            "fault, and the attempt counters only say how many tries are "
+            "left rather than whether one is being asked for."
+        ),
+        translation_key="system_sim_lock_state",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        # Published raw. Only `0` has been observed - on an MC888 Pro with an
+        # unlocked SIM - and the spelling this firmware uses for a PIN-required
+        # state is unknown. Mapping now would mean guessing that spelling and
+        # reporting the wrong state for every value never seen, which is the
+        # call already made for Network Mode Config.
+        value_fn=lambda data: _safe_str(data.get("sim_pin_status")),
     ),
     ZTESensorEntityDescription(
         key="sim_puk_attempts",
@@ -1354,7 +1657,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="system",
-        value_fn=lambda data: data.get("modem_main_state") or None,
+        value_fn=lambda data: get_first(data, _ALIAS_MODEM_STATE) or None,
     ),
     ZTESensorEntityDescription(
         key="connection_failure_count",
@@ -1382,7 +1685,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
-        value_fn=lambda data: data.get("simcard_roam") or None,
+        value_fn=lambda data: get_first(data, _ALIAS_ROAMING) or None,
     ),
     ZTESensorEntityDescription(
         key="nr5g_nsa_band_lock",
@@ -1394,7 +1697,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
-        value_fn=lambda data: data.get("nr5g_nsa_band_lock") or None,
+        value_fn=lambda data: get_first(data, _ALIAS_NSA_BAND_LOCK) or None,
     ),
     ZTESensorEntityDescription(
         key="nr5g_sa_band_lock",
@@ -1406,7 +1709,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         group="signal",
-        value_fn=lambda data: data.get("nr5g_sa_band_lock") or None,
+        value_fn=lambda data: get_first(data, _ALIAS_SA_BAND_LOCK) or None,
     ),
     ZTESensorEntityDescription(
         key="ppp_status",
@@ -1853,7 +2156,10 @@ async def async_setup_entry(
 
 
 class ZTERouterSensor(
-    ZTEAboutEntity, CoordinatorEntity[ZTERouterDataUpdateCoordinator], SensorEntity
+    ZTEAboutEntity,
+    ZTEDeviceEntity,
+    CoordinatorEntity[ZTERouterDataUpdateCoordinator],
+    SensorEntity,
 ):
     """Representation of a ZTE Router sensor."""
 
@@ -1878,6 +2184,13 @@ class ZTERouterSensor(
     _unrecorded_attributes = frozenset(
         {
             "about",
+            # The transition history, its two summary fields included. It is a
+            # list that grows to twenty entries and repeats on every state
+            # write, so recording it would store the same history hundreds of
+            # times over. The counter entities are the recorded half.
+            "history",
+            "previous_version",
+            "last_changed",
             "sntp_server1",
             "sntp_server2",
             "sntp_dst_enable",
@@ -1911,6 +2224,9 @@ class ZTERouterSensor(
         self.entity_description = description
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
 
     @property
     def available(self) -> bool:
@@ -1928,6 +2244,14 @@ class ZTERouterSensor(
     @property
     def native_value(self) -> Any:
         """Return the value of the sensor."""
+        # Read before the payload guard. A counter's value comes from the
+        # stored record, not from the poll, so it stays readable on a cycle
+        # that returned nothing — including the empty first poll of a paused
+        # entry.
+        tracked = self.entity_description.counts_changes_of
+        if tracked is not None:
+            return self.coordinator.observations.change_count(tracked)
+
         if not self.coordinator.data:
             return None
 
@@ -1970,6 +2294,18 @@ class ZTERouterSensor(
         data = self.coordinator.data
         key = self.entity_description.key
         detail: dict[str, Any] = {}
+
+        # Transition history for the values that carry it. Text entities take
+        # no `state_class` and so produce no long-term statistics; without
+        # this the previous firmware, address or operator is gone as soon as
+        # the recorder purges. Listed in `_unrecorded_attributes`, so the
+        # history itself is never written to the database.
+        if key in TRACKED:
+            entries = self.coordinator.observations.history(key)
+            if entries:
+                detail["history"] = entries
+                detail["previous_version"] = entries[-1]["from"]
+                detail["last_changed"] = entries[-1]["timestamp"]
 
         if data:
             if key == "msg_total":
@@ -2017,10 +2353,3 @@ class ZTERouterSensor(
                 }
 
         return self._with_about(detail) or {}
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )

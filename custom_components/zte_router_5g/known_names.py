@@ -21,7 +21,10 @@ Provenance, and the two kinds are not equivalent:
       - MC7010, firmware `IRL_H3G_MC7010DV1.0.0B03`, mined and probed
         2026-09-02.
       - MC888 Pro, firmware `BD_ABPLMC888PROMODV1.0.0B01`, from the
-        diagnostics download attached to issue #56 on 2026-09-01.
+        diagnostics downloads attached to issue #56 on 2026-09-01 and
+        2026-09-02. The second was taken on 3.3.9 with three canaries held,
+        so the names it left silent are absent rather than unproven, and it
+        added 27 names to this set.
   - **Reported by another project.** `EXPECTED_NAMES` holds names taken from
     `Kajkac/ZTE-MC-Home-assistant-repo`'s `SENSOR_NAMES` map, read 2026-09-02.
     That map is what its integration asks for across the MC801, MC888, MC889
@@ -207,6 +210,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "bolder",
         "ca_activated",
         "ca_deactivated",
+        "cbns_client_enable",
         "cbns_server_enable",
         "cell_id",
         "cellularNetworkError",
@@ -248,6 +252,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "dhcp_wan_status",
         "dialMode",
         "dial_mode",
+        "dial_roam_setting_option",
         "dial_roaming_connect",
         "disconnect",
         "disconnected",
@@ -257,6 +262,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "dlna_share_audio",
         "dlna_share_image",
         "dlna_share_video",
+        "dm_last_check_time",
         "dm_new_version",
         "dm_update_package_file_exist",
         "dm_update_successful_time",
@@ -346,6 +352,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "ipv6_wan_apn",
         "ipv6_wan_apn_ui",
         "ipv6_wan_ipaddr",
+        "is_led_night_mode",
         "is_mandatory",
         "is_night_mode",
         "jq_additional",
@@ -470,6 +477,14 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "net_select_mode",
         "networkOperator",
         "networkType",
+        "network_Z5g_CELLINFO_band",
+        "network_Z5g_CELL_ID",
+        "network_Z5g_PCI",
+        "network_Z5g_dlEarfcn",
+        "network_ZCELLINFO_band",
+        "network_Z_PCI",
+        "network_Z_dl_earfcn",
+        "network_cell_id",
         "network_information",
         "network_lte_ca_pcell_arfcn",
         "network_lte_ca_pcell_band",
@@ -481,6 +496,12 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "network_net_select_mode",
         "network_provider",
         "network_provider_fullname",
+        "network_rmcc",
+        "network_rmnc",
+        "network_rssi",
+        "network_signalbar",
+        "network_simcard_roam",
+        "network_sinr",
         "network_type",
         "new_version_state",
         "ngbr_cell_info",
@@ -526,6 +547,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "pie",
         "pin_status",
         "pinnumber",
+        "port_status",
         "ppp_auth_mode",
         "ppp_auth_mode_ui",
         "ppp_connected",
@@ -599,6 +621,9 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "sim_pin_save_flag",
         "sim_pin_status",
         "sim_pinnumber",
+        "sim_spn_b1_flag",
+        "sim_spn_b2_flag",
+        "sim_spn_name_data",
         "simcard_roam",
         "simulate",
         "smsSettingFail",
@@ -735,6 +760,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "web_keylog_enable",
         "web_keylog_level",
         "web_keylog_type",
+        "web_privacy_read_flag",
         "web_sleep_switch",
         "web_sleep_time",
         "web_sntp_day",
@@ -782,6 +808,10 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "wifi_lbd_enable",
         "wifi_mac_address",
         "wifi_mesh_deployed",
+        "wifi_mesh_lan_access_num",
+        "wifi_mesh_re_num",
+        "wifi_mesh_sta_access_num",
+        "wifi_moving_2G_status",
         "wifi_onoff_state",
         "wifi_profile_num",
         "wifi_start_fail",

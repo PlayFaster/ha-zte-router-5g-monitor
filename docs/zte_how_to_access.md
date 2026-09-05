@@ -219,7 +219,7 @@ Three consequences, each of which has caused a defect here:
 
 `REFUSABLE_NAMES` in `known_names.py` holds the names observed to be declined by any device, and they are probed one per request so a refusal cannot reach another name. A name that answers is recorded like any other — holding it there is a probing strategy, not a claim.
 
-Whether refusal indicates operator provisioning is **not established**. The MC888 Pro in issue #56, self-purchased rather than operator-supplied, answers five of those keys plainly; this MC7010 is operator-supplied and declines them. One device on each side of the comparison fits a difference of model or firmware equally well.
+Whether refusal indicates operator provisioning is **not established**. The MC888 Pro in issue #56, self-purchased rather than operator-supplied, answers five of those keys plainly and leaves the other eight silent, with an empty `refused` list; this MC7010 is operator-supplied and declines them. Both sides are now measurements — the MC888 pass held three canaries, so its silence was not a lost session — but one device on each side still fits a difference of model or firmware as well as a difference of provisioning.
 
 **Any consumer must therefore treat present-but-empty as absent**, which is what `_get_first()` and `_safe_int()` / `_safe_float()` / `_safe_str()` do. `in data` alone is not a support test.
 
@@ -402,6 +402,47 @@ One group per secondary carrier, semicolon-terminated, six comma-separated field
 Two things follow. The composite reports a 20 MHz secondary carrier while `lte_ca_scell_bandwidth` is **empty** on the same device, so it carries information the dedicated key does not. And the secondary carrier's SNR ran 14 to 18 dB while the primary ran −2.4 to 2.6 dB across the same samples — the aggregate `lte_snr` shows the worse of the two.
 
 The same arithmetic is unstable on the primary cell, which reports integers rather than one decimal: three consecutive samples gave 100, 79 and 40 RB for a carrier that is 50.
+
+### How often the router's own figures change
+
+**No fixed refresh cycle.** The values are live to within about a second, and what limits them is the resolution they are reported at rather than any staleness in the device.
+
+Measured 2026-09-02 on an MC7010: 345 samples over 360 seconds at a one-second interval, counting how often each key's value differed from the previous sample. `realtime_rx_bytes` served as the control and changed on 95% of samples, which establishes that the response was live rather than cached.
+
+| Key         | Resolution |     Changed on | Median gap |
+| :---------- | :--------- | -------------: | ---------: |
+| `Z5g_SINR`  | 0.1 dB     | 46% of samples |      2.0 s |
+| `lte_snr`   | 0.1 dB     |            35% |      3.0 s |
+| `lte_rsrq`  | 1 dB       |            19% |      3.0 s |
+| `lte_rssi`  | 1 dB       |            14% |      5.0 s |
+| `Z5g_rsrp`  | 1 dB       |             8% |      4.5 s |
+| `lte_rsrp`  | 1 dB       |             7% |      5.0 s |
+| `Z5g_rsrq`  | 1 dB       |           0.6% |       37 s |
+| `signalbar` | 0 to 5     |          never |          — |
+
+A fixed internal cycle was the first reading of the data and it is wrong. Gaps spread across one to five seconds with no dominant interval — the strongest was `lte_snr` at 52% on three seconds — and one-second gaps were common, 44 of them for `Z5g_SINR`. A cycle of 2.5 seconds sampled at 1 Hz produces gaps of two and three seconds and never one.
+
+What the table shows instead is that change frequency tracks reporting resolution. The two keys reporting to 0.1 dB change five times as often as the 1 dB keys, and the coarsest figure did not move once in six minutes. A refresh cycle would move every key at the same rate whatever its resolution; continuous sampling produces exactly this ordering, because the gap is how long the underlying value takes to drift past the next quantisation step.
+
+Two consequences for anything built on these keys. A poll is a **point sample of a moving signal, not an average**, so two polls thirty seconds apart can differ by ordinary variation — `lte_rsrp` took 23 distinct values in six minutes on a stationary unit with no change to the installation. The variation is real; it is just not an event. And `signalbar` is heavily smoothed: it is not a fast indicator, and reading it as one will miss transients the underlying metrics show clearly.
+
+### Three parameter vocabularies, and which one answers
+
+A router in this family may answer a concept under any of three spellings, and which one it fills in is a property of the firmware rather than of the concept.
+
+| Vocabulary | Carries | Example |
+| :-- | :-- | :-- |
+| Bare | 5G signal, SMS, APN, reboot schedule, time | `Z5g_rsrp`, `sms_unread_num` |
+| `flux_` | Data volume, throughput, billing cycle | `flux_monthly_rx_bytes`, `flux_clear_date` |
+| `network_` | LTE signal, cell identity, network mode, roaming | `network_lte_rsrp`, `network_cell_id` |
+
+The reference MC7010 answers the bare spellings. The MC888 Pro in issue #56 answers the `flux_` and `network_` ones and returns the bare LTE set present-and-empty — its own web pages request `lte_rsrq`, `lte_rssi` and `lte_snr`, and the router answers blank.
+
+**The `network_` family splits, and the split decides what a name means.** Some members carry a technology — `network_lte_rsrp`, `network_Z5g_PCI`, `network_ZCELLINFO_band` — and some carry none: `network_cell_id`, `network_signalbar`, `network_simcard_roam`, `network_rmcc`, `network_rmnc`, `network_type`, `network_rssi`, `network_sinr`. The unqualified ones describe whichever radio is serving, which is what a device supporting three bearers needs. Reading an unqualified name as though it were the LTE one is the mistake to avoid: `network_rssi` and `network_sinr` feed the generic **RSSI** and **SINR** sensors, and the LTE-labelled sensors stay blank on that hardware rather than claiming a figure the firmware did not qualify.
+
+**`network_rssi` reports the magnitude without the sign** — 73 for −73 dBm. Established by the `RSRQ = RSRP − RSSI + 10·log₁₀(N)` identity: at the reported RSRP of −105 on a 20 MHz carrier, −73 implies an RSRQ of −12 dB and +73 implies −158 dB, which is not a physical value. The sensor applies `−abs()` rather than a negation, so a firmware reporting the sign correctly is left alone.
+
+Alias order is always **bare spelling first**. The reference device's path is then unchanged, and `get_first` falls through to the alternates only where the leader is absent or empty.
 
 ### Available but not polled
 

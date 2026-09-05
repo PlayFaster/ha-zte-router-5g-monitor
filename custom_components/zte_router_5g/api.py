@@ -213,6 +213,26 @@ _CORE_PARAMS: list[str] = [
     # here: those report whether an update is available or running, this
     # reports whether the last attempt completed.
     "upgrade_result",
+    # A second `network_` group, from the 2026-09-02 MC888 download. The group
+    # above was mined from that device's web UI; these were answered by the
+    # device itself while the bare spelling this list already carries came back
+    # empty, which is the test a fallback has to pass.
+    #
+    # Core rather than extended because every one of them backs a sensor that
+    # is enabled by default, and §22 forbids an enabled entity depending on an
+    # endpoint that is allowed to degrade.
+    #
+    # `network_rssi` is deliberately not here. It answered 73 on a device whose
+    # RSRP was -105, so it is a bar or percentage scale rather than dBm, and
+    # aliasing it to `lte_rssi` would put a positive number into a dBm sensor.
+    "network_cell_id",
+    "network_Z_PCI",
+    "network_Z5g_PCI",
+    "network_ZCELLINFO_band",
+    "network_Z_dl_earfcn",
+    "network_Z5g_CELLINFO_band",
+    "network_Z5g_dlEarfcn",
+    "network_signalbar",
 ]
 
 _EXTENDED_PARAMS: list[str] = [
@@ -282,6 +302,33 @@ _EXTENDED_PARAMS: list[str] = [
     "simcard_roam",
     "nr5g_nsa_band_lock",
     "nr5g_sa_band_lock",
+    # Alternate spellings answered by the MC888 Pro on 2026-09-02 that back
+    # disabled-by-default entities, so they ride the degradable batch. The
+    # first two carry the `network_` prefix of the group in the core list; the
+    # last two carry a different prefix each, which is why they were not found
+    # with it.
+    "network_rmcc",
+    "network_rmnc",
+    "network_simcard_roam",
+    "mc_modem_main_state",
+    "sim_pinnumber",
+    # Added in [3.3.10-dev3], from the same download. The two masks back the
+    # 5G band-lock sensors, which shipped with no source that any device had
+    # ever populated; `sim_pin_status` backs a new sensor.
+    "Z5g_lockband_nsa_mask",
+    "Z5g_lockband_sa_mask",
+    "sim_pin_status",
+    # Added in [3.3.10-dev4]. Both belong to the generic half of the
+    # `network_` family - the names carrying no technology, alongside
+    # `network_signalbar` and `network_cell_id` - so they describe whichever
+    # radio is serving rather than the 4G or 5G carrier specifically.
+    "network_rssi",
+    "network_sinr",
+    # Wi-Fi, added in [3.3.10-dev7]. Two aggregates: how many wireless clients
+    # are connected, and whether the radios are on. Answered by the MC888 Pro,
+    # silent on the MC7010.
+    "wifi_access_sta_num",
+    "wifi_onoff_state",
 ]
 
 

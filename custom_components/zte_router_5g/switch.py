@@ -16,7 +16,6 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -27,7 +26,12 @@ from .const import (
     WRITE_VERIFY_TIMEOUT,
 )
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import ZTEAboutEntity, build_device_info, get_first
+from .entity_defaults import default_enabled
+from .helpers import (
+    ZTEAboutEntity,
+    ZTEDeviceEntity,
+    get_first,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -180,6 +184,7 @@ async def async_setup_entry(
 
 class ZTERouterSwitch(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     SwitchEntity,
 ):
@@ -199,6 +204,9 @@ class ZTERouterSwitch(
         self._entry = entry
         self.entity_description = description
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
         # Last position the router actually reported. Held so a poll that omits
         # the key does not read as a confident "off" — see `_remember_position`.
         self._last_known = False
@@ -242,7 +250,21 @@ class ZTERouterSwitch(
         if not super().available:
             return False
         source = self.entity_description.source
-        return source is None or self.coordinator.endpoint_available(source)
+        if source is not None and not self.coordinator.endpoint_available(source):
+            return False
+
+        # A missing key is not an Off position. Every `value_fn` here resolves
+        # an absent value to False, so a router that does not have the setting
+        # — the MC888 Pro is an indoor unit and answers nothing for
+        # `ODU_led_switch` — gets a control showing a position it was never
+        # told. Sensors already treat present-but-empty as absent and return
+        # None; switches were the one platform rendering it as a state, which
+        # invites a write composed from a reading that does not exist.
+        keys = self.entity_description.state_keys
+        if not keys:
+            return True
+        data = self.coordinator.data or {}
+        return any(data.get(name) not in (None, "") for name in keys)
 
     @property
     def is_on(self) -> bool:
@@ -341,16 +363,10 @@ class ZTERouterSwitch(
             translation_placeholders={"entity": self.entity_description.key},
         )
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )
-
 
 class ZTEPausePollingSwitch(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     SwitchEntity,
 ):
@@ -416,10 +432,3 @@ class ZTEPausePollingSwitch(
         # 2. If we just resumed, trigger an immediate coordinator refresh
         if not state:
             await self.coordinator.async_force_refresh()
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )

@@ -14,7 +14,6 @@ from homeassistant.components.binary_sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -23,7 +22,8 @@ from .coordinator import (
     ENDPOINT_SMS_CAPACITY,
     ZTERouterDataUpdateCoordinator,
 )
-from .helpers import ZTEAboutEntity, build_device_info
+from .entity_defaults import default_enabled
+from .helpers import ZTEAboutEntity, ZTEDeviceEntity
 
 PARALLEL_UPDATES = 0
 
@@ -34,6 +34,12 @@ class ZTEBinarySensorEntityDescription(BinarySensorEntityDescription):
 
     group: str = "signal"
     value_fn: Callable[[Any], bool] | None = None
+    # The router keys this entity's value is built from. A boolean value
+    # function answers `False` for any input, an empty payload included, so it
+    # cannot say whether the router supplied anything — these can. Used by the
+    # populated record, which exists so that `reset_entities` does not disable
+    # an entity that reported a value yesterday and is merely blank today.
+    state_keys: tuple[str, ...] = ()
     extra_attrs_fn: Callable[[Any], dict[str, Any]] | None = None
     # Optional endpoint this entity's value comes from. When set, the entity
     # goes unavailable once that endpoint exhausts its own strike budget
@@ -98,6 +104,7 @@ OPERATOR_PROVISIONED_DESCRIPTION = ZTEBinarySensorEntityDescription(
 BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ZTEBinarySensorEntityDescription(
         key="sms_storage_full",
+        state_keys=("sms_nv_total", "sms_nv_rev_total"),
         source=ENDPOINT_SMS_CAPACITY,
         about=(
             "On when message storage has no room left. A full store makes the "
@@ -125,6 +132,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="reboot_schedule",
+        state_keys=("reboot_schedule_enable",),
         source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router reboots itself on an internal schedule. Execution "
@@ -159,6 +167,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="web_sleep",
+        state_keys=("web_sleep_switch",),
         source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router puts its web management page to sleep after "
@@ -173,6 +182,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="web_wake",
+        state_keys=("web_wake_switch",),
         source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router's web management interface automatically wakes "
@@ -186,6 +196,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="upnp_enabled",
+        state_keys=("upnpEnabled",),
         source=ENDPOINT_EXTENDED,
         about=(
             "Whether the router lets devices open their own inbound ports. "
@@ -201,6 +212,7 @@ BINARY_SENSORS: Final[tuple[ZTEBinarySensorEntityDescription, ...]] = (
     ),
     ZTEBinarySensorEntityDescription(
         key="sip_alg_enabled",
+        state_keys=("alg_sip_enable",),
         source=ENDPOINT_EXTENDED,
         about=(
             "SIP ALG rewrites internet-telephony traffic as it passes through. It "
@@ -243,6 +255,7 @@ async def async_setup_entry(
 
 class ZTEBestConnectionSensor(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -267,6 +280,9 @@ class ZTEBestConnectionSensor(
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self.entity_description = description
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
         self._entry = entry
 
         # Unique ID generated from description key for registry stability
@@ -290,16 +306,10 @@ class ZTEBestConnectionSensor(
             and data.get("wan_lte_ca") == "ca_activated"
         )
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )
-
 
 class ZTEOperatorProvisionedSensor(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -339,6 +349,9 @@ class ZTEOperatorProvisionedSensor(
         """Initialize the provisioning sensor."""
         super().__init__(coordinator)
         self.entity_description = description
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
@@ -350,6 +363,7 @@ class ZTEOperatorProvisionedSensor(
 
 class ZTEIntegrationHealthSensor(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -390,6 +404,16 @@ class ZTEIntegrationHealthSensor(
             "repairs",
             "last_good_update",
             "consecutive_failures",
+            # The uptime counter's measured drift. Every constant in the
+            # boot-time latch was set from one device over one week, and this
+            # is what lets a field report carry the device's own rate instead
+            # of requiring a recorder database extraction.
+            "drift_rate_pct",
+            "drift_rate_min_pct",
+            "drift_rate_max_pct",
+            "drift_intervals",
+            "drift_measured_seconds",
+            "drift_deficit_seconds",
         }
     )
 
@@ -402,6 +426,9 @@ class ZTEIntegrationHealthSensor(
         """Initialize the health sensor."""
         super().__init__(coordinator)
         self.entity_description = description
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
@@ -436,21 +463,16 @@ class ZTEIntegrationHealthSensor(
                     "repairs": snapshot.get("repairs", []),
                     "last_good_update": snapshot.get("last_good_update"),
                     "consecutive_failures": snapshot.get("consecutive_failures", 0),
+                    **self.coordinator.uptime_diagnostics,
                 }
             )
             or {}
         )
 
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
-        )
-
 
 class ZTERouterBinarySensor(
     ZTEAboutEntity,
+    ZTEDeviceEntity,
     CoordinatorEntity[ZTERouterDataUpdateCoordinator],
     BinarySensorEntity,
 ):
@@ -486,6 +508,9 @@ class ZTERouterBinarySensor(
         """Initialize the binary sensor."""
         super().__init__(coordinator)
         self.entity_description = description
+        self._attr_entity_registry_enabled_default = default_enabled(
+            description, coordinator.model
+        )
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
@@ -523,11 +548,4 @@ class ZTERouterBinarySensor(
                 self.entity_description.extra_attrs_fn(self.coordinator.data)
             )
             or {}
-        )
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device information with sub-device support."""
-        return build_device_info(
-            self.coordinator, self._entry, self.entity_description.group
         )

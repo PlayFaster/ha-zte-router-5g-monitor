@@ -67,6 +67,10 @@ def diagnostics_entry(mock_config_entry):
     coordinator.last_update_success_time = None
     coordinator.update_interval = None
     coordinator.health_snapshot = {"problem": True, "issues": [], "severity": "error"}
+    # The boot-time latch's own state, published in the download since
+    # `[3.3.10-dev1]`. A mock without it serializes a MagicMock.
+    coordinator.uptime_state = {"drift_rate_pct": None, "boot_time": None}
+    coordinator.uptime_diagnostics = {"drift_rate_pct": None}
     coordinator.endpoint_failures = {}
     coordinator.api.last_rejection = None
     coordinator.api.login_metadata = {}
@@ -516,6 +520,10 @@ async def test_diagnostics_never_raises_when_every_router_call_fails(
     coordinator = diagnostics_entry.runtime_data
     coordinator.async_run_discovery = AsyncMock(side_effect=OSError("router gone"))
     coordinator.health_snapshot = {"problem": True}
+    # The boot-time latch's own state, published in the download since
+    # `[3.3.10-dev1]`. A mock without it serializes a MagicMock.
+    coordinator.uptime_state = {"drift_rate_pct": None, "boot_time": None}
+    coordinator.uptime_diagnostics = {"drift_rate_pct": None}
 
     result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
 
