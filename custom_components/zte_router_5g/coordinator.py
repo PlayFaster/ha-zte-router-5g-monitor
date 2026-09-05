@@ -18,7 +18,13 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from ._compat import device_by_identifier
-from .api import ZTEAuthError, ZTECredentialsError, ZTERouterAPI
+from .api import (
+    SMS_STORE_ALL,
+    SMS_STORE_SIM,
+    ZTEAuthError,
+    ZTECredentialsError,
+    ZTERouterAPI,
+)
 from .const import (
     CONF_SCAN_INTERVAL,
     CONF_STOP_POLLING,
@@ -32,7 +38,7 @@ from .const import (
     SPARSE_PAYLOAD_MIN_HISTORY,
     UNREACHABLE_STRIKE_LIMIT,
 )
-from .helpers import get_router_model
+from .helpers import get_router_model, sms_instant
 from .observations import ObservationRecorder
 
 _LOGGER = logging.getLogger(__name__)
@@ -1464,6 +1470,37 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             await asyncio.sleep(DISCOVERY_SETTLE_SECONDS)
             return result
 
+    async def async_fetch_sms_snapshot(self) -> dict[str, list[dict[str, Any]]]:
+        """Read the router's message banks under the coordinator's update lock.
+
+        For the diagnostics download, which is the only caller. A poll keeps
+        only the newest message — `data["last_sms"]` — so the list itself
+        exists nowhere by the time a download is generated, and the number of
+        messages the router will actually hand over is what `delete_all`
+        operates on. Issue #56 could not be diagnosed without it: an MC888 Pro
+        reports a delete as successful and keeps the messages, and a download
+        showing the bank empty and a download showing two messages point at
+        opposite faults.
+
+        The lock is required for the same reason `async_run_discovery` takes
+        it: this shares the coordinator's API client, and the router permits
+        one session, so an unsynchronized read can re-login underneath a poll.
+
+        Both banks are read: `SMS_STORE_ALL` for the set `delete_all` operates
+        on, and the SIM alone so its count can be reported separately. That
+        second read is the only way anyone finds out whether the router's own
+        "all" selector really is the union — the reference device has an empty
+        SIM, so it cannot answer the question here.
+
+        Holds no state. Failures are the caller's to record.
+        """
+        async with self._async_update_lock:
+            combined = await self.api.get_sms_messages(
+                mem_store=SMS_STORE_ALL, tags="10"
+            )
+            sim = await self.api.get_sms_messages(mem_store=SMS_STORE_SIM, tags="10")
+            return {"all": combined, "sim": sim}
+
     def _sparse_payload_finding(self, data: dict[str, Any]) -> str | None:
         """Report a poll that succeeded while answering almost nothing.
 
@@ -1634,25 +1671,37 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             }
 
     def _check_new_sms(self, messages: list[dict[str, Any]]) -> None:
-        """Check for new SMS messages and fire events."""
+        """Fire an event for each message this device has not reported before.
+
+        Ordered on parsed instants rather than on the ISO strings. While every
+        timestamp carried `+00:00` the two were equivalent, but a message now
+        carries its router's own offset, and two messages either side of a
+        daylight-saving change carry different ones — where text order and time
+        order part company.
+        """
         if not messages:
             return
 
-        # Sort by date decoded ascending (oldest first) to ensure events fire in order.
-        # Filter out messages that lack a valid date_decoded.
-        sms_list = [m for m in messages if m.get("date_decoded")]
-        sms_list.sort(key=lambda x: x["date_decoded"])
+        dated = [
+            (instant, msg)
+            for msg in messages
+            if (instant := sms_instant(msg.get("date_decoded"))) is not None
+        ]
+        dated.sort(key=lambda pair: pair[0])
 
-        if not sms_list:
+        if not dated:
             return
 
+        latest_instant, latest_msg = dated[-1]
+
         # On first run, just set the baseline timestamp and hashes
-        if self.last_sms_timestamp is None:
-            self.last_sms_timestamp = sms_list[-1]["date_decoded"]
+        baseline = sms_instant(self.last_sms_timestamp)
+        if baseline is None:
+            self.last_sms_timestamp = latest_msg["date_decoded"]
             self.fired_sms_hashes = {
                 f"{msg['id']}_{msg['date_decoded']}"
-                for msg in sms_list
-                if msg["date_decoded"] == self.last_sms_timestamp
+                for instant, msg in dated
+                if instant == latest_instant
             }
             _LOGGER.debug(
                 "%s: SMS tracking baseline established at %s",
@@ -1662,11 +1711,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             return
 
         new_messages = []
-        for msg in sms_list:
+        for instant, msg in dated:
             msg_hash = f"{msg['id']}_{msg['date_decoded']}"
-            if msg["date_decoded"] > self.last_sms_timestamp or (
-                msg["date_decoded"] == self.last_sms_timestamp
-                and msg_hash not in self.fired_sms_hashes
+            if instant > baseline or (
+                instant == baseline and msg_hash not in self.fired_sms_hashes
             ):
                 new_messages.append(msg)
 
@@ -1692,7 +1740,9 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Update tracking state
             msg_hash = f"{msg['id']}_{msg['date_decoded']}"
-            if msg["date_decoded"] > self.last_sms_timestamp:
+            instant = sms_instant(msg["date_decoded"])
+            if instant is not None and instant > baseline:
+                baseline = instant
                 self.last_sms_timestamp = msg["date_decoded"]
                 self.fired_sms_hashes = {msg_hash}
             else:

@@ -18,12 +18,24 @@ The integration follows the standard Home Assistant Custom Component pattern, op
 - **`binary_sensor.py`**: Maps boolean states (e.g., `best_connection` logic).
 - **`switch.py`**: Implements "Pause Polling" to stop API calls without disabling the integration, allowing temporary exclusive access to the router WebUI. Also the two router-facing switches, which confirm their own writes by targeted read-back rather than waiting for the debounced poll (`verify_after_write` + `state_key`) and latch their last reported position so a payload missing the key is never rendered as "off".
 - **`button.py`**: Triggers stateless actions (Refresh Now, Reboot, Delete All SMS). "Refresh Now" forces an immediate coordinator poll via `async_force_refresh()` — the force variant, so it fetches even while Pause Polling is on — complementing the Pause Polling switch and the configurable polling interval.
-- **`diagnostics.py`**: Builds and sanitizes the diagnostics download. Since 3.3.8 it also **runs a discovery pass against the router** — mining the web UI's JavaScript for `cmd` names, probing the unknown ones, and publishing what answered. That makes the download a network operation of roughly 40 seconds and several hundred requests, which is why every section is wrapped: Home Assistant does not guard `config_entry_diagnostics`, so an escaping exception is an HTTP 500 and no file at all. Blanks credentials and carrier identity, pseudonymizes IPs/cell IDs/SMS senders to stable tokens, summarizes APN profiles to their shape, and sweeps for IP/MAC-shaped strings under unknown keys.
+- **`diagnostics.py`**: Builds and sanitizes the diagnostics download. Since 3.3.8 it also **runs a discovery pass against the router** — mining the web UI's JavaScript for `cmd` names, probing the unknown ones, and publishing what answered. That makes the download a network operation of roughly 40 seconds and several hundred requests, which is why every section is wrapped: Home Assistant does not guard `config_entry_diagnostics`, so an escaping exception is an HTTP 500 and no file at all. Blanks credentials and carrier identity, pseudonymizes IPs/cell IDs/SMS senders to stable tokens, summarizes APN profiles to their shape, and sweeps for IP/MAC-shaped strings under unknown keys. Since 3.3.11 it also carries an `sms` section — the message bank as the router will serve it, sanitized entry by entry, beside the `sms_capacity_info` counters — and a `data_usage` section deriving rates from the byte counters and the router's own clocks.
 - **`number.py`**: Provides UI control over the `DataUpdateCoordinator` refresh interval with persistent storage in `ConfigEntry` options.
 - **`entity_defaults.py`**: `default_enabled(description, model)`, the single answer to whether an entity is enabled by default, and the per-model overlay it consults. Every platform calls it when building an entity and `reset_entities` calls it when restoring defaults — two readers of different sources would disagree, and a reset would undo the overlay every time it ran. It is also the only route by which a changed default reaches an installation that already exists, because Home Assistant reads `entity_registry_enabled_default` once, at first registration.
 - **`observations.py`**: What the integration learns from watching successive polls, in one post-poll step on the success path. Two records: transition history for six text values that produce no long-term statistics, and the set of entities that have ever reported a value on this device. Both are keyed by device and both treat an unreadable store as "nothing learned" — no storage fault may fail a setup or a poll.
 - **`reset_entities.py`**: The `reset_entities` action. Bulk-manages entity enabled states, previewing by default. Controls — buttons, the number, Pause Polling — are in scope for the baseline operations and out of scope for the three state-driven ones, because a control's state is local: a button never pressed reads `unknown`, and `disable_unknown` would otherwise switch off Refresh Now and Reboot Router.
 - **`config_flow.py`**: Manages initial setup and reconfiguration via `OptionsFlow`, storing credentials in `entry.options`. Normalizes the host input (`_clean_host`) before storage, and on edit screens leaves credential fields blank (masked, never pre-filled) — restoring the stored password on a blank submit via `_merge_credentials`, so the password can be re-set without ever being displayed.
+
+#### The reads the download makes for itself
+
+Two sections of the diagnostics download ask the router something the poll never stores, and both were added in 3.3.11 because a reporter's file could not distinguish two opposite faults.
+
+`coordinator.async_fetch_sms_snapshot()` reads the device message bank. A poll keeps only the newest message as `data["last_sms"]`, so the list itself exists nowhere by the time a file is generated — and the list is exactly what `delete_all` operates on. Published beside the `sms_capacity_info` counters, it separates "the firmware refuses a real delete" from "nothing was ever there to delete", which need opposite fixes and looked identical in every download before it.
+
+It takes `_async_update_lock`, for the reason `async_run_discovery` does: it shares the coordinator's API client, and the router permits one session, so an unsynchronized read can re-login underneath a live poll and invalidate the cookie that poll is using.
+
+The `data_usage` section is arithmetic on values already published — bytes divided by the elapsed time the router reports beside them, for the month and for the session, plus the ratio between the two rates. Establishing that an MC888 Pro's monthly counter had advanced faster than its link could physically carry, while its session counter never had, took four separate downloads and hand arithmetic. Nothing in the section applies a threshold or flags a value: which counter is wrong is not decidable from the device.
+
+`monthly_time` and `flux_monthly_time` are polled in `_EXTENDED_PARAMS` solely to make that division possible. No entity reads either one.
 
 #### The one read that is not part of the poll
 
@@ -241,6 +253,36 @@ Reads recover from a stolen session; writes do not, because a write on a dead se
 **The recovery is ordering, not detection.** `_ensure_session()` runs one short authenticated read _before_ the write derives its `AD`, and is called from `get_ad()` — the choke point every write passes through. Recovering _after_ a refused write was implemented first and **verified not to work on hardware**; the reason is not established, and the tidy explanation offered for it was disproved by `scripts/hardware_check.py`. Full detail in `docs/zte_how_to_access.md`.
 
 Do not add `"failure"` to the session-expiry strings. It is equally what a declined command returns, and retrying would resend it — for `send_sms`, twice.
+
+### A success result does not mean the command was carried out
+
+`_require_success` detects an explicit refusal and nothing else. Measured on the reference MC7010 on 2026-09-05: `DELETE_SMS` returns `{"result": "success"}` for a message id the router does not hold, so the result code cannot distinguish a delete that happened from one that did not. A firmware that accepts the command and keeps the messages therefore reported a completed deletion, which is the fault reported against an MC888 Pro in issue #56.
+
+**Where the effect of a destructive write is observable, observe it.** `api.verify_deleted` re-lists the bank afterwards and raises when any id it asked for is still present. The comparison is against the requested ids and not against the bank being empty — a message arriving between the delete and the re-list has not caused a failure — and an empty bank is a success rather than a delete of nothing.
+
+**The check belongs to the operation, not to the code path that was fixed first.** It shipped in `[3.3.11-dev1]` inside `delete_all`, which is the Delete All button and the `delete_all_sms` action at `keep_last: 0`. The action's `keep_last` branch and the single-message `delete_sms` action build their own id lists and were left reporting success exactly as before. Three routes, one operation, and a fix that covered one of them for a release.
+
+The hypothesis this replaced is worth recording, because it was plausible and wrong. ZTE's own web UI sends `msg_id=3;` with a trailing separator where this integration sends `msg_id=3`. Tested directly on hardware: both forms delete. The difference is not what the MC888 Pro refuses, and changing the request on that evidence would have shipped a guess as a fix.
+
+### SMS storage is two banks, and "all" was one of them
+
+`mem_store` selects the storage a message query covers: `"1"` is the router's own memory, `"0"` the SIM, `"2"` the router's own selector for both. `delete_all` queried `"1"`, so a message held on the SIM survived an operation whose control is labelled **Delete All** and which reported success.
+
+The fix uses the router's selector rather than querying both banks and merging here, and the reason is specific: ids are per-bank, the message response carries no field naming the bank, and `DELETE_SMS` takes no `mem_store`. Two messages sharing an id could be neither told apart nor individually targeted, so a merge of ours would be inventing an answer to a question the API cannot express.
+
+**`"2"` as the union is observed, not documented.** On the reference MC7010 on 2026-09-05 it returned exactly what `"1"` returned, across all three tag filters, on a device whose SIM bank was empty — consistent with the union and not proof of it. The diagnostics `sms` section therefore reports the SIM bank separately, as a count and its ids: the same figure in both places confirms the union, and a SIM message absent from the combined list means `delete_all` is still missing messages. Neither device available here can produce that evidence.
+
+The knock-on reaches `keep_last`. Ids cannot order a list drawn from both banks, so it orders by the moment each message carries. A message with no usable date sorts after every dated one — it is not known to be recent — but is still counted toward the keep count, because counting only dated messages lets "keep two of four" delete all four on a device whose dates will not parse.
+
+### A received SMS timestamp carries the router's own offset
+
+`date` on a received message is `yy,mm,dd,HH,MM,SS,<offset>`. The six leading values are the router's **local** time and the seventh is the offset in quarter-hours — `+4` is one hour ahead. `_parse_date` discarded that field and stamped `UTC` on the local values, publishing every message an offset's worth late.
+
+It reached the user rather than staying internal: Home Assistant renders a timestamp in the viewer's own zone, so an hour's error is an hour's error on screen. The blast radius is narrow — the Last SMS sensor's `date` attribute and the `zte_router_5g_sms_received` event, neither recorded — but that is a property of where the value is used, not a reason it was acceptable.
+
+An unreadable or implausible offset now costs the offset and keeps the timestamp. That asymmetry is deliberate: a message an hour out is still orderable, and a message with no usable date is excluded from ordering and from the new-message event entirely.
+
+**One change follows from the other.** `_check_new_sms` compared `date_decoded` as text, which was equivalent to comparing instants only because every value carried the same fabricated `+00:00`. With real offsets the two orders differ at a daylight-saving change, where `02:30+02:00` sorts later as text and earlier in time than `02:00+01:00`. Everything that orders messages now goes through `helpers.sms_instant`, which is also the single place deciding whether a value is a timestamp at all — `_parse_date` returns the router's string unchanged when it cannot read it, so `date_decoded` is not guaranteed to be one.
 
 ### Mocks cannot falsify a belief about the router
 

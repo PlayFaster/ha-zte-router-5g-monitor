@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.11] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates
+
+### Summary
+
+- **Timezone-Aware SMS Timestamps**: SMS timestamps now parse the router's reported timezone offset, ensuring correct local time display and chronologically accurate message ordering across daylight-saving transitions.
+- **Verified Multi-Bank SMS Deletion**: SMS deletion operations now span both device memory and SIM storage banks, and all deletion actions verify that targeted messages were purged before reporting success.
+- **Diagnostics SMS & Data Rate Analysis**: Diagnostics downloads now capture sanitized SMS bank metadata and calculate average data transfer rates against elapsed timers to identify counter anomalies.
+
+### Added
+
+- **Sanitized SMS Bank in Diagnostics**: Added an `sms` section to diagnostics downloads containing sanitized message metadata (message IDs, status tags, timestamps, and body lengths without private message content or sender numbers), capacity counters, SIM bank separation, and last deletion attempt results.
+- **Data Usage Rate Analysis in Diagnostics**: Added a `data_usage` section to diagnostics downloads computing average upload and download rates against `monthly_time` and `flux_monthly_time` elapsed timers.
+
+### Fixed
+
+- **Router Timezone Offset in SMS Timestamps**: Fixed SMS timestamps discarding the router's quarter-hour timezone offset, restoring correct local message times on routers reporting non-UTC offsets.
+- **Timezone-Aware SMS Ordering**: New message detection now orders on parsed timestamps rather than raw text, ensuring reliable arrival ordering during timezone and DST changes.
+- **Multi-Bank SMS Deletion**: `delete_all` and `delete_all_sms` now query the combined device and SIM storage bank union (`mem_store="2"`), preventing SIM-stored messages from being left behind.
+- **Deletion Verification Across All Routes**: All SMS deletion operations (`delete_all_sms`, single `delete_sms`, and the Delete All button) now verify that targeted message IDs were purged from the router, raising an error if messages survive.
+- **Date-Ordered `keep_last` Retention**: The `keep_last` option in `delete_all_sms` now retains the newest messages by date rather than ID across combined storage banks.
+
+---
+
 ## [3.3.10] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion
 
 ### Summary
@@ -529,6 +552,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
   - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
   - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)
   - [\[3.3.8\] - 2026-09-01 - Release: Web UI Parameter Mining, Firmware Update Sensors, and Firmware Key Changes](#338---2026-09-01---release-web-ui-parameter-mining-firmware-update-sensors-and-firmware-key-changes)

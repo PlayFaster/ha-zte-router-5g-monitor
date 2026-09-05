@@ -192,9 +192,13 @@ async def test_delete_all_reuses_the_delete_payload(mock_aiohttp_client):
     api.cookies = {"stok": "test"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
-    mock_aiohttp_client.post.return_value = MockResponse(
-        json_data={"messages": [{"id": "1"}, {"id": "2"}], "result": "success"}
-    )
+    mock_aiohttp_client.post.side_effect = [
+        MockResponse(json_data={"messages": [{"id": "1"}, {"id": "2"}]}),
+        MockResponse(json_data={"result": "success"}),
+        # `delete_all` re-lists to verify, so the write is no longer the last
+        # call — the assertions below name it explicitly.
+        MockResponse(json_data={"messages": []}),
+    ]
 
     with (
         patch.object(api, "get_ad", return_value="test_ad"),
@@ -203,7 +207,7 @@ async def test_delete_all_reuses_the_delete_payload(mock_aiohttp_client):
     ):
         await api.delete_all()
 
-    payload = mock_aiohttp_client.post.call_args[1]["data"]
+    payload = mock_aiohttp_client.post.call_args_list[1][1]["data"]
     assert "goformId=DELETE_SMS" in payload
     assert re.search(r"msg_id=1;2(&|$)", payload), (
         f"ids are no longer semicolon-joined: {payload}"

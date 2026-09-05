@@ -46,9 +46,25 @@ def test_api_hex_decode():
 
 
 def test_api_parse_date():
-    """Test date parsing helper."""
+    """The seventh field is the router's offset, in quarter-hours.
+
+    The six leading values are the router's **local** time. Reading them as
+    UTC — which this assertion previously required, offset field and all —
+    published every message an offset's worth late, and Home Assistant renders
+    a timestamp in the viewer's zone, so the error reached the screen.
+    """
     api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
-    assert api._parse_date("23,10,10,10,0,0,+1") == "2023-10-10T10:00:00+00:00"
+    assert api._parse_date("23,10,10,10,0,0,+4") == "2023-10-10T10:00:00+01:00"
+    assert api._parse_date("23,10,10,10,0,0,-8") == "2023-10-10T10:00:00-02:00"
+    # A device reporting no offset, and one reporting none at all. Both mean
+    # UTC, which is what every device measured so far reports.
+    assert api._parse_date("23,10,10,10,0,0,0") == "2023-10-10T10:00:00+00:00"
+    assert api._parse_date("23,10,10,10,0,0") == "2023-10-10T10:00:00+00:00"
+    # An unreadable or impossible offset costs the offset, not the timestamp:
+    # being an hour out is a lesser failure than being undated, which excludes
+    # a message from ordering and from the new-message event entirely.
+    assert api._parse_date("23,10,10,10,0,0,east") == "2023-10-10T10:00:00+00:00"
+    assert api._parse_date("23,10,10,10,0,0,999") == "2023-10-10T10:00:00+00:00"
     assert api._parse_date("") is None
     assert api._parse_date("invalid") == "invalid"
 
@@ -261,7 +277,7 @@ async def test_api_get_last_sms_content(mock_aiohttp_client):
     msg = await api.get_last_sms_content()
     assert msg["content_decoded"] == "Hello"
     assert msg["number_decoded"] == "123"
-    assert msg["date_decoded"] == "2023-10-10T10:00:00+00:00"
+    assert msg["date_decoded"] == "2023-10-10T10:00:00+00:15"
 
 
 @pytest.mark.asyncio
@@ -345,10 +361,20 @@ async def test_api_delete_all_success(mock_aiohttp_client):
     mock_aiohttp_client.post.side_effect = [
         MockResponse(json_data={"messages": [{"id": "1"}, {"id": "2"}]}),
         MockResponse(json_data={"result": "ok"}, status=200),
+        # The post-delete re-list. `delete_all` verifies rather than trusting
+        # the result code, because this API answers success for a delete it
+        # does not carry out.
+        MockResponse(json_data={"messages": []}),
     ]
 
     with patch.object(api, "login"), patch.object(api, "get_ad", return_value="ad"):
         assert await api.delete_all() == 200
+    assert api.last_delete == {
+        "ids_requested": ["1", "2"],
+        "result": {"result": "ok"},
+        "ids_surviving": [],
+        "keep_last": None,
+    }
 
 
 @pytest.mark.asyncio
@@ -425,7 +451,7 @@ async def test_api_get_sms_messages_success(mock_aiohttp_client):
     assert len(msgs) == 1
     assert msgs[0]["content_decoded"] == "Hello"
     assert msgs[0]["number_decoded"] == "123"
-    assert msgs[0]["date_decoded"] == "2023-10-10T10:00:00+00:00"
+    assert msgs[0]["date_decoded"] == "2023-10-10T10:00:00+00:15"
 
 
 @pytest.mark.asyncio

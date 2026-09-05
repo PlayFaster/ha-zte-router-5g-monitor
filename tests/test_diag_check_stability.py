@@ -151,6 +151,61 @@ def test_a_field_present_in_one_run_only_is_a_difference() -> None:
     assert not _outcome(report, "same set of fields")
 
 
+def test_the_derived_usage_figures_are_allowed_to_move() -> None:
+    """They are the byte counters and their clocks under another name.
+
+    Two passes twenty seconds apart differ in every one of them, which is the
+    device living its life rather than the download changing shape.
+    """
+    first = _artefact([], {})
+    first["data_usage"] = {
+        "spelling_used": {"monthly_rx_bytes": "flux_monthly_rx_bytes"},
+        "values": {"monthly_rx_bytes": "100"},
+        "monthly": {"total_bytes": 100.0, "total_bytes_per_second": 1.0},
+        "monthly_rate_over_session_rate": 1.0,
+        "uptime_seconds": 10.0,
+    }
+    second = _artefact([], {})
+    second["data_usage"] = {
+        "spelling_used": {"monthly_rx_bytes": "flux_monthly_rx_bytes"},
+        "values": {"monthly_rx_bytes": "160"},
+        "monthly": {"total_bytes": 160.0, "total_bytes_per_second": 1.6},
+        "monthly_rate_over_session_rate": 1.6,
+        "uptime_seconds": 30.0,
+    }
+    report = Report()
+
+    check_stability(first, second, report)
+
+    assert _outcome(report, "no structural difference")
+
+
+def test_a_device_resolving_a_different_spelling_is_a_difference() -> None:
+    """Which vocabulary a device answers on is a property of the device.
+
+    A pass that resolved it differently from the one before it has either lost
+    a session partway or read a truncated response — the instability this
+    check exists to catch, and the reason `spelling_used` is not excluded
+    along with the figures beside it.
+
+    Stated on `limit_unit` rather than on one of the byte concepts: a path
+    such as `/data_usage/spelling_used/monthly_rx_bytes` already matches the
+    `monthly_` and `_rx_` alternatives that predate this section, so those
+    concepts are tolerated whatever this rule says.
+    """
+    first = _artefact([], {})
+    first["data_usage"] = {"spelling_used": {"limit_unit": "data_volume_limit_unit"}}
+    second = _artefact([], {})
+    second["data_usage"] = {
+        "spelling_used": {"limit_unit": "flux_data_volume_limit_unit"}
+    }
+    report = Report()
+
+    check_stability(first, second, report)
+
+    assert not _outcome(report, "no structural difference")
+
+
 def test_an_unpseudonymized_value_change_is_a_difference() -> None:
     """A real value changing under a non-volatile path is what this catches."""
     first = _artefact([], {"session": "fresh login"})

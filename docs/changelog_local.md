@@ -5,6 +5,10 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
+  - [\[3.3.11-dev3\] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All](#3311-dev3---2026-09-05---sms-timestamps-carry-their-routers-offset-delete-all-means-all)
+  - [\[3.3.11-dev2\] - 2026-09-05 - Uptime in the Usage Section Corrected](#3311-dev2---2026-09-05---uptime-in-the-usage-section-corrected)
+  - [\[3.3.11-dev1\] - 2026-09-05 - SMS Bank and Data Usage in the Diagnostics Download; Verified SMS Deletion](#3311-dev1---2026-09-05---sms-bank-and-data-usage-in-the-diagnostics-download-verified-sms-deletion)
   - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
   - [\[3.3.10-dev13\] - 2026-09-05 - WiFi Back on System; Firmware Sensors Off by Default; Release Documentation](#3310-dev13---2026-09-05---wifi-back-on-system-firmware-sensors-off-by-default-release-documentation)
   - [\[3.3.10-dev12\] - 2026-09-05 - One Inherited `device_info`, Replacing Ten Copies](#3310-dev12---2026-09-05---one-inherited-device_info-replacing-ten-copies)
@@ -232,6 +236,90 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.11] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates
+
+### Summary
+
+- **Timezone-Aware SMS Timestamps**: SMS timestamps now parse the router's reported timezone offset, ensuring correct local time display and chronologically accurate message ordering across daylight-saving transitions.
+- **Verified Multi-Bank SMS Deletion**: SMS deletion operations now span both device memory and SIM storage banks, and all deletion actions verify that targeted messages were purged before reporting success.
+- **Diagnostics SMS & Data Rate Analysis**: Diagnostics downloads now capture sanitized SMS bank metadata and calculate average data transfer rates against elapsed timers to identify counter anomalies.
+
+### Added
+
+- **Sanitized SMS Bank in Diagnostics**: Added an `sms` section to diagnostics downloads containing sanitized message metadata (message IDs, status tags, timestamps, and body lengths without private message content or sender numbers), capacity counters, SIM bank separation, and last deletion attempt results.
+- **Data Usage Rate Analysis in Diagnostics**: Added a `data_usage` section to diagnostics downloads computing average upload and download rates against `monthly_time` and `flux_monthly_time` elapsed timers.
+
+### Fixed
+
+- **Router Timezone Offset in SMS Timestamps**: Fixed SMS timestamps discarding the router's quarter-hour timezone offset, restoring correct local message times on routers reporting non-UTC offsets.
+- **Timezone-Aware SMS Ordering**: New message detection now orders on parsed timestamps rather than raw text, ensuring reliable arrival ordering during timezone and DST changes.
+- **Multi-Bank SMS Deletion**: `delete_all` and `delete_all_sms` now query the combined device and SIM storage bank union (`mem_store="2"`), preventing SIM-stored messages from being left behind.
+- **Deletion Verification Across All Routes**: All SMS deletion operations (`delete_all_sms`, single `delete_sms`, and the Delete All button) now verify that targeted message IDs were purged from the router, raising an error if messages survive.
+- **Date-Ordered `keep_last` Retention**: The `keep_last` option in `delete_all_sms` now retains the newest messages by date rather than ID across combined storage banks.
+
+## [3.3.11-dev3] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All
+
+### Summary
+
+Three faults found while reviewing the delete work rather than reported: a discarded timezone field, a bulk delete that covered one of two storage banks, and a verification that covered one of three delete routes.
+
+### Fixed
+
+- **A received message's timestamp carries the router's own offset.** The `date` field is `yy,mm,dd,HH,MM,SS,<offset>`, the six leading values are the router's **local** time, and the seventh is the offset in quarter-hours. The seventh was discarded and `UTC` stamped in its place, publishing every message an offset's worth late — an hour on a router at UTC+1. Home Assistant renders a timestamp in the viewer's zone, so the error reached the screen. Verified on hardware: a message sent at 12:18 local arrived as `26,09,05,12,18,07,+4`.
+
+  **Displayed SMS times move on any router reporting a non-zero offset.** The affected value is the Last SMS sensor's `date` attribute and the `date` field of the `zte_router_5g_sms_received` event. Neither is recorded — `date` is in `_unrecorded_attributes` and no SMS timestamp sensor exists — so no history or statistics change. A device reporting `0` is unaffected: of the two models measured, the MC888 Pro reports `0` and only the MC7010 reports an offset.
+
+  An unreadable or implausible offset costs the offset, not the timestamp. Being an hour out is a lesser failure than being undated, which excludes a message from ordering and from the new-message event.
+
+- **`_check_new_sms` orders on parsed instants rather than on ISO text.** While every timestamp carried a fabricated `+00:00` the two orders agreed and the string comparison was harmless. Carrying a real offset they part company at a daylight-saving change, where a message written `02:30+02:00` sorts later as text and earlier in time than one written `02:00+01:00`.
+
+- **`delete_all` covers both storage banks.** It listed device memory only, so a message held on the SIM was left in place while the operation reported success — the control says "delete all" and did not. It now lists with the router's own `mem_store="2"` selector rather than merging two queries here: ids are per-bank and the response names no bank, so a merge of ours could not tell two messages sharing an id apart. **That `"2"` is the union is observed, not documented** — on the reference device it returned exactly what `"1"` did, with an empty SIM.
+
+- **Every route that deletes now verifies.** `[3.3.11-dev1]` added the survivor check to `delete_all`, which is the Delete All button and the `delete_all_sms` action at `keep_last: 0`. The action's `keep_last` branch and the single-message `delete_sms` action deleted without it, so the same silent success remained on two of the three routes. The check is now a public `verify_deleted`, called by all three.
+
+### Changed
+
+- **`keep_last` keeps the newest by date, not by id.** Ids are per-bank, so with both banks in one list they say nothing about arrival order. A message the router dates unreadably sorts after every dated one — it is not known to be recent, so it goes first — but it is still **counted toward `keep_last`**, which is what stops "keep two of four" from deleting all four when the dates cannot be read. Undated messages are reported in the log and keep their previous id ordering among themselves.
+
+- **The `keep_last` a caller chose is recorded** beside the delete attempt and published in the download. It cannot be recovered afterwards: the ids say what was targeted, but reconstructing the parameter needs the bank contents at that moment, and a download reports them later.
+
+- **The diagnostics `sms` section reports the SIM bank separately**, as a count and a list of ids. This is the only route to establishing whether `mem_store="2"` really is the union — the reference device's SIM is empty, so the question cannot be settled here. A SIM message present in both places confirms it; one absent from the combined list means `delete_all` is still missing messages.
+
+### Measured
+
+**The trailing-separator hypothesis was tested and rejected in `[3.3.11-dev1]`, and nothing since changes that.** ZTE's own web UI sends `msg_id=3;` where this integration sends `msg_id=3`; both forms delete on the reference hardware, so the difference is not what a refusing firmware is refusing.
+
+## [3.3.11-dev2] - 2026-09-05 - Uptime in the Usage Section Corrected
+
+### Fixed
+
+- **`data_usage.uptime_seconds` reported `null` on live hardware** while every other figure in the section was correct. `coordinator.data["boot_time"]` holds a `datetime`; it only reads as a string once a JSON encoder has been over it, which happens after the section is built. The section accepted only the string form. It now accepts both, and catches `TypeError` beside `ValueError` so a naive instant yields no figure rather than a wrong one.
+
+  The test that should have caught it used the string form, which was an assumption about the coordinator rather than an observation of it. It is now parametrized over the live `datetime`, the string, a non-timestamp, a non-string and a naive datetime.
+
+## [3.3.11-dev1] - 2026-09-05 - SMS Bank and Data Usage in the Diagnostics Download; Verified SMS Deletion
+
+### Summary
+
+Diagnostics downloads now capture sanitized SMS bank metadata and data counter rate calculations to assist in diagnosing message deletion and data counter scaling behavior across router firmwares.
+
+### Added
+
+- **Sanitized SMS section in diagnostics**: Captures message bank metadata (message IDs, status tags, timestamps, content lengths, capacity counters, and last deletion attempt status). Message text and telephone numbers remain strictly redacted.
+- **`coordinator.async_fetch_sms_snapshot()`**: Helper called under the coordinator lock during diagnostics generation to retrieve the current SMS bank without triggering session collisions during normal polling.
+- **Data usage rate analysis in diagnostics**: Computes implied data transfer rates for monthly and session counters against router elapsed timers (`monthly_time` and `flux_monthly_time`), surfacing counter anomalies or overflow conditions.
+- **Polled elapsed timers**: Added `monthly_time` and `flux_monthly_time` to `_EXTENDED_PARAMS` to provide the divisor for rate calculations across MC7010 and MC888/MC889 firmware models.
+- **Last deletion tracking**: Records the last `DELETE_SMS` requested IDs and outcome on the API instance for inclusion in diagnostic captures.
+
+### Fixed
+
+- **SMS deletion verification**: `delete_all` now re-lists message IDs after deletion and raises an error if requested messages remain in storage, preventing false success reports on firmwares that return success without purging messages.
+
+### Measured
+
+- **SMS deletion payload syntax**: Verified on live hardware that trailing semicolons in `msg_id` parameters do not alter deletion behavior.
+- **Data volume calculation**: Confirmed that integration unit conversion (`_get_bytes_to_gb`) accurately reflects raw router byte counters (`monthly_rx_bytes` / `flux_monthly_rx_bytes`).
 
 ## [3.3.10] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion
 

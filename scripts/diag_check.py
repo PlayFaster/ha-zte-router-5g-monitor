@@ -108,6 +108,16 @@ _VOLATILE = re.compile(
     # passes ten seconds apart.
     r"|lte_ca|_band$|_bandwidth$|_pci$|_arfcn$|cell_id"
     r"|_update|_date$|_temp|temperature"
+    # The derived usage figures, which are the counters and their clocks by
+    # another name: two passes twenty seconds apart differ in every one of
+    # them. `/data_usage/spelling_used/` is deliberately *not* excluded here —
+    # which vocabulary a device answers on is a property of the device, and a
+    # pass that resolved it differently from the one before it is the kind of
+    # instability this check exists to catch. Note that the byte concepts
+    # under it are tolerated anyway, by the `monthly_`, `_rx_` and `_tx_`
+    # alternatives above, which match the concept name in the path.
+    r"|^/data_usage/(monthly|session|values)/"
+    r"|^/data_usage/(monthly_rate_over_session_rate|uptime_seconds)$"
     # This script's own bookkeeping, and the free-text notes, which are a
     # list compared by position: a pass emitting one extra note shifts every
     # entry after it and reports a dozen differences for one real one. The

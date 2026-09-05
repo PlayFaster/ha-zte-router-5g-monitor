@@ -6,7 +6,7 @@ import logging
 import re
 import urllib.parse
 from collections.abc import Callable, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from time import monotonic
 from typing import Any, NamedTuple, cast
 
@@ -32,6 +32,23 @@ from .helpers import is_gsm7
 from .known_names import EXPECTED_NAMES, KNOWN_NAMES, REFUSABLE_NAMES
 
 _LOGGER = logging.getLogger(__name__)
+
+# `mem_store` selects which storage a message query covers: "1" is the router's
+# own memory, "0" the SIM, and "2" the router's own selector for both.
+#
+# **"2" as the union is observed, not documented.** On the reference MC7010 on
+# 2026-09-05 it returned exactly what "1" returned, across all three tag
+# filters, on a device whose SIM bank was empty — consistent with the union and
+# not proof of it. Using the router's own selector is still preferable to
+# querying two banks and merging them here: ids are per-bank and the response
+# carries no field naming which bank a message came from, so a merge of our own
+# could not tell two messages sharing an id apart.
+#
+# The diagnostics download reports the SIM count separately, so the first
+# reporter holding a SIM message settles this.
+SMS_STORE_DEVICE = "1"
+SMS_STORE_SIM = "0"
+SMS_STORE_ALL = "2"
 
 
 # The batch poll is split in two because the router's GET is bounded by a URL
@@ -260,6 +277,19 @@ _EXTENDED_PARAMS: list[str] = [
     "opms_wan_mode",
     "opms_wan_auto_mode",
     "apn_interface_version",
+    # --- Billing-cycle clock ---
+    #
+    # How long the monthly byte counters have been accumulating. No entity
+    # reads it: it is the divisor that turns a monthly total into a rate, and
+    # a rate is what says whether a device's own counters agree with each
+    # other. Issue #56 needed four downloads and hand arithmetic to establish
+    # that they did not.
+    #
+    # Both spellings, for the same reason as every other pair here — the
+    # MC7010 answers `monthly_time` and the MC888 Pro `flux_monthly_time`,
+    # both verified `vetted` by discovery on 2026-09-05.
+    "monthly_time",
+    "flux_monthly_time",
     # --- Router settings ---
     "upnpEnabled",
     "alg_sip_enable",
@@ -723,6 +753,13 @@ class ZTERouterAPI:
         # download is asked for. These two carry what was rejected and what the
         # login saw, and both are sanitized on the way out.
         self.last_rejection: dict[str, Any] | None = None
+        # The most recent `DELETE_SMS` attempt. `_require_success` cannot tell
+        # a refused delete from an honoured one on this API: the router
+        # answers `{"result":"success"}` for a message id it does not hold,
+        # measured on the reference MC7010 on 2026-09-05. What was asked for,
+        # what was answered, and which ids survived is the only evidence a
+        # download can carry — see `_record_delete`.
+        self.last_delete: dict[str, Any] | None = None
         self.login_metadata: dict[str, Any] = {}
         self._cookies_found_in = "none"
 
@@ -749,6 +786,38 @@ class ZTERouterAPI:
             "keys_absent": sorted(k for k in asked if k not in payload),
             "payload": dict(payload),
         }
+
+    def _record_delete(self, msg_id: str, result: Any) -> None:
+        """Hold the most recent `DELETE_SMS` attempt, for diagnostics.
+
+        Ids and a result code only — no message content and no sender number
+        ever reach this record, so it needs no sanitizing beyond what
+        `diagnostics.py` already applies to the payload it sits beside.
+
+        Bounded to the most recent attempt and never cleared by a later poll:
+        a reporter presses the button and then downloads, and a record that
+        expired between the two would be absent exactly when it is wanted.
+        """
+        self.last_delete = {
+            "ids_requested": [part for part in msg_id.split(";") if part],
+            "result": dict(result) if isinstance(result, dict) else None,
+            "ids_surviving": None,
+            # Which messages a bulk delete targeted is decided by `keep_last`,
+            # and it cannot be recovered afterwards: the ids say what was
+            # aimed at, but reconstructing the parameter needs the bank
+            # contents at that moment, and a download reports them later.
+            "keep_last": None,
+        }
+
+    def note_delete_parameter(self, keep_last: int | None) -> None:
+        """Record the `keep_last` a caller chose, beside the attempt itself."""
+        if self.last_delete is not None:
+            self.last_delete["keep_last"] = keep_last
+
+    def _record_delete_survivors(self, surviving: list[str]) -> None:
+        """Add the post-delete check's finding to the record above."""
+        if self.last_delete is not None:
+            self.last_delete["ids_surviving"] = sorted(surviving)
 
     def _record_unparsable(self, status: int, body: str) -> None:
         """Hold a preview of a response that was not JSON at all.
@@ -908,30 +977,62 @@ class ZTERouterAPI:
         )
 
     def _parse_date(self, date_str: str) -> str | None:
+        """Decode a received message's timestamp, offset included.
+
+        The field is `yy,mm,dd,HH,MM,SS,<offset>`, and the six leading values
+        are the **router's local** time rather than UTC. The seventh is the
+        offset in quarter-hours, so `+4` is one hour ahead. Measured: a message
+        sent at 12:18 local on a router running at UTC+1 arrived as
+        `26,09,05,12,18,07,+4`.
+
+        That field was previously discarded and `UTC` stamped in its place,
+        which published every message an offset's worth late — an hour, on the
+        device above. Home Assistant renders a timestamp in the viewer's own
+        zone, so the error reached the user's screen directly.
+
+        A device reporting `0` is unaffected, which is most of them.
+        """
         if not date_str:
             return None
         try:
             parts = date_str.split(",")
             if len(parts) >= 6:
-                year = int(f"20{parts[0]}")
-                month = int(parts[1])
-                day = int(parts[2])
-                hour = int(parts[3])
-                minute = int(parts[4])
-                second = int(parts[5])
-                dt = datetime(
-                    year,
-                    month,
-                    day,
-                    hour,
-                    minute,
-                    second,
-                    tzinfo=UTC,
-                )
-                return dt.isoformat()
+                return datetime(
+                    int(f"20{parts[0]}"),
+                    int(parts[1]),
+                    int(parts[2]),
+                    int(parts[3]),
+                    int(parts[4]),
+                    int(parts[5]),
+                    tzinfo=self._sms_timezone(parts),
+                ).isoformat()
         except (ValueError, IndexError):
             _LOGGER.debug("Failed to parse date string '%s'", date_str)
         return date_str
+
+    def _sms_timezone(self, parts: list[str]) -> timezone:
+        """Read the quarter-hour offset field, defaulting to UTC.
+
+        An absent or unreadable seventh field falls back to `UTC` — the
+        behaviour before the offset was read at all — rather than rejecting the
+        whole timestamp. The rest of the value is still correct to within the
+        offset, and a message with no usable date is treated as undated
+        everywhere it matters, which is a heavier outcome than being an hour out.
+        """
+        if len(parts) < 7:
+            return UTC
+        try:
+            quarters = int(parts[6])
+        except ValueError:
+            _LOGGER.debug("Unreadable SMS timezone field %r", parts[6])
+            return UTC
+        # Real offsets run to ±14 hours. Anything beyond that is not an offset,
+        # and `timedelta` outside ±24 hours raises rather than returning a
+        # wrong zone.
+        if abs(quarters) > 14 * 4:
+            _LOGGER.debug("Implausible SMS timezone offset %r", parts[6])
+            return UTC
+        return timezone(timedelta(minutes=15 * quarters))
 
     async def _request(
         self,
@@ -2598,17 +2699,35 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._record_delete(msg_id, res)
         self._require_success(res, "DELETE_SMS")
         return 200
 
     async def delete_all(self) -> int:
-        """Delete all SMS."""
+        """Delete every message the router holds, and verify that it happened.
+
+        The verification is the point. This API answers `{"result":"success"}`
+        for a `DELETE_SMS` naming an id the router does not hold — measured on
+        the reference MC7010 on 2026-09-05 — so `_require_success` passes
+        whatever the firmware actually did, and a device that accepts the
+        command and keeps the messages reports a completed deletion. Issue #56
+        is that shape on an MC888 Pro.
+
+        The check is against **the ids this call asked for**, not against the
+        bank being empty: a message arriving between the delete and the re-list
+        is not a failure to delete the earlier ones. An empty bank is a
+        success — there was nothing to remove and nothing survived.
+
+        Listed with `SMS_STORE_ALL`, so "delete all" means what the router
+        means by all. It previously read device memory only, leaving anything
+        stored on the SIM in place while reporting the operation complete.
+        """
         payload = {
             "isTest": "false",
             "cmd": "sms_data_total",
             "page": "0",
             "data_per_page": "500",
-            "mem_store": "1",
+            "mem_store": SMS_STORE_ALL,
             "tags": "10",
             "order_by": "order by id desc",
         }
@@ -2622,12 +2741,43 @@ class ZTERouterAPI:
 
             if ids:
                 res_code = await self.delete_sms(";".join(ids))
+                await self.verify_deleted(ids)
         except (ZTEAuthError, ZTEConnectionError):
             raise
         except (TimeoutError, aiohttp.ClientError) as e:
             _LOGGER.error("Failed to delete all SMS: %s", e)
             raise ZTEConnectionError(f"Failed to delete all SMS: {e}") from e
         return res_code
+
+    async def verify_deleted(self, ids: list[str]) -> None:
+        """Fail when a message this call asked to delete is still there.
+
+        Public because three routes delete messages — the Delete All button
+        and the two branches of the `delete_all_sms` action — and a check that
+        only one of them ran would leave the same silent success in the other
+        two.
+
+        Raised as a `ZTEConnectionError` so it reaches the user by the route a
+        refused write already takes: every caller wraps any exception in a
+        `HomeAssistantError`, and `delete_all` re-raises this class untouched.
+
+        A failure to re-list is not a failure to delete. Callers run this
+        inside their own `try`, so a timeout surfaces as the connection error
+        it is rather than as a false report that the messages survived.
+        """
+        wanted = {str(i) for i in ids}
+        remaining = await self.get_sms_messages(mem_store=SMS_STORE_ALL, tags="10")
+        surviving = [
+            str(msg.get("id")) for msg in remaining if str(msg.get("id")) in wanted
+        ]
+        self._record_delete_survivors(surviving)
+        if surviving:
+            raise ZTEConnectionError(
+                f"Router accepted DELETE_SMS and kept {len(surviving)} of "
+                f"{len(wanted)} message(s): ids {', '.join(sorted(surviving))}. "
+                f"This API answers 200 OK with result=success for a delete it "
+                f"does not carry out."
+            )
 
     async def send_sms(self, number: str, message: str) -> int:
         """Send an SMS message via the router."""
