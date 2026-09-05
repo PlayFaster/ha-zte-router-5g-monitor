@@ -258,9 +258,31 @@ Do not add `"failure"` to the session-expiry strings. It is equally what a decli
 
 `_require_success` detects an explicit refusal and nothing else. Measured on the reference MC7010 on 2026-09-05: `DELETE_SMS` returns `{"result": "success"}` for a message id the router does not hold, so the result code cannot distinguish a delete that happened from one that did not. A firmware that accepts the command and keeps the messages therefore reported a completed deletion, which is the fault reported against an MC888 Pro in issue #56.
 
-**Where the effect of a destructive write is observable, observe it.** `delete_all` re-lists the bank afterwards and raises when any id it asked for is still present. The comparison is against the requested ids and not against the bank being empty — a message arriving between the delete and the re-list has not caused a failure — and an empty bank is a success rather than a delete of nothing.
+**Where the effect of a destructive write is observable, observe it.** `api.verify_deleted` re-lists the bank afterwards and raises when any id it asked for is still present. The comparison is against the requested ids and not against the bank being empty — a message arriving between the delete and the re-list has not caused a failure — and an empty bank is a success rather than a delete of nothing.
+
+**The check belongs to the operation, not to the code path that was fixed first.** It shipped in `[3.3.11-dev1]` inside `delete_all`, which is the Delete All button and the `delete_all_sms` action at `keep_last: 0`. The action's `keep_last` branch and the single-message `delete_sms` action build their own id lists and were left reporting success exactly as before. Three routes, one operation, and a fix that covered one of them for a release.
 
 The hypothesis this replaced is worth recording, because it was plausible and wrong. ZTE's own web UI sends `msg_id=3;` with a trailing separator where this integration sends `msg_id=3`. Tested directly on hardware: both forms delete. The difference is not what the MC888 Pro refuses, and changing the request on that evidence would have shipped a guess as a fix.
+
+### SMS storage is two banks, and "all" was one of them
+
+`mem_store` selects the storage a message query covers: `"1"` is the router's own memory, `"0"` the SIM, `"2"` the router's own selector for both. `delete_all` queried `"1"`, so a message held on the SIM survived an operation whose control is labelled **Delete All** and which reported success.
+
+The fix uses the router's selector rather than querying both banks and merging here, and the reason is specific: ids are per-bank, the message response carries no field naming the bank, and `DELETE_SMS` takes no `mem_store`. Two messages sharing an id could be neither told apart nor individually targeted, so a merge of ours would be inventing an answer to a question the API cannot express.
+
+**`"2"` as the union is observed, not documented.** On the reference MC7010 on 2026-09-05 it returned exactly what `"1"` returned, across all three tag filters, on a device whose SIM bank was empty — consistent with the union and not proof of it. The diagnostics `sms` section therefore reports the SIM bank separately, as a count and its ids: the same figure in both places confirms the union, and a SIM message absent from the combined list means `delete_all` is still missing messages. Neither device available here can produce that evidence.
+
+The knock-on reaches `keep_last`. Ids cannot order a list drawn from both banks, so it orders by the moment each message carries. A message with no usable date sorts after every dated one — it is not known to be recent — but is still counted toward the keep count, because counting only dated messages lets "keep two of four" delete all four on a device whose dates will not parse.
+
+### A received SMS timestamp carries the router's own offset
+
+`date` on a received message is `yy,mm,dd,HH,MM,SS,<offset>`. The six leading values are the router's **local** time and the seventh is the offset in quarter-hours — `+4` is one hour ahead. `_parse_date` discarded that field and stamped `UTC` on the local values, publishing every message an offset's worth late.
+
+It reached the user rather than staying internal: Home Assistant renders a timestamp in the viewer's own zone, so an hour's error is an hour's error on screen. The blast radius is narrow — the Last SMS sensor's `date` attribute and the `zte_router_5g_sms_received` event, neither recorded — but that is a property of where the value is used, not a reason it was acceptable.
+
+An unreadable or implausible offset now costs the offset and keeps the timestamp. That asymmetry is deliberate: a message an hour out is still orderable, and a message with no usable date is excluded from ordering and from the new-message event entirely.
+
+**One change follows from the other.** `_check_new_sms` compared `date_decoded` as text, which was equivalent to comparing instants only because every value carried the same fabricated `+00:00`. With real offsets the two orders differ at a daylight-saving change, where `02:30+02:00` sorts later as text and earlier in time than `02:00+01:00`. Everything that orders messages now goes through `helpers.sms_instant`, which is also the single place deciding whether a value is a timestamp at all — `_parse_date` returns the router's string unchanged when it cannot read it, so `date_decoded` is not guaranteed to be one.
 
 ### Mocks cannot falsify a belief about the router
 

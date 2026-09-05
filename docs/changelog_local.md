@@ -5,6 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.11-dev3\] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All](#3311-dev3---2026-09-05---sms-timestamps-carry-their-routers-offset-delete-all-means-all)
+  - [\[3.3.11-dev2\] - 2026-09-05 - Uptime in the Usage Section Corrected](#3311-dev2---2026-09-05---uptime-in-the-usage-section-corrected)
   - [\[3.3.11-dev1\] - 2026-09-05 - SMS Bank and Data Usage in the Diagnostics Download; Verified SMS Deletion](#3311-dev1---2026-09-05---sms-bank-and-data-usage-in-the-diagnostics-download-verified-sms-deletion)
   - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
   - [\[3.3.10-dev13\] - 2026-09-05 - WiFi Back on System; Firmware Sensors Off by Default; Release Documentation](#3310-dev13---2026-09-05---wifi-back-on-system-firmware-sensors-off-by-default-release-documentation)
@@ -233,6 +235,54 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.11-dev3] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All
+
+### Summary
+
+Three faults found while reviewing the delete work rather than reported: a discarded timezone field, a bulk delete that covered one of two storage banks, and a verification that covered one of three delete routes.
+
+### Fixed
+
+- **A received message's timestamp carries the router's own offset.** The `date` field is `yy,mm,dd,HH,MM,SS,<offset>`, the six leading values are the router's **local** time, and the seventh is the offset in quarter-hours. The seventh was discarded and `UTC` stamped in its place, publishing every message an offset's worth late — an hour on a router at UTC+1. Home Assistant renders a timestamp in the viewer's zone, so the error reached the screen. Verified on hardware: a message sent at 12:18 local arrived as `26,09,05,12,18,07,+4`.
+
+  **Displayed SMS times move on any router reporting a non-zero offset.** The affected value is the Last SMS sensor's `date` attribute and the `date` field of the `zte_router_5g_sms_received` event. Neither is recorded — `date` is in `_unrecorded_attributes` and no SMS timestamp sensor exists — so no history or statistics change. A device reporting `0` is unaffected: of the two models measured, the MC888 Pro reports `0` and only the MC7010 reports an offset.
+
+  An unreadable or implausible offset costs the offset, not the timestamp. Being an hour out is a lesser failure than being undated, which excludes a message from ordering and from the new-message event.
+
+- **`_check_new_sms` orders on parsed instants rather than on ISO text.** While every timestamp carried a fabricated `+00:00` the two orders agreed and the string comparison was harmless. Carrying a real offset they part company at a daylight-saving change, where a message written `02:30+02:00` sorts later as text and earlier in time than one written `02:00+01:00`.
+
+- **`delete_all` covers both storage banks.** It listed device memory only, so a message held on the SIM was left in place while the operation reported success — the control says "delete all" and did not. It now lists with the router's own `mem_store="2"` selector rather than merging two queries here: ids are per-bank and the response names no bank, so a merge of ours could not tell two messages sharing an id apart. **That `"2"` is the union is observed, not documented** — on the reference device it returned exactly what `"1"` did, with an empty SIM.
+
+- **Every route that deletes now verifies.** `[3.3.11-dev1]` added the survivor check to `delete_all`, which is the Delete All button and the `delete_all_sms` action at `keep_last: 0`. The action's `keep_last` branch and the single-message `delete_sms` action deleted without it, so the same silent success remained on two of the three routes. The check is now a public `verify_deleted`, called by all three.
+
+### Changed
+
+- **`keep_last` keeps the newest by date, not by id.** Ids are per-bank, so with both banks in one list they say nothing about arrival order. A message the router dates unreadably sorts after every dated one — it is not known to be recent, so it goes first — but it is still **counted toward `keep_last`**, which is what stops "keep two of four" from deleting all four when the dates cannot be read. Undated messages are reported in the log and keep their previous id ordering among themselves.
+
+- **The `keep_last` a caller chose is recorded** beside the delete attempt and published in the download. It cannot be recovered afterwards: the ids say what was targeted, but reconstructing the parameter needs the bank contents at that moment, and a download reports them later.
+
+- **The diagnostics `sms` section reports the SIM bank separately**, as a count and a list of ids. This is the only route to establishing whether `mem_store="2"` really is the union — the reference device's SIM is empty, so the question cannot be settled here. A SIM message present in both places confirms it; one absent from the combined list means `delete_all` is still missing messages.
+
+### Measured
+
+**The trailing-separator hypothesis was tested and rejected in `[3.3.11-dev1]`, and nothing since changes that.** ZTE's own web UI sends `msg_id=3;` where this integration sends `msg_id=3`; both forms delete on the reference hardware, so the difference is not what a refusing firmware is refusing.
+
+## [3.3.11-dev2] - 2026-09-05 - Uptime in the Usage Section Corrected
+
+### Summary
+
+Work completed after the `[3.3.11-dev1]` entry was written. The correction below was found by reading a generated download rather than by running the suite, and is recorded here because that entry was already closed — the code itself shipped in the same commit.
+
+### Fixed
+
+- **`data_usage.uptime_seconds` reported `null` on live hardware** while every other figure in the section was correct. `coordinator.data["boot_time"]` holds a `datetime`; it only reads as a string once a JSON encoder has been over it, which happens after the section is built. The section accepted only the string form. It now accepts both, and catches `TypeError` beside `ValueError` so a naive instant yields no figure rather than a wrong one.
+
+  The test that should have caught it used the string form, which was an assumption about the coordinator rather than an observation of it. It is now parametrized over the live `datetime`, the string, a non-timestamp, a non-string and a naive datetime.
+
+### Changed
+
+- Formatting and a lint fix in the tests added by `[3.3.11-dev1]`, and an editorial revision of that entry.
 
 ## [3.3.11-dev1] - 2026-09-05 - SMS Bank and Data Usage in the Diagnostics Download; Verified SMS Deletion
 

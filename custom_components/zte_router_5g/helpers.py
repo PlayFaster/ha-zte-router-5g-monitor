@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from calendar import monthrange
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from homeassistant.const import CONF_HOST
@@ -20,6 +20,28 @@ if TYPE_CHECKING:
 # Known model strings to detect from the wa_inner_version firmware string.
 # e.g. 'IRL_H3G_MC7010DV1.0.0B01' → 'MC7010'
 _KNOWN_MODELS = ["MC7010", "MC801", "MC888", "MC889"]
+
+
+def sms_instant(value: Any) -> datetime | None:
+    """The moment a decoded SMS timestamp names, or `None` if it names none.
+
+    `api._parse_date` returns the original string unchanged when the router's
+    date field cannot be read, so `date_decoded` is not guaranteed to be a
+    timestamp at all. Everything that orders messages goes through here, and a
+    value this rejects is treated as **undated** — never as a guess.
+
+    A naive value is read as UTC rather than rejected. Nothing this integration
+    produces is naive now that `_parse_date` attaches the router's offset, but
+    a value stored by an earlier version is, and reading it as UTC is what that
+    version meant by it.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
 
 
 def get_first(data: dict[str, Any], keys: tuple[str, ...]) -> Any:

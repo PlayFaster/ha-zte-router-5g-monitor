@@ -402,6 +402,9 @@ async def test_service_delete_sms(mock_hass, mock_config_entry):
 
     await async_delete_sms(mock_hass, call)
     mock_api.delete_sms.assert_called_once_with("5")
+    # The result code proves nothing — this API answers success for an id the
+    # router does not hold — so every route that deletes also verifies.
+    mock_api.verify_deleted.assert_awaited_once_with(["5"])
     mock_coordinator.async_force_refresh.assert_called_once()
 
 
@@ -411,6 +414,8 @@ async def test_service_delete_all_sms_simple(mock_hass, mock_config_entry):
     from custom_components.zte_router_5g import async_delete_all_sms
 
     mock_api = AsyncMock()
+    # Sync on the real API, so not an `AsyncMock` attribute.
+    mock_api.note_delete_parameter = MagicMock()
     mock_coordinator = MagicMock()
     mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
@@ -440,6 +445,8 @@ async def test_service_delete_all_sms_keep_last(mock_hass, mock_config_entry):
         {"id": "2"},
         {"id": "1"},
     ]
+    # Sync on the real API, so not an `AsyncMock` attribute.
+    mock_api.note_delete_parameter = MagicMock()
     mock_coordinator = MagicMock()
     mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
@@ -452,8 +459,12 @@ async def test_service_delete_all_sms_keep_last(mock_hass, mock_config_entry):
     call.data = {"keep_last": 2}
 
     await async_delete_all_sms(mock_hass, call)
-    mock_api.get_sms_messages.assert_called_once_with(mem_store="1")
+    # Both banks: "delete all but the newest two" cannot mean "of the device
+    # memory only" now that the router's own selector is available.
+    mock_api.get_sms_messages.assert_called_once_with(mem_store="2")
     mock_api.delete_sms.assert_called_once_with("2;1")
+    mock_api.verify_deleted.assert_awaited_once_with(["2", "1"])
+    mock_api.note_delete_parameter.assert_called_once_with(2)
     mock_coordinator.async_force_refresh.assert_called_once()
 
 
@@ -738,6 +749,8 @@ async def test_service_delete_all_sms_exception(mock_hass, mock_config_entry):
     from custom_components.zte_router_5g import async_delete_all_sms
 
     mock_api = AsyncMock()
+    # Sync on the real API, so not an `AsyncMock` attribute.
+    mock_api.note_delete_parameter = MagicMock()
     mock_api.delete_all.side_effect = RuntimeError("Delete all failed")
     mock_coordinator = MagicMock()
     mock_coordinator.async_force_refresh = AsyncMock()
@@ -838,6 +851,8 @@ async def test_async_setup_service_handlers(mock_hass, mock_config_entry):
 
     # Set up coordinator for handler calls
     mock_api = AsyncMock()
+    # Sync on the real API, so not an `AsyncMock` attribute.
+    mock_api.note_delete_parameter = MagicMock()
     mock_coordinator = MagicMock()
     mock_coordinator.async_force_refresh = AsyncMock()
     mock_coordinator.api = mock_api
@@ -1221,6 +1236,8 @@ async def test_delete_all_sms_keep_last_gte_total_deletes_nothing(
     from custom_components.zte_router_5g import async_delete_all_sms
 
     mock_api = AsyncMock()
+    # Sync on the real API, so not an `AsyncMock` attribute.
+    mock_api.note_delete_parameter = MagicMock()
     mock_api.get_sms_messages.return_value = [{"id": "3"}, {"id": "2"}, {"id": "1"}]
     mock_coordinator = MagicMock()
     mock_coordinator.async_force_refresh = AsyncMock()
@@ -1451,6 +1468,8 @@ async def test_delete_all_removes_what_it_can_when_a_record_has_no_id(
     from custom_components.zte_router_5g import async_delete_all_sms
 
     mock_coordinator.api = AsyncMock()
+    # Sync on the real API, so not an `AsyncMock` attribute.
+    mock_coordinator.api.note_delete_parameter = MagicMock()
     mock_coordinator.api.get_sms_messages = AsyncMock(
         return_value=[
             {"id": "3", "date_decoded": "c"},

@@ -401,8 +401,15 @@ def _uptime_seconds(boot_time: Any, last_poll: str | None) -> float | None:
         return None
 
 
+def _dict_items(value: Any) -> list[dict[str, Any]]:
+    """The dictionaries in a value that should be a list of them."""
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, dict)]
+
+
 def _sms_section(
-    messages: list[dict[str, Any]] | None,
+    snapshot: dict[str, list[dict[str, Any]]] | None,
     data: dict[str, Any],
     coordinator: ZTERouterDataUpdateCoordinator,
     tokenizer: _Tokenizer,
@@ -423,14 +430,24 @@ def _sms_section(
     # this file: the download is serialized after every section has succeeded,
     # and a value that cannot be encoded fails the whole file at the last
     # moment. A stand-in under test is the case that finds this.
-    listed = [msg for msg in messages if isinstance(msg, dict)] if messages else []
+    banks = snapshot if isinstance(snapshot, dict) else {}
+    listed = _dict_items(banks.get("all"))
+    on_sim = _dict_items(banks.get("sim"))
     tracker = coordinator.fired_sms_hashes
     delete_record = coordinator.api.last_delete
     return {
-        "fetched": isinstance(messages, list),
+        "fetched": isinstance(snapshot, dict),
         "message_count": len(listed),
         "ids": [str(msg.get("id")) for msg in listed],
         "messages": [_sanitize_sms(dict(msg), tokenizer) for msg in listed],
+        # The SIM bank on its own. `SMS_STORE_ALL` is the router's own "all"
+        # selector and is *observed* to be the union on a device whose SIM was
+        # empty — this count is what tells us whether that holds where it
+        # matters. A non-zero figure here with the same `message_count` above
+        # means the union is real; a non-zero figure absent from the list
+        # above means it is not, and `delete_all` is still missing messages.
+        "sim_message_count": len(on_sim),
+        "sim_ids": [str(msg.get("id")) for msg in on_sim],
         # The router's own totals, for comparison with `message_count`.
         "capacity_counters": {
             key: data.get(key) for key in SMS_COUNTER_KEYS if key in data
@@ -545,7 +562,7 @@ async def async_get_config_entry_diagnostics(
     # Fetched for the download, not taken from the poll: a poll keeps only the
     # newest message. Guarded like discovery — a router that refuses the list
     # must not cost the reporter the whole file.
-    messages = await _async_guarded(
+    snapshot = await _async_guarded(
         "sms", coordinator.async_fetch_sms_snapshot(), errors
     )
 
@@ -598,7 +615,7 @@ async def async_get_config_entry_diagnostics(
         # value alone did not settle either of the two faults in issue #56.
         "sms": _guarded(
             "sms.section",
-            lambda: _sms_section(messages, payload, coordinator, tokenizer),
+            lambda: _sms_section(snapshot, payload, coordinator, tokenizer),
             errors,
         ),
         "data_usage": _guarded(

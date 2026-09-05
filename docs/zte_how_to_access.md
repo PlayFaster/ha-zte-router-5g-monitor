@@ -729,7 +729,13 @@ Paired with `data_volume_limit_unit`, which is `data` for a byte cap or `time` f
 
 ### SMS date fields
 
-`date` on a received message is `yy,mm,dd,HH,MM,SS` — **comma**-delimited. `sms_time` on an outgoing message is `yy;mm;dd;HH;MM;SS;+0` — **semicolon**-delimited, with a trailing offset field. The two are not interchangeable.
+`date` on a received message is `yy,mm,dd,HH,MM,SS,<offset>` — **comma**-delimited, with a **seventh** field. `sms_time` on an outgoing message is `yy;mm;dd;HH;MM;SS;+0` — **semicolon**-delimited. The two are not interchangeable.
+
+**The six leading values are the router's local time, and the seventh is its offset in quarter-hours.** `+4` is one hour ahead, `0` is UTC. Verified on hardware 2026-09-05: a message sent at 12:18 local, to a router running at UTC+1, arrived as `26,09,05,12,18,07,+4`.
+
+The seventh field went undocumented and unread until then, and `_parse_date` stamped `UTC` on the local values instead — publishing every message an offset's worth late, an hour on that device. Home Assistant renders a timestamp in the viewer's own zone, so the error reached the screen rather than staying internal. The MC888 Pro reports `0`, which is why the fault was invisible in issue #56's captures.
+
+An unreadable or implausible offset now costs the offset and not the timestamp. Being an hour out is a smaller failure than being undated: a message with no usable date is excluded from ordering and from the new-message event entirely.
 
 ---
 

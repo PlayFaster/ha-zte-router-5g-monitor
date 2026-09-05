@@ -35,9 +35,12 @@ _MESSAGE = {
 }
 
 
-def _coordinator(mock_coordinator, *, messages: list[dict] | None) -> MagicMock:
+def _coordinator(
+    mock_coordinator, *, messages: list[dict] | None, sim: list[dict] | None = None
+) -> MagicMock:
     """A coordinator whose SMS snapshot returns `messages`."""
-    mock_coordinator.async_fetch_sms_snapshot = AsyncMock(return_value=messages)
+    snapshot = None if messages is None else {"all": messages, "sim": sim or []}
+    mock_coordinator.async_fetch_sms_snapshot = AsyncMock(return_value=snapshot)
     mock_coordinator.last_sms_timestamp = "2026-08-09T21:24:52+00:00"
     mock_coordinator.fired_sms_hashes = {"3_2026-08-09T21:24:52+00:00"}
     mock_coordinator.api.last_delete = None
@@ -365,16 +368,16 @@ async def test_the_sms_snapshot_is_taken_under_the_update_lock(mock_coordinator)
     coordinator.api = MagicMock()
     held: list[bool] = []
 
-    async def _listing(**_kwargs):
+    async def _listing(*, mem_store, **_kwargs):
         held.append(coordinator._async_update_lock.locked())
-        return [{"id": "1"}]
+        return [{"id": "1"}] if mem_store == "2" else []
 
     coordinator.api.get_sms_messages = AsyncMock(side_effect=_listing)
 
     result = await ZTERouterDataUpdateCoordinator.async_fetch_sms_snapshot(coordinator)
 
-    assert result == [{"id": "1"}]
-    assert held == [True], "the bank was read without holding the update lock"
+    assert result == {"all": [{"id": "1"}], "sim": []}
+    assert held == [True, True], "a bank was read without holding the update lock"
     assert not coordinator._async_update_lock.locked(), "the lock was not released"
 
 
@@ -429,6 +432,22 @@ async def test_a_message_arriving_during_the_delete_is_not_a_failure(
     assert api.last_delete["ids_surviving"] == []
 
 
+async def test_a_parameter_recorded_against_no_attempt_is_dropped(
+    mock_aiohttp_client,
+):
+    """The same guard as below, on the same held state.
+
+    `note_delete_parameter` runs after a delete today, so the record always
+    exists by then. It is stored state rather than a local, and the cost of
+    being wrong is an exception raised while a download is being built.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    api.note_delete_parameter(3)
+
+    assert api.last_delete is None
+
+
 async def test_survivors_recorded_against_no_attempt_are_dropped(
     mock_aiohttp_client,
 ):
@@ -445,6 +464,52 @@ async def test_survivors_recorded_against_no_attempt_are_dropped(
     api._record_delete_survivors(["1"])
 
     assert api.last_delete is None
+
+
+async def test_the_sim_bank_is_reported_separately(mock_coordinator, mock_config_entry):
+    """The only route to knowing whether `mem_store="2"` is really the union.
+
+    The reference device has an empty SIM, so the question cannot be settled
+    here. A reporter holding a SIM message settles it: the same count in both
+    places means the union is real, and a SIM message absent from the combined
+    list means `delete_all` is still missing messages.
+    """
+    mock_coordinator.data = {}
+    on_sim = dict(_MESSAGE, id="9")
+    mock_config_entry.runtime_data = _coordinator(
+        mock_coordinator, messages=[_MESSAGE, on_sim], sim=[on_sim]
+    )
+
+    sms = (await async_get_config_entry_diagnostics(None, mock_config_entry))["sms"]
+
+    assert sms["message_count"] == 2
+    assert sms["sim_message_count"] == 1
+    assert sms["sim_ids"] == ["9"]
+
+
+async def test_the_delete_record_carries_the_keep_last_that_chose_the_targets(
+    mock_aiohttp_client,
+):
+    """`keep_last` decides the target set and cannot be recovered afterwards.
+
+    The ids say what was aimed at; reconstructing the parameter would need the
+    bank contents at that moment, and a download reports them later.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    mock_aiohttp_client.post.side_effect = [
+        MockResponse(json_data={"result": "success"}),
+        MockResponse(json_data={"messages": []}),
+    ]
+
+    with patch.object(api, "login"), patch.object(api, "get_ad", return_value="ad"):
+        await api.delete_sms("2;1")
+        api.note_delete_parameter(3)
+        await api.verify_deleted(["2", "1"])
+
+    assert api.last_delete["keep_last"] == 3
+    assert api.last_delete["ids_surviving"] == []
 
 
 async def test_an_empty_bank_deletes_nothing_and_verifies_nothing(

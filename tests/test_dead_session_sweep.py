@@ -108,6 +108,12 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     "reboot": (),
     "delete_sms": ("1",),
     "delete_all": (),
+    # The post-delete check. A read, and it must behave like one on a dead
+    # session: raising rather than reporting an empty bank, which would read
+    # as "every message went" and restore the silent success it exists to
+    # remove. `_HEALTHY` still holds message id "1", so against a live session
+    # it finds the survivor and raises for that reason instead.
+    "verify_deleted": (["99"],),
     "send_sms": ("+123456789", "Hello"),
     "set_apn": (1, "IP"),
     "set_apn_mode": ("auto",),
@@ -132,6 +138,17 @@ _BEST_EFFORT = {
     "get_version",
     "get_rd",
     "get_ad",
+}
+
+# Methods whose whole answer is whether they raised. `None` from one of these
+# is not a silent no-op — it is the success case, and there is no other value
+# it could return. Distinct from `_BEST_EFFORT`, which is about tolerating
+# failure; these tolerate nothing.
+_ASSERTS_BY_RAISING = {
+    # Confirms a delete happened. It reads the bank through `get_sms_messages`,
+    # which raises on a dead session, so the property this file guards is held
+    # by the call it makes rather than by its own return.
+    "verify_deleted",
 }
 
 
@@ -289,6 +306,10 @@ async def test_no_method_silently_no_ops_on_a_dead_session(method_name, die_afte
             "measure_unauthenticated_keys returned a set on a dead session; "
             "it must decline unless a logout was acknowledged"
         )
+        return
+
+    if method_name in _ASSERTS_BY_RAISING:
+        assert result is None, f"{method_name} is expected to return nothing"
         return
 
     assert not _is_empty_result(result), (

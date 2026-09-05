@@ -142,11 +142,31 @@ The mixin declares the contract it depends on — `coordinator`, `_entry`, `enti
 
 `_require_success` catches an explicit refusal — `{"result": "failure"}` on a 200 OK — and that is all it can catch. Measured on the reference MC7010 on 2026-09-05: `DELETE_SMS` answers `{"result": "success"}` for a message id the router does not hold. The result code carries no information about whether anything happened.
 
-**A destructive write whose effect is observable must observe it.** `delete_all` re-lists the bank and raises when any id **it asked for** is still present. Two details are load-bearing: the comparison is against the requested ids rather than against the bank being empty, so a message arriving in between is not a failure; and an empty bank is a success, since nothing was there to remove.
+**A destructive write whose effect is observable must observe it.** `api.verify_deleted` re-lists the bank and raises when any id **it asked for** is still present. Two details are load-bearing: the comparison is against the requested ids rather than against the bank being empty, so a message arriving in between is not a failure; and an empty bank is a success, since nothing was there to remove.
+
+**Every route to the same operation gets the check, not the first one you fix.** Three routes delete messages — the Delete All button, and both branches of the `delete_all_sms` action — and `[3.3.11-dev1]` covered only the one behind `delete_all`. The other two kept the silent success for a further release, which is why `verify_deleted` is public rather than a private helper on the path that happened to be fixed first.
 
 This is the same class as the reboot rule at `api.reboot` and the stolen-session rule in `DEVELOPMENT.md` §5 — an action that reports done having done nothing is worse than one that fails loudly. Issue #56 is that shape on an MC888 Pro, and nothing in the code could see it.
 
 **Do not change the request form on a hypothesis.** ZTE's own web UI sends `msg_id=3;` with a trailing separator where this integration sends `msg_id=3`, which was the leading explanation. Both forms delete on the reference hardware, so the difference is not what the MC888 Pro refuses, and shipping it would have been a guess wearing a fix's clothes.
+
+### Message storage is two banks, and `mem_store` chooses
+
+`"1"` is the router's own memory, `"0"` the SIM, and `"2"` the router's own selector for both. **Use `SMS_STORE_ALL` for anything that means "all messages"** — `delete_all` read device memory only and left SIM-stored messages in place while reporting the operation complete.
+
+**Do not merge two bank queries here.** Ids are per-bank and the response carries no field naming which bank a message came from, so a merge of ours cannot tell two messages sharing an id apart, and `DELETE_SMS` has no `mem_store` field to disambiguate them with. The router's own selector avoids inventing an answer.
+
+**That `"2"` is the union is observed, not documented.** On the reference MC7010 it returned exactly what `"1"` returned, on a device whose SIM bank was empty — consistent with the union and not proof of it. The diagnostics `sms` section reports the SIM count separately so the first reporter holding a SIM message settles it.
+
+A consequence worth knowing: **ids cannot order a list drawn from both banks.** `keep_last` therefore orders by the moment each message carries, and a message with no usable date sorts after every dated one while still counting toward the keep count — otherwise "keep two of four" deletes all four on a device whose dates cannot be read.
+
+### A received SMS timestamp is the router's local time, plus an offset field
+
+`date` is `yy,mm,dd,HH,MM,SS,<offset>`, the seventh field is the offset in **quarter-hours**, and the six leading values are the router's **local** time. `+4` is one hour ahead; the MC888 Pro reports `0`.
+
+That field was discarded and `UTC` stamped in its place, which published every message an offset's worth late — Home Assistant renders a timestamp in the viewer's own zone, so the error reached the screen rather than staying internal. Do not reintroduce a fabricated zone: an unreadable offset falls back to `UTC` and keeps the timestamp, because being an hour out is a lesser failure than being **undated**, which excludes a message from ordering and from the new-message event entirely.
+
+**Order messages on parsed instants, never on the ISO text.** `helpers.sms_instant` is the one place that decides whether a value is a timestamp at all — `_parse_date` returns the router's string unchanged when it cannot read it, so `date_decoded` is not guaranteed to be one. While every value carried a fabricated `+00:00` text order and time order agreed; carrying real offsets they part company at a daylight-saving change, where `02:30+02:00` sorts later as text and earlier in time than `02:00+01:00`.
 
 ### Entity naming — do not repeat the sub-device word
 
@@ -213,6 +233,7 @@ This project has **more sweep tests than any other in the family** — a consequ
 | A sensor fed from the extended poll | `test_no_sensor_declares_a_source_its_data_does_not_come_from` | Only set `source=ENDPOINT_EXTENDED` if the keys really are in `_EXTENDED_PARAMS`. `Allowance` and `Alert Threshold` declared it while their keys sat in `_CORE_PARAMS`, so both went unavailable holding data the mandatory poll had just refreshed. The sweep resolves keys through lambdas, helper functions and alias tuples — its first version scanned description text only, found nothing for `data_allowance`, and passed with the defect deliberately restored. |
 | A sensor description | `test_every_sensor_carries_a_stable_unique_id` | Every description needs a `key` that yields a distinct `unique_id`. HA silently declines to register an entity without one: it still appears and still reports a value, while every user customization is discarded on restart. |
 | A config-flow field | `test_no_field_leaks_the_stored_secret`, `test_stored_secrets_are_never_pre_filled` | Never pre-fill a stored secret — not as a `default`, not as a `suggested_value`, and not into a non-secret field. A masked value still reaches the browser and the eye icon reveals it. Both schema builders are fed a sentinel secret that must appear nowhere in the rendered schema. |
+| Anything that orders SMS | `tests/test_sms_ordering.py` | Order on `helpers.sms_instant`, not on the ISO string, and treat a value it rejects as undated. Ids order nothing once both banks are in one list. |
 | A destructive write | `test_every_public_method_is_covered_by_the_sweep`, and the delete tests in `tests/test_sms_and_usage_diagnostics.py` | Verify the effect, do not trust the `result`. This API answers `success` for a `DELETE_SMS` naming an id it does not hold. |
 | A name added to the batch poll | `test_no_discovery_candidate_is_already_requested` | Remove it from `DISCOVERY_CANDIDATES` and `DISCOVERY_VALUE_SAFE`. Discovery exists for names the poll does **not** carry, so a name in both is probed for an answer already in hand. |
 | A derived figure in the download | `[4] no structural difference between the two runs` in `scripts/diag_check.py` | Anything computed from a counter or a clock differs between two passes twenty seconds apart. Add its path to `_VOLATILE` — but not the structural fields beside it, such as `spelling_used`, whose changing _is_ the fault that check looks for. |

@@ -18,7 +18,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from .api import ZTEAuthError, ZTEConnectionError, ZTERouterAPI
+from .api import SMS_STORE_ALL, ZTEAuthError, ZTEConnectionError, ZTERouterAPI
 from .const import (
     DOMAIN,
     LIVE_OPTION_KEYS,
@@ -32,7 +32,7 @@ from .coordinator import (
     UPTIME_STORAGE_VERSION,
     ZTERouterDataUpdateCoordinator,
 )
-from .helpers import is_gsm7
+from .helpers import is_gsm7, sms_instant
 from .observations import (
     HISTORY_STORAGE_VERSION,
     OBSERVED_STORAGE_VERSION,
@@ -256,6 +256,9 @@ async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
 
     try:
         await coordinator.api.delete_sms(str(index))
+        # The result code cannot say whether the message went: this API
+        # answers success for an id the router does not hold.
+        await coordinator.api.verify_deleted([str(index)])
     except Exception as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
@@ -266,6 +269,42 @@ async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
     await _async_refresh_after_write(coordinator, "delete_sms")
 
 
+def _messages_beyond_the_newest(
+    messages: list[dict[str, Any]], keep_last: int, title: str
+) -> list[dict[str, Any]]:
+    """Everything except the `keep_last` messages known to be most recent.
+
+    Ordered by the moment each message carries, newest first, because ids are
+    per-bank: with both banks in one list, id order says nothing about arrival
+    order and the response carries no field naming the bank.
+
+    **A message with no usable date sorts after every dated one** — it is not
+    known to be recent, so it is the first to go. It is still counted toward
+    `keep_last`, which is what stops "keep two of four" from deleting all four
+    when the dates cannot be read. Among themselves, undated messages keep the
+    id ordering this function used before dates entered it.
+    """
+    dated = [
+        (instant, msg)
+        for msg in messages
+        if (instant := sms_instant(msg.get("date_decoded"))) is not None
+    ]
+    dated.sort(key=lambda pair: pair[0], reverse=True)
+
+    undated = [msg for msg in messages if sms_instant(msg.get("date_decoded")) is None]
+    if undated:
+        _LOGGER.warning(
+            "%s: %d message(s) carry no readable date and are treated as the "
+            "oldest; they are still counted toward keep_last",
+            title,
+            len(undated),
+        )
+    undated.sort(key=lambda msg: int(msg.get("id", 0)), reverse=True)
+
+    ordered = [msg for _, msg in dated] + undated
+    return ordered[keep_last:]
+
+
 async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
     """Service to delete all SMS messages."""
     coordinator = _get_coordinator(hass, call.data)
@@ -274,10 +313,12 @@ async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
     try:
         if keep_last == 0:
             await coordinator.api.delete_all()
+            coordinator.api.note_delete_parameter(keep_last)
         else:
-            messages = await coordinator.api.get_sms_messages(mem_store="1")
-            messages.sort(key=lambda x: int(x.get("id", 0)), reverse=True)
-            to_delete = messages[keep_last:] if keep_last < len(messages) else []
+            messages = await coordinator.api.get_sms_messages(mem_store=SMS_STORE_ALL)
+            to_delete = _messages_beyond_the_newest(
+                messages, keep_last, coordinator.entry.title
+            )
             # A record with no `id` came that way from the router — this
             # integration never strips one. It cannot be deleted by any route,
             # since deletion targets ids, so refusing the whole operation would
@@ -297,6 +338,8 @@ async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
             # blank `delete_sms` is unknown, and this is a destructive command.
             if ids:
                 await coordinator.api.delete_sms(";".join(ids))
+                coordinator.api.note_delete_parameter(keep_last)
+                await coordinator.api.verify_deleted(ids)
     except Exception as err:
         raise HomeAssistantError(
             translation_domain=DOMAIN,
