@@ -244,12 +244,6 @@ GROUP_NAMES = {
     "signal": "Signal",
     "data": "Data",
     "sms": "SMS",
-    # Wi-Fi is its own sub-device rather than two more entries on System.
-    # Only indoor models report it — the reference MC7010 answers nothing, so
-    # this card is empty there — but the alternative is entity ids that would
-    # have to change the first time a third Wi-Fi entity is added, and this
-    # placement is free before release and not afterwards.
-    "wifi": "WiFi",
 }
 
 

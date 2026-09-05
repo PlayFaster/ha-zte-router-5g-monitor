@@ -93,7 +93,7 @@ def test_the_mc888_disables_what_it_cannot_populate(key: str) -> None:
     assert default_enabled(description, MC7010) is True
 
 
-@pytest.mark.parametrize("key", ["rssi", "sinr", "wifi_clients", "wifi_enabled"])
+@pytest.mark.parametrize("key", ["rssi", "sinr"])
 def test_the_mc888_enables_what_only_it_reports(key: str) -> None:
     """The overlay is a curated suite, not a filter over blanks.
 
@@ -119,6 +119,22 @@ def test_the_enodeb_sensor_is_not_disabled_on_the_mc888() -> None:
     description = _description("enodeb_id")
 
     assert default_enabled(description, MC888) is True
+
+
+@pytest.mark.parametrize("key", ["wifi_clients", "wifi_enabled"])
+def test_the_mc7010_disables_the_wifi_sensors(key: str) -> None:
+    """An outdoor unit with no WiFi of its own answers neither key.
+
+    These are on everywhere else, including hardware nobody has measured: a
+    router serving WiFi is the likelier case, and a blank pair is easier to
+    notice and switch off than a missing pair is to discover.
+    """
+    description = _description(key)
+    assert description.entity_registry_enabled_default is True
+
+    assert default_enabled(description, MC7010) is False
+    assert default_enabled(description, MC888) is True
+    assert default_enabled(description, "MF286D") is True
 
 
 def test_the_overlay_matches_the_family_not_the_variant() -> None:

@@ -1814,4 +1814,11 @@ def test_the_new_diagnostic_sensors_are_disabled_by_default() -> None:
 
     for key in off_by_default:
         assert by_key[key].entity_registry_enabled_default is False, key
-    assert by_key["upgrade_result"].entity_registry_enabled_default is not False
+
+    # `upgrade_result` shipped enabled in `[3.3.9-dev12]` as the one firmware
+    # sensor reporting a fault the others miss. It joined them off by default
+    # in `[3.3.10-dev13]`: three firmware sensors on the System card is more
+    # than a working router needs on show, and a user chasing an update
+    # problem can turn them on.
+    assert by_key["upgrade_result"].entity_registry_enabled_default is False
+    assert by_key["current_upgrade_state"].entity_registry_enabled_default is False

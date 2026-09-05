@@ -72,9 +72,16 @@ MODEL_OVERLAY: Final[dict[str, dict[str, bool]]] = {
         "wan_connect_status": False,
         "rssi": True,
         "sinr": True,
-        # Wi-Fi is answered by this firmware and by no MC7010.
-        "wifi_clients": True,
-        "wifi_enabled": True,
+    },
+    # ZTE MC7010, firmware `IRL_H3G_MC7010DV1.0.0B03`.
+    #
+    # An outdoor unit with no WiFi of its own. It answers neither
+    # `wifi_access_sta_num` nor `wifi_onoff_state`, so the two sensors that
+    # read them are off here and on everywhere else — including hardware
+    # nobody has measured, where a router serving WiFi is the likelier case.
+    "MC7010": {
+        "wifi_clients": False,
+        "wifi_enabled": False,
     },
 }
 

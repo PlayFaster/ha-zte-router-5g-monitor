@@ -353,10 +353,10 @@
       "system_wan_mode_changes": {
         "name": "WAN Mode Changes"
       },
-      "wifi_clients_connected": {
-        "name": "Clients Connected"
+      "system_wifi_clients_connected": {
+        "name": "WiFi Clients Connected"
       },
-      "wifi_wifi_enabled": {
+      "system_wifi_enabled": {
         "name": "WiFi Enabled"
       }
     },

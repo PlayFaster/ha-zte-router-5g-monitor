@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.10-dev13\] - 2026-09-05 - WiFi Back on System; Firmware Sensors Off by Default; Release Documentation](#3310-dev13---2026-09-05---wifi-back-on-system-firmware-sensors-off-by-default-release-documentation)
   - [\[3.3.10-dev12\] - 2026-09-05 - One Inherited `device_info`, Replacing Ten Copies](#3310-dev12---2026-09-05---one-inherited-device_info-replacing-ten-copies)
   - [\[3.3.10-dev11\] - 2026-09-05 - Operator Provisioned Given a Device; Reset Action Corrected](#3310-dev11---2026-09-05---operator-provisioned-given-a-device-reset-action-corrected)
   - [\[3.3.10-dev10\] - 2026-09-05 - Wi-Fi Sub-Device; Populated Set Corrected; Reset Action Documented](#3310-dev10---2026-09-05---wi-fi-sub-device-populated-set-corrected-reset-action-documented)
@@ -230,6 +231,33 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.10-dev13] - 2026-09-05 - WiFi Back on System; Firmware Sensors Off by Default; Release Documentation
+
+### Summary
+
+Three entity-default changes and the documentation pass for the `[3.3.10]` release. The entity count is unchanged at 121, now across four sub-devices rather than five.
+
+### Changed
+
+- **The WiFi sub-device is removed and its two sensors move to System.** A device is created when its entities are added, disabled or not, so the WiFi card was drawn on an MC7010 holding two entities that are both blank there. Moving them removes the empty card without conditional entity creation. **WiFi Clients Connected** and **WiFi Enabled**, both diagnostic.
+- **Those two are now enabled by default**, and the overlay disables them on the MC7010, which answers neither key. An unrecognised model keeps them on: a router serving WiFi is the common case, and a blank pair is easier to notice and switch off than a missing pair is to discover. This is the first overlay entry for the MC7010.
+- **Firmware Update State and Firmware Update Result are off by default.** `upgrade_result` shipped enabled in `[3.3.9-dev12]` as the one firmware sensor reporting a fault the other two miss; three firmware sensors on the System card is more than a working router needs on show, and a user chasing an update problem can enable them.
+
+### Documentation
+
+- **`README.md`** gains a **Reset Entities Action** section: what each of the ten options does, the dry-run-then-apply sequence, the two protections that stop it disabling something wanted, and what it refuses rather than guesses. Also a note that entity defaults depend on the router model, and the sub-device table corrected to four devices.
+- **`AGENTS.md`** gains the three modules added in this series and a rule that `device_info` is inherited and never declared on an entity class, with the sweep names that enforce it. Three rows added to the "tests that will stop you" table.
+- **`docs/DEVELOPMENT.md`** documents `entity_defaults.py`, `observations.py` and `reset_entities.py`, and records the temperature finding below.
+- **`docs/zte_how_to_access.md`** gains a section on the three parameter vocabularies, how the `network_` family splits into qualified and unqualified names, and the sign convention on `network_rssi`.
+- **`docs/expected_zte_compatibility.md`** records per-model defaults and the 36 cross-model spellings as supported behaviour, and notes that the WiFi client count is a single figure rather than the device tracking this integration excludes.
+- **`docs/ha_compatibility.md`** — tested against 2026.9.0.
+
+### Measured
+
+**All five `pm_*` temperature sensors stay, and the evidence is now stronger than "unknown".** Three of them — `pm_sensor_pa1`, `pm_sensor_mdm` and `pm_modem_5g` — are referenced in the MC888 Pro's **own web UI** and answered blank, exactly as that firmware answers `lte_rsrq`. So the concept exists in the model and no reachable device populates it. `pm_sensor_ambient` and `pm_sensor_5g` appear in neither device's mined set, and all five are in `Kajkac/ZTE-MC-Home-assistant-repo`'s `SENSOR_NAMES`, four with `°C` units, which is the provenance the closed decision in `DEVELOPMENT.md` cites.
+
+That decision was nearly re-opened on a false reading. `known_names.EXPECTED_NAMES` returns nothing for these names, and that is not evidence of absence — the set holds only the sibling project's names **not already in this integration's vocabulary**, so anything already polled is invisible in it. The caution is recorded beside the decision.
 
 ## [3.3.10-dev12] - 2026-09-05 - One Inherited `device_info`, Replacing Ten Copies
 

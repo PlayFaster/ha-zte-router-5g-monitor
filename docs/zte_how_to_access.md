@@ -426,6 +426,24 @@ What the table shows instead is that change frequency tracks reporting resolutio
 
 Two consequences for anything built on these keys. A poll is a **point sample of a moving signal, not an average**, so two polls thirty seconds apart can differ by ordinary variation — `lte_rsrp` took 23 distinct values in six minutes on a stationary unit with no change to the installation. The variation is real; it is just not an event. And `signalbar` is heavily smoothed: it is not a fast indicator, and reading it as one will miss transients the underlying metrics show clearly.
 
+### Three parameter vocabularies, and which one answers
+
+A router in this family may answer a concept under any of three spellings, and which one it fills in is a property of the firmware rather than of the concept.
+
+| Vocabulary | Carries | Example |
+| :-- | :-- | :-- |
+| Bare | 5G signal, SMS, APN, reboot schedule, time | `Z5g_rsrp`, `sms_unread_num` |
+| `flux_` | Data volume, throughput, billing cycle | `flux_monthly_rx_bytes`, `flux_clear_date` |
+| `network_` | LTE signal, cell identity, network mode, roaming | `network_lte_rsrp`, `network_cell_id` |
+
+The reference MC7010 answers the bare spellings. The MC888 Pro in issue #56 answers the `flux_` and `network_` ones and returns the bare LTE set present-and-empty — its own web pages request `lte_rsrq`, `lte_rssi` and `lte_snr`, and the router answers blank.
+
+**The `network_` family splits, and the split decides what a name means.** Some members carry a technology — `network_lte_rsrp`, `network_Z5g_PCI`, `network_ZCELLINFO_band` — and some carry none: `network_cell_id`, `network_signalbar`, `network_simcard_roam`, `network_rmcc`, `network_rmnc`, `network_type`, `network_rssi`, `network_sinr`. The unqualified ones describe whichever radio is serving, which is what a device supporting three bearers needs. Reading an unqualified name as though it were the LTE one is the mistake to avoid: `network_rssi` and `network_sinr` feed the generic **RSSI** and **SINR** sensors, and the LTE-labelled sensors stay blank on that hardware rather than claiming a figure the firmware did not qualify.
+
+**`network_rssi` reports the magnitude without the sign** — 73 for −73 dBm. Established by the `RSRQ = RSRP − RSSI + 10·log₁₀(N)` identity: at the reported RSRP of −105 on a 20 MHz carrier, −73 implies an RSRQ of −12 dB and +73 implies −158 dB, which is not a physical value. The sensor applies `−abs()` rather than a negation, so a firmware reporting the sign correctly is left alone.
+
+Alias order is always **bare spelling first**. The reference device's path is then unchanged, and `get_first` falls through to the alternates only where the leader is absent or empty.
+
 ### Available but not polled
 
 The 2026-07-29 discovery run probed 183 candidate names. These answered with a value and were **not** in either batch at the time — some have since been adopted, and `battery_value`, `hardwarenumber`, `rmcc`, `rmnc` and `wan_connect_status` are now polled. Treat the table as a starting point rather than a current inventory; `docs/all_sensors.md` is generated and authoritative — recorded so the next person asking "what else does this router expose?" can start here rather than re-running the probe. Adding any of them costs URL budget (see above).

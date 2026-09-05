@@ -676,6 +676,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "own, reported unchanged."
         ),
         translation_key="system_firmware_update_state",
+        entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
         value_fn=lambda data: _safe_str(data.get("current_upgrade_state")),
@@ -1334,6 +1335,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "update-state entities do not show."
         ),
         translation_key="system_upgrade_result",
+        entity_registry_enabled_default=False,
         entity_category=EntityCategory.DIAGNOSTIC,
         group="system",
         value_fn=lambda data: data.get("upgrade_result") or None,
@@ -1568,11 +1570,19 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         counts_changes_of="opms_wan_mode",
         value_fn=lambda data: None,
     ),
-    # Wi-Fi. Answered by the MC888 Pro and by no MC7010, so these are off by
-    # default and the model overlay turns them on where the firmware serves
-    # them. Two aggregates only: the four per-`chip` counters would need the
-    # `chip1` / `chip2` to 2.4 GHz / 5 GHz mapping confirmed, which nothing in
-    # any download states, and a band-labelled sensor showing the other band's
+    # WiFi. Two aggregates on the System sub-device rather than a group of
+    # their own: a WiFi sub-device would be drawn whether or not its entities
+    # report anything, because a device is created when its entities are
+    # added, disabled or not — so on an MC7010 it was an empty card.
+    #
+    # Enabled by default, and the overlay turns them off on the MC7010, which
+    # answers neither key. An unrecognised model keeps them on: a router that
+    # serves WiFi is the common case, and a blank pair is easier to notice and
+    # switch off than a missing pair is to discover.
+    #
+    # Two aggregates only: the four per-`chip` counters would need the `chip1`
+    # / `chip2` to 2.4 GHz / 5 GHz mapping confirmed, which nothing in any
+    # download states, and a band-labelled sensor showing the other band's
     # figure is a wrong reading rather than a missing one.
     ZTESensorEntityDescription(
         key="wifi_clients",
@@ -1581,13 +1591,12 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "across all its networks. Counts wireless clients only - anything "
             "on a network cable is not included."
         ),
-        translation_key="wifi_clients_connected",
+        translation_key="system_wifi_clients_connected",
         state_class=SensorStateClass.MEASUREMENT,
         min_limit=0,
         max_limit=256,
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        group="wifi",
+        group="system",
         source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_int(data.get("wifi_access_sta_num")),
     ),
@@ -1598,10 +1607,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "the router states it, so this reflects the radios rather than "
             "the last command sent to them."
         ),
-        translation_key="wifi_wifi_enabled",
+        translation_key="system_wifi_enabled",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        group="wifi",
+        group="system",
         source=ENDPOINT_EXTENDED,
         value_fn=lambda data: _safe_str(data.get("wifi_onoff_state")),
     ),

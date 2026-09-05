@@ -11,8 +11,7 @@ A complete list of the static entities and service actions provided by the integ
 | **Data**   | 15           | Data entities.         |
 | **SMS**    | 5            | SMS entities.          |
 | **Signal** | 54           | Signal entities.       |
-| **System** | 45           | System entities.       |
-| **WiFi**   | 2            | WiFi entities.         |
+| **System** | 47           | System entities.       |
 | **Total**  | **121**      | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
@@ -104,7 +103,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G RSSI | `z5g_rssi` | Sensor | dBm | - | LTS: `measurement` |
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 
-## System Sub-Device (45 Entities)
+## System Sub-Device (47 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -121,7 +120,7 @@ A complete list of the static entities and service actions provided by the integ
 | APN Interface Version | `apn_interface_version` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Battery | `battery_value` | Sensor | % | - | **Disabled by default.** |
 | Connection Failure Count | `connection_failure_count` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
-| Firmware Update State | `current_upgrade_state` | Sensor | - | Diagnostic | - |
+| Firmware Update State | `current_upgrade_state` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Device Uptime | `device_uptime` | Sensor | - | - | - |
 | Firmware Changes | `firmware_changes` | Sensor | - | Diagnostic | LTS: `total_increasing` |
 | Hardware Version | `hardware_version` | Sensor | - | Diagnostic | - |
@@ -146,20 +145,15 @@ A complete list of the static entities and service actions provided by the integ
 | SIM PUK Attempts Remaining | `sim_puk_attempts` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Time Server (SNTP) | `sntp_server` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Router Timezone | `sntp_timezone` | Sensor | - | Diagnostic | **Disabled by default.** |
-| Firmware Update Result | `upgrade_result` | Sensor | - | Diagnostic | - |
+| Firmware Update Result | `upgrade_result` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Firmware Version | `wa_inner_version` | Sensor | - | Diagnostic | - |
 | WAN IP Changes | `wan_ip_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | WAN IP Address | `wan_ipaddr` | Sensor | - | Diagnostic | - |
 | WAN Mode Changes | `wan_mode_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
+| WiFi Clients Connected | `wifi_clients` | Sensor | - | Diagnostic | LTS: `measurement` |
+| WiFi Enabled | `wifi_enabled` | Sensor | - | Diagnostic | - |
 | ODU LED Switch | `odu_led_switch` | Switch | - | Config | **Disabled by default.** |
 | Pause Polling | `pause_polling` | Switch | - | Config | - |
-
-## WiFi Sub-Device (2 Entities)
-
-| Name | Key | Type | Unit | Category | Notes |
-| :-- | :-- | :-- | :-- | :-- | :-- |
-| Clients Connected | `wifi_clients` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `measurement` |
-| WiFi Enabled | `wifi_enabled` | Sensor | - | Diagnostic | **Disabled by default.** |
 
 <!-- GENERATED:end -->
 

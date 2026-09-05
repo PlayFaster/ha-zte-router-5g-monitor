@@ -10,7 +10,7 @@ This document details hardware compatibility, API protocol families, and integra
 
 ZRM is designed specifically as a **cellular WAN, signal, data usage, and SMS monitor** for ZTE 5G/4G CPE routers (optimized for outdoor or indoor bridge-mode deployments).
 
-> [!IMPORTANT] **What ZRM does NOT do:** ZRM deliberately **excludes LAN/Wi-Fi client device tracking**. In bridge mode (e.g. MC7010 connected to a downstream UniFi, OPNSense, or pfSense firewall), DHCP and client tracking are handled by the primary router. Excluding client tracking keeps ZRM lightweight, prevents API polling collisions, and maintains compliance with Home Assistant architectural standards.
+> [!IMPORTANT] **What ZRM does NOT do:** ZRM deliberately **excludes LAN/Wi-Fi client device tracking**. It reports a WiFi _client count_ on models that supply one, which is a single number from the router's own status page and creates no per-device entities. In bridge mode (e.g. MC7010 connected to a downstream UniFi, OPNSense, or pfSense firewall), DHCP and client tracking are handled by the primary router. Excluding client tracking keeps ZRM lightweight, prevents API polling collisions, and maintains compliance with Home Assistant architectural standards.
 
 ---
 
@@ -45,6 +45,8 @@ The following ZTE 5G and 4G CPE models use the **ZTE `goform` HTTP API** (`gofor
 1. **Shared Batch Endpoint**: They respond to `GET goform_get_cmd_process?multi_data=1&cmd=...` with flat JSON objects.
 2. **Identical Login Challenge**: They utilize the `LD` token salt challenge + double SHA-256 password hash + `stok` cookie.
 3. **Built-in `AD` Token branching**: ZRM automatically switches between MD5 (MC7010/MC801) and SHA-256 (MC888/MC889) based on the router's firmware version string.
+4. **Per-model entity defaults**: which entities start enabled is resolved per router model, because models answer different subsets of the parameter set. The MC888 Pro reports its signal quality under `network_`-prefixed names an MC7010 does not use, so **RSSI** and **SINR** start enabled there and the five LTE and 5G sensors it cannot fill start disabled; the MC7010 has no WiFi of its own, so the two WiFi sensors start disabled there and enabled everywhere else. An unrecognised model gets the standard set. Curated from diagnostics captures, never measured at runtime — see `entity_defaults.MODEL_OVERLAY`.
+5. **Cross-model parameter spellings**: 36 alternate spellings resolve to the same entities, so a router using the `network_` or `flux_` vocabulary populates sensors named for the bare one.
 
 #### What ZRM does to accommodate them (added 3.3.1)
 
@@ -91,7 +93,7 @@ ZRM will **NOT** work with the following router families because they use fundam
 
 | Router Family | Representative Models | API Protocol | Primary Focus | ZRM Compatibility | Alternative Integration |
 | :-- | :-- | :-- | :-- | :-- | :-- |
-| **ZTE 5G/4G CPE (MC Series)** | MC7010, MC801A, MC888, MC889 | `goform` HTTP API | 5G/LTE Signal, WAN Status, SMS | ✅ **Supported** (MC7010 tested) | **ZRM** (`zte_router_5g`) |
+| **ZTE 5G/4G CPE (MC Series)** | MC7010, MC801A, MC888, MC889 | `goform` HTTP API | 5G/LTE Signal, WAN Status, SMS | ✅ **Supported** (MC7010 tested on hardware; MC888 Pro verified from diagnostics captures) | **ZRM** (`zte_router_5g`) |
 | **ZTE Next-Gen 5G CPE (G5 Series)** | G5TC, G5TS, G5C, G5 Max | `ubus` JSON-RPC API | 5G Signal & Router Status | ❌ Incompatible | [`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router) |
 | **ZTE Landline Broadband / Fiber ONTs** | F6640, F680, H288A, H388X, FIBRA6S | `_type=` Lua / XML API | LAN Device Tracking & Mesh Topology | ❌ Incompatible | [`zte_tracker`](https://github.com/juacas/zte_tracker) / [`ha-zte-fibra`](https://github.com/AldenDana/ha-zte-fibra) |
 
