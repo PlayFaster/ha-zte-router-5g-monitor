@@ -458,6 +458,17 @@ def test_every_flux_spelling_requested_is_aliased_somewhere() -> None:
         consumed |= set(tup)
     consumed |= {"flux_realtime_time"}  # read by the coordinator's uptime latch
 
+    # The diagnostics download resolves the usage vocabulary itself: those
+    # concepts have no entity, so `sensor._ALIAS_*` does not cover them.
+    from custom_components.zte_router_5g import diagnostics
+
+    consumed |= {
+        key
+        for name in dir(diagnostics)
+        if name.startswith("_USAGE_")
+        for key in getattr(diagnostics, name)
+    }
+
     flux_requested = {
         key
         for key in set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)

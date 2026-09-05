@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
+from datetime import datetime
 from typing import Any
 
 from homeassistant.components.diagnostics import async_redact_data
@@ -98,6 +99,37 @@ CELL_KEYS = {
 # about a *third party* who never consented to appear in a bug report.
 SMS_TEXT_KEYS = {"content", "content_decoded"}
 SMS_NUMBER_KEYS = {"number", "number_decoded"}
+
+# The eight SMS totals the router reports through `sms_capacity_info`. Kept
+# beside the message list so the count it claims and the count it will hand
+# over can be compared without diffing two downloads — the test that separates
+# "the firmware refuses a real delete" from "nothing was ever there to delete".
+SMS_COUNTER_KEYS = (
+    "sms_nv_total",
+    "sms_sim_total",
+    "sms_nv_rev_total",
+    "sms_nv_send_total",
+    "sms_nv_draftbox_total",
+    "sms_sim_rev_total",
+    "sms_sim_send_total",
+    "sms_sim_draftbox_total",
+    "sms_unread_num",
+)
+
+# Usage concepts as the spellings that answer for them, bare first and `flux_`
+# second, matching the order `sensor.py` gives its own alias tuples. Recording
+# *which* spelling answered is half the value: a device using the `flux_`
+# vocabulary throughout is a different situation from one that answers a
+# mixture, and the blanks alone do not say which.
+_USAGE_MONTHLY_RX = ("monthly_rx_bytes", "flux_monthly_rx_bytes")
+_USAGE_MONTHLY_TX = ("monthly_tx_bytes", "flux_monthly_tx_bytes")
+_USAGE_MONTHLY_TIME = ("monthly_time", "flux_monthly_time")
+_USAGE_SESSION_RX = ("realtime_rx_bytes", "flux_realtime_rx_bytes")
+_USAGE_SESSION_TX = ("realtime_tx_bytes", "flux_realtime_tx_bytes")
+_USAGE_SESSION_TIME = ("realtime_time", "flux_realtime_time")
+_USAGE_CLEAR_DATE = ("traffic_clear_date", "flux_clear_date", "data_volume_clear_date")
+_USAGE_LIMIT_SIZE = ("data_volume_limit_size", "flux_data_volume_limit_size")
+_USAGE_LIMIT_UNIT = ("data_volume_limit_unit", "flux_data_volume_limit_unit")
 
 _IP_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 _MAC_RE = re.compile(r"\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b")
@@ -228,6 +260,204 @@ def _sanitize_payload(data: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, 
     return clean
 
 
+def _resolve(data: dict[str, Any], names: tuple[str, ...]) -> tuple[str | None, Any]:
+    """Return the first spelling that answered, and its value.
+
+    "Answered" means present and non-empty, the same rule `sensor.get_first`
+    applies: a device that carries a key blank has not answered it.
+    """
+    for name in names:
+        value = data.get(name)
+        if value not in (None, ""):
+            return name, value
+    return None, None
+
+
+def _as_number(value: Any) -> float | None:
+    """Return a value as a number, or `None` when it is not one."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _rate(total: Any, seconds: Any) -> float | None:
+    """Bytes per second, or `None` when either side is missing or zero.
+
+    A zero divisor is the ordinary case, not an error: a router polled in the
+    first second of a billing cycle reports the elapsed time as zero.
+    """
+    numerator = _as_number(total)
+    divisor = _as_number(seconds)
+    if numerator is None or not divisor:
+        return None
+    return round(numerator / divisor, 3)
+
+
+def _data_usage(data: dict[str, Any], last_poll: str | None) -> dict[str, Any]:
+    """Describe the router's own byte counters against its own clocks.
+
+    A byte total says nothing on its own. The same 5,515.8 GB is unremarkable
+    over a quarter and impossible over four days, and only the elapsed time
+    the router reports beside it settles which. Issue #56 took four downloads
+    and hand arithmetic to establish that an MC888 Pro's monthly counter had
+    advanced faster than its link could carry, while its session counter never
+    had — this section is that comparison, computed in the file.
+
+    Everything here is arithmetic on values already published in `data`. No
+    judgement is applied and no value is flagged: which counter is wrong is
+    not decidable from the device alone, and a threshold guessed here would
+    hide a real figure on a model nobody has measured.
+    """
+    concepts = {
+        "monthly_rx_bytes": _USAGE_MONTHLY_RX,
+        "monthly_tx_bytes": _USAGE_MONTHLY_TX,
+        "monthly_seconds": _USAGE_MONTHLY_TIME,
+        "session_rx_bytes": _USAGE_SESSION_RX,
+        "session_tx_bytes": _USAGE_SESSION_TX,
+        "session_seconds": _USAGE_SESSION_TIME,
+        "cycle_reset_day": _USAGE_CLEAR_DATE,
+        "limit_size": _USAGE_LIMIT_SIZE,
+        "limit_unit": _USAGE_LIMIT_UNIT,
+    }
+    spelling: dict[str, str | None] = {}
+    value: dict[str, Any] = {}
+    for concept, names in concepts.items():
+        spelling[concept], value[concept] = _resolve(data, names)
+
+    def _total(rx: str, tx: str) -> float | None:
+        left, right = _as_number(value[rx]), _as_number(value[tx])
+        return None if left is None or right is None else left + right
+
+    monthly_total = _total("monthly_rx_bytes", "monthly_tx_bytes")
+    session_total = _total("session_rx_bytes", "session_tx_bytes")
+    monthly_rate = _rate(monthly_total, value["monthly_seconds"])
+    session_rate = _rate(session_total, value["session_seconds"])
+
+    return {
+        # Which vocabulary this device speaks, concept by concept.
+        "spelling_used": spelling,
+        "values": value,
+        "monthly": {
+            "total_bytes": monthly_total,
+            "elapsed_seconds": _as_number(value["monthly_seconds"]),
+            "rx_bytes_per_second": _rate(
+                value["monthly_rx_bytes"], value["monthly_seconds"]
+            ),
+            "tx_bytes_per_second": _rate(
+                value["monthly_tx_bytes"], value["monthly_seconds"]
+            ),
+            "total_bytes_per_second": monthly_rate,
+        },
+        "session": {
+            "total_bytes": session_total,
+            "elapsed_seconds": _as_number(value["session_seconds"]),
+            "rx_bytes_per_second": _rate(
+                value["session_rx_bytes"], value["session_seconds"]
+            ),
+            "tx_bytes_per_second": _rate(
+                value["session_tx_bytes"], value["session_seconds"]
+            ),
+            "total_bytes_per_second": session_rate,
+        },
+        # The one number that says whether a device's two counters agree with
+        # each other. A device whose month and whose session describe the same
+        # traffic sits near 1; the MC888 Pro of issue #56 sat at 15.9.
+        "monthly_rate_over_session_rate": (
+            round(monthly_rate / session_rate, 3)
+            if monthly_rate is not None and session_rate
+            else None
+        ),
+        # Whether the "session" is the connection or the boot. On both models
+        # measured it is the boot, to within a second, which is worth stating
+        # rather than leaving to be rediscovered from two timestamps.
+        "uptime_seconds": _uptime_seconds(data.get("boot_time"), last_poll),
+    }
+
+
+def _uptime_seconds(boot_time: Any, last_poll: str | None) -> float | None:
+    """Seconds between the latched boot instant and the last successful poll.
+
+    `boot_time` is a `datetime` in `coordinator.data` — `coordinator.py:617`
+    assigns `self._boot_time` directly — and reads as a string everywhere the
+    payload has been through a JSON encoder, a diagnostics download included.
+    Both shapes arrive here, and the first version accepted only the second:
+    it returned `None` against live hardware while every other figure in the
+    section was correct.
+    """
+    if not last_poll:
+        return None
+    booted = boot_time
+    try:
+        if isinstance(booted, str):
+            booted = datetime.fromisoformat(booted)
+        if not isinstance(booted, datetime):
+            return None
+        return round(
+            (datetime.fromisoformat(last_poll) - booted).total_seconds(), 3
+        )
+    except (ValueError, TypeError):
+        # `TypeError` covers the naive/aware mismatch: the subtraction raises
+        # rather than returning a wrong answer, and a wrong uptime is worse
+        # than an absent one.
+        return None
+
+
+def _sms_section(
+    messages: list[dict[str, Any]] | None,
+    data: dict[str, Any],
+    coordinator: ZTERouterDataUpdateCoordinator,
+    tokenizer: _Tokenizer,
+) -> dict[str, Any]:
+    """Describe the message bank, the counters, and the last delete attempt.
+
+    The message list is fetched for the download rather than taken from the
+    poll, which keeps only the newest message. What it is here to answer is
+    narrow: the router's `sms_capacity_info` says how many messages it holds,
+    and this says how many it will hand over. `delete_all` can only delete
+    what the second number covers, so the two disagreeing and the two agreeing
+    are opposite faults.
+
+    Every message goes through `_sanitize_sms`, so no body and no sender
+    number reaches the file — the same treatment `last_sms` has always had.
+    """
+    # Read off a collaborator, so guarded the way `_scalar` guards the rest of
+    # this file: the download is serialized after every section has succeeded,
+    # and a value that cannot be encoded fails the whole file at the last
+    # moment. A stand-in under test is the case that finds this.
+    listed = [msg for msg in messages if isinstance(msg, dict)] if messages else []
+    tracker = coordinator.fired_sms_hashes
+    delete_record = coordinator.api.last_delete
+    return {
+        "fetched": isinstance(messages, list),
+        "message_count": len(listed),
+        "ids": [str(msg.get("id")) for msg in listed],
+        "messages": [_sanitize_sms(dict(msg), tokenizer) for msg in listed],
+        # The router's own totals, for comparison with `message_count`.
+        "capacity_counters": {
+            key: data.get(key) for key in SMS_COUNTER_KEYS if key in data
+        },
+        # A message with no parsable date is invisible to the new-SMS event:
+        # `_check_new_sms` drops it before sorting and says nothing.
+        "undated_messages": sum(1 for msg in listed if not msg.get("date_decoded")),
+        # The event tracker's state. It is in memory only, so a restart
+        # re-establishes the baseline from whatever is in the bank.
+        "event_tracker": {
+            "last_sms_timestamp": _scalar(coordinator.last_sms_timestamp),
+            "fired_hashes": (
+                len(tracker) if isinstance(tracker, (set, frozenset)) else None
+            ),
+        },
+        # Ids only, and the router's verbatim result. Never cleared, so a
+        # reporter who presses the button and downloads afterwards carries the
+        # evidence — which is the only way a refused delete is visible, since
+        # this API answers success for one it does not carry out.
+        "last_delete": (
+            deepcopy(delete_record) if isinstance(delete_record, dict) else None
+        ),
+    }
+
+
 def _scalar(value: Any) -> Any:
     """Return a value only when it is a JSON scalar, else `None`.
 
@@ -314,6 +544,19 @@ async def async_get_config_entry_diagnostics(
         or {}
     )
 
+    # Fetched for the download, not taken from the poll: a poll keeps only the
+    # newest message. Guarded like discovery — a router that refuses the list
+    # must not cost the reporter the whole file.
+    messages = await _async_guarded(
+        "sms", coordinator.async_fetch_sms_snapshot(), errors
+    )
+
+    last_poll = (
+        coordinator.last_update_success_time.isoformat()
+        if coordinator.last_update_success_time
+        else None
+    )
+
     return {
         "entry": {
             "title": entry.title,
@@ -328,11 +571,7 @@ async def async_get_config_entry_diagnostics(
         "coordinator": {
             "consecutive_failures": coordinator.consecutive_failures,
             "last_update_success": coordinator.last_update_success,
-            "last_update_success_time": (
-                coordinator.last_update_success_time.isoformat()
-                if coordinator.last_update_success_time
-                else None
-            ),
+            "last_update_success_time": last_poll,
             "data_available": coordinator.data is not None,
             "update_interval_seconds": (
                 coordinator.update_interval.total_seconds()
@@ -356,6 +595,17 @@ async def async_get_config_entry_diagnostics(
             1 for value in payload.values() if value not in ("", None, {})
         ),
         "data_empty": sum(1 for value in payload.values() if value in ("", None)),
+        # The message bank as the router will actually serve it, and the byte
+        # counters set against the router's own clocks. Both exist because a
+        # value alone did not settle either of the two faults in issue #56.
+        "sms": _guarded(
+            "sms.section",
+            lambda: _sms_section(messages, payload, coordinator, tokenizer),
+            errors,
+        ),
+        "data_usage": _guarded(
+            "data_usage", lambda: _data_usage(payload, last_poll), errors
+        ),
         # `data` is empty until the first successful poll, which is exactly
         # the case this file is usually requested for. These two carry the
         # evidence that would otherwise be reachable only from raw logs.

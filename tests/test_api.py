@@ -345,10 +345,19 @@ async def test_api_delete_all_success(mock_aiohttp_client):
     mock_aiohttp_client.post.side_effect = [
         MockResponse(json_data={"messages": [{"id": "1"}, {"id": "2"}]}),
         MockResponse(json_data={"result": "ok"}, status=200),
+        # The post-delete re-list. `delete_all` verifies rather than trusting
+        # the result code, because this API answers success for a delete it
+        # does not carry out.
+        MockResponse(json_data={"messages": []}),
     ]
 
     with patch.object(api, "login"), patch.object(api, "get_ad", return_value="ad"):
         assert await api.delete_all() == 200
+    assert api.last_delete == {
+        "ids_requested": ["1", "2"],
+        "result": {"result": "ok"},
+        "ids_surviving": [],
+    }
 
 
 @pytest.mark.asyncio

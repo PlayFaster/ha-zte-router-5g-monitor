@@ -27,6 +27,7 @@ Live findings this encodes (MC7010 `V1.0.0B03`, 2026-07-29, see
 """
 
 import inspect
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -148,6 +149,19 @@ class _DyingSession:
         self.revive_on_login = revive_on_login
         self.count = 0
         self.dead = False
+        # A deleted message stays deleted. `delete_all` re-lists to verify,
+        # because this API answers success for a delete it does not carry out
+        # — so a stub that acknowledged the command and kept the message would
+        # model the broken firmware, and every recovery run would fail.
+        self.deleted: set[str] = set()
+
+    def _healthy(self) -> dict[str, Any]:
+        """The healthy payload, with deleted messages actually gone."""
+        payload = dict(_HEALTHY)
+        payload["messages"] = [
+            msg for msg in _HEALTHY["messages"] if msg["id"] not in self.deleted
+        ]
+        return payload
 
     def _respond(self, *args: Any, **kwargs: Any) -> MockResponse:
         data = kwargs.get("data")
@@ -177,14 +191,18 @@ class _DyingSession:
         # clock and cause the bug this file guards. Returning the dead shape
         # for them would be a fault the router cannot produce.
         if "cmd=LD" in body or "cmd=wa_inner_version" in body:
-            return MockResponse(json_data=dict(_HEALTHY))
+            return MockResponse(json_data=self._healthy())
 
         self.count += 1
         if self.count > self.die_after:
             self.dead = True
         if self.dead:
             return MockResponse(json_data=dict(_DEAD))
-        return MockResponse(json_data=dict(_HEALTHY))
+        if "goformId=DELETE_SMS" in body:
+            match = re.search(r"msg_id=([^&]*)", body)
+            if match:
+                self.deleted |= {part for part in match.group(1).split(";") if part}
+        return MockResponse(json_data=self._healthy())
 
     def get(self, *args: Any, **kwargs: Any) -> MockResponse:
         return self._respond(*args, **kwargs)

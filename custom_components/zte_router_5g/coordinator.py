@@ -1464,6 +1464,27 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             await asyncio.sleep(DISCOVERY_SETTLE_SECONDS)
             return result
 
+    async def async_fetch_sms_snapshot(self) -> list[dict[str, Any]]:
+        """Read the device message bank under the coordinator's update lock.
+
+        For the diagnostics download, which is the only caller. A poll keeps
+        only the newest message — `data["last_sms"]` — so the list itself
+        exists nowhere by the time a download is generated, and the number of
+        messages the router will actually hand over is what `delete_all`
+        operates on. Issue #56 could not be diagnosed without it: an MC888 Pro
+        reports a delete as successful and keeps the messages, and a download
+        showing the bank empty and a download showing two messages point at
+        opposite faults.
+
+        The lock is required for the same reason `async_run_discovery` takes
+        it: this shares the coordinator's API client, and the router permits
+        one session, so an unsynchronized read can re-login underneath a poll.
+
+        Holds no state. Failures are the caller's to record.
+        """
+        async with self._async_update_lock:
+            return await self.api.get_sms_messages(mem_store="1", tags="10")
+
     def _sparse_payload_finding(self, data: dict[str, Any]) -> str | None:
         """Report a poll that succeeded while answering almost nothing.
 

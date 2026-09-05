@@ -260,6 +260,19 @@ _EXTENDED_PARAMS: list[str] = [
     "opms_wan_mode",
     "opms_wan_auto_mode",
     "apn_interface_version",
+    # --- Billing-cycle clock ---
+    #
+    # How long the monthly byte counters have been accumulating. No entity
+    # reads it: it is the divisor that turns a monthly total into a rate, and
+    # a rate is what says whether a device's own counters agree with each
+    # other. Issue #56 needed four downloads and hand arithmetic to establish
+    # that they did not.
+    #
+    # Both spellings, for the same reason as every other pair here — the
+    # MC7010 answers `monthly_time` and the MC888 Pro `flux_monthly_time`,
+    # both verified `vetted` by discovery on 2026-09-05.
+    "monthly_time",
+    "flux_monthly_time",
     # --- Router settings ---
     "upnpEnabled",
     "alg_sip_enable",
@@ -723,6 +736,13 @@ class ZTERouterAPI:
         # download is asked for. These two carry what was rejected and what the
         # login saw, and both are sanitized on the way out.
         self.last_rejection: dict[str, Any] | None = None
+        # The most recent `DELETE_SMS` attempt. `_require_success` cannot tell
+        # a refused delete from an honoured one on this API: the router
+        # answers `{"result":"success"}` for a message id it does not hold,
+        # measured on the reference MC7010 on 2026-09-05. What was asked for,
+        # what was answered, and which ids survived is the only evidence a
+        # download can carry — see `_record_delete`.
+        self.last_delete: dict[str, Any] | None = None
         self.login_metadata: dict[str, Any] = {}
         self._cookies_found_in = "none"
 
@@ -749,6 +769,28 @@ class ZTERouterAPI:
             "keys_absent": sorted(k for k in asked if k not in payload),
             "payload": dict(payload),
         }
+
+    def _record_delete(self, msg_id: str, result: Any) -> None:
+        """Hold the most recent `DELETE_SMS` attempt, for diagnostics.
+
+        Ids and a result code only — no message content and no sender number
+        ever reach this record, so it needs no sanitizing beyond what
+        `diagnostics.py` already applies to the payload it sits beside.
+
+        Bounded to the most recent attempt and never cleared by a later poll:
+        a reporter presses the button and then downloads, and a record that
+        expired between the two would be absent exactly when it is wanted.
+        """
+        self.last_delete = {
+            "ids_requested": [part for part in msg_id.split(";") if part],
+            "result": dict(result) if isinstance(result, dict) else None,
+            "ids_surviving": None,
+        }
+
+    def _record_delete_survivors(self, surviving: list[str]) -> None:
+        """Add the post-delete check's finding to the record above."""
+        if self.last_delete is not None:
+            self.last_delete["ids_surviving"] = sorted(surviving)
 
     def _record_unparsable(self, status: int, body: str) -> None:
         """Hold a preview of a response that was not JSON at all.
@@ -2598,11 +2640,25 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
+        self._record_delete(msg_id, res)
         self._require_success(res, "DELETE_SMS")
         return 200
 
     async def delete_all(self) -> int:
-        """Delete all SMS."""
+        """Delete every message in the device bank, and verify that it happened.
+
+        The verification is the point. This API answers `{"result":"success"}`
+        for a `DELETE_SMS` naming an id the router does not hold — measured on
+        the reference MC7010 on 2026-09-05 — so `_require_success` passes
+        whatever the firmware actually did, and a device that accepts the
+        command and keeps the messages reports a completed deletion. Issue #56
+        is that shape on an MC888 Pro.
+
+        The check is against **the ids this call asked for**, not against the
+        bank being empty: a message arriving between the delete and the re-list
+        is not a failure to delete the earlier ones. An empty bank is a
+        success — there was nothing to remove and nothing survived.
+        """
         payload = {
             "isTest": "false",
             "cmd": "sms_data_total",
@@ -2622,12 +2678,40 @@ class ZTERouterAPI:
 
             if ids:
                 res_code = await self.delete_sms(";".join(ids))
+                await self._require_deleted(ids)
         except (ZTEAuthError, ZTEConnectionError):
             raise
         except (TimeoutError, aiohttp.ClientError) as e:
             _LOGGER.error("Failed to delete all SMS: %s", e)
             raise ZTEConnectionError(f"Failed to delete all SMS: {e}") from e
         return res_code
+
+    async def _require_deleted(self, ids: list[str]) -> None:
+        """Fail when a message this call asked to delete is still there.
+
+        Raised as a `ZTEConnectionError` so it reaches the user by the route a
+        refused write already takes: both callers of `delete_all` wrap any
+        exception in a `HomeAssistantError`, and the caller above re-raises
+        this class untouched.
+
+        A failure to re-list is not a failure to delete. The re-list runs
+        inside `delete_all`'s own `try`, so a timeout there surfaces as the
+        connection error it is, rather than as a false report that the
+        messages survived.
+        """
+        wanted = {str(i) for i in ids}
+        remaining = await self.get_sms_messages(mem_store="1", tags="10")
+        surviving = [
+            str(msg.get("id")) for msg in remaining if str(msg.get("id")) in wanted
+        ]
+        self._record_delete_survivors(surviving)
+        if surviving:
+            raise ZTEConnectionError(
+                f"Router accepted DELETE_SMS and kept {len(surviving)} of "
+                f"{len(wanted)} message(s): ids {', '.join(sorted(surviving))}. "
+                f"This API answers 200 OK with result=success for a delete it "
+                f"does not carry out."
+            )
 
     async def send_sms(self, number: str, message: str) -> int:
         """Send an SMS message via the router."""

@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.11-dev1\] - 2026-09-05 - SMS Bank and Data Usage in the Diagnostics Download; Verified SMS Deletion](#3311-dev1---2026-09-05---sms-bank-and-data-usage-in-the-diagnostics-download-verified-sms-deletion)
   - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
   - [\[3.3.10-dev13\] - 2026-09-05 - WiFi Back on System; Firmware Sensors Off by Default; Release Documentation](#3310-dev13---2026-09-05---wifi-back-on-system-firmware-sensors-off-by-default-release-documentation)
   - [\[3.3.10-dev12\] - 2026-09-05 - One Inherited `device_info`, Replacing Ten Copies](#3310-dev12---2026-09-05---one-inherited-device_info-replacing-ten-copies)
@@ -232,6 +233,40 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.11-dev1] - 2026-09-05 - SMS Bank and Data Usage in the Diagnostics Download; Verified SMS Deletion
+
+### Summary
+
+Two faults reported against an MC888 Pro in issue #56 — SMS deletion that reports success and removes nothing, and monthly data figures three orders of magnitude above the subscriber's plan. Neither could be diagnosed from a diagnostics download, and neither is fixed here. What changes is that the next download states both.
+
+### Added
+
+- **An `sms` section in the diagnostics download**, carrying the message bank as the router will actually serve it. Every entry passes through the existing `_sanitize_sms`, so ids, tags, dates and a content length are published and no message body or sender number is. Beside the list: the count, the eight `sms_capacity_info` counters, the number of messages carrying no parsable date, and the event tracker's baseline.
+
+  **The comparison is the reason it exists.** `sms_capacity_info` says how many messages the router believes it holds; the list says how many it will hand over. `delete_all` can only remove the second, so the two disagreeing and the two agreeing are opposite faults with opposite fixes, and nothing in a download distinguished them.
+
+- **`coordinator.async_fetch_sms_snapshot()`**, which the section calls. A poll keeps only the newest message as `data["last_sms"]`, so the list exists nowhere by the time a download is generated. Fetched for the download under the coordinator's update lock, the same way `async_run_discovery` is — the router permits one session, and an unsynchronized read can re-login underneath a poll.
+
+- **A `data_usage` section**, computing the implied average rate for the monthly and session counters against the router's own clocks, rx and tx separately, and the ratio between the two. Also which spelling answered for each concept, the session length, and the uptime derived from `boot_time`.
+
+  **A byte total says nothing on its own.** The same 5,515.8 GB is unremarkable over a quarter and impossible over four days, and only the elapsed time the router reports beside it settles which. Establishing that an MC888 Pro's monthly counter had advanced faster than its link could carry, while its session counter never had, took four downloads and hand arithmetic. Nothing here judges the result: which counter is wrong is not decidable from the device, and a threshold guessed here would hide a real figure on a model nobody has measured.
+
+- **`monthly_time` and `flux_monthly_time` are polled**, in `_EXTENDED_PARAMS`. No entity reads them — they are the divisor that turns a monthly total into a rate. Both spellings, because the MC7010 answers the first and the MC888 Pro the second. Removed from `DISCOVERY_CANDIDATES`, which exists for names the poll does not carry.
+
+- **The last `DELETE_SMS` attempt is recorded on the API object** and published in the `sms` section: the ids requested, the router's verbatim result, and which of those ids survived. Ids only. Never cleared, so a reporter who presses the button and then downloads carries the evidence.
+
+### Fixed
+
+- **`delete_all` verifies that the deletion happened, instead of trusting the result code.** Measured on the reference MC7010 on 2026-09-05: `DELETE_SMS` answers `{"result": "success"}` for a message id the router does not hold. `_require_success` therefore passes whatever the firmware did, and a device that accepts the command and keeps the messages reports a completed deletion — which is issue #56. The check re-lists and raises when any id **this call asked for** is still present; a message arriving in between is not a failure, and an empty bank is a success that costs no extra request.
+
+### Measured
+
+**The trailing separator is not the cause, and was not shipped.** ZTE's own web UI sends `msg_id=3;` where this integration sends `msg_id=3`, which was the leading hypothesis. Tested on the reference MC7010 on 2026-09-05: both forms delete, so the difference is not what the MC888 Pro is refusing, and changing the request on that evidence would have been a guess presented as a fix.
+
+**The MC888 Pro's monthly counter recorded more traffic than its link could carry.** Across the reporter's four downloads the monthly total rose from 26.0 GB to 5,784.0 GB. Between the third and fourth captures it advanced 1,567.3 GB over 218,122 s, an ordinary 57.5 Mbps; between the second and third it advanced 3,775.8 GB over 83,513 s, which is 361.7 Mbps sustained for 23 hours. Every session-counter sample stayed within an ordinary range — 109.1, 115.1 and 8.0 Mbps. `flux_monthly_time` tracks wall clock from the cycle reset to within 42 s at two of the captures, so those are real averages rather than an artefact of the divisor.
+
+**The integration's arithmetic is not implicated.** `5515805133461 / 10^9` is exactly the 5,515.8 GB displayed, and the code that reads the counter, resolves its spelling and converts it has not changed in the window: `_ALIAS_MONTHLY_RX` and the request-list entry date from `[3.3.1-dev2]` and `[3.3.1-dev3]`, and `_get_bytes_to_gb` from `[3.0.1-dev3]`.
 
 ## [3.3.10] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion
 
