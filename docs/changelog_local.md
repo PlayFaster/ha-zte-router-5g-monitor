@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.12-dev1\] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json](#3312-dev1---2026-09-06---ci-bump-phacc-update-shared-ci-tasksjson)
   - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
   - [\[3.3.11-dev3\] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All](#3311-dev3---2026-09-05---sms-timestamps-carry-their-routers-offset-delete-all-means-all)
   - [\[3.3.11-dev2\] - 2026-09-05 - Uptime in the Usage Section Corrected](#3311-dev2---2026-09-05---uptime-in-the-usage-section-corrected)
@@ -236,6 +237,16 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.12-dev1] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json
+
+### Bumps
+
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.363 to 0.13.363
+
+### Changed
+
+- **Shared CI `tasks.json`**: Updated for consistent on-screen formatting, green for good/pass; red for fail; yellow for warn; cyan for note; across ALL tasks.
 
 ## [3.3.11] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates
 
