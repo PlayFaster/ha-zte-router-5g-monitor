@@ -369,11 +369,18 @@ async def test_api_delete_all_success(mock_aiohttp_client):
 
     with patch.object(api, "login"), patch.object(api, "get_ad", return_value="ad"):
         assert await api.delete_all() == 200
-    assert api.last_delete == {
+    # `attempted_at` is a wall-clock stamp and is asserted for shape only.
+    record = dict(api.last_delete)
+    assert record.pop("attempted_at").endswith("+00:00")
+    assert record == {
         "ids_requested": ["1", "2"],
         "result": {"result": "ok"},
         "ids_surviving": [],
         "keep_last": None,
+        # `DELETE_SMS` carries no bank selector on any route; the ids were
+        # found by listing the combined bank.
+        "mem_store_sent": None,
+        "listed_with": "2",
     }
 
 

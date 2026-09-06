@@ -48,6 +48,10 @@ class ZTESelectEntityDescription(SelectEntityDescription):
     # Optional plain-language note surfaced as an unrecorded `about` attribute
     # (dev_standards Section 14). Resolved by the ZTEAboutEntity mixin.
     about: str | None = None
+    # Set where the entity has no value under conditions the router treats as
+    # normal, so `unknown` is the correct reading rather than a fault. Read by
+    # `check_sensor_manifest.py --verify-ha`, which otherwise reports it stuck.
+    unknown_is_valid: bool = False
 
 
 def _get_apn_profiles(data: Any) -> list[tuple[int, str, str]]:
@@ -144,6 +148,12 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
         group="signal",
         options_fn=lambda data: [p[1] for p in _get_apn_profiles(data)],
         value_fn=_get_current_apn_profile,
+        # In auto mode the network-provided APN need not exist in the stored
+        # profile list, and `_get_current_apn_profile` returns None rather
+        # than naming a profile that is not in use. Observed live on an
+        # MC7010: auto mode, active APN `3FWA.ie`, one stored profile
+        # (`Default`, empty APN field) — no match is possible.
+        unknown_is_valid=True,
         setter_fn=lambda api, option, data: _set_apn_profile_option(api, option, data),
     ),
     ZTESelectEntityDescription(

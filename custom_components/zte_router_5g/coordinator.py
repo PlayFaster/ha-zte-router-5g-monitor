@@ -309,6 +309,14 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 if parsed is not None and parsed.tzinfo is not None:
                     self._boot_time = parsed
 
+        # The record of the last delete attempt is restored onto the API
+        # object, because it lives in memory there and a reporter's download is
+        # routinely taken after a restart. Issue #56 turned on exactly that: the
+        # section read `null` and the router's answer to the delete was lost.
+        stored_delete = entry.data.get("last_delete")
+        if isinstance(stored_delete, dict):
+            api.last_delete = dict(stored_delete)
+
         # `entry.data["last_uptime"]` is deliberately NOT read. It is written
         # only on a latch, so it is frozen at whatever small value the previous
         # reboot recorded, and comparing a live counter against it is the
@@ -1196,6 +1204,22 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         new_data["boot_time"] = self._boot_time.isoformat()
         self.hass.config_entries.async_update_entry(self.entry, data=new_data)
         self._write_counter(seconds, now)
+
+    def persist_last_delete(self) -> None:
+        """Write the API's delete record into the entry, so a restart keeps it.
+
+        Called after a delete route finishes, successfully or not: the failing
+        case is the one worth keeping. The record is small, bounded to the most
+        recent attempt, and carries ids and a result code only — no message
+        content and no sender number — so it is no more sensitive than the
+        `boot_time` written the same way.
+        """
+        record = self.api.last_delete
+        if record is None:
+            return
+        new_data = dict(self.entry.data)
+        new_data["last_delete"] = record
+        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
     def _maybe_persist_counter(self, seconds: int, now: datetime) -> None:
         """Flush the counter and accumulators on a fixed interval.

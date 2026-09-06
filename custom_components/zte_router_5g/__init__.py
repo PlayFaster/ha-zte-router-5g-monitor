@@ -260,12 +260,16 @@ async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
         # answers success for an id the router does not hold.
         await coordinator.api.verify_deleted([str(index)])
     except Exception as err:
+        # Persisted in both paths: a delete the router refused is the case a
+        # diagnostics download is wanted for, and it is the one that raises.
+        coordinator.persist_last_delete()
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="delete_sms_failed",
             translation_placeholders={"error": str(err)},
         ) from err
 
+    coordinator.persist_last_delete()
     await _async_refresh_after_write(coordinator, "delete_sms")
 
 
@@ -341,12 +345,14 @@ async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
                 coordinator.api.note_delete_parameter(keep_last)
                 await coordinator.api.verify_deleted(ids)
     except Exception as err:
+        coordinator.persist_last_delete()
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="delete_all_sms_failed",
             translation_placeholders={"error": str(err)},
         ) from err
 
+    coordinator.persist_last_delete()
     await _async_refresh_after_write(coordinator, "delete_all_sms")
 
 

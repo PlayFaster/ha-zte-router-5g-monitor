@@ -787,7 +787,12 @@ class ZTERouterAPI:
             "payload": dict(payload),
         }
 
-    def _record_delete(self, msg_id: str, result: Any) -> None:
+    def _record_delete(
+        self,
+        msg_id: str,
+        result: Any,
+        listed_with: str | None = None,
+    ) -> None:
         """Hold the most recent `DELETE_SMS` attempt, for diagnostics.
 
         Ids and a result code only — no message content and no sender number
@@ -799,9 +804,18 @@ class ZTERouterAPI:
         expired between the two would be absent exactly when it is wanted.
         """
         self.last_delete = {
+            "attempted_at": datetime.now(UTC).isoformat(),
             "ids_requested": [part for part in msg_id.split(";") if part],
             "result": dict(result) if isinstance(result, dict) else None,
             "ids_surviving": None,
+            # `DELETE_SMS` carries no bank selector — the command names ids and
+            # nothing else — so this is `None` on every route. Recorded rather
+            # than omitted: a reader comparing this against the router's own web
+            # page needs to know the selector was absent, not assume it was
+            # sent and wrong. `listed_with` is the selector used to *find* the
+            # ids, which is the only place a bank choice enters a bulk delete.
+            "mem_store_sent": None,
+            "listed_with": listed_with,
             # Which messages a bulk delete targeted is decided by `keep_last`,
             # and it cannot be recovered afterwards: the ids say what was
             # aimed at, but reconstructing the parameter needs the bank
@@ -2689,8 +2703,12 @@ class ZTERouterAPI:
         self._require_success(res, "REBOOT_DEVICE")
         return 200
 
-    async def delete_sms(self, msg_id: str) -> int:
-        """Delete SMS."""
+    async def delete_sms(self, msg_id: str, listed_with: str | None = None) -> int:
+        """Delete SMS.
+
+        `listed_with` is the `mem_store` a caller used to choose these ids, and
+        is recorded beside the attempt. It changes nothing about the request.
+        """
         ad = await self.get_ad()
         payload = f"isTest=false&goformId=DELETE_SMS&msg_id={msg_id}&AD=" + ad
         headers = {
@@ -2699,7 +2717,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
-        self._record_delete(msg_id, res)
+        self._record_delete(msg_id, res, listed_with)
         self._require_success(res, "DELETE_SMS")
         return 200
 
@@ -2740,7 +2758,7 @@ class ZTERouterAPI:
             ids = [m["id"] for m in resp_json["messages"]]
 
             if ids:
-                res_code = await self.delete_sms(";".join(ids))
+                res_code = await self.delete_sms(";".join(ids), SMS_STORE_ALL)
                 await self.verify_deleted(ids)
         except (ZTEAuthError, ZTEConnectionError):
             raise

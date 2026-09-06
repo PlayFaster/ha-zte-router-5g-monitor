@@ -78,6 +78,12 @@ def _nv_store_is_full(data: Any) -> bool:
     return capacity > 0 and used >= capacity
 
 
+# How a device spells "LTE anchor with a 5G leg" — 5G non-standalone. Measured:
+# `ENDC` on the MC7010, `EN-DC` on the MC888 Pro. Neither device has been seen
+# to use the other's form.
+_ENDC_SPELLINGS: Final = ("ENDC", "EN-DC")
+
+
 # Define the entity description for static metadata
 BEST_CONN_DESCRIPTION = ZTEBinarySensorEntityDescription(
     key="best_connection",
@@ -300,9 +306,12 @@ class ZTEBestConnectionSensor(
         data = self.coordinator.data
         if not data:
             return None
-        # Optimal connection logic based on raw data keys
+        # Both spellings of the same state. The MC7010 reports `ENDC` and the
+        # MC888 Pro reports `EN-DC`, consistently across every diagnostics
+        # download of each — so testing for one alone left the sensor stuck off
+        # on an MC888 whatever the radio was doing (issue #56).
         return bool(
-            data.get("network_type") == "ENDC"
+            data.get("network_type") in _ENDC_SPELLINGS
             and data.get("wan_lte_ca") == "ca_activated"
         )
 

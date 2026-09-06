@@ -5,6 +5,11 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
+  - [\[3.3.12-dev4\] - 2026-09-06 - Best Connection Reads Both EN-DC Spellings; Delete Record Survives a Restart](#3312-dev4---2026-09-06---best-connection-reads-both-en-dc-spellings-delete-record-survives-a-restart)
+  - [\[3.3.12-dev3\] - 2026-09-06 - Diagnostics Entity Verification Aligned With Per-Model Defaults](#3312-dev3---2026-09-06---diagnostics-entity-verification-aligned-with-per-model-defaults)
+  - [\[3.3.12-dev2\] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync](#3312-dev2---2026-09-06---diagnostics-check-re-takes-an-unfinished-pass-shared-ci-tasksjson-sync)
+  - [\[3.3.12-dev1\] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json](#3312-dev1---2026-09-06---ci-bump-phacc-update-shared-ci-tasksjson)
   - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
   - [\[3.3.11-dev3\] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All](#3311-dev3---2026-09-05---sms-timestamps-carry-their-routers-offset-delete-all-means-all)
   - [\[3.3.11-dev2\] - 2026-09-05 - Uptime in the Usage Section Corrected](#3311-dev2---2026-09-05---uptime-in-the-usage-section-corrected)
@@ -236,6 +241,101 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.12] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records
+
+### Summary
+
+- **Best Connection Dual Schema Support**: The Best Connection binary sensor now recognizes both `ENDC` and `EN-DC` network type formats, enabling correct status evaluation on MC888-series hardware.
+- **Persistent SMS Deletion Diagnostics**: The record of recent SMS deletion operations now persists across Home Assistant restarts, ensuring full deletion history is available in diagnostic captures.
+
+### Added
+
+- **Persistent Deletion Diagnostics**: SMS deletion attempt history (including timestamps, targeted message IDs, storage selectors, and router responses) is now preserved, suitably redacted, in config entry storage across restarts for inclusion in diagnostic downloads.
+
+### Changed
+
+- **Best Connection Network Type Evaluation**: Added support for hyphenated `EN-DC` network type strings alongside `ENDC` in the Best Connection binary sensor.
+
+### Under the hood
+
+- **Diagnostic Capture Retry & Manifest Alignment**: Diagnostic stability verification checks now automatically retry interrupted passes during transient session collisions, and live entity manifest checks align with per-model default overlays.
+
+## [3.3.12-dev4] - 2026-09-06 - Best Connection Reads Both EN-DC Spellings; Delete Record Survives a Restart
+
+### Summary
+
+Two faults found while reviewing the fourth diagnostics download on issue #56, neither reported as a fault by the reporter. One sensor cannot be correct on an MC888 Pro; the evidence needed to diagnose the SMS deletion failure was being discarded before it could be collected.
+
+### Fixed
+
+- **Best Connection tested for one spelling of a state that has two.** It required `network_type == "ENDC"`. The MC7010 reports `ENDC` and the MC888 Pro reports `EN-DC`, consistently — sixteen downloads of the first and six of the second, with neither device ever using the other's form. So on an MC888 the sensor could not read `on` whatever the radio was doing. Both spellings are now accepted, named in `_ENDC_SPELLINGS` beside the sensor.
+
+  The reporter's device is currently `off` for an unrelated and correct reason — the router reports no carrier aggregation — so this changes nothing they can see today, and would have changed everything once their aggregation came up.
+
+### Added
+
+- **The record of the last delete attempt survives a restart.** `last_delete` lived on the API object only, so a Home Assistant restart erased it. That is the ordinary sequence for a reporter — press the button, restart at some point, download diagnostics later — and it is what happened on issue #56: the `sms` section read `null` where the router's answer to the delete should have been. The record is now written into the config entry when a delete route finishes and restored onto the API object at setup, the same mechanism `boot_time` already uses.
+
+  Written on failure as well as on success. The refused delete is the case a download is wanted for, and it is the one that raises.
+
+- **The record carries a timestamp and the storage selectors.** `attempted_at` says when, so an attempt can be placed against a download taken later. `mem_store_sent` records that `DELETE_SMS` carries no bank selector on any route — recorded rather than omitted, because a reader comparing this against the router's own web page needs to know the selector was absent rather than assume it was sent and wrong. `listed_with` records the selector used to find the ids, which is the only place a bank choice enters a bulk delete.
+
+### Verified
+
+- 1,468 tests, 100% line and branch coverage; ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.12-dev3] - 2026-09-06 - Diagnostics Entity Verification Aligned With Per-Model Defaults
+
+### Summary
+
+The shared entity verification tool reported three faults against a healthy installation. All three were entities correctly reading `unknown`, and the tool had no way to know it.
+
+### Changed
+
+- **The APN Profile select declares that `unknown` is a valid state for it.** In auto mode the router uses the network-provided APN, which need not exist in the stored profile list, and `_get_current_apn_profile` returns `None` rather than naming a profile that is not in use. Observed live on an MC7010: auto mode, an active APN matching none of the stored profiles, and one stored profile whose APN field is empty. The new `unknown_is_valid` flag on `ZTESelectEntityDescription` is read by `check_sensor_manifest.py --verify-ha`, which previously reported the entity as stuck.
+
+- **`docs/expected_zte_compatibility.md` records how per-model defaults interact with live verification.** `--verify-ha` now resolves entity defaults through `entity_defaults.MODEL_OVERLAY`, so the two Wi-Fi sensors reading `unknown` on an MC7010 — a device with no Wi-Fi of its own — are reported as expected rather than as findings. Only the disabling half of the overlay is honoured there: it also enables RSSI and SINR on the MC888 Pro, and acting on that would apply a liveness check to hardware the tool has never run against.
+
+- **Shared CI `tasks.json` synced.** FYI note only; the change is documented in full in `dev-workbench`. Adds a headless task runner, three composite tasks, fast-to-slow ordering for the full validation pass, and repairs to the summary tasks.
+
+### Verified
+
+- **Live verification passes on the reference MC7010**: 121 of 121 entities verified, no findings, and the three previously reported entities now listed as expected unknown states, two naming the model and one naming the declaration.
+
+## [3.3.12-dev2] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync
+
+### Summary
+
+`Hardware: Check Diagnostics Download` failed against live hardware while both downloads were correct. The comparison ran between a pass that finished probing and one that did not, and reported the consequences as three separate stability failures. The unfinished pass is now taken again, and a comparison that is still unsound says so.
+
+### Fixed
+
+- **A pass that did not finish probing is taken again before it is compared.** A name lands in `not_reprobed` when its own request keeps failing, which is what a second client logging into the router does to the first: the device permits one session, and the coordinator lock that serialises discovery against polling protects one Home Assistant instance only. In the observed failure run 1 hit the round cap with 89 names left unasked after repeated `_SESSION_LOST` responses, while a live Home Assistant instance was polling the same router. That is a property of the moment rather than of the device, so `produce_complete` re-takes the pass once, five seconds later, and compares the retaken artefact.
+
+  A second unfinished pass is not retried. At that point it is a finding rather than noise, and the checks already in place report it.
+
+- **A comparison between unfinished passes is labelled as one.** Where either pass still carries unasked names, a cyan note precedes the comparison naming which one and stating that the differences below follow from that rather than from an unstable pass. Without it a reader meets three failures — field set, list positions, and value stability — and has to work out unaided that they share one cause and that none of them is about stability.
+
+  `unasked_count` reads `discovery.not_reprobed` at the top level of the download, matching the three readers already in `diag_check.py`. Covered by three tests in `tests/test_diag_check_stability.py`; the tests found the helper reading one level too deep, which would have returned zero for every pass and left both measures inert.
+
+### Verified
+
+- **Three consecutive `diag_check` runs against hardware, 67 to 70 seconds each, all passing.**
+
+### Changed
+
+- **Shared CI `tasks.json` synced.** FYI note only; the change is documented in full in `dev-workbench`. A headless task runner, `Fix All Fast` / `Validate Docs` / `Fix and Validate All` composites, `Validate All` reordered fast-to-slow, and several reporting fixes covering skipped tasks and fixer verdicts.
+
+## [3.3.12-dev1] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json
+
+### Bumps
+
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.363 to 0.13.363
+
+### Changed
+
+- **Shared CI `tasks.json`**: Updated for consistent on-screen formatting, green for good/pass; red for fail; yellow for warn; cyan for note; across ALL tasks.
 
 ## [3.3.11] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates
 

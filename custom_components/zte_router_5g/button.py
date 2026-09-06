@@ -145,8 +145,11 @@ class ZTEDeleteAllSMSButton(ZTEButton):
         """Handle the button press."""
         try:
             await self.coordinator.api.delete_all()
+            self.coordinator.persist_last_delete()
             await self.coordinator.async_force_refresh()
         except Exception as err:
+            # The refused delete is the case worth keeping across a restart.
+            self.coordinator.persist_last_delete()
             _LOGGER.error("%s: Delete SMS failed: %s", self._entry.title, err)
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
