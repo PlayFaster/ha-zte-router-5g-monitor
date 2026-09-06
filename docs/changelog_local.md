@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.12-dev2\] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync](#3312-dev2---2026-09-06---diagnostics-check-re-takes-an-unfinished-pass-shared-ci-tasksjson-sync)
   - [\[3.3.12-dev1\] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json](#3312-dev1---2026-09-06---ci-bump-phacc-update-shared-ci-tasksjson)
   - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
   - [\[3.3.11-dev3\] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All](#3311-dev3---2026-09-05---sms-timestamps-carry-their-routers-offset-delete-all-means-all)
@@ -237,6 +238,30 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.12-dev2] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync
+
+### Summary
+
+`Hardware: Check Diagnostics Download` failed against live hardware while both downloads were correct. The comparison ran between a pass that finished probing and one that did not, and reported the consequences as three separate stability failures. The unfinished pass is now taken again, and a comparison that is still unsound says so.
+
+### Fixed
+
+- **A pass that did not finish probing is taken again before it is compared.** A name lands in `not_reprobed` when its own request keeps failing, which is what a second client logging into the router does to the first: the device permits one session, and the coordinator lock that serialises discovery against polling protects one Home Assistant instance only. In the observed failure run 1 hit the round cap with 89 names left unasked after repeated `_SESSION_LOST` responses, while a live Home Assistant instance was polling the same router. That is a property of the moment rather than of the device, so `produce_complete` re-takes the pass once, five seconds later, and compares the retaken artefact.
+
+  A second unfinished pass is not retried. At that point it is a finding rather than noise, and the checks already in place report it.
+
+- **A comparison between unfinished passes is labelled as one.** Where either pass still carries unasked names, a cyan note precedes the comparison naming which one and stating that the differences below follow from that rather than from an unstable pass. Without it a reader meets three failures — field set, list positions, and value stability — and has to work out unaided that they share one cause and that none of them is about stability.
+
+  `unasked_count` reads `discovery.not_reprobed` at the top level of the download, matching the three readers already in `diag_check.py`. Covered by three tests in `tests/test_diag_check_stability.py`; the tests found the helper reading one level too deep, which would have returned zero for every pass and left both measures inert.
+
+### Verified
+
+- **Three consecutive `diag_check` runs against hardware, 67 to 70 seconds each, all passing.**
+
+### Changed
+
+- **Shared CI `tasks.json` synced.** FYI note only; the change is documented in full in `dev-workbench`. A headless task runner, `Fix All Fast` / `Validate Docs` / `Fix and Validate All` composites, `Validate All` reordered fast-to-slow, and several reporting fixes covering skipped tasks and fixer verdicts.
 
 ## [3.3.12-dev1] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json
 

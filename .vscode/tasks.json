@@ -14,7 +14,7 @@
       "type": "shell"
     },
     {
-      "command": "mkdir -p .reports && { if [ ! -f .workbench/tasks.json ]; then echo \"[Skipped: workbench source not mounted]\"; elif cmp -s .vscode/tasks.json .workbench/tasks.json; then printf \"\u001b[1;32m✔  Task Sync: PASSED\u001b[0m\n\"; else printf \"\u001b[1;33m✖  Task Sync: DRIFTED - .vscode/tasks.json differs from dev-workbench/workbench/tasks.json. Either this copy was edited (the edit will be lost) or the source has moved on (run Env: Sync Shared Files).\u001b[0m\n\"; fi; exit 0 } 2>&1 | tee .reports/task_sync.txt; exit 0",
+      "command": "mkdir -p .reports && { if [ ! -f .workbench/tasks.json ]; then echo \"[Skipped: workbench source not mounted]\"; elif cmp -s .vscode/tasks.json .workbench/tasks.json; then printf \"\u001b[1;32m✔  Task Sync: PASSED\u001b[0m\n\"; else printf \"\u001b[1;33m✖  Task Sync: DRIFTED - .vscode/tasks.json differs from dev-workbench/workbench/tasks.json. Either this copy was edited (the edit will be lost) or the source has moved on (run Env: Sync Shared Files).\u001b[0m\n\"; fi; } 2>&1 | tee /dev/stderr | sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/task_sync.txt; exit 0",
       "label": "Env: Check Task Sync Drift",
       "detail": "Compares .vscode/tasks.json against the workbench source. Silent when they match. Never fails the build - a project may legitimately be waiting on a sync.",
       "presentation": {
@@ -163,7 +163,7 @@
       "type": "shell"
     },
     {
-      "command": "[ \"${config:project.category}\" = \"theme\" ] && echo -e \"\\033[1;36m–  Skipped: integration only\\033[0m\" || { mkdir -p .reports && ruff format . > .reports/format_ruff.txt 2>&1; ec=$?; cat .reports/format_ruff.txt; echo \"\"; if [ $ec -eq 0 ]; then echo -e \"\\033[1;32m✔  Ruff Format Fix: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  Ruff Format Fix: FAILED\\033[0m\"; fi; exit 0; }",
+      "command": "[ \"${config:project.category}\" = \"theme\" ] && echo -e \"\\033[1;36m–  Skipped: integration only\\033[0m\" || { mkdir -p .reports && ruff format . > .reports/format_ruff.txt 2>&1; ec=$?; cat .reports/format_ruff.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Ruff Format Fix: PASSED\\n' >> .reports/format_ruff.txt; echo -e \"\\033[1;32m✔  Ruff Format Fix: PASSED\\033[0m\"; else printf '✖  Ruff Format Fix: FAILED\\n' >> .reports/format_ruff.txt; echo -e \"\\033[1;31m✖  Ruff Format Fix: FAILED\\033[0m\"; fi; exit 0; }",
       "label": "Ruff: Format Fix (Auto-Repair)",
       "presentation": {
         "close": false,
@@ -175,7 +175,7 @@
       "type": "shell"
     },
     {
-      "command": "[ \"${config:project.category}\" = \"theme\" ] && echo -e \"\\033[1;36m–  Skipped: integration only\\033[0m\" || { mkdir -p .reports && ruff check --fix . > .reports/format_ruff_lint.txt 2>&1; ec=$?; cat .reports/format_ruff_lint.txt; echo \"\"; if [ $ec -eq 0 ]; then echo -e \"\\033[1;32m✔  Ruff Lint Fix: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  Ruff Lint Fix: FAILED\\033[0m\"; fi; exit 0; }",
+      "command": "[ \"${config:project.category}\" = \"theme\" ] && echo -e \"\\033[1;36m–  Skipped: integration only\\033[0m\" || { mkdir -p .reports && ruff check --fix . > .reports/format_ruff_lint.txt 2>&1; ec=$?; cat .reports/format_ruff_lint.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Ruff Lint Fix: PASSED\\n' >> .reports/format_ruff_lint.txt; echo -e \"\\033[1;32m✔  Ruff Lint Fix: PASSED\\033[0m\"; else printf '✖  Ruff Lint Fix: FAILED\\n' >> .reports/format_ruff_lint.txt; echo -e \"\\033[1;31m✖  Ruff Lint Fix: FAILED\\033[0m\"; fi; exit 0; }",
       "label": "Ruff: Check Fix (Auto-Repair Lint)",
       "presentation": {
         "close": false,
@@ -220,7 +220,7 @@
       "type": "shell"
     },
     {
-      "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.md' | xargs -0 -r markdownlint --config .validate/.markdownlint.json --fix > .reports/format_markdownlint.txt 2>&1; ec=$?; cat .reports/format_markdownlint.txt; echo \"\"; if [ $ec -eq 0 ]; then echo -e \"\\033[1;32m✔  Markdown Lint Fix: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  Markdown Lint Fix: FAILED (unfixable errors remain — edit manually)\\033[0m\"; fi; exit 0",
+      "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.md' | xargs -0 -r markdownlint --config .validate/.markdownlint.json --fix > .reports/format_markdownlint.txt 2>&1; ec=$?; cat .reports/format_markdownlint.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Markdown Lint Fix: PASSED\\n' >> .reports/format_markdownlint.txt; echo -e \"\\033[1;32m✔  Markdown Lint Fix: PASSED\\033[0m\"; else printf '✖  Markdown Lint Fix: FAILED\\n' >> .reports/format_markdownlint.txt; echo -e \"\\033[1;31m✖  Markdown Lint Fix: FAILED (unfixable errors remain — edit manually)\\033[0m\"; fi; exit 0",
       "label": "Markdown: Lint (Auto-Fix)",
       "presentation": {
         "panel": "dedicated",
@@ -242,7 +242,7 @@
       "type": "shell"
     },
     {
-      "command": "mkdir -p .reports && codespell . -w > .reports/format_codespell.txt 2>&1; ec=$?; cat .reports/format_codespell.txt; echo \"\"; if [ $ec -eq 0 ]; then echo -e \"\\033[1;32m✔  Codespell Fix: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  Codespell Fix: FAILED\\033[0m\"; fi; exit 0",
+      "command": "mkdir -p .reports && codespell . -w > .reports/format_codespell.txt 2>&1; ec=$?; cat .reports/format_codespell.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Codespell Fix: PASSED\\n' >> .reports/format_codespell.txt; echo -e \"\\033[1;32m✔  Codespell Fix: PASSED\\033[0m\"; else printf '✖  Codespell Fix: FAILED\\n' >> .reports/format_codespell.txt; echo -e \"\\033[1;31m✖  Codespell Fix: FAILED\\033[0m\"; fi; exit 0",
       "label": "Codespell: Fix (Auto-Repair)",
       "presentation": {
         "panel": "dedicated",
@@ -264,7 +264,7 @@
       "type": "shell"
     },
     {
-      "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .validate/.prettierrc.json --write > .reports/format_prettier.txt 2>&1; ec=$?; cat .reports/format_prettier.txt; echo \"\"; if [ $ec -eq 0 ]; then echo -e \"\\033[1;32m✔  Prettier Format: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  Prettier Format: FAILED\\033[0m\"; fi; exit 0",
+      "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.md' '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .validate/.prettierrc.json --write > .reports/format_prettier.txt 2>&1; ec=$?; cat .reports/format_prettier.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Prettier Format: PASSED\\n' >> .reports/format_prettier.txt; echo -e \"\\033[1;32m✔  Prettier Format: PASSED\\033[0m\"; else printf '✖  Prettier Format: FAILED\\n' >> .reports/format_prettier.txt; echo -e \"\\033[1;31m✖  Prettier Format: FAILED\\033[0m\"; fi; exit 0",
       "label": "Prettier: Format (Auto-Fix)",
       "presentation": {
         "panel": "dedicated",
@@ -330,7 +330,7 @@
       "type": "shell"
     },
     {
-      "command": "mkdir -p .reports && zizmor --fix .github/ > .reports/format_zizmor.txt 2>&1; ec=$?; cat .reports/format_zizmor.txt; echo \"\"; if [ $ec -eq 0 ]; then echo -e \"\\033[1;32m✔  Zizmor Fix: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  Zizmor Fix: FAILED\\033[0m\"; fi; exit 0",
+      "command": "mkdir -p .reports && zizmor --fix .github/ > .reports/format_zizmor.txt 2>&1; ec=$?; cat .reports/format_zizmor.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Zizmor Fix: PASSED\\n' >> .reports/format_zizmor.txt; echo -e \"\\033[1;32m✔  Zizmor Fix: PASSED\\033[0m\"; else printf '✖  Zizmor Fix: FAILED\\n' >> .reports/format_zizmor.txt; echo -e \"\\033[1;31m✖  Zizmor Fix: FAILED\\033[0m\"; fi; exit 0",
       "label": "Zizmor: Fix (Safe Auto-Fix)",
       "presentation": {
         "panel": "dedicated",
@@ -415,7 +415,7 @@
       "type": "shell"
     },
     {
-      "command": "[ \"${config:project.category}\" = \"theme\" ] && echo -e \"\\033[1;36m–  Skipped: integration only\\033[0m\" || { mkdir -p .reports && FORCE_COLOR=1 pre-commit run --all-files | tee >(sed -e 's/.*\\r//g' -e 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' -e 's/\\x1b\\][^\\x1b]*\\x1b\\\\//g' -e 's/\\x1b\\][^\\x07]*\\x07//g' -e 's/\\x1b(B//g' > .reports/precommit_all.txt); echo \"\"; if ! grep -q \"Failed\" .reports/precommit_all.txt 2>/dev/null; then echo -e \"\\033[1;32m✔  Pre-commit: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  Pre-commit: FAILED\\033[0m\"; fi; exit 0; }",
+      "command": "[ \"${config:project.category}\" = \"theme\" ] && echo -e \"\\033[1;36m–  Skipped: integration only\\033[0m\" || { mkdir -p .reports && FORCE_COLOR=1 pre-commit run --all-files | tee >(sed -e 's/.*\\r//g' -e 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' -e 's/\\x1b\\][^\\x1b]*\\x1b\\\\//g' -e 's/\\x1b\\][^\\x07]*\\x07//g' -e 's/\\x1b(B//g' > .reports/precommit_all.txt); echo \"\"; if ! grep -q \"Failed\" .reports/precommit_all.txt 2>/dev/null; then printf '✔  Pre-commit: PASSED\\n' >> .reports/precommit_all.txt; echo -e \"\\033[1;32m✔  Pre-commit: PASSED\\033[0m\"; else printf '✖  Pre-commit: FAILED\\n' >> .reports/precommit_all.txt; echo -e \"\\033[1;31m✖  Pre-commit: FAILED\\033[0m\"; fi; exit 0; }",
       "label": "Pre-commit: Fix + Check All",
       "presentation": {
         "clear": true,
@@ -438,7 +438,7 @@
       "type": "shell"
     },
     {
-      "command": "G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}\u2013${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (no issues)\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); echo -e \"  ${G}✔${N}  $lbl $result\"; else result=$(tail -1 \"$f\"); echo -e \"  ${R}✖${N}  $lbl $result\"; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m       Validate All — Summary        \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Hassfest          \" hassfest.txt \"Invalid integrations: 0\"; chk \"IQS Static        \" iqs_static.txt \"IQS Static: PASSED\"; chk \"Sensor Manifest   \" sensor_manifest.txt \"Documentation is in sync\"; chk \"Pytest            \" pytest_coverage.txt \" passed\"; chk \"Assertion Audit   \" test_assertions.txt \"Assertion Audit: PASSED\"; chk \"Test Depth        \" test_depth.txt \"Test Depth: PASSED\"; chk \"Mypy Strict       \" mypy_strict.txt \"Success:\"; chk \"Ruff Lint         \" ruff_lint.txt \"All checks passed\"; chk \"Ruff Format       \" ruff_format_status.txt \"already formatted\"; chk \"YAML Lint         \" yaml_lint.txt \"\"; chk \"Codespell         \" codespell.txt \"\"; chk \"Markdown Lint     \" markdown_lint.txt \"\"; chk \"Repo Links        \" repo_links.txt \"Repo Links: PASSED\"; chk \"HA Manifest       \" ha_manifest_validation.txt \"ok -- validation done\"; chk \"HACS Manifest     \" hacs_validation.txt \"ok -- validation done\"; chk \"JSON Schema       \" json_validation.txt \"ok -- validation done\"; chk \"Prettier          \" prettier_check.txt \"Prettier code style\"; chk \"Task Sync         \" task_sync.txt \"PASSED\"; chk \"Fault Drill       \" fault_drill_staleness.txt \"PASSED\"; chk \"Hardware Check    \" hardware_check.txt \"Hardware check: PASSED\"; chk \"Diag Check        \" diag_check.txt \"Diagnostics check: PASSED\"; echo \"\"",
+      "command": "mkdir -p .reports && { G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}–${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (no issues)\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); echo -e \"  ${G}✔${N}  $lbl $result\"; else result=$(tail -1 \"$f\"); echo -e \"  ${R}✖${N}  $lbl $result\"; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m       Validate All — Summary        \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Hassfest          \" hassfest.txt \"Invalid integrations: 0\"; chk \"IQS Static        \" iqs_static.txt \"IQS Static: PASSED\"; chk \"Sensor Manifest   \" sensor_manifest.txt \"Documentation is in sync\"; chk \"Pytest            \" pytest_coverage.txt \" passed\"; chk \"Assertion Audit   \" test_assertions.txt \"Assertion Audit: PASSED\"; chk \"Test Depth        \" test_depth.txt \"Test Depth: PASSED\"; chk \"Mypy Strict       \" mypy_strict.txt \"Success:\"; chk \"Ruff Lint         \" ruff_lint.txt \"All checks passed\"; chk \"Ruff Format       \" ruff_format_status.txt \"already formatted\"; chk \"YAML Lint         \" yaml_lint.txt \"\"; chk \"Codespell         \" codespell.txt \"\"; chk \"Markdown Lint     \" markdown_lint.txt \"\"; chk \"Repo Links        \" repo_links.txt \"Repo Links: PASSED\"; chk \"HA Manifest       \" ha_manifest_validation.txt \"ok -- validation done\"; chk \"HACS Manifest     \" hacs_validation.txt \"ok -- validation done\"; chk \"JSON Schema       \" json_validation.txt \"ok -- validation done\"; chk \"Prettier          \" prettier_check.txt \"Prettier code style\"; chk \"Task Sync         \" task_sync.txt \"PASSED\"; chk \"Fault Drill       \" fault_drill_staleness.txt \"PASSED\"; chk \"Hardware Check    \" hardware_check.txt \"Hardware check: PASSED\"; chk \"Diag Check        \" diag_check.txt \"Diagnostics check: PASSED\"; echo \"\"; } 2>&1 | tee /dev/stderr | sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/summary_validate.txt",
       "label": "Show: Results Summary",
       "presentation": {
         "panel": "dedicated",
@@ -449,7 +449,7 @@
       "type": "shell"
     },
     {
-      "command": "G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}\u2013${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (clean / no changes)\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); echo -e \"  ${G}✔${N}  $lbl $result\"; elif [ -n \"$pat\" ]; then echo -e \"  ${R}✖${N}  $lbl (issues remain)\"; else result=$(tail -1 \"$f\"); echo -e \"  ${G}✔${N}  $lbl $result\"; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m          Fix All — Summary           \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Zizmor Fix        \" format_zizmor.txt \"\"; chk \"Ruff Format Fix   \" format_ruff.txt \"\"; chk \"Ruff Lint Fix     \" format_ruff_lint.txt \"\"; chk \"Markdown Lint Fix \" format_markdownlint.txt \"\"; chk \"Codespell Fix     \" format_codespell.txt \"\"; chk \"Prettier Format   \" format_prettier.txt \"\"; chk \"Pre-commit All    \" precommit_all.txt \"\"; echo \"\"",
+      "command": "mkdir -p .reports && { G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}–${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (clean / no changes)\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); echo -e \"  ${G}✔${N}  $lbl $result\"; elif [ -n \"$pat\" ]; then echo -e \"  ${R}✖${N}  $lbl (issues remain)\"; else result=$(tail -1 \"$f\"); echo -e \"  ${G}✔${N}  $lbl $result\"; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m          Fix All — Summary           \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Zizmor Fix        \" format_zizmor.txt \"PASSED\"; chk \"Ruff Format Fix   \" format_ruff.txt \"PASSED\"; chk \"Ruff Lint Fix     \" format_ruff_lint.txt \"PASSED\"; chk \"Markdown Lint Fix \" format_markdownlint.txt \"PASSED\"; chk \"Codespell Fix     \" format_codespell.txt \"PASSED\"; chk \"Prettier Format   \" format_prettier.txt \"PASSED\"; chk \"Pre-commit All    \" precommit_all.txt \"PASSED\"; echo \"\"; } 2>&1 | tee /dev/stderr | sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/summary_fix.txt",
       "label": "Show: Fix Results Summary",
       "presentation": {
         "panel": "dedicated",
@@ -497,7 +497,7 @@
       "type": "shell"
     },
     {
-      "command": "mkdir -p .reports && { [ -f .devcontainer/fault_drill.py ] || { echo -e \"\\033[1;36m–  Skipped: no .devcontainer/fault_drill.py in this project\\033[0m\"; exit 0; }; S=.notes/fault_drill_last.txt; W=\"custom_components/*/health.py custom_components/*/coordinator.py custom_components/*/const.py custom_components/*/strings.json custom_components/*/translations .devcontainer/mock_supervisor.py\"; C=$(git log -1 --format=%ct -- $W 2>/dev/null); D=$(git status --porcelain -- $W 2>/dev/null); M=\"\"; if [ ! -f \"$S\" ]; then M=\"never run\"; else L=$(cut -d\" \" -f1 \"$S\"); H=$(cut -d\" \" -f2 \"$S\"); if [ -n \"$C\" ] && [ \"$C\" -gt \"$L\" ]; then M=\"stale - last run $H, and a watched file has changed since\"; elif [ -n \"$D\" ]; then M=\"uncommitted changes to a watched file since the last drill ($H)\"; fi; fi; if [ -n \"$M\" ]; then printf \"\\033[1;33m✖  Fault Drill: %s. Run the 'Mock: Fault Drill' task.\\033[0m\\n\" \"$M\"; else printf \"\\033[1;32m✔  Fault Drill: PASSED\\033[0m\\n\"; fi; exit 0 } 2>&1 | tee .reports/fault_drill_staleness.txt; exit 0",
+      "command": "mkdir -p .reports && { [ -f .devcontainer/fault_drill.py ] || { echo -e \"\\033[1;36m–  Skipped: no .devcontainer/fault_drill.py in this project\\033[0m\"; exit 0; }; S=.notes/fault_drill_last.txt; W=\"custom_components/*/health.py custom_components/*/coordinator.py custom_components/*/const.py custom_components/*/strings.json custom_components/*/translations .devcontainer/mock_supervisor.py\"; C=$(git log -1 --format=%ct -- $W 2>/dev/null); D=$(git status --porcelain -- $W 2>/dev/null); M=\"\"; if [ ! -f \"$S\" ]; then M=\"never run\"; else L=$(cut -d\" \" -f1 \"$S\"); H=$(cut -d\" \" -f2 \"$S\"); if [ -n \"$C\" ] && [ \"$C\" -gt \"$L\" ]; then M=\"stale - last run $H, and a watched file has changed since\"; elif [ -n \"$D\" ]; then M=\"uncommitted changes to a watched file since the last drill ($H)\"; fi; fi; if [ -n \"$M\" ]; then printf \"\\033[1;33m✖  Fault Drill: %s. Run the 'Mock: Fault Drill' task.\\033[0m\\n\" \"$M\"; else printf \"\\033[1;32m✔  Fault Drill: PASSED\\033[0m\\n\"; fi; } 2>&1 | tee /dev/stderr | sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/fault_drill_staleness.txt; exit 0",
       "label": "Mock: Fault Drill Staleness",
       "detail": "Prints NOTHING when the drill is current, and nothing at all in a project without a fault drill - so when it does speak, it means something. Warns only if the drill has never run, or a file that could invalidate it has changed since. Never fails the build.",
       "presentation": {
@@ -526,25 +526,25 @@
         "Env: Check Task Sync Drift",
         "HA: Verify Manifest",
         "HACS: Verify Manifest",
-        "Zizmor: GitHub Actions Audit",
+        "JSON: Verify All Files",
+        "YAML: Lint Project",
+        "Ruff: Check (Lint Only)",
+        "Ruff: Format Check (View Only)",
         "Sensor: Check Manifest",
         "IQS: Static Check",
         "Tests: Assertion Audit",
         "Mock: Fault Drill Staleness",
-        "Hardware: Check Device",
-        "Hardware: Check Diagnostics Download",
-        "YAML: Lint Project",
-        "JSON: Verify All Files",
-        "Ruff: Check (Lint Only)",
-        "Ruff: Format Check (View Only)",
+        "Zizmor: GitHub Actions Audit",
+        "Markdown: Check Repo Links",
         "Codespell: Check (View Only)",
         "Prettier: Check (View Only)",
-        "Markdown: Lint (View Only)",
-        "Markdown: Check Links",
-        "Markdown: Check Repo Links",
         "HA: Verify Version (AwesomeVersion)",
         "HA: Check Config",
+        "Markdown: Lint (View Only)",
+        "Markdown: Check Links",
         "HA: Hassfest Validation",
+        "Hardware: Check Device",
+        "Hardware: Check Diagnostics Download",
         "Pytest: Check Test Coverage",
         "Tests: Depth Check",
         "Mypy: Strict Check",
@@ -577,7 +577,7 @@
       "type": "shell"
     },
     {
-      "command": "G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}\u2013${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (clean / no changes)\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); echo -e \"  ${G}✔${N}  $lbl $result\"; elif [ -n \"$pat\" ]; then echo -e \"  ${R}✖${N}  $lbl (issues remain)\"; else result=$(tail -1 \"$f\"); echo -e \"  ${G}✔${N}  $lbl $result\"; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m          Fix All — Summary           \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Zizmor Fix        \" format_zizmor.txt \"\"; chk \"Ruff Format Fix   \" format_ruff.txt \"\"; chk \"Ruff Lint Fix     \" format_ruff_lint.txt \"\"; chk \"Markdown Lint Fix \" format_markdownlint.txt \"\"; chk \"Codespell Fix     \" format_codespell.txt \"\"; chk \"Prettier Format   \" format_prettier.txt \"\"; echo \"\"",
+      "command": "mkdir -p .reports && { G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}–${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (clean / no changes)\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); echo -e \"  ${G}✔${N}  $lbl $result\"; elif [ -n \"$pat\" ]; then echo -e \"  ${R}✖${N}  $lbl (issues remain)\"; else result=$(tail -1 \"$f\"); echo -e \"  ${G}✔${N}  $lbl $result\"; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m        Fix All Fast — Summary        \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Zizmor Fix        \" format_zizmor.txt \"PASSED\"; chk \"Ruff Format Fix   \" format_ruff.txt \"PASSED\"; chk \"Ruff Lint Fix     \" format_ruff_lint.txt \"PASSED\"; chk \"Markdown Lint Fix \" format_markdownlint.txt \"PASSED\"; chk \"Codespell Fix     \" format_codespell.txt \"PASSED\"; chk \"Prettier Format   \" format_prettier.txt \"PASSED\"; echo \"\"; } 2>&1 | tee /dev/stderr | sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/summary_fix_fast.txt",
       "label": "Show: Fix Results Summary (Fast)",
       "presentation": {
         "panel": "dedicated",
@@ -589,7 +589,7 @@
       "detail": "Fix All Fast summary. Omits the Pre-commit row, which that pass does not run."
     },
     {
-      "command": "G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}\u2013${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (no issues)\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); echo -e \"  ${G}✔${N}  $lbl $result\"; else result=$(tail -1 \"$f\"); echo -e \"  ${R}✖${N}  $lbl $result\"; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m      Fix and Validate — Fixes      \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Zizmor Fix        \" format_zizmor.txt \"\"; chk \"Ruff Format Fix   \" format_ruff.txt \"\"; chk \"Ruff Lint Fix     \" format_ruff_lint.txt \"\"; chk \"Markdown Lint Fix \" format_markdownlint.txt \"\"; chk \"Codespell Fix     \" format_codespell.txt \"\"; chk \"Prettier Format   \" format_prettier.txt \"\"; echo \"\"echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m  Fix and Validate — Checks    \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Hassfest          \" hassfest.txt \"Invalid integrations: 0\"; chk \"IQS Static        \" iqs_static.txt \"IQS Static: PASSED\"; chk \"Sensor Manifest   \" sensor_manifest.txt \"Documentation is in sync\"; chk \"Pytest            \" pytest_coverage.txt \" passed\"; chk \"Assertion Audit   \" test_assertions.txt \"Assertion Audit: PASSED\"; chk \"Test Depth        \" test_depth.txt \"Test Depth: PASSED\"; chk \"Mypy Strict       \" mypy_strict.txt \"Success:\"; chk \"Ruff Lint         \" ruff_lint.txt \"All checks passed\"; chk \"Ruff Format       \" ruff_format_status.txt \"already formatted\"; chk \"YAML Lint         \" yaml_lint.txt \"\"; chk \"Codespell         \" codespell.txt \"\"; chk \"Markdown Lint     \" markdown_lint.txt \"\"; chk \"Repo Links        \" repo_links.txt \"Repo Links: PASSED\"; chk \"HA Manifest       \" ha_manifest_validation.txt \"ok -- validation done\"; chk \"HACS Manifest     \" hacs_validation.txt \"ok -- validation done\"; chk \"JSON Schema       \" json_validation.txt \"ok -- validation done\"; chk \"Prettier          \" prettier_check.txt \"Prettier code style\"; chk \"Task Sync         \" task_sync.txt \"PASSED\"; chk \"Fault Drill       \" fault_drill_staleness.txt \"PASSED\"; chk \"Hardware Check    \" hardware_check.txt \"Hardware check: PASSED\"; chk \"Diag Check        \" diag_check.txt \"Diagnostics check: PASSED\"; echo \"\"",
+      "command": "mkdir -p .reports && { G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}–${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (no issues)\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); echo -e \"  ${G}✔${N}  $lbl $result\"; else result=$(tail -1 \"$f\"); echo -e \"  ${R}✖${N}  $lbl $result\"; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m   Fix and Validate — Fixes      \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Zizmor Fix        \" format_zizmor.txt \"PASSED\"; chk \"Ruff Format Fix   \" format_ruff.txt \"PASSED\"; chk \"Ruff Lint Fix     \" format_ruff_lint.txt \"PASSED\"; chk \"Markdown Lint Fix \" format_markdownlint.txt \"PASSED\"; chk \"Codespell Fix     \" format_codespell.txt \"PASSED\"; chk \"Prettier Format   \" format_prettier.txt \"PASSED\";echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m  Fix and Validate — Checks     \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Hassfest          \" hassfest.txt \"Invalid integrations: 0\"; chk \"IQS Static        \" iqs_static.txt \"IQS Static: PASSED\"; chk \"Sensor Manifest   \" sensor_manifest.txt \"Documentation is in sync\"; chk \"Pytest            \" pytest_coverage.txt \" passed\"; chk \"Assertion Audit   \" test_assertions.txt \"Assertion Audit: PASSED\"; chk \"Test Depth        \" test_depth.txt \"Test Depth: PASSED\"; chk \"Mypy Strict       \" mypy_strict.txt \"Success:\"; chk \"Ruff Lint         \" ruff_lint.txt \"All checks passed\"; chk \"Ruff Format       \" ruff_format_status.txt \"already formatted\"; chk \"YAML Lint         \" yaml_lint.txt \"\"; chk \"Codespell         \" codespell.txt \"\"; chk \"Markdown Lint     \" markdown_lint.txt \"\"; chk \"Repo Links        \" repo_links.txt \"Repo Links: PASSED\"; chk \"HA Manifest       \" ha_manifest_validation.txt \"ok -- validation done\"; chk \"HACS Manifest     \" hacs_validation.txt \"ok -- validation done\"; chk \"JSON Schema       \" json_validation.txt \"ok -- validation done\"; chk \"Prettier          \" prettier_check.txt \"Prettier code style\"; chk \"Task Sync         \" task_sync.txt \"PASSED\"; chk \"Fault Drill       \" fault_drill_staleness.txt \"PASSED\"; chk \"Hardware Check    \" hardware_check.txt \"Hardware check: PASSED\"; chk \"Diag Check        \" diag_check.txt \"Diagnostics check: PASSED\"; echo \"\"; } 2>&1 | tee /dev/stderr | sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/summary_fix_and_validate.txt",
       "label": "Show: Results Summary (Fix and Validate)",
       "presentation": {
         "panel": "dedicated",
@@ -652,25 +652,25 @@
         "Env: Check Task Sync Drift",
         "HA: Verify Manifest",
         "HACS: Verify Manifest",
-        "Zizmor: GitHub Actions Audit",
+        "JSON: Verify All Files",
+        "YAML: Lint Project",
+        "Ruff: Check (Lint Only)",
+        "Ruff: Format Check (View Only)",
         "Sensor: Check Manifest",
         "IQS: Static Check",
         "Tests: Assertion Audit",
         "Mock: Fault Drill Staleness",
-        "Hardware: Check Device",
-        "Hardware: Check Diagnostics Download",
-        "YAML: Lint Project",
-        "JSON: Verify All Files",
-        "Ruff: Check (Lint Only)",
-        "Ruff: Format Check (View Only)",
+        "Zizmor: GitHub Actions Audit",
+        "Markdown: Check Repo Links",
         "Codespell: Check (View Only)",
         "Prettier: Check (View Only)",
-        "Markdown: Lint (View Only)",
-        "Markdown: Check Links",
-        "Markdown: Check Repo Links",
         "HA: Verify Version (AwesomeVersion)",
         "HA: Check Config",
+        "Markdown: Lint (View Only)",
+        "Markdown: Check Links",
         "HA: Hassfest Validation",
+        "Hardware: Check Device",
+        "Hardware: Check Diagnostics Download",
         "Pytest: Check Test Coverage",
         "Tests: Depth Check",
         "Mypy: Strict Check",

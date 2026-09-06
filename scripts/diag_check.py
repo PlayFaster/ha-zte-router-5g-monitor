@@ -297,6 +297,46 @@ def _sabotaging_chunk(original: Any, sabotage_at: int) -> Any:
     return chunk
 
 
+def unasked_count(artefact: dict[str, Any]) -> int:
+    """How many names a pass could not ask. Zero means it finished probing."""
+    discovery = artefact.get("discovery", {})
+    return len(discovery.get("not_reprobed", []))
+
+
+async def produce_complete(label: str) -> dict[str, Any]:
+    """One pass, re-taken once if it did not finish probing.
+
+    Names stay unasked when their own requests keep failing, which is what
+    another client logging into the router does to this one — the router
+    permits a single session. That is a property of the moment, not of the
+    device, so the pass is worth taking again.
+
+    A second incomplete pass is not retried. At that point it is a finding
+    rather than noise, and the checks below report it.
+    """
+    artefact = await produce(label)
+    unasked = unasked_count(artefact)
+    if not unasked:
+        return artefact
+
+    print(
+        _cyan(
+            f"           {unasked} names left unasked — the pass did not finish "
+            "probing; taking it again"
+        )
+    )
+    await asyncio.sleep(5)
+    retaken = await produce(f"{label} (retaken)")
+    if unasked_count(retaken):
+        print(
+            _cyan(
+                "           still incomplete. The comparison below is between "
+                "passes that did not both finish."
+            )
+        )
+    return retaken
+
+
 async def produce(label: str, sabotage_at: int = 0) -> dict[str, Any]:
     """Build a coordinator against the live router and return one download.
 
@@ -866,7 +906,7 @@ async def main() -> int:
     report = Report()
     _announce_expected_warnings()
     print("producing diagnostics against the live router")
-    first = await produce("run 1")
+    first = await produce_complete("run 1")
 
     print("\nthe artefact")
     check_shape(first, report)
@@ -878,8 +918,25 @@ async def main() -> int:
         # request once when one immediately followed another. The wait costs
         # nothing here and removes a source of noise from the diff.
         await asyncio.sleep(5)
-        second = await produce("run 2")
+        second = await produce_complete("run 2")
         print("\ntwo runs compared")
+        incomplete = [
+            name
+            for name, artefact in (("run 1", first), ("run 2", second))
+            if unasked_count(artefact)
+        ]
+        if incomplete:
+            # Without this a reader meets three failures and has to work out
+            # that they share one cause and that none of them is about
+            # stability.
+            print(
+                _cyan(
+                    "  note: "
+                    + " and ".join(incomplete)
+                    + " did not finish probing, so the differences below follow "
+                    "from that rather than from an unstable pass"
+                )
+            )
         check_stability(first, second, report)
         if args.keep:
             print(f"\nsaved -> {_save(second, 'run2', first['entry']['title'])}")

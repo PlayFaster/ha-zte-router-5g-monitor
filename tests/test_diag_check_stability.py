@@ -21,7 +21,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.diag_check import Report, check_stability
+from scripts.diag_check import Report, check_stability, unasked_count
 
 
 def _artefact(
@@ -215,3 +215,32 @@ def test_an_unpseudonymized_value_change_is_a_difference() -> None:
     check_stability(first, second, report)
 
     assert not _outcome(report, "no structural difference")
+
+
+# ---------------------------------------------------------------------------
+# Whether a pass finished probing
+# ---------------------------------------------------------------------------
+
+
+def test_a_pass_that_asked_everything_reports_none_unasked() -> None:
+    """`not_reprobed` empty is the definition of a complete pass."""
+    assert unasked_count(_artefact([], {})) == 0
+
+
+def test_unasked_names_are_counted() -> None:
+    """Names that could not be asked are counted.
+
+    A name lands here when its own request kept failing, which is what another
+    client logging into the router does to this one.
+
+    The count decides whether the pass is re-taken, so it reads the field
+    rather than inferring incompleteness from the differences it causes.
+    """
+    artefact = _artefact([], {})
+    artefact["discovery"]["not_reprobed"] = ["a", "b", "c"]
+    assert unasked_count(artefact) == 3
+
+
+def test_a_download_without_a_discovery_block_counts_as_complete() -> None:
+    """`--once` against an older artefact must not crash the retry decision."""
+    assert unasked_count({}) == 0
