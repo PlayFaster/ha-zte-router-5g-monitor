@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.12-dev3\] - 2026-09-06 - Diagnostics Entity Verification Aligned With Per-Model Defaults](#3312-dev3---2026-09-06---diagnostics-entity-verification-aligned-with-per-model-defaults)
   - [\[3.3.12-dev2\] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync](#3312-dev2---2026-09-06---diagnostics-check-re-takes-an-unfinished-pass-shared-ci-tasksjson-sync)
   - [\[3.3.12-dev1\] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json](#3312-dev1---2026-09-06---ci-bump-phacc-update-shared-ci-tasksjson)
   - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
@@ -238,6 +239,24 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.12-dev3] - 2026-09-06 - Diagnostics Entity Verification Aligned With Per-Model Defaults
+
+### Summary
+
+The shared entity verification tool reported three faults against a healthy installation. All three were entities correctly reading `unknown`, and the tool had no way to know it.
+
+### Changed
+
+- **The APN Profile select declares that `unknown` is a valid state for it.** In auto mode the router uses the network-provided APN, which need not exist in the stored profile list, and `_get_current_apn_profile` returns `None` rather than naming a profile that is not in use. Observed live on an MC7010: auto mode, an active APN matching none of the stored profiles, and one stored profile whose APN field is empty. The new `unknown_is_valid` flag on `ZTESelectEntityDescription` is read by `check_sensor_manifest.py --verify-ha`, which previously reported the entity as stuck.
+
+- **`docs/expected_zte_compatibility.md` records how per-model defaults interact with live verification.** `--verify-ha` now resolves entity defaults through `entity_defaults.MODEL_OVERLAY`, so the two Wi-Fi sensors reading `unknown` on an MC7010 — a device with no Wi-Fi of its own — are reported as expected rather than as findings. Only the disabling half of the overlay is honoured there: it also enables RSSI and SINR on the MC888 Pro, and acting on that would apply a liveness check to hardware the tool has never run against.
+
+- **Shared CI `tasks.json` synced.** FYI note only; the change is documented in full in `dev-workbench`. Adds a headless task runner, three composite tasks, fast-to-slow ordering for the full validation pass, and repairs to the summary tasks.
+
+### Verified
+
+- **Live verification passes on the reference MC7010**: 121 of 121 entities verified, no findings, and the three previously reported entities now listed as expected unknown states, two naming the model and one naming the declaration.
 
 ## [3.3.12-dev2] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync
 
