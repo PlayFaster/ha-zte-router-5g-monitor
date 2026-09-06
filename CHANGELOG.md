@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.12] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records
+
+### Summary
+
+- **Best Connection Dual Schema Support**: The Best Connection binary sensor now recognizes both `ENDC` and `EN-DC` network type formats, enabling correct status evaluation on MC888-series hardware.
+- **Persistent SMS Deletion Diagnostics**: The record of recent SMS deletion operations now persists across Home Assistant restarts, ensuring full deletion history is available in diagnostic captures.
+
+### Added
+
+- **Persistent Deletion Diagnostics**: SMS deletion attempt history (including timestamps, targeted message IDs, storage selectors, and router responses) is now preserved, suitably redacted, in config entry storage across restarts for inclusion in diagnostic downloads.
+
+### Changed
+
+- **Best Connection Network Type Evaluation**: Added support for hyphenated `EN-DC` network type strings alongside `ENDC` in the Best Connection binary sensor.
+
+### Under the hood
+
+- **Diagnostic Capture Retry & Manifest Alignment**: Diagnostic stability verification checks now automatically retry interrupted passes during transient session collisions, and live entity manifest checks align with per-model default overlays.
+
+---
+
 ## [3.3.11] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates
 
 ### Summary
@@ -552,6 +573,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
   - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
   - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
   - [\[3.3.9\] - 2026-09-02 - Release: Diagnostic Sensor Expansion, MC888 Compatibility, and Intelligent URL Batching](#339---2026-09-02---release-diagnostic-sensor-expansion-mc888-compatibility-and-intelligent-url-batching)

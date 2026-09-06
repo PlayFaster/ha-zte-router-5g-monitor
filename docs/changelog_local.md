@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
   - [\[3.3.12-dev4\] - 2026-09-06 - Best Connection Reads Both EN-DC Spellings; Delete Record Survives a Restart](#3312-dev4---2026-09-06---best-connection-reads-both-en-dc-spellings-delete-record-survives-a-restart)
   - [\[3.3.12-dev3\] - 2026-09-06 - Diagnostics Entity Verification Aligned With Per-Model Defaults](#3312-dev3---2026-09-06---diagnostics-entity-verification-aligned-with-per-model-defaults)
   - [\[3.3.12-dev2\] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync](#3312-dev2---2026-09-06---diagnostics-check-re-takes-an-unfinished-pass-shared-ci-tasksjson-sync)
@@ -240,6 +241,25 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.12] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records
+
+### Summary
+
+- **Best Connection Dual Schema Support**: The Best Connection binary sensor now recognizes both `ENDC` and `EN-DC` network type formats, enabling correct status evaluation on MC888-series hardware.
+- **Persistent SMS Deletion Diagnostics**: The record of recent SMS deletion operations now persists across Home Assistant restarts, ensuring full deletion history is available in diagnostic captures.
+
+### Added
+
+- **Persistent Deletion Diagnostics**: SMS deletion attempt history (including timestamps, targeted message IDs, storage selectors, and router responses) is now preserved, suitably redacted, in config entry storage across restarts for inclusion in diagnostic downloads.
+
+### Changed
+
+- **Best Connection Network Type Evaluation**: Added support for hyphenated `EN-DC` network type strings alongside `ENDC` in the Best Connection binary sensor.
+
+### Under the hood
+
+- **Diagnostic Capture Retry & Manifest Alignment**: Diagnostic stability verification checks now automatically retry interrupted passes during transient session collisions, and live entity manifest checks align with per-model default overlays.
 
 ## [3.3.12-dev4] - 2026-09-06 - Best Connection Reads Both EN-DC Spellings; Delete Record Survives a Restart
 
