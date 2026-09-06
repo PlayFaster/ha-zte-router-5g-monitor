@@ -165,3 +165,74 @@ async def test_a_genuinely_newer_message_still_fires(hass) -> None:
     assert len(fired) == 1
     assert fired[0].data["index"] == 7
     assert coordinator.last_sms_timestamp == "2026-09-05T12:00:00+01:00"
+
+
+# --- the delete record outliving a restart ----------------------------------
+#
+# The record lives on the API object, so a Home Assistant restart erased it.
+# Issue #56 turned on exactly that: the reporter pressed Delete All, restarted,
+# downloaded diagnostics, and the section read `null` — the router's answer to
+# the delete was gone, which was the one thing the download was wanted for.
+
+
+def _entry_with(hass, **data):
+    """A config entry carrying whatever extra keys a test needs."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"imei": "1", **data},
+        options={
+            CONF_HOST: "192.168.0.1",
+            CONF_USERNAME: "admin",
+            CONF_PASSWORD: "password",
+        },
+    )
+    entry.add_to_hass(hass)
+    return entry
+
+
+async def test_a_stored_delete_record_is_restored_onto_the_api(hass) -> None:
+    """Setting up again after a restart brings the last attempt back."""
+    stored = {"ids_requested": ["4"], "ids_surviving": ["4"], "result": None}
+    api = AsyncMock()
+    api.last_delete = None
+
+    ZTERouterDataUpdateCoordinator(hass, _entry_with(hass, last_delete=stored), api)
+
+    assert api.last_delete == stored
+
+
+async def test_a_stored_record_of_the_wrong_shape_is_ignored(hass) -> None:
+    """Hand-edited or older entry data must not break setup."""
+    api = AsyncMock()
+    api.last_delete = None
+
+    ZTERouterDataUpdateCoordinator(hass, _entry_with(hass, last_delete="rubbish"), api)
+
+    assert api.last_delete is None
+
+
+async def test_the_delete_record_is_written_into_the_entry(hass) -> None:
+    """What the delete routes call, so the record survives the next restart."""
+    entry = _entry_with(hass)
+    api = AsyncMock()
+    api.last_delete = {"ids_requested": ["2"], "ids_surviving": ["2"]}
+    coordinator = ZTERouterDataUpdateCoordinator(hass, entry, api)
+
+    coordinator.persist_last_delete()
+    await hass.async_block_till_done()
+
+    assert entry.data["last_delete"] == {"ids_requested": ["2"], "ids_surviving": ["2"]}
+    assert entry.data["imei"] == "1"
+
+
+async def test_no_attempt_writes_nothing(hass) -> None:
+    """Called on a route that never reached the router; there is nothing to keep."""
+    entry = _entry_with(hass)
+    api = AsyncMock()
+    api.last_delete = None
+    coordinator = ZTERouterDataUpdateCoordinator(hass, entry, api)
+
+    coordinator.persist_last_delete()
+    await hass.async_block_till_done()
+
+    assert "last_delete" not in entry.data

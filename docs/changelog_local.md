@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.12-dev4\] - 2026-09-06 - Best Connection Reads Both EN-DC Spellings; Delete Record Survives a Restart](#3312-dev4---2026-09-06---best-connection-reads-both-en-dc-spellings-delete-record-survives-a-restart)
   - [\[3.3.12-dev3\] - 2026-09-06 - Diagnostics Entity Verification Aligned With Per-Model Defaults](#3312-dev3---2026-09-06---diagnostics-entity-verification-aligned-with-per-model-defaults)
   - [\[3.3.12-dev2\] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync](#3312-dev2---2026-09-06---diagnostics-check-re-takes-an-unfinished-pass-shared-ci-tasksjson-sync)
   - [\[3.3.12-dev1\] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json](#3312-dev1---2026-09-06---ci-bump-phacc-update-shared-ci-tasksjson)
@@ -239,6 +240,30 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.12-dev4] - 2026-09-06 - Best Connection Reads Both EN-DC Spellings; Delete Record Survives a Restart
+
+### Summary
+
+Two faults found while reviewing the fourth diagnostics download on issue #56, neither reported as a fault by the reporter. One sensor cannot be correct on an MC888 Pro; the evidence needed to diagnose the SMS deletion failure was being discarded before it could be collected.
+
+### Fixed
+
+- **Best Connection tested for one spelling of a state that has two.** It required `network_type == "ENDC"`. The MC7010 reports `ENDC` and the MC888 Pro reports `EN-DC`, consistently — sixteen downloads of the first and six of the second, with neither device ever using the other's form. So on an MC888 the sensor could not read `on` whatever the radio was doing. Both spellings are now accepted, named in `_ENDC_SPELLINGS` beside the sensor.
+
+  The reporter's device is currently `off` for an unrelated and correct reason — the router reports no carrier aggregation — so this changes nothing they can see today, and would have changed everything once their aggregation came up.
+
+### Added
+
+- **The record of the last delete attempt survives a restart.** `last_delete` lived on the API object only, so a Home Assistant restart erased it. That is the ordinary sequence for a reporter — press the button, restart at some point, download diagnostics later — and it is what happened on issue #56: the `sms` section read `null` where the router's answer to the delete should have been. The record is now written into the config entry when a delete route finishes and restored onto the API object at setup, the same mechanism `boot_time` already uses.
+
+  Written on failure as well as on success. The refused delete is the case a download is wanted for, and it is the one that raises.
+
+- **The record carries a timestamp and the storage selectors.** `attempted_at` says when, so an attempt can be placed against a download taken later. `mem_store_sent` records that `DELETE_SMS` carries no bank selector on any route — recorded rather than omitted, because a reader comparing this against the router's own web page needs to know the selector was absent rather than assume it was sent and wrong. `listed_with` records the selector used to find the ids, which is the only place a bank choice enters a bulk delete.
+
+### Verified
+
+- 1,468 tests, 100% line and branch coverage; ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.12-dev3] - 2026-09-06 - Diagnostics Entity Verification Aligned With Per-Model Defaults
 
