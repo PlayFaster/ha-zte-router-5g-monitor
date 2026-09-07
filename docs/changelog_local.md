@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.14\] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence](#3314---2026-09-07---release-sms-deletion-diagnostic-probing-and-entry-state-persistence)
   - [\[3.3.14-dev4\] - 2026-09-07 - Probe Survives Its Own Failure and a Restart; Hardware Check Settle Pause](#3314-dev4---2026-09-07---probe-survives-its-own-failure-and-a-restart-hardware-check-settle-pause)
   - [\[3.3.14-dev3\] - 2026-09-07 - Probe Records the Router's Answer; Batch and Real-Path Rungs Added](#3314-dev3---2026-09-07---probe-records-the-routers-answer-batch-and-real-path-rungs-added)
   - [\[3.3.14-dev2\] - 2026-09-07 - SMS Delete Failures Recorded; Temporary Delete Probe](#3314-dev2---2026-09-07---sms-delete-failures-recorded-temporary-delete-probe)
@@ -245,6 +246,24 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.14] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe**: Added a temporary diagnostic action (`zte_router_5g.sms_delete_probe`) testing multiple API variants (batching, alternative storage selectors, and live deletion paths) to troubleshoot SMS deletion failures on specific hardware. This action is temporary scaffolding for diagnostic data collection and will be removed in the next release.
+- **Persistent Failure & Probe History**: Recorded SMS deletion failures and probe diagnostics now persist in config entry storage across Home Assistant restarts, ensuring full troubleshooting history survives reboots and download delays.
+- **Router Data Usage Documentation**: Expanded documentation clarifying router-provided data usage reporting versus independent utility tracking.
+
+### Added
+
+- **Temporary SMS Deletion Diagnostic Action**: Added `zte_router_5g.sms_delete_probe`, a temporary diagnostic service action that runs 13 isolated API deletion variants to characterize router deletion behavior while protecting message privacy. _(Note: This temporary action is added for issue troubleshooting and will be removed in the next release.)_
+- **Detailed SMS Write Failure Tracking**: Failed SMS deletion attempts now record sanitized status codes, storage selectors, router response bodies, and timing in `sms.write_failures` within diagnostic downloads, preserved across Home Assistant restarts.
+- **Pre- and Post-Probe Message Counters**: Diagnostic probe reporting captures router message counters before and after probing to detect discrepancies between total counts and message listings.
+
+### Changed
+
+- **Data Usage Tracker Guidance**: Updated README documentation explaining router data counter behavior and recommending the Utility Meter helper for persistent, router-reset-independent usage tracking.
 
 ## [3.3.14-dev4] - 2026-09-07 - Probe Survives Its Own Failure and a Restart; Hardware Check Settle Pause
 

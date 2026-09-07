@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.14] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe**: Added a temporary diagnostic action (`zte_router_5g.sms_delete_probe`) testing multiple API variants (batching, alternative storage selectors, and live deletion paths) to troubleshoot SMS deletion failures on specific hardware. This action is temporary scaffolding for diagnostic data collection and will be removed in the next release.
+- **Persistent Failure & Probe History**: Recorded SMS deletion failures and probe diagnostics now persist in config entry storage across Home Assistant restarts, ensuring full troubleshooting history survives reboots and download delays.
+- **Router Data Usage Documentation**: Expanded documentation clarifying router-provided data usage reporting versus independent utility tracking.
+
+### Added
+
+- **Temporary SMS Deletion Diagnostic Action**: Added `zte_router_5g.sms_delete_probe`, a temporary diagnostic service action that runs 13 isolated API deletion variants to characterize router deletion behavior while protecting message privacy. _(Note: This temporary action is added for issue troubleshooting and will be removed in the next release.)_
+- **Detailed SMS Write Failure Tracking**: Failed SMS deletion attempts now record sanitized status codes, storage selectors, router response bodies, and timing in `sms.write_failures` within diagnostic downloads, preserved across Home Assistant restarts.
+- **Pre- and Post-Probe Message Counters**: Diagnostic probe reporting captures router message counters before and after probing to detect discrepancies between total counts and message listings.
+
+### Changed
+
+- **Data Usage Tracker Guidance**: Updated README documentation explaining router data counter behavior and recommending the Utility Meter helper for persistent, router-reset-independent usage tracking.
+
+---
+
 ## [3.3.12] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records
 
 ### Summary
@@ -306,7 +326,7 @@ Adds broader router model support, router-aligned data usage tracking, extended 
 ### Changed
 
 - **Extended SMS length support**: `send_sms` now accepts multi-part messages up to **765** ASCII characters or **335** Unicode characters (with emoji/special characters), matching router hardware capacity with automatic encoding selection and validation errors.
-  - **Obligatory Warning**: It is _**YOUR**_ responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
+  - **Obligatory Warning**: It is **_YOUR_** responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
     - Remember **longer** messages generally get **billed** as multiple SMS.
 
 - **Wider ZTE model support**: signal and data-usage sensors now recognize the alternative field names used by other `goform` routers, the login falls back to the other form when a model rejects the first, and the LTE/5G band name is worked out from the channel number when the router leaves it blank.
@@ -573,6 +593,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.14\] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence](#3314---2026-09-07---release-sms-deletion-diagnostic-probing-and-entry-state-persistence)
   - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
   - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
   - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
