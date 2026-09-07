@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.14-dev1\] - 2026-09-07 - Cyclomatic Complexity Below 20; Six Helper Extractions](#3314-dev1---2026-09-07---cyclomatic-complexity-below-20-six-helper-extractions)
   - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
   - [\[3.3.12-dev4\] - 2026-09-06 - Best Connection Reads Both EN-DC Spellings; Delete Record Survives a Restart](#3312-dev4---2026-09-06---best-connection-reads-both-en-dc-spellings-delete-record-survives-a-restart)
   - [\[3.3.12-dev3\] - 2026-09-06 - Diagnostics Entity Verification Aligned With Per-Model Defaults](#3312-dev3---2026-09-06---diagnostics-entity-verification-aligned-with-per-model-defaults)
@@ -239,6 +240,39 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+
+---
+
+## [3.3.14-dev1] - 2026-09-07 - Cyclomatic Complexity Below 20; Six Helper Extractions
+
+### Summary
+
+The three functions sitting closest to Ruff's `max-complexity = 25` ceiling were decomposed into named helpers, taking the project maximum from 24 to 19. No rule changed: every extraction moves existing branches verbatim into a function that states what they decide. Version 3.3.13 is skipped.
+
+### Changed
+
+- `api.probe_names` **24 → 11**. The seven mutable pass counters became `_ProbePassCounters`; the nine trailing conditional `notes.append` statements became the pure module-level `_pass_notes` and `_reprobe_notes`; and the re-login block that appeared verbatim at two call sites became `_relogin_once`, which also owns the `DISCOVERY_RELOGIN_LIMIT` budget check.
+- `api._request` **23 → 19**. The `return await self._request(...)` replay that appeared verbatim at three call sites — each carrying ten keyword arguments — became `_replay_after_login`, which owns the `_retry=False` / `_after_relogin=True` pair that makes the replay happen once. The `isinstance(resp_json, dict)` session-verdict block became `_session_rejected`, returning `True` when a renewal is worth attempting and raising for everything a renewal cannot fix.
+- `coordinator._async_update_data_locked` **21 → 13**. The post-fetch payload stage — the SMS capacity merge, the latest-message pick, the boot-time latch and the device-registry refresh — became `_postprocess_payload`. The hold-last-known-values preamble that opened all three exception handlers identically became `_hold_last_values`, parameterized on the one clause that differed between them.
+
+### Fixed
+
+- `data["last_sms"]` had no test asserting it holds the **newest** message. The descending sort could be reversed with the suite still fully green, which would have republished an old message through the SMS sensor as though it had just arrived.
+
+### Tests
+
+- Five added. Three in `test_diagnostic_capture.py` pin the pass-summary notes that no test distinguished: the shared-request refusal count against the per-name declined count, the names an expiring budget left un-re-probed, and the absence of every note on a clean pass. Two in `test_sms_ordering.py` cover `last_sms`.
+- 1468 → 1473, all passing.
+
+### Verified
+
+- Sixteen mutations applied across the six extracted helpers, each caught by at least one test, each file restored to its pre-mutation checksum. The `_replay_after_login` mutation that sets `_retry=True` both fails `test_api_get_all_data_retry_exhausted` and sends the suite into an unbounded re-login loop, which is the condition the flag exists to prevent.
+- Full validation green: pytest, mypy, Ruff, hassfest, and the hardware checks.
+
+### Notes
+
+- Ruff scores `_request` at 19 against a target of 20. The remaining branches are the HTML-redirect and JSON-parse-failure paths, which share the replay helper but not a common verdict, and the idle-session preemption at the top of the function. Splitting them further would separate the request from the decision about its own response.
+- The project now carries no `# noqa: C901` suppression.
 
 ---
 

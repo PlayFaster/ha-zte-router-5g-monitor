@@ -88,7 +88,7 @@ It is also why you cannot verify a logout by checking whether the web UI is reac
 
 ### Session expiry — three different signatures
 
-The router does not return `401`. Expiry is detected by pattern, and all three are handled in `_request`:
+The router does not return `401`. Expiry is detected by pattern. `_request` owns the first two; the third is scored and acted on by `_session_rejected`, which returns whether a re-login is worth attempting and raises for everything a re-login cannot fix:
 
 | Signature | What it looks like | Where |
 | :-- | :-- | :-- |
@@ -789,7 +789,7 @@ The client enforces this in three layers, each covering a shape the others miss:
 
 | Guard | Catches | Where |
 | :-- | :-- | :-- |
-| Expiry detection in `_request` | A body whose values are **all** empty strings — the dead-session shape | `api.py:_request` |
+| Expiry detection on a dict response | A body whose values are **all** empty strings — the dead-session shape | `api.py:_session_rejected`, scoring via `_classify_session` |
 | `_require_contract(data, key, cmd)` | A populated body missing the key the caller needs — missing router fields, or a partial session | reads (`get_sms_messages`, `get_sms_capacity`, …) |
 | `_require_success(data, cmd)` | An explicit `{"result":"failure"}` on an otherwise healthy session | all eight write commands |
 

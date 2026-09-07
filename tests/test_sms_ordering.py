@@ -112,6 +112,44 @@ def _coordinator(hass) -> ZTERouterDataUpdateCoordinator:
     return ZTERouterDataUpdateCoordinator(hass, entry, AsyncMock())
 
 
+async def test_last_sms_is_the_highest_id_not_the_first_returned(hass) -> None:
+    """`last_sms` is the newest message, and the router does not order its list.
+
+    The SMS sensor publishes this one message, so picking the wrong end of the
+    list republishes an old message as though it had just arrived. Ids ascend
+    within a bank, so the newest is the highest — which is why the pick sorts
+    descending rather than taking `messages[0]`.
+    """
+    coordinator = _coordinator(hass)
+    data: dict = {}
+
+    coordinator._postprocess_payload(
+        data,
+        {},
+        [
+            _msg("3", "2026-09-01T00:00:00+00:00"),
+            _msg("11", "2026-09-03T00:00:00+00:00"),
+            _msg("7", "2026-09-02T00:00:00+00:00"),
+        ],
+    )
+
+    assert data["last_sms"]["id"] == "11"
+
+
+async def test_no_messages_leaves_last_sms_empty(hass) -> None:
+    """An empty bank is a fact, not a missing key.
+
+    The sensor reads `last_sms` unconditionally, so the key is always present
+    and an empty mapping is how "nothing to show" is stated.
+    """
+    coordinator = _coordinator(hass)
+    data: dict = {}
+
+    coordinator._postprocess_payload(data, {}, [])
+
+    assert data["last_sms"] == {}
+
+
 async def test_the_baseline_is_the_latest_instant_not_the_latest_text(hass) -> None:
     """Text order and time order part company at a daylight-saving change.
 

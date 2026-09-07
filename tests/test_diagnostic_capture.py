@@ -1947,3 +1947,103 @@ def test_the_three_name_sets_do_not_overlap() -> None:
     """
     assert not (KNOWN_NAMES & EXPECTED_NAMES)
     assert not (EXPECTED_NAMES & REFUSABLE_NAMES)
+
+
+# ---------------------------------------------------------------------------
+# The pass summary. Every counter `probe_names` keeps is reported in a note,
+# and the notes are the only record a download carries of how the pass went.
+# A counter that stops being reported loses that record silently, so each
+# note is pinned to the condition that produces it.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_declined_chunk_and_its_names_are_counted_separately(
+    mock_aiohttp_client,
+):
+    """One refusal is two facts: a request lost, and the names it cost.
+
+    Both are reported, and both matter. The shared request is what the pass
+    paid; the per-name count is what the firmware actually declined.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.return_value = MockResponse(json_data={"result": "failure"})
+
+    _found, notes, _unasked, refused = await api.probe_names(
+        ["a_one", "b_two"], chunk_size=2, canaries=["lte_rsrp"]
+    )
+
+    assert refused == ["a_one", "b_two"]
+    assert any(
+        "1 shared requests declined by the router and re-probed one name "
+        "at a time" in note
+        for note in notes
+    )
+    assert any("2 names declined by the router" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_a_name_the_budget_stopped_mid_reprobe_is_reported_as_unproven(
+    mock_aiohttp_client,
+):
+    """The chunk loop starts inside budget and the re-probe runs out of it.
+
+    Distinct from a budget already spent on entry, which returns before the
+    re-probe exists to report anything. Here names reach the queue, are never
+    asked singly, and must be named as unproven rather than counted absent.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    async def _blank(chunk, canaries=()):
+        return {}
+
+    # Inside budget for the one chunk, spent by the time the re-probe asks.
+    clock = iter([50.0])
+
+    def _monotonic():
+        return next(clock, 150.0)
+
+    with (
+        patch.object(api, "_probe_chunk", side_effect=_blank),
+        patch("custom_components.zte_router_5g.api.monotonic", _monotonic),
+    ):
+        _found, notes, unasked, _refused = await api.probe_names(
+            ["a_one", "b_two"], chunk_size=8, deadline=100.0
+        )
+
+    assert unasked == ["a_one", "b_two"]
+    assert any(
+        "2 names could not be re-probed and are not reported as absent" in note
+        for note in notes
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_pass_that_went_cleanly_reports_no_counters(mock_aiohttp_client):
+    """Every note is conditional, so a clean pass carries none of them.
+
+    The summary is a record of what went wrong. A note that appears when its
+    counter is zero would put a failure in a download that had none.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    async def _answer(chunk, canaries=()):
+        return dict.fromkeys(chunk, "value")
+
+    with patch.object(api, "_probe_chunk", side_effect=_answer):
+        found, notes, unasked, refused = await api.probe_names(
+            ["a_one", "b_two"], chunk_size=8
+        )
+
+    assert found == {"a_one": "value", "b_two": "value"}
+    assert (unasked, refused) == ([], [])
+    assert notes == [], f"a clean pass reported {notes}"

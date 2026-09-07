@@ -6,6 +6,7 @@ import logging
 import re
 import urllib.parse
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
 from time import monotonic
 from typing import Any, NamedTuple, cast
@@ -686,6 +687,77 @@ def _is_classifiable(chunk: list[str], unauthenticated: frozenset[str]) -> bool:
     return bool(names & set(_SESSION_SENTINELS)) or bool(names & unauthenticated)
 
 
+@dataclass
+class _ProbePassCounters:
+    """What went wrong during one chunked discovery pass.
+
+    Held together rather than as seven locals because the counters are read
+    as a set: the pass summary reports every one of them, and the re-login
+    path advances three at once.
+    """
+
+    unreliable: int = 0
+    blank_since_check: int = 0
+    fallback_checks: int = 0
+    refused_chunks: int = 0
+    relogins: int = 0
+    recovered: int = 0
+    failed_relogins: int = 0
+
+
+def _pass_notes(counts: _ProbePassCounters) -> list[str]:
+    """Summarize a chunked pass, reporting only the counters that fired.
+
+    Every note is conditional: a download from a pass that went cleanly
+    carries none of them, so a note present is always a statement that
+    something happened.
+    """
+    notes: list[str] = []
+    if counts.unreliable:
+        notes.append(f"{counts.unreliable} names read without a session and re-probed")
+    if counts.recovered:
+        notes.append(f"session re-established {counts.recovered} times mid-pass")
+    if counts.failed_relogins:
+        notes.append(
+            f"session could not be re-established {counts.failed_relogins} times"
+        )
+    if counts.relogins >= DISCOVERY_RELOGIN_LIMIT:
+        notes.append(
+            "re-login limit reached; later names were read without a confirmed session"
+        )
+    if counts.refused_chunks:
+        notes.append(
+            f"{counts.refused_chunks} shared requests declined by the router and "
+            "re-probed one name at a time"
+        )
+    if counts.fallback_checks:
+        notes.append(
+            f"no canary available: session confirmed out of band "
+            f"{counts.fallback_checks} times"
+        )
+    return notes
+
+
+def _reprobe_notes(
+    retried: int, rounds: list[int], never_reprobed: list[str], refused: list[str]
+) -> list[str]:
+    """Summarize the single-name re-probe phase, on the same terms."""
+    notes: list[str] = []
+    if retried:
+        notes.append(
+            f"{retried} names re-probed singly over {len(rounds)} rounds, "
+            f"resolving {sum(rounds)}"
+        )
+    if never_reprobed:
+        notes.append(
+            f"{len(never_reprobed)} names could not be re-probed and are "
+            "not reported as absent"
+        )
+    if refused:
+        notes.append(f"{len(refused)} names declined by the router")
+    return notes
+
+
 class ZTERouterAPI:
     """Async wrapper for the ZTE Router goform API using aiohttp."""
 
@@ -1048,6 +1120,129 @@ class ZTERouterAPI:
             return UTC
         return timezone(timedelta(minutes=15 * quarters))
 
+    def _session_rejected(
+        self,
+        resp_json: dict[str, Any],
+        requested: list[str] | None,
+        *,
+        classify: bool,
+        authenticated: bool,
+        retry: bool,
+        after_relogin: bool,
+    ) -> bool:
+        """Score a dict response against the session and say what to do next.
+
+        `True` means renew the session and put the same request again;
+        `False` means the response stands. Anything a renewal cannot fix
+        raises from here rather than returning, so the caller is left with
+        only the replay decision.
+        """
+        # A dead session answers HTTP 200 with the *authenticated* keys
+        # echoed back empty — never an error, never a redirect. Captured
+        # from an MC7010 on firmware V1.0.0B03 (2026-07-27) by replaying an
+        # invalidated stok:
+        #
+        #   batch poll  -> {"network_type":"","signalbar":"","wan_ipaddr":""}
+        #   SMS list    -> {"sms_data_total":""}
+        #   SMS capacity-> {"sms_capacity_info":""}
+        #
+        # `_classify_session` reads that shape against the two classes of
+        # key rather than against the whole response; see its docstring for
+        # why the difference matters. `undecidable` keeps the older rule for
+        # the SMS endpoints, which carry no unauthenticated key to compare
+        # against — the case that rule was written for and still handles.
+        # A discovery probe asks for names the device may not implement,
+        # so every value coming back blank is the expected answer — it
+        # means "this firmware does not report these", not "the session
+        # died". Classifying it cost a re-login and a replay per empty
+        # chunk: 142 of 187 chunks failed that way on the reference
+        # MC7010, and suppressing the verdict took a pass from 63 seconds
+        # to 16 with the same 90 names answered.
+        verdict = (
+            _classify_session(resp_json, requested, self.unauthenticated_key_set())
+            if classify
+            else "live"
+        )
+        self._record_verdict(verdict, resp_json, requested)
+        is_status_expired = verdict == "expired" or (
+            verdict == "undecidable"
+            and bool(resp_json)
+            and all(value == "" for value in resp_json.values())
+        )
+        # Other endpoints might return explicit error indications
+        is_auth_error = (
+            resp_json.get("result") in ["session expired", "unauth", "fail"]
+            or resp_json.get("status") == "fail"
+        )
+
+        # Answering, but with nothing to say yet. Logging in again would
+        # not help, so this is reported as a reachability problem and picks
+        # up the coordinator's hold-last-known-values path instead of
+        # burning a re-login and then a reauth prompt.
+        if verdict == "not_ready" and authenticated:
+            raise ZTEConnectionError(
+                "Router answered but reported no data — it is probably "
+                "still starting up"
+            )
+
+        if (is_status_expired or is_auth_error) and authenticated:
+            if retry:
+                _LOGGER.debug("Session expired in JSON response; renewing session")
+                return True
+            if after_relogin and not is_auth_error:
+                # A session established seconds ago cannot itself be
+                # expired. The response was scored from its *shape*, and
+                # a fresh session producing that shape refutes the rule
+                # rather than confirming the verdict. Reported as a
+                # reachability problem so it picks up the coordinator's
+                # hold-last-known-values path, and so a rule that does not
+                # fit this device cannot present as an auth condition.
+                raise ZTEConnectionError(
+                    "Router returned an expired-looking response on a "
+                    "freshly established session — the session is not the "
+                    "problem"
+                )
+            # Either the router said so explicitly, or the caller asked for
+            # no recovery. `scripts/hardware_check.py` probes an invalidated
+            # session with `_retry=False` and asserts this exception; that
+            # check is the standing hardware proof that expiry is detectable.
+            raise ZTEAuthError("Session expired/unauthorized")
+        return False
+
+    async def _replay_after_login(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        data: Any = None,
+        headers: dict[str, str] | None = None,
+        timeout_sec: int | None = None,
+        authenticated: bool = True,
+        requested: list[str] | None = None,
+    ) -> Any:
+        """Renew the session and put the same request again, once.
+
+        `_retry=False` is what makes it once: the replay cannot itself decide
+        to log in again, so a router that keeps answering as though the
+        session were dead raises rather than looping. `_after_relogin` marks
+        the replay so a fresh session producing an expired-looking response is
+        read as the rule not fitting the device, not as an auth failure.
+        """
+        await self.login(timeout_sec=timeout_sec)
+        return await self._request(
+            method,
+            path,
+            params=params,
+            data=data,
+            headers=headers,
+            timeout_sec=timeout_sec,
+            authenticated=authenticated,
+            requested=requested,
+            _retry=False,
+            _after_relogin=True,
+        )
+
     async def _request(
         self,
         method: str,
@@ -1144,8 +1339,7 @@ class ZTERouterAPI:
         if is_html_page:
             if authenticated and _retry:
                 _LOGGER.debug("Detected HTML redirect/response; renewing session")
-                await self.login(timeout_sec=timeout_sec)
-                return await self._request(
+                return await self._replay_after_login(
                     method,
                     path,
                     params=params,
@@ -1154,8 +1348,6 @@ class ZTERouterAPI:
                     timeout_sec=timeout_sec,
                     authenticated=authenticated,
                     requested=requested,
-                    _retry=False,
-                    _after_relogin=True,
                 )
             self._record_unparsable(status, body_preview)
             _LOGGER.error(
@@ -1172,8 +1364,7 @@ class ZTERouterAPI:
         if resp_json is None:
             if authenticated and _retry:
                 _LOGGER.debug("JSON parse failed; renewing session")
-                await self.login(timeout_sec=timeout_sec)
-                return await self._request(
+                return await self._replay_after_login(
                     method,
                     path,
                     params=params,
@@ -1182,96 +1373,29 @@ class ZTERouterAPI:
                     timeout_sec=timeout_sec,
                     authenticated=authenticated,
                     requested=requested,
-                    _retry=False,
-                    _after_relogin=True,
                 )
             self._record_unparsable(status, body_preview)
             raise ZTEConnectionError("Failed to parse JSON response from router")
 
         # 3. Check JSON structure for session expiry/invalid indicators
-        if isinstance(resp_json, dict):
-            # A dead session answers HTTP 200 with the *authenticated* keys
-            # echoed back empty — never an error, never a redirect. Captured
-            # from an MC7010 on firmware V1.0.0B03 (2026-07-27) by replaying an
-            # invalidated stok:
-            #
-            #   batch poll  -> {"network_type":"","signalbar":"","wan_ipaddr":""}
-            #   SMS list    -> {"sms_data_total":""}
-            #   SMS capacity-> {"sms_capacity_info":""}
-            #
-            # `_classify_session` reads that shape against the two classes of
-            # key rather than against the whole response; see its docstring for
-            # why the difference matters. `undecidable` keeps the older rule for
-            # the SMS endpoints, which carry no unauthenticated key to compare
-            # against — the case that rule was written for and still handles.
-            # A discovery probe asks for names the device may not implement,
-            # so every value coming back blank is the expected answer — it
-            # means "this firmware does not report these", not "the session
-            # died". Classifying it cost a re-login and a replay per empty
-            # chunk: 142 of 187 chunks failed that way on the reference
-            # MC7010, and suppressing the verdict took a pass from 63 seconds
-            # to 16 with the same 90 names answered.
-            verdict = (
-                _classify_session(resp_json, requested, self.unauthenticated_key_set())
-                if classify
-                else "live"
+        if isinstance(resp_json, dict) and self._session_rejected(
+            resp_json,
+            requested,
+            classify=classify,
+            authenticated=authenticated,
+            retry=_retry,
+            after_relogin=_after_relogin,
+        ):
+            return await self._replay_after_login(
+                method,
+                path,
+                params=params,
+                data=data,
+                headers=headers,
+                timeout_sec=timeout_sec,
+                authenticated=authenticated,
+                requested=requested,
             )
-            self._record_verdict(verdict, resp_json, requested)
-            is_status_expired = verdict == "expired" or (
-                verdict == "undecidable"
-                and bool(resp_json)
-                and all(value == "" for value in resp_json.values())
-            )
-            # Other endpoints might return explicit error indications
-            is_auth_error = (
-                resp_json.get("result") in ["session expired", "unauth", "fail"]
-                or resp_json.get("status") == "fail"
-            )
-
-            # Answering, but with nothing to say yet. Logging in again would
-            # not help, so this is reported as a reachability problem and picks
-            # up the coordinator's hold-last-known-values path instead of
-            # burning a re-login and then a reauth prompt.
-            if verdict == "not_ready" and authenticated:
-                raise ZTEConnectionError(
-                    "Router answered but reported no data — it is probably "
-                    "still starting up"
-                )
-
-            if (is_status_expired or is_auth_error) and authenticated:
-                if _retry:
-                    _LOGGER.debug("Session expired in JSON response; renewing session")
-                    await self.login(timeout_sec=timeout_sec)
-                    return await self._request(
-                        method,
-                        path,
-                        params=params,
-                        data=data,
-                        headers=headers,
-                        timeout_sec=timeout_sec,
-                        authenticated=authenticated,
-                        requested=requested,
-                        _retry=False,
-                        _after_relogin=True,
-                    )
-                if _after_relogin and not is_auth_error:
-                    # A session established seconds ago cannot itself be
-                    # expired. The response was scored from its *shape*, and
-                    # a fresh session producing that shape refutes the rule
-                    # rather than confirming the verdict. Reported as a
-                    # reachability problem so it picks up the coordinator's
-                    # hold-last-known-values path, and so a rule that does not
-                    # fit this device cannot present as an auth condition.
-                    raise ZTEConnectionError(
-                        "Router returned an expired-looking response on a "
-                        "freshly established session — the session is not the "
-                        "problem"
-                    )
-                # Either the router said so explicitly, or the caller asked for
-                # no recovery. `scripts/hardware_check.py` probes an invalidated
-                # session with `_retry=False` and asserts this exception; that
-                # check is the standing hardware proof that expiry is detectable.
-                raise ZTEAuthError("Session expired/unauthorized")
 
         # Only an authenticated call proves the session is still alive, so only
         # one counts as activity. Unauthenticated endpoints (`LD`, `RD`'s
@@ -1996,14 +2120,8 @@ class ZTERouterAPI:
         found: dict[str, str] = {}
         notes: list[str] = []
         retry: list[str] = []
-        unreliable = 0
-        blank_since_check = 0
-        fallback_checks = 0
-        refused_chunks = 0
+        counts = _ProbePassCounters()
         refused_early: list[str] = []
-        relogins = 0
-        recovered = 0
-        failed_relogins = 0
 
         for start in range(0, len(names), chunk_size):
             if monotonic() > deadline:
@@ -2024,7 +2142,7 @@ class ZTERouterAPI:
                 # other names in this chunk have not been asked. Requeued as a
                 # failure: nothing here is evidence about any of them, and none
                 # of it says anything about the session.
-                refused_chunks += 1
+                counts.refused_chunks += 1
                 retry.extend(chunk)
                 continue
             if answered is _SESSION_LOST:
@@ -2032,14 +2150,9 @@ class ZTERouterAPI:
                 # session, so every name in it came back blank for a reason
                 # that has nothing to do with the firmware. Recording it as
                 # "not reported" would be the lie discovery exists to avoid.
-                unreliable += len(chunk)
+                counts.unreliable += len(chunk)
                 retry.extend(chunk)
-                if relogins < DISCOVERY_RELOGIN_LIMIT:
-                    relogins += 1
-                    if await self._reestablish_session(canaries):
-                        recovered += 1
-                    else:
-                        failed_relogins += 1
+                await self._relogin_once(canaries, counts)
                 continue
             if answered is None:
                 retry.extend(chunk)
@@ -2058,63 +2171,45 @@ class ZTERouterAPI:
                 # every name it read while logged out as one the firmware does
                 # not report, which is the assertion this whole mechanism
                 # exists to refuse.
-                blank_since_check += 1
-                if not canaries and blank_since_check >= CANARY_FALLBACK_EVERY:
-                    blank_since_check = 0
-                    fallback_checks += 1
+                counts.blank_since_check += 1
+                if not canaries and counts.blank_since_check >= CANARY_FALLBACK_EVERY:
+                    counts.blank_since_check = 0
+                    counts.fallback_checks += 1
                     if not await self._session_still_alive():
-                        unreliable += len(chunk)
+                        counts.unreliable += len(chunk)
                         retry.extend(chunk)
-                        if relogins < DISCOVERY_RELOGIN_LIMIT:
-                            relogins += 1
-                            if await self._reestablish_session(canaries):
-                                recovered += 1
-                            else:
-                                failed_relogins += 1
+                        await self._relogin_once(canaries, counts)
                         continue
                 retry.extend(chunk)
 
-        if unreliable:
-            notes.append(f"{unreliable} names read without a session and re-probed")
-        if recovered:
-            notes.append(f"session re-established {recovered} times mid-pass")
-        if failed_relogins:
-            notes.append(f"session could not be re-established {failed_relogins} times")
-        if relogins >= DISCOVERY_RELOGIN_LIMIT:
-            notes.append(
-                "re-login limit reached; later names were read without a "
-                "confirmed session"
-            )
-        if refused_chunks:
-            notes.append(
-                f"{refused_chunks} shared requests declined by the router and "
-                "re-probed one name at a time"
-            )
-        if fallback_checks:
-            notes.append(
-                f"no canary available: session confirmed out of band "
-                f"{fallback_checks} times"
-            )
+        notes.extend(_pass_notes(counts))
 
+        retried = len(retry)
         found_again, refused, never_reprobed, rounds = await self._reprobe_singly(
             retry, canaries=canaries, deadline=deadline, notes=notes
         )
         found.update(found_again)
-        if retry:
-            notes.append(
-                f"{len(retry)} names re-probed singly over {len(rounds)} rounds, "
-                f"resolving {sum(rounds)}"
-            )
-        if never_reprobed:
-            notes.append(
-                f"{len(never_reprobed)} names could not be re-probed and are "
-                "not reported as absent"
-            )
         refused = refused_early + refused
-        if refused:
-            notes.append(f"{len(refused)} names declined by the router")
+        notes.extend(_reprobe_notes(retried, rounds, never_reprobed, refused))
 
         return found, notes, never_reprobed, sorted(refused)
+
+    async def _relogin_once(
+        self, canaries: Sequence[str], counts: _ProbePassCounters
+    ) -> None:
+        """Re-establish the session once, within the pass's re-login budget.
+
+        The budget exists because a firmware that keeps evicting the session
+        would otherwise make a pass log in on every chunk. Past the limit the
+        pass continues unauthenticated, and `_pass_notes` says so.
+        """
+        if counts.relogins >= DISCOVERY_RELOGIN_LIMIT:
+            return
+        counts.relogins += 1
+        if await self._reestablish_session(canaries):
+            counts.recovered += 1
+        else:
+            counts.failed_relogins += 1
 
     async def _reprobe_singly(
         self,
