@@ -378,6 +378,9 @@
     },
     "reset_entities": {
       "service": "mdi:playlist-check"
+    },
+    "sms_delete_probe": {
+      "service": "mdi:test-tube"
     }
   }
 }

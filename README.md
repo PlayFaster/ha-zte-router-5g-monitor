@@ -260,8 +260,17 @@ Monitor monthly data consumption, active session totals, and upload/download spe
 - **Monthly Data Usage**: Track your monthly download, upload and total data usage. See the [Data Usage Alert](#-data-usage-alert) example.
 - **Session Usage**: Track your download and upload for this session/connection (i.e. since last router restart).
 - **Allowance & Threshold Info**: Visibility to the allowance limits and warning thresholds you set in the router web UI.
+
 - **Projected Cycle Usage** (`sensor.zte_5g_data_projected_cycle_usage`): An estimate of where you will finish the cycle at your current rate. See [Data Usage Projection](#-data-usage-projection) below.
 - **Download & Upload Speed**: Track your upload and download speeds. Note: This is valid, but only at the instant data was fetched from the router.
+
+> [!NOTE] **Where these figures come from.**
+>
+> The monthly figures are read from the router, not measured by this integration. They move when the router's own counter moves, they follow its billing-cycle setting rather than the calendar month, and they are not your ISP's billing figure.
+>
+> **These figures can be changed from the router's web UI.** The Data Management page lets you reset the used-data counter to zero, and lets you set it to an arbitrary value. Either takes effect immediately, and the monthly sensors follow. Session usage is a separate counter and is unaffected.
+>
+> If you want a total that is independent of the router, create a Home Assistant [Utility Meter helper](https://www.home-assistant.io/integrations/utility_meter/) with the monthly total as its source. It counts only from the point you create it.
 
 | Data Sensors | Data Diagnostics |
 | :-: | :-: |

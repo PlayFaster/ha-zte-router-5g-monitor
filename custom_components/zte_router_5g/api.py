@@ -51,6 +51,11 @@ SMS_STORE_DEVICE = "1"
 SMS_STORE_SIM = "0"
 SMS_STORE_ALL = "2"
 
+# How many failed writes to keep. Enough to hold a first attempt and the
+# replay that follows a re-login, several times over, without letting a
+# device that fails every poll grow the download without bound.
+WRITE_FAILURE_HISTORY = 5
+
 
 # The batch poll is split in two because the router's GET is bounded by a URL
 # length of roughly 2,048 characters, not by a number of names. A single list
@@ -832,7 +837,23 @@ class ZTERouterAPI:
         # what was answered, and which ids survived is the only evidence a
         # download can carry — see `_record_delete`.
         self.last_delete: dict[str, Any] | None = None
+        # Every delete attempt, including the ones that raised. `last_delete`
+        # holds only the most recent and only when the request returned; a
+        # refused delete raises inside `_request`, so the record that mattered
+        # was never written. Bounded, and deliberately never cleared by a
+        # later poll: a reporter presses the button and downloads diagnostics
+        # afterwards, sometimes days afterwards.
+        self.write_failures: list[dict[str, Any]] = []
+        # Set only by the temporary SMS delete probe. Absent from the
+        # download otherwise, and removed with that module.
+        self.delete_probe: dict[str, Any] | None = None
         self.login_metadata: dict[str, Any] = {}
+        self._session_was_fresh = False
+        # The transport-level facts about the most recent response, kept so a
+        # write that raises can record them. `_request` raises from several
+        # places and none of them carries the status code out.
+        self.last_response_status: int | None = None
+        self.last_response_preview: str = ""
         self._cookies_found_in = "none"
 
     def _record_verdict(
@@ -894,6 +915,33 @@ class ZTERouterAPI:
             # contents at that moment, and a download reports them later.
             "keep_last": None,
         }
+
+    def record_write_failure(
+        self,
+        command: str,
+        error: BaseException,
+        *,
+        detail: dict[str, Any] | None = None,
+    ) -> None:
+        """Keep what a failed write was doing, for a download taken later.
+
+        **Never records a request body.** `SEND_SMS` carries the recipient's
+        number and the message text, and a diagnostics download is written to
+        be attached to a public issue without hand-editing. Callers pass only
+        fields they have established are safe — for a delete, the ids and the
+        parameter names.
+        """
+        self.write_failures.append(
+            {
+                "at": datetime.now(UTC).isoformat(),
+                "command": command,
+                "error_type": type(error).__name__,
+                "error": str(error)[:300],
+                "login_form": self.login_metadata.get("form"),
+                **(detail or {}),
+            }
+        )
+        del self.write_failures[:-WRITE_FAILURE_HISTORY]
 
     def note_delete_parameter(self, keep_last: int | None) -> None:
         """Record the `keep_last` a caller chose, beside the attempt itself."""
@@ -1301,6 +1349,8 @@ class ZTERouterAPI:
                 ssl=False,
             ) as r:
                 status = r.status
+                self.last_response_status = status
+                self._session_was_fresh = False
                 content_type = r.headers.get("Content-Type", "")
                 url_str = str(r.url)
 
@@ -1349,6 +1399,7 @@ class ZTERouterAPI:
                     authenticated=authenticated,
                     requested=requested,
                 )
+            self.last_response_preview = body_preview
             self._record_unparsable(status, body_preview)
             _LOGGER.error(
                 "Unexpected HTML response from %s (Status: %s, Content-Type: %s): %s",
@@ -1374,6 +1425,7 @@ class ZTERouterAPI:
                     authenticated=authenticated,
                     requested=requested,
                 )
+            self.last_response_preview = body_preview
             self._record_unparsable(status, body_preview)
             raise ZTEConnectionError("Failed to parse JSON response from router")
 
@@ -1533,6 +1585,10 @@ class ZTERouterAPI:
 
         self.cookies = dict(attempt.cookies)
         self.session_active = True
+        # Cleared by the first request that follows. A write refused on a
+        # session established seconds earlier says something different from
+        # one refused on a session hours old.
+        self._session_was_fresh = True
         self.last_activity = datetime.now(UTC)
         if not attempt.cookies:
             # Kept because a router answering a success `result` with no
@@ -2809,9 +2865,32 @@ class ZTERouterAPI:
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
         }
-        res = await self._request(
-            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
-        )
+        ids = [part for part in msg_id.split(";") if part]
+        # Read before the request: `_request` clears it once one has gone out.
+        was_fresh = self._session_was_fresh
+        try:
+            res = await self._request(
+                "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+            )
+        except Exception as err:
+            # The record has to be written here or not at all. A refused delete
+            # raises inside `_request`, so `_record_delete` below is never
+            # reached — which is why four diagnostics downloads on issue #56
+            # carried `last_delete: null` while the reporter was pressing the
+            # button. Ids and parameter names only; the body is never kept.
+            self.record_write_failure(
+                "DELETE_SMS",
+                err,
+                detail={
+                    "ids_requested": ids,
+                    "listed_with": listed_with,
+                    "mem_store_sent": None,
+                    "session_was_fresh": was_fresh,
+                    "status": self.last_response_status,
+                    "body_preview": self.last_response_preview,
+                },
+            )
+            raise
         self._record_delete(msg_id, res, listed_with)
         self._require_success(res, "DELETE_SMS")
         return 200

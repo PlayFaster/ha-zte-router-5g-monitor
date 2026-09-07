@@ -435,6 +435,11 @@ def _sms_section(
     on_sim = _dict_items(banks.get("sim"))
     tracker = coordinator.fired_sms_hashes
     delete_record = coordinator.api.last_delete
+    # Type-guarded like every other field here: the download is serialized
+    # after each section has succeeded, so a stand-in that is not a list or
+    # dict fails the whole file at the last moment.
+    failures = coordinator.api.write_failures
+    probe = getattr(coordinator.api, "delete_probe", None)
     return {
         "fetched": isinstance(snapshot, dict),
         "message_count": len(listed),
@@ -470,6 +475,16 @@ def _sms_section(
         "last_delete": (
             deepcopy(delete_record) if isinstance(delete_record, dict) else None
         ),
+        # Failed writes, including the ones that raised before any result was
+        # returned. `last_delete` above only ever holds an attempt whose
+        # request came back; a refused delete raises first, which is how four
+        # downloads on issue #56 recorded nothing at all. Never cleared by a
+        # later poll, and it carries no request body — `SEND_SMS` would put a
+        # recipient and a message into a file written to be posted publicly.
+        "write_failures": (deepcopy(failures) if isinstance(failures, list) else []),
+        # The probe's findings, when the temporary diagnostic action has been
+        # run. Absent otherwise.
+        "delete_probe": deepcopy(probe) if isinstance(probe, dict) else None,
     }
 
 

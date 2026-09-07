@@ -234,3 +234,28 @@ reset_entities:
       default: false
       selector:
         boolean:
+
+# TEMPORARY — a one-off diagnostic for issue #56, removed once that is
+# understood. See custom_components/zte_router_5g/sms_delete_probe.py.
+sms_delete_probe:
+  description:
+    Diagnostic only. Tries every known variant of the SMS delete command and reports
+    what the router answered to each. The later steps DELETE REAL MESSAGES. Send
+    yourself several test messages first, and only run this if you have been asked to.
+  fields:
+    entry_id:
+      description:
+        The router to use. Defaults to your only router; required if more than one is
+        configured.
+      required: false
+      selector:
+        config_entry:
+          integration: zte_router_5g
+    confirm:
+      name: I understand this deletes messages
+      description:
+        Must be ticked. The later probes delete messages from the router and cannot be
+        undone.
+      required: true
+      selector:
+        boolean:

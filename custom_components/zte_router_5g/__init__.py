@@ -95,6 +95,14 @@ SERVICE_RESET_ENTITIES_SCHEMA = vol.Schema(
     }
 )
 
+# TEMPORARY — removed with `sms_delete_probe.py`. See that module's header.
+SERVICE_SMS_DELETE_PROBE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("entry_id"): str,
+        vol.Required("confirm"): vol.All(bool, vol.Equal(True)),
+    }
+)
+
 SERVICE_GET_SMS_LIST_SCHEMA = vol.Schema(
     {
         vol.Optional("entry_id"): str,
@@ -441,6 +449,12 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             hass, _get_coordinator(hass, call.data), dict(call.data)
         )
 
+    # TEMPORARY — removed with `sms_delete_probe.py`.
+    async def _handle_sms_delete_probe(call: ServiceCall) -> dict[str, Any]:
+        from .sms_delete_probe import run_probe
+
+        return await run_probe(_get_coordinator(hass, call.data))
+
     hass.services.async_register(
         DOMAIN,
         "send_sms",
@@ -460,6 +474,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         "delete_all_sms",
         _handle_delete_all_sms,
         schema=SERVICE_DELETE_ALL_SMS_SCHEMA,
+    )
+
+    # TEMPORARY — removed with `sms_delete_probe.py`.
+    hass.services.async_register(
+        DOMAIN,
+        "sms_delete_probe",
+        _handle_sms_delete_probe,
+        schema=SERVICE_SMS_DELETE_PROBE_SCHEMA,
+        supports_response=SupportsResponse.ONLY,
     )
 
     hass.services.async_register(

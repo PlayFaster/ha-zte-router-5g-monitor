@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.14-dev2\] - 2026-09-07 - SMS Delete Failures Recorded; Temporary Delete Probe](#3314-dev2---2026-09-07---sms-delete-failures-recorded-temporary-delete-probe)
   - [\[3.3.14-dev1\] - 2026-09-07 - Cyclomatic Complexity Below 20; Six Helper Extractions](#3314-dev1---2026-09-07---cyclomatic-complexity-below-20-six-helper-extractions)
   - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
   - [\[3.3.12-dev4\] - 2026-09-06 - Best Connection Reads Both EN-DC Spellings; Delete Record Survives a Restart](#3312-dev4---2026-09-06---best-connection-reads-both-en-dc-spellings-delete-record-survives-a-restart)
@@ -243,6 +244,40 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.14-dev2] - 2026-09-07 - SMS Delete Failures Recorded; Temporary Delete Probe
+
+### Summary
+
+Four diagnostics downloads on issue #56 carried `last_delete: null` while the reporter was pressing the button. The record was never missing information — it was never written, because the failure raises before the line that writes it. This makes a failed write impossible to lose, and adds a temporary action to characterize the device in one pass rather than another round of downloads.
+
+### Bumps
+
+- **Validate Bump**: Update `zizmor` from 1.29.0 to 1.30.0
+
+### Changed
+
+- **README**: Added a note to `README.md` to clarify that the integrations data use sensors come directly from the router, and are not independent. Included a pointer towards a `Utility Meter` helper if a separate independent data tracker, that would be immune to router resets or changes, is required.
+
+### Added
+
+- **A failed write is recorded, including one that raised.** `delete_sms` now records the attempt in its exception path and re-raises. The record carries the ids, the storage selector used to find them, the HTTP status, a response-body preview, whether the session had just been established, and which login form issued it. It appears in the diagnostics download as `sms.write_failures`.
+
+  **No request body is ever recorded.** `SEND_SMS` carries the recipient's number and the message text, and a diagnostics download is written to be attached to a public issue without hand-editing. Callers pass only fields established as safe; for a delete that is ids and parameter names.
+
+- **The record survives a later poll.** `last_rejection` is cleared by the next live verdict, so the evidence was erased within one polling cycle — a download taken minutes afterwards showed nothing. `write_failures` is never cleared and holds the five most recent, which is enough for a first attempt and the replay that follows a re-login, several times over.
+
+- **`sms_delete_probe` — a temporary action, to be removed.** It runs thirteen variants of the delete command and records what the router answered to each: whether the write token changes when the session is renewed, which storage bank holds the messages, whether a delete naming an id the router does not hold is refused, whether it is refused differently from one carrying a deliberately wrong token, whether `notCallback` or an explicit bank changes the answer, and whether any write at all succeeds on the device.
+
+  The first seven probes destroy nothing — they read state, or name a message id no router holds. Only then does it touch real messages, and every one it touches is one already targeted for deletion. It does not stop at the first success: a device this different from the reference hardware is worth characterizing once rather than learning one fact and asking again. Probes it could not run for want of messages say so.
+
+### Removal required
+
+`custom_components/zte_router_5g/sms_delete_probe.py` and its action are **diagnostic scaffolding for issue #56 and must not reach a stable release.** Removing them means deleting that module, its registration in `__init__.py`, its schema, its block in `services.yaml`, its `icons.json` entry, its two suppression allow-list entries and `tests/test_sms_delete_probe.py`. Recorded as outstanding work in `.notes/issues/other_router_access/`.
+
+### Verified
+
+- 1,485 tests, 100% line and branch coverage. Ruff, ruff format and mypy `--strict` clean.
+
 ## [3.3.14-dev1] - 2026-09-07 - Cyclomatic Complexity Below 20; Six Helper Extractions
 
 ### Summary
@@ -345,7 +380,7 @@ The shared entity verification tool reported three faults against a healthy inst
 
 ### Fixed
 
-- **A pass that did not finish probing is taken again before it is compared.** A name lands in `not_reprobed` when its own request keeps failing, which is what a second client logging into the router does to the first: the device permits one session, and the coordinator lock that serialises discovery against polling protects one Home Assistant instance only. In the observed failure run 1 hit the round cap with 89 names left unasked after repeated `_SESSION_LOST` responses, while a live Home Assistant instance was polling the same router. That is a property of the moment rather than of the device, so `produce_complete` re-takes the pass once, five seconds later, and compares the retaken artefact.
+- **A pass that did not finish probing is taken again before it is compared.** A name lands in `not_reprobed` when its own request keeps failing, which is what a second client logging into the router does to the first: the device permits one session, and the coordinator lock that serializes discovery against polling protects one Home Assistant instance only. In the observed failure run 1 hit the round cap with 89 names left unasked after repeated `_SESSION_LOST` responses, while a live Home Assistant instance was polling the same router. That is a property of the moment rather than of the device, so `produce_complete` re-takes the pass once, five seconds later, and compares the retaken artefact.
 
   A second unfinished pass is not retried. At that point it is a finding rather than noise, and the checks already in place report it.
 
@@ -492,7 +527,7 @@ Three entity-default changes and the documentation pass for the `[3.3.10]` relea
 ### Changed
 
 - **The WiFi sub-device is removed and its two sensors move to System.** A device is created when its entities are added, disabled or not, so the WiFi card was drawn on an MC7010 holding two entities that are both blank there. Moving them removes the empty card without conditional entity creation. **WiFi Clients Connected** and **WiFi Enabled**, both diagnostic.
-- **Those two are now enabled by default**, and the overlay disables them on the MC7010, which answers neither key. An unrecognised model keeps them on: a router serving WiFi is the common case, and a blank pair is easier to notice and switch off than a missing pair is to discover. This is the first overlay entry for the MC7010.
+- **Those two are now enabled by default**, and the overlay disables them on the MC7010, which answers neither key. An unrecognized model keeps them on: a router serving WiFi is the common case, and a blank pair is easier to notice and switch off than a missing pair is to discover. This is the first overlay entry for the MC7010.
 - **Firmware Update State and Firmware Update Result are off by default.** `upgrade_result` shipped enabled in `[3.3.9-dev12]` as the one firmware sensor reporting a fault the other two miss; three firmware sensors on the System card is more than a working router needs on show, and a user chasing an update problem can enable them.
 
 ### Documentation
@@ -501,7 +536,7 @@ Three entity-default changes and the documentation pass for the `[3.3.10]` relea
 - **`AGENTS.md`** gains the three modules added in this series and a rule that `device_info` is inherited and never declared on an entity class, with the sweep names that enforce it. Three rows added to the "tests that will stop you" table.
 - **`docs/DEVELOPMENT.md`** documents `entity_defaults.py`, `observations.py` and `reset_entities.py`, and records the temperature finding below.
 - **`docs/zte_how_to_access.md`** gains a section on the three parameter vocabularies, how the `network_` family splits into qualified and unqualified names, and the sign convention on `network_rssi`.
-- **`docs/expected_zte_compatibility.md`** records per-model defaults and the 36 cross-model spellings as supported behaviour, and notes that the WiFi client count is a single figure rather than the device tracking this integration excludes.
+- **`docs/expected_zte_compatibility.md`** records per-model defaults and the 36 cross-model spellings as supported behavior, and notes that the WiFi client count is a single figure rather than the device tracking this integration excludes.
 - **`docs/ha_compatibility.md`** — tested against 2026.9.0.
 
 ### Measured
@@ -516,7 +551,7 @@ That decision was nearly re-opened on a false reading. `known_names.EXPECTED_NAM
 
 `[3.3.10-dev11]` fixed an entity that had no device and added a sweep to catch another. This removes the condition that made the omission possible: ten entity classes across six modules each carried a byte-identical `device_info` property, and every copy was somewhere the property could be left out. There is now one, inherited.
 
-No behaviour change. The entity count, the device assignments and the sensor manifest are unchanged.
+No behavior change. The entity count, the device assignments and the sensor manifest are unchanged.
 
 ### Changed
 
@@ -654,7 +689,7 @@ The entity count moves from 113 to 115.
 ### Added
 
 - **`entity_defaults.default_enabled(description, model)`**, the single resolver for whether an entity is enabled by default. Every platform calls it when building an entity. The `reset_entities` action will call the same function when it restores defaults, because two readers of different sources would disagree and a reset would undo the overlay every time it ran.
-- **`MODEL_OVERLAY`**, matched as a substring of the reported model, longest key first so a variant entry can later override a family one. Family matching is deliberate: the `network_` vocabulary and the `zsidn` session cookie are firmware-family behaviours, and `api._hash` already selects SHA-256 on `MC888` or `MC889` appearing anywhere in the version string.
+- **`MODEL_OVERLAY`**, matched as a substring of the reported model, longest key first so a variant entry can later override a family one. Family matching is deliberate: the `network_` vocabulary and the `zsidn` session cookie are firmware-family behaviors, and `api._hash` already selects SHA-256 on `MC888` or `MC889` appearing anywhere in the version string.
 - **An MC888 entry**: LTE RSRQ, LTE RSSI, LTE SNR, 5G RSSI, eNodeB ID and WAN Connect Status disabled; RSSI, SINR and the two new Wi-Fi sensors enabled. Seeded from the 2026-09-02 diagnostics download only, never from inference about what a model probably supports.
 - **Wi-Fi Clients Connected** and **Wi-Fi Enabled**, sensors on the System sub-device, disabled by default and enabled by the MC888 overlay, from `wifi_access_sta_num` and `wifi_onoff_state`.
 
@@ -1240,7 +1275,7 @@ The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`
 ### Added
 
 - **Names are mined from the router's web UI at download time**: `mine_candidate_names()` fetches the bundles named in `docs/zte_how_to_access.md`, extracts every `cmd=` literal, and filters to tokens that are actually `cmd` names — the 2026-07-29 artefact contains the literal `1`, and both probe paths interpolate names straight into a URL. The static list is retained and unioned, because 48 of its names appear in no bundle.
-- **Discovery runs when the user asks for a download**, not at setup: the mined names have no runtime consumer, so the work is done where the value is rather than speculatively on every reload. It logs in when no session is live — the user pressed the button, and that authorises using the router.
+- **Discovery runs when the user asks for a download**, not at setup: the mined names have no runtime consumer, so the work is done where the value is rather than speculatively on every reload. It logs in when no session is live — the user pressed the button, and that authorizes using the router.
 - **Values publish by default, gated in layers**: `DISCOVERY_VALUE_SAFE` becomes a bypass for vetted names rather than the gate. A mined name has no allow-list entry by construction, so denying by default would list names and answer nothing. Safety comes from a name deny-pattern for credentials, subscriber identifiers, location, SSIDs and APNs; then the existing walker; then shape rules for coordinates and blobs; then a length cap. The verdict for each key publishes alongside its value, so a key that answered nothing and a key that was withheld stop looking alike.
 - **Failure notes throughout**: the download carries an `errors` list, per-bundle mining notes, whether the probe ran on an existing session or a fresh login, why the unauthenticated-key measurement was skipped or rejected, and `logout_acknowledged`.
 
@@ -1361,7 +1396,7 @@ The cookieless-session path added in 3.3.5-dev25 is retained but is no longer ev
 - **Stale Boot Time Across Restarts**: Fixed a bug where a router reboot occurring during a Home Assistant restart, host power cycle, or system update was not detected on startup, causing `Device Uptime` to freeze on the prior boot time indefinitely. Startup now cross-checks the live uptime counter and calculated boot instant against persisted history to reconcile reboots accurately.
   - This issue could be seen when:
     - HA restarted after a long downtime, during which time the router had rebooted.
-    - HA and the ROuter restarted at the same time, after a power outaage.
+    - HA and the ROuter restarted at the same time, after a power outage.
 
 ### Under the hood
 
