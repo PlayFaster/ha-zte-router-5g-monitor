@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.14-dev4\] - 2026-09-07 - Probe Survives Its Own Failure and a Restart; Hardware Check Settle Pause](#3314-dev4---2026-09-07---probe-survives-its-own-failure-and-a-restart-hardware-check-settle-pause)
   - [\[3.3.14-dev3\] - 2026-09-07 - Probe Records the Router's Answer; Batch and Real-Path Rungs Added](#3314-dev3---2026-09-07---probe-records-the-routers-answer-batch-and-real-path-rungs-added)
   - [\[3.3.14-dev2\] - 2026-09-07 - SMS Delete Failures Recorded; Temporary Delete Probe](#3314-dev2---2026-09-07---sms-delete-failures-recorded-temporary-delete-probe)
   - [\[3.3.14-dev1\] - 2026-09-07 - Cyclomatic Complexity Below 20; Six Helper Extractions](#3314-dev1---2026-09-07---cyclomatic-complexity-below-20-six-helper-extractions)
@@ -244,6 +245,34 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.14-dev4] - 2026-09-07 - Probe Survives Its Own Failure and a Restart; Hardware Check Settle Pause
+
+### Summary
+
+The probe gets one run on the reporter's device. Every way that run could end with nothing to show for it is closed here, and the hardware check stops tripping a condition the integration already guards against.
+
+### Fixed
+
+- **The probe report is stored before the run, not after it.** The assignment was the last line, so any failure anywhere discarded every finding collected up to it — on the one device where a failure is expected. It is stored first and mutated in place, `completed` says whether the run reached the end, and an unexpected exception is written into the report as `aborted` rather than only raised.
+
+- **The report survives a Home Assistant restart.** It lived in memory only, so a restart between running the probe and taking the download erased it. It is now written to the config entry and restored at setup, exactly as the delete record already was. The reporter has restarted between actions repeatedly across this issue.
+
+- **Two awaits that could abort the run are guarded.** A message listing and a re-login now record a failure rather than ending the run and taking every earlier finding with them.
+
+- **`hardware_check.py` pauses after the discovery pass.** A pass issues several hundred requests in under a minute and a write attempted immediately afterwards is refused with an empty transport error — twice in three runs on the reference MC7010, with the same write succeeding seconds later. `coordinator.async_run_discovery` has held that pause for this reason; the check ran the pass and the write back to back.
+
+### Added
+
+- **The router's own message counters, before and after the run.** The listing and the counters have disagreed before on this issue — a device reporting a total it will not list is the shape the SMS thread started from — so a report carrying only one of them can be read the wrong way round.
+
+### Changed
+
+- **`login_form` is no longer recorded.** It is `null` on both measured devices, and a field that is always absent reads as missing information rather than as an answer.
+
+### Verified
+
+- 1,498 tests, 100% line and branch coverage. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.14-dev3] - 2026-09-07 - Probe Records the Router's Answer; Batch and Real-Path Rungs Added
 

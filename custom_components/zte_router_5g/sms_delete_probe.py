@@ -68,7 +68,6 @@ async def _capture(
         record["sent"] = sent
     # Read before the request: the flag is cleared once one has gone out.
     record["session_was_fresh"] = api._session_was_fresh  # noqa: SLF001
-    record["login_form"] = api.login_metadata.get("form")
     try:
         record["result"] = await run()
         record["outcome"] = "returned"
@@ -92,6 +91,17 @@ async def _surviving_ids(coordinator: ZTERouterDataUpdateCoordinator) -> list[st
     """Ids the router still holds, across both storage banks."""
     messages = await coordinator.api.get_sms_messages(mem_store=SMS_STORE_ALL)
     return [str(msg.get("id")) for msg in messages if msg.get("id") is not None]
+
+
+async def _counters(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, Any]:
+    """The router's own message totals.
+
+    A second view of the same fact. The listing and the counters have
+    disagreed before on this issue — a device reporting a total it will not
+    list is the shape the whole SMS thread started from — so a report carrying
+    only one of them can be read the wrong way round.
+    """
+    return dict(await coordinator.api.get_sms_capacity())
 
 
 async def _message_summary(
@@ -183,21 +193,48 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
     each step is attributable.
     """
     api = coordinator.api
-    async with coordinator._async_update_lock:  # noqa: SLF001 - the lock is the point
-        report: dict[str, Any] = {
-            "started": datetime.now(UTC).isoformat(),
-            "probes": [],
-            "note": (
-                "Temporary diagnostic for issue #56. Probes 1-7 destroy "
-                "nothing; 8 onward delete messages already targeted for "
-                "deletion. Probes 3-14 build their own request and never reach "
-                "the integration's own recording, so an empty "
-                "sms.write_failures means probe 15 succeeded rather than that "
-                "the recording failed."
-            ),
-        }
-        probes: list[dict[str, Any]] = report["probes"]
+    report: dict[str, Any] = {
+        "started": datetime.now(UTC).isoformat(),
+        "probes": [],
+        "completed": False,
+        "note": (
+            "Temporary diagnostic for issue #56. Probes 1-7 destroy nothing; "
+            "8 onward delete messages already targeted for deletion. Probes "
+            "3-14 build their own request and never reach the integration's "
+            "own recording, so an empty sms.write_failures means probe 15 "
+            "succeeded rather than that the recording failed."
+        ),
+    }
+    probes: list[dict[str, Any]] = report["probes"]
 
+    # Stored before anything runs, and mutated in place. The assignment used to
+    # be the last line, so any failure anywhere discarded every finding
+    # collected up to it — on the one device where a failure is expected.
+    # `completed` says whether the run reached the end, so a partial report is
+    # not mistaken for a complete one.
+    api.delete_probe = report
+    coordinator.persist_delete_probe()
+
+    try:
+        await _run_rungs(coordinator, report, probes)
+    except Exception as err:  # noqa: BLE001 - a lost report is the worse outcome
+        report["aborted"] = {
+            "error_type": type(err).__name__,
+            "error": str(err)[:300],
+        }
+    report["finished"] = datetime.now(UTC).isoformat()
+    coordinator.persist_delete_probe()
+    return report
+
+
+async def _run_rungs(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    report: dict[str, Any],
+    probes: list[dict[str, Any]],
+) -> None:
+    """Every rung, in order, under the coordinator's update lock."""
+    api = coordinator.api
+    async with coordinator._async_update_lock:  # noqa: SLF001 - the lock is the point
         # --- 1. Does the write token change when the session is renewed? ----
         # If it does, a replayed write carrying its original token was always
         # going to be refused. Read-only.
@@ -213,6 +250,10 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
             }
 
         probes.append(await _capture(coordinator, "1_token_rotation", token_rotation))
+
+        # The router's own totals, before anything is deleted.
+        with contextlib.suppress(Exception):
+            report["counters_before"] = await _counters(coordinator)
 
         # --- 2. Where do the messages actually live? ------------------------
         async def bank_listing() -> dict[str, Any]:
@@ -272,7 +313,11 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
         # --- 8 onward. Real messages, one variant each ----------------------
         # Id, tag and date only. Whether deletion depends on read state or on
         # age is a live question; the message itself answers nothing.
-        report["messages_before"] = await _message_summary(coordinator)
+        # Guarded: a listing that fails here used to abort the run and take
+        # every finding above it with it.
+        report["messages_before"] = []
+        with contextlib.suppress(Exception):
+            report["messages_before"] = await _message_summary(coordinator)
         available = [str(entry["id"]) for entry in report["messages_before"]]
         report["messages_available"] = list(available)
         real_variants: list[tuple[str, dict[str, Any], int]] = [
@@ -303,7 +348,10 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
             consumed += needs
             msg_id = ";".join(targets)
             if name.endswith("fresh_session"):
-                await api.login()
+                # Guarded for the same reason: a re-login that fails is a
+                # finding about the device, not a reason to lose the run.
+                with contextlib.suppress(Exception):
+                    await api.login()
             record = await _capture(
                 coordinator,
                 name,
@@ -341,7 +389,6 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
 
         with contextlib.suppress(Exception):
             report["ids_remaining"] = await _surviving_ids(coordinator)
-        report["finished"] = datetime.now(UTC).isoformat()
-
-    api.delete_probe = report
-    return report
+        with contextlib.suppress(Exception):
+            report["counters_after"] = await _counters(coordinator)
+        report["completed"] = True

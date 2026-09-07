@@ -274,3 +274,48 @@ async def test_no_attempt_writes_nothing(hass) -> None:
     await hass.async_block_till_done()
 
     assert "last_delete" not in entry.data
+
+
+async def test_a_stored_probe_report_is_restored_onto_the_api(hass) -> None:
+    """TEMPORARY - goes with `sms_delete_probe.py`.
+
+    Restored for the same reason the delete record is: the probe is run, Home
+    Assistant restarts at some point, and the diagnostics download is taken
+    afterwards. Without this the one run we get is lost to a restart.
+    """
+    stored = {"probes": [{"probe": "3_absent_id"}], "completed": True}
+    api = AsyncMock()
+    api.last_delete = None
+    api.delete_probe = None
+
+    ZTERouterDataUpdateCoordinator(hass, _entry_with(hass, delete_probe=stored), api)
+
+    assert api.delete_probe == stored
+
+
+async def test_the_probe_report_is_written_into_the_entry(hass) -> None:
+    """Called before the run and again at the end, so a partial run survives."""
+    entry = _entry_with(hass)
+    api = AsyncMock()
+    api.last_delete = None
+    api.delete_probe = {"probes": [], "completed": False}
+    coordinator = ZTERouterDataUpdateCoordinator(hass, entry, api)
+
+    coordinator.persist_delete_probe()
+    await hass.async_block_till_done()
+
+    assert entry.data["delete_probe"] == {"probes": [], "completed": False}
+
+
+async def test_no_probe_report_writes_nothing(hass) -> None:
+    """Nothing has been run; there is nothing to keep."""
+    entry = _entry_with(hass)
+    api = AsyncMock()
+    api.last_delete = None
+    api.delete_probe = None
+    coordinator = ZTERouterDataUpdateCoordinator(hass, entry, api)
+
+    coordinator.persist_delete_probe()
+    await hass.async_block_till_done()
+
+    assert "delete_probe" not in entry.data

@@ -51,7 +51,6 @@ def _coordinator(ids: list[str] | None = None) -> MagicMock:
     api.last_response_preview = ""
     api.last_rejection = {"verdict": "expired", "payload": {"result": ""}}
     api._session_was_fresh = False
-    api.login_metadata = {"form": "LOGIN_MULTI_USER"}
     api.delete_all = AsyncMock(return_value=200)
     api.delete_probe = None
 
@@ -371,7 +370,6 @@ async def test_each_probe_is_timed_and_carries_its_session_state() -> None:
 
     timed = [p for p in report["probes"] if p["outcome"] != "skipped"]
     assert all(isinstance(p["elapsed_seconds"], float) for p in timed)
-    assert all(p["login_form"] == "LOGIN_MULTI_USER" for p in timed)
     assert all(p["session_was_fresh"] is False for p in timed)
 
 
@@ -419,3 +417,24 @@ async def test_a_refusal_with_nothing_retained_still_records_the_failure() -> No
     assert absent["outcome"] == "raised"
     assert absent["error_type"] == "TimeoutError"
     assert "rejection" not in absent
+
+
+async def test_an_unexpected_failure_still_leaves_the_report_behind() -> None:
+    """The one device where a failure is expected is the one running this.
+
+    The report used to be stored on the last line, so anything raising
+    anywhere discarded every finding above it. It is stored before the first
+    rung now, and an abort is written into it rather than only raised.
+    """
+    coordinator = _coordinator()
+    coordinator._async_update_lock = MagicMock()
+    coordinator._async_update_lock.__aenter__ = AsyncMock(
+        side_effect=RuntimeError("lock is gone")
+    )
+
+    report = await run_probe(coordinator)
+
+    assert report["completed"] is False
+    assert report["aborted"]["error_type"] == "RuntimeError"
+    assert coordinator.api.delete_probe is report
+    coordinator.persist_delete_probe.assert_called()

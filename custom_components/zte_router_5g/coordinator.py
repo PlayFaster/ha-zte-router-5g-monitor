@@ -317,6 +317,13 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         if isinstance(stored_delete, dict):
             api.last_delete = dict(stored_delete)
 
+        # TEMPORARY - goes with `sms_delete_probe.py`. Restored for the same
+        # reason as the record above: the reporter runs the probe, restarts at
+        # some point, and downloads diagnostics afterwards.
+        stored_probe = entry.data.get("delete_probe")
+        if isinstance(stored_probe, dict):
+            api.delete_probe = dict(stored_probe)
+
         # `entry.data["last_uptime"]` is deliberately NOT read. It is written
         # only on a latch, so it is frozen at whatever small value the previous
         # reboot recorded, and comparing a live counter against it is the
@@ -1206,6 +1213,22 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             return
         new_data = dict(self.entry.data)
         new_data["last_delete"] = record
+        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+
+    def persist_delete_probe(self) -> None:
+        """Write the probe's report into the entry, so a restart keeps it.
+
+        TEMPORARY - goes with `sms_delete_probe.py`. Called before the run and
+        again at the end, so a report survives both a restart and a run that
+        does not finish. The record holds ids, timings and router replies; the
+        write token is redacted before it reaches the report and no message
+        content is read at all.
+        """
+        record = self.api.delete_probe
+        if record is None:
+            return
+        new_data = dict(self.entry.data)
+        new_data["delete_probe"] = record
         self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
     def _maybe_persist_counter(self, seconds: int, now: datetime) -> None:
