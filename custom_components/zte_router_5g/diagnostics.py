@@ -481,10 +481,17 @@ def _sms_section(
         # downloads on issue #56 recorded nothing at all. Never cleared by a
         # later poll, and it carries no request body — `SEND_SMS` would put a
         # recipient and a message into a file written to be posted publicly.
-        "write_failures": (deepcopy(failures) if isinstance(failures, list) else []),
+        "write_failures": _sanitize_walk(
+            [item for item in failures if isinstance(item, dict)]
+            if isinstance(failures, list)
+            else [],
+            tokenizer,
+        ),
         # The probe's findings, when the temporary diagnostic action has been
         # run. Absent otherwise.
-        "delete_probe": deepcopy(probe) if isinstance(probe, dict) else None,
+        "delete_probe": (
+            _sanitize_walk(probe, tokenizer) if isinstance(probe, dict) else None
+        ),
     }
 
 
@@ -880,6 +887,27 @@ def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]
             for note in out["notes"]
         ]
     return out
+
+
+def _sanitize_walk(value: Any, tokenizer: _Tokenizer) -> Any:
+    """Sweep every string in a structure, leaving its shape intact.
+
+    The write-failure records and the probe report are built from router
+    replies and error text. Nothing sensitive is expected in either, and that
+    is exactly the assumption a sweep exists to stop anyone having to make: a
+    device returns what it returns, and this file is written to be attached to
+    a public issue without hand-editing.
+
+    Copies as it goes, so the live records the entities are serving from are
+    never rewritten by a read path.
+    """
+    if isinstance(value, dict):
+        return {key: _sanitize_walk(item, tokenizer) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_walk(item, tokenizer) for item in value]
+    if isinstance(value, str):
+        return _sweep(value, tokenizer)
+    return value
 
 
 def _sanitize_rejection(

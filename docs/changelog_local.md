@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.14-dev3\] - 2026-09-07 - Probe Records the Router's Answer; Batch and Real-Path Rungs Added](#3314-dev3---2026-09-07---probe-records-the-routers-answer-batch-and-real-path-rungs-added)
   - [\[3.3.14-dev2\] - 2026-09-07 - SMS Delete Failures Recorded; Temporary Delete Probe](#3314-dev2---2026-09-07---sms-delete-failures-recorded-temporary-delete-probe)
   - [\[3.3.14-dev1\] - 2026-09-07 - Cyclomatic Complexity Below 20; Six Helper Extractions](#3314-dev1---2026-09-07---cyclomatic-complexity-below-20-six-helper-extractions)
   - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
@@ -243,6 +244,38 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.14-dev3] - 2026-09-07 - Probe Records the Router's Answer; Batch and Real-Path Rungs Added
+
+### Summary
+
+The probe was run against the reference MC7010 and worked, which exposed what it would not have told us on the reporter's device. Two gaps would have wasted the run: no rung sent the batched form the Delete All button actually uses, and no rung called the integration's own delete path, so a report could show every variant succeeding while the button kept failing. A third gap was visible in the live output — the one rung that failed recorded `Request failed:` and nothing behind it.
+
+### Fixed
+
+- **A failed probe now keeps what the router said.** The response held against a non-live verdict is snapshotted into the record, because the next successful poll clears it. Without this the one rung that matters is the one carrying no evidence.
+
+- **`write_failures` and the probe report are sanitized on the way into the download.** Both were being copied in raw while every other part of the SMS section was swept. Nothing sensitive is expected in either — they hold ids, status codes and router replies — but a device returns what it returns, and this file is written to be attached to a public issue without hand-editing.
+
+### Added
+
+- **A batch rung**, sending ids joined with semicolons. That is the form `delete_all` sends and no rung tested it. A router accepting a single id while refusing a batch would have passed every previous rung with the reported fault untouched.
+
+- **A rung that calls the integration's own `delete_all`.** Every other rung builds its own request, so none of them exercised the real path, its verification step, or the write-failure recording added in dev2. That is why the first live run produced an empty `write_failures`, and the report now says so rather than leaving a reader to wonder. It calls the API method directly and never the action handler, which ends in a refresh that would deadlock against the lock the probe holds.
+
+- **A repeat of the plain single-id rung**, so a failure can be told apart from a one-off.
+
+- **Each rung records the body it sent** with the write token replaced, how long it took, whether the session had just been established, and which login form issued it. A refusal and a timeout were previously indistinguishable in the record.
+
+- **Message state before the run** — id, tag and date for each. Whether deletion depends on read state or age is a live question. The message itself is never read: content and sender answer nothing and would put a stranger's message into a public file.
+
+### Changed
+
+- **The action now asks for at least twelve test messages.** Eight rungs consume one or more, and the batch rung needs two. Any rung that cannot run reports how many it needed rather than failing silently.
+
+### Verified
+
+- 1,494 tests, 100% line and branch coverage. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.14-dev2] - 2026-09-07 - SMS Delete Failures Recorded; Temporary Delete Probe
 
