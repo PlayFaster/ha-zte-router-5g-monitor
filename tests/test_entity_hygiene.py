@@ -692,6 +692,20 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "caller reading the transcript is the point. File-level because every "
         "print in the file is the same deliberate choice."
     ),
+    ("sms_delete_probe.py", "noqa: SLF001"): (
+        "Two sites, in a module that exists to be deleted. One takes the "
+        "coordinator's update lock so a routine poll cannot interleave with a "
+        "sequence whose whole value is that each step is attributable; the "
+        "other posts a `DELETE_SMS` built by hand, because the point of the "
+        "probe is to vary a form the API deliberately sends only one way. "
+        "Adding public surface for a temporary diagnostic would outlive it."
+    ),
+    ("sms_delete_probe.py", "noqa: BLE001"): (
+        "Every probe records what happened and moves to the next one. A raised "
+        "exception is the finding, not an error to propagate: stopping at the "
+        "first refusal is exactly the behaviour that left four diagnostics "
+        "downloads with nothing in them."
+    ),
     ("diag_check.py", "noqa: S104"): (
         "`0.0.0.0` appears in a set of addresses the leak sweep treats as "
         "non-identifying, alongside the broadcast and loopback addresses. It "

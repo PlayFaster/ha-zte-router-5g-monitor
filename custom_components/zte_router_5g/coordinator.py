@@ -317,6 +317,13 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         if isinstance(stored_delete, dict):
             api.last_delete = dict(stored_delete)
 
+        # TEMPORARY - goes with `sms_delete_probe.py`. Restored for the same
+        # reason as the record above: the reporter runs the probe, restarts at
+        # some point, and downloads diagnostics afterwards.
+        stored_probe = entry.data.get("delete_probe")
+        if isinstance(stored_probe, dict):
+            api.delete_probe = dict(stored_probe)
+
         # `entry.data["last_uptime"]` is deliberately NOT read. It is written
         # only on a latch, so it is frozen at whatever small value the previous
         # reboot recorded, and comparing a live counter against it is the
@@ -596,76 +603,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                     await self.api.login()
                     data, sms_cap, messages = await self._fetch_all()
 
-                data.update(sms_cap)
-                # Sort by ID descending to find the latest message
-                if messages:
-                    sorted_msgs = sorted(
-                        messages, key=lambda x: int(x.get("id", 0)), reverse=True
-                    )
-                    data["last_sms"] = sorted_msgs[0]
-                else:
-                    data["last_sms"] = {}
-
-                # Stable boot time: latch once and only re-derive it when the
-                # router's uptime counter drops (a genuine reboot). The boot
-                # instant is physically constant between reboots, so freezing it
-                # eliminates the drift caused by recomputing now() - uptime
-                # against two independently ticking clocks.
-                seconds: int | None = None
-                with contextlib.suppress(ValueError, TypeError):
-                    # Aliased: a device that spells this `flux_realtime_time`
-                    # would otherwise never latch a boot time, and the uptime
-                    # sensor would sit at `unknown` forever. Mirrors
-                    # `sensor._ALIAS_REALTIME_TIME`, which `sensor.py` cannot
-                    # be imported from here — `test_uptime_alias_matches_the
-                    # _sensor_tuple` fails if the two diverge.
-                    raw_uptime = data.get("realtime_time") or data.get(
-                        "flux_realtime_time"
-                    )
-                    if raw_uptime is not None:
-                        seconds = int(float(raw_uptime))
-
-                if seconds is None or seconds < 0:
-                    # Bad-reading guard: keep the latched value untouched and do
-                    # not advance the reboot anchor on a missing/garbage reading.
-                    data["boot_time"] = self._boot_time
-                else:
-                    self._apply_uptime(seconds)
-                    data["boot_time"] = self._boot_time
-
-                # Identify if hardware metadata has changed
-                new_model = get_router_model(data)
-                new_version = data.get("wa_inner_version")
-
-                if new_version != self.sw_version or new_model != self.model:
-                    _LOGGER.info(
-                        "%s: Hardware metadata updated: %s (%s)",
-                        self.entry.title,
-                        new_model,
-                        new_version,
-                    )
-                    self.sw_version = new_version
-                    self.model = new_model
-
-                    # Update device registry instead of writing entry.data on every poll
-                    sub_id_prefix = (
-                        self.imei
-                        or f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
-                    )
-                    dev_reg = dr.async_get(self.hass)
-                    # async_get_device(identifiers=…) is deprecated in HA 2026.8
-                    # and removed in 2027.8; the shim feature-detects the scoped
-                    # replacement.
-                    device = device_by_identifier(
-                        dev_reg,
-                        DOMAIN,
-                        f"{sub_id_prefix}_system",
-                        self.entry.entry_id,
-                    )
-                    if device:
-                        dev_reg.async_update_device(
-                            device.id, model=new_model, sw_version=new_version
-                        )
+                self._postprocess_payload(data, sms_cap, messages)
 
                 # Success path
                 self.last_update_success_time = dt_util.now()
@@ -683,53 +621,17 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 return data
 
         except TimeoutError as err:
-            self.consecutive_failures += 1
-            self._record_health_failure(err)
-            if (
-                self.data is not None
-                and self.consecutive_failures <= FETCH_STRIKE_LIMIT
-            ):
-                if self.consecutive_failures == 1:
-                    _LOGGER.warning(
-                        "%s: Error fetching ZTE data, holding last known values: %s",
-                        self.entry.title,
-                        err,
-                    )
-                else:
-                    _LOGGER.debug(
-                        "%s: Error fetching ZTE data (failure %d/%d): %s",
-                        self.entry.title,
-                        self.consecutive_failures,
-                        FETCH_STRIKE_LIMIT,
-                        err,
-                    )
-                return self.data
+            held = self._hold_last_values(err, "Error fetching ZTE data")
+            if held is not None:
+                return held
             _LOGGER.error("%s: API request timed out", self.entry.title)
             self._was_available = False
             raise UpdateFailed("API request timed out") from err
 
         except ZTEAuthError as err:
-            self.consecutive_failures += 1
-            self._record_health_failure(err)
-            if (
-                self.data is not None
-                and self.consecutive_failures <= FETCH_STRIKE_LIMIT
-            ):
-                if self.consecutive_failures == 1:
-                    _LOGGER.warning(
-                        "%s: Authentication failed, holding last known values: %s",
-                        self.entry.title,
-                        err,
-                    )
-                else:
-                    _LOGGER.debug(
-                        "%s: Authentication failed (failure %d/%d): %s",
-                        self.entry.title,
-                        self.consecutive_failures,
-                        FETCH_STRIKE_LIMIT,
-                        err,
-                    )
-                return self.data
+            held = self._hold_last_values(err, "Authentication failed")
+            if held is not None:
+                return held
 
             # Only a rejected password is the user's to fix. A session that
             # merely lapsed is ours, and re-login above has already tried; if
@@ -752,28 +654,9 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Session could not be established: {err}") from err
 
         except Exception as err:
-            self.consecutive_failures += 1
-            self._record_health_failure(err)
-            # Failure resilience — hold last known values for three cycles
-            if (
-                self.data is not None
-                and self.consecutive_failures <= FETCH_STRIKE_LIMIT
-            ):
-                if self.consecutive_failures == 1:
-                    _LOGGER.warning(
-                        "%s: Error fetching ZTE data, holding last known values: %s",
-                        self.entry.title,
-                        err,
-                    )
-                else:
-                    _LOGGER.debug(
-                        "%s: Error fetching ZTE data (failure %d/%d): %s",
-                        self.entry.title,
-                        self.consecutive_failures,
-                        FETCH_STRIKE_LIMIT,
-                        err,
-                    )
-                return self.data
+            held = self._hold_last_values(err, "Error fetching ZTE data")
+            if held is not None:
+                return held
 
             # Safe startup bypass — if paused on first run, start with empty data
             if is_paused:
@@ -788,6 +671,117 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             )
             self._was_available = False
             raise UpdateFailed(f"Communication error: {err}") from err
+
+    def _hold_last_values(self, err: Exception, label: str) -> dict[str, Any] | None:
+        """Record a failed cycle and return the values to hold, if any.
+
+        Failure resilience: a transient fault holds the last known values for
+        `FETCH_STRIKE_LIMIT` cycles rather than emptying every entity. `None`
+        means there is nothing to hold or the strike budget is spent, and the
+        caller decides how the cycle fails.
+        """
+        self.consecutive_failures += 1
+        self._record_health_failure(err)
+        if self.data is None or self.consecutive_failures > FETCH_STRIKE_LIMIT:
+            return None
+        if self.consecutive_failures == 1:
+            _LOGGER.warning(
+                "%s: %s, holding last known values: %s",
+                self.entry.title,
+                label,
+                err,
+            )
+        else:
+            _LOGGER.debug(
+                "%s: %s (failure %d/%d): %s",
+                self.entry.title,
+                label,
+                self.consecutive_failures,
+                FETCH_STRIKE_LIMIT,
+                err,
+            )
+        return self.data
+
+    def _postprocess_payload(
+        self,
+        data: dict[str, Any],
+        sms_cap: dict[str, Any],
+        messages: list[dict[str, Any]],
+    ) -> None:
+        """Fold the fetched parts into one payload and latch what persists.
+
+        Pure payload work: the SMS capacity merge, the latest-message pick,
+        the boot-time latch, and the device-registry refresh when the
+        router's reported hardware changes. Nothing here decides whether
+        the cycle succeeded.
+        """
+        data.update(sms_cap)
+        # Sort by ID descending to find the latest message
+        if messages:
+            sorted_msgs = sorted(
+                messages, key=lambda x: int(x.get("id", 0)), reverse=True
+            )
+            data["last_sms"] = sorted_msgs[0]
+        else:
+            data["last_sms"] = {}
+
+        # Stable boot time: latch once and only re-derive it when the
+        # router's uptime counter drops (a genuine reboot). The boot
+        # instant is physically constant between reboots, so freezing it
+        # eliminates the drift caused by recomputing now() - uptime
+        # against two independently ticking clocks.
+        seconds: int | None = None
+        with contextlib.suppress(ValueError, TypeError):
+            # Aliased: a device that spells this `flux_realtime_time`
+            # would otherwise never latch a boot time, and the uptime
+            # sensor would sit at `unknown` forever. Mirrors
+            # `sensor._ALIAS_REALTIME_TIME`, which `sensor.py` cannot
+            # be imported from here — `test_uptime_alias_matches_the
+            # _sensor_tuple` fails if the two diverge.
+            raw_uptime = data.get("realtime_time") or data.get("flux_realtime_time")
+            if raw_uptime is not None:
+                seconds = int(float(raw_uptime))
+
+        if seconds is None or seconds < 0:
+            # Bad-reading guard: keep the latched value untouched and do
+            # not advance the reboot anchor on a missing/garbage reading.
+            data["boot_time"] = self._boot_time
+        else:
+            self._apply_uptime(seconds)
+            data["boot_time"] = self._boot_time
+
+        # Identify if hardware metadata has changed
+        new_model = get_router_model(data)
+        new_version = data.get("wa_inner_version")
+
+        if new_version != self.sw_version or new_model != self.model:
+            _LOGGER.info(
+                "%s: Hardware metadata updated: %s (%s)",
+                self.entry.title,
+                new_model,
+                new_version,
+            )
+            self.sw_version = new_version
+            self.model = new_model
+
+            # Update device registry instead of writing entry.data on every poll
+            sub_id_prefix = (
+                self.imei or f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
+            )
+            dev_reg = dr.async_get(self.hass)
+            # async_get_device(identifiers=…) is deprecated in HA 2026.8
+            # and removed in 2027.8; the shim feature-detects the scoped
+            # replacement.
+            device = device_by_identifier(
+                dev_reg,
+                DOMAIN,
+                f"{sub_id_prefix}_system",
+                self.entry.entry_id,
+            )
+            if device:
+                dev_reg.async_update_device(
+                    device.id, model=new_model, sw_version=new_version
+                )
 
     # ------------------------------------------------------------------
     # Boot-time latch
@@ -1219,6 +1213,22 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             return
         new_data = dict(self.entry.data)
         new_data["last_delete"] = record
+        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+
+    def persist_delete_probe(self) -> None:
+        """Write the probe's report into the entry, so a restart keeps it.
+
+        TEMPORARY - goes with `sms_delete_probe.py`. Called before the run and
+        again at the end, so a report survives both a restart and a run that
+        does not finish. The record holds ids, timings and router replies; the
+        write token is redacted before it reaches the report and no message
+        content is read at all.
+        """
+        record = self.api.delete_probe
+        if record is None:
+            return
+        new_data = dict(self.entry.data)
+        new_data["delete_probe"] = record
         self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
     def _maybe_persist_counter(self, seconds: int, now: datetime) -> None:

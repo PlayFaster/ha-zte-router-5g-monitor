@@ -419,3 +419,41 @@ async def test_two_macs_in_one_value_get_two_tokens(diagnostics_entry) -> None:
     assert FAKE_MAC not in swept
     assert "aa:bb:cc:dd:ee:ff" not in swept
     assert "mac-1" in swept and "mac-2" in swept
+
+
+# ---------------------------------------------------------------------------
+# The write-failure and probe records
+# ---------------------------------------------------------------------------
+
+
+def test_the_write_failure_sweep_reaches_every_string_at_any_depth() -> None:
+    """These records are built from router replies and free-text errors.
+
+    Nothing sensitive is expected in either, and that is exactly the assumption
+    a sweep exists to remove: a device returns what it returns, and this file
+    is written to be attached to a public issue without hand-editing.
+    """
+    from custom_components.zte_router_5g.diagnostics import _sanitize_walk, _Tokenizer
+
+    tokenizer = _Tokenizer()
+    walked = _sanitize_walk(
+        {
+            "error": "refused by 192.168.1.99",
+            "nested": [{"body_preview": "gateway 10.0.0.4"}, "plain 10.0.0.4"],
+            "status": 200,
+            "session_was_fresh": True,
+        },
+        tokenizer,
+    )
+
+    dumped = json.dumps(walked)
+    assert "192.168.1.99" not in dumped
+    assert "10.0.0.4" not in dumped
+    # The same address twice keeps the same token, which is the point of one.
+    assert (
+        walked["nested"][0]["body_preview"].split()[-1]
+        == walked["nested"][1].split()[-1]
+    )
+    # Non-strings are returned untouched, not stringified.
+    assert walked["status"] == 200
+    assert walked["session_was_fresh"] is True

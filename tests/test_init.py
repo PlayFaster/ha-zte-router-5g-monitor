@@ -354,7 +354,7 @@ async def test_async_setup_registers_services(mock_hass):
 
     with patch.object(mock_hass.services, "async_register") as mock_register:
         assert await async_setup(mock_hass, {}) is True
-        assert mock_register.call_count == 5
+        assert mock_register.call_count == 6
         # Verify the service names registered
         registered_services = [call[0][1] for call in mock_register.call_args_list]
         assert "send_sms" in registered_services
@@ -362,6 +362,8 @@ async def test_async_setup_registers_services(mock_hass):
         assert "delete_all_sms" in registered_services
         assert "reset_entities" in registered_services
         assert "get_sms_list" in registered_services
+        # TEMPORARY - goes with `sms_delete_probe.py`.
+        assert "sms_delete_probe" in registered_services
 
 
 @pytest.mark.asyncio
@@ -886,6 +888,20 @@ async def test_async_setup_service_handlers(mock_hass, mock_config_entry):
     list_call.data = {"page": 1, "count": 20, "box_type": 1}
     result = await registered_handlers["get_sms_list"](list_call)
     assert result == {"messages": []}
+
+    # Invoke _handle_sms_delete_probe. TEMPORARY - goes with the probe module.
+    # The probe itself is tested in test_sms_delete_probe.py; this covers the
+    # handler that reaches it, which is where the call data and the coordinator
+    # are joined.
+    probe_call = MagicMock(spec=ServiceCall)
+    probe_call.data = {"confirm": True}
+    with patch(
+        "custom_components.zte_router_5g.sms_delete_probe.run_probe",
+        new=AsyncMock(return_value={"probes": []}),
+    ) as mock_probe:
+        result = await registered_handlers["sms_delete_probe"](probe_call)
+    assert result == {"probes": []}
+    mock_probe.assert_awaited_once()
 
     # Invoke _handle_reset_entities. The action itself is tested in
     # test_reset_entities.py; this covers the handler that reaches it, which

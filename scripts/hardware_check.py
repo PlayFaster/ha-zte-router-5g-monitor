@@ -97,6 +97,7 @@ try:
     from custom_components.zte_router_5g.const import (
         APN_PROFILE_SLOTS,
         DISCOVERY_CANDIDATES,
+        DISCOVERY_SETTLE_SECONDS,
     )
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
     raise SystemExit(
@@ -535,6 +536,15 @@ async def check_no_mined_probe_disturbs_the_poll(
         f"{populated} keys populated",
     )
     report.captured["discovery_answered"] = len(values)
+
+    # A discovery pass issues several hundred requests in under a minute, and a
+    # write attempted immediately afterwards is refused with an empty transport
+    # error — twice in three runs of this check on the reference MC7010, and the
+    # same write succeeds seconds later. `coordinator.async_run_discovery`
+    # already holds the same pause for the same reason; this check ran the pass
+    # and the write back to back and so tripped a condition the integration
+    # itself guards against.
+    await asyncio.sleep(DISCOVERY_SETTLE_SECONDS)
 
 
 async def check_write_round_trip(

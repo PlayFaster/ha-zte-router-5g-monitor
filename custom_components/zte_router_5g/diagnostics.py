@@ -435,6 +435,11 @@ def _sms_section(
     on_sim = _dict_items(banks.get("sim"))
     tracker = coordinator.fired_sms_hashes
     delete_record = coordinator.api.last_delete
+    # Type-guarded like every other field here: the download is serialized
+    # after each section has succeeded, so a stand-in that is not a list or
+    # dict fails the whole file at the last moment.
+    failures = coordinator.api.write_failures
+    probe = getattr(coordinator.api, "delete_probe", None)
     return {
         "fetched": isinstance(snapshot, dict),
         "message_count": len(listed),
@@ -469,6 +474,23 @@ def _sms_section(
         # this API answers success for one it does not carry out.
         "last_delete": (
             deepcopy(delete_record) if isinstance(delete_record, dict) else None
+        ),
+        # Failed writes, including the ones that raised before any result was
+        # returned. `last_delete` above only ever holds an attempt whose
+        # request came back; a refused delete raises first, which is how four
+        # downloads on issue #56 recorded nothing at all. Never cleared by a
+        # later poll, and it carries no request body — `SEND_SMS` would put a
+        # recipient and a message into a file written to be posted publicly.
+        "write_failures": _sanitize_walk(
+            [item for item in failures if isinstance(item, dict)]
+            if isinstance(failures, list)
+            else [],
+            tokenizer,
+        ),
+        # The probe's findings, when the temporary diagnostic action has been
+        # run. Absent otherwise.
+        "delete_probe": (
+            _sanitize_walk(probe, tokenizer) if isinstance(probe, dict) else None
         ),
     }
 
@@ -865,6 +887,27 @@ def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]
             for note in out["notes"]
         ]
     return out
+
+
+def _sanitize_walk(value: Any, tokenizer: _Tokenizer) -> Any:
+    """Sweep every string in a structure, leaving its shape intact.
+
+    The write-failure records and the probe report are built from router
+    replies and error text. Nothing sensitive is expected in either, and that
+    is exactly the assumption a sweep exists to stop anyone having to make: a
+    device returns what it returns, and this file is written to be attached to
+    a public issue without hand-editing.
+
+    Copies as it goes, so the live records the entities are serving from are
+    never rewritten by a read path.
+    """
+    if isinstance(value, dict):
+        return {key: _sanitize_walk(item, tokenizer) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_walk(item, tokenizer) for item in value]
+    if isinstance(value, str):
+        return _sweep(value, tokenizer)
+    return value
 
 
 def _sanitize_rejection(

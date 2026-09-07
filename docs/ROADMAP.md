@@ -8,7 +8,7 @@ Format document `roadmap_format.md` used.
 
 ---
 
-## To Be Done
+## Maybe
 
 ### Billing-cycle write controls
 
@@ -25,9 +25,7 @@ Both keys are already polled, and the switch already drives the projection senso
 
 **Both ship disabled by default**, matching the existing Data Limit Switch. Changing the reset day moves the boundary that the projection sensor and every data-cap automation reason about — not dangerous, but not a display setting either.
 
----
-
-## Maybe
+**Would be justified by:** anyone asking for either control, or a router whose monthly counters do not roll over as the projection sensor assumes — `wan_auto_clear_flow_data_switch` already drives that suppression logic, and today there is no way for a user to see or change it.
 
 ### SMS feature-group toggle
 
@@ -115,12 +113,12 @@ Not doing it. Both are network plumbing set once at installation, and neither be
 
 Forward work only. Declined and Revisit items are recorded above and are not work in progress.
 
-| Item                             | Group      | Value  | Effort |
-| :------------------------------- | :--------- | :----- | :----- |
-| Billing-cycle write controls     | To Be Done | ⭐⭐⭐ | Low    |
-| SMS feature-group toggle         | Maybe      | ⭐⭐⭐ | Medium |
-| Projection accuracy from history | Maybe      | ⭐⭐   | Medium |
-| Reboot-on-degradation blueprint  | Maybe      | ⭐⭐   | Low    |
+| Item                             | Group | Value  | Effort |
+| :------------------------------- | :---- | :----- | :----- |
+| Billing-cycle write controls     | Maybe | ⭐⭐⭐ | Low    |
+| SMS feature-group toggle         | Maybe | ⭐⭐⭐ | Medium |
+| Projection accuracy from history | Maybe | ⭐⭐   | Medium |
+| Reboot-on-degradation blueprint  | Maybe | ⭐⭐   | Low    |
 
 **Current state.** 121 entities across five sub-devices, 108 carrying `about` notes. 1420 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 

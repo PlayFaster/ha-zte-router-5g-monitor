@@ -5,6 +5,11 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.14\] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence](#3314---2026-09-07---release-sms-deletion-diagnostic-probing-and-entry-state-persistence)
+  - [\[3.3.14-dev4\] - 2026-09-07 - Probe Survives Its Own Failure and a Restart; Hardware Check Settle Pause](#3314-dev4---2026-09-07---probe-survives-its-own-failure-and-a-restart-hardware-check-settle-pause)
+  - [\[3.3.14-dev3\] - 2026-09-07 - Probe Records the Router's Answer; Batch and Real-Path Rungs Added](#3314-dev3---2026-09-07---probe-records-the-routers-answer-batch-and-real-path-rungs-added)
+  - [\[3.3.14-dev2\] - 2026-09-07 - SMS Delete Failures Recorded; Temporary Delete Probe](#3314-dev2---2026-09-07---sms-delete-failures-recorded-temporary-delete-probe)
+  - [\[3.3.14-dev1\] - 2026-09-07 - Cyclomatic Complexity Below 20; Six Helper Extractions](#3314-dev1---2026-09-07---cyclomatic-complexity-below-20-six-helper-extractions)
   - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
   - [\[3.3.12-dev4\] - 2026-09-06 - Best Connection Reads Both EN-DC Spellings; Delete Record Survives a Restart](#3312-dev4---2026-09-06---best-connection-reads-both-en-dc-spellings-delete-record-survives-a-restart)
   - [\[3.3.12-dev3\] - 2026-09-06 - Diagnostics Entity Verification Aligned With Per-Model Defaults](#3312-dev3---2026-09-06---diagnostics-entity-verification-aligned-with-per-model-defaults)
@@ -242,6 +247,151 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.14] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe**: Added a temporary diagnostic action (`zte_router_5g.sms_delete_probe`) testing multiple API variants (batching, alternative storage selectors, and live deletion paths) to troubleshoot SMS deletion failures on specific hardware. This action is temporary scaffolding for diagnostic data collection and will be removed in the next release.
+- **Persistent Failure & Probe History**: Recorded SMS deletion failures and probe diagnostics now persist in config entry storage across Home Assistant restarts, ensuring full troubleshooting history survives reboots and download delays.
+- **Router Data Usage Documentation**: Expanded documentation clarifying router-provided data usage reporting versus independent utility tracking.
+
+### Added
+
+- **Temporary SMS Deletion Diagnostic Action**: Added `zte_router_5g.sms_delete_probe`, a temporary diagnostic service action that runs 13 isolated API deletion variants to characterize router deletion behavior while protecting message privacy. _(Note: This temporary action is added for issue troubleshooting and will be removed in the next release.)_
+- **Detailed SMS Write Failure Tracking**: Failed SMS deletion attempts now record sanitized status codes, storage selectors, router response bodies, and timing in `sms.write_failures` within diagnostic downloads, preserved across Home Assistant restarts.
+- **Pre- and Post-Probe Message Counters**: Diagnostic probe reporting captures router message counters before and after probing to detect discrepancies between total counts and message listings.
+
+### Changed
+
+- **Data Usage Tracker Guidance**: Updated README documentation explaining router data counter behavior and recommending the Utility Meter helper for persistent, router-reset-independent usage tracking.
+
+## [3.3.14-dev4] - 2026-09-07 - Probe Survives Its Own Failure and a Restart; Hardware Check Settle Pause
+
+### Summary
+
+The probe gets one run on the reporter's device. Every way that run could end with nothing to show for it is closed here, and the hardware check stops tripping a condition the integration already guards against.
+
+### Fixed
+
+- **The probe report is stored before the run, not after it.** The assignment was the last line, so any failure anywhere discarded every finding collected up to it — on the one device where a failure is expected. It is stored first and mutated in place, `completed` says whether the run reached the end, and an unexpected exception is written into the report as `aborted` rather than only raised.
+
+- **The report survives a Home Assistant restart.** It lived in memory only, so a restart between running the probe and taking the download erased it. It is now written to the config entry and restored at setup, exactly as the delete record already was. The reporter has restarted between actions repeatedly across this issue.
+
+- **Two awaits that could abort the run are guarded.** A message listing and a re-login now record a failure rather than ending the run and taking every earlier finding with them.
+
+- **`hardware_check.py` pauses after the discovery pass.** A pass issues several hundred requests in under a minute and a write attempted immediately afterwards is refused with an empty transport error — twice in three runs on the reference MC7010, with the same write succeeding seconds later. `coordinator.async_run_discovery` has held that pause for this reason; the check ran the pass and the write back to back.
+
+### Added
+
+- **The router's own message counters, before and after the run.** The listing and the counters have disagreed before on this issue — a device reporting a total it will not list is the shape the SMS thread started from — so a report carrying only one of them can be read the wrong way round.
+
+### Changed
+
+- **`login_form` is no longer recorded.** It is `null` on both measured devices, and a field that is always absent reads as missing information rather than as an answer.
+
+### Verified
+
+- 1,498 tests, 100% line and branch coverage. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.14-dev3] - 2026-09-07 - Probe Records the Router's Answer; Batch and Real-Path Rungs Added
+
+### Summary
+
+The probe was run against the reference MC7010 and worked, which exposed what it would not have told us on the reporter's device. Two gaps would have wasted the run: no rung sent the batched form the Delete All button actually uses, and no rung called the integration's own delete path, so a report could show every variant succeeding while the button kept failing. A third gap was visible in the live output — the one rung that failed recorded `Request failed:` and nothing behind it.
+
+### Fixed
+
+- **A failed probe now keeps what the router said.** The response held against a non-live verdict is snapshotted into the record, because the next successful poll clears it. Without this the one rung that matters is the one carrying no evidence.
+
+- **`write_failures` and the probe report are sanitized on the way into the download.** Both were being copied in raw while every other part of the SMS section was swept. Nothing sensitive is expected in either — they hold ids, status codes and router replies — but a device returns what it returns, and this file is written to be attached to a public issue without hand-editing.
+
+### Added
+
+- **A batch rung**, sending ids joined with semicolons. That is the form `delete_all` sends and no rung tested it. A router accepting a single id while refusing a batch would have passed every previous rung with the reported fault untouched.
+
+- **A rung that calls the integration's own `delete_all`.** Every other rung builds its own request, so none of them exercised the real path, its verification step, or the write-failure recording added in dev2. That is why the first live run produced an empty `write_failures`, and the report now says so rather than leaving a reader to wonder. It calls the API method directly and never the action handler, which ends in a refresh that would deadlock against the lock the probe holds.
+
+- **A repeat of the plain single-id rung**, so a failure can be told apart from a one-off.
+
+- **Each rung records the body it sent** with the write token replaced, how long it took, whether the session had just been established, and which login form issued it. A refusal and a timeout were previously indistinguishable in the record.
+
+- **Message state before the run** — id, tag and date for each. Whether deletion depends on read state or age is a live question. The message itself is never read: content and sender answer nothing and would put a stranger's message into a public file.
+
+### Changed
+
+- **The action now asks for at least twelve test messages.** Eight rungs consume one or more, and the batch rung needs two. Any rung that cannot run reports how many it needed rather than failing silently.
+
+### Verified
+
+- 1,494 tests, 100% line and branch coverage. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.14-dev2] - 2026-09-07 - SMS Delete Failures Recorded; Temporary Delete Probe
+
+### Summary
+
+Four diagnostics downloads on issue #56 carried `last_delete: null` while the reporter was pressing the button. The record was never missing information — it was never written, because the failure raises before the line that writes it. This makes a failed write impossible to lose, and adds a temporary action to characterize the device in one pass rather than another round of downloads.
+
+### Bumps
+
+- **Validate Bump**: Update `zizmor` from 1.29.0 to 1.30.0
+
+### Changed
+
+- **README**: Added a note to `README.md` to clarify that the integrations data use sensors come directly from the router, and are not independent. Included a pointer towards a `Utility Meter` helper if a separate independent data tracker, that would be immune to router resets or changes, is required.
+
+### Added
+
+- **A failed write is recorded, including one that raised.** `delete_sms` now records the attempt in its exception path and re-raises. The record carries the ids, the storage selector used to find them, the HTTP status, a response-body preview, whether the session had just been established, and which login form issued it. It appears in the diagnostics download as `sms.write_failures`.
+
+  **No request body is ever recorded.** `SEND_SMS` carries the recipient's number and the message text, and a diagnostics download is written to be attached to a public issue without hand-editing. Callers pass only fields established as safe; for a delete that is ids and parameter names.
+
+- **The record survives a later poll.** `last_rejection` is cleared by the next live verdict, so the evidence was erased within one polling cycle — a download taken minutes afterwards showed nothing. `write_failures` is never cleared and holds the five most recent, which is enough for a first attempt and the replay that follows a re-login, several times over.
+
+- **`sms_delete_probe` — a temporary action, to be removed.** It runs thirteen variants of the delete command and records what the router answered to each: whether the write token changes when the session is renewed, which storage bank holds the messages, whether a delete naming an id the router does not hold is refused, whether it is refused differently from one carrying a deliberately wrong token, whether `notCallback` or an explicit bank changes the answer, and whether any write at all succeeds on the device.
+
+  The first seven probes destroy nothing — they read state, or name a message id no router holds. Only then does it touch real messages, and every one it touches is one already targeted for deletion. It does not stop at the first success: a device this different from the reference hardware is worth characterizing once rather than learning one fact and asking again. Probes it could not run for want of messages say so.
+
+### Removal required
+
+`custom_components/zte_router_5g/sms_delete_probe.py` and its action are **diagnostic scaffolding for issue #56 and must not reach a stable release.** Removing them means deleting that module, its registration in `__init__.py`, its schema, its block in `services.yaml`, its `icons.json` entry, its two suppression allow-list entries and `tests/test_sms_delete_probe.py`. Recorded as outstanding work in `.notes/issues/other_router_access/`.
+
+### Verified
+
+- 1,485 tests, 100% line and branch coverage. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.14-dev1] - 2026-09-07 - Cyclomatic Complexity Below 20; Six Helper Extractions
+
+### Summary
+
+The three functions sitting closest to Ruff's `max-complexity = 25` ceiling were decomposed into named helpers, taking the project maximum from 24 to 19. No rule changed: every extraction moves existing branches verbatim into a function that states what they decide. Version 3.3.13 is skipped.
+
+### Changed
+
+- `api.probe_names` **24 → 11**. The seven mutable pass counters became `_ProbePassCounters`; the nine trailing conditional `notes.append` statements became the pure module-level `_pass_notes` and `_reprobe_notes`; and the re-login block that appeared verbatim at two call sites became `_relogin_once`, which also owns the `DISCOVERY_RELOGIN_LIMIT` budget check.
+- `api._request` **23 → 19**. The `return await self._request(...)` replay that appeared verbatim at three call sites — each carrying ten keyword arguments — became `_replay_after_login`, which owns the `_retry=False` / `_after_relogin=True` pair that makes the replay happen once. The `isinstance(resp_json, dict)` session-verdict block became `_session_rejected`, returning `True` when a renewal is worth attempting and raising for everything a renewal cannot fix.
+- `coordinator._async_update_data_locked` **21 → 13**. The post-fetch payload stage — the SMS capacity merge, the latest-message pick, the boot-time latch and the device-registry refresh — became `_postprocess_payload`. The hold-last-known-values preamble that opened all three exception handlers identically became `_hold_last_values`, parameterized on the one clause that differed between them.
+
+### Fixed
+
+- `data["last_sms"]` had no test asserting it holds the **newest** message. The descending sort could be reversed with the suite still fully green, which would have republished an old message through the SMS sensor as though it had just arrived.
+
+### Tests
+
+- Five added. Three in `test_diagnostic_capture.py` pin the pass-summary notes that no test distinguished: the shared-request refusal count against the per-name declined count, the names an expiring budget left un-re-probed, and the absence of every note on a clean pass. Two in `test_sms_ordering.py` cover `last_sms`.
+- 1468 → 1473, all passing.
+
+### Verified
+
+- Sixteen mutations applied across the six extracted helpers, each caught by at least one test, each file restored to its pre-mutation checksum. The `_replay_after_login` mutation that sets `_retry=True` both fails `test_api_get_all_data_retry_exhausted` and sends the suite into an unbounded re-login loop, which is the condition the flag exists to prevent.
+- Full validation green: pytest, mypy, Ruff, hassfest, and the hardware checks.
+
+### Notes
+
+- Ruff scores `_request` at 19 against a target of 20. The remaining branches are the HTML-redirect and JSON-parse-failure paths, which share the replay helper but not a common verdict, and the idle-session preemption at the top of the function. Splitting them further would separate the request from the decision about its own response.
+- The project now carries no `# noqa: C901` suppression.
+
+---
+
 ## [3.3.12] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records
 
 ### Summary
@@ -311,7 +461,7 @@ The shared entity verification tool reported three faults against a healthy inst
 
 ### Fixed
 
-- **A pass that did not finish probing is taken again before it is compared.** A name lands in `not_reprobed` when its own request keeps failing, which is what a second client logging into the router does to the first: the device permits one session, and the coordinator lock that serialises discovery against polling protects one Home Assistant instance only. In the observed failure run 1 hit the round cap with 89 names left unasked after repeated `_SESSION_LOST` responses, while a live Home Assistant instance was polling the same router. That is a property of the moment rather than of the device, so `produce_complete` re-takes the pass once, five seconds later, and compares the retaken artefact.
+- **A pass that did not finish probing is taken again before it is compared.** A name lands in `not_reprobed` when its own request keeps failing, which is what a second client logging into the router does to the first: the device permits one session, and the coordinator lock that serializes discovery against polling protects one Home Assistant instance only. In the observed failure run 1 hit the round cap with 89 names left unasked after repeated `_SESSION_LOST` responses, while a live Home Assistant instance was polling the same router. That is a property of the moment rather than of the device, so `produce_complete` re-takes the pass once, five seconds later, and compares the retaken artefact.
 
   A second unfinished pass is not retried. At that point it is a finding rather than noise, and the checks already in place report it.
 
@@ -458,7 +608,7 @@ Three entity-default changes and the documentation pass for the `[3.3.10]` relea
 ### Changed
 
 - **The WiFi sub-device is removed and its two sensors move to System.** A device is created when its entities are added, disabled or not, so the WiFi card was drawn on an MC7010 holding two entities that are both blank there. Moving them removes the empty card without conditional entity creation. **WiFi Clients Connected** and **WiFi Enabled**, both diagnostic.
-- **Those two are now enabled by default**, and the overlay disables them on the MC7010, which answers neither key. An unrecognised model keeps them on: a router serving WiFi is the common case, and a blank pair is easier to notice and switch off than a missing pair is to discover. This is the first overlay entry for the MC7010.
+- **Those two are now enabled by default**, and the overlay disables them on the MC7010, which answers neither key. An unrecognized model keeps them on: a router serving WiFi is the common case, and a blank pair is easier to notice and switch off than a missing pair is to discover. This is the first overlay entry for the MC7010.
 - **Firmware Update State and Firmware Update Result are off by default.** `upgrade_result` shipped enabled in `[3.3.9-dev12]` as the one firmware sensor reporting a fault the other two miss; three firmware sensors on the System card is more than a working router needs on show, and a user chasing an update problem can enable them.
 
 ### Documentation
@@ -467,7 +617,7 @@ Three entity-default changes and the documentation pass for the `[3.3.10]` relea
 - **`AGENTS.md`** gains the three modules added in this series and a rule that `device_info` is inherited and never declared on an entity class, with the sweep names that enforce it. Three rows added to the "tests that will stop you" table.
 - **`docs/DEVELOPMENT.md`** documents `entity_defaults.py`, `observations.py` and `reset_entities.py`, and records the temperature finding below.
 - **`docs/zte_how_to_access.md`** gains a section on the three parameter vocabularies, how the `network_` family splits into qualified and unqualified names, and the sign convention on `network_rssi`.
-- **`docs/expected_zte_compatibility.md`** records per-model defaults and the 36 cross-model spellings as supported behaviour, and notes that the WiFi client count is a single figure rather than the device tracking this integration excludes.
+- **`docs/expected_zte_compatibility.md`** records per-model defaults and the 36 cross-model spellings as supported behavior, and notes that the WiFi client count is a single figure rather than the device tracking this integration excludes.
 - **`docs/ha_compatibility.md`** — tested against 2026.9.0.
 
 ### Measured
@@ -482,7 +632,7 @@ That decision was nearly re-opened on a false reading. `known_names.EXPECTED_NAM
 
 `[3.3.10-dev11]` fixed an entity that had no device and added a sweep to catch another. This removes the condition that made the omission possible: ten entity classes across six modules each carried a byte-identical `device_info` property, and every copy was somewhere the property could be left out. There is now one, inherited.
 
-No behaviour change. The entity count, the device assignments and the sensor manifest are unchanged.
+No behavior change. The entity count, the device assignments and the sensor manifest are unchanged.
 
 ### Changed
 
@@ -620,7 +770,7 @@ The entity count moves from 113 to 115.
 ### Added
 
 - **`entity_defaults.default_enabled(description, model)`**, the single resolver for whether an entity is enabled by default. Every platform calls it when building an entity. The `reset_entities` action will call the same function when it restores defaults, because two readers of different sources would disagree and a reset would undo the overlay every time it ran.
-- **`MODEL_OVERLAY`**, matched as a substring of the reported model, longest key first so a variant entry can later override a family one. Family matching is deliberate: the `network_` vocabulary and the `zsidn` session cookie are firmware-family behaviours, and `api._hash` already selects SHA-256 on `MC888` or `MC889` appearing anywhere in the version string.
+- **`MODEL_OVERLAY`**, matched as a substring of the reported model, longest key first so a variant entry can later override a family one. Family matching is deliberate: the `network_` vocabulary and the `zsidn` session cookie are firmware-family behaviors, and `api._hash` already selects SHA-256 on `MC888` or `MC889` appearing anywhere in the version string.
 - **An MC888 entry**: LTE RSRQ, LTE RSSI, LTE SNR, 5G RSSI, eNodeB ID and WAN Connect Status disabled; RSSI, SINR and the two new Wi-Fi sensors enabled. Seeded from the 2026-09-02 diagnostics download only, never from inference about what a model probably supports.
 - **Wi-Fi Clients Connected** and **Wi-Fi Enabled**, sensors on the System sub-device, disabled by default and enabled by the MC888 overlay, from `wifi_access_sta_num` and `wifi_onoff_state`.
 
@@ -1206,7 +1356,7 @@ The 3.3.7 discovery probe reads a fixed list of 62 names written into `const.py`
 ### Added
 
 - **Names are mined from the router's web UI at download time**: `mine_candidate_names()` fetches the bundles named in `docs/zte_how_to_access.md`, extracts every `cmd=` literal, and filters to tokens that are actually `cmd` names — the 2026-07-29 artefact contains the literal `1`, and both probe paths interpolate names straight into a URL. The static list is retained and unioned, because 48 of its names appear in no bundle.
-- **Discovery runs when the user asks for a download**, not at setup: the mined names have no runtime consumer, so the work is done where the value is rather than speculatively on every reload. It logs in when no session is live — the user pressed the button, and that authorises using the router.
+- **Discovery runs when the user asks for a download**, not at setup: the mined names have no runtime consumer, so the work is done where the value is rather than speculatively on every reload. It logs in when no session is live — the user pressed the button, and that authorizes using the router.
 - **Values publish by default, gated in layers**: `DISCOVERY_VALUE_SAFE` becomes a bypass for vetted names rather than the gate. A mined name has no allow-list entry by construction, so denying by default would list names and answer nothing. Safety comes from a name deny-pattern for credentials, subscriber identifiers, location, SSIDs and APNs; then the existing walker; then shape rules for coordinates and blobs; then a length cap. The verdict for each key publishes alongside its value, so a key that answered nothing and a key that was withheld stop looking alike.
 - **Failure notes throughout**: the download carries an `errors` list, per-bundle mining notes, whether the probe ran on an existing session or a fresh login, why the unauthenticated-key measurement was skipped or rejected, and `logout_acknowledged`.
 
@@ -1327,7 +1477,7 @@ The cookieless-session path added in 3.3.5-dev25 is retained but is no longer ev
 - **Stale Boot Time Across Restarts**: Fixed a bug where a router reboot occurring during a Home Assistant restart, host power cycle, or system update was not detected on startup, causing `Device Uptime` to freeze on the prior boot time indefinitely. Startup now cross-checks the live uptime counter and calculated boot instant against persisted history to reconcile reboots accurately.
   - This issue could be seen when:
     - HA restarted after a long downtime, during which time the router had rebooted.
-    - HA and the ROuter restarted at the same time, after a power outaage.
+    - HA and the ROuter restarted at the same time, after a power outage.
 
 ### Under the hood
 
