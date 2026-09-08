@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.15\] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation](#3315---2026-09-08---release-sms-delete-probe-v2-token-step-isolation)
   - [\[3.3.15-dev2\] - 2026-09-08 - Special SMS Probe V2, now Isolates Which Step Blocks a Write; Six Token Variants Tested](#3315-dev2---2026-09-08---special-sms-probe-v2-now-isolates-which-step-blocks-a-write-six-token-variants-tested)
   - [\[3.3.15-dev1\] - 2026-09-08 - McCabe Complexity in tasks.json; README tweak](#3315-dev1---2026-09-08---mccabe-complexity-in-tasksjson-readme-tweak)
   - [\[3.3.14\] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence](#3314---2026-09-07---release-sms-deletion-diagnostic-probing-and-entry-state-persistence)
@@ -248,6 +249,18 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.15] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V2**: Updated the temporary diagnostic action (`zte_router_5g.sms_delete_probe`) to isolate which specific step of token derivation blocks write commands on problem firmwares. It tests six write-token variants against non-destructive data volume commands before spending messages, and adds a four-minute runtime cap. This action is temporary troubleshooting scaffolding for issue diagnostics and will be removed in the next release.
+
+### Added
+
+- **Temporary SMS Delete Probe Step Isolation**: Added five non-writing diagnostic steps to `zte_router_5g.sms_delete_probe` (individual session checks, firmware queries, RD reads, and token derivation) to determine precisely where router authentication fails. _(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)_
+- **Non-Destructive Token Probing**: Evaluates six distinct token generation strategies against harmless data volume settings, requiring three consecutive successes before attempting message deletion.
+- **Probe Execution Timeout**: Added a four-minute safety timeout on the full probe run, preserving all findings collected up to that point.
 
 ## [3.3.15-dev2] - 2026-09-08 - Special SMS Probe V2, now Isolates Which Step Blocks a Write; Six Token Variants Tested
 
