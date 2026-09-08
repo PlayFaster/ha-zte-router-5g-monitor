@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.15-dev2\] - 2026-09-08 - Special SMS Probe V2, now Isolates Which Step Blocks a Write; Six Token Variants Tested](#3315-dev2---2026-09-08---special-sms-probe-v2-now-isolates-which-step-blocks-a-write-six-token-variants-tested)
   - [\[3.3.15-dev1\] - 2026-09-08 - McCabe Complexity in tasks.json; README tweak](#3315-dev1---2026-09-08---mccabe-complexity-in-tasksjson-readme-tweak)
   - [\[3.3.14\] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence](#3314---2026-09-07---release-sms-deletion-diagnostic-probing-and-entry-state-persistence)
   - [\[3.3.14-dev4\] - 2026-09-07 - Probe Survives Its Own Failure and a Restart; Hardware Check Settle Pause](#3314-dev4---2026-09-07---probe-survives-its-own-failure-and-a-restart-hardware-check-settle-pause)
@@ -79,7 +80,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -137,7 +138,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -145,7 +146,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -247,6 +248,30 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.15-dev2] - 2026-09-08 - Special SMS Probe V2, now Isolates Which Step Blocks a Write; Six Token Variants Tested
+
+### Summary
+
+The reporter's probe run deleted nothing, and showed why: every rung that derived a write token failed, and the one rung that supplied its own token succeeded. The fault is inside that derivation, before any command reaches the router. This version isolates which of its three steps is responsible and tests six ways around it against a write that cannot destroy anything.
+
+### Added
+
+- **Five diagnostic rungs that write nothing.** The three liveness keys read together and scored with the integration's own classifier; then the session check, the firmware-version read, the RD read and the full token derivation, each called alone. Any of the three could be the one refusing, and `last_rejection` holds only the most recent, so the earlier report could not separate them.
+
+- **Six token variants against the data-volume write, three attempts each.** The form written back at its current values is not an SMS command, so a failure there says no write works on the device rather than anything about messages. The variants are the current path, one skipping the session check, one after a fresh login, one using a three-key session check, one after a successful read, and one after a two-second settle. One success is not a working method and one failure is not a broken one, so a variant counts only if it works every time.
+
+- **Confirmation before a message is spent.** A variant that succeeds three times is re-run three more times against the same harmless write. Only then does the probe delete anything, and it deletes three separate messages and one batch rather than one message.
+
+- **A four-minute cap on the whole run**, recorded as `timed_out` with everything collected up to that point kept. There was no limit before: a router refusing every write provokes a re-login and a replay per attempt, and the action would have spun with no bound.
+
+### Measured
+
+- On the reference MC7010, `wan_connect_status` and `ppp_status` are both populated on a live session and both blank on a genuinely dead one, while `modem_main_state` answers either way. On the MC888 Pro the first is blank at all times. So one key distinguishes the two states on both devices and the current one does not — but the fix stays out of shared code until his run says which variant works.
+
+### Verified
+
+- 1,508 tests, 100% line and branch coverage. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.15-dev1] - 2026-09-08 - McCabe Complexity in tasks.json; README tweak
 
