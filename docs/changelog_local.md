@@ -5,6 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.16-dev3\] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest](#3316-dev3---2026-09-08---probe-control-uses-the-shipped-token-path-candidates-take-the-devices-digest)
+  - [\[3.3.16-dev2\] - 2026-09-08 - Documentation: Project Complexity \& Health Scorecard Added](#3316-dev2---2026-09-08---documentation-project-complexity--health-scorecard-added)
   - [\[3.3.16-dev1\] - 2026-09-08 - Session Check Reads Three Keys; SMS Probe V3 Tries Twelve Token Formulas](#3316-dev1---2026-09-08---session-check-reads-three-keys-sms-probe-v3-tries-twelve-token-formulas)
   - [\[3.3.15\] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation](#3315---2026-09-08---release-sms-delete-probe-v2-token-step-isolation)
   - [\[3.3.15-dev2\] - 2026-09-08 - Special SMS Probe V2, now Isolates Which Step Blocks a Write; Six Token Variants Tested](#3315-dev2---2026-09-08---special-sms-probe-v2-now-isolates-which-step-blocks-a-write-six-token-variants-tested)
@@ -250,6 +252,42 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.16-dev3] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest
+
+### Summary
+
+The first hardware run of the v3 probe, against the reference MC7010, returned no accepted formula and a control that failed three times out of three — while `7_harmless_write`, going through the integration's own path in the same run, returned `{"result": "success"}`. The same write seconds apart, one refused and one accepted. The cause was in the probe: every candidate was built with SHA-256 against a router that uses MD5.
+
+### Fixed
+
+- **The control asks the integration for its token.** It reproduced the formula instead, and reproducing it is how a control stops controlling anything: on a device the copy does not match, the control fails for a reason that has nothing to do with the thing being tested. `a_control_current` now calls `get_ad`, so it is the shipped path by construction and cannot drift from it.
+
+- **Candidates are built with the digest the device uses.** `_ad_hash_func` reads the firmware string and returns MD5 or SHA-256; the probe now asks it rather than assuming. On the MC7010 run, `a_control_current`, `d_wa_lower` and `i_wa_hashed_rd_lower` were the only candidates that ran — `cr_version` is not answered on that device — and all three failed on the digest alone, which says nothing about their structure.
+
+### Changed
+
+- **The alternate digest is one deliberate candidate rather than an accident.** `l_md5_wa_cr_lower` became `l_other_digest_wa_cr_lower`: it takes whichever digest this device does _not_ use. `RD` is 64 characters on the MC888 Pro, so "the firmware uses the other hash" is a thin hypothesis — worth one candidate and not worth twelve.
+
+### Measured
+
+- On the reference MC7010: `RD` 32 characters, derived token 32 characters, both MD5. The three-key session check returned `live` from `pdp_connected` / `ppp_connected` / `MC7010`, and `1c_session_check` returned rather than raising.
+
+- `cr_version` is listed under `probed_no_answer` in that device's own discovery, so the eight candidates needing it were skipped with the reason recorded. It is answered on the MC888 Pro, where those candidates will run.
+
+- The measured unauthenticated key set on the MC7010 carries seven names and includes `modem_main_state` — a third confirmation that it was the wrong choice for the session check.
+
+- `1g_login_baseline` read 178 keys and recorded 99 populated, names only.
+
+### Verified
+
+- 1,528 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.16-dev2] - 2026-09-08 - Documentation: Project Complexity & Health Scorecard Added
+
+### Added
+
+- **`docs/project_complexity.md` architectural health scorecard**: Added a tracked project scorecard documenting current structural complexity metrics, including PlayFaster Health Index score, unmasked McCabe cyclomatic complexity ($V(G)$), routine statement length distributions, module sizes, entity platform declarative efficiency, test surface, and code suppressions.
 
 ## [3.3.16-dev1] - 2026-09-08 - Session Check Reads Three Keys; SMS Probe V3 Tries Twelve Token Formulas
 

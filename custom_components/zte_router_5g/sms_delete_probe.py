@@ -155,35 +155,59 @@ def _md5(value: str) -> str:
 # `{"result": "failure"}` — the same answer it gives to a deliberately
 # malformed token.
 #
-# Guessing between them costs another round trip each time. Trying all of them
-# in one pass costs one run of a write that changes nothing.
+# **The digest is the device's own, not a constant here.** `_ad_hash_func`
+# chooses it per firmware, and a run of v3 against the reference MC7010 built
+# every token with SHA-256 against a router that uses MD5: all three candidates
+# that ran failed for one reason unrelated to their structure, and the control
+# failed alongside them while the integration's own write in the same run
+# succeeded. Each builder therefore takes the digest as its first argument.
 #
-# Each entry is a name, whether it needs `cr_version`, and a builder taking
-# the two version strings and `RD`. The first is the formula the integration
-# ships, carried as a control: without it a run where everything fails cannot
-# be told from a run where the write path was broken for some other reason.
-_CANDIDATES: tuple[tuple[str, bool, Any], ...] = (
-    ("a_control_current", False, lambda wa, cr, rd: _sha(_sha(wa) + rd).upper()),
-    ("b_wa_cr_lower", True, lambda wa, cr, rd: _sha(_sha(wa + cr) + rd)),
-    ("c_wa_cr_upper", True, lambda wa, cr, rd: _sha(_sha(wa + cr) + rd).upper()),
-    ("d_wa_lower", False, lambda wa, cr, rd: _sha(_sha(wa) + rd)),
-    ("e_cr_lower", True, lambda wa, cr, rd: _sha(_sha(cr) + rd)),
-    ("f_cr_upper", True, lambda wa, cr, rd: _sha(_sha(cr) + rd).upper()),
+# Each entry is a name, whether it needs `cr_version`, whether it wants the
+# *other* digest rather than this device's, and the builder. A builder of
+# `None` marks the control.
+_CANDIDATES: tuple[tuple[str, bool, bool, Any], ...] = (
+    ("a_control_current", False, False, None),
+    ("b_wa_cr_lower", True, False, lambda h, wa, cr, rd: h(h(wa + cr) + rd)),
+    ("c_wa_cr_upper", True, False, lambda h, wa, cr, rd: h(h(wa + cr) + rd).upper()),
+    ("d_wa_lower", False, False, lambda h, wa, cr, rd: h(h(wa) + rd)),
+    ("e_cr_lower", True, False, lambda h, wa, cr, rd: h(h(cr) + rd)),
+    ("f_cr_upper", True, False, lambda h, wa, cr, rd: h(h(cr) + rd).upper()),
     (
         "g_wa_no_timestamp_cr_lower",
         True,
-        lambda wa, cr, rd: _sha(_sha(_TIMESTAMP.sub("", wa) + cr) + rd),
+        False,
+        lambda h, wa, cr, rd: h(h(_TIMESTAMP.sub("", wa) + cr) + rd),
     ),
-    ("h_cr_wa_lower", True, lambda wa, cr, rd: _sha(_sha(cr + wa) + rd)),
-    ("i_wa_hashed_rd_lower", False, lambda wa, cr, rd: _sha(_sha(wa) + _sha(rd))),
-    ("j_single_round_lower", True, lambda wa, cr, rd: _sha(wa + cr + rd)),
+    ("h_cr_wa_lower", True, False, lambda h, wa, cr, rd: h(h(cr + wa) + rd)),
+    ("i_wa_hashed_rd_lower", False, False, lambda h, wa, cr, rd: h(h(wa) + h(rd))),
+    ("j_single_round_lower", True, False, lambda h, wa, cr, rd: h(wa + cr + rd)),
     (
         "k_wa_cr_hashed_rd_lower",
         True,
-        lambda wa, cr, rd: _sha(_sha(wa + cr) + _sha(rd)),
+        False,
+        lambda h, wa, cr, rd: h(h(wa + cr) + h(rd)),
     ),
-    ("l_md5_wa_cr_lower", True, lambda wa, cr, rd: _md5(_md5(wa + cr) + rd)),
+    (
+        "l_other_digest_wa_cr_lower",
+        True,
+        True,
+        lambda h, wa, cr, rd: h(h(wa + cr) + rd),
+    ),
 )
+
+
+def _digests(api: Any, version: str) -> tuple[Any, Any]:
+    """This device's digest, and the other one.
+
+    `_ad_hash_func` reads the firmware string and returns MD5 or SHA-256. It is
+    asked rather than reproduced, so a candidate cannot silently disagree with
+    what the integration itself would send. The other digest is offered as one
+    deliberate variant, because "the firmware uses the other hash" is a
+    hypothesis worth one candidate and not worth twelve.
+    """
+    native = api._ad_hash_func(version)  # noqa: SLF001 - the device's own choice
+    other = _md5 if len(str(native("probe"))) > 32 else _sha
+    return native, other
 
 
 async def _token_inputs(api: Any, timeout_sec: int | None = None) -> dict[str, Any]:
@@ -683,6 +707,22 @@ async def _run_rungs(
         report["completed"] = True
 
 
+async def _candidate_token(api: Any, builder: Any, alternate: bool) -> Any:
+    """Build one candidate's token from values read moments ago.
+
+    `RD` may be a nonce, so the values are read per attempt rather than once.
+    A `None` builder is the control, which asks the integration for the token
+    the ordinary way — reproducing that formula here is what made the control
+    of v3 disagree with the code it was supposed to be controlling.
+    """
+    if builder is None:
+        return await api.get_ad()
+    fresh = await _token_inputs(api)
+    native, other = _digests(api, fresh["wa_inner_version"])
+    digest = other if alternate else native
+    return builder(digest, fresh["wa_inner_version"], fresh["cr_version"], fresh["rd"])
+
+
 async def _candidate_rungs(
     coordinator: ZTERouterDataUpdateCoordinator,
     report: dict[str, Any],
@@ -721,11 +761,11 @@ async def _candidate_rungs(
 
     have_cr = bool(values.get("cr_version"))
     accepted: str | None = None
-    accepted_builder: Any = None
+    accepted_choice: tuple[Any, bool] | None = None
     passed: list[str] = []
     report["candidates"] = {}
 
-    for name, needs_cr, builder in _CANDIDATES:
+    for name, needs_cr, alternate, builder in _CANDIDATES:
         if needs_cr and not have_cr:
             # Named, not silently dropped. A candidate that was never tried
             # and a candidate that failed are different findings.
@@ -742,11 +782,8 @@ async def _candidate_rungs(
         outcomes: list[bool] = []
         for attempt in range(1, WRITE_ATTEMPTS + 1):
 
-            async def one(b: Any = builder) -> dict[str, Any]:
-                # Read fresh every time. `RD` may be a nonce, and a token
-                # built on a stale one fails for the wrong reason.
-                fresh = await _token_inputs(api)
-                token = b(fresh["wa_inner_version"], fresh["cr_version"], fresh["rd"])
+            async def one(b: Any = builder, alt: bool = alternate) -> dict[str, Any]:
+                token = await _candidate_token(api, b, alt)
                 return await _data_volume_write(coordinator, token)
 
             record = await _capture(coordinator, f"7b_{name}_{attempt}", one)
@@ -760,7 +797,7 @@ async def _candidate_rungs(
         if succeeded == WRITE_ATTEMPTS:
             passed.append(name)
             if accepted is None:
-                accepted, accepted_builder = name, builder
+                accepted, accepted_choice = name, (builder, alternate)
 
     # Every formula that passed, not only the one used. A device accepting
     # several says something different about its firmware than one accepting
@@ -768,7 +805,7 @@ async def _candidate_rungs(
     report["candidates_passed"] = passed
     report["working_variant"] = accepted
 
-    if accepted is None:
+    if accepted is None or accepted_choice is None:
         return None, None
 
     # --- 7h. Confirm it before spending a message -----------------------
@@ -777,9 +814,8 @@ async def _candidate_rungs(
     confirmed: list[bool] = []
     for attempt in range(1, WRITE_ATTEMPTS + 1):
 
-        async def again(b: Any = accepted_builder) -> dict[str, Any]:
-            fresh = await _token_inputs(api)
-            token = b(fresh["wa_inner_version"], fresh["cr_version"], fresh["rd"])
+        async def again(choice: tuple[Any, bool] = accepted_choice) -> dict[str, Any]:
+            token = await _candidate_token(api, *choice)
             return await _data_volume_write(coordinator, token)
 
         record = await _capture(coordinator, f"7h_confirm_{attempt}", again)
@@ -789,9 +825,9 @@ async def _candidate_rungs(
         await asyncio.sleep(ATTEMPT_DELAY)
 
     if not all(confirmed):
-        accepted, accepted_builder = None, None
+        accepted, accepted_choice = None, None
     report["working_variant_confirmed"] = accepted
-    return accepted, accepted_builder
+    return accepted, accepted_choice
 
 
 async def _confirmed_variant_rungs(
@@ -848,10 +884,7 @@ async def _confirmed_variant_rungs(
             async def delete_one(i: str = msg_id, k: dict[str, Any] = kwargs) -> Any:
                 # Built from the accepted formula on values read moments ago,
                 # the same way it was built for the write that accepted it.
-                fresh = await _token_inputs(api)
-                token = working_token(
-                    fresh["wa_inner_version"], fresh["cr_version"], fresh["rd"]
-                )
+                token = await _candidate_token(api, *working_token)
                 return await _delete_raw(coordinator, i, token=token, **k)
 
             record = await _capture(

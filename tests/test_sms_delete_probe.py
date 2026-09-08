@@ -670,7 +670,7 @@ async def test_every_candidate_runs_even_after_one_succeeds() -> None:
 
     report = await run_probe(coordinator)
 
-    tried = {name for name, _needs_cr, _builder in sms_delete_probe._CANDIDATES}
+    tried = {name for name, *_rest in sms_delete_probe._CANDIDATES}
     assert set(report["candidates"]) == tried
     assert report["candidates_passed"], "the control should pass against a stand-in"
 
@@ -686,7 +686,7 @@ async def test_candidates_needing_cr_version_are_named_when_it_is_absent() -> No
 
     report = await run_probe(coordinator)
 
-    needs_cr = [n for n, cr, _b in sms_delete_probe._CANDIDATES if cr]
+    needs_cr = [n for n, cr, _alt, _b in sms_delete_probe._CANDIDATES if cr]
     for name in needs_cr:
         assert report["candidates"][name] == "skipped: no cr_version"
     inputs = _by_name(report, "7a_token_inputs")
@@ -717,17 +717,25 @@ async def test_every_candidate_formula_is_distinct() -> None:
     """Two entries computing the same token report one finding twice.
 
     It would also make a passing formula look more corroborated than it is.
+    The control is excluded: it asks the integration for its token rather than
+    computing one, which is the whole point of it.
     """
     # The reporter's own shape, timestamp included. One candidate strips that
     # timestamp, so a stand-in without one would make two formulas identical
     # and the test would report a collision the device never sees.
+    # The digest is part of a candidate's identity, so each is built with the
+    # one it would actually be given — SHA-256 on an MC888, MD5 for the entry
+    # that exists to try the other one. Building them all with the same digest
+    # would report a collision the device never sees.
     tokens = {
         name: builder(
+            sms_delete_probe._md5 if alternate else sms_delete_probe._sha,
             "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
             "CR_ABPLMC888PROV1.0.1B04",
             "0123456789abcdef",
         )
-        for name, _needs_cr, builder in sms_delete_probe._CANDIDATES
+        for name, _needs_cr, alternate, builder in sms_delete_probe._CANDIDATES
+        if builder is not None
     }
 
     assert len(set(tokens.values())) == len(tokens)
@@ -820,3 +828,60 @@ async def test_a_reply_that_is_not_a_mapping_is_not_counted_as_success() -> None
     report = await run_probe(coordinator)
 
     assert report["working_variant"] is None
+
+
+async def test_the_control_asks_the_integration_for_its_token() -> None:
+    """Reproducing the shipped formula here is how the control stopped being one.
+
+    Version 3 hardcoded SHA-256 and ran against an MD5 router: the control
+    failed three times out of three while the integration's own write in the
+    same run succeeded. Asking `get_ad` makes the control right by
+    construction.
+    """
+    coordinator = _coordinator()
+
+    await run_probe(coordinator)
+
+    coordinator.api.get_ad.assert_awaited()
+
+
+async def test_a_candidate_is_built_with_the_digest_this_device_uses() -> None:
+    """`_ad_hash_func` reads the firmware string and picks MD5 or SHA-256.
+
+    Asking it, rather than choosing here, is what stops a candidate disagreeing
+    with what the integration itself would send.
+    """
+    coordinator = _coordinator()
+
+    await run_probe(coordinator)
+
+    coordinator.api._ad_hash_func.assert_called()
+
+
+def test_the_other_digest_is_the_one_this_device_does_not_use() -> None:
+    """The alternative must be the alternative on either kind of device.
+
+    One candidate exists to try it, and a device-independent choice here would
+    make that candidate a duplicate on one of the two.
+    """
+    api = MagicMock()
+
+    api._ad_hash_func = MagicMock(return_value=sms_delete_probe._sha)
+    native, other = sms_delete_probe._digests(api, "any")
+    assert (native, other) == (sms_delete_probe._sha, sms_delete_probe._md5)
+
+    api._ad_hash_func = MagicMock(return_value=sms_delete_probe._md5)
+    native, other = sms_delete_probe._digests(api, "any")
+    assert (native, other) == (sms_delete_probe._md5, sms_delete_probe._sha)
+
+
+async def test_exactly_one_candidate_carries_the_other_digest() -> None:
+    """The alternative digest is a thin hypothesis, worth exactly one candidate.
+
+    `RD` is 64 characters on the MC888 Pro, which points firmly at SHA-256.
+    """
+    alternates = [
+        name for name, _cr, alternate, _b in sms_delete_probe._CANDIDATES if alternate
+    ]
+
+    assert len(alternates) == 1
