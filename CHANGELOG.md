@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.16] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas
+
+### Summary
+
+- **Multi-Key Pre-Write Session Validation**: Pre-write session assurance now verifies multiple connection keys (`wan_connect_status`, `ppp_status`, and `model_name`) rather than a single field, preventing false session-expiry errors and blocked write commands on router firmwares that leave individual status keys unpopulated.
+- **Temporary SMS Deletion Diagnostic Probe V3**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to evaluate twelve candidate authentication token derivation formulas against non-destructive write commands, with device-specific hash selection and strict router success confirmation. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+- **Project Complexity & Health Scorecard**: Added a public scorecard tracking architectural complexity metrics, module sizes, and code health standards.
+
+### Fixed
+
+- **Pre-Write Session Check Key Verification**: Fixed pre-write validation prematurely flagging active sessions as expired on hardware where `wan_connect_status` remains blank. Checking a multi-key set ensures writes proceed reliably across alternate firmware configurations.
+
+### Added
+
+- **Temporary SMS Delete Probe Formula Evaluation**: Added automated evaluation of twelve candidate security token derivation variants to `zte_router_5g.sms_delete_probe`, testing combinations of firmware version parameters and random nonces against harmless settings writes to isolate firmware-specific token requirements. _(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)_
+- **Post-Login Key Inventory Probe**: Added diagnostic inventory capture (`1g_login_baseline`) recording populated key counts following login to assist with model-agnostic validation.
+- **Project Complexity & Health Scorecard**: Added [`docs/project_complexity.md`](docs/project_complexity.md) documenting structural complexity metrics, unmasked cyclomatic complexity, routine lengths, module dimensions, and standards compliance.
+
+---
+
 ## [3.3.15] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation
 
 ### Summary
@@ -607,6 +627,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.16\] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas](#3316---2026-09-08---release-multi-key-session-validation-and-sms-probe-v3-token-formulas)
   - [\[3.3.15\] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation](#3315---2026-09-08---release-sms-delete-probe-v2-token-step-isolation)
   - [\[3.3.14\] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence](#3314---2026-09-07---release-sms-deletion-diagnostic-probing-and-entry-state-persistence)
   - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
