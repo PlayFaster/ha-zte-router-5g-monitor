@@ -270,7 +270,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 - **Temporary SMS Delete Probe Formula Evaluation**: Added automated evaluation of twelve candidate security token derivation variants to `zte_router_5g.sms_delete_probe`, testing combinations of firmware version parameters and random nonces against harmless settings writes to isolate firmware-specific token requirements. _(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)_
 - **Post-Login Key Inventory Probe**: Added diagnostic inventory capture (`1g_login_baseline`) recording populated key counts following login to assist with model-agnostic validation.
-- **Project Complexity & Health Scorecard**: Added [`docs/project_complexity.md`](docs/project_complexity.md) documenting structural complexity metrics, unmasked cyclomatic complexity, routine lengths, module dimensions, and standards compliance.
+- **Project Complexity & Health Scorecard**: Added `docs/project_complexity.md` documenting structural complexity metrics, unmasked cyclomatic complexity, routine lengths, module dimensions, and standards compliance.
 
 ## [3.3.16-dev3] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest
 
