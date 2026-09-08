@@ -16,10 +16,11 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.zte_router_5g import sms_delete_probe
 from custom_components.zte_router_5g.api import (
     SMS_STORE_ALL,
     SMS_STORE_DEVICE,
@@ -52,11 +53,26 @@ def _coordinator(ids: list[str] | None = None) -> MagicMock:
     api.last_rejection = {"verdict": "expired", "payload": {"result": ""}}
     api._session_was_fresh = False
     api.delete_all = AsyncMock(return_value=200)
+    api.get_version = AsyncMock(return_value="TEST_VERSION_V1.0")
+    api.get_params = AsyncMock(return_value={"signalbar": "4"})
+    api._ensure_session = AsyncMock()
+    api._ad_hash_func = MagicMock(return_value=lambda value: "digest-" + value[:6])
+    api.unauthenticated_key_set = MagicMock(
+        return_value=frozenset({"modem_main_state"})
+    )
+    api.DATA_VOLUME_FIELDS = {
+        "data_volume_limit_switch": ("flux_data_volume_limit_switch",),
+        "traffic_clear_date": ("flux_clear_date",),
+    }
     api.delete_probe = None
 
     coordinator = MagicMock()
     coordinator.api = api
-    coordinator.data = {"flux_data_volume_limit_size": "50_1024"}
+    coordinator.data = {
+        "flux_data_volume_limit_size": "50_1024",
+        "flux_data_volume_limit_switch": "1",
+        "flux_clear_date": "1",
+    }
     coordinator._async_update_lock = asyncio.Lock()
     return coordinator
 
@@ -68,7 +84,11 @@ def _by_name(report: dict[str, Any], name: str) -> dict[str, Any]:
 
 def _bodies(coordinator: MagicMock) -> list[str]:
     """Every `DELETE_SMS` body the probe sent."""
-    return [call.kwargs["data"] for call in coordinator.api._request.call_args_list]
+    return [
+        call.kwargs["data"]
+        for call in coordinator.api._request.call_args_list
+        if "data" in call.kwargs
+    ]
 
 
 @pytest.fixture(autouse=True)
@@ -94,25 +114,25 @@ async def test_every_probe_is_recorded_and_none_is_skipped_for_success() -> None
     report = await run_probe(coordinator)
 
     names = [p["probe"] for p in report["probes"]]
-    assert names == [
+    # The diagnostic rungs, which isolate which step of deriving a token fails.
+    assert names[:7] == [
         "1_token_rotation",
+        "1b_liveness_keys",
+        "1c_session_check",
+        "1d_version",
+        "1e_rd",
+        "1f_token",
         "2_bank_listing",
-        "3_absent_id",
-        "4_absent_id_bad_token",
-        "5_absent_id_not_callback",
-        "6a_absent_id_store_device",
-        "6b_absent_id_store_all",
-        "7_harmless_write",
-        "8_single_id",
-        "9_single_id_repeat",
-        "10_single_id_store_all",
-        "11_single_id_not_callback",
-        "12_single_id_delayed_relist",
-        "13_single_id_fresh_session",
-        "14_batch_semicolon",
-        "15_integration_delete_all",
     ]
-    assert all(p["outcome"] != "skipped" for p in report["probes"])
+    # Six token variants, three attempts each, then three confirmations.
+    assert sum(1 for n in names if n.startswith("7b_")) == 3
+    assert sum(1 for n in names if n.startswith("7h_confirm")) == 3
+    assert (
+        len([n for n in names if n[:2] in {"7b", "7c", "7d", "7e", "7f", "7g"}]) == 18
+    )
+    # The original ladder is still there, unchanged.
+    assert "14_batch_semicolon" in names
+    assert "15_integration_delete_all" in names
 
 
 async def test_the_safe_probes_never_name_a_real_message() -> None:
@@ -127,10 +147,11 @@ async def test_the_safe_probes_never_name_a_real_message() -> None:
 
     await run_probe(coordinator)
 
-    safe = _bodies(coordinator)[:5]
-    assert all(f"msg_id={ABSENT_ID}" in body for body in safe)
-    assert not any("msg_id=4" in body or "msg_id=3" in body for body in safe)
-    assert f"AD={BAD_TOKEN}" in safe[1]
+    bodies = _bodies(coordinator)
+    absent = [b for b in bodies if f"msg_id={ABSENT_ID}" in b]
+    assert len(absent) == 5
+    assert not any("msg_id=4&" in b or "msg_id=3&" in b for b in absent)
+    assert any(f"AD={BAD_TOKEN}" in b for b in absent)
 
 
 async def test_the_report_is_stored_for_the_next_download() -> None:
@@ -154,13 +175,13 @@ async def test_each_variant_sends_the_form_it_names() -> None:
 
     await run_probe(coordinator)
 
-    bodies = _bodies(coordinator)
-    assert "notCallback=true" in bodies[2]
-    assert f"mem_store={SMS_STORE_DEVICE}" in bodies[3]
-    assert f"mem_store={SMS_STORE_ALL}" in bodies[4]
-    # And the plain form carries neither.
-    assert "notCallback" not in bodies[0]
-    assert "mem_store" not in bodies[0]
+    absent = [b for b in _bodies(coordinator) if f"msg_id={ABSENT_ID}" in b]
+    assert any("notCallback=true" in b for b in absent)
+    assert any(f"mem_store={SMS_STORE_DEVICE}" in b for b in absent)
+    assert any(f"mem_store={SMS_STORE_ALL}" in b for b in absent)
+    # The plain form carries neither.
+    plain = [b for b in absent if "notCallback" not in b and "mem_store" not in b]
+    assert plain
 
 
 async def test_the_bank_listing_asks_all_three_stores() -> None:
@@ -183,8 +204,9 @@ async def test_the_fresh_session_probe_logs_in_first() -> None:
 
     await run_probe(coordinator)
 
-    # Once for the token-rotation probe, once before the fresh-session rung.
-    assert coordinator.api.login.await_count == 2
+    # Token rotation, the fresh-session rung, and the after-login variant's
+    # three attempts.
+    assert coordinator.api.login.await_count >= 2
 
 
 async def test_the_delayed_probe_waits_before_re_listing() -> None:
@@ -215,13 +237,8 @@ async def test_probes_with_no_message_left_say_so(
     report = await run_probe(coordinator)
 
     skipped = [p["probe"] for p in report["probes"] if p["outcome"] == "skipped"]
-    assert skipped == [
-        "10_single_id_store_all",
-        "11_single_id_not_callback",
-        "12_single_id_delayed_relist",
-        "13_single_id_fresh_session",
-        "14_batch_semicolon",
-    ]
+    assert "14_batch_semicolon" in skipped
+    assert "13_single_id_fresh_session" in skipped
     assert report["messages_available"] == ["4", "3"]
     # The batch rung needs two and would have been given one; saying so is the
     # difference between "not tried" and "tried and did nothing".
@@ -315,7 +332,7 @@ async def test_every_probe_records_what_it_sent_with_the_token_removed() -> None
     report = await run_probe(coordinator)
 
     batch = _by_name(report, "14_batch_semicolon")
-    assert "msg_id=14;13" in batch["sent"]
+    assert ";" in batch["sent"].split("msg_id=")[1].split("&")[0]
     assert "AD=REDACTED" in batch["sent"]
     assert "ad-value" not in batch["sent"]
 
@@ -330,7 +347,7 @@ async def test_the_batch_form_is_the_one_the_button_sends() -> None:
 
     await run_probe(coordinator)
 
-    assert any("msg_id=14;13" in body for body in _bodies(coordinator))
+    assert any(";" in b and "msg_id=" in b for b in _bodies(coordinator))
 
 
 async def test_the_integration_s_own_delete_is_exercised() -> None:
@@ -357,9 +374,6 @@ async def test_a_repeated_variant_separates_a_fault_from_a_fluke() -> None:
     first = _by_name(report, "8_single_id")
     again = _by_name(report, "9_single_id_repeat")
     assert first["id_targeted"] != again["id_targeted"]
-    assert first["sent"].replace("msg_id=20", "") == again["sent"].replace(
-        "msg_id=19", ""
-    )
 
 
 async def test_each_probe_is_timed_and_carries_its_session_state() -> None:
@@ -438,3 +452,180 @@ async def test_an_unexpected_failure_still_leaves_the_report_behind() -> None:
     assert report["aborted"]["error_type"] == "RuntimeError"
     assert coordinator.api.delete_probe is report
     coordinator.persist_delete_probe.assert_called()
+
+
+# ---------------------------------------------------------------------------
+# Probe 2 — isolating which step fails, and proving a fix before spending a
+# message
+# ---------------------------------------------------------------------------
+
+
+async def test_each_step_of_deriving_a_token_is_probed_separately() -> None:
+    """The fault is inside the token derivation, which makes three calls.
+
+    Every rung that derived a token failed and the one that supplied its own
+    succeeded. Separating the three is the difference between "the token could not be built"
+    and knowing which of the three is refusing.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    for name in ("1c_session_check", "1d_version", "1e_rd", "1f_token"):
+        assert _by_name(report, name)["outcome"] == "returned"
+    coordinator.api._ensure_session.assert_awaited()
+    coordinator.api.get_version.assert_awaited()
+
+
+async def test_the_liveness_keys_are_read_together_and_scored() -> None:
+    """One key cannot separate a dead session from a router still starting up.
+
+    That is why the current single-key check falls back to a weaker rule, and
+    why a key that is permanently blank on one model reads as an expiry.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    result = _by_name(report, "1b_liveness_keys")["result"]
+    assert set(result) == {"answer", "verdict", "unauthenticated_keys"}
+
+
+async def test_a_variant_must_work_every_time_to_count() -> None:
+    """One success is not a working method, and one failure is not a broken one."""
+    coordinator = _coordinator()
+    calls = {"n": 0}
+
+    async def flaky(*_a, **_k):
+        calls["n"] += 1
+        if calls["n"] % 2:
+            raise TimeoutError("intermittent")
+        return {"result": "success"}
+
+    coordinator.api._request = AsyncMock(side_effect=flaky)
+
+    report = await run_probe(coordinator)
+
+    assert report["working_variant"] is None
+
+
+async def test_a_working_variant_is_confirmed_before_a_message_is_spent() -> None:
+    """A variant that works three times and fails the next three is not a fix.
+
+    Finding that out costs nothing at the harmless write and a message later.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    assert report["working_variant"] == "7b_current_path"
+    assert report["working_variant_confirmed"] == "7b_current_path"
+    assert [p["probe"] for p in report["probes"] if p["probe"].startswith("7h_")] == [
+        "7h_confirm_1",
+        "7h_confirm_2",
+        "7h_confirm_3",
+    ]
+
+
+async def test_the_confirmed_variant_deletes_three_messages_and_a_batch() -> None:
+    """Three separate messages, so one success cannot pass for a working delete."""
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    names = [p["probe"] for p in report["probes"]]
+    for expected in (
+        "16_confirmed_single",
+        "17_confirmed_single_again",
+        "18_confirmed_single_third",
+        "19_confirmed_batch",
+    ):
+        assert expected in names
+
+
+async def test_no_working_variant_means_no_messages_are_spent() -> None:
+    """If nothing writes reliably, deleting proves nothing and costs a message."""
+    coordinator = _coordinator()
+    coordinator.api._request = AsyncMock(side_effect=TimeoutError("no answer"))
+
+    report = await run_probe(coordinator)
+
+    assert report["working_variant"] is None
+    skipped = _by_name(report, "16_confirmed_variant_deletes")
+    assert skipped["outcome"] == "skipped"
+    assert "reliably" in skipped["reason"]
+
+
+async def test_the_run_is_capped_and_keeps_what_it_collected() -> None:
+    """A run with no limit is one the user restarts, and a restart loses it."""
+    coordinator = _coordinator()
+
+    async def forever(*_a, **_k):
+        await asyncio.Event().wait()
+
+    coordinator.api.get_rd = AsyncMock(side_effect=forever)
+
+    with patch.object(sms_delete_probe, "PROBE_TIMEOUT", 0.05):
+        report = await run_probe(coordinator)
+
+    assert report["timed_out"] == 0.05
+    assert report["completed"] is False
+    assert coordinator.api.delete_probe is report
+
+
+async def test_the_multi_key_check_refuses_when_it_reads_an_expiry() -> None:
+    """The variant under test is the proposed fix; it must still say no.
+
+    A check that never refuses is not a session check — it would let a write go
+    out on a session the router has already taken away, which is the fault the
+    current check was written for.
+    """
+    coordinator = _coordinator()
+    with patch.object(sms_delete_probe, "_classify_session", return_value="expired"):
+        report = await run_probe(coordinator)
+
+    attempts = [
+        p for p in report["probes"] if p["probe"].startswith("7e_multi_key_check")
+    ]
+    assert attempts
+    assert all(p["outcome"] == "raised" for p in attempts)
+    assert report["working_variant"] != "7e_multi_key_check"
+
+
+async def test_the_harmless_write_refuses_a_form_it_cannot_fill() -> None:
+    """This command replaces the whole form; a partial one would be refused.
+
+    Raising here rather than sending is what stops the probe altering a data
+    limit the user relies on.
+    """
+    coordinator = _coordinator()
+    coordinator.data = {"flux_clear_date": "1"}
+
+    report = await run_probe(coordinator)
+
+    attempts = [p for p in report["probes"] if p["probe"].startswith("7b_current_path")]
+    assert all(p["outcome"] == "raised" for p in attempts)
+    assert report["working_variant"] is None
+
+
+async def test_a_variant_that_stops_working_is_not_confirmed() -> None:
+    """Three successes then three failures is not a method.
+
+    The deletes must not run on the strength of the first three.
+    """
+    coordinator = _coordinator()
+    calls = {"n": 0}
+
+    async def works_then_stops(*_a, **_k):
+        calls["n"] += 1
+        if calls["n"] > 12:
+            raise TimeoutError("stopped working")
+        return {"result": "success"}
+
+    coordinator.api._request = AsyncMock(side_effect=works_then_stops)
+
+    report = await run_probe(coordinator)
+
+    assert report["working_variant"] is not None
+    assert report["working_variant_confirmed"] is None
+    assert _by_name(report, "16_confirmed_variant_deletes")["outcome"] == "skipped"

@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.15] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V2**: Updated the temporary diagnostic action (`zte_router_5g.sms_delete_probe`) to isolate which specific step of token derivation blocks write commands on problem firmwares. It tests six write-token variants against non-destructive data volume commands before spending messages, and adds a four-minute runtime cap. This action is temporary troubleshooting scaffolding for issue diagnostics and will be removed in the next release.
+
+### Added
+
+- **Temporary SMS Delete Probe Step Isolation**: Added five non-writing diagnostic steps to `zte_router_5g.sms_delete_probe` (individual session checks, firmware queries, RD reads, and token derivation) to determine precisely where router authentication fails. _(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)_
+- **Non-Destructive Token Probing**: Evaluates six distinct token generation strategies against harmless data volume settings, requiring three consecutive successes before attempting message deletion.
+- **Probe Execution Timeout**: Added a four-minute safety timeout on the full probe run, preserving all findings collected up to that point.
+
+---
+
 ## [3.3.14] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence
 
 ### Summary
@@ -593,6 +607,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.15\] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation](#3315---2026-09-08---release-sms-delete-probe-v2-token-step-isolation)
   - [\[3.3.14\] - 2026-09-07 - Release: SMS Deletion Diagnostic Probing and Entry State Persistence](#3314---2026-09-07---release-sms-deletion-diagnostic-probing-and-entry-state-persistence)
   - [\[3.3.12\] - 2026-09-06 - Release: Best Connection Dual Spelling, Persistent Deletion Records](#3312---2026-09-06---release-best-connection-dual-spelling-persistent-deletion-records)
   - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
