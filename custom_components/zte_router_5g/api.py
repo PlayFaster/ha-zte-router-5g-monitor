@@ -542,6 +542,33 @@ _UNAUTHENTICATED_KEYS = frozenset(
 )
 
 
+# Read together by `_ensure_session`, because one key cannot separate a dead
+# session from a device that simply never populates that key.
+#
+# Verified on both devices this integration has downloads for, and the choice
+# of the third key is not free. `modem_main_state` was tried first and is
+# wrong twice over: on the reference MC7010 a *dead* session still answered it
+# populated, which scores `live` and disables expiry detection outright, and on
+# the MC888 Pro of issue #56 it came back blank. `model_name` is in
+# `_UNAUTHENTICATED_KEYS` on both, so it cannot vote `live`; what it does is
+# let `_classify_session` separate `expired` from `not_ready`, which a
+# single-key read has no way to do.
+#
+# The live verdict therefore rests on `wan_connect_status` or `ppp_status`.
+# Measured on the MC888 Pro: the first is blank at all times — which is what
+# blocked every write on that device, since a lone blank key with no
+# unauthenticated key alongside it falls through to the weak "everything is
+# empty" rule — and the second answered `ppp_connected`.
+#
+# Anything changed here must be verified on hardware. A key that is populated
+# regardless of session state silently turns this check into a no-op.
+_SESSION_CHECK_KEYS: tuple[str, ...] = (
+    "wan_connect_status",
+    "ppp_status",
+    "model_name",
+)
+
+
 class ZTEConnectionError(Exception):
     """Raised when the router cannot be reached."""
 
@@ -1102,12 +1129,26 @@ class ZTERouterAPI:
         Costs one short read (~16 ms) on a path where the write itself is
         ~112 ms. `_request` does the recovery: a retrying read re-logs-in on its
         own when the session has gone.
+
+        **Reads `_SESSION_CHECK_KEYS`, not one key.** It read
+        `wan_connect_status` alone until v3.3.16, which is blank at all times on
+        an MC888 Pro. A response of one blank value carries no unauthenticated
+        key, so `_classify_session` cannot rule and the caller falls back to
+        "every value is empty, so the session is gone" — permanently true on
+        that device. Every write was refused before it was sent, which is the
+        SMS deletion fault in issue #56. See that constant for why each key is
+        in the list.
+
+        `requested` is passed so the absent-key guard applies: a device that
+        answers none of these is a truncated read or firmware key-name drift,
+        and must not be scored as an expiry.
         """
         await self._request(
             "GET",
             "goform/goform_get_cmd_process?multi_data=1&isTest=false"
-            "&sms_received_flag_flag=0&cmd=wan_connect_status",
+            "&sms_received_flag_flag=0&cmd=" + ",".join(_SESSION_CHECK_KEYS),
             timeout_sec=timeout_sec,
+            requested=list(_SESSION_CHECK_KEYS),
         )
 
     def _parse_date(self, date_str: str) -> str | None:

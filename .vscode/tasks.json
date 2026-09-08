@@ -541,7 +541,6 @@
         "YAML: Lint Project",
         "Ruff: Check (Lint Only)",
         "Ruff: Format Check (View Only)",
-        "Complexity: Check McCabe",
         "Sensor: Check Manifest",
         "IQS: Static Check",
         "Tests: Assertion Audit",
@@ -559,6 +558,7 @@
         "Hardware: Check Diagnostics Download",
         "Pytest: Check Test Coverage",
         "Tests: Depth Check",
+        "Complexity: Check McCabe",
         "Mypy: Strict Check",
         "Show: Results Summary"
       ],
@@ -668,7 +668,6 @@
         "YAML: Lint Project",
         "Ruff: Check (Lint Only)",
         "Ruff: Format Check (View Only)",
-        "Complexity: Check McCabe",
         "Sensor: Check Manifest",
         "IQS: Static Check",
         "Tests: Assertion Audit",
@@ -686,6 +685,7 @@
         "Hardware: Check Diagnostics Download",
         "Pytest: Check Test Coverage",
         "Tests: Depth Check",
+        "Complexity: Check McCabe",
         "Mypy: Strict Check",
         "Show: Results Summary (Fix and Validate)"
       ],

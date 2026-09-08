@@ -700,6 +700,13 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "probe is to vary a form the API deliberately sends only one way. "
         "Adding public surface for a temporary diagnostic would outlive it."
     ),
+    ("sms_delete_probe.py", "noqa: S324"): (
+        "MD5 is one of the digests this router's own firmware uses to derive a "
+        "write token, and one candidate formula reproduces it. The choice is "
+        "the device's, not this code's, and the value is never used to "
+        "authenticate anything here — it is compared against what the router "
+        "accepts. It goes with the module."
+    ),
     ("sms_delete_probe.py", "noqa: BLE001"): (
         "Every probe records what happened and moves to the next one. A raised "
         "exception is the finding, not an error to propagate: stopping at the "
