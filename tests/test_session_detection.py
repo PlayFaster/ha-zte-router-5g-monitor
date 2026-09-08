@@ -32,6 +32,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from custom_components.zte_router_5g.api import (
     _CORE_PARAMS,
     _EXTENDED_PARAMS,
+    _SESSION_CHECK_KEYS,
     _UNAUTHENTICATED_KEYS,
     ZTEAuthError,
     ZTEConnectionError,
@@ -414,3 +415,112 @@ def test_a_verdict_is_only_drawn_where_it_could_mean_something(
     the poll returned nothing at all.
     """
     assert _is_classifiable(chunk, _UNAUTHENTICATED_KEYS) is expected, why
+
+
+# ---------------------------------------------------------------------------
+# The pre-write session check, and why it reads three keys
+# ---------------------------------------------------------------------------
+
+
+def _check_response(**values: str) -> dict[str, str]:
+    """A session-check answer, every key present, blank unless named."""
+    return {key: values.get(key, "") for key in _SESSION_CHECK_KEYS}
+
+
+async def test_the_session_check_reads_every_key_it_classifies_on(
+    mock_aiohttp_client,
+) -> None:
+    """A one-key check cannot be classified, and fell through to the weak rule.
+
+    `_classify_session` needs an unauthenticated key alongside an
+    authenticated one to rule at all. A lone `wan_connect_status` supplies
+    neither pairing, so the verdict was `undecidable` and the caller fell back
+    to "every value is empty, so the session is gone" — permanently true on a
+    device that never populates that key.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    seen: dict[str, object] = {}
+
+    async def record(_method, path, **kwargs):
+        seen["path"] = path
+        seen["requested"] = kwargs.get("requested")
+        return _check_response(ppp_status="ppp_connected")
+
+    with patch.object(api, "_request", side_effect=record):
+        await api._ensure_session()
+
+    for key in _SESSION_CHECK_KEYS:
+        assert key in str(seen["path"])
+    # Passed so the absent-key guard applies: a device answering none of these
+    # is a truncated read, not an expiry.
+    assert seen["requested"] == list(_SESSION_CHECK_KEYS)
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected", "why"),
+    [
+        (
+            _check_response(
+                wan_connect_status="pdp_connected",
+                ppp_status="ppp_connected",
+                model_name="MC7010",
+            ),
+            "live",
+            "the reference device, session alive",
+        ),
+        (
+            _check_response(ppp_status="ppp_connected", model_name="MC888 Pro"),
+            "live",
+            "the MC888 Pro of issue #56, whose wan_connect_status is always blank",
+        ),
+        (
+            _check_response(model_name="MC7010"),
+            "expired",
+            "authenticated keys blank while the router plainly answers",
+        ),
+        (
+            _check_response(),
+            "not_ready",
+            "everything blank, which is a router still starting up",
+        ),
+    ],
+)
+def test_the_session_check_keys_classify_each_state(
+    answer: dict[str, str], expected: str, why: str
+) -> None:
+    """The three states this check has to separate, on both known devices.
+
+    The second case is the fault in issue #56. `wan_connect_status` is blank
+    at all times on that firmware, so the live session it was reporting on had
+    to be recognized from another key or every write would be refused before
+    it was sent.
+    """
+    verdict = _classify_session(answer, list(_SESSION_CHECK_KEYS))
+
+    assert verdict == expected, why
+
+
+def test_the_third_key_cannot_vote_a_dead_session_alive() -> None:
+    """`model_name` is unauthenticated, which is the property being relied on.
+
+    `modem_main_state` was the first choice and is wrong twice over. On the
+    reference MC7010 a dead session answered it `modem_init_complete`, and
+    because the constant classifies it as authenticated that populated value
+    scores `live` — a dead session reported healthy, which is worse than the
+    fault being fixed. On the MC888 Pro it came back blank, so it would not
+    have helped there either.
+    """
+    assert set(_SESSION_CHECK_KEYS) & _UNAUTHENTICATED_KEYS == {"model_name"}
+
+    masked = {
+        "wan_connect_status": "",
+        "ppp_status": "",
+        "modem_main_state": "modem_init_complete",
+    }
+    assert _classify_session(masked, list(masked)) == "live"
+
+    same_state_with_the_chosen_key = _check_response(model_name="MC7010")
+    assert (
+        _classify_session(same_state_with_the_chosen_key, list(_SESSION_CHECK_KEYS))
+        == "expired"
+    )

@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.16-dev1\] - 2026-09-08 - Session Check Reads Three Keys; SMS Probe V3 Tries Twelve Token Formulas](#3316-dev1---2026-09-08---session-check-reads-three-keys-sms-probe-v3-tries-twelve-token-formulas)
   - [\[3.3.15\] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation](#3315---2026-09-08---release-sms-delete-probe-v2-token-step-isolation)
   - [\[3.3.15-dev2\] - 2026-09-08 - Special SMS Probe V2, now Isolates Which Step Blocks a Write; Six Token Variants Tested](#3315-dev2---2026-09-08---special-sms-probe-v2-now-isolates-which-step-blocks-a-write-six-token-variants-tested)
   - [\[3.3.15-dev1\] - 2026-09-08 - McCabe Complexity in tasks.json; README tweak](#3315-dev1---2026-09-08---mccabe-complexity-in-tasksjson-readme-tweak)
@@ -249,6 +250,42 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.16-dev1] - 2026-09-08 - Session Check Reads Three Keys; SMS Probe V3 Tries Twelve Token Formulas
+
+### Summary
+
+The reporter's probe run established two stacked faults. The session check that guards every write read one key, `wan_connect_status`, which is blank at all times on an MC888 Pro, so every write was refused before it was sent. Bypassing that check, the router then answered the write `{"result": "failure"}` — the same answer it gives to a deliberately malformed token, which points at how the token itself is derived. This release fixes the first and tests twelve derivations for the second.
+
+### Fixed
+
+- **The pre-write session check reads three keys rather than one.** `_ensure_session` now requests `wan_connect_status,ppp_status,model_name` and passes the request list so the absent-key guard applies. A response of one blank value carries no unauthenticated key, so `_classify_session` could not rule on it and the caller fell through to "every value is empty, so the session is gone" — permanently true on a device that never populates that key. Every write on that device was blocked before it reached the router, which is the SMS deletion fault in issue #56.
+
+### Added
+
+- **Twelve token derivations tried against a write that destroys nothing.** The probe builds each candidate `AD` token from `wa_inner_version`, `cr_version` and `RD`, read fresh for every attempt because `RD` may be a nonce, and sends the data-volume form back at its current values. Three attempts each, all twelve run whatever the earlier ones did, and a formula is accepted only on three successes out of three. Candidates needing `cr_version` are named and skipped, with the reason, where the device does not answer it.
+
+- **Every formula that passed is recorded, not only the one used.** A device accepting several says something different about its firmware than one accepting exactly one.
+
+- **`1g_login_baseline`, a read-only inventory.** After a login, both batches are read and the names of the populated keys recorded — names and counts, no values, plus the `model_name` and `wa_inner_version` identity pair. It is groundwork for drawing the session-check keys from the device rather than a hand-picked list; see `.notes/issues/other_router_access/model_agnostic_session_validation.md`.
+
+### Changed
+
+- **A candidate is judged on the router's own `result` field.** Version 2 judged on whether the call raised, and reported a variant confirmed while all six of its writes came back `{"result": "failure"}`. This API answers `200 OK` for a refused write, so a call that returns proves only that the router was reachable. An explicit success is now required: a response carrying no `result` at all is not counted, because treating silence as success is the same mistake in a quieter form.
+
+- **The six token-source variants are removed.** Which step of the derivation fails was the question version 2 answered, and it is not asked again.
+
+### Measured
+
+- On the reporter's MC888 Pro, the three-key read answers `wan_connect_status: ""`, `ppp_status: "ppp_connected"`, `model_name` populated. `ppp_status` is authenticated in the key set and carries a value, so the trio scores `live` where the single key scored `expired`.
+
+- `modem_main_state` was tried as the third key and rejected. On the reference MC7010 a genuinely dead session still answered it `modem_init_complete`, which the constant classifies as authenticated and therefore scores `live` — a dead session reported healthy. On the MC888 Pro it came back blank. `model_name` and `wa_inner_version` both produced the correct refusal on a dead MC7010 session.
+
+- `RD` is 64 characters on the MC888 Pro and 32 on the MC7010, which is SHA-256 against MD5.
+
+### Verified
+
+- 1,524 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.15] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation
 
