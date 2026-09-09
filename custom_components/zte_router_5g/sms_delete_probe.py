@@ -72,7 +72,7 @@ LAZY_DELETE_WAIT = 5
 # and a replay per attempt, and there is no other limit — the first version
 # could in principle have run for twenty minutes with the action still
 # spinning, and a user watching that will restart Home Assistant.
-PROBE_TIMEOUT = 480
+PROBE_TIMEOUT = 600
 
 # A failed login answers `{"result":"3"}` on both devices this project can
 # reach, measured 2026-09-09 for a wrong password and for a wrong username with
@@ -328,12 +328,19 @@ def _md5(value: str) -> str:
 # `nicjac` uses `wa + cr` for the MC801A, `teixeluis` documents `cr + wa` for
 # the MF266, and `Kajkac` concatenates a `cr_version` it never populates, which
 # is `wa` alone.
+# Ordered by what a source documents, not by convenience. The screening pass
+# runs to the cap and a run cut short loses the tail, so the derivations with a
+# citation behind them go first: `wa + cr` is what miononno documents for the
+# MC888 Pro and what `nicjac` uses for the MC801A, `wa` alone is what `Kajkac`
+# computes and what this integration ships, and `cr + wa` is the MF266's order.
+#
+# That ordering is a judgement about likelihood, not a measurement.
 _OPERANDS: tuple[tuple[str, Any], ...] = (
-    ("wa", lambda wa, cr: wa),
-    ("cr", lambda wa, cr: cr),
     ("wacr", lambda wa, cr: wa + cr),
+    ("wa", lambda wa, cr: wa),
     ("crwa", lambda wa, cr: cr + wa),
     ("wanots_cr", lambda wa, cr: _TIMESTAMP.sub("", wa) + cr),
+    ("cr", lambda wa, cr: cr),
 )
 
 # What is done to `RD` before the second round. `teixeluis` documents an
@@ -478,6 +485,88 @@ def _wrote(record: dict[str, Any]) -> bool:
     return value is not None and str(value).lower() in ("success", "0", "ok")
 
 
+# How a write is carried, as opposed to what it says.
+#
+# A write on this API has four independent axes — the session it runs under,
+# the token it carries, how it is carried, and which command it is — and this
+# is the third. Holding it as a value rather than as a set of one-off rungs is
+# what lets a proven transport be adopted for everything below it: the login
+# stage already works that way, and the two audits that preceded this release
+# both found the same defect, a value discovered and then not used.
+# The transport in force. Replaced in place when a variant is proven, so
+# every rung below inherits it without being told.
+_ADOPTED: dict[str, Any] = {}
+
+_DEFAULT_TRANSPORT: dict[str, Any] = {
+    "method": "POST",
+    "as_query": False,
+    "not_callback": False,
+    "cookies": None,
+    "headers": {"Content-Type": "application/x-www-form-urlencoded"},
+}
+
+
+async def _attempt(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    *,
+    token: str | None = None,
+    transport: dict[str, Any] | None = None,
+    command: str = "DATA_LIMIT_SETTING",
+    fields: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """One write, on one session, with one token, carried one way.
+
+    The single place a write is built, so that a variation of any axis is a
+    parameter rather than another hand-written rung. Everything above it
+    chooses values; nothing above it constructs a request.
+
+    `token` of `None` asks the integration for one the ordinary way. The token
+    is single-use on this hardware, so a caller repeating an attempt must
+    supply a freshly derived one rather than the value that just worked.
+
+    The session is not a parameter: it is whatever `api.cookies` holds, which
+    `_login_stage` may have set to a variant it proved. `cookies` in the
+    transport overrides that for the duration of the call and is put back.
+    """
+    api = coordinator.api
+    carried = {**_DEFAULT_TRANSPORT, **(transport or {})}
+
+    if fields is None:
+        current = dict(coordinator.data or {})
+        fields = {}
+        for field, aliases in api.DATA_VOLUME_FIELDS.items():
+            value = next(
+                (current[key] for key in aliases if current.get(key) not in ("", None)),
+                None,
+            )
+            if value is None:
+                raise ZTEConnectionError(f"the poll did not supply {field}")
+            fields[field] = str(value)
+
+    ad = token if token is not None else await api.get_ad()
+    parts = ["isTest=false", f"goformId={command}"]
+    parts += [f"{key}={value}" for key, value in fields.items()]
+    if carried["not_callback"]:
+        parts.append("notCallback=true")
+    parts.append(f"AD={ad}")
+    payload = "&".join(parts)
+
+    held = dict(api.cookies)
+    if carried["cookies"] is not None:
+        api.cookies = dict(carried["cookies"])
+    try:
+        as_query = bool(carried["as_query"])
+        result = await api._request(  # noqa: SLF001 - the point is to vary a fixed form
+            str(carried["method"]),
+            "goform/goform_set_cmd_process" + (f"?{payload}" if as_query else ""),
+            data=None if as_query else payload,
+            headers=dict(carried["headers"]),
+        )
+    finally:
+        api.cookies = held
+    return cast("dict[str, Any]", result)
+
+
 async def _data_volume_write(
     coordinator: ZTERouterDataUpdateCoordinator, token: str | None
 ) -> dict[str, Any]:
@@ -491,27 +580,7 @@ async def _data_volume_write(
     The reporter's limit has already changed once between downloads, and
     writing back a stale value would alter a setting he relies on.
     """
-    api = coordinator.api
-    current = dict(coordinator.data or {})
-    fields: dict[str, str] = {}
-    for field, aliases in api.DATA_VOLUME_FIELDS.items():
-        value = next(
-            (current[key] for key in aliases if current.get(key) not in ("", None)),
-            None,
-        )
-        if value is None:
-            raise ZTEConnectionError(f"the poll did not supply {field}")
-        fields[field] = str(value)
-
-    ad = token if token is not None else await api.get_ad()
-    body = "&".join(f"{key}={value}" for key, value in fields.items())
-    result = await api._request(  # noqa: SLF001 - a deliberate variant, not the API's own form
-        "POST",
-        "goform/goform_set_cmd_process",
-        data=f"isTest=false&goformId=DATA_LIMIT_SETTING&{body}&AD={ad}",
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-    )
-    return cast("dict[str, Any]", result)
+    return await _attempt(coordinator, token=token, transport=_ADOPTED)
 
 
 async def _surviving_ids(coordinator: ZTERouterDataUpdateCoordinator) -> list[str]:
@@ -584,16 +653,23 @@ async def _delete_raw(
     is to vary the form, so this builds the body directly rather than calling
     it. `token=None` means a correct one, derived now.
     """
-    api = coordinator.api
-    ad = token if token is not None else await api.get_ad()
-    body = _delete_body(msg_id, ad, mem_store=mem_store, not_callback=not_callback)
-    result = await api._request(  # noqa: SLF001 - a deliberate variant, not the API's own form
-        "POST",
-        "goform/goform_set_cmd_process",
-        data=body,
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    fields: dict[str, str] = {"msg_id": msg_id}
+    if mem_store is not None:
+        fields["mem_store"] = mem_store
+    # Carried the way a write was proven to work, where one was. A delete sent
+    # through the transport the device refuses would fail for a reason this
+    # run has already solved, which is the defect two audits of this release
+    # found in two other places.
+    transport = {**_ADOPTED}
+    if not_callback:
+        transport["not_callback"] = True
+    return await _attempt(
+        coordinator,
+        token=token,
+        transport=transport,
+        command="DELETE_SMS",
+        fields=fields,
     )
-    return cast("dict[str, Any]", result)
 
 
 def _redacted_body(
@@ -644,10 +720,12 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
     # not mistaken for a complete one.
     api.delete_probe = report
     coordinator.persist_delete_probe()
-    # Cleared per run. It is module state so that `_token_inputs` can report a
-    # failure the caller never sees, and a note left from an earlier run would
-    # be attributed to this one.
+    # Cleared per run. Both are module state so that helpers can report to a
+    # caller that never sees them, and either left from an earlier run would be
+    # attributed to this one — a transport most of all, since an adopted one
+    # silently changes how every write below it is carried.
     _CR_NOTE.clear()
+    _ADOPTED.clear()
 
     try:
         async with asyncio.timeout(PROBE_TIMEOUT):
@@ -675,8 +753,16 @@ async def _run_rungs(
     api = coordinator.api
     async with coordinator._async_update_lock:  # noqa: SLF001 - the lock is the point
         # --- 0. Can any login produce a session that writes? ----------------
-        # First, because everything below assumes one. Read the docstring on
-        # `_login_stage` for why this is budgeted rather than exhaustive.
+        # First, because everything below assumes one, and the session it
+        # settles on is the session the rest of the pass runs under. Read the
+        # docstring on `_login_stage` for why this is budgeted rather than
+        # exhaustive.
+        #
+        # Rungs below that log in again — `1_token_rotation` and
+        # `13_single_id_fresh_session` — use the shipped form by design, since
+        # what they measure is what a renewal does. Where an adopted session
+        # was in force, `report["session_in_use"]` says so and those two rungs
+        # are read against it rather than against the adopted one.
         await _login_stage(coordinator, report, probes)
 
         # --- 1. Does the write token change when the session is renewed? ----
@@ -955,6 +1041,7 @@ async def _login_stage(
     api = coordinator.api
     spent = 0
     winner: str | None = None
+    winning_variant: dict[str, Any] | None = None
     report["login_variants"] = {}
 
     for variant in await _login_variants(api):
@@ -980,13 +1067,18 @@ async def _login_stage(
             coordinator, f"0a_{name}", lambda v=variant: _try_login(api, v)
         )
         outcome = record.get("result")
-        if isinstance(outcome, dict) and outcome.get("spent_an_attempt"):
-            spent += 1
         probes.append(record)
         await asyncio.sleep(LOGIN_DELAY)
 
         established = isinstance(outcome, dict) and bool(outcome.get("cookie_names"))
+        # Anything that did not establish a session is counted as spent, not
+        # only what answered `result: "3"`. That code is measured on one
+        # device; a router that refuses some other way, or answers nothing,
+        # would leave the counter still and quietly bypass the budget — and
+        # this is the one place where being wrong costs the user a locked
+        # router rather than a missing finding.
         if not established:
+            spent += 1
             report["login_variants"][name] = "no session"
             continue
 
@@ -1000,12 +1092,38 @@ async def _login_stage(
         probes.append(write)
         report["login_variants"][name] = "wrote" if write["wrote"] else "session only"
         if write["wrote"] and winner is None:
-            winner = name
+            winner, winning_variant = name, variant
         await asyncio.sleep(ATTEMPT_DELAY)
 
     report["login_variant_that_wrote"] = winner
-    # Whatever happened, the run continues from a session this integration
-    # would normally hold, so the rungs below measure the shipped path.
+
+    # --- adopt it -------------------------------------------------------
+    # Every rung below this one asks a question that only means something on a
+    # session that can write. Recording which login unlocked the device and
+    # then running the rest of the pass on the shipped one would answer the
+    # hardest question in the run and then decline to use the answer, which
+    # costs another round trip with the reporter for work this pass already
+    # had the router in front of it to do.
+    if winning_variant is not None:
+        adopted = await _capture(
+            coordinator,
+            f"0y_adopt_{winner}",
+            lambda v=winning_variant: _try_login(api, v),
+        )
+        probes.append(adopted)
+        result = adopted.get("result")
+        report["session_in_use"] = (
+            winner
+            if isinstance(result, dict) and result.get("cookie_names")
+            else "shipped login: the winning variant did not re-establish"
+        )
+        if isinstance(result, dict) and result.get("cookie_names"):
+            return winner
+
+    # Nothing won, or the winner would not come back. The run continues on the
+    # session this integration would normally hold, so the rungs below at least
+    # measure the shipped path rather than no path at all.
+    report.setdefault("session_in_use", "shipped login")
     with contextlib.suppress(Exception):
         await api.login()
     return winner
@@ -1128,51 +1246,33 @@ async def _transport_rungs(
     report: dict[str, Any],
     probes: list[dict[str, Any]],
 ) -> None:
-    """The same write, sent differently. Nothing here concerns the token.
+    """Every way of carrying the same write, and the first that works is kept.
 
-    Every one of these is something another implementation does and this one
-    does not, or the reverse. None is attested as necessary — the projects that
-    do them are not themselves attested as writing on an MC888 — so they are
-    tried rather than adopted.
+    Each value is something another implementation does and this one does not,
+    or the reverse. None is attested as necessary — neither reference project
+    is itself attested as writing on an MC888 — so they are tried rather than
+    adopted on authority.
 
-    All are variations on the data-volume form, so none spends a message and
-    none changes a setting.
+    **A proven transport is held for the rest of the run.** Two audits of this
+    release found the same defect in two places: a value discovered and then
+    not used, so every rung below went on failing in a way the run had already
+    shown how to fix. `_ADOPTED` is replaced in place, and everything that
+    writes through `_attempt` inherits it without being told.
+
+    All of these carry the data-volume form, so none spends a message and none
+    changes a setting.
     """
     api = coordinator.api
+    root = api.referer
 
-    async def send(**kwargs: Any) -> dict[str, Any]:
-        current = dict(coordinator.data or {})
-        fields: dict[str, str] = {}
-        for field, aliases in api.DATA_VOLUME_FIELDS.items():
-            value = next(
-                (current[key] for key in aliases if current.get(key) not in ("", None)),
-                None,
-            )
-            if value is None:
-                raise ZTEConnectionError(f"the poll did not supply {field}")
-            fields[field] = str(value)
-        ad = await api.get_ad()
-        body = "&".join(f"{key}={value}" for key, value in fields.items())
-        payload = f"isTest=false&goformId=DATA_LIMIT_SETTING&{body}&AD={ad}"
-        return cast(
-            "dict[str, Any]",
-            await api._request(  # noqa: SLF001 - a deliberate variant
-                kwargs.pop("method", "POST"),
-                "goform/goform_set_cmd_process",
-                data=None if kwargs.pop("as_query", False) else payload,
-                params=None,
-                **kwargs,
-            ),
-        )
-
-    variants: list[tuple[str, dict[str, Any]]] = [
+    values: list[tuple[str, dict[str, Any]]] = [
         # The site root rather than `index.html`, which is what both reference
         # implementations send.
         (
             "20a_referer_root",
             {
                 "headers": {
-                    "Referer": api.referer,
+                    "Referer": root,
                     "Content-Type": "application/x-www-form-urlencoded",
                 }
             },
@@ -1182,12 +1282,10 @@ async def _transport_rungs(
             "20b_browser_headers",
             {
                 "headers": {
-                    "Referer": api.referer,
-                    "Origin": api.referer.rstrip("/"),
+                    "Referer": root,
+                    "Origin": root.rstrip("/"),
                     "X-Requested-With": "XMLHttpRequest",
-                    "Content-Type": (
-                        "application/x-www-form-urlencoded; charset=UTF-8"
-                    ),
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
                     "User-Agent": (
                         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                         "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -1197,25 +1295,80 @@ async def _transport_rungs(
             },
         ),
         # No content type at all, which is what `Kajkac` sends.
-        ("20c_no_content_type", {"headers": {"Referer": api.referer}}),
+        ("20c_no_content_type", {"headers": {"Referer": root}}),
+        # `Kajkac` carries `notCallback` on its writes; this integration sends
+        # it only on a delete, so it has never been tried on anything else.
+        ("20n_not_callback", {"not_callback": True}),
+        # A query string rather than a body. `nicjac` logs in by GET against
+        # this same endpoint, so the firmware reads parameters from the query
+        # on at least one command.
+        ("20i_write_as_query", {"method": "GET", "as_query": True}),
+        # `Kajkac` attaches a cookie only when it is named `stok`, so on a
+        # device issuing `zsidn` it sends none at all.
+        ("20j_no_cookie", {"cookies": {}}),
+        # The same value under the other name, which asks whether the firmware
+        # reads the name rather than the value.
+        (
+            "20k_cookie_named_stok",
+            {"cookies": {"stok": next(iter(dict(api.cookies).values()), "")}},
+        ),
     ]
-    for name, kwargs in variants:
-        record = await _capture(coordinator, name, lambda k=kwargs: send(**k))
+
+    report["transport_variants"] = {}
+    for name, transport in values:
+        record = await _capture(
+            coordinator, name, lambda t=transport: _attempt(coordinator, transport=t)
+        )
         record["wrote"] = _wrote(record)
+        _record_headers(api, record)
         probes.append(record)
+        report["transport_variants"][name] = "wrote" if record["wrote"] else "refused"
+        if record["wrote"] and not _ADOPTED:
+            _ADOPTED.update(transport)
+            report["transport_in_use"] = name
         await asyncio.sleep(ATTEMPT_DELAY)
 
-    # A write issued immediately after a fresh login, with nothing between the
-    # two. `Kajkac` issue #4 reports a user fixing a dead control this way.
+    report.setdefault("transport_in_use", "shipped transport")
+
+    # --- 20d, 20g, 20h, 20l. When the token is derived, relative to the write
+    # The token is single-use: measured on the reference MC7010, a second write
+    # carrying the same one is refused at any delay, and re-reading the inputs
+    # re-arms it. What that did not settle is whether an unrelated request
+    # between deriving and posting also spends it — which matters because
+    # `get_ad` makes three calls of its own before the write follows.
     async def after_fresh_login() -> dict[str, Any]:
         await api.login()
-        return await _data_volume_write(coordinator, None)
+        return await _attempt(coordinator, transport=_ADOPTED)
 
-    record = await _capture(
-        coordinator, "20d_write_after_fresh_login", after_fresh_login
-    )
-    record["wrote"] = _wrote(record)
-    probes.append(record)
+    async def derive_then_post() -> dict[str, Any]:
+        token = await api.get_ad()
+        return await _attempt(coordinator, token=token, transport=_ADOPTED)
+
+    async def derive_read_then_post() -> dict[str, Any]:
+        token = await api.get_ad()
+        # One read, deliberately unrelated to the token.
+        await api.get_params(["signalbar"])
+        return await _attempt(coordinator, token=token, transport=_ADOPTED)
+
+    async def token_captured_at_login() -> dict[str, Any]:
+        # `Kajkac` computes `AD` during authentication and reuses it for every
+        # protected write; `nicjac` derives fresh per write, as this
+        # integration does. The two disagree and neither is attested here.
+        token = await api.get_ad()
+        await api.login()
+        return await _attempt(coordinator, token=token, transport=_ADOPTED)
+
+    for name, run in (
+        ("20d_write_after_fresh_login", after_fresh_login),
+        ("20g_derive_then_post", derive_then_post),
+        ("20h_derive_read_then_post", derive_read_then_post),
+        ("20l_token_captured_at_login", token_captured_at_login),
+    ):
+        record = await _capture(coordinator, name, run)
+        record["wrote"] = _wrote(record)
+        _record_headers(api, record)
+        probes.append(record)
+        await asyncio.sleep(ATTEMPT_DELAY)
 
     # Does the firmware carry the RED payload encryption `Kajkac` implements
     # for newer MC888 builds? Read only; nothing is negotiated or sent.
@@ -1231,6 +1384,28 @@ async def _transport_rungs(
         }
 
     probes.append(await _capture(coordinator, "20e_red_crypto_present", red_present))
+
+    # Names from bundles the earlier mining could not read. The reporter's
+    # discovery pass recorded `js/statusBar.js: HTTP 404`, so its 997 names
+    # came from the bundles that answered.
+    async def remine() -> dict[str, Any]:
+        names, notes = await api.mine_candidate_names()
+        return {"mined": len(names), "notes": notes}
+
+    probes.append(await _capture(coordinator, "20m_remine_bundles", remine))
+
+
+def _record_headers(api: Any, record: dict[str, Any]) -> None:
+    """Keep the response header names a write drew.
+
+    Names only, and only where the API kept them. A refused write that sets a
+    cookie, or answers with an authentication header, is currently invisible:
+    the record carries a status and a body preview and nothing else. Recording
+    the names costs nothing and cannot carry a value.
+    """
+    names = getattr(api, "last_response_header_names", None)
+    if names:
+        record["response_header_names"] = list(names)
 
 
 async def _session_proof_rung(

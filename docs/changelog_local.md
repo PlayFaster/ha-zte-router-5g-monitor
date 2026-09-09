@@ -5,6 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.17-dev5\] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted](#3317-dev5---2026-09-10---sms-probe-v4-one-attempt-primitive-transport-becomes-an-axis-and-is-adopted)
+  - [\[3.3.17-dev4\] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run](#3317-dev4---2026-09-10---sms-probe-v4-the-winning-login-is-adopted-for-the-rest-of-the-run)
+  - [\[3.3.17-dev3\] - 2026-09-09 - SMS Probe V4: The Five Rungs the Plan Named and the Build Missed](#3317-dev3---2026-09-09---sms-probe-v4-the-five-rungs-the-plan-named-and-the-build-missed)
   - [\[3.3.17-dev1\] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured](#3317-dev1---2026-09-09---sms-probe-v4-login-stage-generated-token-space-single-use-token-measured)
   - [\[3.3.16\] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas](#3316---2026-09-08---release-multi-key-session-validation-and-sms-probe-v3-token-formulas)
   - [\[3.3.16-dev3\] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest](#3316-dev3---2026-09-08---probe-control-uses-the-shipped-token-path-candidates-take-the-devices-digest)
@@ -86,7 +89,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -144,7 +147,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -152,7 +155,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -254,6 +257,86 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.17-dev5] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted
+
+### Summary
+
+Two audits of this release found the same defect in two places: a value discovered and then not used, so every rung below went on failing in a way the run had already shown how to fix. The login stage was corrected in the previous entry. This one removes the cause rather than the third instance, by giving the probe a single place where a write is built and making how it is carried a value that can be proven and held.
+
+### Changed
+
+- **One attempt primitive.** A write on this API has four independent axes — the session it runs under, the token it carries, how it is carried, and which command it is. `_attempt` is the only place a request is constructed, so varying any axis is a parameter rather than another hand-written rung. `_data_volume_write` and `_delete_raw` are now thin callers, which is what makes the two changes below reach every rung without any of them being rewritten.
+
+- **A transport that works is held for the rest of the run.** Seven carriers are tried — the site root as `Referer`, the full browser header set, no content type, `notCallback`, a query string, no cookie, and the cookie under the name `stok` — and the first that writes is adopted. `transport_in_use` names it. Every later write, the token sweep and the deletes included, inherits it.
+
+- **The deletes are carried the way a write was proven.** `_delete_raw` built its own request and sent the shipped form regardless of what the transport rungs had established, so a delete would have failed for a reason the run had already solved.
+
+- **The token space is ordered by what a source documents.** The screening pass runs to the cap and a run cut short loses its tail, so `wa + cr` — miononno's derivation for the MC888 Pro, and `nicjac`'s for the MC801A — is tried before the operands with no citation behind them. The ordering is a judgement about likelihood, not a measurement.
+
+### Added
+
+- **`20n_not_callback`.** `Kajkac` carries `notCallback` on its writes; this integration sends it only on a delete, so it had never been tried on anything else.
+
+- **`20i_write_as_query`** is now a transport value rather than a one-off rung, so a router that accepts a write on the query string has that carrier adopted for everything below.
+
+- **Response header names are recorded on every write.** `api.py` gains `last_response_header_names`, alongside the status and body preview it already keeps. A refused write that sets a cookie, or answers with an authentication header, was invisible. Names only, never values.
+
+### Fixed
+
+- **The adopted transport is cleared at the start of each run.** It is module state, and one left from an earlier run would silently change how every write in the next one is carried.
+
+### Verified
+
+- 1,553 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.17-dev4] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run
+
+### Summary
+
+A second audit found the login stage recording which variant unlocked the device and then discarding it: the stage ended by restoring the shipped login, so every rung below ran on the session that could not write. The run would have answered the hardest question in the pass and declined to use the answer.
+
+### Fixed
+
+- **The login that wrote is adopted for the rest of the run.** Where a variant establishes a session and that session writes, it is re-established and held, and `session_in_use` names it. Where it will not come back, or where nothing won, the pass falls back to the shipped login and says so — a report that does not name its session cannot be compared with another.
+
+- **A failed login attempt is counted by outcome, not by one response code.** The budget incremented only on `result: "3"`, which is measured on the reference MC7010. A router that refuses some other way, or answers nothing at all, would leave the counter still and quietly bypass the group limit. Anything that does not establish a session now counts as spent. This is the one place where being wrong costs the user a locked router rather than a missing finding.
+
+### Changed
+
+- **The run cap is ten minutes**, from eight. The generated space is 150 rules on the reporter's firmware and each attempt now makes four requests, so the earlier cap had no margin.
+
+- `1_token_rotation` and `13_single_id_fresh_session` still log in with the shipped form, because what they measure is what a renewal does. Where an adopted session is in force, `session_in_use` records it so those two rungs are read against the right baseline.
+
+### Verified
+
+- 1,546 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.17-dev3] - 2026-09-09 - SMS Probe V4: The Five Rungs the Plan Named and the Build Missed
+
+### Summary
+
+An audit of the previous entry against the twenty leads it was built from found sixteen covered and four absent, and the single-use token measured in that entry raised a fifth question nobody had asked. All five are added here. Nothing already present is changed.
+
+### Added
+
+- **`20g` and `20h`: does anything other than the write spend the token?** The token is single-use, and re-reading its inputs re-arms it, but what spends it is not fully established. `get_ad` makes three calls of its own before the write follows, so a read between deriving and posting could invalidate it — and a device that orders those calls differently would refuse every write for a reason no token variant can reach. One rung derives and posts with nothing between; the other derives, makes one unrelated read, and posts.
+
+- **`20i`: the write as a query string.** `nicjac/python-zte-mc801a` logs in by `GET` against this same endpoint, so the firmware reads parameters from the query string on at least one command. Whether it does so for a write is untested.
+
+- **`20j` and `20k`: what the session cookie is worth.** `Kajkac/ZTE-MC-Home-assistant-repo` attaches a cookie only when it is named `stok`, so on a device issuing `zsidn` — which is what the reporter's router issues — it sends none at all. One rung sends no cookie; the other sends the same value under the name `stok`, which asks whether the firmware reads the name rather than the value. Held cookies are restored either way, so no rung below inherits a session this one removed.
+
+- **`20l`: a token captured before a re-login and reused.** `Kajkac` computes `AD` during authentication and reuses it for every protected write; `nicjac` derives fresh per write, as this integration does, and writes successfully on its own hardware. The two disagree and neither is attested on an MC888, so one rung settles it for this device.
+
+- **`20m`: the bundles the earlier mining could not read.** The reporter's discovery pass recorded `js/statusBar.js: HTTP 404`, so its 997 names came from the bundles that answered. A name appearing only in a bundle nobody read is invisible to every other rung.
+
+### Fixed
+
+- **A test helper collected the query-string variant's absent body.** `_bodies` gathered every call carrying a `data` keyword, including the one that carries `None` because its payload is in the path, which put a `None` among the bodies three assertions iterate over.
+
+### Verified
+
+- 1,543 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.17-dev1] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured
 

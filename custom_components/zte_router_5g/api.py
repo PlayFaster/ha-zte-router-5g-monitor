@@ -881,6 +881,13 @@ class ZTERouterAPI:
         # places and none of them carries the status code out.
         self.last_response_status: int | None = None
         self.last_response_preview: str = ""
+        # Header *names* from the most recent response, never their values.
+        # A refused write that sets a cookie, or answers with an
+        # authentication header, is otherwise invisible: a status and a body
+        # preview say nothing about what came back alongside them. Names carry
+        # nothing personal, so this needs no sanitizing beyond what the
+        # diagnostics walker already applies.
+        self.last_response_header_names: list[str] = []
         self._cookies_found_in = "none"
 
     def _record_verdict(
@@ -1391,6 +1398,7 @@ class ZTERouterAPI:
             ) as r:
                 status = r.status
                 self.last_response_status = status
+                self.last_response_header_names = sorted(r.headers)
                 self._session_was_fresh = False
                 content_type = r.headers.get("Content-Type", "")
                 url_str = str(r.url)
