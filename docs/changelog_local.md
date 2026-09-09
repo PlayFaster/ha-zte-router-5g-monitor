@@ -6,6 +6,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
   - [\[3.3.16\] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas](#3316---2026-09-08---release-multi-key-session-validation-and-sms-probe-v3-token-formulas)
+  - [\[3.3.16-dev4\] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured](#3316-dev4---2026-09-09---sms-probe-v4-login-stage-generated-token-space-single-use-token-measured)
   - [\[3.3.16-dev3\] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest](#3316-dev3---2026-09-08---probe-control-uses-the-shipped-token-path-candidates-take-the-devices-digest)
   - [\[3.3.16-dev2\] - 2026-09-08 - Documentation: Project Complexity \& Health Scorecard Added](#3316-dev2---2026-09-08---documentation-project-complexity--health-scorecard-added)
   - [\[3.3.16-dev1\] - 2026-09-08 - Session Check Reads Three Keys; SMS Probe V3 Tries Twelve Token Formulas](#3316-dev1---2026-09-08---session-check-reads-three-keys-sms-probe-v3-tries-twelve-token-formulas)
@@ -271,6 +272,57 @@ All changes to this project will be documented in this file. This is the detaile
 - **Temporary SMS Delete Probe Formula Evaluation**: Added automated evaluation of twelve candidate security token derivation variants to `zte_router_5g.sms_delete_probe`, testing combinations of firmware version parameters and random nonces against harmless settings writes to isolate firmware-specific token requirements. _(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)_
 - **Post-Login Key Inventory Probe**: Added diagnostic inventory capture (`1g_login_baseline`) recording populated key counts following login to assist with model-agnostic validation.
 - **Project Complexity & Health Scorecard**: Added `docs/project_complexity.md` documenting structural complexity metrics, unmasked cyclomatic complexity, routine lengths, module dimensions, and standards compliance.
+
+## [3.3.17-dev1] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured
+
+### Summary
+
+The third MC888 Pro run wrote nothing in sixty probes, and established that the token was never the discriminator: a correctly derived one and a deliberately malformed one drew the identical refusal. Reviewing two other ZTE implementations and the reporter's own configuration moved the suspicion to the login, which is the one step this integration has never varied. This version tests the login first, replaces the hand-written candidate list with a generated space, and records a property of the hardware that invalidates how both earlier versions measured.
+
+### Measured
+
+- **The write token is single-use.** On the reference MC7010, the first write carrying a given `AD` succeeds and every later write carrying the same one is refused, at any delay, while `RD` itself is unchanged across reads and unchanged after `get_ad`. Re-reading the token inputs re-arms it. A screening pass that computed its candidates once and fired them reported thirty refusals on a device where the shipped derivation demonstrably works.
+
+- **Neither device exposes a failed-login count.** Both report `psw_fail_num_str: 5` and `login_lock_time: 300`, and neither value moves: measured across two failed logins with the session held so nothing could reset it, none of 230 readable names changed except radio noise and traffic counters. Of 78 login-shaped names mined from the MC888's own web UI, only those two and `loginfo` answer at all.
+
+- **A failed login answers `{"result":"3"}`**, for a wrong password and for a wrong username with the right password alike.
+
+- **A read proves a session on the MC7010**: 40 of the core keys are populated with one and 1 without.
+
+- `web_crt_get` is unanswered on the MC7010, so the RED payload encryption implemented by `Kajkac` for newer firmware is not present there.
+
+### Added
+
+- **A login stage, ahead of everything that assumes a session.** Twelve variants of the same credentials: the shipped form as control, `user` and `username` spellings, `user` and `admin` values, `LOGIN_MULTI_USER` with a token, `LOGIN` carrying a token, the field omitted entirely, and three repeats with `LD` uppercased before the password hash. Each is judged by one data-volume write, which changes nothing and spends no message.
+
+- **Every cookie each login draws is recorded by name.** The reporter's device only ever issues `zsidn`; a variant drawing a differently named cookie, or a second one, is a finding no amount of guessing at cookie names could produce.
+
+- **A lockout budget.** Failed attempts are counted by the probe, since the router does not expose a count. After three, a known-good login is made on the assumption that a correct login clears the allowance, and the stage stops early if that login itself fails — which is what a lockout looks like from here.
+
+- **Transport variants**: the site root as `Referer`, the full set of browser headers `nicjac` sends, no content type at all as `Kajkac` sends, a write issued immediately after a fresh login, and a read of `web_crt_get`.
+
+- **A rung that measures whether a read proves a session at all.** The session is discarded rather than logged out, because the reporter's router does not acknowledge a logout, and the same keys are read again.
+
+### Changed
+
+- **The candidate list is generated, not written.** Five operands, two digests, four `RD` treatments, both cases on each round independently, and one or two rounds — deduplicated against the device's own firmware string. Thirty-six distinct rules on the MC7010; a hundred and fifty on the MC888 Pro.
+
+- **The space carries rules rather than tokens**, and every attempt re-reads its inputs. This follows directly from the single-use finding above.
+
+- **Screened once, then confirmed three times.** A wrong token is refused deterministically, so one attempt rules a rule out; acceptance still requires three successes out of three.
+
+- **The run cap is eight minutes**, from four. The login stage is paced at five seconds between attempts because a login is what a lockout counts.
+
+### Fixed
+
+- **Four single-round rules shared one name**, because the outer case was left out of it, so the candidate table reported 120 entries where 144 were sent.
+
+- **The delete path replayed a spent token.** It derives again from values read moments before.
+
+### Verified
+
+- Rehearsed on the reference MC7010: 36 rules screened, exactly one wrote, confirmed three times out of three, and it is the derivation the integration ships. Thirty-five refused. The login stage completed all twelve variants with no lockout. All four transport variants wrote.
+- 1,537 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.16-dev3] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest
 

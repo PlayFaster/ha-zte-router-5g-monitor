@@ -33,6 +33,26 @@ from custom_components.zte_router_5g.sms_delete_probe import (
 )
 
 
+class _FakePost:
+    """One `session.post`, answering whatever the api stand-in is set to say."""
+
+    def __init__(self, api: MagicMock) -> None:
+        self._api = api
+
+    async def __aenter__(self) -> MagicMock:
+        response = MagicMock()
+        answer = self._api._request.return_value
+        # A string passes through, so a router answering a login with
+        # something that is not an object can be exercised.
+        if not isinstance(answer, (dict, str)):
+            answer = {"result": "0"}
+        response.json = AsyncMock(return_value=answer)
+        return response
+
+    async def __aexit__(self, *_exc: object) -> None:
+        return None
+
+
 def _coordinator(ids: list[str] | None = None) -> MagicMock:
     """A coordinator whose router answers everything successfully."""
     held = list(ids if ids is not None else [str(n) for n in range(20, 8, -1)])
@@ -75,6 +95,19 @@ def _coordinator(ids: list[str] | None = None) -> MagicMock:
         "traffic_clear_date": ("flux_clear_date",),
     }
     api.delete_probe = None
+    # The login stage posts its own form and reads the cookies back, so the
+    # stand-in needs the pieces of the API that path touches.
+    api.username = "configured-name"
+    api.password = "secret"
+    api.referer = "http://router/"
+    api.get_ld = AsyncMock(return_value="LD-VALUE")
+    api._hash = MagicMock(side_effect=lambda v: "h(" + str(v)[:8] + ")")
+    api._clear_session = MagicMock()
+    api._extract_cookies = MagicMock(return_value={"zsidn": "cookie-value"})
+    api.session_active = True
+    api.cookies = {"zsidn": "cookie-value"}
+    api.session = MagicMock()
+    api.session.post = MagicMock(return_value=_FakePost(api))
 
     coordinator = MagicMock()
     coordinator.api = api
@@ -125,7 +158,11 @@ async def test_every_probe_is_recorded_and_none_is_skipped_for_success() -> None
 
     names = [p["probe"] for p in report["probes"]]
     # The diagnostic rungs, which isolate which step of deriving a token fails.
-    assert names[:8] == [
+    # The login stage runs first: everything below it assumes a session that
+    # may write.
+    assert names[0].startswith("0a_")
+    ladder = [n for n in names if not n.startswith(("0a_", "0b_", "0z_"))]
+    assert ladder[:8] == [
         "1_token_rotation",
         "1b_liveness_keys",
         "1c_session_check",
@@ -135,13 +172,11 @@ async def test_every_probe_is_recorded_and_none_is_skipped_for_success() -> None
         "1g_login_baseline",
         "2_bank_listing",
     ]
-    # Twelve hash candidates, three attempts each, then three confirmations.
+    # The generated token space, screened once each.
     assert "7a_token_inputs" in names
-    assert (
-        len([n for n in names if n.startswith("7b_")])
-        == len(sms_delete_probe._CANDIDATES) * sms_delete_probe.WRITE_ATTEMPTS
-    )
-    assert sum(1 for n in names if n.startswith("7h_confirm")) == 3
+    inputs = _by_name(report, "7a_token_inputs")["result"]
+    assert len(report["candidates"]) == inputs["distinct_tokens"]
+    assert report["screened"] == inputs["distinct_tokens"]
     # The original ladder is still there, unchanged.
     assert "14_batch_semicolon" in names
     assert "15_integration_delete_all" in names
@@ -521,24 +556,6 @@ async def test_a_variant_must_work_every_time_to_count() -> None:
     assert report["working_variant"] is None
 
 
-async def test_a_working_variant_is_confirmed_before_a_message_is_spent() -> None:
-    """A variant that works three times and fails the next three is not a fix.
-
-    Finding that out costs nothing at the harmless write and a message later.
-    """
-    coordinator = _coordinator()
-
-    report = await run_probe(coordinator)
-
-    assert report["working_variant"] == "a_control_current"
-    assert report["working_variant_confirmed"] == "a_control_current"
-    assert [p["probe"] for p in report["probes"] if p["probe"].startswith("7h_")] == [
-        "7h_confirm_1",
-        "7h_confirm_2",
-        "7h_confirm_3",
-    ]
-
-
 async def test_the_confirmed_variant_deletes_three_messages_and_a_batch() -> None:
     """Three separate messages, so one success cannot pass for a working delete."""
     coordinator = _coordinator()
@@ -603,47 +620,9 @@ async def test_the_harmless_write_refuses_a_form_it_cannot_fill() -> None:
     assert report["working_variant"] is None
 
 
-async def test_a_variant_that_stops_working_is_not_confirmed() -> None:
-    """Three successes then three failures is not a method.
-
-    The deletes must not run on the strength of the first three.
-    """
-    coordinator = _coordinator()
-    calls = {"n": 0}
-
-    async def works_then_stops(*_a, **_k):
-        calls["n"] += 1
-        if calls["n"] > 12:
-            raise TimeoutError("stopped working")
-        return {"result": "success"}
-
-    coordinator.api._request = AsyncMock(side_effect=works_then_stops)
-
-    report = await run_probe(coordinator)
-
-    assert report["working_variant"] is not None
-    assert report["working_variant_confirmed"] is None
-    assert _by_name(report, "16_confirmed_variant_deletes")["outcome"] == "skipped"
-
-
 # ---------------------------------------------------------------------------
 # Probe 3 - the hash candidates, and judging them on what the router said
 # ---------------------------------------------------------------------------
-
-
-async def test_a_candidate_is_judged_on_the_routers_result_not_on_returning() -> None:
-    """This API answers `200 OK` for a refused write, so returning proves nothing.
-
-    Version 2 counted any call that did not raise, and reported a variant
-    confirmed while all six of its writes came back `{"result": "failure"}`.
-    """
-    coordinator = _coordinator()
-    coordinator.api._request = AsyncMock(return_value={"result": "failure"})
-
-    report = await run_probe(coordinator)
-
-    assert report["working_variant"] is None
-    assert all(count == "0/3" for count in report["candidates"].values())
 
 
 async def test_a_response_carrying_no_result_is_not_counted_as_success() -> None:
@@ -658,39 +637,6 @@ async def test_a_response_carrying_no_result_is_not_counted_as_success() -> None
     report = await run_probe(coordinator)
 
     assert report["working_variant"] is None
-
-
-async def test_every_candidate_runs_even_after_one_succeeds() -> None:
-    """Stopping at the first success leaves eleven formulas unknown.
-
-    That is another round trip with the reporter for a fact this run already
-    had the router in front of it to establish.
-    """
-    coordinator = _coordinator()
-
-    report = await run_probe(coordinator)
-
-    tried = {name for name, *_rest in sms_delete_probe._CANDIDATES}
-    assert set(report["candidates"]) == tried
-    assert report["candidates_passed"], "the control should pass against a stand-in"
-
-
-async def test_candidates_needing_cr_version_are_named_when_it_is_absent() -> None:
-    """A candidate never tried and one that failed are different findings.
-
-    `cr_version` answers this device through the discovery pass. Whether it
-    answers a plain read is not established, so the run records what it got.
-    """
-    coordinator = _coordinator()
-    coordinator.api.get_params = AsyncMock(return_value={"signalbar": "4"})
-
-    report = await run_probe(coordinator)
-
-    needs_cr = [n for n, cr, _alt, _b in sms_delete_probe._CANDIDATES if cr]
-    for name in needs_cr:
-        assert report["candidates"][name] == "skipped: no cr_version"
-    inputs = _by_name(report, "7a_token_inputs")
-    assert inputs["result"]["cr_version_answered"] is False
 
 
 async def test_the_token_inputs_rung_records_lengths_and_not_values() -> None:
@@ -711,34 +657,6 @@ async def test_the_token_inputs_rung_records_lengths_and_not_values() -> None:
         "cr_version_answered",
     }
     assert not any(isinstance(v, str) and len(v) > 20 for v in result.values())
-
-
-async def test_every_candidate_formula_is_distinct() -> None:
-    """Two entries computing the same token report one finding twice.
-
-    It would also make a passing formula look more corroborated than it is.
-    The control is excluded: it asks the integration for its token rather than
-    computing one, which is the whole point of it.
-    """
-    # The reporter's own shape, timestamp included. One candidate strips that
-    # timestamp, so a stand-in without one would make two formulas identical
-    # and the test would report a collision the device never sees.
-    # The digest is part of a candidate's identity, so each is built with the
-    # one it would actually be given — SHA-256 on an MC888, MD5 for the entry
-    # that exists to try the other one. Building them all with the same digest
-    # would report a collision the device never sees.
-    tokens = {
-        name: builder(
-            sms_delete_probe._md5 if alternate else sms_delete_probe._sha,
-            "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
-            "CR_ABPLMC888PROV1.0.1B04",
-            "0123456789abcdef",
-        )
-        for name, _needs_cr, alternate, builder in sms_delete_probe._CANDIDATES
-        if builder is not None
-    }
-
-    assert len(set(tokens.values())) == len(tokens)
 
 
 async def test_the_login_baseline_records_names_and_not_values() -> None:
@@ -845,43 +763,279 @@ async def test_the_control_asks_the_integration_for_its_token() -> None:
     coordinator.api.get_ad.assert_awaited()
 
 
-async def test_a_candidate_is_built_with_the_digest_this_device_uses() -> None:
-    """`_ad_hash_func` reads the firmware string and picks MD5 or SHA-256.
+# ---------------------------------------------------------------------------
+# Probe 4 - the login stage, and the space that replaced the list
+# ---------------------------------------------------------------------------
 
-    Asking it, rather than choosing here, is what stops a candidate disagreeing
-    with what the integration itself would send.
+
+async def test_the_login_stage_runs_before_anything_that_assumes_a_session() -> None:
+    """Three downloads measured the same refusal because the login was never
+    varied. It is the one step every other rung depends on.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    names = [p["probe"] for p in report["probes"]]
+    assert names[0].startswith("0a_")
+    assert set(report["login_variants"])
+
+
+async def test_every_login_variant_records_the_cookies_it_drew() -> None:
+    """The reporter's device only ever issues `zsidn`.
+
+    A variant drawing a differently named cookie, or a second one, is a finding
+    no amount of guessing at cookie names could produce - so every name the
+    router sets is recorded whether or not the variant went on to write.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    logins = [p for p in report["probes"] if p["probe"].startswith("0a_")]
+    assert logins
+    for record in logins:
+        assert "cookie_names" in record["result"]
+
+
+async def test_a_correct_login_is_forced_after_three_failed_ones() -> None:
+    """Neither device exposes a failed-attempt count, so the probe counts its own.
+
+    Five attempts are allowed before a five-minute lockout; three leaves a
+    margin against a limit that is itself only inferred.
+    """
+    coordinator = _coordinator()
+    coordinator.api._request = AsyncMock(return_value={"result": "3"})
+
+    report = await run_probe(coordinator)
+
+    resets = [p for p in report["probes"] if p["probe"].startswith("0z_reset")]
+    assert resets, "no correct login was made despite a run of failures"
+
+
+async def test_a_failed_login_is_recognized_by_the_routers_own_code() -> None:
+    """`result: "3"` is the only marker of a spent attempt.
+
+    Measured on the reference MC7010 on 2026-09-09: a wrong password and a
+    wrong username with the right one both answer with it.
+    """
+    coordinator = _coordinator()
+    coordinator.api._request = AsyncMock(
+        return_value={"result": sms_delete_probe.FAILED_LOGIN_RESULT}
+    )
+
+    report = await run_probe(coordinator)
+
+    logins = [p for p in report["probes"] if p["probe"].startswith("0a_")]
+    assert all(p["result"]["spent_an_attempt"] for p in logins)
+
+
+async def test_the_stage_stops_when_a_known_good_login_fails() -> None:
+    """A correct login that fails is what a lockout looks like from here.
+
+    Carrying on would spend the remaining variants against a router that is
+    refusing everything, and report them as findings.
+    """
+    coordinator = _coordinator()
+    coordinator.api._request = AsyncMock(return_value={"result": "3"})
+    coordinator.api.login = AsyncMock(side_effect=TimeoutError("locked out"))
+
+    report = await run_probe(coordinator)
+
+    assert "login_stage_stopped" in report
+
+
+async def test_the_token_space_is_deduplicated_for_this_devices_own_strings() -> None:
+    """Two rules that differ in the abstract can produce the same digest here.
+
+    Version 3 checked distinctness against a stand-in firmware string and
+    reported twelve candidates where the MC888 Pro received nine, because an
+    uppercasing digest makes an `.upper()` variant a duplicate of its base.
+    """
+    space = sms_delete_probe._token_space(
+        "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
+        "CR_ABPLMC888PROV1.0.1B04",
+        "a1b2" * 16,
+    )
+
+    tokens = [
+        rule(
+            "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
+            "CR_ABPLMC888PROV1.0.1B04",
+            "a1b2" * 16,
+        )
+        for _name, rule in space
+    ]
+    assert len(set(tokens)) == len(tokens)
+
+
+async def test_the_space_shrinks_where_cr_version_is_not_answered() -> None:
+    """The MC7010 lists `cr_version` under `probed_no_answer`.
+
+    Every operand built from it collapses onto one built without it, and the
+    count reported must be the count actually sent.
+    """
+    with_cr = sms_delete_probe._token_space("WA_V1", "CR_V1", "b" * 32)
+    without_cr = sms_delete_probe._token_space("WA_V1", "", "b" * 32)
+
+    assert len(without_cr) < len(with_cr)
+
+
+async def test_the_space_carries_both_digests_and_both_cases() -> None:
+    """Version 3 could explore structure and never case.
+
+    `_ad_hash_func` returns an uppercasing digest on an MC888, every candidate
+    inherited it, and no lowercase token was ever sent to the reporter's
+    router.
+    """
+    space = sms_delete_probe._token_space("WA_V1", "CR_V1", "b" * 32)
+
+    names = [name for name, _token in space]
+    assert any("_sha_" in n for n in names)
+    assert any("_md5_" in n for n in names)
+    assert any(n.endswith("rdupper") for n in names)
+    tokens = [rule("WA_V1", "CR_V1", "b" * 32) for _n, rule in space]
+    assert any(t.islower() for t in tokens)
+    assert any(t.isupper() for t in tokens)
+
+
+async def test_a_screened_token_is_confirmed_before_a_message_is_spent() -> None:
+    """One success is not a method. Screening only decides what to confirm."""
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    assert report["candidates_passed"]
+    assert report["working_variant"] in report["candidates_passed"]
+    confirms = [p for p in report["probes"] if p["probe"].startswith("7h_")]
+    assert len(confirms) >= sms_delete_probe.WRITE_ATTEMPTS
+
+
+async def test_a_refused_screening_pass_spends_no_message() -> None:
+    """This API answers `200 OK` for a refused write, so returning proves nothing."""
+    coordinator = _coordinator()
+    coordinator.api._request = AsyncMock(return_value={"result": "failure"})
+
+    report = await run_probe(coordinator)
+
+    assert report["working_variant"] is None
+    assert all(v == "screened: refused" for v in report["candidates"].values())
+    skipped = _by_name(report, "16_confirmed_variant_deletes")
+    assert skipped["outcome"] == "skipped"
+
+
+async def test_no_token_can_be_built_without_a_firmware_string_or_rd() -> None:
+    """A skipped stage with a reason beats a stage that silently ran zero
+    candidates and reported nothing.
+    """
+    coordinator = _coordinator()
+    coordinator.api.get_rd = AsyncMock(return_value="")
+
+    report = await run_probe(coordinator)
+
+    assert report["candidates"] == {}
+    skipped = _by_name(report, "7b_token_space")
+    assert skipped["outcome"] == "skipped"
+
+
+async def test_the_same_write_is_tried_with_other_transports() -> None:
+    """Each is something another implementation does and this one does not.
+
+    None is attested as necessary, so they are tried rather than adopted.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    names = [p["probe"] for p in report["probes"]]
+    for expected in (
+        "20a_referer_root",
+        "20b_browser_headers",
+        "20c_no_content_type",
+        "20d_write_after_fresh_login",
+        "20e_red_crypto_present",
+    ):
+        assert expected in names
+
+
+async def test_whether_a_read_proves_a_session_is_measured_not_assumed() -> None:
+    """ "Reads work, writes do not" means nothing if the reads need no session.
+
+    The session is discarded rather than logged out, because the reporter's
+    router does not acknowledge a logout.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    result = _by_name(report, "20f_reads_without_a_session")["result"]
+    assert set(result) == {
+        "populated_with_a_session",
+        "populated_without_one",
+        "served_without_a_session",
+    }
+
+
+async def test_the_session_is_restored_after_the_sessionless_read() -> None:
+    """Every rung below it would otherwise measure a session this rung threw
+    away.
     """
     coordinator = _coordinator()
 
     await run_probe(coordinator)
 
-    coordinator.api._ad_hash_func.assert_called()
+    assert coordinator.api.session_active is not False or coordinator.api.cookies
 
 
-def test_the_other_digest_is_the_one_this_device_does_not_use() -> None:
-    """The alternative must be the alternative on either kind of device.
-
-    One candidate exists to try it, and a device-independent choice here would
-    make that candidate a duplicate on one of the two.
+async def test_a_login_that_answers_no_json_is_still_recorded() -> None:
+    """A router that answers a login with something other than JSON has still
+    answered, and what it set is still the finding.
     """
-    api = MagicMock()
+    coordinator = _coordinator()
+    coordinator.api.session.post = MagicMock(return_value=_FakePost(coordinator.api))
+    coordinator.api._request = AsyncMock(return_value="not json")
+    coordinator.api._extract_cookies = MagicMock(return_value={})
 
-    api._ad_hash_func = MagicMock(return_value=sms_delete_probe._sha)
-    native, other = sms_delete_probe._digests(api, "any")
-    assert (native, other) == (sms_delete_probe._sha, sms_delete_probe._md5)
+    report = await run_probe(coordinator)
 
-    api._ad_hash_func = MagicMock(return_value=sms_delete_probe._md5)
-    native, other = sms_delete_probe._digests(api, "any")
-    assert (native, other) == (sms_delete_probe._md5, sms_delete_probe._sha)
+    logins = [p for p in report["probes"] if p["probe"].startswith("0a_")]
+    assert logins
+    assert all(p["result"]["cookie_names"] == [] for p in logins)
+    assert all(v == "no session" for v in report["login_variants"].values())
 
 
-async def test_exactly_one_candidate_carries_the_other_digest() -> None:
-    """The alternative digest is a thin hypothesis, worth exactly one candidate.
+def test_the_username_sent_is_described_without_repeating_his_own() -> None:
+    """The literal defaults are ours to publish; a configured username is his."""
+    kind = sms_delete_probe._value_kind
 
-    `RD` is 64 characters on the MC888 Pro, which points firmly at SHA-256.
+    assert kind({"field": None, "value": None}) == "field absent"
+    assert kind({"field": "user", "value": ""}) == "empty"
+    assert kind({"field": "user", "value": "user"}) == "user"
+    assert kind({"field": "user", "value": "admin"}) == "admin"
+    assert kind({"field": "user", "value": "his-own"}) == "the configured username"
+
+
+def test_every_rule_in_the_space_has_its_own_name() -> None:
+    """The report is keyed by name, so two rules sharing one lose a finding.
+
+    Four single-round rules once shared a label because the outer case was left
+    out of it, and the candidate table silently reported fewer entries than
+    were sent.
     """
-    alternates = [
-        name for name, _cr, alternate, _b in sms_delete_probe._CANDIDATES if alternate
-    ]
+    space = sms_delete_probe._token_space("WA_V1", "CR_V1", "b" * 32)
 
-    assert len(alternates) == 1
+    names = [name for name, _rule in space]
+    assert len(set(names)) == len(names)
+
+
+def test_a_rule_is_a_function_of_the_values_read_at_the_time() -> None:
+    """A token is single-use on this hardware, so the space cannot hold tokens.
+
+    Measured on the reference MC7010: the first write carrying a given token
+    succeeds and every later write carrying the same one is refused, at any
+    delay, while `RD` is unchanged. Re-reading re-arms it.
+    """
+    space = sms_delete_probe._token_space("WA_V1", "CR_V1", "b" * 32)
+
+    _name, rule = space[0]
+    assert rule("WA_V1", "CR_V1", "b" * 32) != rule("WA_V1", "CR_V1", "c" * 32)
