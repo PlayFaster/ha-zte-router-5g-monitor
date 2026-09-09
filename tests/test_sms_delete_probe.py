@@ -769,8 +769,10 @@ async def test_the_control_asks_the_integration_for_its_token() -> None:
 
 
 async def test_the_login_stage_runs_before_anything_that_assumes_a_session() -> None:
-    """Three downloads measured the same refusal because the login was never
-    varied. It is the one step every other rung depends on.
+    """It is the one step every other rung depends on.
+
+    Three downloads measured the same refusal because the login was never
+    varied.
     """
     coordinator = _coordinator()
 
@@ -925,8 +927,10 @@ async def test_a_refused_screening_pass_spends_no_message() -> None:
 
 
 async def test_no_token_can_be_built_without_a_firmware_string_or_rd() -> None:
-    """A skipped stage with a reason beats a stage that silently ran zero
-    candidates and reported nothing.
+    """A skipped stage with a reason beats one that silently ran nothing.
+
+    A stage reporting zero candidates and no explanation reads as a device
+    that refused everything.
     """
     coordinator = _coordinator()
     coordinator.api.get_rd = AsyncMock(return_value="")
@@ -959,7 +963,7 @@ async def test_the_same_write_is_tried_with_other_transports() -> None:
 
 
 async def test_whether_a_read_proves_a_session_is_measured_not_assumed() -> None:
-    """ "Reads work, writes do not" means nothing if the reads need no session.
+    """Reads working proves nothing if those reads need no session.
 
     The session is discarded rather than logged out, because the reporter's
     router does not acknowledge a logout.
@@ -977,8 +981,10 @@ async def test_whether_a_read_proves_a_session_is_measured_not_assumed() -> None
 
 
 async def test_the_session_is_restored_after_the_sessionless_read() -> None:
-    """Every rung below it would otherwise measure a session this rung threw
-    away.
+    """Every rung below would otherwise measure a session this one threw away.
+
+    Discarding it is how the rung works; not putting it back would make every
+    later finding an artefact of this one.
     """
     coordinator = _coordinator()
 
@@ -988,8 +994,9 @@ async def test_the_session_is_restored_after_the_sessionless_read() -> None:
 
 
 async def test_a_login_that_answers_no_json_is_still_recorded() -> None:
-    """A router that answers a login with something other than JSON has still
-    answered, and what it set is still the finding.
+    """A router answering a login with something other than JSON has answered.
+
+    What it set is still the finding, and the variant is still recorded.
     """
     coordinator = _coordinator()
     coordinator.api.session.post = MagicMock(return_value=_FakePost(coordinator.api))

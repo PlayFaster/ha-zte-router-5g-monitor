@@ -5,8 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.17-dev1\] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured](#3317-dev1---2026-09-09---sms-probe-v4-login-stage-generated-token-space-single-use-token-measured)
   - [\[3.3.16\] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas](#3316---2026-09-08---release-multi-key-session-validation-and-sms-probe-v3-token-formulas)
-  - [\[3.3.16-dev4\] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured](#3316-dev4---2026-09-09---sms-probe-v4-login-stage-generated-token-space-single-use-token-measured)
   - [\[3.3.16-dev3\] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest](#3316-dev3---2026-09-08---probe-control-uses-the-shipped-token-path-candidates-take-the-devices-digest)
   - [\[3.3.16-dev2\] - 2026-09-08 - Documentation: Project Complexity \& Health Scorecard Added](#3316-dev2---2026-09-08---documentation-project-complexity--health-scorecard-added)
   - [\[3.3.16-dev1\] - 2026-09-08 - Session Check Reads Three Keys; SMS Probe V3 Tries Twelve Token Formulas](#3316-dev1---2026-09-08---session-check-reads-three-keys-sms-probe-v3-tries-twelve-token-formulas)
@@ -86,7 +86,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -144,7 +144,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -152,7 +152,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -255,24 +255,6 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.16] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas
-
-### Summary
-
-- **Multi-Key Pre-Write Session Validation**: Pre-write session assurance now verifies multiple connection keys (`wan_connect_status`, `ppp_status`, and `model_name`) rather than a single field, preventing false session-expiry errors and blocked write commands on router firmwares that leave individual status keys unpopulated.
-- **Temporary SMS Deletion Diagnostic Probe V3**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to evaluate twelve candidate authentication token derivation formulas against non-destructive write commands, with device-specific hash selection and strict router success confirmation. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
-- **Project Complexity & Health Scorecard**: Added a public scorecard tracking architectural complexity metrics, module sizes, and code health standards.
-
-### Fixed
-
-- **Pre-Write Session Check Key Verification**: Fixed pre-write validation prematurely flagging active sessions as expired on hardware where `wan_connect_status` remains blank. Checking a multi-key set ensures writes proceed reliably across alternate firmware configurations.
-
-### Added
-
-- **Temporary SMS Delete Probe Formula Evaluation**: Added automated evaluation of twelve candidate security token derivation variants to `zte_router_5g.sms_delete_probe`, testing combinations of firmware version parameters and random nonces against harmless settings writes to isolate firmware-specific token requirements. _(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)_
-- **Post-Login Key Inventory Probe**: Added diagnostic inventory capture (`1g_login_baseline`) recording populated key counts following login to assist with model-agnostic validation.
-- **Project Complexity & Health Scorecard**: Added `docs/project_complexity.md` documenting structural complexity metrics, unmasked cyclomatic complexity, routine lengths, module dimensions, and standards compliance.
-
 ## [3.3.17-dev1] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured
 
 ### Summary
@@ -323,6 +305,26 @@ The third MC888 Pro run wrote nothing in sixty probes, and established that the 
 
 - Rehearsed on the reference MC7010: 36 rules screened, exactly one wrote, confirmed three times out of three, and it is the derivation the integration ships. Thirty-five refused. The login stage completed all twelve variants with no lockout. All four transport variants wrote.
 - 1,537 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+---
+
+## [3.3.16] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas
+
+### Summary
+
+- **Multi-Key Pre-Write Session Validation**: Pre-write session assurance now verifies multiple connection keys (`wan_connect_status`, `ppp_status`, and `model_name`) rather than a single field, preventing false session-expiry errors and blocked write commands on router firmwares that leave individual status keys unpopulated.
+- **Temporary SMS Deletion Diagnostic Probe V3**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to evaluate twelve candidate authentication token derivation formulas against non-destructive write commands, with device-specific hash selection and strict router success confirmation. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+- **Project Complexity & Health Scorecard**: Added a public scorecard tracking architectural complexity metrics, module sizes, and code health standards.
+
+### Fixed
+
+- **Pre-Write Session Check Key Verification**: Fixed pre-write validation prematurely flagging active sessions as expired on hardware where `wan_connect_status` remains blank. Checking a multi-key set ensures writes proceed reliably across alternate firmware configurations.
+
+### Added
+
+- **Temporary SMS Delete Probe Formula Evaluation**: Added automated evaluation of twelve candidate security token derivation variants to `zte_router_5g.sms_delete_probe`, testing combinations of firmware version parameters and random nonces against harmless settings writes to isolate firmware-specific token requirements. _(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)_
+- **Post-Login Key Inventory Probe**: Added diagnostic inventory capture (`1g_login_baseline`) recording populated key counts following login to assist with model-agnostic validation.
+- **Project Complexity & Health Scorecard**: Added `docs/project_complexity.md` documenting structural complexity metrics, unmasked cyclomatic complexity, routine lengths, module dimensions, and standards compliance.
 
 ## [3.3.16-dev3] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest
 
