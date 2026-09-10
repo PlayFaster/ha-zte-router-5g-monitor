@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.19] - 2026-09-10 - Release: Web UI Client Inspection and Browser-Aligned Diagnostic Probing
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V6**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to inspect the router's served web UI client scripts dynamically, extracting client-side token derivation routines, command parameter payloads, and authentication flags.
+- **Browser-Aligned Request Payloads**: Added diagnostic evaluation rungs that mirror the browser web client's exact payload construction (including script-mined field lists, `ACCESSIBLE_ID_SUPPORT` token gating, trailing semicolons on message identifiers with `notCallback`, and dynamic `which_cgi` parameters). This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+
+### Added
+
+- **Web UI Client Script Mining**: Diagnostic probe inspects RequireJS application modules served by the router, capturing bundle sizes, script contents around write command handlers, and exact client-side parameter structures.
+- **Browser-Aligned Write Rungs**: Added diagnostic test rungs executing writes with browser-matched data volume fields, unauthenticated writes when token gating is inactive, trailing semicolon message deletion formatting, and dynamic `which_cgi` values.
+
+### Fixed
+
+- **Caller-Supplied Form Read-Back Verification**: Fixed state toggle read-back comparisons when using caller-supplied custom forms in diagnostic tests, ensuring accurate write confirmation.
+- **Dynamic Command Parameter Extraction**: Parameters missing from default polling payloads are queried directly from the device rather than omitted during browser-aligned write tests.
+
+---
+
 ## [3.3.18] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space
 
 ### Summary

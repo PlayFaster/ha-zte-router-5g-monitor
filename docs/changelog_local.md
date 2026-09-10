@@ -5,6 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.19\] - 2026-09-10 - Release: Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
+  - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-that-could-not-report-what-they-measured)
+  - [\[3.3.19-dev1\] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At](#3319-dev1---2026-09-10---sms-probe-v6-the-routers-own-web-client-is-read-rather-than-guessed-at)
   - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
   - [\[3.3.18-dev1\] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back](#3318-dev1---2026-09-10---sms-probe-v5-every-write-changes-something-and-is-read-back)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
@@ -262,6 +265,84 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.19] - 2026-09-10 - Release: Web UI Client Inspection and Browser-Aligned Diagnostic Probing
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V6**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to inspect the router's served web UI client scripts dynamically, extracting client-side token derivation routines, command parameter payloads, and authentication flags.
+- **Browser-Aligned Request Payloads**: Added diagnostic evaluation rungs that mirror the browser web client's exact payload construction (including script-mined field lists, `ACCESSIBLE_ID_SUPPORT` token gating, trailing semicolons on message identifiers with `notCallback`, and dynamic `which_cgi` parameters). This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+
+### Added
+
+- **Web UI Client Script Mining**: Diagnostic probe inspects RequireJS application modules served by the router, capturing bundle sizes, script contents around write command handlers, and exact client-side parameter structures.
+- **Browser-Aligned Write Rungs**: Added diagnostic test rungs executing writes with browser-matched data volume fields, unauthenticated writes when token gating is inactive, trailing semicolon message deletion formatting, and dynamic `which_cgi` values.
+
+### Fixed
+
+- **Caller-Supplied Form Read-Back Verification**: Fixed state toggle read-back comparisons when using caller-supplied custom forms in diagnostic tests, ensuring accurate write confirmation.
+- **Dynamic Command Parameter Extraction**: Parameters missing from default polling payloads are queried directly from the device rather than omitted during browser-aligned write tests.
+
+## [3.3.19-dev2] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured
+
+### Summary
+
+The first MC7010 rehearsal of Probe v6 read the router's web client exactly as intended — 21 bundles, the token derivation, the flag that gates it, and one field the router sends that this integration does not. It also showed two of the four new write rungs unable to report a result they could earn.
+
+### Fixed
+
+- **A caller-supplied form still flips, and is still verified.** `_attempt` computed the before-and-after values only when it assembled the fields itself. `23a` supplies its own, so `flipped_to` stayed `None`, the read-back compared against `None`, and the rung reported failure whatever the router did — a false negative of exactly the kind it exists to detect. The rehearsal recorded `result: "success"` alongside `wrote: false`.
+
+- **A field the poll does not carry is read rather than dropped.** `23a` sent six fields where the router's own code assembles seven, because `notify_deviceui_enable` is not in the poll payload. That is our form under the router's name, and the missing field is the whole reason the rung exists. Anything the device will not answer either is now named in the record.
+
+- **`which_cgi` is read from the script, not assumed.** The router's delete-all sends `which_cgi: e.location`, and what that variable holds is not in the payload builder. The first version sent the storage constant this integration uses elsewhere, drew a refusal on a device where delete-all works, and recorded it as a finding — a guess reported as a measurement. Every literal the script assigns to `which_cgi` is now collected and tried, and where none is found the rung is skipped with that reason.
+
+### Verified
+
+- 1,586 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+- On the reference MC7010, `23c` sent the browser's exact delete form — `msg_id=130;` with `notCallback` — and the re-listing confirms that message gone.
+
+## [3.3.19-dev1] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At
+
+### Summary
+
+The reporter's Probe v5 download refused all 1,880 attempts, with 63 read-backs confirming the refusals were real rather than the router misreporting. He then established that he **can** delete a message from the router's own web page. So the device permits the write, the account permits it, and the difference is in the request — which means the client that succeeds is worth reading, and it is served by the router to anyone who opens its address.
+
+### Measured on the reference MC7010, before writing any of this
+
+- **The index uses RequireJS.** It names three library scripts and `data-main="js/main"`; the application's own modules are declared inside that entry point. An `.js`-suffix scan of the index can never see them, which is why the reporter's device reported "no scripts named" for four downloads and fell back to a hardcoded list carrying `js/statusBar.js`, which answers 404 on both devices.
+
+- **`js/service.js` holds the write path**, and this project has fetched that file in every diagnostics pass since `[3.3.8-dev1]` while extracting only identifiers and discarding the source.
+
+- **The token is not derived from the version strings.** The router's own code reads `AD = hex_md5(hex_md5(rd0 + rd1) + RD)`, where `rd0` and `rd1` are runtime globals declared empty in `js/main.js` and assigned in a module this project has never fetched. The MC7010 formula this integration ships matches only because `cr_version` is empty on that device.
+
+- **`ACCESSIBLE_ID_SUPPORT` gates the token entirely.** Where that flag is unset the browser attaches no `AD` at all, and never attaches one to `LOGIN` or `SET_WEB_LANGUAGE`.
+
+- **`DELETE_SMS` sends `msg_id` as `ids.join(";") + ";"` with `notCallback` always set.** This project has sent each of those separately and never both.
+
+- **`ALL_DELETE_SMS` carries `which_cgi`**, which this project does not send.
+
+- **No page sets a cookie.** `/`, `/index.html` and `/js/service.js` all answer without `Set-Cookie`, which weakens the browser-warm-up hypothesis that prompted this work.
+
+### Added
+
+- **`22a` through `22e`, a read-only pass over the router's own web client.** The index and its head; the entry point and every module its loader declares; every bundle fetched, with its status, size and marker counts; the source around each `goform_set_cmd_process`, `rd0` and `ACCESSIBLE_ID_SUPPORT` occurrence, bounded; and the field list the router's code assembles for each write command set against the field list this integration sends.
+
+- **`23a`, the data-limit form built from the router's own field list** rather than from `DATA_VOLUME_FIELDS`. That constant is six fields fixed here and checked against one device, while the router's code assembles the form conditionally — the switch only on a device whose string contains `cpe`, and three more fields only when a limit is enabled. A wrong field set draws a refusal that says nothing about the token, the carrier or the session.
+
+- **`23b`, a write carrying no token at all**, which is what the router's client sends where `ACCESSIBLE_ID_SUPPORT` is unset.
+
+- **`23c`, a delete in the browser's exact form** — trailing semicolon and `notCallback` together.
+
+- **`23d`, delete-all carrying `which_cgi`.**
+
+### Changed
+
+- Where the extraction yields nothing, the rungs that depend on it are **skipped with that reason** rather than falling back to this module's constants. A fallback would report a result that reads as a finding about his firmware when it is a finding about ours.
+
+### Verified
+
+- 1,581 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.18] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space
 

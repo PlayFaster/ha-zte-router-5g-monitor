@@ -32,6 +32,54 @@ from custom_components.zte_router_5g.sms_delete_probe import (
     run_probe,
 )
 
+# A miniature of what a ZTE web UI serves: an index that names its scripts
+# through a module loader, and a bundle carrying the payload builders the probe
+# reads. Small, but the same shape the reference MC7010 answers with.
+_FAKE_INDEX = (
+    "<html><head>"
+    '<script src="js/lib/require/require-jquery.js?v=1" data-main="js/main">'
+    "</script></head><body></body></html>"
+)
+_FAKE_MAIN = 'require.config({paths:{service:"service",home:"home"}});'
+_FAKE_SERVICE = (
+    'function zteDelete(){function e(e,t){var n=e.ids.join(";")+";";'
+    'return{isTest:Dn,goformId:"DELETE_SMS",msg_id:n,notCallback:!0}}}'
+    'function zteDeleteAll(){return{isTest:Dn,goformId:"ALL_DELETE_SMS",notCallback:!0,'
+    "which_cgi:e.location}}"
+    'var loc={all:"2",device:"1"};which_cgi="2";'
+    'function zteDataLimit(){var _={isTest:Dn,goformId:"DATA_LIMIT_SETTING"};'
+    "_.data_volume_limit_size=e.limitDataMonth;"
+    "_.traffic_clear_date=e.traffic_clear_date;"
+    "_.data_volume_limit_switch=e.x;return _}"
+    'if(n.ACCESSIBLE_ID_SUPPORT&&"LOGIN"!=e.goformId){'
+    'var o=hex_md5(rd0+rd1),u=Bt({nv:"RD"}).RD,c=hex_md5(o+u);e.AD=c}'
+    't.ajax({url:"/goform/goform_set_cmd_process"});'
+)
+
+
+class _FakeGet:
+    """One `session.get`, answering with the miniature web UI above."""
+
+    def __init__(self, url: str) -> None:
+        self._url = url
+
+    async def __aenter__(self) -> MagicMock:
+        body = ""
+        if self._url.endswith(("/", "index.html")):
+            body = _FAKE_INDEX
+        elif self._url.endswith("main.js"):
+            body = _FAKE_MAIN
+        elif self._url.endswith("service.js"):
+            body = _FAKE_SERVICE
+        response = MagicMock()
+        response.status = 200 if body else 404
+        response.headers = {"Content-Type": "text/html"}
+        response.text = AsyncMock(return_value=body)
+        return response
+
+    async def __aexit__(self, *_exc: object) -> None:
+        return None
+
 
 class _FakePost:
     """One login request, answering whatever the api stand-in is set to say."""
@@ -152,6 +200,7 @@ def _coordinator(ids: list[str] | None = None) -> MagicMock:
     api.session = MagicMock()
     # `_try_login` posts, or sends a query string for the GET variant, through
     # the same call.
+    api.session.get = MagicMock(side_effect=lambda url, **_kw: _FakeGet(url))
     api.session.request = MagicMock(return_value=_FakePost(api))
 
     coordinator = MagicMock()
@@ -1639,3 +1688,256 @@ async def test_a_rule_that_screens_and_then_stops_working_is_not_accepted(
         if p["probe"].startswith("7h_")
     }
     assert len(confirmed) > 1, "the rule after the failing one was not tried"
+
+
+async def test_the_router_s_own_client_is_read_and_recorded() -> None:
+    """Five probe versions decided what to send from constants written here.
+
+    The router serves a working client of its own API; what that client sends
+    is a measurement rather than a guess.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    index = _by_name(report, "22a_index")["result"]
+    assert index["data_main"] == ["js/main"]
+    assert index["script_src"]
+    modules = _by_name(report, "22b_module_list")["result"]
+    assert modules["declared"] == {"service": "service", "home": "home"}
+    bundles = _by_name(report, "22c_bundles")["result"]
+    assert bundles["read"] >= 2
+
+
+async def test_the_write_path_source_is_captured_from_the_router() -> None:
+    """The code that builds a write says what the browser sends.
+
+    It is the router's own script, served to anyone who opens its address, and
+    carries nothing belonging to the reporter.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    captures = _by_name(report, "22d_write_path_source")["result"]["captures"]
+    assert "goform_set_cmd_process" in captures
+    assert any("hex_md5" in text for text in captures.get("rd0", []))
+    assert "ACCESSIBLE_ID_SUPPORT" in captures
+
+
+async def test_the_fields_the_router_sends_are_compared_with_ours() -> None:
+    """A constant the device contradicts is the finding.
+
+    It should be stated in the report rather than hunted for across a
+    thousand records.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    diff = report["command_field_differences"]
+    assert diff["DELETE_SMS"]["router_sends"]
+    assert "notCallback" in diff["DELETE_SMS"]["router_sends"]
+    assert "which_cgi" in diff["ALL_DELETE_SMS"]["router_sends"]
+    assert set(diff) == {
+        "DATA_LIMIT_SETTING",
+        "NIGHT_MODE_INFO_SETTINGS",
+        "DELETE_SMS",
+        "ALL_DELETE_SMS",
+    }
+
+
+async def test_a_write_is_also_sent_carrying_no_token_at_all() -> None:
+    """The router attaches `AD` only when its own flag is set.
+
+    A firmware with that flag unset expects no token, and every request this
+    project has ever sent carried one.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    record = _by_name(report, "23b_write_without_a_token")
+    assert record["carried"]["token_sent"] is False
+
+
+async def test_a_delete_is_sent_in_the_form_the_browser_uses() -> None:
+    """The browser sends both the trailing semicolon and `notCallback`.
+
+    This project has sent each separately and never the two together, which is
+    not the same request.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    record = _by_name(report, "23c_delete_browser_form")
+    assert record["sent"].count(";") >= 1
+    assert "notCallback=true" in record["sent"]
+
+
+async def test_a_page_that_cannot_be_read_is_a_finding_not_a_failure() -> None:
+    """A router that answers nothing must still produce a report."""
+    coordinator = _coordinator()
+    coordinator.api.session.get = MagicMock(side_effect=OSError("no route"))
+
+    report = await run_probe(coordinator)
+
+    index = _by_name(report, "22a_index")["result"]
+    assert index["status"] is None
+    assert "OSError" in index["head"] or index["bytes"] > 0
+
+
+async def test_an_index_naming_no_entry_point_says_so() -> None:
+    """Four downloads reported exactly that, and the run must not stop there."""
+    coordinator = _coordinator()
+    coordinator.api.session.get = MagicMock(
+        side_effect=lambda url, **_kw: _FakeGet("http://router/nothing")
+    )
+
+    report = await run_probe(coordinator)
+
+    modules = _by_name(report, "22b_module_list")["result"]
+    assert modules["note"] == "the index named no entry point"
+
+
+async def test_the_router_form_write_is_skipped_when_nothing_was_extracted() -> None:
+    """A fallback to our own constants would test this module, not the router.
+
+    The result would read as a finding about his firmware when it is a finding
+    about ours.
+    """
+    coordinator = _coordinator()
+    coordinator.api.session.get = MagicMock(
+        side_effect=lambda url, **_kw: _FakeGet("http://router/nothing")
+    )
+
+    report = await run_probe(coordinator)
+
+    skipped = _by_name(report, "23a_data_limit_router_form")
+    assert skipped["outcome"] == "skipped"
+    assert "field list" in skipped["reason"]
+
+
+async def test_the_browser_form_delete_is_skipped_with_no_message_left() -> None:
+    """A rung that needs a message says so rather than reporting a refusal."""
+    coordinator = _coordinator([])
+
+    report = await run_probe(coordinator)
+
+    skipped = _by_name(report, "23c_delete_browser_form")
+    assert skipped["outcome"] == "skipped"
+
+
+def test_the_source_capture_is_bounded_per_marker() -> None:
+    """A minified bundle can mention a name hundreds of times.
+
+    Capturing every one would put a megabyte of the same script into a
+    download that is already several.
+    """
+    text = "goform_set_cmd_process " * 50
+
+    captures = sms_delete_probe._captures(text, "goform_set_cmd_process")
+
+    assert len(captures) == 4
+    assert all(len(c) <= 2 * sms_delete_probe._CAPTURE_WINDOW for c in captures)
+
+
+def test_the_field_reader_handles_malformed_and_nested_source() -> None:
+    """Three readings of this were wrong before one was right.
+
+    A window scan reported a neighbouring reader's fields as the command's own;
+    a literal-only scan found none, because the data-limit form is assembled by
+    assignment after the literal. These are the edges that produced each.
+    """
+    fields_for = sms_delete_probe._fields_for
+
+    # No literal at all before the marker.
+    assert fields_for('goformId:"X"', "X") == []
+    # A literal that never closes inside the scan window.
+    assert fields_for('{a:1,goformId:"X"' + " " * 5000, "X") == []
+    # Keys of a nested object are not fields of this command.
+    assert fields_for('{goformId:"X",a:1,b:{hidden:2}}', "X") == ["a", "b"]
+    # Fields assigned to the literal afterwards are.
+    assert fields_for('var _={goformId:"X"};_.later=1;', "X") == ["later"]
+    # A quoted key is read; a computed one is not.
+    assert fields_for('{goformId:"X","quoted":1,[k]:2}', "X") == ["quoted"]
+
+
+async def test_a_caller_supplied_form_still_flips_and_is_verified() -> None:
+    """Computing the flip only for forms this module builds made `23a` blind.
+
+    It compared its read-back against `None` and could not report success
+    whatever the router did — a false negative of the kind that rung exists to
+    detect.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    record = _by_name(report, "23a_data_limit_router_form")
+    assert record["result"]["flipped_from"] is not None
+    assert record["result"]["flipped_to"] is not None
+    assert record["verified"] is True
+
+
+async def test_the_router_form_fills_a_field_the_poll_does_not_carry() -> None:
+    """Dropping it sends our form under the router's name.
+
+    The first run reported six fields where the router's code assembles seven,
+    and the missing one is the whole reason the rung exists.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    record = _by_name(report, "23a_data_limit_router_form")
+    assert "fields_the_device_would_not_answer" in record
+
+
+async def test_which_cgi_is_read_from_the_script_not_assumed() -> None:
+    """A guess reported as a measurement is worse than no rung at all."""
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    names = [p["probe"] for p in report["probes"]]
+    tried = [n for n in names if n.startswith("23d_all_delete_which_cgi_")]
+    assert tried
+    assert all(
+        _by_name(report, n)["which_cgi_from"] == "the router's own script"
+        for n in tried
+    )
+
+
+async def test_no_which_cgi_value_means_the_rung_is_skipped() -> None:
+    """Sending a guess would report our assumption as the router's behaviour."""
+    coordinator = _coordinator()
+    coordinator.api.session.get = MagicMock(
+        side_effect=lambda url, **_kw: _FakeGet("http://router/nothing")
+    )
+
+    report = await run_probe(coordinator)
+
+    skipped = _by_name(report, "23d_all_delete_which_cgi")
+    assert skipped["outcome"] == "skipped"
+    assert "guess" in skipped["reason"]
+
+
+async def test_a_form_the_poll_already_carries_needs_no_extra_read() -> None:
+    """The fill is for the gap, not a second read of what is already known."""
+    coordinator = _coordinator()
+    # Every field the fixture's script names is in the poll payload, so there
+    # is nothing left to fetch.
+    coordinator.data = {
+        **coordinator.data,
+        "data_volume_limit_size": "50_1024",
+        "traffic_clear_date": "1",
+        "notify_deviceui_enable": "1",
+        "data_volume_limit_switch": "1",
+    }
+
+    report = await run_probe(coordinator)
+
+    record = _by_name(report, "23a_data_limit_router_form")
+    assert record["fields_the_device_would_not_answer"] == []
