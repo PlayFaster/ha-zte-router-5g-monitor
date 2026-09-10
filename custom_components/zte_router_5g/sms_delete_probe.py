@@ -994,11 +994,24 @@ async def _run_rungs(
 
         probes.append(await _capture(coordinator, "7_harmless_write", harmless_write))
 
-        working, working_token = await _candidate_rungs(coordinator, report, probes)
-
         # --- 20. The same write, sent differently, and two questions the
         # rungs above cannot answer. None of this touches a message.
+        #
+        # **Before the token sweep, not after.** Finding a carrier costs seven
+        # writes and the sweep costs a hundred and fifty; running them the
+        # other way round screens every rule through a carrier that may be the
+        # thing being refused, and reports a hundred and fifty refusals for a
+        # reason the run went on to solve two rungs later. The MC7010 download
+        # of 2026-09-10 showed exactly that: every screened attempt carried
+        # `Content-Type` alone, because the root `Referer` was not adopted
+        # until afterwards.
+        #
+        # The rung numbers are left as they are so a download stays comparable
+        # with the three that came before it.
         await _transport_rungs(coordinator, report, probes)
+
+        working, working_token = await _candidate_rungs(coordinator, report, probes)
+
         # --- 21. The axes crossed, where a session allows it ----------------
         await _combination_rungs(coordinator, report, probes)
         await _session_proof_rung(coordinator, probes)

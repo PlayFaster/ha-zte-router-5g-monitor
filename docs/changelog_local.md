@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.17-dev7\] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened](#3317-dev7---2026-09-10---sms-probe-v4-the-carrier-is-found-before-the-token-space-is-screened)
   - [\[3.3.17-dev6\] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept](#3317-dev6---2026-09-10---sms-probe-v4-the-axes-crossed-and-every-attempt-kept)
   - [\[3.3.17-dev5\] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted](#3317-dev5---2026-09-10---sms-probe-v4-one-attempt-primitive-transport-becomes-an-axis-and-is-adopted)
   - [\[3.3.17-dev4\] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run](#3317-dev4---2026-09-10---sms-probe-v4-the-winning-login-is-adopted-for-the-rest-of-the-run)
@@ -259,6 +260,23 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.17-dev7] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened
+
+### Summary
+
+A live run of the previous entry on the reference MC7010 showed every screened attempt carrying `Content-Type` alone, with no `Referer`. The transport axis was adopted two rungs after the token sweep had already finished, so the sweep could never inherit it. The previous entry claimed otherwise.
+
+### Fixed
+
+- **The transport axis runs before the token sweep.** Finding a carrier costs seven writes and screening the space costs a hundred and fifty. In the other order, every rule is screened through a carrier that may itself be what the router is refusing, and the run reports a hundred and fifty refusals for a reason it solves two rungs later — which on the reporter's device is the difference between a finding and a wasted download. The rung numbers are unchanged so a download stays comparable with the three before it.
+
+- **A settle before the diagnostics check, and a longer one between its two passes.** `scripts/diag_check.py` opens two full discovery passes back to back and logs in for each with a five-second timeout. Five failures on 2026-09-09 and 2026-09-10 all followed sustained probe traffic against the same device, twice with the identical signature of run 1 completing cleanly and run 2's login never answering. `SETTLE_SECONDS` is 15, applied before the first pass and between the two; the second is where every observed failure occurred. The router recovers on its own and a re-run has passed every time, so this removes noise rather than fixing a fault.
+
+### Verified
+
+- 1,563 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+- Two tests added: that the carrier is settled before the first screened rule, and that a screened rule carries the header the carrier established. The second is the one that would have caught this.
+
 ## [3.3.17-dev6] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept
 
 ### Summary
@@ -301,7 +319,7 @@ Two audits of this release found the same defect in two places: a value discover
 
 - **One attempt primitive.** A write on this API has four independent axes — the session it runs under, the token it carries, how it is carried, and which command it is. `_attempt` is the only place a request is constructed, so varying any axis is a parameter rather than another hand-written rung. `_data_volume_write` and `_delete_raw` are now thin callers, which is what makes the two changes below reach every rung without any of them being rewritten.
 
-- **A transport that works is held for the rest of the run.** Seven carriers are tried — the site root as `Referer`, the full browser header set, no content type, `notCallback`, a query string, no cookie, and the cookie under the name `stok` — and the first that writes is adopted. `transport_in_use` names it. Every later write, the token sweep and the deletes included, inherits it.
+- **A transport that works is held for the rest of the run.** Seven carriers are tried — the site root as `Referer`, the full browser header set, no content type, `notCallback`, a query string, no cookie, and the cookie under the name `stok` — and the first that writes is adopted. `transport_in_use` names it. Every later write inherits it. (Corrected in dev7: until then the token sweep ran before the carrier was known, so it did not.)
 
 - **The deletes are carried the way a write was proven.** `_delete_raw` built its own request and sent the shipped form regardless of what the transport rungs had established, so a delete would have failed for a reason the run had already solved.
 

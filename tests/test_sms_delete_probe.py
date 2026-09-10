@@ -1397,3 +1397,31 @@ def test_every_cited_rule_names_a_source_this_project_has_read() -> None:
         "wa_md5_ll",
         "crwa_md5_lu",
     ]
+
+
+async def test_the_carrier_is_found_before_the_token_space_is_screened() -> None:
+    """Seven writes settle the carrier; a hundred and fifty screen the rules.
+
+    Run the other way round, every rule is screened through a carrier that may
+    itself be what the router is refusing, and the run reports a hundred and
+    fifty refusals for a reason it solves two rungs later.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    names = [p["probe"] for p in report["probes"]]
+    assert names.index("20a_referer_root") < names.index("7a_token_inputs")
+    assert names.index("20a_referer_root") < min(
+        i for i, n in enumerate(names) if n.startswith("7b_")
+    )
+
+
+async def test_a_screened_rule_carries_the_transport_that_was_proven() -> None:
+    """The adopted carrier has to reach the sweep, not merely precede it."""
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    screened = next(p for p in report["probes"] if p["probe"].startswith("7b_"))
+    assert "Referer" in screened["carried"]["header_names"]
