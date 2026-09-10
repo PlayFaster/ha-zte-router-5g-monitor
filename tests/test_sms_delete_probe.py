@@ -46,6 +46,7 @@ _FAKE_SERVICE = (
     'return{isTest:Dn,goformId:"DELETE_SMS",msg_id:n,notCallback:!0}}}'
     'function zteDeleteAll(){return{isTest:Dn,goformId:"ALL_DELETE_SMS",notCallback:!0,'
     "which_cgi:e.location}}"
+    'var loc={all:"2",device:"1"};which_cgi="2";'
     'function zteDataLimit(){var _={isTest:Dn,goformId:"DATA_LIMIT_SETTING"};'
     "_.data_volume_limit_size=e.limitDataMonth;"
     "_.traffic_clear_date=e.traffic_clear_date;"
@@ -1861,3 +1862,82 @@ def test_the_field_reader_handles_malformed_and_nested_source() -> None:
     assert fields_for('var _={goformId:"X"};_.later=1;', "X") == ["later"]
     # A quoted key is read; a computed one is not.
     assert fields_for('{goformId:"X","quoted":1,[k]:2}', "X") == ["quoted"]
+
+
+async def test_a_caller_supplied_form_still_flips_and_is_verified() -> None:
+    """Computing the flip only for forms this module builds made `23a` blind.
+
+    It compared its read-back against `None` and could not report success
+    whatever the router did — a false negative of the kind that rung exists to
+    detect.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    record = _by_name(report, "23a_data_limit_router_form")
+    assert record["result"]["flipped_from"] is not None
+    assert record["result"]["flipped_to"] is not None
+    assert record["verified"] is True
+
+
+async def test_the_router_form_fills_a_field_the_poll_does_not_carry() -> None:
+    """Dropping it sends our form under the router's name.
+
+    The first run reported six fields where the router's code assembles seven,
+    and the missing one is the whole reason the rung exists.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    record = _by_name(report, "23a_data_limit_router_form")
+    assert "fields_the_device_would_not_answer" in record
+
+
+async def test_which_cgi_is_read_from_the_script_not_assumed() -> None:
+    """A guess reported as a measurement is worse than no rung at all."""
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    names = [p["probe"] for p in report["probes"]]
+    tried = [n for n in names if n.startswith("23d_all_delete_which_cgi_")]
+    assert tried
+    assert all(
+        _by_name(report, n)["which_cgi_from"] == "the router's own script"
+        for n in tried
+    )
+
+
+async def test_no_which_cgi_value_means_the_rung_is_skipped() -> None:
+    """Sending a guess would report our assumption as the router's behaviour."""
+    coordinator = _coordinator()
+    coordinator.api.session.get = MagicMock(
+        side_effect=lambda url, **_kw: _FakeGet("http://router/nothing")
+    )
+
+    report = await run_probe(coordinator)
+
+    skipped = _by_name(report, "23d_all_delete_which_cgi")
+    assert skipped["outcome"] == "skipped"
+    assert "guess" in skipped["reason"]
+
+
+async def test_a_form_the_poll_already_carries_needs_no_extra_read() -> None:
+    """The fill is for the gap, not a second read of what is already known."""
+    coordinator = _coordinator()
+    # Every field the fixture's script names is in the poll payload, so there
+    # is nothing left to fetch.
+    coordinator.data = {
+        **coordinator.data,
+        "data_volume_limit_size": "50_1024",
+        "traffic_clear_date": "1",
+        "notify_deviceui_enable": "1",
+        "data_volume_limit_switch": "1",
+    }
+
+    report = await run_probe(coordinator)
+
+    record = _by_name(report, "23a_data_limit_router_form")
+    assert record["fields_the_device_would_not_answer"] == []

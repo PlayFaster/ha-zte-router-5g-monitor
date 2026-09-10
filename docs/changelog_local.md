@@ -6,6 +6,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
   - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
+  - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-that-could-not-report-what-they-measured)
   - [\[3.3.19-dev1\] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At](#3319-dev1---2026-09-10---sms-probe-v6-the-routers-own-web-client-is-read-rather-than-guessed-at)
   - [\[3.3.18-dev1\] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back](#3318-dev1---2026-09-10---sms-probe-v5-every-write-changes-something-and-is-read-back)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
@@ -280,6 +281,25 @@ All changes to this project will be documented in this file. This is the detaile
 
 - **Cached Firmware Version Inputs**: Firmware version strings are cached once per probe run to eliminate redundant polling overhead across extensive formula screening passes.
 - **Extended Probe Timeout**: Increased the probe execution safety ceiling to 15 minutes to accommodate expanded multi-variant token evaluation.
+
+## [3.3.19-dev2] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured
+
+### Summary
+
+The first MC7010 rehearsal of Probe v6 read the router's web client exactly as intended — 21 bundles, the token derivation, the flag that gates it, and one field the router sends that this integration does not. It also showed two of the four new write rungs unable to report a result they could earn.
+
+### Fixed
+
+- **A caller-supplied form still flips, and is still verified.** `_attempt` computed the before-and-after values only when it assembled the fields itself. `23a` supplies its own, so `flipped_to` stayed `None`, the read-back compared against `None`, and the rung reported failure whatever the router did — a false negative of exactly the kind it exists to detect. The rehearsal recorded `result: "success"` alongside `wrote: false`.
+
+- **A field the poll does not carry is read rather than dropped.** `23a` sent six fields where the router's own code assembles seven, because `notify_deviceui_enable` is not in the poll payload. That is our form under the router's name, and the missing field is the whole reason the rung exists. Anything the device will not answer either is now named in the record.
+
+- **`which_cgi` is read from the script, not assumed.** The router's delete-all sends `which_cgi: e.location`, and what that variable holds is not in the payload builder. The first version sent the storage constant this integration uses elsewhere, drew a refusal on a device where delete-all works, and recorded it as a finding — a guess reported as a measurement. Every literal the script assigns to `which_cgi` is now collected and tried, and where none is found the rung is skipped with that reason.
+
+### Verified
+
+- 1,586 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+- On the reference MC7010, `23c` sent the browser's exact delete form — `msg_id=130;` with `notCallback` — and the re-listing confirms that message gone.
 
 ## [3.3.19-dev1] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At
 

@@ -438,6 +438,19 @@ def _module_paths(entry_text: str) -> dict[str, str]:
     }
 
 
+def _which_cgi_values(text: str) -> set[str]:
+    """Every literal the router's script assigns to `which_cgi`.
+
+    The delete-all builder passes a variable, so the values live wherever that
+    variable is set. Reading them is the difference between sending what the
+    device sends and sending what this project assumes it sends.
+    """
+    return {
+        match.group(1)
+        for match in re.finditer(r"""which_cgi\s*[:=]\s*["']([^"']+)["']""", text)
+    }
+
+
 def _captures(text: str, marker: str) -> list[str]:
     """The source around each occurrence of a marker, bounded."""
     out: list[str] = []
@@ -975,39 +988,48 @@ async def _attempt(
     flipped_from: str | None = None
     flipped_to: str | None = None
 
-    if fields is None and toggle is not None:
+    if toggle is not None:
         _name, _command, aliases, field, default = toggle
         _alias, current_value = await _read_switch(api, aliases)
         flipped_from = current_value if current_value is not None else default
         flipped_to = _flip(flipped_from)
-        # The whole form, with one field flipped. `DATA_LIMIT_SETTING` is
-        # all-or-nothing — `api.py` records that the router refuses it outright
-        # when a field is missing — so sending the switch alone would draw a
-        # refusal that says nothing about the token, the carrier or the
-        # session. Everything else goes back at the value it already holds.
-        fields = {}
-        if _name == "led_night":
-            with contextlib.suppress(Exception):
-                answer = await api.get_params(list(_NIGHT_MODE_FIELDS))
-                fields = {
-                    key: str(value)
-                    for key, value in (answer or {}).items()
-                    if key in _NIGHT_MODE_FIELDS and value not in ("", None)
-                }
-        else:
-            current = dict(coordinator.data or {})
-            for name, spellings in api.DATA_VOLUME_FIELDS.items():
-                value = next(
-                    (
-                        current[key]
-                        for key in spellings
-                        if current.get(key) not in ("", None)
-                    ),
-                    None,
-                )
-                if value is not None:
-                    fields[name] = str(value)
-        fields[field] = flipped_to
+
+        if fields is None:
+            # The whole form, with one field flipped. `DATA_LIMIT_SETTING` is
+            # all-or-nothing — `api.py` records that the router refuses it
+            # outright when a field is missing — so sending the switch alone
+            # would draw a refusal that says nothing about the token, the
+            # carrier or the session. Everything else goes back at the value it
+            # already holds.
+            fields = {}
+            if _name == "led_night":
+                with contextlib.suppress(Exception):
+                    answer = await api.get_params(list(_NIGHT_MODE_FIELDS))
+                    fields = {
+                        key: str(value)
+                        for key, value in (answer or {}).items()
+                        if key in _NIGHT_MODE_FIELDS and value not in ("", None)
+                    }
+            else:
+                current = dict(coordinator.data or {})
+                for name, spellings in api.DATA_VOLUME_FIELDS.items():
+                    value = next(
+                        (
+                            current[key]
+                            for key in spellings
+                            if current.get(key) not in ("", None)
+                        ),
+                        None,
+                    )
+                    if value is not None:
+                        fields[name] = str(value)
+
+        # Applied whether this function built the form or a caller supplied
+        # one. Computing the flip only in the first case meant `23a` compared
+        # its read-back against `None` and could not report success whatever
+        # the router did — a false negative of exactly the kind that rung
+        # exists to detect.
+        fields = {**fields, field: str(flipped_to)}
 
     if fields is None:
         current = dict(coordinator.data or {})
@@ -2337,6 +2359,10 @@ async def _web_ui_rungs(
             for marker in ("goform_set_cmd_process", "rd0", "ACCESSIBLE_ID_SUPPORT"):
                 if marker in body and marker not in found["captures"]:
                     found["captures"][marker] = _captures(body, marker)
+            found.setdefault("which_cgi_values", [])
+            found["which_cgi_values"] = sorted(
+                set(found["which_cgi_values"]) | _which_cgi_values(body)
+            )
             for command in (
                 "DELETE_SMS",
                 "ALL_DELETE_SMS",
@@ -2436,13 +2462,27 @@ async def _web_ui_write_rungs(
     else:
         current = dict(coordinator.data or {})
         toggle = _TOGGLES[0]
-        _alias, value = await _read_switch(api, toggle[2])
         payload = {
             name: str(current.get(name, ""))
             for name in fields
             if current.get(name) not in ("", None)
         }
-        payload[toggle[3]] = _flip(value)
+        # A field the poll does not carry is read directly rather than dropped.
+        # Dropping it sends our form under the router's name: the first run of
+        # this rung reported six fields where the router's code assembles
+        # seven, and the missing one is the whole reason the rung exists.
+        absent = [name for name in fields if name not in payload]
+        if absent:
+            with contextlib.suppress(Exception):
+                answer = await api.get_params(absent)
+                payload.update(
+                    {
+                        name: str(value)
+                        for name, value in (answer or {}).items()
+                        if name in absent and value not in ("", None)
+                    }
+                )
+        still_absent = sorted(name for name in fields if name not in payload)
 
         async def router_form() -> dict[str, Any]:
             return await _attempt(
@@ -2458,6 +2498,7 @@ async def _web_ui_write_rungs(
         record["wrote"] = _wrote(record)
         record["verified"] = _verified(record)
         record["fields_from"] = "the router's own script"
+        record["fields_the_device_would_not_answer"] = still_absent
         probes.append(record)
         await asyncio.sleep(ATTEMPT_DELAY)
 
@@ -2516,19 +2557,48 @@ async def _web_ui_write_rungs(
         await asyncio.sleep(ATTEMPT_DELAY)
 
     # --- 23d. Delete-all with the parameter its own code carries --------
-    async def all_delete() -> dict[str, Any]:
-        return await _attempt(
-            coordinator,
-            transport={**_ADOPTED, "not_callback": True},
-            command="ALL_DELETE_SMS",
-            fields={"which_cgi": SMS_STORE_ALL},
+    # The router's script sends `which_cgi: e.location`, and what `e.location`
+    # holds is not in the payload builder. A first version assumed the storage
+    # constant this integration uses elsewhere, sent it, drew a refusal on a
+    # device where delete-all works, and recorded that as a finding. It was a
+    # guess reported as a measurement.
+    #
+    # Every value the script assigns to `which_cgi` is now taken from the
+    # source, and each is tried. Where none was found, the rung says so.
+    values = web.get("which_cgi_values") or []
+    if not values:
+        probes.append(
+            {
+                "probe": "23d_all_delete_which_cgi",
+                "outcome": "skipped",
+                "reason": (
+                    "the router's script did not yield a value for which_cgi, "
+                    "and sending a guess would report our assumption as its "
+                    "behaviour"
+                ),
+            }
         )
+        return
 
-    record = await _capture(coordinator, "23d_all_delete_which_cgi", all_delete)
-    record["wrote"] = _wrote(record)
-    with contextlib.suppress(Exception):
-        record["ids_after"] = await _surviving_ids(coordinator)
-    probes.append(record)
+    for value in values[:3]:
+
+        async def all_delete(v: str = value) -> dict[str, Any]:
+            return await _attempt(
+                coordinator,
+                transport={**_ADOPTED, "not_callback": True},
+                command="ALL_DELETE_SMS",
+                fields={"which_cgi": v},
+            )
+
+        record = await _capture(
+            coordinator, f"23d_all_delete_which_cgi_{value}", all_delete
+        )
+        record["wrote"] = _wrote(record)
+        record["which_cgi_from"] = "the router's own script"
+        with contextlib.suppress(Exception):
+            record["ids_after"] = await _surviving_ids(coordinator)
+        probes.append(record)
+        await asyncio.sleep(ATTEMPT_DELAY)
 
 
 async def _session_proof_rung(
