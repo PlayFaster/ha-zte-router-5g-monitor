@@ -42,6 +42,8 @@ from datetime import UTC, datetime
 from time import monotonic
 from typing import TYPE_CHECKING, Any, cast
 
+import aiohttp
+
 from .api import (
     _CORE_PARAMS,
     _EXTENDED_PARAMS,
@@ -52,6 +54,7 @@ from .api import (
     ZTEConnectionError,
     _classify_session,
 )
+from .const import JS_BUNDLES
 
 if TYPE_CHECKING:
     from .coordinator import ZTERouterDataUpdateCoordinator
@@ -353,6 +356,171 @@ def _value_kind(variant: dict[str, Any]) -> str:
     if not value:
         return "empty"
     return value if value in ("user", "admin") else "the configured username"
+
+
+# --- reading the router's own web UI ---------------------------------------
+#
+# Every version of this probe decided what to send from constants written here.
+# The router publishes the answer itself: the page its browser loads is the
+# same client, hitting the same API, and it works. Reading that code turns a
+# guess into a measurement — and where the two disagree, the disagreement is
+# the finding.
+#
+# All of this is read-only, and none of it is the reporter's data: it is the
+# script the router serves to anyone who opens its address.
+
+# `<script src="...">`, and the RequireJS entry point the index names instead.
+_SCRIPT_SRC = re.compile(r"""<script[^>]+src\s*=\s*["']([^"']+)["']""")
+_DATA_MAIN = re.compile(r"""data-main\s*=\s*["']([^"']+)["']""")
+# `require.config({paths:{name:"path", ...}})`, which is where a module loader
+# keeps the list an index page does not carry.
+_REQUIRE_PATHS = re.compile(r"""paths\s*:\s*\{([^}]*)\}""")
+_PATH_PAIR = re.compile(r"""["']?([\w$-]+)["']?\s*:\s*["']([^"']+)["']""")
+
+# What a bundle is searched for, and what each occurrence is worth capturing.
+_MARKERS: tuple[str, ...] = (
+    "goform_set_cmd_process",
+    "goform_get_cmd_process",
+    "DELETE_SMS",
+    "ALL_DELETE_SMS",
+    "DATA_LIMIT_SETTING",
+    "NIGHT_MODE_INFO_SETTINGS",
+    "ACCESSIBLE_ID_SUPPORT",
+    "rd0",
+    "rd1",
+    "hex_md5",
+    "hex_sha256",
+    "SHA256",
+    "which_cgi",
+)
+
+# Characters of source kept either side of a marker. Enough to hold a payload
+# builder and its callback; small enough that a dozen captures do not dominate
+# the download.
+_CAPTURE_WINDOW = 700
+
+# Bundles fetched in one run, and bytes read from each. A module loader can
+# name a great many, and a probe that reads all of them on a slow router is a
+# probe that times out.
+_MAX_BUNDLES = 40
+_MAX_BUNDLE_BYTES = 400_000
+
+
+async def _fetch_text(api: Any, path: str) -> tuple[int | None, list[str], str]:
+    """Fetch one page or script, returning status, header names and body."""
+    url = f"{api.referer}{path.lstrip('/')}"
+    try:
+        async with api.session.get(
+            url,
+            headers={"Referer": f"{api.referer}index.html"},
+            timeout=aiohttp.ClientTimeout(total=15),
+            ssl=False,
+        ) as response:
+            body = await response.text(errors="replace")
+            return response.status, sorted(response.headers), body
+    except Exception as err:  # noqa: BLE001 - a miss is a finding, not a failure
+        return None, [], f"{type(err).__name__}: {err}"
+
+
+def _module_paths(entry_text: str) -> dict[str, str]:
+    """Every module a RequireJS entry point declares.
+
+    The reference MC7010's index names three library scripts and
+    `data-main="js/main"`; the modules the application actually uses are listed
+    inside that entry point and nowhere else. An index that "names no scripts"
+    — which is what the reporter's device reported for four downloads — is an
+    index whose scripts are declared here.
+    """
+    return {
+        pair.group(1): pair.group(2)
+        for block in _REQUIRE_PATHS.finditer(entry_text)
+        for pair in _PATH_PAIR.finditer(block.group(1))
+    }
+
+
+def _captures(text: str, marker: str) -> list[str]:
+    """The source around each occurrence of a marker, bounded."""
+    out: list[str] = []
+    for match in re.finditer(re.escape(marker), text):
+        start = max(0, match.start() - _CAPTURE_WINDOW)
+        out.append(text[start : match.start() + _CAPTURE_WINDOW])
+        if len(out) >= 4:
+            break
+    return out
+
+
+def _fields_for(text: str, goform_id: str) -> list[str]:
+    """The field names the router's own code assembles for one command.
+
+    **Read from the object literal that carries the `goformId`, and only from
+    it.** A first version scanned a fixed window either side and picked up
+    whatever happened to be nearby: on the reference MC7010 it reported the
+    data-limit form as carrying `monthlySent`, `monthlyReceived` and `result`,
+    which belong to a neighbouring reader. Those names would then have been
+    sent in `23a` as "the router's own form", and a refusal blamed on the
+    device rather than on this function.
+
+    Balanced braces from the literal's opening, keys at its top level only. An
+    empty list means the pattern was not found, which is recorded rather than
+    filled in from a constant.
+    """
+    names: set[str] = set()
+    for match in re.finditer(re.escape(f'goformId:"{goform_id}"'), text):
+        opening = text.rfind("{", 0, match.start())
+        if opening == -1:
+            continue
+        depth = 0
+        for index in range(opening, min(len(text), opening + 4000)):
+            character = text[index]
+            if character == "{":
+                depth += 1
+            elif character == "}":
+                depth -= 1
+                if depth == 0:
+                    body = text[opening + 1 : index]
+                    break
+        else:
+            continue
+        # Keys at the literal's own level, so a nested object's keys are not
+        # read as fields of this command.
+        level = 0
+        key = ""
+        for character in body:
+            if character in "{[(":
+                level += 1
+            elif character in "}])":
+                level -= 1
+            elif character == ":" and level == 0:
+                stripped = key.strip().strip("\"'")
+                if re.fullmatch(r"\w+", stripped):
+                    names.add(stripped)
+                key = ""
+            elif character == "," and level == 0:
+                key = ""
+            elif level == 0:
+                # Only what sits at the literal's own level can be a key. A
+                # nested object's keys belong to it, and `[k]: 2` is computed
+                # at runtime — its `k` is not a field name this probe could
+                # send. Skipping everything inside a bracket covers both, and
+                # is why no reset is needed when one opens.
+                key += character
+        # Fields assigned to the literal afterwards, which is how the
+        # data-limit form is built: `var _={isTest:Dn,goformId:"..."}` and then
+        # `_.data_volume_limit_unit=...` under a condition. Reading only the
+        # literal finds none of them; reading a fixed window finds them and a
+        # neighbouring reader's fields too.
+        prefix = text[max(0, opening - 40) : opening]
+        holder = re.search(r"(\w+)\s*=\s*$", prefix)
+        if holder:
+            tail = text[index : index + 2000]
+            names |= {
+                m.group(1)
+                for m in re.finditer(
+                    r"\b" + re.escape(holder.group(1)) + r"\.(\w+)\s*=",
+                    tail,
+                )
+            }
+    return sorted(names - {"goformId", "isTest"})
 
 
 async def _capture(
@@ -744,6 +912,11 @@ _DEFAULT_TRANSPORT: dict[str, Any] = {
     "token_in_query": False,
     "is_test": "false",
     "multi_data": False,
+    # The router's own code attaches `AD` only when `ACCESSIBLE_ID_SUPPORT` is
+    # set, and never on `LOGIN` or `SET_WEB_LANGUAGE`. A firmware with that
+    # flag unset expects no token at all, and every request this project has
+    # ever sent carried one.
+    "no_token": False,
 }
 
 
@@ -848,7 +1021,11 @@ async def _attempt(
                 raise ZTEConnectionError(f"the poll did not supply {field}")
             fields[field] = str(value)
 
-    ad = token if token is not None else await api.get_ad()
+    ad = (
+        ""
+        if carried["no_token"]
+        else (token if token is not None else await api.get_ad())
+    )
     token_field = str(carried["token_field"])
     parts = [f"isTest={carried['is_test']}", f"goformId={command}"]
     if carried["multi_data"]:
@@ -858,11 +1035,13 @@ async def _attempt(
     parts += [f"{key}={value}" for key, value in fields.items()]
     if carried["not_callback"]:
         parts.append("notCallback=true")
-    if not carried["token_first"] and not carried["token_in_header"]:
-        if carried["token_in_query"]:
-            pass
-        else:
-            parts.append(f"{token_field}={ad}")
+    if (
+        not carried["no_token"]
+        and not carried["token_first"]
+        and not carried["token_in_header"]
+        and not carried["token_in_query"]
+    ):
+        parts.append(f"{token_field}={ad}")
     payload = "&".join(parts)
 
     held = dict(api.cookies)
@@ -885,6 +1064,7 @@ async def _attempt(
             "not_callback": bool(carried["not_callback"]),
             "header_names": sorted(dict(carried["headers"])),
             "cookie_names": sorted(api.cookies),
+            "token_sent": not carried["no_token"],
             "token_length": len(str(ad)),
             "token_case": _case_of(str(ad)),
         }
@@ -1372,6 +1552,11 @@ async def _run_rungs(
         working, working_token = await _candidate_rungs(coordinator, report, probes)
 
         # --- 21. The axes crossed, where a session allows it ----------------
+        # --- 22. What the router's own web client does ---------------
+        web = await _web_ui_rungs(coordinator, report, probes)
+
+        await _web_ui_write_rungs(coordinator, report, probes, web)
+
         await _combination_rungs(coordinator, report, probes)
         await _session_proof_rung(coordinator, probes)
 
@@ -2062,6 +2247,288 @@ async def _combination_rungs(
     # Back to whatever the run had settled on.
     with contextlib.suppress(Exception):
         await api.login()
+
+
+async def _web_ui_rungs(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    report: dict[str, Any],
+    probes: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Read the client the router ships, and record where it disagrees with us.
+
+    Five probe versions decided what to send from constants written in this
+    project, checked against one device. The router serves a working client of
+    its own API; what that client sends is not a guess.
+
+    Read-only throughout, and none of it is the reporter's data.
+
+    Returns what was extracted, so the write rungs below can send the router's
+    own form alongside ours.
+    """
+    api = coordinator.api
+    found: dict[str, Any] = {"bundles": {}, "commands": {}, "captures": {}}
+
+    # --- 22a. The index, and what it names ------------------------------
+    async def index() -> dict[str, Any]:
+        status, headers, body = await _fetch_text(api, "index.html")
+        srcs = _SCRIPT_SRC.findall(body) if status == 200 else []
+        main = _DATA_MAIN.findall(body) if status == 200 else []
+        found["entry"] = main[0] if main else ""
+        found["index_scripts"] = srcs
+        return {
+            "status": status,
+            "bytes": len(body),
+            "header_names": headers,
+            "script_src": srcs,
+            "data_main": main,
+            # The head, so a page naming nothing is diagnosed rather than
+            # guessed at a second time.
+            "head": body[: body.find("</head>") + 7][:1500] if status == 200 else "",
+            "sets_a_cookie": "Set-Cookie" in headers,
+        }
+
+    probes.append(await _capture(coordinator, "22a_index", index))
+
+    # --- 22b. The module list the loader carries ------------------------
+    async def modules() -> dict[str, Any]:
+        entry = found.get("entry") or ""
+        if not entry:
+            return {"entry": "", "note": "the index named no entry point"}
+        path = entry if entry.endswith(".js") else f"{entry}.js"
+        status, _headers, body = await _fetch_text(api, path)
+        paths = _module_paths(body) if status == 200 else {}
+        found["modules"] = paths
+        return {
+            "entry": path,
+            "status": status,
+            "bytes": len(body),
+            "declared": paths,
+            "declared_count": len(paths),
+        }
+
+    probes.append(await _capture(coordinator, "22b_module_list", modules))
+
+    # --- 22c. Every bundle, and what each contains ----------------------
+    async def bundles() -> dict[str, Any]:
+        # Query strings are cache-busters; the path is what answers.
+        wanted: list[str] = [
+            str(name).split("?")[0] for name in found.get("index_scripts", [])
+        ]
+        entry = found.get("entry") or ""
+        if entry:
+            wanted.append(entry if entry.endswith(".js") else f"{entry}.js")
+        base = (entry.rsplit("/", 1)[0] + "/") if "/" in entry else ""
+        for path in (found.get("modules") or {}).values():
+            candidate = path if path.endswith(".js") else f"{path}.js"
+            wanted.append(
+                candidate if candidate.startswith(("/", "js/")) else base + candidate
+            )
+        wanted += list(JS_BUNDLES)
+
+        seen: dict[str, Any] = {}
+        for path in list(dict.fromkeys(wanted))[:_MAX_BUNDLES]:
+            status, _headers, body = await _fetch_text(api, path)
+            if status != 200:
+                seen[path] = {"status": status}
+                continue
+            body = body[:_MAX_BUNDLE_BYTES]
+            hits = {m: body.count(m) for m in _MARKERS if m in body}
+            seen[path] = {"status": 200, "bytes": len(body), "markers": hits}
+            for marker in ("goform_set_cmd_process", "rd0", "ACCESSIBLE_ID_SUPPORT"):
+                if marker in body and marker not in found["captures"]:
+                    found["captures"][marker] = _captures(body, marker)
+            for command in (
+                "DELETE_SMS",
+                "ALL_DELETE_SMS",
+                "DATA_LIMIT_SETTING",
+                "NIGHT_MODE_INFO_SETTINGS",
+            ):
+                fields = _fields_for(body, command)
+                if fields and command not in found["commands"]:
+                    found["commands"][command] = fields
+        found["bundles"] = seen
+        return {
+            "read": len([v for v in seen.values() if v.get("status") == 200]),
+            "missing": [k for k, v in seen.items() if v.get("status") != 200],
+            "bundles": seen,
+        }
+
+    probes.append(await _capture(coordinator, "22c_bundles", bundles))
+
+    # --- 22d. The code that builds a write, verbatim --------------------
+    async def write_path_source() -> dict[str, Any]:
+        return {
+            "captures": found["captures"],
+            "note": (
+                "the router's own script, as served to any browser; bounded "
+                f"to {_CAPTURE_WINDOW} characters either side of each "
+                "occurrence"
+            ),
+        }
+
+    # Through `_capture` like every other rung, so one record shape holds for
+    # the whole run and a reader can compare any two of them.
+    probes.append(
+        await _capture(coordinator, "22d_write_path_source", write_path_source)
+    )
+
+    # --- 22e. What the router's client sends, against what we send ------
+    ours = {
+        "DATA_LIMIT_SETTING": sorted(api.DATA_VOLUME_FIELDS),
+        "NIGHT_MODE_INFO_SETTINGS": sorted((*_NIGHT_MODE_FIELDS, _TOGGLES[1][3])),
+        "DELETE_SMS": ["msg_id"],
+        "ALL_DELETE_SMS": [],
+    }
+    differences = {
+        command: {
+            "router_sends": found["commands"].get(command, []),
+            "we_send": ours.get(command, []),
+            "only_the_router": sorted(
+                set(found["commands"].get(command, [])) - set(ours.get(command, []))
+            ),
+            "only_us": sorted(
+                set(ours.get(command, [])) - set(found["commands"].get(command, []))
+            ),
+        }
+        for command in ours
+    }
+    report["command_field_differences"] = differences
+
+    async def field_differences() -> dict[str, Any]:
+        return differences
+
+    probes.append(
+        await _capture(coordinator, "22e_field_differences", field_differences)
+    )
+    return found
+
+
+async def _web_ui_write_rungs(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    report: dict[str, Any],
+    probes: list[dict[str, Any]],
+    web: dict[str, Any],
+) -> None:
+    """Writes shaped the way the router's own client shapes them.
+
+    Everything above sends a form assembled from constants in this module.
+    These send what was read from the device's own script, and one that sends
+    no token at all — which is what that script does when the firmware's
+    `ACCESSIBLE_ID_SUPPORT` flag is unset.
+
+    Where the extraction found nothing, the rung is skipped with that reason
+    rather than falling back to the constants and reporting a result that
+    looks like a test of the router.
+    """
+    api = coordinator.api
+    commands = web.get("commands") or {}
+
+    # --- 23a. The data-limit form, with the fields its own code assembles
+    fields = commands.get("DATA_LIMIT_SETTING") or []
+    if not fields:
+        probes.append(
+            {
+                "probe": "23a_data_limit_router_form",
+                "outcome": "skipped",
+                "reason": "the router's script did not yield a field list",
+            }
+        )
+    else:
+        current = dict(coordinator.data or {})
+        toggle = _TOGGLES[0]
+        _alias, value = await _read_switch(api, toggle[2])
+        payload = {
+            name: str(current.get(name, ""))
+            for name in fields
+            if current.get(name) not in ("", None)
+        }
+        payload[toggle[3]] = _flip(value)
+
+        async def router_form() -> dict[str, Any]:
+            return await _attempt(
+                coordinator,
+                transport=_ADOPTED,
+                command="DATA_LIMIT_SETTING",
+                fields=payload,
+                toggle=toggle,
+                verify=True,
+            )
+
+        record = await _capture(coordinator, "23a_data_limit_router_form", router_form)
+        record["wrote"] = _wrote(record)
+        record["verified"] = _verified(record)
+        record["fields_from"] = "the router's own script"
+        probes.append(record)
+        await asyncio.sleep(ATTEMPT_DELAY)
+
+    # --- 23b. The same write carrying no token at all -------------------
+    async def no_token() -> dict[str, Any]:
+        return await _attempt(
+            coordinator,
+            transport={**_ADOPTED, "no_token": True},
+            command=_TOGGLES[0][1],
+            toggle=_TOGGLES[0],
+            verify=True,
+        )
+
+    record = await _capture(coordinator, "23b_write_without_a_token", no_token)
+    record["wrote"] = _wrote(record)
+    record["verified"] = _verified(record)
+    probes.append(record)
+    await asyncio.sleep(ATTEMPT_DELAY)
+
+    # --- 23c. A delete shaped exactly as the browser sends it ------------
+    # The router's script builds `msg_id` as `ids.join(";") + ";"` and always
+    # carries `notCallback`. This project has sent each of those separately and
+    # never both, which is not the same request.
+    remaining: list[str] = []
+    with contextlib.suppress(Exception):
+        remaining = await _surviving_ids(coordinator)
+    if not remaining:
+        probes.append(
+            {
+                "probe": "23c_delete_browser_form",
+                "outcome": "skipped",
+                "reason": "no message left to target",
+            }
+        )
+    else:
+        target = remaining[0]
+
+        async def browser_form() -> Any:
+            return await _delete_raw(
+                coordinator,
+                target,
+                not_callback=True,
+                trailing_semicolon=True,
+            )
+
+        record = await _capture(
+            coordinator,
+            "23c_delete_browser_form",
+            browser_form,
+            sent=_redacted_body(f"{target};", not_callback=True),
+        )
+        record["id_targeted"] = target
+        with contextlib.suppress(Exception):
+            record["ids_after"] = await _surviving_ids(coordinator)
+        probes.append(record)
+        await asyncio.sleep(ATTEMPT_DELAY)
+
+    # --- 23d. Delete-all with the parameter its own code carries --------
+    async def all_delete() -> dict[str, Any]:
+        return await _attempt(
+            coordinator,
+            transport={**_ADOPTED, "not_callback": True},
+            command="ALL_DELETE_SMS",
+            fields={"which_cgi": SMS_STORE_ALL},
+        )
+
+    record = await _capture(coordinator, "23d_all_delete_which_cgi", all_delete)
+    record["wrote"] = _wrote(record)
+    with contextlib.suppress(Exception):
+        record["ids_after"] = await _surviving_ids(coordinator)
+    probes.append(record)
 
 
 async def _session_proof_rung(

@@ -6,6 +6,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
   - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
+  - [\[3.3.19-dev1\] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At](#3319-dev1---2026-09-10---sms-probe-v6-the-routers-own-web-client-is-read-rather-than-guessed-at)
   - [\[3.3.18-dev1\] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back](#3318-dev1---2026-09-10---sms-probe-v5-every-write-changes-something-and-is-read-back)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
   - [\[3.3.17-dev7\] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened](#3317-dev7---2026-09-10---sms-probe-v4-the-carrier-is-found-before-the-token-space-is-screened)
@@ -279,6 +280,48 @@ All changes to this project will be documented in this file. This is the detaile
 
 - **Cached Firmware Version Inputs**: Firmware version strings are cached once per probe run to eliminate redundant polling overhead across extensive formula screening passes.
 - **Extended Probe Timeout**: Increased the probe execution safety ceiling to 15 minutes to accommodate expanded multi-variant token evaluation.
+
+## [3.3.19-dev1] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At
+
+### Summary
+
+The reporter's Probe v5 download refused all 1,880 attempts, with 63 read-backs confirming the refusals were real rather than the router misreporting. He then established that he **can** delete a message from the router's own web page. So the device permits the write, the account permits it, and the difference is in the request — which means the client that succeeds is worth reading, and it is served by the router to anyone who opens its address.
+
+### Measured on the reference MC7010, before writing any of this
+
+- **The index uses RequireJS.** It names three library scripts and `data-main="js/main"`; the application's own modules are declared inside that entry point. An `.js`-suffix scan of the index can never see them, which is why the reporter's device reported "no scripts named" for four downloads and fell back to a hardcoded list carrying `js/statusBar.js`, which answers 404 on both devices.
+
+- **`js/service.js` holds the write path**, and this project has fetched that file in every diagnostics pass since `[3.3.8-dev1]` while extracting only identifiers and discarding the source.
+
+- **The token is not derived from the version strings.** The router's own code reads `AD = hex_md5(hex_md5(rd0 + rd1) + RD)`, where `rd0` and `rd1` are runtime globals declared empty in `js/main.js` and assigned in a module this project has never fetched. The MC7010 formula this integration ships matches only because `cr_version` is empty on that device.
+
+- **`ACCESSIBLE_ID_SUPPORT` gates the token entirely.** Where that flag is unset the browser attaches no `AD` at all, and never attaches one to `LOGIN` or `SET_WEB_LANGUAGE`.
+
+- **`DELETE_SMS` sends `msg_id` as `ids.join(";") + ";"` with `notCallback` always set.** This project has sent each of those separately and never both.
+
+- **`ALL_DELETE_SMS` carries `which_cgi`**, which this project does not send.
+
+- **No page sets a cookie.** `/`, `/index.html` and `/js/service.js` all answer without `Set-Cookie`, which weakens the browser-warm-up hypothesis that prompted this work.
+
+### Added
+
+- **`22a` through `22e`, a read-only pass over the router's own web client.** The index and its head; the entry point and every module its loader declares; every bundle fetched, with its status, size and marker counts; the source around each `goform_set_cmd_process`, `rd0` and `ACCESSIBLE_ID_SUPPORT` occurrence, bounded; and the field list the router's code assembles for each write command set against the field list this integration sends.
+
+- **`23a`, the data-limit form built from the router's own field list** rather than from `DATA_VOLUME_FIELDS`. That constant is six fields fixed here and checked against one device, while the router's code assembles the form conditionally — the switch only on a device whose string contains `cpe`, and three more fields only when a limit is enabled. A wrong field set draws a refusal that says nothing about the token, the carrier or the session.
+
+- **`23b`, a write carrying no token at all**, which is what the router's client sends where `ACCESSIBLE_ID_SUPPORT` is unset.
+
+- **`23c`, a delete in the browser's exact form** — trailing semicolon and `notCallback` together.
+
+- **`23d`, delete-all carrying `which_cgi`.**
+
+### Changed
+
+- Where the extraction yields nothing, the rungs that depend on it are **skipped with that reason** rather than falling back to this module's constants. A fallback would report a result that reads as a finding about his firmware when it is a finding about ours.
+
+### Verified
+
+- 1,581 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.18-dev1] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back
 
