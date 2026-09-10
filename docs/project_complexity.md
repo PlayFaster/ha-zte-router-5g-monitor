@@ -5,7 +5,7 @@
 ## 1. Executive Summary
 
 | Metric | Value | Verdict / Evaluation |
-| :--- | :---: | :--- |
+| :-- | :-: | :-- |
 | **PlayFaster Health Index** | **`60` / 100** | `ACTION REQUIRED` ($\ge 90$ Excellent · $\ge 80$ Good · $\ge 70$ Warning) |
 | **Max McCabe Complexity ($V(G)$)** | **19** | `PASS (<20)` in `_request` ($< 20$ Pass · $20–23$ Warn · $\ge 24$ Fail) |
 | **Mean Complexity per Routine** | **2.98** | Across 362 routines (Ideal $< 4.0$ per routine) |
@@ -31,82 +31,82 @@
 
 ## 2. High Complexity Routines ($\ge 10$)
 
-| Score | Routine Symbol | Location | Status |
-| :---: | :--- | :--- | :--- |
-| **19** | `_request` | `api.py:1342` | `ELEVATED` |
-| **19** | `_attempt` | `sms_delete_probe.py:957` | `ELEVATED` |
-| **17** | `_run_rungs` | `sms_delete_probe.py:1372` | `ELEVATED` |
-| **15** | `_fields_for` | `sms_delete_probe.py:465` | `ELEVATED` |
-| **15** | `_web_ui_rungs` | `sms_delete_probe.py:2274` | `ELEVATED` |
-| **13** | `_async_update_data_locked` | `coordinator.py:569` | `ELEVATED` |
-| **12** | `_candidate_rungs` | `sms_delete_probe.py:1788` | `ELEVATED` |
-| **12** | `_transport_rungs` | `sms_delete_probe.py:2053` | `ELEVATED` |
-| **11** | `login` | `api.py:1552` | `ELEVATED` |
-| **11** | `probe_names` | `api.py:2195` | `ELEVATED` |
-| **10** | `_get_current_apn_profile` | `select.py:73` | `ELEVATED` |
-| **10** | `extra_state_attributes` | `sensor.py:2287` | `ELEVATED` |
-| **10** | `_try_login` | `sms_delete_probe.py:274` | `ELEVATED` |
-| **10** | `_web_ui_write_rungs` | `sms_delete_probe.py:2432` | `ELEVATED` |
+| Score  | Routine Symbol              | Location                   | Status     |
+| :----: | :-------------------------- | :------------------------- | :--------- |
+| **19** | `_request`                  | `api.py:1342`              | `ELEVATED` |
+| **19** | `_attempt`                  | `sms_delete_probe.py:957`  | `ELEVATED` |
+| **17** | `_run_rungs`                | `sms_delete_probe.py:1372` | `ELEVATED` |
+| **15** | `_fields_for`               | `sms_delete_probe.py:465`  | `ELEVATED` |
+| **15** | `_web_ui_rungs`             | `sms_delete_probe.py:2274` | `ELEVATED` |
+| **13** | `_async_update_data_locked` | `coordinator.py:569`       | `ELEVATED` |
+| **12** | `_candidate_rungs`          | `sms_delete_probe.py:1788` | `ELEVATED` |
+| **12** | `_transport_rungs`          | `sms_delete_probe.py:2053` | `ELEVATED` |
+| **11** | `login`                     | `api.py:1552`              | `ELEVATED` |
+| **11** | `probe_names`               | `api.py:2195`              | `ELEVATED` |
+| **10** | `_get_current_apn_profile`  | `select.py:73`             | `ELEVATED` |
+| **10** | `extra_state_attributes`    | `sensor.py:2287`           | `ELEVATED` |
+| **10** | `_try_login`                | `sms_delete_probe.py:274`  | `ELEVATED` |
+| **10** | `_web_ui_write_rungs`       | `sms_delete_probe.py:2432` | `ELEVATED` |
 
 ## 3. Active Code Suppressions (`custom_components/`)
 
-| Line | Rule Bypassed | File |
-| :---: | :--- | :--- |
-| 220 | `BLE001` | `__init__.py` |
-| 2031 | `BLE001` | `api.py` |
-| 2091 | `BLE001` | `api.py` |
-| 2128 | `BLE001` | `api.py` |
-| 2151 | `BLE001` | `api.py` |
-| 2176 | `BLE001` | `api.py` |
-| 2425 | `BLE001` | `api.py` |
-| 2630 | `BLE001` | `api.py` |
-| 2672 | `BLE001` | `api.py` |
-| 2847 | `BLE001` | `api.py` |
-| 3139 | `S324` | `api.py` |
-| 3185 | `BLE001` | `api.py` |
-| 461 | `BLE001` | `coordinator.py` |
-| 900 | `BLE001` | `coordinator.py` |
-| 513 | `BLE001` | `diagnostics.py` |
-| 528 | `BLE001` | `diagnostics.py` |
-| 128 | `BLE001, S112` | `observations.py` |
-| 166 | `BLE001` | `observations.py` |
-| 312 | `BLE001` | `observations.py` |
-| 294 | `SLF001` | `sms_delete_probe.py` |
-| 307 | `SLF001` | `sms_delete_probe.py` |
-| 326 | `SLF001` | `sms_delete_probe.py` |
-| 421 | `BLE001` | `sms_delete_probe.py` |
-| 559 | `SLF001` | `sms_delete_probe.py` |
-| 563 | `BLE001` | `sms_delete_probe.py` |
-| 592 | `S324` | `sms_delete_probe.py` |
-| 772 | `BLE001` | `sms_delete_probe.py` |
-| 1104 | `SLF001` | `sms_delete_probe.py` |
-| 1341 | `BLE001` | `sms_delete_probe.py` |
-| 1379 | `SLF001` | `sms_delete_probe.py` |
-| 1424 | `SLF001` | `sms_delete_probe.py` |
-| 1436 | `SLF001` | `sms_delete_probe.py` |
-| 1475 | `SLF001` | `sms_delete_probe.py` |
-| 2134 | `SLF001` | `sms_delete_probe.py` |
-| 2621 | `SLF001` | `sms_delete_probe.py` |
-| 2630 | `SLF001` | `sms_delete_probe.py` |
-| 345 | `BLE001` | `switch.py` |
+| Line | Rule Bypassed  | File                  |
+| :--: | :------------- | :-------------------- |
+| 220  | `BLE001`       | `__init__.py`         |
+| 2031 | `BLE001`       | `api.py`              |
+| 2091 | `BLE001`       | `api.py`              |
+| 2128 | `BLE001`       | `api.py`              |
+| 2151 | `BLE001`       | `api.py`              |
+| 2176 | `BLE001`       | `api.py`              |
+| 2425 | `BLE001`       | `api.py`              |
+| 2630 | `BLE001`       | `api.py`              |
+| 2672 | `BLE001`       | `api.py`              |
+| 2847 | `BLE001`       | `api.py`              |
+| 3139 | `S324`         | `api.py`              |
+| 3185 | `BLE001`       | `api.py`              |
+| 461  | `BLE001`       | `coordinator.py`      |
+| 900  | `BLE001`       | `coordinator.py`      |
+| 513  | `BLE001`       | `diagnostics.py`      |
+| 528  | `BLE001`       | `diagnostics.py`      |
+| 128  | `BLE001, S112` | `observations.py`     |
+| 166  | `BLE001`       | `observations.py`     |
+| 312  | `BLE001`       | `observations.py`     |
+| 294  | `SLF001`       | `sms_delete_probe.py` |
+| 307  | `SLF001`       | `sms_delete_probe.py` |
+| 326  | `SLF001`       | `sms_delete_probe.py` |
+| 421  | `BLE001`       | `sms_delete_probe.py` |
+| 559  | `SLF001`       | `sms_delete_probe.py` |
+| 563  | `BLE001`       | `sms_delete_probe.py` |
+| 592  | `S324`         | `sms_delete_probe.py` |
+| 772  | `BLE001`       | `sms_delete_probe.py` |
+| 1104 | `SLF001`       | `sms_delete_probe.py` |
+| 1341 | `BLE001`       | `sms_delete_probe.py` |
+| 1379 | `SLF001`       | `sms_delete_probe.py` |
+| 1424 | `SLF001`       | `sms_delete_probe.py` |
+| 1436 | `SLF001`       | `sms_delete_probe.py` |
+| 1475 | `SLF001`       | `sms_delete_probe.py` |
+| 2134 | `SLF001`       | `sms_delete_probe.py` |
+| 2621 | `SLF001`       | `sms_delete_probe.py` |
+| 2630 | `SLF001`       | `sms_delete_probe.py` |
+| 345  | `BLE001`       | `switch.py`           |
 
 ## 4. Comment Quality & Density Audits
 
 ### 4.1 High Comment Density Files (> 25% comments/code)
 
-| Module | Rationale / Advisory |
-| :--- | :--- |
-| `api.py` | Inspect for commented-out dead code or procedural narration |
-| `const.py` | Inspect for commented-out dead code or procedural narration |
-| `coordinator.py` | Inspect for commented-out dead code or procedural narration |
-| `diagnostics.py` | Inspect for commented-out dead code or procedural narration |
-| `entity_defaults.py` | Inspect for commented-out dead code or procedural narration |
+| Module                | Rationale / Advisory                                        |
+| :-------------------- | :---------------------------------------------------------- |
+| `api.py`              | Inspect for commented-out dead code or procedural narration |
+| `const.py`            | Inspect for commented-out dead code or procedural narration |
+| `coordinator.py`      | Inspect for commented-out dead code or procedural narration |
+| `diagnostics.py`      | Inspect for commented-out dead code or procedural narration |
+| `entity_defaults.py`  | Inspect for commented-out dead code or procedural narration |
 | `sms_delete_probe.py` | Inspect for commented-out dead code or procedural narration |
 
 ### 4.2 Contiguous Comment Blocks (> 8 lines)
 
 | Location | Length | Advisory |
-| :--- | :---: | :--- |
+| :-- | :-: | :-- |
 | `const.py:170` | 30 lines | Long procedural block; consider moving architecture notes to docs |
 | `sms_delete_probe.py:595` | 24 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:1236` | 21 lines | Long procedural block; consider moving architecture notes to docs |
@@ -181,6 +181,6 @@
 ### 4.3 Routines with Comments Exceeding Code Lines
 
 | Routine | Location | Comments / Code | Advisory |
-| :--- | :--- | :---: | :--- |
+| :-- | :-- | :-: | :-- |
 | `__init__` | `api.py:796` | 56 comm / 37 code | Comments exceed code statements; verify against procedural narration |
 | `async_run_discovery` | `coordinator.py:1487` | 6 comm / 5 code | Comments exceed code statements; verify against procedural narration |

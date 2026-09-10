@@ -5,9 +5,10 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
+  - [\[3.3.19\] - 2026-09-10 - Release: Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
   - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-that-could-not-report-what-they-measured)
   - [\[3.3.19-dev1\] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At](#3319-dev1---2026-09-10---sms-probe-v6-the-routers-own-web-client-is-read-rather-than-guessed-at)
+  - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
   - [\[3.3.18-dev1\] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back](#3318-dev1---2026-09-10---sms-probe-v5-every-write-changes-something-and-is-read-back)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
   - [\[3.3.17-dev7\] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened](#3317-dev7---2026-09-10---sms-probe-v4-the-carrier-is-found-before-the-token-space-is-screened)
@@ -265,22 +266,22 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.18] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space
+## [3.3.19] - 2026-09-10 - Release: Web UI Client Inspection and Browser-Aligned Diagnostic Probing
 
 ### Summary
 
-- **Temporary SMS Deletion Diagnostic Probe V5**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to use state-modifying, self-reversing data volume toggle writes paired with post-write read-back verification, avoiding false refusals from firmware no-op rejections.
-- **Expanded Token Derivation & Carrier Screening**: Expanded the generated token derivation space to include alternate firmware version combinations (`wa_version`), three-round hashing, alternate nonces, additional login forms (`DEVELOPER_OPTION_LOGIN`), and distinct carrier configurations. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+- **Temporary SMS Deletion Diagnostic Probe V6**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to inspect the router's served web UI client scripts dynamically, extracting client-side token derivation routines, command parameter payloads, and authentication flags.
+- **Browser-Aligned Request Payloads**: Added diagnostic evaluation rungs that mirror the browser web client's exact payload construction (including script-mined field lists, `ACCESSIBLE_ID_SUPPORT` token gating, trailing semicolons on message identifiers with `notCallback`, and dynamic `which_cgi` parameters). This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
 
 ### Added
 
-- **Diagnostic Write Toggle and Read-Back Verification**: Test writes in `zte_router_5g.sms_delete_probe` now toggle the reversible `data_volume_limit_switch` setting and verify the actual router state via read-back rather than relying solely on HTTP 200 response codes, restoring the initial value upon completion.
-- **Expanded Candidate Derivation Space**: Added screening support for additional firmware version operands (`wa_version`), structural nonce placements, 3-round hash pipelines, alternative login modes, and night mode LED toggle commands.
+- **Web UI Client Script Mining**: Diagnostic probe inspects RequireJS application modules served by the router, capturing bundle sizes, script contents around write command handlers, and exact client-side parameter structures.
+- **Browser-Aligned Write Rungs**: Added diagnostic test rungs executing writes with browser-matched data volume fields, unauthenticated writes when token gating is inactive, trailing semicolon message deletion formatting, and dynamic `which_cgi` values.
 
-### Changed
+### Fixed
 
-- **Cached Firmware Version Inputs**: Firmware version strings are cached once per probe run to eliminate redundant polling overhead across extensive formula screening passes.
-- **Extended Probe Timeout**: Increased the probe execution safety ceiling to 15 minutes to accommodate expanded multi-variant token evaluation.
+- **Caller-Supplied Form Read-Back Verification**: Fixed state toggle read-back comparisons when using caller-supplied custom forms in diagnostic tests, ensuring accurate write confirmation.
+- **Dynamic Command Parameter Extraction**: Parameters missing from default polling payloads are queried directly from the device rather than omitted during browser-aligned write tests.
 
 ## [3.3.19-dev2] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured
 
@@ -342,6 +343,23 @@ The reporter's Probe v5 download refused all 1,880 attempts, with 63 read-backs 
 ### Verified
 
 - 1,581 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.18] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V5**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to use state-modifying, self-reversing data volume toggle writes paired with post-write read-back verification, avoiding false refusals from firmware no-op rejections.
+- **Expanded Token Derivation & Carrier Screening**: Expanded the generated token derivation space to include alternate firmware version combinations (`wa_version`), three-round hashing, alternate nonces, additional login forms (`DEVELOPER_OPTION_LOGIN`), and distinct carrier configurations. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+
+### Added
+
+- **Diagnostic Write Toggle and Read-Back Verification**: Test writes in `zte_router_5g.sms_delete_probe` now toggle the reversible `data_volume_limit_switch` setting and verify the actual router state via read-back rather than relying solely on HTTP 200 response codes, restoring the initial value upon completion.
+- **Expanded Candidate Derivation Space**: Added screening support for additional firmware version operands (`wa_version`), structural nonce placements, 3-round hash pipelines, alternative login modes, and night mode LED toggle commands.
+
+### Changed
+
+- **Cached Firmware Version Inputs**: Firmware version strings are cached once per probe run to eliminate redundant polling overhead across extensive formula screening passes.
+- **Extended Probe Timeout**: Increased the probe execution safety ceiling to 15 minutes to accommodate expanded multi-variant token evaluation.
 
 ## [3.3.18-dev1] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back
 
