@@ -6,6 +6,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
+  - [\[3.3.18-dev1\] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back](#3318-dev1---2026-09-10---sms-probe-v5-every-write-changes-something-and-is-read-back)
   - [\[3.3.17-dev7\] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened](#3317-dev7---2026-09-10---sms-probe-v4-the-carrier-is-found-before-the-token-space-is-screened)
   - [\[3.3.17-dev6\] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept](#3317-dev6---2026-09-10---sms-probe-v4-the-axes-crossed-and-every-attempt-kept)
   - [\[3.3.17-dev5\] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted](#3317-dev5---2026-09-10---sms-probe-v4-one-attempt-primitive-transport-becomes-an-axis-and-is-adopted)
@@ -277,6 +278,50 @@ All changes to this project will be documented in this file. This is the detaile
 
 - **Dynamic Probe Adaptation**: When an alternative login formulation or HTTP carrier succeeds, the diagnostic probe adopts the winning configuration for all subsequent write evaluations.
 - **Probe Timeout and Lockout Safety**: Extended diagnostic probe run ceiling to 10 minutes with strict pacing and outcome-based failure tracking to prevent router authentication lockouts.
+
+## [3.3.18-dev1] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back
+
+### Summary
+
+The reporter's Probe v4 download refused all 396 attempts across thirteen login variants, one hundred and eighty derivations, seven carriers and one hundred and forty-three combinations. Reviewing it surfaced an assumption sitting under every one of those attempts, and under every attempt since v2: **the probe had never sent that router a write that changed anything.**
+
+### Fixed
+
+- **The workhorse write toggles rather than writing the value back.** Every attempt from v2 to v4 sent the data-volume form at its current values. A firmware that refuses or short-circuits a no-op would produce exactly the uniform refusal that was measured, and nothing in 396 attempts could tell the two apart. Each attempt now sets `data_volume_limit_switch` to the opposite of what it reads: refused leaves it untouched, accepted flips it, the next flips it back, and the run restores the starting value whatever happened. Chosen because it is reversible and observable — on the reference MC7010, turning the data limit off hides the other fields in the web UI and retains them, and turning it back on restores them untouched.
+
+- **The whole form is still sent, with one field flipped.** `DATA_LIMIT_SETTING` is all-or-nothing and the router refuses it outright when a field is missing, so sending the switch alone would draw a refusal that says nothing about the token, the carrier or the session.
+
+- **Outcomes are read back rather than believed.** `_wrote` now prefers a read-back over the router's own `result`, on an API this project's own code documents as answering `200 OK` to a refused write. The confirmation gate — the one that decides whether real messages are spent — verifies on every attempt; the screening pass verifies one attempt in twenty-five and re-runs verified anything claiming success.
+
+- **The inner case is part of a rule's name for every round count that uses it.** Leaving it out of the three-round names put two rules with different tokens under one label, the same defect the single-round names carried in v3.3.17-dev3.
+
+### Added
+
+- **`wa_version` as an operand, and the reason for it.** The reporter's router reports three version strings and two disagree: `wa_inner_version` is `V1.0.0B01` built October 2025, `wa_version` is `V1.0.1B03`, and `cr_version` is `V1.0.1B04`. Every token this project ever built used the first. The internally consistent pair — both `1.0.1` — is `wa_version` with `cr_version`, and it had never been sent. It now leads the operand list and appears twice among the cited derivations.
+
+- **Eight more operands**: `wa_version` alone, both orders of it with `cr_version`, all three versions concatenated, `LD`, `hardware_version`, `model_name`, and no version string at all.
+
+- **Three more structural dimensions**: a third hashing round, `RD` prepended rather than appended, and the token derived from `RD` alone.
+
+- **Six more login variants**: `DEVELOPER_OPTION_LOGIN` with and without a token — a second login form present among the 187 write commands mined from the reporter's own router and sent by `tpoechtrager`'s script, which this integration has never used — the password hashed without uppercasing either round, an MD5 password hash, `LD` lowercased, and `LOGIN_MULTI_USER` with the `username=` spelling.
+
+- **Eight more carriers**: both cookie names at once, the token first in the body, the token field named `ad`, the token as an HTTP header, the token in the query string, `isTest=true`, and `multi_data=1`.
+
+- **`20v_led_night_toggle`**, a second command from an unrelated part of the firmware under the same toggle-and-verify rule. It sends `NIGHT_MODE_INFO_SETTINGS`, which is one of the 187 write commands mined from the reporter's own router — a first draft invented `LED_NIGHT_MODE_SET`, which exists nowhere, and would have tested the spelling rather than the device. Everything else writes the data-volume form; if the refusal is device-wide rather than specific to that command, this is refused too.
+
+- **`6c_absent_id_trailing_semicolon`**, a `msg_id` terminated with a semicolon. It cannot explain a refusal of a command carrying no `msg_id` at all, so it is a tick-off rather than a lead.
+
+### Changed
+
+- **The version strings are read once per run**, not per attempt. They are properties of the firmware; only `RD` is the nonce the token is armed against. On the reporter's device the generated space is 1,548 rules, and reading five values per attempt rather than one is roughly seven minutes.
+
+- **The cap is fifteen minutes**, from ten.
+
+- **The test suite bounds the space** to four operands and two `RD` forms. Running 1,548 rules through several tests took longer than the probe does against real hardware; the four kept are the ones the assertions reason about, `wa_version + cr_version` first, so the shape under test is the shape that ships.
+
+### Verified
+
+- 1,571 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.17-dev7] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened
 
