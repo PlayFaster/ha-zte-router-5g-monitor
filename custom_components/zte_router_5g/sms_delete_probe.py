@@ -191,6 +191,16 @@ async def _login_variants(api: Any) -> list[dict[str, Any]]:
             "with_ad": True,
         },
         {"name": "L9_no_field", "form": "LOGIN", "field": None, "value": None},
+        # `nicjac` logs in by GET against this same endpoint, with the password
+        # in the query string. It is the only login form in either reference
+        # implementation that this integration has never sent.
+        {
+            "name": "L10_get_query",
+            "form": "LOGIN",
+            "field": "username",
+            "value": configured,
+            "as_query": True,
+        },
     ]
     # The MF266 documentation hashes the password against an uppercased `LD`.
     # Ours uses it as returned. Repeating the leading forms doubles the stage,
@@ -228,9 +238,14 @@ async def _try_login(api: Any, variant: dict[str, Any]) -> dict[str, Any]:
     api._clear_session()  # noqa: SLF001 - each variant starts from nothing
     result: Any = None
     cookies: dict[str, str] = {}
-    async with api.session.post(
-        f"{api.referer}goform/goform_set_cmd_process",
-        data=payload,
+    as_query = bool(variant.get("as_query"))
+    url = f"{api.referer}goform/goform_set_cmd_process"
+    if as_query:
+        url += "?" + "&".join(f"{key}={value}" for key, value in payload.items())
+    async with api.session.request(
+        "GET" if as_query else "POST",
+        url,
+        data=None if as_query else payload,
         headers={"Referer": api.referer},
         ssl=False,
     ) as response:
@@ -247,6 +262,7 @@ async def _try_login(api: Any, variant: dict[str, Any]) -> dict[str, Any]:
         api.last_activity = datetime.now(UTC)
     return {
         "form": variant["form"],
+        "method": "GET" if as_query else "POST",
         "field": variant["field"],
         "value_kind": _value_kind(variant),
         "ld_upper": bool(variant.get("ld_upper")),
@@ -307,6 +323,12 @@ async def _capture(
     record["elapsed_seconds"] = round(monotonic() - started, 3)
     record["status"] = api.last_response_status
     record["body_preview"] = api.last_response_preview
+    names = getattr(api, "last_response_header_names", None)
+    if names:
+        record["response_header_names"] = list(names)
+    if _LAST_SENT:
+        record["carried"] = dict(_LAST_SENT)
+        _LAST_SENT.clear()
     return record
 
 
@@ -497,6 +519,18 @@ def _wrote(record: dict[str, Any]) -> bool:
 # every rung below inherits it without being told.
 _ADOPTED: dict[str, Any] = {}
 
+# What the most recent attempt carried, for the record that wraps it. Module
+# state for the same reason `_CR_NOTE` is: the value is produced deep inside a
+# call whose return value has no room for it.
+_LAST_SENT: dict[str, Any] = {}
+
+# Login variants that established a session, whether or not they went on to
+# write. The combination pass runs the other axes under each of them: a fix
+# needing two axes at once — a particular login *and* a particular carrier —
+# is invisible to a run that varies one at a time, and nothing in three
+# downloads rules that out.
+_WITH_SESSION: list[dict[str, Any]] = []
+
 _DEFAULT_TRANSPORT: dict[str, Any] = {
     "method": "POST",
     "as_query": False,
@@ -554,6 +588,27 @@ async def _attempt(
     held = dict(api.cookies)
     if carried["cookies"] is not None:
         api.cookies = dict(carried["cookies"])
+    # What actually went out, kept where `_capture` can find it. Without this,
+    # a variant that silently failed to carry its override is indistinguishable
+    # in the download from one the router refused — and the whole run turns on
+    # telling those two apart.
+    #
+    # The token is described, never published: its length and case identify the
+    # digest, which is all any reader needs.
+    _LAST_SENT.clear()
+    _LAST_SENT.update(
+        {
+            "method": str(carried["method"]),
+            "as_query": bool(carried["as_query"]),
+            "command": command,
+            "fields": sorted(fields),
+            "not_callback": bool(carried["not_callback"]),
+            "header_names": sorted(dict(carried["headers"])),
+            "cookie_names": sorted(api.cookies),
+            "token_length": len(str(ad)),
+            "token_case": _case_of(str(ad)),
+        }
+    )
     try:
         as_query = bool(carried["as_query"])
         result = await api._request(  # noqa: SLF001 - the point is to vary a fixed form
@@ -565,6 +620,18 @@ async def _attempt(
     finally:
         api.cookies = held
     return cast("dict[str, Any]", result)
+
+
+def _case_of(token: str) -> str:
+    """Whether a hex digest is upper, lower or neither, without publishing it."""
+    letters = [c for c in token if c.isalpha()]
+    if not letters:
+        return "no letters"
+    if all(c.isupper() for c in letters):
+        return "upper"
+    if all(c.islower() for c in letters):
+        return "lower"
+    return "mixed"
 
 
 async def _data_volume_write(
@@ -726,6 +793,8 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
     # silently changes how every write below it is carried.
     _CR_NOTE.clear()
     _ADOPTED.clear()
+    _LAST_SENT.clear()
+    _WITH_SESSION.clear()
 
     try:
         async with asyncio.timeout(PROBE_TIMEOUT):
@@ -930,6 +999,8 @@ async def _run_rungs(
         # --- 20. The same write, sent differently, and two questions the
         # rungs above cannot answer. None of this touches a message.
         await _transport_rungs(coordinator, report, probes)
+        # --- 21. The axes crossed, where a session allows it ----------------
+        await _combination_rungs(coordinator, report, probes)
         await _session_proof_rung(coordinator, probes)
 
         # --- 8 onward. Real messages, one variant each ----------------------
@@ -1042,6 +1113,7 @@ async def _login_stage(
     spent = 0
     winner: str | None = None
     winning_variant: dict[str, Any] | None = None
+    with_session: list[dict[str, Any]] = []
     report["login_variants"] = {}
 
     for variant in await _login_variants(api):
@@ -1071,6 +1143,8 @@ async def _login_stage(
         await asyncio.sleep(LOGIN_DELAY)
 
         established = isinstance(outcome, dict) and bool(outcome.get("cookie_names"))
+        if established:
+            with_session.append(variant)
         # Anything that did not establish a session is counted as spent, not
         # only what answered `result: "3"`. That code is measured on one
         # device; a router that refuses some other way, or answers nothing,
@@ -1096,6 +1170,9 @@ async def _login_stage(
         await asyncio.sleep(ATTEMPT_DELAY)
 
     report["login_variant_that_wrote"] = winner
+    report["logins_with_a_session"] = [v["name"] for v in with_session]
+    _WITH_SESSION.clear()
+    _WITH_SESSION.extend(with_session)
 
     # --- adopt it -------------------------------------------------------
     # Every rung below this one asks a question that only means something on a
@@ -1205,10 +1282,15 @@ async def _candidate_rungs(
     for name, rule in space:
         record = await _capture(coordinator, f"7b_{name}", lambda r=rule: one(r))
         wrote = _wrote(record)
+        # Every attempt is kept, not only the ones that worked. Collapsing a
+        # refusal to the word "refused" discards the router's own answer, the
+        # status, the timing and what was carried — on the part of the run most
+        # likely to hold the finding. A token refused *differently* from its
+        # neighbours would have been invisible.
+        probes.append(record)
         report["candidates"][name] = "screened: wrote" if wrote else "screened: refused"
         if wrote:
             survivors[name] = rule
-            probes.append(record)
         await asyncio.sleep(SCREEN_DELAY)
 
     report["screened"] = len(space)
@@ -1241,30 +1323,13 @@ async def _candidate_rungs(
     return accepted, accepted_rule
 
 
-async def _transport_rungs(
-    coordinator: ZTERouterDataUpdateCoordinator,
-    report: dict[str, Any],
-    probes: list[dict[str, Any]],
-) -> None:
-    """Every way of carrying the same write, and the first that works is kept.
+def _carriers(api: Any) -> list[tuple[str, dict[str, Any]]]:
+    """Every way of carrying a write that is worth trying on this device.
 
-    Each value is something another implementation does and this one does not,
-    or the reverse. None is attested as necessary — neither reference project
-    is itself attested as writing on an MC888 — so they are tried rather than
-    adopted on authority.
-
-    **A proven transport is held for the rest of the run.** Two audits of this
-    release found the same defect in two places: a value discovered and then
-    not used, so every rung below went on failing in a way the run had already
-    shown how to fix. `_ADOPTED` is replaced in place, and everything that
-    writes through `_attempt` inherits it without being told.
-
-    All of these carry the data-volume form, so none spends a message and none
-    changes a setting.
+    Shared by the single-axis pass and the combination pass, so a carrier
+    cannot be tried in one and forgotten in the other.
     """
-    api = coordinator.api
     root = api.referer
-
     values: list[tuple[str, dict[str, Any]]] = [
         # The site root rather than `index.html`, which is what both reference
         # implementations send.
@@ -1314,13 +1379,71 @@ async def _transport_rungs(
         ),
     ]
 
+    return values
+
+
+# The derivations with a source behind them, for the combination pass. The
+# full space is too large to cross with anything; these six are what miononno,
+# `nicjac`, `Kajkac`, the MF266 documentation and this integration actually
+# use.
+_CITED_RULES: tuple[tuple[str, Any], ...] = (
+    (
+        "wacr_sha_ll",
+        _rule(_OPERANDS[0][1], _sha, _RD_FORMS[0][1], str.lower, str.lower, 2),
+    ),
+    (
+        "wacr_sha_uu",
+        _rule(_OPERANDS[0][1], _sha, _RD_FORMS[0][1], str.upper, str.upper, 2),
+    ),
+    (
+        "wacr_md5_ll",
+        _rule(_OPERANDS[0][1], _md5, _RD_FORMS[0][1], str.lower, str.lower, 2),
+    ),
+    (
+        "wa_sha_uu",
+        _rule(_OPERANDS[1][1], _sha, _RD_FORMS[0][1], str.upper, str.upper, 2),
+    ),
+    (
+        "wa_md5_ll",
+        _rule(_OPERANDS[1][1], _md5, _RD_FORMS[0][1], str.lower, str.lower, 2),
+    ),
+    (
+        "crwa_md5_lu",
+        _rule(_OPERANDS[2][1], _md5, _RD_FORMS[0][1], str.lower, str.upper, 2),
+    ),
+)
+
+
+async def _transport_rungs(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    report: dict[str, Any],
+    probes: list[dict[str, Any]],
+) -> None:
+    """Every way of carrying the same write, and the first that works is kept.
+
+    Each value is something another implementation does and this one does not,
+    or the reverse. None is attested as necessary — neither reference project
+    is itself attested as writing on an MC888 — so they are tried rather than
+    adopted on authority.
+
+    **A proven transport is held for the rest of the run.** Two audits of this
+    release found the same defect in two places: a value discovered and then
+    not used, so every rung below went on failing in a way the run had already
+    shown how to fix. `_ADOPTED` is replaced in place, and everything that
+    writes through `_attempt` inherits it without being told.
+
+    All of these carry the data-volume form, so none spends a message and none
+    changes a setting.
+    """
+    api = coordinator.api
+    values = _carriers(api)
+
     report["transport_variants"] = {}
     for name, transport in values:
         record = await _capture(
             coordinator, name, lambda t=transport: _attempt(coordinator, transport=t)
         )
         record["wrote"] = _wrote(record)
-        _record_headers(api, record)
         probes.append(record)
         report["transport_variants"][name] = "wrote" if record["wrote"] else "refused"
         if record["wrote"] and not _ADOPTED:
@@ -1366,7 +1489,6 @@ async def _transport_rungs(
     ):
         record = await _capture(coordinator, name, run)
         record["wrote"] = _wrote(record)
-        _record_headers(api, record)
         probes.append(record)
         await asyncio.sleep(ATTEMPT_DELAY)
 
@@ -1395,17 +1517,83 @@ async def _transport_rungs(
     probes.append(await _capture(coordinator, "20m_remine_bundles", remine))
 
 
-def _record_headers(api: Any, record: dict[str, Any]) -> None:
-    """Keep the response header names a write drew.
+async def _combination_rungs(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    report: dict[str, Any],
+    probes: list[dict[str, Any]],
+) -> None:
+    """Cross the axes, where a session can be established to cross them under.
 
-    Names only, and only where the API kept them. A refused write that sets a
-    cookie, or answers with an authentication header, is currently invisible:
-    the record carries a status and a body preview and nothing else. Recording
-    the names costs nothing and cannot carry a value.
+    Every rung above this one varies a single axis and holds the others at
+    their shipped value. A fault needing two at once — a particular login *and*
+    a particular carrier, or a particular login and a particular derivation —
+    would pass through all of them unseen, and nothing measured on the
+    reporter's device rules that out.
+
+    **Bounded deliberately.** The full product is twelve logins by seven
+    carriers by a hundred and fifty rules, which cannot run. This crosses the
+    logins that actually established a session — one to three, on the evidence
+    so far — against the seven carriers and against the derivations that have
+    a source behind them. A write is cheap; only the login axis is constrained
+    by the lockout, and these reuse sessions already established rather than
+    spending new attempts on them.
     """
-    names = getattr(api, "last_response_header_names", None)
-    if names:
-        record["response_header_names"] = list(names)
+    api = coordinator.api
+    report["combinations"] = {}
+    if not _WITH_SESSION:
+        probes.append(
+            {
+                "probe": "21_combinations",
+                "outcome": "skipped",
+                "reason": "no login variant established a session to cross under",
+            }
+        )
+        return
+
+    cited = list(_CITED_RULES)
+    for variant in _WITH_SESSION:
+        login = variant["name"]
+        established = await _capture(
+            coordinator, f"21a_{login}_session", lambda v=variant: _try_login(api, v)
+        )
+        probes.append(established)
+        result = established.get("result")
+        if not (isinstance(result, dict) and result.get("cookie_names")):
+            report["combinations"][login] = "the session would not come back"
+            continue
+
+        wrote: list[str] = []
+        for carrier, transport in _carriers(api):
+            record = await _capture(
+                coordinator,
+                f"21b_{login}_{carrier}",
+                lambda t=transport: _attempt(coordinator, transport=t),
+            )
+            record["wrote"] = _wrote(record)
+            probes.append(record)
+            if record["wrote"]:
+                wrote.append(carrier)
+            await asyncio.sleep(SCREEN_DELAY)
+
+        for rule_name, rule in cited:
+
+            async def one(r: Any = rule) -> dict[str, Any]:
+                fresh = await _token_inputs(api)
+                token = r(fresh["wa_inner_version"], fresh["cr_version"], fresh["rd"])
+                return await _attempt(coordinator, token=token)
+
+            record = await _capture(coordinator, f"21c_{login}_{rule_name}", one)
+            record["wrote"] = _wrote(record)
+            probes.append(record)
+            if record["wrote"]:
+                wrote.append(rule_name)
+            await asyncio.sleep(SCREEN_DELAY)
+
+        report["combinations"][login] = wrote or "nothing wrote under this session"
+
+    # Back to whatever the run had settled on.
+    with contextlib.suppress(Exception):
+        await api.login()
 
 
 async def _session_proof_rung(

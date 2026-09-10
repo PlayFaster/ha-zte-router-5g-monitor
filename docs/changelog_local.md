@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.17-dev6\] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept](#3317-dev6---2026-09-10---sms-probe-v4-the-axes-crossed-and-every-attempt-kept)
   - [\[3.3.17-dev5\] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted](#3317-dev5---2026-09-10---sms-probe-v4-one-attempt-primitive-transport-becomes-an-axis-and-is-adopted)
   - [\[3.3.17-dev4\] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run](#3317-dev4---2026-09-10---sms-probe-v4-the-winning-login-is-adopted-for-the-rest-of-the-run)
   - [\[3.3.17-dev3\] - 2026-09-09 - SMS Probe V4: The Five Rungs the Plan Named and the Build Missed](#3317-dev3---2026-09-09---sms-probe-v4-the-five-rungs-the-plan-named-and-the-build-missed)
@@ -257,6 +258,38 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.17-dev6] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept
+
+### Summary
+
+The last entry left three known limitations: the axes were only ever varied one at a time, the screening pass discarded every refusal it recorded, and no attempt said what it had actually sent. All three are closed here. This is the last intended cycle before the probe is sent.
+
+### Added
+
+- **The axes are crossed, where a session can be established to cross them under.** Every rung until now varied one axis and held the others at their shipped value, so a fault needing a particular login _and_ a particular carrier — or a particular login and a particular derivation — would pass through all of them unseen. The new pass re-establishes each login that produced a session and runs the seven carriers and the six cited derivations under it. Bounded deliberately: the full product is twelve logins by seven carriers by a hundred and fifty rules and cannot run, while these reuse sessions already established rather than spending fresh login attempts against the lockout.
+
+- **`L10_get_query`, a login sent as a query string.** `nicjac/python-zte-mc801a` logs in by `GET` against this same endpoint. It is the only login form in either reference implementation this integration has never sent.
+
+- **Six cited derivations, named as such.** What the combination pass carries is what miononno, `nicjac`, `Kajkac`, the MF266 documentation and this integration actually use, rather than a selection of my own.
+
+### Changed
+
+- **Every screened attempt is kept.** The pass recorded 150 attempts and put one in the download, collapsing the rest to the word `refused`. A token refused _differently_ from its neighbours — another `result` string, another status, a much slower answer — was invisible, on the part of the run most likely to hold the finding.
+
+- **Every attempt records what it carried**: method, whether it went as a query string, the command, the field names, `notCallback`, the header names, the cookie names, and the token's length and case. The token itself is never published; its length and case identify the digest, which is all a reader needs. Without this, a variant that silently failed to carry its override could not be told apart from one the router refused.
+
+- **Response header names are recorded on every attempt**, not only the transport rungs. `_record_headers` is gone; `_capture` does it once for everything.
+
+- **The carrier list is shared.** `_carriers` is read by the single-axis pass and the combination pass, so a carrier cannot be tried in one and forgotten in the other.
+
+### Fixed
+
+- **`_LAST_SENT` and the session list are cleared at the start of each run**, alongside the adopted transport. All three are module state and any of them left from an earlier run would be attributed to the next.
+
+### Verified
+
+- 1,561 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
 ## [3.3.17-dev5] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted
 

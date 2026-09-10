@@ -1,47 +1,47 @@
 # Project Complexity & Health: ha-zte-router-5g-monitor
 
-**Last Measured:** 2026-09-09T23:40:10.221346+00:00 · **Release:** `3.3.16` · **Dev Version:** `3.3.17-dev5`
+**Last Measured:** 2026-09-10T00:01:52.594100+00:00 · **Release:** `3.3.16` · **Dev Version:** `3.3.17-dev6`
 
 ## 1. Executive Summary
 
 | Metric | Value | Verdict / Evaluation |
 | :--- | :---: | :--- |
-| **PlayFaster Health Index** | **`68` / 100** | `ACTION REQUIRED` ($\ge 90$ Excellent · $\ge 80$ Good · $\ge 70$ Warning) |
+| **PlayFaster Health Index** | **`70` / 100** | `WARNING` ($\ge 90$ Excellent · $\ge 80$ Good · $\ge 70$ Warning) |
 | **Max McCabe Complexity ($V(G)$)** | **19** | `PASS (<20)` in `_request` ($< 20$ Pass · $20–23$ Warn · $\ge 24$ Fail) |
-| **Mean Complexity per Routine** | **2.83** | Across 338 routines (Ideal $< 4.0$ per routine) |
+| **Mean Complexity per Routine** | **2.86** | Across 341 routines (Ideal $< 4.0$ per routine) |
 | **Danger Routines ($\ge 20$)** | **0** | Zero tolerance (refactor or decompose) |
 | **Elevated Routines ($10–19$)** | **9** | Monitor closely; candidate for cleanup |
-| **Mean Routine Length** | **16.5 code lines** | Target $\le 15$ code lines ideal |
-| **Largest Routine Length** | **172 code lines** | `_run_rungs` in `sms_delete_probe.py` (Target $\le 40$ ideal, $> 80$ warn, $> 150$ fail) |
-| **Routines > 80 Code Lines** | **6** | Candidate for functional decomposition |
+| **Mean Routine Length** | **16.6 code lines** | Target $\le 15$ code lines ideal |
+| **Largest Routine Length** | **173 code lines** | `_run_rungs` in `sms_delete_probe.py` (Target $\le 40$ ideal, $> 80$ warn, $> 150$ fail) |
+| **Routines > 80 Code Lines** | **5** | Candidate for functional decomposition |
 | **Largest Module** | **1,931 code lines** | `sensor.py` (Warn $> 1,500$ code lines module bloat) |
 | **Modules > 1,500 Code Lines** | **2** | Candidate for module decomposition |
 | **Code Suppressions (`# noqa`)** | **36** | Zero preferred; review regularly |
 | **Type Suppressions (`# type: ignore`)** | **0** | Mypy strict compliance |
-| **Source Python SLOC** | **9,494** | Across 20 files in custom_components/ (code statements) |
-| **Docstring Volume** | **2,371 lines** | Interface and contract documentation |
-| **Comment Density** | **24.8%** | 2,354 inline comment lines (Healthy implementation rationale) |
+| **Source Python SLOC** | **9,623** | Across 20 files in custom_components/ (code statements) |
+| **Docstring Volume** | **2,386 lines** | Interface and contract documentation |
+| **Comment Density** | **24.8%** | 2,383 inline comment lines (Healthy implementation rationale) |
 | **Platform Declarations SLOC** | **3,003 lines** | Across 6 platform files |
-| **Core Engine / Driver SLOC** | **6,491 lines** | Across 14 coordinator/API/helper files |
+| **Core Engine / Driver SLOC** | **6,620 lines** | Across 14 coordinator/API/helper files |
 | **Static Entities** | **121 entities** | Scale indicator (`all_sensors.md`) |
 | **Platform SLOC / Entity** | **24.8 lines/entity** | Target 20 – 45 lines/entity declarative efficiency |
-| **Test-to-Source Ratio** | **1.47×** | 13,957 test lines ($\ge 1.5×$ recommended) |
-| **Pytest Coverage** | **100%** | 1553 tests executed |
-| **Pytest Duration** | **167.85s** | Full test suite wall-clock execution time |
+| **Test-to-Source Ratio** | **1.46×** | 14,014 test lines ($\ge 1.5×$ recommended) |
+| **Pytest Coverage** | **100%** | 1561 tests executed |
+| **Pytest Duration** | **167.21s** | Full test suite wall-clock execution time |
 
 ## 2. High Complexity Routines ($\ge 10$)
 
 | Score | Routine Symbol | Location | Status |
 | :---: | :--- | :--- | :--- |
 | **19** | `_request` | `api.py:1342` | `ELEVATED` |
-| **17** | `_run_rungs` | `sms_delete_probe.py:747` | `ELEVATED` |
+| **17** | `_run_rungs` | `sms_delete_probe.py:816` | `ELEVATED` |
 | **13** | `_async_update_data_locked` | `coordinator.py:569` | `ELEVATED` |
 | **11** | `login` | `api.py:1552` | `ELEVATED` |
 | **11** | `probe_names` | `api.py:2195` | `ELEVATED` |
-| **11** | `_candidate_rungs` | `sms_delete_probe.py:1132` | `ELEVATED` |
+| **11** | `_candidate_rungs` | `sms_delete_probe.py:1209` | `ELEVATED` |
 | **10** | `_get_current_apn_profile` | `select.py:73` | `ELEVATED` |
 | **10** | `extra_state_attributes` | `sensor.py:2287` | `ELEVATED` |
-| **10** | `_transport_rungs` | `sms_delete_probe.py:1244` | `ELEVATED` |
+| **10** | `_transport_rungs` | `sms_delete_probe.py:1417` | `ELEVATED` |
 
 ## 3. Active Code Suppressions (`custom_components/`)
 
@@ -66,22 +66,22 @@
 | 128 | `BLE001, S112` | `observations.py` |
 | 166 | `BLE001` | `observations.py` |
 | 312 | `BLE001` | `observations.py` |
-| 215 | `SLF001` | `sms_delete_probe.py` |
-| 228 | `SLF001` | `sms_delete_probe.py` |
-| 242 | `SLF001` | `sms_delete_probe.py` |
-| 293 | `SLF001` | `sms_delete_probe.py` |
-| 297 | `BLE001` | `sms_delete_probe.py` |
-| 320 | `S324` | `sms_delete_probe.py` |
-| 452 | `BLE001` | `sms_delete_probe.py` |
-| 559 | `SLF001` | `sms_delete_probe.py` |
-| 737 | `BLE001` | `sms_delete_probe.py` |
-| 754 | `SLF001` | `sms_delete_probe.py` |
-| 799 | `SLF001` | `sms_delete_probe.py` |
-| 811 | `SLF001` | `sms_delete_probe.py` |
-| 850 | `SLF001` | `sms_delete_probe.py` |
-| 1376 | `SLF001` | `sms_delete_probe.py` |
-| 1428 | `SLF001` | `sms_delete_probe.py` |
-| 1437 | `SLF001` | `sms_delete_probe.py` |
+| 225 | `SLF001` | `sms_delete_probe.py` |
+| 238 | `SLF001` | `sms_delete_probe.py` |
+| 257 | `SLF001` | `sms_delete_probe.py` |
+| 309 | `SLF001` | `sms_delete_probe.py` |
+| 313 | `BLE001` | `sms_delete_probe.py` |
+| 342 | `S324` | `sms_delete_probe.py` |
+| 474 | `BLE001` | `sms_delete_probe.py` |
+| 614 | `SLF001` | `sms_delete_probe.py` |
+| 806 | `BLE001` | `sms_delete_probe.py` |
+| 823 | `SLF001` | `sms_delete_probe.py` |
+| 868 | `SLF001` | `sms_delete_probe.py` |
+| 880 | `SLF001` | `sms_delete_probe.py` |
+| 919 | `SLF001` | `sms_delete_probe.py` |
+| 1498 | `SLF001` | `sms_delete_probe.py` |
+| 1616 | `SLF001` | `sms_delete_probe.py` |
+| 1625 | `SLF001` | `sms_delete_probe.py` |
 | 345 | `BLE001` | `switch.py` |
 
 ## 4. Comment Quality & Density Audits
@@ -117,7 +117,7 @@
 | `api.py:426` | 15 lines | Long procedural block; consider moving architecture notes to docs |
 | `entity_defaults.py:52` | 15 lines | Long procedural block; consider moving architecture notes to docs |
 | `sensor.py:2169` | 15 lines | Long procedural block; consider moving architecture notes to docs |
-| `sms_delete_probe.py:323` | 15 lines | Long procedural block; consider moving architecture notes to docs |
+| `sms_delete_probe.py:345` | 15 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:2477` | 14 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:2739` | 14 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:112` | 14 lines | Long procedural block; consider moving architecture notes to docs |
@@ -131,13 +131,13 @@
 | `const.py:46` | 13 lines | Long procedural block; consider moving architecture notes to docs |
 | `entity_defaults.py:38` | 13 lines | Long procedural block; consider moving architecture notes to docs |
 | `reset_entities.py:213` | 13 lines | Long procedural block; consider moving architecture notes to docs |
-| `sms_delete_probe.py:832` | 13 lines | Long procedural block; consider moving architecture notes to docs |
+| `sms_delete_probe.py:901` | 13 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:239` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:2267` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:17` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `coordinator.py:75` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `sensor.py:1469` | 12 lines | Long procedural block; consider moving architecture notes to docs |
-| `sms_delete_probe.py:754` | 12 lines | Long procedural block; consider moving architecture notes to docs |
+| `sms_delete_probe.py:823` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:286` | 11 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:646` | 11 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:1957` | 11 lines | Long procedural block; consider moving architecture notes to docs |
@@ -155,7 +155,7 @@
 | `coordinator.py:104` | 10 lines | Long procedural block; consider moving architecture notes to docs |
 | `sensor.py:239` | 10 lines | Long procedural block; consider moving architecture notes to docs |
 | `sensor.py:287` | 10 lines | Long procedural block; consider moving architecture notes to docs |
-| `sms_delete_probe.py:488` | 10 lines | Long procedural block; consider moving architecture notes to docs |
+| `sms_delete_probe.py:510` | 10 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:129` | 9 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:184` | 9 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:216` | 9 lines | Long procedural block; consider moving architecture notes to docs |
