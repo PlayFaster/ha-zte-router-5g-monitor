@@ -5,6 +5,13 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
+  - [\[3.3.17-dev7\] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened](#3317-dev7---2026-09-10---sms-probe-v4-the-carrier-is-found-before-the-token-space-is-screened)
+  - [\[3.3.17-dev6\] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept](#3317-dev6---2026-09-10---sms-probe-v4-the-axes-crossed-and-every-attempt-kept)
+  - [\[3.3.17-dev5\] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted](#3317-dev5---2026-09-10---sms-probe-v4-one-attempt-primitive-transport-becomes-an-axis-and-is-adopted)
+  - [\[3.3.17-dev4\] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run](#3317-dev4---2026-09-10---sms-probe-v4-the-winning-login-is-adopted-for-the-rest-of-the-run)
+  - [\[3.3.17-dev3\] - 2026-09-09 - SMS Probe V4: The Five Rungs the Plan Named and the Build Missed](#3317-dev3---2026-09-09---sms-probe-v4-the-five-rungs-the-plan-named-and-the-build-missed)
+  - [\[3.3.17-dev1\] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured](#3317-dev1---2026-09-09---sms-probe-v4-login-stage-generated-token-space-single-use-token-measured)
   - [\[3.3.16\] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas](#3316---2026-09-08---release-multi-key-session-validation-and-sms-probe-v3-token-formulas)
   - [\[3.3.16-dev3\] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest](#3316-dev3---2026-09-08---probe-control-uses-the-shipped-token-path-candidates-take-the-devices-digest)
   - [\[3.3.16-dev2\] - 2026-09-08 - Documentation: Project Complexity \& Health Scorecard Added](#3316-dev2---2026-09-08---documentation-project-complexity--health-scorecard-added)
@@ -251,6 +258,205 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+
+---
+
+## [3.3.17] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V4**: Upgraded the diagnostic troubleshooting action (`zte_router_5g.sms_delete_probe`) to systematically screen authentication and write command execution across multiple independent axes (login method variants, HTTP transport headers and payload formats, and algorithmic write-token derivation rules).
+- **Adaptive Probe Session and Carrier Resolution**: Probe execution now dynamically adopts working login forms and verified HTTP request transports across subsequent test rungs, preserves detailed per-attempt request signatures in diagnostics downloads, and enforces strict single-use write token replenishment. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+
+### Added
+
+- **Multi-Axis Write Probe Architecture**: Diagnostic probe now evaluates twelve distinct login form structures, seven HTTP transport and carrier header configurations, and dynamically generated token formula spaces.
+- **Detailed Attempt Metadata**: Probe captures full structural metadata for all screened write attempts (HTTP method, query parameter encoding, header names, cookie names, and token length/casing) directly in diagnostics exports.
+
+### Changed
+
+- **Dynamic Probe Adaptation**: When an alternative login formulation or HTTP carrier succeeds, the diagnostic probe adopts the winning configuration for all subsequent write evaluations.
+- **Probe Timeout and Lockout Safety**: Extended diagnostic probe run ceiling to 10 minutes with strict pacing and outcome-based failure tracking to prevent router authentication lockouts.
+
+## [3.3.17-dev7] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened
+
+### Summary
+
+A live run of the previous entry on the reference MC7010 showed every screened attempt carrying `Content-Type` alone, with no `Referer`. The transport axis was adopted two rungs after the token sweep had already finished, so the sweep could never inherit it. The previous entry claimed otherwise.
+
+### Fixed
+
+- **The transport axis runs before the token sweep.** Finding a carrier costs seven writes and screening the space costs a hundred and fifty. In the other order, every rule is screened through a carrier that may itself be what the router is refusing, and the run reports a hundred and fifty refusals for a reason it solves two rungs later — which on the reporter's device is the difference between a finding and a wasted download. The rung numbers are unchanged so a download stays comparable with the three before it.
+
+- **A settle before the diagnostics check, and a longer one between its two passes.** `scripts/diag_check.py` opens two full discovery passes back to back and logs in for each with a five-second timeout. Five failures on 2026-09-09 and 2026-09-10 all followed sustained probe traffic against the same device, twice with the identical signature of run 1 completing cleanly and run 2's login never answering. `SETTLE_SECONDS` is 15, applied before the first pass and between the two; the second is where every observed failure occurred. The router recovers on its own and a re-run has passed every time, so this removes noise rather than fixing a fault.
+
+### Verified
+
+- 1,563 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+- Two tests added: that the carrier is settled before the first screened rule, and that a screened rule carries the header the carrier established. The second is the one that would have caught this.
+
+## [3.3.17-dev6] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept
+
+### Summary
+
+The last entry left three known limitations: the axes were only ever varied one at a time, the screening pass discarded every refusal it recorded, and no attempt said what it had actually sent. All three are closed here. This is the last intended cycle before the probe is sent.
+
+### Added
+
+- **The axes are crossed, where a session can be established to cross them under.** Every rung until now varied one axis and held the others at their shipped value, so a fault needing a particular login _and_ a particular carrier — or a particular login and a particular derivation — would pass through all of them unseen. The new pass re-establishes each login that produced a session and runs the seven carriers and the six cited derivations under it. Bounded deliberately: the full product is twelve logins by seven carriers by a hundred and fifty rules and cannot run, while these reuse sessions already established rather than spending fresh login attempts against the lockout.
+
+- **`L10_get_query`, a login sent as a query string.** `nicjac/python-zte-mc801a` logs in by `GET` against this same endpoint. It is the only login form in either reference implementation this integration has never sent.
+
+- **Six cited derivations, named as such.** What the combination pass carries is what miononno, `nicjac`, `Kajkac`, the MF266 documentation and this integration actually use, rather than a selection of my own.
+
+### Changed
+
+- **Every screened attempt is kept.** The pass recorded 150 attempts and put one in the download, collapsing the rest to the word `refused`. A token refused _differently_ from its neighbours — another `result` string, another status, a much slower answer — was invisible, on the part of the run most likely to hold the finding.
+
+- **Every attempt records what it carried**: method, whether it went as a query string, the command, the field names, `notCallback`, the header names, the cookie names, and the token's length and case. The token itself is never published; its length and case identify the digest, which is all a reader needs. Without this, a variant that silently failed to carry its override could not be told apart from one the router refused.
+
+- **Response header names are recorded on every attempt**, not only the transport rungs. `_record_headers` is gone; `_capture` does it once for everything.
+
+- **The carrier list is shared.** `_carriers` is read by the single-axis pass and the combination pass, so a carrier cannot be tried in one and forgotten in the other.
+
+### Fixed
+
+- **`_LAST_SENT` and the session list are cleared at the start of each run**, alongside the adopted transport. All three are module state and any of them left from an earlier run would be attributed to the next.
+
+### Verified
+
+- 1,561 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.17-dev5] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted
+
+### Summary
+
+Two audits of this release found the same defect in two places: a value discovered and then not used, so every rung below went on failing in a way the run had already shown how to fix. The login stage was corrected in the previous entry. This one removes the cause rather than the third instance, by giving the probe a single place where a write is built and making how it is carried a value that can be proven and held.
+
+### Changed
+
+- **One attempt primitive.** A write on this API has four independent axes — the session it runs under, the token it carries, how it is carried, and which command it is. `_attempt` is the only place a request is constructed, so varying any axis is a parameter rather than another hand-written rung. `_data_volume_write` and `_delete_raw` are now thin callers, which is what makes the two changes below reach every rung without any of them being rewritten.
+
+- **A transport that works is held for the rest of the run.** Seven carriers are tried — the site root as `Referer`, the full browser header set, no content type, `notCallback`, a query string, no cookie, and the cookie under the name `stok` — and the first that writes is adopted. `transport_in_use` names it. Every later write inherits it. (Corrected in dev7: until then the token sweep ran before the carrier was known, so it did not.)
+
+- **The deletes are carried the way a write was proven.** `_delete_raw` built its own request and sent the shipped form regardless of what the transport rungs had established, so a delete would have failed for a reason the run had already solved.
+
+- **The token space is ordered by what a source documents.** The screening pass runs to the cap and a run cut short loses its tail, so `wa + cr` — miononno's derivation for the MC888 Pro, and `nicjac`'s for the MC801A — is tried before the operands with no citation behind them. The ordering is a judgement about likelihood, not a measurement.
+
+### Added
+
+- **`20n_not_callback`.** `Kajkac` carries `notCallback` on its writes; this integration sends it only on a delete, so it had never been tried on anything else.
+
+- **`20i_write_as_query`** is now a transport value rather than a one-off rung, so a router that accepts a write on the query string has that carrier adopted for everything below.
+
+- **Response header names are recorded on every write.** `api.py` gains `last_response_header_names`, alongside the status and body preview it already keeps. A refused write that sets a cookie, or answers with an authentication header, was invisible. Names only, never values.
+
+### Fixed
+
+- **The adopted transport is cleared at the start of each run.** It is module state, and one left from an earlier run would silently change how every write in the next one is carried.
+
+### Verified
+
+- 1,553 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.17-dev4] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run
+
+### Summary
+
+A second audit found the login stage recording which variant unlocked the device and then discarding it: the stage ended by restoring the shipped login, so every rung below ran on the session that could not write. The run would have answered the hardest question in the pass and declined to use the answer.
+
+### Fixed
+
+- **The login that wrote is adopted for the rest of the run.** Where a variant establishes a session and that session writes, it is re-established and held, and `session_in_use` names it. Where it will not come back, or where nothing won, the pass falls back to the shipped login and says so — a report that does not name its session cannot be compared with another.
+
+- **A failed login attempt is counted by outcome, not by one response code.** The budget incremented only on `result: "3"`, which is measured on the reference MC7010. A router that refuses some other way, or answers nothing at all, would leave the counter still and quietly bypass the group limit. Anything that does not establish a session now counts as spent. This is the one place where being wrong costs the user a locked router rather than a missing finding.
+
+### Changed
+
+- **The run cap is ten minutes**, from eight. The generated space is 150 rules on the reporter's firmware and each attempt now makes four requests, so the earlier cap had no margin.
+
+- `1_token_rotation` and `13_single_id_fresh_session` still log in with the shipped form, because what they measure is what a renewal does. Where an adopted session is in force, `session_in_use` records it so those two rungs are read against the right baseline.
+
+### Verified
+
+- 1,546 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.17-dev3] - 2026-09-09 - SMS Probe V4: The Five Rungs the Plan Named and the Build Missed
+
+### Summary
+
+An audit of the previous entry against the twenty leads it was built from found sixteen covered and four absent, and the single-use token measured in that entry raised a fifth question nobody had asked. All five are added here. Nothing already present is changed.
+
+### Added
+
+- **`20g` and `20h`: does anything other than the write spend the token?** The token is single-use, and re-reading its inputs re-arms it, but what spends it is not fully established. `get_ad` makes three calls of its own before the write follows, so a read between deriving and posting could invalidate it — and a device that orders those calls differently would refuse every write for a reason no token variant can reach. One rung derives and posts with nothing between; the other derives, makes one unrelated read, and posts.
+
+- **`20i`: the write as a query string.** `nicjac/python-zte-mc801a` logs in by `GET` against this same endpoint, so the firmware reads parameters from the query string on at least one command. Whether it does so for a write is untested.
+
+- **`20j` and `20k`: what the session cookie is worth.** `Kajkac/ZTE-MC-Home-assistant-repo` attaches a cookie only when it is named `stok`, so on a device issuing `zsidn` — which is what the reporter's router issues — it sends none at all. One rung sends no cookie; the other sends the same value under the name `stok`, which asks whether the firmware reads the name rather than the value. Held cookies are restored either way, so no rung below inherits a session this one removed.
+
+- **`20l`: a token captured before a re-login and reused.** `Kajkac` computes `AD` during authentication and reuses it for every protected write; `nicjac` derives fresh per write, as this integration does, and writes successfully on its own hardware. The two disagree and neither is attested on an MC888, so one rung settles it for this device.
+
+- **`20m`: the bundles the earlier mining could not read.** The reporter's discovery pass recorded `js/statusBar.js: HTTP 404`, so its 997 names came from the bundles that answered. A name appearing only in a bundle nobody read is invisible to every other rung.
+
+### Fixed
+
+- **A test helper collected the query-string variant's absent body.** `_bodies` gathered every call carrying a `data` keyword, including the one that carries `None` because its payload is in the path, which put a `None` among the bodies three assertions iterate over.
+
+### Verified
+
+- 1,543 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.17-dev1] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured
+
+### Summary
+
+The third MC888 Pro run wrote nothing in sixty probes, and established that the token was never the discriminator: a correctly derived one and a deliberately malformed one drew the identical refusal. Reviewing two other ZTE implementations and the reporter's own configuration moved the suspicion to the login, which is the one step this integration has never varied. This version tests the login first, replaces the hand-written candidate list with a generated space, and records a property of the hardware that invalidates how both earlier versions measured.
+
+### Measured
+
+- **The write token is single-use.** On the reference MC7010, the first write carrying a given `AD` succeeds and every later write carrying the same one is refused, at any delay, while `RD` itself is unchanged across reads and unchanged after `get_ad`. Re-reading the token inputs re-arms it. A screening pass that computed its candidates once and fired them reported thirty refusals on a device where the shipped derivation demonstrably works.
+
+- **Neither device exposes a failed-login count.** Both report `psw_fail_num_str: 5` and `login_lock_time: 300`, and neither value moves: measured across two failed logins with the session held so nothing could reset it, none of 230 readable names changed except radio noise and traffic counters. Of 78 login-shaped names mined from the MC888's own web UI, only those two and `loginfo` answer at all.
+
+- **A failed login answers `{"result":"3"}`**, for a wrong password and for a wrong username with the right password alike.
+
+- **A read proves a session on the MC7010**: 40 of the core keys are populated with one and 1 without.
+
+- `web_crt_get` is unanswered on the MC7010, so the RED payload encryption implemented by `Kajkac` for newer firmware is not present there.
+
+### Added
+
+- **A login stage, ahead of everything that assumes a session.** Twelve variants of the same credentials: the shipped form as control, `user` and `username` spellings, `user` and `admin` values, `LOGIN_MULTI_USER` with a token, `LOGIN` carrying a token, the field omitted entirely, and three repeats with `LD` uppercased before the password hash. Each is judged by one data-volume write, which changes nothing and spends no message.
+
+- **Every cookie each login draws is recorded by name.** The reporter's device only ever issues `zsidn`; a variant drawing a differently named cookie, or a second one, is a finding no amount of guessing at cookie names could produce.
+
+- **A lockout budget.** Failed attempts are counted by the probe, since the router does not expose a count. After three, a known-good login is made on the assumption that a correct login clears the allowance, and the stage stops early if that login itself fails — which is what a lockout looks like from here.
+
+- **Transport variants**: the site root as `Referer`, the full set of browser headers `nicjac` sends, no content type at all as `Kajkac` sends, a write issued immediately after a fresh login, and a read of `web_crt_get`.
+
+- **A rung that measures whether a read proves a session at all.** The session is discarded rather than logged out, because the reporter's router does not acknowledge a logout, and the same keys are read again.
+
+### Changed
+
+- **The candidate list is generated, not written.** Five operands, two digests, four `RD` treatments, both cases on each round independently, and one or two rounds — deduplicated against the device's own firmware string. Thirty-six distinct rules on the MC7010; a hundred and fifty on the MC888 Pro.
+
+- **The space carries rules rather than tokens**, and every attempt re-reads its inputs. This follows directly from the single-use finding above.
+
+- **Screened once, then confirmed three times.** A wrong token is refused deterministically, so one attempt rules a rule out; acceptance still requires three successes out of three.
+
+- **The run cap is eight minutes**, from four. The login stage is paced at five seconds between attempts because a login is what a lockout counts.
+
+### Fixed
+
+- **Four single-round rules shared one name**, because the outer case was left out of it, so the candidate table reported 120 entries where 144 were sent.
+
+- **The delete path replayed a spent token.** It derives again from values read moments before.
+
+### Verified
+
+- Rehearsed on the reference MC7010: 36 rules screened, exactly one wrote, confirmed three times out of three, and it is the derivation the integration ships. Thirty-five refused. The login stage completed all twelve variants with no lockout. All four transport variants wrote.
+- 1,537 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
 ---
 

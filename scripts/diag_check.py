@@ -182,6 +182,19 @@ SABOTAGE_RECOVERY_FLOOR = 0.95
 # an afternoon.
 SURVEY_GAP_SECONDS = 20
 
+# Seconds to let the router settle before the first pass, and between the two.
+#
+# This check opens two full discovery passes back to back and logs in for each
+# with a five-second timeout. Run immediately after heavy traffic it fails, and
+# not at random: five failures on 2026-09-09 and 2026-09-10 all followed a
+# sustained probe run against the same device, twice with the identical
+# signature of run 1 completing cleanly and run 2's login never answering.
+#
+# The pause is not a fix for a fault in the integration — the router recovers
+# on its own within seconds, and a re-run has passed every time. It removes a
+# source of noise that has cost several validation runs.
+SETTLE_SECONDS = 15
+
 # Addresses that are not identifying and appear in the file by design.
 _ALLOWED_ADDRESSES = frozenset(
     {
@@ -905,6 +918,8 @@ async def main() -> int:
 
     report = Report()
     _announce_expected_warnings()
+    print(f"letting the router settle for {SETTLE_SECONDS}s before the first pass")
+    await asyncio.sleep(SETTLE_SECONDS)
     print("producing diagnostics against the live router")
     first = await produce_complete("run 1")
 
@@ -917,7 +932,11 @@ async def main() -> int:
         # The pass logs out and back in, and the reference hardware refused a
         # request once when one immediately followed another. The wait costs
         # nothing here and removes a source of noise from the diff.
-        await asyncio.sleep(5)
+        #
+        # Raised from five seconds to `SETTLE_SECONDS`: every observed failure
+        # of this check has been run 2's login timing out, so this is the wait
+        # the evidence points at rather than the one before run 1.
+        await asyncio.sleep(SETTLE_SECONDS)
         second = await produce_complete("run 2")
         print("\ntwo runs compared")
         incomplete = [
