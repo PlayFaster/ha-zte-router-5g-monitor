@@ -72,7 +72,7 @@ LAZY_DELETE_WAIT = 5
 # and a replay per attempt, and there is no other limit — the first version
 # could in principle have run for twenty minutes with the action still
 # spinning, and a user watching that will restart Home Assistant.
-PROBE_TIMEOUT = 600
+PROBE_TIMEOUT = 900
 
 # A failed login answers `{"result":"3"}` on both devices this project can
 # reach, measured 2026-09-09 for a wrong password and for a wrong username with
@@ -113,7 +113,13 @@ ATTEMPT_DELAY = 1.0
 # pass is long — the generated space is 150 distinct tokens on the reporter's
 # firmware — and a screened token is only ever ruled *out* here. Anything it
 # rules in is re-tried at the slower pace before it counts.
-SCREEN_DELAY = 0.4
+SCREEN_DELAY = 0.15
+
+# One screened attempt in this many is read back rather than believed. A
+# read-back on every rule would roughly double a sweep approaching a thousand
+# attempts; a sample establishes that the refusals are real, and anything
+# claiming success is re-run verified whatever the sample says.
+VERIFY_EVERY = 25
 
 # The keys the shipped session check now reads, imported rather than repeated
 # so this rung reports on what the integration actually does. The download is
@@ -201,6 +207,57 @@ async def _login_variants(api: Any) -> list[dict[str, Any]]:
             "value": configured,
             "as_query": True,
         },
+        # A second login form, selected by a `developer_login` flag in
+        # `tpoechtrager`'s script and present among the 187 write commands
+        # mined from the reporter's own router. Same credentials, same token,
+        # different `goformId` — and it is the only login form either
+        # reference implementation sends that this integration never has.
+        {
+            "name": "L11_developer_option",
+            "form": "DEVELOPER_OPTION_LOGIN",
+            "field": "username",
+            "value": configured,
+            "with_ad": True,
+        },
+        {
+            "name": "L12_developer_option_no_ad",
+            "form": "DEVELOPER_OPTION_LOGIN",
+            "field": "username",
+            "value": configured,
+        },
+        # The gist hashes the password without uppercasing either round. This
+        # integration uppercases both. The difference has never been sent.
+        {
+            "name": "L13_password_plain_case",
+            "form": "LOGIN",
+            "field": "username",
+            "value": configured,
+            "password_case": "plain",
+        },
+        # For builds predating the SHA-256 transition.
+        {
+            "name": "L14_password_md5",
+            "form": "LOGIN",
+            "field": "username",
+            "value": configured,
+            "password_digest": "md5",
+        },
+        # Completing the `LD` case set alongside as-returned and uppercased.
+        {
+            "name": "L15_ld_lower",
+            "form": "LOGIN",
+            "field": "username",
+            "value": configured,
+            "ld_lower": True,
+        },
+        # `LOGIN_MULTI_USER` has only ever been sent with `user=`.
+        {
+            "name": "L16_multi_username_spelling",
+            "form": "LOGIN_MULTI_USER",
+            "field": "username",
+            "value": "admin",
+            "with_ad": True,
+        },
     ]
     # The MF266 documentation hashes the password against an uppercased `LD`.
     # Ours uses it as returned. Repeating the leading forms doubles the stage,
@@ -222,7 +279,16 @@ async def _try_login(api: Any, variant: dict[str, Any]) -> dict[str, Any]:
     ld = await api.get_ld()
     if variant.get("ld_upper"):
         ld = ld.upper()
-    zte_pass = api._hash(api._hash(api.password).upper() + ld).upper()  # noqa: SLF001
+    if variant.get("ld_lower"):
+        ld = ld.lower()
+    if variant.get("password_digest") == "md5":
+        zte_pass = _md5(_md5(api.password).upper() + ld).upper()
+    elif variant.get("password_case") == "plain":
+        # `SHA256(SHA256(password) + LD)`, neither round uppercased, exactly as
+        # `tpoechtrager`'s script sends it.
+        zte_pass = _sha(_sha(api.password) + ld)
+    else:
+        zte_pass = api._hash(api._hash(api.password).upper() + ld).upper()  # noqa: SLF001
 
     payload: dict[str, str] = {
         "isTest": "false",
@@ -266,6 +332,9 @@ async def _try_login(api: Any, variant: dict[str, Any]) -> dict[str, Any]:
         "field": variant["field"],
         "value_kind": _value_kind(variant),
         "ld_upper": bool(variant.get("ld_upper")),
+        "ld_lower": bool(variant.get("ld_lower")),
+        "password_digest": str(variant.get("password_digest") or "sha"),
+        "password_case": str(variant.get("password_case") or "upper"),
         "carried_ad": bool(variant.get("with_ad")),
         "result": result,
         "cookie_names": sorted(cookies),
@@ -357,12 +426,30 @@ def _md5(value: str) -> str:
 # computes and what this integration ships, and `cr + wa` is the MF266's order.
 #
 # That ordering is a judgement about likelihood, not a measurement.
+# Each takes the four strings the device reports and returns what the first
+# round hashes.
+#
+# `wav` is `wa_version`, and it is the reason this list grew. The reporter's
+# router reports three version strings and two of them disagree:
+# `wa_inner_version` is `V1.0.0B01` built October 2025, `wa_version` is
+# `V1.0.1B03`, and `cr_version` is `V1.0.1B04`. Every token this project has
+# ever built used the first. The internally consistent pair — both `1.0.1` — is
+# `wa_version` with `cr_version`, and it had never been sent.
 _OPERANDS: tuple[tuple[str, Any], ...] = (
-    ("wacr", lambda wa, cr: wa + cr),
-    ("wa", lambda wa, cr: wa),
-    ("crwa", lambda wa, cr: cr + wa),
-    ("wanots_cr", lambda wa, cr: _TIMESTAMP.sub("", wa) + cr),
-    ("cr", lambda wa, cr: cr),
+    ("wavcr", lambda v: v["wav"] + v["cr"]),
+    ("wacr", lambda v: v["wa"] + v["cr"]),
+    ("wav", lambda v: v["wav"]),
+    ("wa", lambda v: v["wa"]),
+    ("crwav", lambda v: v["cr"] + v["wav"]),
+    ("crwa", lambda v: v["cr"] + v["wa"]),
+    ("wanots_cr", lambda v: _TIMESTAMP.sub("", v["wa"]) + v["cr"]),
+    ("cr", lambda v: v["cr"]),
+    ("all_three", lambda v: v["wa"] + v["wav"] + v["cr"]),
+    ("ld", lambda v: v["ld"]),
+    ("hw", lambda v: v["hw"]),
+    ("model", lambda v: v["model"]),
+    # No version string at all, for a firmware that seeds only from `RD`.
+    ("none", lambda v: ""),
 )
 
 # What is done to `RD` before the second round. `teixeluis` documents an
@@ -394,63 +481,77 @@ def _rule(
     inner_case: Any,
     outer_case: Any,
     rounds: int,
+    rd_first: bool = False,
 ) -> Any:
-    """One derivation, as a function of the three values it is built from."""
+    """One derivation, as a function of the values it is built from."""
 
-    def build(wa: str, cr: str, rd: str) -> str:
-        first = operand(wa, cr)
-        prepared = rd_form(rd, digest)
+    def build(values: dict[str, str]) -> str:
+        first = operand(values)
+        prepared = rd_form(values["rd"], digest)
         if rounds == 1:
-            return str(outer_case(digest(first + prepared)))
+            joined = prepared + first if rd_first else first + prepared
+            return str(outer_case(digest(joined)))
         inner = inner_case(digest(first))
-        return str(outer_case(digest(inner + prepared)))
+        joined = prepared + inner if rd_first else inner + prepared
+        if rounds == 3:
+            return str(outer_case(digest(digest(joined))))
+        return str(outer_case(digest(joined)))
 
     return build
 
 
-def _token_space(wa: str, cr: str, rd: str) -> list[tuple[str, Any]]:
+def _token_space(values: dict[str, str]) -> list[tuple[str, Any]]:
     """Every distinct derivation these rules can produce, as rules.
 
     **Rules, not tokens.** An `AD` is single-use on this hardware: measured on
-    the reference MC7010 on 2026-09-09, the first write carrying a given token
-    succeeds and every later write carrying the same one is refused, at any
-    delay, while `RD` itself is unchanged. Re-reading the token inputs re-arms
-    it. A pass that computed the space once and fired it would therefore spend
-    its only valid attempt on whichever rule happened to come first — which is
-    what an earlier version of this function did, and it reported thirty
-    refusals on a device where the shipped derivation works.
+    the reference MC7010, the first write carrying a given token succeeds and
+    every later write carrying the same one is refused, at any delay, while
+    `RD` itself is unchanged. Re-reading the token inputs re-arms it.
 
     **Deduplicated against the device's own strings, not a stand-in.** Two
     rules that differ in the abstract can produce the same digest here — an
     uppercasing digest makes an `.upper()` variant a duplicate of its base, and
-    an absent `cr_version` makes `wa + cr` a duplicate of `wa`. v3's
-    distinctness test used a stand-in firmware string and reported twelve
-    candidates where the router received nine. The values passed here decide
-    which rules are worth separating; the rules themselves are what run.
+    a string the device does not answer collapses one operand onto another. The
+    values passed here decide which rules are worth separating; the rules
+    themselves are what run.
 
     Returns `(name, rule)` pairs in a stable order, first occurrence kept.
     """
     seen: dict[str, tuple[str, Any]] = {}
     for op_name, operand in _OPERANDS:
-        if not operand(wa, cr):
+        if op_name != "none" and not operand(values):
             continue
         for digest_name, digest in (("sha", _sha), ("md5", _md5)):
             for rd_name, rd_form in _RD_FORMS:
-                for inner_name, inner_case in _CASES:
-                    for outer_name, outer_case in _CASES:
-                        for rounds, suffix in (
-                            (2, f"{inner_name}{outer_name}"),
-                            # The outer case still varies a single-round
-                            # token, so it belongs in the name: without it
-                            # four distinct rules shared one label and the
-                            # report counted names where it meant tokens.
-                            (1, f"1round{outer_name}"),
-                        ):
-                            rule = _rule(
-                                operand, digest, rd_form, inner_case, outer_case, rounds
-                            )
-                            name = f"{op_name}_{digest_name}_{suffix}_rd{rd_name}"
-                            seen.setdefault(rule(wa, cr, rd), (name, rule))
+                for rd_first in (False, True):
+                    for inner_name, inner_case in _CASES:
+                        for outer_name, outer_case in _CASES:
+                            for rounds in (2, 1, 3):
+                                rule = _rule(
+                                    operand,
+                                    digest,
+                                    rd_form,
+                                    inner_case,
+                                    outer_case,
+                                    rounds,
+                                    rd_first,
+                                )
+                                # The inner case is part of the name for
+                                # every round count that uses it. Leaving it
+                                # out of the three-round names put two rules
+                                # with different tokens under one label — the
+                                # same defect the single-round names carried in
+                                # v3.3.17-dev3.
+                                suffix = (
+                                    f"{inner_name}{outer_name}"
+                                    if rounds == 2
+                                    else f"{rounds}round{inner_name}{outer_name}"
+                                )
+                                where = "rdfirst" if rd_first else "rd"
+                                name = (
+                                    f"{op_name}_{digest_name}_{suffix}_{where}{rd_name}"
+                                )
+                                seen.setdefault(rule(values), (name, rule))
     return list(seen.values())
 
 
@@ -465,16 +566,41 @@ async def _token_inputs(api: Any, timeout_sec: int | None = None) -> dict[str, A
     the value: 64 characters is SHA-256, 32 is MD5. Measured, the MC888 Pro
     answers `RD` at 64 and the reference MC7010 at 32.
     """
-    version = await api.get_version(timeout_sec=timeout_sec) or ""
+    # `RD` is the only value that has to be re-read. It is the nonce the token
+    # is armed against; the version strings are properties of the firmware and
+    # do not change within a run. Reading all five per attempt cost four
+    # requests where one will do, and the generated space is 1,548 rules on the
+    # reporter's device — the difference is roughly seven minutes.
     rd = await api.get_rd(timeout_sec=timeout_sec) or ""
-    cr = ""
+    if _STATIC_INPUTS:
+        return {**_STATIC_INPUTS, "rd": rd}
+
+    version = await api.get_version(timeout_sec=timeout_sec) or ""
+    ld = ""
+    with contextlib.suppress(Exception):
+        ld = await api.get_ld(timeout_sec=timeout_sec) or ""
+    extra: dict[str, Any] = {}
     try:
-        answer = await api.get_params(["cr_version"], timeout_sec=timeout_sec)
-        cr = str((answer or {}).get("cr_version") or "")
+        extra = (
+            await api.get_params(
+                ["cr_version", "wa_version", "hardware_version", "model_name"],
+                timeout_sec=timeout_sec,
+            )
+            or {}
+        )
     except Exception as err:  # noqa: BLE001 - an unanswered read is a finding
-        cr = ""
         _CR_NOTE["error"] = f"{type(err).__name__}: {err!s:.120}"
-    return {"wa_inner_version": version, "cr_version": cr, "rd": rd}
+    _STATIC_INPUTS.update(
+        {
+            "wa": version,
+            "wav": str(extra.get("wa_version") or ""),
+            "cr": str(extra.get("cr_version") or ""),
+            "hw": str(extra.get("hardware_version") or ""),
+            "model": str(extra.get("model_name") or ""),
+            "ld": ld,
+        }
+    )
+    return {**_STATIC_INPUTS, "rd": rd}
 
 
 # Filled by `_token_inputs` when the `cr_version` read raises, and reported on
@@ -483,6 +609,23 @@ async def _token_inputs(api: Any, timeout_sec: int | None = None) -> dict[str, A
 # plain read has not been established, and a candidate skipped for a reason
 # nobody recorded is a candidate that gets tried again next time.
 _CR_NOTE: dict[str, str] = {}
+
+# The version strings, read once per run. Properties of the firmware, not of
+# the session, so re-reading them on every one of a thousand-odd attempts buys
+# nothing and costs three requests each time.
+_STATIC_INPUTS: dict[str, str] = {}
+
+
+def _verified(record: dict[str, Any]) -> bool | None:
+    """Whether a read-back confirmed the value actually changed.
+
+    `None` where the attempt did not verify. This is the only judgement in the
+    run that does not rest on the router's own account of its own write.
+    """
+    result = record.get("result")
+    if isinstance(result, dict) and "verified_changed" in result:
+        return bool(result["verified_changed"])
+    return None
 
 
 def _wrote(record: dict[str, Any]) -> bool:
@@ -503,6 +646,9 @@ def _wrote(record: dict[str, Any]) -> bool:
     result = record.get("result")
     if not isinstance(result, dict):
         return False
+    # A read-back beats the claim. Where one was taken, it decides.
+    if "verified_changed" in result:
+        return bool(result["verified_changed"])
     value = result.get("result")
     return value is not None and str(value).lower() in ("success", "0", "ok")
 
@@ -531,13 +677,95 @@ _LAST_SENT: dict[str, Any] = {}
 # downloads rules that out.
 _WITH_SESSION: list[dict[str, Any]] = []
 
+# Where each toggle stood before the run touched it.
+_STARTED_AT: dict[str, str] = {}
+
+# The switch every probe write flips, and how to read it back.
+#
+# **A write that writes back the value already there is not a write.** Every
+# attempt from v2 to v4 sent the data-volume form at its current values, so no
+# request this project ever made to the reporter's router changed anything. A
+# firmware that refuses or short-circuits a no-op write would produce exactly
+# the uniform refusal that was measured, and nothing in 396 attempts could tell
+# the two apart.
+#
+# So the workhorse toggles. Each attempt sets the switch to the opposite of
+# what it reads, which makes every attempt a real change: refused, and the
+# value is untouched; accepted, and it flipped, and the next attempt flips it
+# back. The sweep alternates on its own and the run restores the starting value
+# whatever happened.
+#
+# Chosen because it is reversible and observable. On the reference MC7010,
+# turning the data limit off hides the other fields in the web UI and retains
+# them; turning it back on restores them untouched.
+_TOGGLES: tuple[tuple[str, str, tuple[str, ...], str, str], ...] = (
+    (
+        "data_limit",
+        "DATA_LIMIT_SETTING",
+        ("data_volume_limit_switch", "flux_data_volume_limit_switch"),
+        "data_volume_limit_switch",
+        "0",
+    ),
+    # A second command from an unrelated part of the firmware, under the same
+    # rule. If this is refused too, "no write of any kind works" stops being an
+    # inference drawn from one form.
+    (
+        "led_night",
+        # The command name is the reporter's own, not a guess: it is one of
+        # the 187 write commands mined from his router's JavaScript. An
+        # earlier draft invented `LED_NIGHT_MODE_SET`, which exists nowhere,
+        # and the rung would have tested the spelling rather than the device.
+        "NIGHT_MODE_INFO_SETTINGS",
+        ("led_night_mode_switch",),
+        "led_night_mode_switch",
+        "0",
+    ),
+)
+
+# The rest of the night-mode form, sent alongside the flipped switch. Like the
+# data-volume form, a `goform` setting is usually all-or-nothing, so a field
+# left out draws a refusal that says nothing about what is being tested.
+_NIGHT_MODE_FIELDS: tuple[str, ...] = (
+    "is_led_night_mode",
+    "led_night_mode_start_time",
+    "led_night_mode_end_time",
+)
+
 _DEFAULT_TRANSPORT: dict[str, Any] = {
     "method": "POST",
     "as_query": False,
     "not_callback": False,
     "cookies": None,
     "headers": {"Content-Type": "application/x-www-form-urlencoded"},
+    # Where the token goes, and what it is called.
+    "token_field": "AD",
+    "token_first": False,
+    "token_in_header": False,
+    "token_in_query": False,
+    "is_test": "false",
+    "multi_data": False,
 }
+
+
+async def _read_switch(api: Any, aliases: tuple[str, ...]) -> tuple[str, str | None]:
+    """Read a toggle's current value, trying each spelling the device may use.
+
+    Returns the alias that answered and its value, or `(aliases[0], None)` when
+    the device answers none of them — which is a finding, not an error: a
+    toggle nobody can read is a toggle nobody can verify.
+    """
+    with contextlib.suppress(Exception):
+        answer = await api.get_params(list(aliases))
+        for alias in aliases:
+            value = (answer or {}).get(alias)
+            if value not in ("", None):
+                return alias, str(value)
+    return aliases[0], None
+
+
+def _flip(value: str | None) -> str:
+    """The opposite of a boolean-shaped router value."""
+    return "0" if str(value).strip() in ("1", "true", "on") else "1"
 
 
 async def _attempt(
@@ -547,6 +775,8 @@ async def _attempt(
     transport: dict[str, Any] | None = None,
     command: str = "DATA_LIMIT_SETTING",
     fields: dict[str, str] | None = None,
+    toggle: tuple[str, str, tuple[str, ...], str, str] | None = None,
+    verify: bool = False,
 ) -> dict[str, Any]:
     """One write, on one session, with one token, carried one way.
 
@@ -561,9 +791,50 @@ async def _attempt(
     The session is not a parameter: it is whatever `api.cookies` holds, which
     `_login_stage` may have set to a variant it proved. `cookies` in the
     transport overrides that for the duration of the call and is put back.
+
+    **`toggle` names a switch to flip.** The write then changes something, and
+    `verify` reads it back afterwards so the outcome does not rest on the
+    router's own `result` — an API this project's own code documents as
+    answering `200 OK` to a refused write.
     """
     api = coordinator.api
     carried = {**_DEFAULT_TRANSPORT, **(transport or {})}
+    flipped_from: str | None = None
+    flipped_to: str | None = None
+
+    if fields is None and toggle is not None:
+        _name, _command, aliases, field, default = toggle
+        _alias, current_value = await _read_switch(api, aliases)
+        flipped_from = current_value if current_value is not None else default
+        flipped_to = _flip(flipped_from)
+        # The whole form, with one field flipped. `DATA_LIMIT_SETTING` is
+        # all-or-nothing — `api.py` records that the router refuses it outright
+        # when a field is missing — so sending the switch alone would draw a
+        # refusal that says nothing about the token, the carrier or the
+        # session. Everything else goes back at the value it already holds.
+        fields = {}
+        if _name == "led_night":
+            with contextlib.suppress(Exception):
+                answer = await api.get_params(list(_NIGHT_MODE_FIELDS))
+                fields = {
+                    key: str(value)
+                    for key, value in (answer or {}).items()
+                    if key in _NIGHT_MODE_FIELDS and value not in ("", None)
+                }
+        else:
+            current = dict(coordinator.data or {})
+            for name, spellings in api.DATA_VOLUME_FIELDS.items():
+                value = next(
+                    (
+                        current[key]
+                        for key in spellings
+                        if current.get(key) not in ("", None)
+                    ),
+                    None,
+                )
+                if value is not None:
+                    fields[name] = str(value)
+        fields[field] = flipped_to
 
     if fields is None:
         current = dict(coordinator.data or {})
@@ -578,11 +849,20 @@ async def _attempt(
             fields[field] = str(value)
 
     ad = token if token is not None else await api.get_ad()
-    parts = ["isTest=false", f"goformId={command}"]
+    token_field = str(carried["token_field"])
+    parts = [f"isTest={carried['is_test']}", f"goformId={command}"]
+    if carried["multi_data"]:
+        parts.append("multi_data=1")
+    if carried["token_first"]:
+        parts.insert(0, f"{token_field}={ad}")
     parts += [f"{key}={value}" for key, value in fields.items()]
     if carried["not_callback"]:
         parts.append("notCallback=true")
-    parts.append(f"AD={ad}")
+    if not carried["token_first"] and not carried["token_in_header"]:
+        if carried["token_in_query"]:
+            pass
+        else:
+            parts.append(f"{token_field}={ad}")
     payload = "&".join(parts)
 
     held = dict(api.cookies)
@@ -611,15 +891,36 @@ async def _attempt(
     )
     try:
         as_query = bool(carried["as_query"])
+        path = "goform/goform_set_cmd_process"
+        headers = dict(carried["headers"])
+        if carried["token_in_header"]:
+            headers[token_field] = str(ad)
+        if carried["token_in_query"]:
+            path += f"?{token_field}={ad}"
+        elif as_query:
+            path += f"?{payload}"
         result = await api._request(  # noqa: SLF001 - the point is to vary a fixed form
             str(carried["method"]),
-            "goform/goform_set_cmd_process" + (f"?{payload}" if as_query else ""),
+            path,
             data=None if as_query else payload,
-            headers=dict(carried["headers"]),
+            headers=headers,
         )
     finally:
         api.cookies = held
-    return cast("dict[str, Any]", result)
+
+    answered = cast("dict[str, Any]", result)
+    if toggle is not None:
+        answered = dict(answered)
+        answered["flipped_from"] = flipped_from
+        answered["flipped_to"] = flipped_to
+        if verify:
+            # The only measurement in this run that does not depend on the
+            # router telling the truth about its own write.
+            _name, _command, aliases, _field, _default = toggle
+            _alias, now = await _read_switch(api, aliases)
+            answered["value_after"] = now
+            answered["verified_changed"] = now is not None and now == flipped_to
+    return answered
 
 
 def _case_of(token: str) -> str:
@@ -635,7 +936,10 @@ def _case_of(token: str) -> str:
 
 
 async def _data_volume_write(
-    coordinator: ZTERouterDataUpdateCoordinator, token: str | None
+    coordinator: ZTERouterDataUpdateCoordinator,
+    token: str | None,
+    *,
+    verify: bool = False,
 ) -> dict[str, Any]:
     """Write the data-volume form back at exactly the values it already holds.
 
@@ -643,11 +947,25 @@ async def _data_volume_write(
     it is not an SMS command — so a failure here says the fault is every write
     on the device rather than anything about messages.
 
-    The values are read immediately before each write and never remembered.
-    The reporter's limit has already changed once between downloads, and
-    writing back a stale value would alter a setting he relies on.
+    **It flips the switch rather than writing the value back.** Writing back
+    what is already there is not a write, and every attempt this project ever
+    sent the reporter's router did exactly that — so a firmware that refuses or
+    short-circuits a no-op would have produced the same uniform refusal, and
+    nothing in 396 attempts could tell the two apart.
+
+    The value is read immediately before each attempt and never remembered. It
+    alternates: refused leaves it untouched, accepted flips it, and the next
+    attempt flips it back. `run_probe` restores the starting value at the end
+    whatever happened in between.
     """
-    return await _attempt(coordinator, token=token, transport=_ADOPTED)
+    return await _attempt(
+        coordinator,
+        token=token,
+        transport=_ADOPTED,
+        command=_TOGGLES[0][1],
+        toggle=_TOGGLES[0],
+        verify=verify,
+    )
 
 
 async def _surviving_ids(coordinator: ZTERouterDataUpdateCoordinator) -> list[str]:
@@ -697,6 +1015,10 @@ def _delete_body(
     not_callback: bool = False,
 ) -> str:
     """The exact body one variant sends. Shared so the record cannot drift."""
+    # A trailing semicolon is how at least one account of this API describes
+    # the field. This integration has never sent one, on a single id or a
+    # batch. It cannot explain a refusal of a command that carries no `msg_id`
+    # at all, so it is a tick-off rather than a lead.
     parts = ["isTest=false", "goformId=DELETE_SMS", f"msg_id={msg_id}"]
     if not_callback:
         parts.append("notCallback=true")
@@ -713,6 +1035,7 @@ async def _delete_raw(
     token: str | None = None,
     mem_store: str | None = None,
     not_callback: bool = False,
+    trailing_semicolon: bool = False,
 ) -> dict[str, Any]:
     """Send one `DELETE_SMS` in a named variant, bypassing the normal path.
 
@@ -720,7 +1043,7 @@ async def _delete_raw(
     is to vary the form, so this builds the body directly rather than calling
     it. `token=None` means a correct one, derived now.
     """
-    fields: dict[str, str] = {"msg_id": msg_id}
+    fields: dict[str, str] = {"msg_id": f"{msg_id};" if trailing_semicolon else msg_id}
     if mem_store is not None:
         fields["mem_store"] = mem_store
     # Carried the way a write was proven to work, where one was. A delete sent
@@ -792,9 +1115,19 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
     # attributed to this one — a transport most of all, since an adopted one
     # silently changes how every write below it is carried.
     _CR_NOTE.clear()
+    _STATIC_INPUTS.clear()
     _ADOPTED.clear()
     _LAST_SENT.clear()
     _WITH_SESSION.clear()
+    _STARTED_AT.clear()
+    # Where each switch stood before anything was flipped, so the run can put
+    # it back. Read here rather than inside the sweep: by then the first
+    # attempt has already changed it.
+    for name, _command, aliases, _field, _default in _TOGGLES:
+        with contextlib.suppress(Exception):
+            _alias, value = await _read_switch(api, aliases)
+            if value is not None:
+                _STARTED_AT[name] = value
 
     try:
         async with asyncio.timeout(PROBE_TIMEOUT):
@@ -808,6 +1141,27 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
             "error_type": type(err).__name__,
             "error": str(err)[:300],
         }
+    # Put every switch back where it started, whatever happened above. The
+    # sweep alternates, so the value may be one flip away from where it began.
+    restored: dict[str, Any] = {}
+    for name, command, aliases, field, _default in _TOGGLES:
+        started = _STARTED_AT.get(name)
+        if started is None:
+            continue
+        with contextlib.suppress(Exception):
+            _alias, now = await _read_switch(api, aliases)
+            if now is not None and now != started:
+                await _attempt(
+                    coordinator,
+                    command=command,
+                    fields={field: started},
+                    transport=_ADOPTED,
+                )
+                _alias, now = await _read_switch(api, aliases)
+            restored[name] = {"started": started, "ended": now}
+    if restored:
+        report["switches_restored"] = restored
+
     report["finished"] = datetime.now(UTC).isoformat()
     coordinator.persist_delete_probe()
     return report
@@ -964,6 +1318,11 @@ async def _run_rungs(
             ("5_absent_id_not_callback", {"not_callback": True}),
             ("6a_absent_id_store_device", {"mem_store": SMS_STORE_DEVICE}),
             ("6b_absent_id_store_all", {"mem_store": SMS_STORE_ALL}),
+            # A trailing semicolon on a single id, which one account of this
+            # API says the field expects. Never sent before, on a single or a
+            # batch. It cannot explain a refusal of a command carrying no
+            # `msg_id` at all, so it is a tick-off rather than a lead.
+            ("6c_absent_id_trailing_semicolon", {"trailing_semicolon": True}),
         ]
         for name, kwargs in variants:
             probes.append(
@@ -1249,21 +1608,26 @@ async def _candidate_rungs(
     inputs = await _capture(coordinator, "7a_token_inputs", lambda: _token_inputs(api))
     raw = inputs.get("result")
     values: dict[str, Any] = raw if isinstance(raw, dict) else {}
-    wa = str(values.get("wa_inner_version") or "")
-    cr = str(values.get("cr_version") or "")
+    wa = str(values.get("wa") or "")
+    cr = str(values.get("cr") or "")
     rd = str(values.get("rd") or "")
     # Lengths and presence only. The version strings identify a firmware and
     # `RD` is a session value; neither is published.
     inputs["result"] = {
         "wa_inner_version_length": len(wa),
+        "wa_version_length": len(str(values.get("wav") or "")),
+        "wa_version_differs": bool(values.get("wav")) and values.get("wav") != wa,
         "cr_version_length": len(cr),
+        "ld_length": len(str(values.get("ld") or "")),
+        "hardware_version_answered": bool(values.get("hw")),
+        "model_name_answered": bool(values.get("model")),
         "rd_length": len(rd),
         "cr_version_answered": bool(cr),
     }
     if _CR_NOTE:
         inputs["result"]["cr_version_note"] = _CR_NOTE.get("error")
 
-    space = _token_space(wa, cr, rd) if wa and rd else []
+    space = _token_space(values) if rd else []
     inputs["result"]["distinct_tokens"] = len(space)
     probes.append(inputs)
     report["candidates"] = {}
@@ -1284,16 +1648,29 @@ async def _candidate_rungs(
     # --- 7b. The screening pass -----------------------------------------
     # One attempt each, recorded as a table rather than one probe record per
     # token: 150 records of the same refusal is not evidence, it is volume.
-    async def one(rule: Any) -> dict[str, Any]:
+    async def one(rule: Any, verify: bool = False) -> dict[str, Any]:
         # Read fresh, every time. The token is single-use and a read re-arms
         # it; reusing one guarantees a refusal that says nothing about the rule.
         fresh = await _token_inputs(api)
-        token = rule(fresh["wa_inner_version"], fresh["cr_version"], fresh["rd"])
-        return await _data_volume_write(coordinator, token)
+        token = rule(fresh)
+        return await _data_volume_write(coordinator, token, verify=verify)
 
     survivors: dict[str, Any] = {}
-    for name, rule in space:
-        record = await _capture(coordinator, f"7b_{name}", lambda r=rule: one(r))
+    for index, (name, rule) in enumerate(space):
+        # Verified on a sample rather than on every attempt: a read-back per
+        # rule would roughly double a sweep of nearly a thousand. The sample
+        # proves the refusals are real refusals, and any attempt that claims
+        # success is re-run verified immediately below.
+        sample = index % VERIFY_EVERY == 0
+        record = await _capture(
+            coordinator, f"7b_{name}", lambda r=rule, v=sample: one(r, v)
+        )
+        if _wrote(record) and not sample:
+            # It said yes. Do not take its word for it.
+            record = await _capture(
+                coordinator, f"7b_{name}_verified", lambda r=rule: one(r, True)
+            )
+        record["verified"] = _verified(record)
         wrote = _wrote(record)
         # Every attempt is kept, not only the ones that worked. Collapsing a
         # refusal to the word "refused" discards the router's own answer, the
@@ -1317,9 +1694,13 @@ async def _candidate_rungs(
     for name, rule in survivors.items():
         outcomes: list[bool] = []
         for attempt in range(1, WRITE_ATTEMPTS + 1):
+            # Verified, always. This is the gate that decides whether real
+            # messages are spent, so it is the last place to take the
+            # router's word for its own write.
             record = await _capture(
-                coordinator, f"7h_{name}_{attempt}", lambda r=rule: one(r)
+                coordinator, f"7h_{name}_{attempt}", lambda r=rule: one(r, True)
             )
+            record["verified"] = _verified(record)
             record["wrote"] = _wrote(record)
             outcomes.append(record["wrote"])
             probes.append(record)
@@ -1390,6 +1771,26 @@ def _carriers(api: Any) -> list[tuple[str, dict[str, Any]]]:
             "20k_cookie_named_stok",
             {"cookies": {"stok": next(iter(dict(api.cookies).values()), "")}},
         ),
+        # Both names at once, in case the firmware reads one and the session
+        # is keyed on the other.
+        (
+            "20o_both_cookies",
+            {
+                "cookies": {
+                    **dict(api.cookies),
+                    "stok": next(iter(dict(api.cookies).values()), ""),
+                }
+            },
+        ),
+        # Where the token sits in the request, and what it is called. None of
+        # these is supported by anything read; all are cheap, and nothing has
+        # worked, so nothing is held back.
+        ("20p_token_first", {"token_first": True}),
+        ("20q_token_lowercase", {"token_field": "ad"}),
+        ("20r_token_in_header", {"token_in_header": True}),
+        ("20s_token_in_query", {"token_in_query": True}),
+        ("20t_is_test_true", {"is_test": "true"}),
+        ("20u_multi_data", {"multi_data": True}),
     ]
 
     return values
@@ -1399,30 +1800,45 @@ def _carriers(api: Any) -> list[tuple[str, dict[str, Any]]]:
 # full space is too large to cross with anything; these six are what miononno,
 # `nicjac`, `Kajkac`, the MF266 documentation and this integration actually
 # use.
+def _operand(name: str) -> Any:
+    """One operand builder, by the name it is listed under."""
+    return next(builder for listed, builder in _OPERANDS if listed == name)
+
+
 _CITED_RULES: tuple[tuple[str, Any], ...] = (
     (
         "wacr_sha_ll",
-        _rule(_OPERANDS[0][1], _sha, _RD_FORMS[0][1], str.lower, str.lower, 2),
+        _rule(_operand("wacr"), _sha, _RD_FORMS[0][1], str.lower, str.lower, 2),
     ),
     (
         "wacr_sha_uu",
-        _rule(_OPERANDS[0][1], _sha, _RD_FORMS[0][1], str.upper, str.upper, 2),
+        _rule(_operand("wacr"), _sha, _RD_FORMS[0][1], str.upper, str.upper, 2),
     ),
     (
         "wacr_md5_ll",
-        _rule(_OPERANDS[0][1], _md5, _RD_FORMS[0][1], str.lower, str.lower, 2),
+        _rule(_operand("wacr"), _md5, _RD_FORMS[0][1], str.lower, str.lower, 2),
     ),
     (
         "wa_sha_uu",
-        _rule(_OPERANDS[1][1], _sha, _RD_FORMS[0][1], str.upper, str.upper, 2),
+        _rule(_operand("wa"), _sha, _RD_FORMS[0][1], str.upper, str.upper, 2),
     ),
     (
         "wa_md5_ll",
-        _rule(_OPERANDS[1][1], _md5, _RD_FORMS[0][1], str.lower, str.lower, 2),
+        _rule(_operand("wa"), _md5, _RD_FORMS[0][1], str.lower, str.lower, 2),
     ),
     (
         "crwa_md5_lu",
-        _rule(_OPERANDS[2][1], _md5, _RD_FORMS[0][1], str.lower, str.upper, 2),
+        _rule(_operand("crwa"), _md5, _RD_FORMS[0][1], str.lower, str.upper, 2),
+    ),
+    # The pair that is internally consistent on the reporter's firmware — both
+    # `1.0.1` — in the two cases a source documents for this family.
+    (
+        "wavcr_sha_uu",
+        _rule(_operand("wavcr"), _sha, _RD_FORMS[0][1], str.upper, str.upper, 2),
+    ),
+    (
+        "wavcr_sha_ll",
+        _rule(_operand("wavcr"), _sha, _RD_FORMS[0][1], str.lower, str.lower, 2),
     ),
 )
 
@@ -1529,6 +1945,45 @@ async def _transport_rungs(
 
     probes.append(await _capture(coordinator, "20m_remine_bundles", remine))
 
+    # --- 20v. A second command, from an unrelated part of the firmware -----
+    # Everything else here writes the data-volume form. If the refusal is
+    # device-wide rather than specific to that command, a switch from the LED
+    # subsystem is refused too — and if it is not, we have found a write that
+    # works and can compare it against the ones that do not.
+    second = _TOGGLES[1]
+
+    async def other_subsystem() -> dict[str, Any]:
+        return await _attempt(
+            coordinator,
+            transport=_ADOPTED,
+            command=second[1],
+            toggle=second,
+            verify=True,
+        )
+
+    # Only where the device answers the switch. A router that does not carry
+    # this field at all — the reference MC7010 does not — would otherwise
+    # record a refusal that looks like the finding this rung exists to make,
+    # when it is really "we could not read it".
+    _alias, present = await _read_switch(api, second[2])
+    if present is None:
+        probes.append(
+            {
+                "probe": "20v_led_night_toggle",
+                "outcome": "skipped",
+                "reason": (
+                    f"this device does not answer {second[3]}, so the write "
+                    f"could not be verified and was not sent"
+                ),
+            }
+        )
+    else:
+        record = await _capture(coordinator, "20v_led_night_toggle", other_subsystem)
+        record["wrote"] = _wrote(record)
+        record["verified"] = _verified(record)
+        probes.append(record)
+        await asyncio.sleep(ATTEMPT_DELAY)
+
 
 async def _combination_rungs(
     coordinator: ZTERouterDataUpdateCoordinator,
@@ -1592,7 +2047,7 @@ async def _combination_rungs(
 
             async def one(r: Any = rule) -> dict[str, Any]:
                 fresh = await _token_inputs(api)
-                token = r(fresh["wa_inner_version"], fresh["cr_version"], fresh["rd"])
+                token = r(fresh)
                 return await _attempt(coordinator, token=token)
 
             record = await _capture(coordinator, f"21c_{login}_{rule_name}", one)
@@ -1720,9 +2175,7 @@ async def _confirmed_variant_rungs(
                 # Derived again, not replayed: a token is single-use, and the
                 # one that proved the rule has already been spent.
                 fresh = await _token_inputs(api)
-                token = working_token(
-                    fresh["wa_inner_version"], fresh["cr_version"], fresh["rd"]
-                )
+                token = working_token(fresh)
                 return await _delete_raw(coordinator, i, token=token, **k)
 
             record = await _capture(

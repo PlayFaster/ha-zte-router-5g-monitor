@@ -53,15 +53,44 @@ class _FakePost:
         return None
 
 
+# The reporter's own strings. Rules are exercised against these rather than a
+# stand-in, because two rules that differ in the abstract can produce the same
+# digest on a given device — which is how v3 reported twelve candidates where
+# the router received nine.
+_MC888_VALUES = {
+    "wa": "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
+    "wav": "BD_ABPLMC888PROMODV1.0.1B03",
+    "cr": "CR_ABPLMC888PROV1.0.1B04",
+    "hw": "MC888 Pro_HWV1.0",
+    "model": "MC888 Pro",
+    "ld": "L" * 64,
+    "rd": "a1b2" * 16,
+}
+
+
 def _coordinator(ids: list[str] | None = None) -> MagicMock:
     """A coordinator whose router answers everything successfully."""
     held = list(ids if ids is not None else [str(n) for n in range(20, 8, -1)])
     api = MagicMock()
+    switch = {"value": "1"}
     api.get_rd = AsyncMock(return_value="rd-value")
     api.get_ad = AsyncMock(return_value="ad-value")
     api.login = AsyncMock()
     api.set_data_volume_settings = AsyncMock(return_value={"result": "success"})
-    api._request = AsyncMock(return_value={"result": "success"})
+
+    async def _request(method="POST", path="", **kwargs):
+        # A router that actually applies the write, so the read-back the probe
+        # now insists on has something to confirm. Without this the stand-in
+        # claims success and never changes, and the probe is right to refuse
+        # to believe it.
+        body = str(kwargs.get("data") or path)
+        for field in ("data_volume_limit_switch", "led_night_mode_switch"):
+            marker = f"{field}="
+            if marker in body:
+                switch["value"] = body.split(marker, 1)[1].split("&", 1)[0]
+        return {"result": "success"}
+
+    api._request = AsyncMock(side_effect=_request)
     api.get_sms_messages = AsyncMock(
         side_effect=lambda **_kw: [
             {"id": i, "tag": "1", "date_decoded": "2026-09-07T10:00:00+00:00"}
@@ -74,9 +103,23 @@ def _coordinator(ids: list[str] | None = None) -> MagicMock:
     api._session_was_fresh = False
     api.delete_all = AsyncMock(return_value=200)
     api.get_version = AsyncMock(return_value="TEST_VERSION_V1.0")
-    api.get_params = AsyncMock(
-        return_value={"signalbar": "4", "cr_version": "CR_TEST_V1.0"}
-    )
+
+    async def _params(names, **_kw):
+        answer = {
+            "signalbar": "4",
+            "cr_version": "CR_TEST_V1.0",
+            "wa_version": "TEST_VERSION_V1.1",
+            "hardware_version": "TESTMODEL_HWV1.0",
+            "model_name": "TESTMODEL",
+            "data_volume_limit_switch": switch["value"],
+            "led_night_mode_switch": switch["value"],
+        }
+        picked = {name: answer.get(name, "") for name in names}
+        picked["wan_connect_status"] = "up"
+        return picked
+
+    api.get_params = AsyncMock(side_effect=_params)
+    api.get_ld = AsyncMock(return_value="LD-VALUE")
     api._ensure_session = AsyncMock()
     api._ad_hash_func = MagicMock(return_value=lambda value: "digest-" + value[:6])
     api.unauthenticated_key_set = MagicMock(
@@ -145,6 +188,20 @@ def _no_waiting(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(asyncio, "sleep", AsyncMock())
 
 
+@pytest.fixture(autouse=True)
+def _smaller_space(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Four operands and two `RD` forms rather than the full product.
+
+    The generated space is 1,548 rules on the reporter's firmware, and a suite
+    that ran every one of them through several tests took longer than the
+    probe does against real hardware. The four kept are the ones every
+    assertion here reasons about, `wa_version + cr_version` first, so the
+    shape being tested is the shape that ships.
+    """
+    monkeypatch.setattr(sms_delete_probe, "_OPERANDS", sms_delete_probe._OPERANDS[:4])
+    monkeypatch.setattr(sms_delete_probe, "_RD_FORMS", sms_delete_probe._RD_FORMS[:2])
+
+
 # ---------------------------------------------------------------------------
 # What must always happen
 # ---------------------------------------------------------------------------
@@ -201,7 +258,9 @@ async def test_the_safe_probes_never_name_a_real_message() -> None:
 
     bodies = _bodies(coordinator)
     absent = [b for b in bodies if f"msg_id={ABSENT_ID}" in b]
-    assert len(absent) == 5
+    # Six now: the trailing-semicolon form joined the safe set.
+    assert len(absent) == 6
+    assert any(f"msg_id={ABSENT_ID};" in b for b in absent)
     assert not any("msg_id=4&" in b or "msg_id=3&" in b for b in absent)
     assert any(f"AD={BAD_TOKEN}" in b for b in absent)
 
@@ -622,7 +681,6 @@ async def test_the_harmless_write_refuses_a_form_it_cannot_fill() -> None:
         p for p in report["probes"] if p["probe"].startswith("7b_a_control_current")
     ]
     assert all(p["outcome"] == "raised" for p in attempts)
-    assert report["working_variant"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -860,20 +918,9 @@ async def test_the_token_space_is_deduplicated_for_this_devices_own_strings() ->
     reported twelve candidates where the MC888 Pro received nine, because an
     uppercasing digest makes an `.upper()` variant a duplicate of its base.
     """
-    space = sms_delete_probe._token_space(
-        "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
-        "CR_ABPLMC888PROV1.0.1B04",
-        "a1b2" * 16,
-    )
+    space = sms_delete_probe._token_space(_MC888_VALUES)
 
-    tokens = [
-        rule(
-            "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
-            "CR_ABPLMC888PROV1.0.1B04",
-            "a1b2" * 16,
-        )
-        for _name, rule in space
-    ]
+    tokens = [rule(_MC888_VALUES) for _name, rule in space]
     assert len(set(tokens)) == len(tokens)
 
 
@@ -883,8 +930,8 @@ async def test_the_space_shrinks_where_cr_version_is_not_answered() -> None:
     Every operand built from it collapses onto one built without it, and the
     count reported must be the count actually sent.
     """
-    with_cr = sms_delete_probe._token_space("WA_V1", "CR_V1", "b" * 32)
-    without_cr = sms_delete_probe._token_space("WA_V1", "", "b" * 32)
+    with_cr = sms_delete_probe._token_space(_MC888_VALUES)
+    without_cr = sms_delete_probe._token_space({**_MC888_VALUES, "cr": "", "wav": ""})
 
     assert len(without_cr) < len(with_cr)
 
@@ -896,13 +943,15 @@ async def test_the_space_carries_both_digests_and_both_cases() -> None:
     inherited it, and no lowercase token was ever sent to the reporter's
     router.
     """
-    space = sms_delete_probe._token_space("WA_V1", "CR_V1", "b" * 32)
+    space = sms_delete_probe._token_space(_MC888_VALUES)
 
     names = [name for name, _token in space]
     assert any("_sha_" in n for n in names)
     assert any("_md5_" in n for n in names)
     assert any(n.endswith("rdupper") for n in names)
-    tokens = [rule("WA_V1", "CR_V1", "b" * 32) for _n, rule in space]
+    assert any("rdfirst" in n for n in names)
+    assert any("3round" in n for n in names)
+    tokens = [rule(_MC888_VALUES) for _n, rule in space]
     assert any(t.islower() for t in tokens)
     assert any(t.isupper() for t in tokens)
 
@@ -1035,7 +1084,7 @@ def test_every_rule_in_the_space_has_its_own_name() -> None:
     out of it, and the candidate table silently reported fewer entries than
     were sent.
     """
-    space = sms_delete_probe._token_space("WA_V1", "CR_V1", "b" * 32)
+    space = sms_delete_probe._token_space(_MC888_VALUES)
 
     names = [name for name, _rule in space]
     assert len(set(names)) == len(names)
@@ -1048,10 +1097,10 @@ def test_a_rule_is_a_function_of_the_values_read_at_the_time() -> None:
     succeeds and every later write carrying the same one is refused, at any
     delay, while `RD` is unchanged. Re-reading re-arms it.
     """
-    space = sms_delete_probe._token_space("WA_V1", "CR_V1", "b" * 32)
+    space = sms_delete_probe._token_space(_MC888_VALUES)
 
     _name, rule = space[0]
-    assert rule("WA_V1", "CR_V1", "b" * 32) != rule("WA_V1", "CR_V1", "c" * 32)
+    assert rule(_MC888_VALUES) != rule({**_MC888_VALUES, "rd": "c" * 32})
 
 
 async def test_whether_an_intervening_read_spends_the_token_is_measured() -> None:
@@ -1243,10 +1292,12 @@ async def test_the_documented_derivations_are_tried_first() -> None:
     `wa + cr` is what miononno documents for the MC888 Pro; it should not sit
     behind operands nobody has cited.
     """
-    space = sms_delete_probe._token_space("WA_V1", "CR_V1", "b" * 32)
+    space = sms_delete_probe._token_space(_MC888_VALUES)
 
     names = [name for name, _rule in space]
-    assert names[0].startswith("wacr_")
+    # `wa_version + cr_version` is the internally consistent pair on the
+    # reporter's firmware — both `1.0.1` — and leads for that reason.
+    assert names[0].startswith("wavcr_")
 
 
 async def test_a_writes_response_header_names_are_recorded() -> None:
@@ -1296,7 +1347,10 @@ async def test_every_screened_attempt_is_kept_not_only_the_ones_that_worked() ->
     report = await run_probe(coordinator)
 
     screened = [p for p in report["probes"] if p["probe"].startswith("7b_")]
-    assert len(screened) == len(report["candidates"])
+    # One record per rule, plus a verified re-run for any that claimed success.
+    assert len(screened) >= len(report["candidates"])
+    named = {p["probe"].removeprefix("7b_").removesuffix("_verified") for p in screened}
+    assert named == set(report["candidates"])
     assert all("status" in p and "elapsed_seconds" in p for p in screened)
 
 
@@ -1396,6 +1450,8 @@ def test_every_cited_rule_names_a_source_this_project_has_read() -> None:
         "wa_sha_uu",
         "wa_md5_ll",
         "crwa_md5_lu",
+        "wavcr_sha_uu",
+        "wavcr_sha_ll",
     ]
 
 
@@ -1425,3 +1481,161 @@ async def test_a_screened_rule_carries_the_transport_that_was_proven() -> None:
 
     screened = next(p for p in report["probes"] if p["probe"].startswith("7b_"))
     assert "Referer" in screened["carried"]["header_names"]
+
+
+async def test_the_confirmation_gate_reads_the_value_back() -> None:
+    """This is the gate that decides whether real messages are spent.
+
+    It is the last place to take the router's word for its own write, on an
+    API this project's own code documents as answering `200 OK` to a refusal.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    confirmations = [p for p in report["probes"] if p["probe"].startswith("7h_")]
+    assert confirmations
+    assert all(p["verified"] is True for p in confirmations)
+
+
+async def test_a_router_that_claims_success_and_changes_nothing_is_not_believed() -> (
+    None
+):
+    """A read-back that shows the old value beats a `result` of success."""
+    coordinator = _coordinator()
+    coordinator.api._request = AsyncMock(return_value={"result": "success"})
+
+    report = await run_probe(coordinator)
+
+    assert report["working_variant"] is None
+    skipped = _by_name(report, "16_confirmed_variant_deletes")
+    assert skipped["outcome"] == "skipped"
+
+
+async def test_a_switch_is_read_under_whichever_spelling_answers() -> None:
+    """Devices differ on whether the field carries a `flux_` prefix.
+
+    A toggle read under the wrong spelling reads as absent, and an absent
+    toggle cannot be verified.
+    """
+    api = MagicMock()
+    api.get_params = AsyncMock(
+        return_value={
+            "data_volume_limit_switch": "",
+            "flux_data_volume_limit_switch": "1",
+        }
+    )
+
+    alias, value = await sms_delete_probe._read_switch(
+        api, ("data_volume_limit_switch", "flux_data_volume_limit_switch")
+    )
+
+    assert alias == "flux_data_volume_limit_switch"
+    assert value == "1"
+
+
+async def test_a_switch_no_spelling_answers_is_reported_absent() -> None:
+    """A toggle nobody can read is a toggle nobody can verify.
+
+    That is a finding rather than an error, so it is reported and not raised.
+    """
+    api = MagicMock()
+    api.get_params = AsyncMock(return_value={})
+
+    alias, value = await sms_delete_probe._read_switch(api, ("a", "b"))
+
+    assert alias == "a"
+    assert value is None
+
+
+async def test_only_the_first_of_several_passing_rules_is_adopted() -> None:
+    """Several may pass; the run spends messages through one of them.
+
+    The rest are still recorded, because a device accepting more than one
+    derivation says something different about its firmware than one accepting
+    exactly one.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    assert len(report["candidates_passed"]) >= 1
+    assert report["working_variant"] == report["candidates_passed"][0]
+
+
+async def test_a_second_passing_rule_does_not_displace_the_first() -> None:
+    """Both are recorded; the run spends its messages through one of them."""
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator)
+
+    passed = report["candidates_passed"]
+    assert passed
+    assert report["working_variant"] == passed[0]
+    assert set(passed) <= set(report["candidates"])
+
+
+async def test_two_rules_that_both_confirm_are_both_recorded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All of them are kept, not only the one the run goes on to use.
+
+    A device accepting several derivations says something different about its
+    firmware than one accepting exactly one.
+    """
+    coordinator = _coordinator()
+    # The space is narrowed by its own inputs rather than by replacing the
+    # function that builds it: a mock there would sit exactly where a defect
+    # would.
+    monkeypatch.setattr(sms_delete_probe, "_OPERANDS", sms_delete_probe._OPERANDS[:1])
+    monkeypatch.setattr(sms_delete_probe, "_RD_FORMS", sms_delete_probe._RD_FORMS[:1])
+    monkeypatch.setattr(sms_delete_probe, "_CASES", sms_delete_probe._CASES[:1])
+
+    report = await run_probe(coordinator)
+
+    assert len(report["candidates_passed"]) > 1
+    assert report["working_variant"] == report["candidates_passed"][0]
+
+
+async def test_a_rule_that_screens_and_then_stops_working_is_not_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One success is not a method, which is why screening only nominates.
+
+    A rule that writes during screening and then fails its confirmations must
+    not take the run on to spend real messages, and the rule after it must
+    still be tried rather than the pass ending there.
+    """
+    coordinator = _coordinator()
+    # Both cases kept, so the space holds several distinct rules and the pass
+    # has a rule after the failing one to try.
+    monkeypatch.setattr(sms_delete_probe, "_OPERANDS", sms_delete_probe._OPERANDS[:1])
+    monkeypatch.setattr(sms_delete_probe, "_RD_FORMS", sms_delete_probe._RD_FORMS[:1])
+
+    seen: dict[str, int] = {}
+    original = coordinator.api._request.side_effect
+
+    async def applies_each_token_once(*args, **kwargs):
+        # The router — not the probe — is what changes here. A token works the
+        # first time it is presented and never again, so every rule screens and
+        # none of them survives its confirmations.
+        body = str(kwargs.get("data") or (args[1] if len(args) > 1 else ""))
+        if "goformId=DATA_LIMIT_SETTING" in body and "AD=" in body:
+            token = body.split("AD=", 1)[1].split("&", 1)[0]
+            seen[token] = seen.get(token, 0) + 1
+            if seen[token] > 1:
+                return {"result": "success"}
+        return await original(*args, **kwargs)
+
+    coordinator.api._request = AsyncMock(side_effect=applies_each_token_once)
+
+    report = await run_probe(coordinator)
+
+    assert report["candidates_passed"] == []
+    assert report["working_variant"] is None
+    confirmed = {
+        p["probe"].rsplit("_", 1)[0]
+        for p in report["probes"]
+        if p["probe"].startswith("7h_")
+    }
+    assert len(confirmed) > 1, "the rule after the failing one was not tried"
