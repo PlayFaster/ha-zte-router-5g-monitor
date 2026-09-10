@@ -5,8 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
+  - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
   - [\[3.3.18-dev1\] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back](#3318-dev1---2026-09-10---sms-probe-v5-every-write-changes-something-and-is-read-back)
+  - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
   - [\[3.3.17-dev7\] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened](#3317-dev7---2026-09-10---sms-probe-v4-the-carrier-is-found-before-the-token-space-is-screened)
   - [\[3.3.17-dev6\] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept](#3317-dev6---2026-09-10---sms-probe-v4-the-axes-crossed-and-every-attempt-kept)
   - [\[3.3.17-dev5\] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted](#3317-dev5---2026-09-10---sms-probe-v4-one-attempt-primitive-transport-becomes-an-axis-and-is-adopted)
@@ -262,22 +263,22 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.17] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe
+## [3.3.18] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space
 
 ### Summary
 
-- **Temporary SMS Deletion Diagnostic Probe V4**: Upgraded the diagnostic troubleshooting action (`zte_router_5g.sms_delete_probe`) to systematically screen authentication and write command execution across multiple independent axes (login method variants, HTTP transport headers and payload formats, and algorithmic write-token derivation rules).
-- **Adaptive Probe Session and Carrier Resolution**: Probe execution now dynamically adopts working login forms and verified HTTP request transports across subsequent test rungs, preserves detailed per-attempt request signatures in diagnostics downloads, and enforces strict single-use write token replenishment. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+- **Temporary SMS Deletion Diagnostic Probe V5**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to use state-modifying, self-reversing data volume toggle writes paired with post-write read-back verification, avoiding false refusals from firmware no-op rejections.
+- **Expanded Token Derivation & Carrier Screening**: Expanded the generated token derivation space to include alternate firmware version combinations (`wa_version`), three-round hashing, alternate nonces, additional login forms (`DEVELOPER_OPTION_LOGIN`), and distinct carrier configurations. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
 
 ### Added
 
-- **Multi-Axis Write Probe Architecture**: Diagnostic probe now evaluates twelve distinct login form structures, seven HTTP transport and carrier header configurations, and dynamically generated token formula spaces.
-- **Detailed Attempt Metadata**: Probe captures full structural metadata for all screened write attempts (HTTP method, query parameter encoding, header names, cookie names, and token length/casing) directly in diagnostics exports.
+- **Diagnostic Write Toggle and Read-Back Verification**: Test writes in `zte_router_5g.sms_delete_probe` now toggle the reversible `data_volume_limit_switch` setting and verify the actual router state via read-back rather than relying solely on HTTP 200 response codes, restoring the initial value upon completion.
+- **Expanded Candidate Derivation Space**: Added screening support for additional firmware version operands (`wa_version`), structural nonce placements, 3-round hash pipelines, alternative login modes, and night mode LED toggle commands.
 
 ### Changed
 
-- **Dynamic Probe Adaptation**: When an alternative login formulation or HTTP carrier succeeds, the diagnostic probe adopts the winning configuration for all subsequent write evaluations.
-- **Probe Timeout and Lockout Safety**: Extended diagnostic probe run ceiling to 10 minutes with strict pacing and outcome-based failure tracking to prevent router authentication lockouts.
+- **Cached Firmware Version Inputs**: Firmware version strings are cached once per probe run to eliminate redundant polling overhead across extensive formula screening passes.
+- **Extended Probe Timeout**: Increased the probe execution safety ceiling to 15 minutes to accommodate expanded multi-variant token evaluation.
 
 ## [3.3.18-dev1] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back
 
@@ -322,6 +323,23 @@ The reporter's Probe v4 download refused all 396 attempts across thirteen login 
 ### Verified
 
 - 1,571 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.17] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V4**: Upgraded the diagnostic troubleshooting action (`zte_router_5g.sms_delete_probe`) to systematically screen authentication and write command execution across multiple independent axes (login method variants, HTTP transport headers and payload formats, and algorithmic write-token derivation rules).
+- **Adaptive Probe Session and Carrier Resolution**: Probe execution now dynamically adopts working login forms and verified HTTP request transports across subsequent test rungs, preserves detailed per-attempt request signatures in diagnostics downloads, and enforces strict single-use write token replenishment. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+
+### Added
+
+- **Multi-Axis Write Probe Architecture**: Diagnostic probe now evaluates twelve distinct login form structures, seven HTTP transport and carrier header configurations, and dynamically generated token formula spaces.
+- **Detailed Attempt Metadata**: Probe captures full structural metadata for all screened write attempts (HTTP method, query parameter encoding, header names, cookie names, and token length/casing) directly in diagnostics exports.
+
+### Changed
+
+- **Dynamic Probe Adaptation**: When an alternative login formulation or HTTP carrier succeeds, the diagnostic probe adopts the winning configuration for all subsequent write evaluations.
+- **Probe Timeout and Lockout Safety**: Extended diagnostic probe run ceiling to 10 minutes with strict pacing and outcome-based failure tracking to prevent router authentication lockouts.
 
 ## [3.3.17-dev7] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened
 

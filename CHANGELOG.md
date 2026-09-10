@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.18] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V5**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to use state-modifying, self-reversing data volume toggle writes paired with post-write read-back verification, avoiding false refusals from firmware no-op rejections.
+- **Expanded Token Derivation & Carrier Screening**: Expanded the generated token derivation space to include alternate firmware version combinations (`wa_version`), three-round hashing, alternate nonces, additional login forms (`DEVELOPER_OPTION_LOGIN`), and distinct carrier configurations. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+
+### Added
+
+- **Diagnostic Write Toggle and Read-Back Verification**: Test writes in `zte_router_5g.sms_delete_probe` now toggle the reversible `data_volume_limit_switch` setting and verify the actual router state via read-back rather than relying solely on HTTP 200 response codes, restoring the initial value upon completion.
+- **Expanded Candidate Derivation Space**: Added screening support for additional firmware version operands (`wa_version`), structural nonce placements, 3-round hash pipelines, alternative login modes, and night mode LED toggle commands.
+
+### Changed
+
+- **Cached Firmware Version Inputs**: Firmware version strings are cached once per probe run to eliminate redundant polling overhead across extensive formula screening passes.
+- **Extended Probe Timeout**: Increased the probe execution safety ceiling to 15 minutes to accommodate expanded multi-variant token evaluation.
+
+---
+
 ## [3.3.17] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe
 
 ### Summary
@@ -646,6 +665,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
   - [\[3.3.16\] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas](#3316---2026-09-08---release-multi-key-session-validation-and-sms-probe-v3-token-formulas)
   - [\[3.3.15\] - 2026-09-08 - Release: SMS Delete Probe V2 Token Step Isolation](#3315---2026-09-08---release-sms-delete-probe-v2-token-step-isolation)
