@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.20-dev5\] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic](#3320-dev5---2026-09-11---browser-write-capture-a-tool-outside-the-repository-and-the-first-verified-token-arithmetic)
   - [\[3.3.20-dev4\] - 2026-09-11 - Sweep Exemption Verified, Bundle List Corrected, Hardware Check Improved](#3320-dev4---2026-09-11---sweep-exemption-verified-bundle-list-corrected-hardware-check-improved)
   - [\[3.3.20-dev3\] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send](#3320-dev3---2026-09-11---sms-probe-v7-the-capture-made-fit-to-send)
   - [\[3.3.20-dev2\] - 2026-09-11 - SMS Probe V7: Three Probe Actions, and the Full Source Capture](#3320-dev2---2026-09-11---sms-probe-v7-three-probe-actions-and-the-full-source-capture)
@@ -101,7 +102,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -159,7 +160,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -167,7 +168,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -269,6 +270,43 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.20-dev5] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic
+
+### Summary
+
+No code in this repository changed. This entry records a diagnostic tool built and rehearsed for issue #56 that is delivered to the reporter directly rather than shipped, and the findings it produced on the reference MC7010 — which include the first arithmetic confirmation of the write token against a real, successful delete.
+
+It is recorded because the findings bear on core code, because the tool will be referred to in the issue thread, and because a later reader will otherwise find measurements in the notes with no account of where they came from.
+
+### Added, outside the repository
+
+- **A browser capture tool, in two forms.** A commented JavaScript source file and a one-line bookmarklet built from it. It wraps `XMLHttpRequest` — which is what the router's jQuery uses — records requests to `goform_set_cmd_process`, and presents a small panel with a count and a download button. The reporter needs no developer tools: the bookmarklet is added as a bookmark and clicked on the router's page.
+
+- **Version 2 adds the token inputs.** The first version captured the write but not the `RD` value the token was built from, and `RD` is single-use, so the arithmetic could not be checked. Version 2 keeps the recent reads whose requested values are all on a fixed eight-name allow-list of version and token fields, attaches the most recent of them to each write, and records the page's `rd0`, `rd1`, whether `hex_md5` and `hex_sha256` are defined, and the firmware flags from the loader's `config/config` module.
+
+### Findings
+
+- **The write token is confirmed arithmetically.** From the capture's own values — `rd0 = IRL_H3G_MC7010DV1.0.0B03`, `rd1` empty, `RD = 92a9cd16cee3a478c0c2cffa014587ee` — `md5(md5(rd0 + rd1) + RD)` reproduces the `AD` the browser sent, `2f8c7ec23453048dace22de19bdf934e`, on a delete the router answered with `{"result":"success"}`. Everything before this was inference from minified source; this is the digest matching the one the device accepted.
+
+- **`RD` is re-read immediately before each write.** The captured read precedes its write by 21 milliseconds.
+
+- **The browser's delete form differs from the integration's in three respects**, each previously inferred and now measured: the message id carries a trailing semicolon, `notCallback=true` is present, and `AD` is the last field rather than the fourth. The headers add `X-Requested-With: XMLHttpRequest` and `charset=UTF-8`. No bank selector is sent, confirming what `_record_delete` documents as an assumption.
+
+- **The firmware states how it wants to be authenticated.** `require("config/config")` on the live page returns `ACCESSIBLE_ID_SUPPORT: true`, `LOGIN_SECURITY_SUPPORT: true`, `MAX_LOGIN_COUNT: 5`, `PASSWORD_ENCODE: true`, `PASSWORD_ENCODE_SHA256: true` and `WEB_ATTR_IF_SUPPORT_SHA256: 2`. The same values are in `js/config/config.js`, which the probe's crawl already downloads, so they are reachable without a browser. This bears directly on `_ad_hash_func`, which selects MD5 or SHA-256 by testing whether the model string contains `MC888` or `MC889` — a guess where the firmware supplies an answer. `WEB_ATTR_IF_SUPPORT_SHA256` reads `2` on a device that uses MD5, so the meaning of its values is not yet established and needs a second device before it can be relied on.
+
+### Verified
+
+- Rehearsed on the MC7010 against the live router. The capture records a write with its body, status, response and response headers; it pairs the preceding `cmd=RD` read with it; and it reports the page globals and firmware flags.
+- A read for `sms_data_total,sms_unread_num` was fired during the rehearsal and confirmed absent from the capture: a read is kept only when every value it asks for is on the allow-list, so message data is excluded rather than filtered.
+- A request carrying a marker password was fired and confirmed absent: login requests are dropped before anything is stored.
+- Running the tool twice returns "Already armed" rather than wrapping the request machinery a second time. A single arm on a clean page records one request per request.
+
+### Known Issues
+
+- Cookies, `Referer`, `Origin` and `User-Agent` cannot be captured: the browser sets them after the hook runs. `Origin` is the most consequential — a firmware requiring it on writes would refuse Home Assistant every time while the captured and sent requests looked identical in every comparable field.
+- The rehearsal could not produce an authenticated write. Every write sent during it was unauthenticated and drew `{"result":"failure"}`; the successful captures came from the maintainer operating the web interface directly.
+- A first bookmarklet build replaced the page with the tool's return string, a `javascript:` URL evaluating to a value being treated as a document. The body is now wrapped in `void`. The rehearsal had only ever run the collapsed body through the debugger, where a return value is discarded, so the one path that mattered was the one not exercised.
 
 ## [3.3.20-dev4] - 2026-09-11 - Sweep Exemption Verified, Bundle List Corrected, Hardware Check Improved
 
