@@ -32,6 +32,7 @@ from custom_components.zte_router_5g.sms_delete_probe import (
     ACTION_CONFIRM,
     ACTION_FULL,
     BAD_TOKEN,
+    _captures,
     _resolve,
     run_probe,
 )
@@ -2193,3 +2194,41 @@ async def test_the_model_specific_directory_is_fetched() -> None:
 def test_a_reference_with_no_name_left_is_dropped() -> None:
     """`js/config/` names a directory, and `.js` is not a file."""
     assert _resolve("js/config/") is None
+
+
+async def test_the_token_operand_read_survives_a_device_that_answers_one_key() -> None:
+    """Three of the four version keys are unanswered on the reference device.
+
+    Without `requested=`, the session classifier sees a mostly-empty reply,
+    judges the session expired and the rung raises — reporting nothing about
+    the one question it exists to answer.
+    """
+    coordinator = _coordinator()
+
+    report = await run_probe(coordinator, ACTION_CAPTURE)
+
+    record = _by_name(report, "24c_token_operands")
+    assert record["outcome"] == "returned"
+    assert "cr_version_answered" in record["result"]
+
+
+async def test_the_crawl_is_seeded_from_the_static_list_too() -> None:
+    """An index that names no scripts is the fault this probe exists for.
+
+    Four downloads from the device of issue #56 reported exactly that, so a
+    crawl starting only from what the index declares starts there from nothing.
+    """
+    coordinator = _coordinator()
+    coordinator.api.session.get = lambda url, **_kw: _FakeGet(
+        url.replace("index.html", "empty.html")
+    )
+
+    report = await run_probe(coordinator, ACTION_CAPTURE)
+
+    assert "js/service.js" in report["source_capture"]["sources"]
+
+
+def test_a_marker_captured_fewer_than_four_times_ends_the_scan() -> None:
+    """The bound exists for a marker that occurs throughout a bundle."""
+    assert len(_captures("a X b X c", "X")) == 2
+    assert len(_captures("X" * 10, "X")) == 4

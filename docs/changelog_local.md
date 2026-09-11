@@ -5,7 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.20-dev2\] - 2026-09-11 - SMS Probe V7: A Three option Action, and the Routers Own Source Captured Whole](#3320-dev2---2026-09-11---sms-probe-v7-a-three-option-action-and-the-routers-own-source-captured-whole)
+  - [\[3.3.20-dev3\] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send](#3320-dev3---2026-09-11---sms-probe-v7-the-capture-made-fit-to-send)
+  - [\[3.3.20-dev2\] - 2026-09-11 - SMS Probe V7: Three Probe Actions, and the Full Source Capture](#3320-dev2---2026-09-11---sms-probe-v7-three-probe-actions-and-the-full-source-capture)
   - [\[3.3.20-dev1\] - 20206-09-11 - CI Bump Ruff](#3320-dev1---20206-09-11---ci-bump-ruff)
   - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
   - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-that-could-not-report-what-they-measured)
@@ -99,7 +100,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -157,7 +158,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -165,7 +166,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -268,7 +269,36 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.20-dev2] - 2026-09-11 - SMS Probe V7: A Three option Action, and the Routers Own Source Captured Whole
+## [3.3.20-dev3] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send
+
+### Summary
+
+The first `confirm` run on the reference MC7010 produced a download carrying the router's own source, and reading it showed three faults in how that source is captured and published, plus one rung that never ran. All four would have cost a round trip with the reporter of issue #56, which is what this probe exists to avoid.
+
+### Fixed
+
+- **The token-operand rung never ran.** `24c` reads four version keys in one request. Three of them are unanswered on the reference device, so `_classify_session` judged the reply an expired session and the rung raised `ZTEAuthError` instead of reporting. The read itself had succeeded, and its payload was visible in the rejection record. It now passes `requested=`, so the absent-key guard knows which names were asked for. This is the one rung whose answer could change what gets fixed in `get_ad`, which derives the write token from `wa_inner_version` alone — correct only where `cr_version` is unanswered.
+
+- **The diagnostics sanitizer rewrote the captured firmware.** `_sanitize_walk` sweeps every string in the probe report, and the report now carries the scripts the router serves. On the reference device the literal `"0.0.0.0"` in `js/service.js` was published as `"ip-7"`. These files are firmware, identical on every unit of a build, and carry nothing belonging to whoever ran the probe; sweeping them alters the code the capture exists to preserve. `source_capture.sources` is now exempt and flagged as such with `sources_are_unswept`. Everything else in the report, the file list included, is swept as before.
+
+- **The capture was published twice.** The report is persisted into the config entry so it survives a restart, and it is also published under `sms.delete_probe`. Both were rendered, at 190 KB each, taking one download to 658 KB — and because the two went through different sanitizing paths, they differed. The entry copy no longer carries it.
+
+- **The crawl started from what the index declares.** The device of issue #56 reported "index: no scripts named" on four downloads, so a crawl seeded only from the index starts there from nothing. It is now seeded from `const.JS_BUNDLES` as well. On the reference device this immediately surfaced `js/statusBar.js` as a listed file the router does not serve — the path in the static list is wrong, the real one being `js/status/statusBar.js` — which four downloads had skipped silently.
+
+### Changed
+
+- **Crawl budget raised from 60 files to 90.** The reference MC7010 used 45. The MC888 Pro runs a later and larger web UI that has never been measured, and a crawl capped part-way through returns a partial answer to a question that costs a round trip to ask again.
+
+### Verified
+
+- Rehearsed against the MC7010. `24c` returns rather than raising: `cr_version` empty, `wa_inner_version` and `hardware_version` answered. The crawl fetched 45 files, returned 17, and was not capped.
+- 1,609 tests, 100% line and branch coverage on `sms_delete_probe.py` — including the `_captures` bound, which was the one partial branch left by `[3.3.20-dev2]`. Ruff, ruff format, mypy `--strict`, McCabe, test depth and assertion audit clean.
+
+### Known Issues
+
+- `Hardware: Check Device` fails one assertion, "six-field form accepted and applied". The reference device's `data_volume_limit_switch` currently reads `0`, and the firmware ignores a size change while the limit is disabled. Device state, not a code fault.
+
+## [3.3.20-dev2] - 2026-09-11 - SMS Probe V7: Three Probe Actions, and the Full Source Capture
 
 ### Summary
 

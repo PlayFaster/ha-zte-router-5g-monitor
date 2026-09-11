@@ -457,3 +457,75 @@ def test_the_write_failure_sweep_reaches_every_string_at_any_depth() -> None:
     # Non-strings are returned untouched, not stringified.
     assert walked["status"] == 200
     assert walked["session_was_fresh"] is True
+
+
+# --------------------------------------------------------------------------
+# The probe's captured source
+# --------------------------------------------------------------------------
+
+# An address-shaped literal in firmware the router serves to anyone. Sweeping
+# it rewrites the code rather than protecting anybody: on the reference MC7010
+# `"0.0.0.0"` in `js/service.js` was recorded as `"ip-7"`.
+FIRMWARE_SOURCE = 'function t(e){return""==e||"0.0.0.0"==e||"::0"==e}'
+
+
+@pytest.fixture
+def entry_with_a_capture(diagnostics_entry):
+    """A config entry whose probe report carries captured router source."""
+    probe = {
+        "action": "confirm",
+        "completed": True,
+        "probes": [],
+        "source_capture": {
+            "files": {"js/service.js": {"status": 200, "bytes": 51}},
+            "sources": {"js/service.js": FIRMWARE_SOURCE},
+        },
+    }
+    diagnostics_entry.runtime_data.api.delete_probe = probe
+    object.__setattr__(
+        diagnostics_entry,
+        "data",
+        {**dict(diagnostics_entry.data), "delete_probe": probe},
+    )
+    return diagnostics_entry
+
+
+async def test_captured_router_source_is_published_unaltered(
+    entry_with_a_capture,
+) -> None:
+    """The capture exists to be read as source; a sweep would corrupt it.
+
+    These are firmware files, identical on every unit of a build, carrying no
+    value belonging to whoever ran the probe.
+    """
+    result = await async_get_config_entry_diagnostics(None, entry_with_a_capture)
+
+    capture = result["sms"]["delete_probe"]["source_capture"]
+    assert capture["sources"]["js/service.js"] == FIRMWARE_SOURCE
+    assert capture["sources_are_unswept"] is True
+
+
+async def test_a_probe_without_a_capture_is_still_swept(diagnostics_entry) -> None:
+    """The exemption is for the captured source, not for the report."""
+    diagnostics_entry.runtime_data.api.delete_probe = {
+        "completed": True,
+        "probes": [{"probe": "1_token_rotation", "note": FAKE_WAN_IP}],
+    }
+
+    rendered = await _render(diagnostics_entry)
+
+    assert FAKE_WAN_IP not in rendered
+
+
+async def test_the_capture_is_not_published_twice(entry_with_a_capture) -> None:
+    """The capture is published once, under `sms`.
+
+    It is persisted into the entry so it survives a restart, and published
+    under `sms` too. Carrying both doubled a download once the probe began
+    returning the router's own source, and the two copies were sanitized by
+    different paths, so they differed.
+    """
+    result = await async_get_config_entry_diagnostics(None, entry_with_a_capture)
+
+    assert "delete_probe" not in result["entry"]["data"]
+    assert "source_capture" in result["sms"]["delete_probe"]

@@ -505,7 +505,11 @@ _LIB_PREFIX = "js/lib/"
 
 # The crawl, capped. A loader can name a great many files and a slow router
 # turns that into a timeout.
-_MAX_CRAWL_FILES = 60
+# Ninety rather than sixty: the reference MC7010 used 43, and the MC888 Pro's
+# web UI is a later and larger one that has never been measured. A crawl capped
+# part-way through returns a partial answer to a question that costs a round
+# trip with the reporter to ask again.
+_MAX_CRAWL_FILES = 90
 _MAX_CRAWL_BYTES = 3_000_000
 _MAX_RETURN_BYTES = 400_000
 
@@ -601,7 +605,11 @@ async def _crawl(api: Any) -> dict[str, Any]:
     there so two devices' downloads can be compared without diffing a
     megabyte, and so a truncated body is visible as such.
     """
-    queue: list[str] = ["index.html", "js/main.js"]
+    # Seeded from the static list as well as the index. Four downloads from
+    # the MC888 Pro of issue #56 reported "index: no scripts named", so a crawl
+    # that starts only from what the index declares starts, on that device,
+    # from nothing.
+    queue: list[str] = ["index.html", "js/main.js", *JS_BUNDLES]
     seen: set[str] = set()
     files: dict[str, Any] = {}
     sources: dict[str, str] = {}
@@ -1687,10 +1695,16 @@ async def _capture_stage(
         firmware only where `cr_version` is unanswered, which is true of the
         reference device and need not be true here.
         """
+        keys = ["cr_version", "wa_inner_version", "wa_version", "hardware_version"]
+        # `requested=` so the session guard knows which names were asked for.
+        # Without it, a device that answers one of four — which is this
+        # reference device, three of them being unanswered here — is judged to
+        # have an expired session and the rung raises instead of reporting.
         answer = await api._request(  # noqa: SLF001
             "GET",
-            "goform/goform_get_cmd_process?isTest=false&multi_data=1"
-            "&cmd=cr_version,wa_inner_version,wa_version,hardware_version",
+            "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd="
+            + ",".join(keys),
+            requested=keys,
             _retry=False,
         )
         cr = str(answer.get("cr_version") or "")

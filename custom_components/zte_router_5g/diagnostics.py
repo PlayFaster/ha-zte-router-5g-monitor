@@ -29,7 +29,7 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
@@ -229,6 +229,21 @@ def _sanitize_sms(block: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any
         else:
             clean[key] = value
     return clean
+
+
+def _entry_data_without_probe(entry: ConfigEntry) -> dict[str, Any]:
+    """The stored entry data, less the probe report.
+
+    The report is persisted into the entry so it survives a restart, and it is
+    already published under `sms.delete_probe`. Carrying it twice doubled a
+    download to 658 KB once the probe began returning the router's own source,
+    and the two copies were sanitized by different paths, so they differed.
+    """
+    return {
+        key: value
+        for key, value in deepcopy(dict(entry.data)).items()
+        if key != "delete_probe"
+    }
 
 
 def _sanitize_payload(data: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
@@ -490,7 +505,7 @@ def _sms_section(
         # The probe's findings, when the temporary diagnostic action has been
         # run. Absent otherwise.
         "delete_probe": (
-            _sanitize_walk(probe, tokenizer) if isinstance(probe, dict) else None
+            _sanitize_probe(probe, tokenizer) if isinstance(probe, dict) else None
         ),
     }
 
@@ -551,7 +566,7 @@ async def async_get_config_entry_diagnostics(
     entry_data = (
         _guarded(
             "entry.data",
-            lambda: _sanitize_payload(deepcopy(dict(entry.data)), tokenizer),
+            lambda: _sanitize_payload(_entry_data_without_probe(entry), tokenizer),
             errors,
         )
         or {}
@@ -887,6 +902,37 @@ def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]
             for note in out["notes"]
         ]
     return out
+
+
+def _sanitize_probe(probe: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
+    """Sweep the probe report, leaving the captured source untouched.
+
+    `source_capture.sources` holds the scripts the router serves to anyone who
+    opens its address. They are firmware, identical on every unit of a build,
+    and carry no value belonging to the person who ran the probe. Sweeping them
+    rewrites the code itself: an address-shaped literal in the router's own
+    JavaScript — `"0.0.0.0"` in `js/service.js` on the reference device —
+    becomes a token, and the capture then differs from what the router sent.
+    The capture exists to be read as source, so it is exempted rather than
+    swept.
+
+    Everything else in the report is swept as before, including the file list,
+    whose paths and digests are ours rather than the device's.
+    """
+    capture = probe.get("source_capture")
+    sources = capture.get("sources") if isinstance(capture, dict) else None
+    if not isinstance(sources, dict):
+        return cast("dict[str, Any]", _sanitize_walk(probe, tokenizer))
+    without = {key: value for key, value in probe.items() if key != "source_capture"}
+    clean = cast("dict[str, Any]", _sanitize_walk(without, tokenizer))
+    files = capture.get("files", {}) if isinstance(capture, dict) else {}
+    clean["source_capture"] = {
+        "files": _sanitize_walk(files, tokenizer),
+        # Verbatim. See the docstring.
+        "sources": deepcopy(sources),
+        "sources_are_unswept": True,
+    }
+    return clean
 
 
 def _sanitize_walk(value: Any, tokenizer: _Tokenizer) -> Any:
