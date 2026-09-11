@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.19] - 2026-09-10 - Release: Web UI Client Inspection and Browser-Aligned Diagnostic Probing
+## [3.3.19] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing
 
 ### Summary
 
@@ -684,6 +684,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
   - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
   - [\[3.3.16\] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas](#3316---2026-09-08---release-multi-key-session-validation-and-sms-probe-v3-token-formulas)
