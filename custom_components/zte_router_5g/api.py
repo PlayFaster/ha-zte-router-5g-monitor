@@ -864,6 +864,10 @@ class ZTERouterAPI:
         # what was answered, and which ids survived is the only evidence a
         # download can carry — see `_record_delete`.
         self.last_delete: dict[str, Any] | None = None
+        # `(wa_inner_version, cr_version)`. The second half of the write
+        # token's first operand, read once and held against the version it
+        # belongs to. See `get_cr_version`.
+        self._cr_version_cache: tuple[str, str] | None = None
         # Every delete attempt, including the ones that raised. `last_delete`
         # holds only the most recent and only when the request returned; a
         # refused delete raises inside `_request`, so the record that mattered
@@ -3108,7 +3112,17 @@ class ZTERouterAPI:
                 "firmware version. The command was not sent."
             )
         hash_func = self._ad_hash_func(version)
-        a = hash_func(version)
+        # Both operands. The router's own client computes `hash(rd0 + rd1)`,
+        # where `rd0` is `wa_inner_version` and `rd1` is `cr_version` — read
+        # from `js/service.js` on both devices this project can measure, and
+        # confirmed against a capture of a successful delete on the MC888 Pro
+        # of issue #56, whose accepted token reproduces only with both.
+        #
+        # Devices that do not answer `cr_version`, the reference MC7010 among
+        # them, append an empty string and derive exactly the token they
+        # derived before.
+        cr_version = await self.get_cr_version(version, timeout_sec=timeout_sec)
+        a = hash_func(version + cr_version)
         rd = await self.get_rd(timeout_sec=timeout_sec)
         if not rd:
             # The other half of the check above, missed when it was added.
@@ -3168,6 +3182,48 @@ class ZTERouterAPI:
             return None
         hash_func = self._ad_hash_func(version)
         return hash_func(hash_func(version) + rd)
+
+    async def get_cr_version(
+        self, version: str | None = None, timeout_sec: int | None = None
+    ) -> str:
+        """The `cr_version` half of the write token's first operand.
+
+        Static per firmware, so it is read once and kept against the version
+        string it was read with: a firmware update changes both, and pairing
+        them means the cache cannot outlive what it describes. `version` is
+        passed in by callers that have already read it, so deriving a token
+        costs one extra request on the first write after a firmware change and
+        none thereafter.
+
+        Absent on some devices — the reference MC7010 lists it under
+        `probed_no_answer` — and an absent value is the empty string, which is
+        what the router's own client concatenates in that case.
+
+        A read that *fails* is a different matter and is allowed to raise. The
+        two outcomes look alike and are not: an answered-but-empty value gives
+        the right token on a device without a `cr_version`, while a failed read
+        would give a single-operand token on a device that has one — which is
+        precisely the fault this pair of operands exists to fix. Failing the
+        write is better than sending one the router will refuse.
+        """
+        if version is not None and self._cr_version_cache:
+            if self._cr_version_cache[0] == version:
+                return self._cr_version_cache[1]
+        # Both keys in one request when the caller has no version to hand, the
+        # way the router's own client reads them. `get_version` is not reused
+        # here: it answers `None` on a dead session instead of raising, which
+        # would turn an unreachable router into an empty operand and a
+        # well-formed token the router refuses.
+        cmd = "cr_version" if version is not None else "wa_inner_version,cr_version"
+        path = "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd=" + cmd
+        data = await self._request(
+            "GET", path, timeout_sec=timeout_sec, authenticated=False
+        )
+        if version is None:
+            version = cast(str, data.get("wa_inner_version", "") or "")
+        cr_version = cast(str, data.get("cr_version", "") or "")
+        self._cr_version_cache = (version, cr_version)
+        return cr_version
 
     async def get_rd(self, timeout_sec: int | None = None) -> str:
         """Get the RD parameter for AD generation."""
@@ -3392,21 +3448,28 @@ class ZTERouterAPI:
         missing: list[str] = []
 
         for field, aliases in self.DATA_VOLUME_FIELDS.items():
-            if field in changes:
-                payload_fields[field] = str(changes[field])
-                continue
-            value = next(
+            # Write the spelling this device answers, not the canonical one.
+            # `DATA_LIMIT_SETTING` replaces the whole form and the router
+            # refuses a payload whose field names it does not recognise, so a
+            # device using the `flux_` spellings — the MC888 Pro of issue #56
+            # answers those and leaves the unprefixed names empty — was being
+            # sent a form it could never accept, however correct the token.
+            answered = next(
                 (
-                    current[key]
+                    key
                     for key in aliases
                     if key in current and current[key] not in ("", None)
                 ),
                 None,
             )
-            if value is None:
+            name = answered or field
+            if field in changes:
+                payload_fields[name] = str(changes[field])
+                continue
+            if answered is None:
                 missing.append(field)
             else:
-                payload_fields[field] = str(value)
+                payload_fields[name] = str(current[answered])
 
         if missing:
             raise ZTEConnectionError(

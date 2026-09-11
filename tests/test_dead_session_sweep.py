@@ -105,6 +105,7 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     "get_sms_messages": (),
     "get_ad": (),
     "get_rd": (),
+    "get_cr_version": (),
     "reboot": (),
     "delete_sms": ("1",),
     "delete_all": (),

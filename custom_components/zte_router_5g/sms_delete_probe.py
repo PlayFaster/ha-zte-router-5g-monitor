@@ -39,6 +39,7 @@ import hashlib
 import re
 from copy import deepcopy
 from datetime import UTC, datetime
+from itertools import islice
 from time import monotonic
 from typing import TYPE_CHECKING, Any, cast
 
@@ -410,6 +411,10 @@ _MARKERS: tuple[str, ...] = (
 # the download.
 _CAPTURE_WINDOW = 700
 
+# Occurrences kept per marker. A marker used throughout a bundle would
+# otherwise dominate the download.
+_MAX_CAPTURES = 4
+
 # Bundles fetched in one run, and bytes read from each. A module loader can
 # name a great many, and a probe that reads all of them on a slow router is a
 # probe that times out.
@@ -701,14 +706,16 @@ def _which_cgi_values(text: str) -> set[str]:
 
 
 def _captures(text: str, marker: str) -> list[str]:
-    """The source around each occurrence of a marker, bounded."""
-    out: list[str] = []
-    for match in re.finditer(re.escape(marker), text):
-        start = max(0, match.start() - _CAPTURE_WINDOW)
-        out.append(text[start : match.start() + _CAPTURE_WINDOW])
-        if len(out) >= 4:
-            break
-    return out
+    """The source around each occurrence of a marker, bounded.
+
+    `islice` rather than a counter and a `break`: the bound is the same, and
+    the loop has one exit instead of two, which the branch coverage can see
+    without depending on which tracing core measures it.
+    """
+    return [
+        text[max(0, match.start() - _CAPTURE_WINDOW) : match.start() + _CAPTURE_WINDOW]
+        for match in islice(re.finditer(re.escape(marker), text), _MAX_CAPTURES)
+    ]
 
 
 def _fields_for(text: str, goform_id: str) -> list[str]:

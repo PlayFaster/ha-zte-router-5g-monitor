@@ -6,6 +6,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
   - [\[3.3.20\] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions](#3320---2026-09-11---probe-v7-release-diagnostic-source-crawl-and-tiered-probing-actions)
+  - [\[3.3.21-dev1\] - 2026-09-11 - The Write Token Carries Both Operands: The Cause of Issue #56](#3321-dev1---2026-09-11---the-write-token-carries-both-operands-the-cause-of-issue-56)
   - [\[3.3.20-dev5\] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic](#3320-dev5---2026-09-11---browser-write-capture-a-tool-outside-the-repository-and-the-first-verified-token-arithmetic)
   - [\[3.3.20-dev4\] - 2026-09-11 - Sweep Exemption Verified, Bundle List Corrected, Hardware Check Improved](#3320-dev4---2026-09-11---sweep-exemption-verified-bundle-list-corrected-hardware-check-improved)
   - [\[3.3.20-dev3\] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send](#3320-dev3---2026-09-11---sms-probe-v7-the-capture-made-fit-to-send)
@@ -288,6 +289,40 @@ All changes to this project will be documented in this file. This is the detaile
 
 - **Crawl Budget and Bundle Path Corrections**: Expanded the discovery fetch ceiling to 90 files and updated static script locations to resolve bundle paths across varied ZTE firmware layouts.
 - **Diagnostics Sanitizer Integrity**: Captured router firmware source scripts are preserved intact during diagnostics export generation, with verification flags ensuring accurate reporting.
+
+## [3.3.21-dev1] - 2026-09-11 - The Write Token Carries Both Operands: The Cause of Issue #56
+
+### Summary
+
+The write token was derived from one operand where the firmware uses two. On a device that answers `cr_version` the resulting token is well formed and wrong, so every write of every kind is refused while every read succeeds. That is the fault behind [issue #56](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues/56), and it is ours.
+
+The evidence is a capture of the reporter's own web interface deleting a message successfully. His router's accepted `AD` reproduces from his firmware strings and the nonce it was built with, and only with both operands.
+
+### Fixed
+
+- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version` — read from `js/service.js` on both devices this project can measure. The reporter's MC888 Pro answers `cr_version` as `CR_ABPLMC888PROV1.0.1B04`; this integration never read that key at all, and sent `hash(hash(wa_inner_version) + RD)`. The reference MC7010 does not answer it, so the operand appends an empty string there and the digest is byte-identical to what shipped before.
+
+- **`DATA_LIMIT_SETTING` is written with the field names the device answers.** The form is all-or-nothing and the router refuses a payload whose names it does not recognise. The `flux_` spellings were read through the alias tuples and then discarded, every write going out under the canonical names. The reporter's device answers only the `flux_` spellings, and its own client builds that form from `flux_data_volume_limit_size`, `flux_clear_date`, `flux_limited_disconnect` and their siblings — so its data-limit form could never have been accepted, whatever the token.
+
+### Added
+
+- **`get_cr_version`**, which reads the key once per firmware and caches it against the `wa_inner_version` it was read with. A caller that already holds the version passes it in, so deriving a token costs one extra request on the first write after a firmware change and none after that.
+
+### Changed
+
+- **A failed `cr_version` read stops the write rather than degrading it.** Answered-and-empty and unreadable look alike and are not: the first gives the correct token on a device without a `cr_version`, the second would give a single-operand token on a device that has one — the fault above. `get_version` is deliberately not reused inside the new reader, because it answers `None` on a dead session rather than raising.
+
+### Verified
+
+- The derivation is pinned by fixtures built from two tokens the routers themselves accepted: the MC888 Pro's `3D4B9F8C…B15DD51B` over SHA-256 uppercased with both operands, and the MC7010's `2f8c7ec2…e19bdf934e` over MD5 with an empty second operand. Both reproduce exactly.
+- Rehearsed against the reference MC7010: `cr_version` reads empty, the token remains a 32-character MD5, and a live `DATA_LIMIT_SETTING` write moved the alert percentage from 81 to 80 and restored it.
+- The dead-session sweep required the new method to raise rather than return a default; that requirement found the `get_version` masking described above.
+- 1,615 tests. `_captures` was rewritten around `islice` so its bound has one loop exit rather than two, restoring 100% branch coverage under the `ctrace` core that CI uses.
+
+### Known Issues
+
+- Whether this resolves issue #56 is unconfirmed. The reporter's device has never been sent a `DELETE_SMS` carrying a correct token: the probe's token sweep screened every candidate through a `DATA_LIMIT_SETTING` form his firmware rejects on its field names, and the delete rungs all used the shipped single-operand token, so the two halves never met.
+- The temporary SMS probe is untouched and still carries its own screening flaw.
 
 ## [3.3.20-dev5] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic
 

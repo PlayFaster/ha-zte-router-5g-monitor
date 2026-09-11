@@ -1,6 +1,6 @@
 # Project Complexity & Health: ha-zte-router-5g-monitor
 
-**Last Measured:** 2026-09-11T15:22:45.456662+00:00 · **Release:** `3.3.20` · **Dev Version:** `3.3.20-dev4`
+**Last Measured:** 2026-09-11T17:51:54.090228+00:00 · **Release:** `3.3.20` · **Dev Version:** `3.3.20`
 
 ## 1. Executive Summary
 
@@ -25,9 +25,9 @@
 | **Core Engine / Driver SLOC** | **7,577 lines** | Across 14 coordinator/API/helper files |
 | **Static Entities** | **121 entities** | Scale indicator (`all_sensors.md`) |
 | **Platform SLOC / Entity** | **24.8 lines/entity** | Target 20 – 45 lines/entity declarative efficiency |
-| **Test-to-Source Ratio** | **1.37×** | 14,520 test lines ($\ge 1.5×$ recommended) |
+| **Test-to-Source Ratio** | **1.37×** | 14,521 test lines ($\ge 1.5×$ recommended) |
 | **Pytest Coverage** | **99%** | 1611 tests executed |
-| **Pytest Duration** | **366.04s** | Full test suite wall-clock execution time |
+| **Pytest Duration** | **395.43s** | Full test suite wall-clock execution time |
 
 ## 2. High Complexity Routines ($\ge 10$)
 
