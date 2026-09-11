@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.20-dev2\] - 2026-09-11 - SMS Probe V7: A Three option Action, and the Routers Own Source Captured Whole](#3320-dev2---2026-09-11---sms-probe-v7-a-three-option-action-and-the-routers-own-source-captured-whole)
   - [\[3.3.20-dev1\] - 20206-09-11 - CI Bump Ruff](#3320-dev1---20206-09-11---ci-bump-ruff)
   - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
   - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-that-could-not-report-what-they-measured)
@@ -266,6 +267,45 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.20-dev2] - 2026-09-11 - SMS Probe V7: A Three option Action, and the Routers Own Source Captured Whole
+
+### Summary
+
+Six probe versions decided in advance what was worth extracting from the router's web client, and each one answered the questions chosen before it ran. The question that mattered was outside every window: where the firmware assigns the globals its write token is built from. Version 7 stops mining and returns the source.
+
+The run is also split. The write ladder consumes most of a fifteen-minute budget and can exhaust a router's login attempts; the capture needs neither. Held in one run, the cheap stage could be lost to a failure in the expensive one.
+
+### Added
+
+- **`action` on `zte_router_5g.sms_delete_probe`, defaulting to `capture`.** `capture` is read-only and runs the source crawl, the token-operand read and the existing marker mining. `confirm` adds the write rungs that are few enough to read back individually — rungs 3 to 7, the fourteen transports, the browser-aligned forms and the session proof. `full` is every rung the module has ever carried, including the 1,548-rule token sweep, the nineteen login variants, the crossed axes and the real-message delete ladder. Nothing was removed; the expensive stages are switched off rather than deleted.
+
+- **The capture runs first and is persisted before any write is attempted.** A lockout or a timeout in a later stage can no longer cost the one stage expected to return something new.
+
+- **Rung `24a`, a transitive source crawl.** References are followed to a fixed point rather than read from any single declaration: `<script src>`, `data-main`, `require.config` `paths`, `define` and `require` dependency arrays, `shim` lists, and path-shaped string literals in the router's own files. Aliases resolve through the loader's own `paths` map. Third-party libraries are followed for the modules they name but not returned. Each file carries its HTTP status, byte count and SHA-256, and a listed file that is not served is reported rather than skipped.
+
+- **The model-specific module directory.** `DEVICE:"cpe/MF253V"` in the served config names a directory the loader composes at runtime; nothing refers to those files by name, so no amount of reference-following reaches them. They are now derived from that literal.
+
+- **Rung `24b`, the `rd0`/`rd1` assignment sites**, extracted verbatim with 300 bytes either side.
+
+- **Rung `24c`, whether the device answers `cr_version`.** `get_ad` derives the write token from `wa_inner_version` alone, which equals the firmware's `rd0 + rd1` only where `cr_version` is unanswered.
+
+### Fixed
+
+- **Discovery read a third of the router's own code.** The reference MC7010 loads thirty-one files. Probe v6 fetched twenty-two, and the nine it missed include `js/app.js`, `js/util.js`, `js/router.js`, `js/login.js`, `js/language.js`, `js/logout.js` and `js/status/statusBar.js` — reached through dependency arrays inside `js/app.js` rather than named in the `paths` map the probe parsed. The crawl fetches all thirty-one.
+
+### Verified
+
+- The `rd0`/`rd1` derivation is resolved on the reference device. Read at runtime in the browser: `rd0` carries the `wa_inner_version` string, `rd1` is empty. `js/language.js` assigns both from `rd_params0`/`rd_params1`, and `js/login.js` refills them when either is empty. The token the browser computes is the token this integration sends.
+- Rehearsed against the MC7010: 43 files fetched, all 31 the browser loads, 16 returned, 219 KB. Three defects found only by running against hardware — loader aliases resolved as literal paths and fabricating eighteen absent files; a shim pattern loose enough to match a country-code table and exhaust the file budget; and the model directory, unreachable by reference.
+- 1,603 tests, 100% line and branch coverage on `sms_delete_probe.py`. Ruff, ruff format, mypy `--strict`, McCabe, test depth and assertion audit clean.
+- `_run_rungs` reached complexity 21; the real-message delete ladder is now `_real_message_rungs`.
+
+### Known Issues
+
+- Rung `24c` raises `ZTEAuthError` on the reference device. It reads four version keys in one request, three of which are unanswered there, and the session classifier judges the result expired. The read itself succeeds and the payload is recorded in the rejection.
+- Captured JavaScript passes through the diagnostics sanitiser, which rewrites address-shaped literals: `"0.0.0.0"` in `js/service.js` is recorded as `"ip-7"` in one of the two copies.
+- The capture is serialised twice in a diagnostics download, at `/data/entry/data/delete_probe` and `/data/sms/delete_probe`.
 
 ## [3.3.20-dev1] - 20206-09-11 - CI Bump Ruff
 

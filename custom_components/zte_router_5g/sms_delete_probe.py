@@ -59,6 +59,17 @@ from .const import JS_BUNDLES
 if TYPE_CHECKING:
     from .coordinator import ZTERouterDataUpdateCoordinator
 
+# What a run is asked to do. The probe grew a write ladder that takes most of
+# a fifteen-minute budget and can exhaust a router's login attempts, and a
+# capture that needs neither. Keeping them in one run meant the cheap stage
+# could be lost to a failure in the expensive one.
+ACTION_CAPTURE = "capture"
+ACTION_CONFIRM = "confirm"
+ACTION_FULL = "full"
+PROBE_ACTIONS: tuple[str, ...] = (ACTION_CAPTURE, ACTION_CONFIRM, ACTION_FULL)
+# Read-only, and the only stage still expected to return something new.
+DEFAULT_ACTION = ACTION_CAPTURE
+
 # An id no router holds. Naming it exercises the entire write path — token,
 # form, session — while putting nothing at risk.
 ABSENT_ID = "999999"
@@ -435,6 +446,236 @@ def _module_paths(entry_text: str) -> dict[str, str]:
         pair.group(1): pair.group(2)
         for block in _REQUIRE_PATHS.finditer(entry_text)
         for pair in _PATH_PAIR.finditer(block.group(1))
+    }
+
+
+# A RequireJS module list is not the loader's whole answer. On the reference
+# MC7010 the index names three scripts and `data-main`, the `paths` map in the
+# entry point names a dozen more, and the browser loads thirty-one — the rest
+# arrive through dependency arrays inside `js/app.js` and its children. The
+# assignment that resolves the write token was in one of the nine files that
+# difference accounts for, and six probe runs never fetched it.
+#
+# So the list is built by following references until no new name appears,
+# rather than by reading any one declaration.
+_DEP_ARRAY = re.compile(r"""(?:define|require)\s*\(\s*\[([^\]]{0,4000})\]""")
+# `shim:{jq_simplemodal:["lib/bootstrap"]}`. The loader follows these; the
+# first rehearsal did not, and missed `js/lib/bootstrap.js`.
+#
+# Scoped to the shim block rather than to any bracketed list of strings: the
+# looser form matched a table of country codes and filled the crawl's budget
+# with two hundred names the router has never served.
+_SHIM_BLOCK = re.compile(r"""shim\s*:\s*\{([^}]{0,4000})\}""")
+# `DEVICE:"cpe/MF253V"`, which names a directory of model-specific modules the
+# loader composes at runtime. Nothing refers to those files by name, so no
+# amount of reference-following reaches them.
+_DEVICE = re.compile(r"""\bDEVICE\s*:\s*["']([\w./-]{1,60})["']""")
+_DEP_ITEM = re.compile(r"""["']([^"']{1,120})["']""")
+# A string that could be a module path: no spaces, no scheme, not a sentence.
+_MODULE_LITERAL = re.compile(r"""["']((?:\.{0,2}/)?[\w][\w./-]{1,80})["']""")
+
+# Names a loader can reach without ever naming them in a file we parse. Swept
+# once at the end so a crawl that stalls still returns the modules that carry
+# the write path.
+_KNOWN_MODULES: tuple[str, ...] = (
+    "js/main.js",
+    "js/app.js",
+    "js/service.js",
+    "js/util.js",
+    "js/router.js",
+    "js/home.js",
+    "js/login.js",
+    "js/logout.js",
+    "js/language.js",
+    "js/tooltip.js",
+    "js/status/statusBar.js",
+    "js/config/config.js",
+    "js/config/menu.js",
+    "js/lib/md5.js",
+    "js/lib/base64.js",
+    "tmpl/login.html",
+)
+
+# Given `DEVICE:"cpe/MF253V"`, the files that directory is known to hold.
+_DEVICE_MODULES: tuple[str, ...] = ("config.js", "menu_bridge.js")
+
+# A library is followed, because it names modules, but not returned: jQuery and
+# Knockout are a megabyte that tells us nothing about this firmware.
+_LIB_PREFIX = "js/lib/"
+
+# The crawl, capped. A loader can name a great many files and a slow router
+# turns that into a timeout.
+_MAX_CRAWL_FILES = 60
+_MAX_CRAWL_BYTES = 3_000_000
+_MAX_RETURN_BYTES = 400_000
+
+
+def _resolve(
+    name: str,
+    base: str = "js/",
+    aliases: dict[str, str] | None = None,
+) -> str | None:
+    """A module reference as a path this probe can fetch, or None.
+
+    RequireJS names are extensionless and may be relative. `text!tmpl/x.html`
+    names a template through the text plugin. Most of them are aliases rather
+    than paths: a dependency array asks for `jquery`, and the `paths` map says
+    where `jquery` lives. Resolving without that map invents `js/jquery.js`,
+    which does not exist — eighteen of the fifty-one names the first rehearsal
+    fetched were fabricated that way, and each one was reported as a file the
+    router failed to serve.
+    """
+    name = name.strip()
+    if not name or "://" in name or name.startswith(("//", "#")):
+        return None
+    if "!" in name:
+        name = name.split("!", 1)[1]
+        if not name:
+            return None
+    name = name.split("?", 1)[0]
+    if aliases:
+        head, _sep, rest = name.partition("/")
+        if head in aliases:
+            name = aliases[head] + ("/" + rest if rest else "")
+    if name.startswith("/"):
+        name = name[1:]
+    elif not name.startswith(("js/", "tmpl/", "css/", "img/")):
+        name = base + name
+    while "/./" in name:
+        name = name.replace("/./", "/")
+    while "/../" in name:
+        head, _sep, rest = name.partition("/../")
+        name = head.rsplit("/", 1)[0] + "/" + rest if "/" in head else rest
+    if not name.endswith((".js", ".html")):
+        name += ".js"
+    if any(part in {"", ".", ".."} for part in name.split("/")):
+        return None
+    if name.rsplit("/", 1)[-1] in {".js", ".html"}:
+        return None
+    return name
+
+
+def _aliases(text: str) -> dict[str, str]:
+    """The loader's `paths` map: the alias a dependency array asks for."""
+    return {
+        pair.group(1): pair.group(2)
+        for block in _REQUIRE_PATHS.finditer(text)
+        for pair in _PATH_PAIR.finditer(block.group(1))
+    }
+
+
+def _referenced(
+    text: str,
+    aliases: dict[str, str] | None = None,
+    literals: bool = True,
+) -> set[str]:
+    """Every module path one file refers to, by any of the three routes.
+
+    `literals` is the loosest of the three and is turned off for third-party
+    libraries, whose documentation comments carry example paths — the first
+    rehearsal followed `js/one/two/three.js` out of the RequireJS banner and
+    reported it as a file the router failed to serve.
+    """
+    names: set[str] = set()
+    for block in _REQUIRE_PATHS.finditer(text):
+        for pair in _PATH_PAIR.finditer(block.group(1)):
+            names.add(pair.group(2))
+    for pattern in (_DEP_ARRAY, _SHIM_BLOCK):
+        for block in pattern.finditer(text):
+            names.update(item.group(1) for item in _DEP_ITEM.finditer(block.group(1)))
+    if literals:
+        names.update(
+            match.group(1)
+            for match in _MODULE_LITERAL.finditer(text)
+            if match.group(1).endswith((".js", ".html"))
+        )
+    resolved = {_resolve(name, aliases=aliases) for name in names}
+    return {name for name in resolved if name}
+
+
+async def _crawl(api: Any) -> dict[str, Any]:
+    """Follow the router's own references until no new file appears.
+
+    Returns one record per file — status, byte count and digest — and the
+    source of every file that is not a third-party library. The digest is
+    there so two devices' downloads can be compared without diffing a
+    megabyte, and so a truncated body is visible as such.
+    """
+    queue: list[str] = ["index.html", "js/main.js"]
+    seen: set[str] = set()
+    files: dict[str, Any] = {}
+    sources: dict[str, str] = {}
+    total = 0
+    truncated: list[str] = []
+    missing: list[str] = []
+    aliases: dict[str, str] = {}
+
+    async def take(path: str) -> str:
+        nonlocal total
+        status, _headers, body = await _fetch_text(api, path)
+        size = len(body)
+        record: dict[str, Any] = {"status": status, "bytes": size}
+        if status == 200:
+            record["sha256"] = hashlib.sha256(body.encode(errors="replace")).hexdigest()
+            if not path.startswith(_LIB_PREFIX):
+                kept = body[:_MAX_RETURN_BYTES]
+                if len(kept) < size:
+                    truncated.append(path)
+                    record["returned_bytes"] = len(kept)
+                sources[path] = kept
+                total += len(kept)
+        else:
+            missing.append(path)
+        files[path] = record
+        return body if status == 200 else ""
+
+    while queue and len(seen) < _MAX_CRAWL_FILES and total < _MAX_CRAWL_BYTES:
+        # Nothing reaches the queue twice: every producer below checks both
+        # `seen` and `queue` before appending.
+        path = queue.pop(0)
+        seen.add(path)
+        body = await take(path)
+        if not body or path.endswith(".html"):
+            # A template refers to nothing this crawl can follow, and an index
+            # is seeded separately below.
+            if path == "index.html":
+                for src in _SCRIPT_SRC.findall(body) + _DATA_MAIN.findall(body):
+                    resolved = _resolve(src, aliases=aliases)
+                    if resolved and resolved not in seen and resolved not in queue:
+                        queue.append(resolved)
+            continue
+        aliases.update(_aliases(body))
+        for name in sorted(
+            _referenced(body, aliases, not path.startswith(_LIB_PREFIX))
+        ):
+            if name not in seen and name not in queue:
+                queue.append(name)
+
+    # The model-specific directory, composed rather than referenced. On the
+    # reference device it holds the config that overrides the general one, so a
+    # build whose write path differs could differ here and nowhere else.
+    device_modules: list[str] = []
+    for text in sources.values():
+        for match in _DEVICE.finditer(text):
+            device_modules += [
+                f"js/config/{match.group(1)}/{name}" for name in _DEVICE_MODULES
+            ]
+
+    for known in (*_KNOWN_MODULES, *dict.fromkeys(device_modules)):
+        if known not in seen and len(seen) < _MAX_CRAWL_FILES:
+            seen.add(known)
+            await take(known)
+
+    return {
+        "files": files,
+        "sources": sources,
+        "fetched": len(files),
+        "returned": len(sources),
+        "returned_bytes": total,
+        "missing": missing,
+        "truncated": truncated,
+        "unvisited_queue": queue[:20],
+        "capped": len(seen) >= _MAX_CRAWL_FILES or total >= _MAX_CRAWL_BYTES,
     }
 
 
@@ -1280,8 +1521,16 @@ def _redacted_body(
     )
 
 
-async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, Any]:
-    """Run every probe, record everything, and stop for nothing.
+async def run_probe(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    action: str = DEFAULT_ACTION,
+) -> dict[str, Any]:
+    """Run the stages the action calls for, record everything, stop for nothing.
+
+    `action` selects how far the run goes. `capture` is read-only and is the
+    default; `confirm` adds a short set of writes, each read back; `full` is
+    every rung, including the token sweep, which no run has yet learned
+    anything from but which is kept rather than deleted.
 
     Held under the coordinator's update lock so a routine poll cannot log in,
     re-list or otherwise interleave with a sequence whose whole value is that
@@ -1290,6 +1539,7 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
     api = coordinator.api
     report: dict[str, Any] = {
         "started": datetime.now(UTC).isoformat(),
+        "action": action,
         "probes": [],
         "completed": False,
         "note": (
@@ -1333,7 +1583,7 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
 
     try:
         async with asyncio.timeout(PROBE_TIMEOUT):
-            await _run_rungs(coordinator, report, probes)
+            await _run_rungs(coordinator, report, probes, action)
     except TimeoutError:
         # Everything collected so far is kept. A run that has to be waited out
         # is one the user restarts, and a restart used to lose the report.
@@ -1369,26 +1619,142 @@ async def run_probe(coordinator: ZTERouterDataUpdateCoordinator) -> dict[str, An
     return report
 
 
-async def _run_rungs(
+# Where a build assigns the write-token globals. On the MC7010 these are plain
+# assignments in `js/language.js` and `js/login.js`; a build that does it
+# anywhere else is the finding.
+_RD_ASSIGN = re.compile(r"""\brd[01]\s*=[^=]""")
+
+
+async def _capture_stage(
     coordinator: ZTERouterDataUpdateCoordinator,
     report: dict[str, Any],
     probes: list[dict[str, Any]],
 ) -> None:
-    """Every rung, in order, under the coordinator's update lock."""
+    """Return the router's own source, whole, and the two reads that bear on it.
+
+    Read-only throughout. Nothing here is the reporter's data: it is the
+    script the router serves to anyone who opens its address, plus two
+    version strings.
+    """
     api = coordinator.api
+
+    async def crawl() -> dict[str, Any]:
+        result = await _crawl(api)
+        # Held on the report rather than the probe record so a reader can find
+        # the sources without walking the rung list.
+        report["source_capture"] = {
+            "files": result["files"],
+            "sources": result["sources"],
+        }
+        return {
+            key: result[key]
+            for key in (
+                "fetched",
+                "returned",
+                "returned_bytes",
+                "missing",
+                "truncated",
+                "unvisited_queue",
+                "capped",
+            )
+        }
+
+    probes.append(await _capture(coordinator, "24a_source_crawl", crawl))
+
+    async def rd_assignment() -> dict[str, Any]:
+        """Every site that assigns `rd0` or `rd1`, with its surroundings."""
+        sources: dict[str, str] = report.get("source_capture", {}).get("sources", {})
+        sites: dict[str, list[str]] = {}
+        for path, text in sources.items():
+            found = [
+                text[max(0, m.start() - 300) : m.start() + 300]
+                for m in _RD_ASSIGN.finditer(text)
+            ]
+            if found:
+                sites[path] = found
+        return {
+            "files_with_an_assignment": sorted(sites),
+            "sites": sites,
+            "reference_device_assigns_in": ["js/language.js", "js/login.js"],
+        }
+
+    probes.append(await _capture(coordinator, "24b_rd_assignment", rd_assignment))
+
+    async def token_operands() -> dict[str, Any]:
+        """Does this device answer `cr_version`, and with what?
+
+        The shipped derivation uses `wa_inner_version` alone. That matches the
+        firmware only where `cr_version` is unanswered, which is true of the
+        reference device and need not be true here.
+        """
+        answer = await api._request(  # noqa: SLF001
+            "GET",
+            "goform/goform_get_cmd_process?isTest=false&multi_data=1"
+            "&cmd=cr_version,wa_inner_version,wa_version,hardware_version",
+            _retry=False,
+        )
+        cr = str(answer.get("cr_version") or "")
+        wa = str(answer.get("wa_inner_version") or "")
+        return {
+            "cr_version_answered": bool(cr),
+            "cr_version_length": len(cr),
+            "wa_inner_version_length": len(wa),
+            "operands_differ_from_shipped": bool(cr),
+        }
+
+    probes.append(await _capture(coordinator, "24c_token_operands", token_operands))
+
+
+async def _run_rungs(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    report: dict[str, Any],
+    probes: list[dict[str, Any]],
+    action: str = DEFAULT_ACTION,
+) -> None:
+    """Every rung the chosen action calls for, in order, under the lock.
+
+    The order is not the rung numbering. Capture runs first because it is the
+    only stage expected to return something not already known, and because the
+    stages below it can lock the account out or exhaust the run's budget; a
+    run that sweeps first and captures afterwards can lose the capture to a
+    failure in work whose answer is already recorded.
+
+    `capture` stops after the read-only stages. `confirm` adds the writes that
+    are few enough to read back individually. `full` is every rung this module
+    has ever carried, including the token sweep, and is kept because nothing
+    here has yet explained the fault — not because a repeat is expected to.
+    """
+    api = coordinator.api
+    writes = action in (ACTION_CONFIRM, ACTION_FULL)
+    sweep = action == ACTION_FULL
+    report["action"] = action
     async with coordinator._async_update_lock:  # noqa: SLF001 - the lock is the point
-        # --- 0. Can any login produce a session that writes? ----------------
-        # First, because everything below assumes one, and the session it
-        # settles on is the session the rest of the pass runs under. Read the
-        # docstring on `_login_stage` for why this is budgeted rather than
-        # exhaustive.
-        #
-        # Rungs below that log in again — `1_token_rotation` and
-        # `13_single_id_fresh_session` — use the shipped form by design, since
-        # what they measure is what a renewal does. Where an adopted session
-        # was in force, `report["session_in_use"]` says so and those two rungs
-        # are read against it rather than against the adopted one.
-        await _login_stage(coordinator, report, probes)
+        # --- 24. The router's own source, in full ---------------------------
+        # First, and read-only. Six runs of marker mining answered questions
+        # chosen in advance; this returns the files themselves, so a question
+        # nobody thought to ask can still be answered from the download.
+        await _capture_stage(coordinator, report, probes)
+        # Persisted before a single write is attempted, so a lockout or a
+        # timeout in any stage below cannot cost the capture.
+        coordinator.persist_delete_probe()
+
+        # --- 22. What the router's own web client does ----------------------
+        # Read-only, and it supplies the forms the write rungs below send.
+        web = await _web_ui_rungs(coordinator, report, probes)
+
+        if sweep:
+            # --- 0. Can any login produce a session that writes? ----------------
+            # First, because everything below assumes one, and the session it
+            # settles on is the session the rest of the pass runs under. Read the
+            # docstring on `_login_stage` for why this is budgeted rather than
+            # exhaustive.
+            #
+            # Rungs below that log in again — `1_token_rotation` and
+            # `13_single_id_fresh_session` — use the shipped form by design, since
+            # what they measure is what a renewal does. Where an adopted session
+            # was in force, `report["session_in_use"]` says so and those two rungs
+            # are read against it rather than against the adopted one.
+            await _login_stage(coordinator, report, probes)
 
         # --- 1. Does the write token change when the session is renewed? ----
         # If it does, a replayed write carrying its original token was always
@@ -1511,6 +1877,10 @@ async def _run_rungs(
 
         probes.append(await _capture(coordinator, "2_bank_listing", bank_listing))
 
+        if not writes:
+            report["completed"] = True
+            return
+
         # --- 3-6. The write path, with nothing at risk ----------------------
         # A delete naming an id the router does not hold. If this is refused,
         # the fault is not about his messages at all.
@@ -1571,81 +1941,24 @@ async def _run_rungs(
         # with the three that came before it.
         await _transport_rungs(coordinator, report, probes)
 
-        working, working_token = await _candidate_rungs(coordinator, report, probes)
-
-        # --- 21. The axes crossed, where a session allows it ----------------
-        # --- 22. What the router's own web client does ---------------
-        web = await _web_ui_rungs(coordinator, report, probes)
+        working: str | None = None
+        working_token: str | None = None
+        if sweep:
+            working, working_token = await _candidate_rungs(coordinator, report, probes)
 
         await _web_ui_write_rungs(coordinator, report, probes, web)
-
-        await _combination_rungs(coordinator, report, probes)
         await _session_proof_rung(coordinator, probes)
 
-        # --- 8 onward. Real messages, one variant each ----------------------
-        # Id, tag and date only. Whether deletion depends on read state or on
-        # age is a live question; the message itself answers nothing.
-        # Guarded: a listing that fails here used to abort the run and take
-        # every finding above it with it.
-        report["messages_before"] = []
-        with contextlib.suppress(Exception):
-            report["messages_before"] = await _message_summary(coordinator)
-        available = [str(entry["id"]) for entry in report["messages_before"]]
-        report["messages_available"] = list(available)
-        real_variants: list[tuple[str, dict[str, Any], int]] = [
-            ("8_single_id", {}, 1),
-            # Repeated so a failure can be told apart from a one-off.
-            ("9_single_id_repeat", {}, 1),
-            ("10_single_id_store_all", {"mem_store": SMS_STORE_ALL}, 1),
-            ("11_single_id_not_callback", {"not_callback": True}, 1),
-            ("12_single_id_delayed_relist", {}, 1),
-            ("13_single_id_fresh_session", {}, 1),
-            # The form the Delete All button actually sends. Nothing above
-            # tests it, and a router that accepts one id but refuses a batch
-            # would pass every rung above while the button kept failing.
-            ("14_batch_semicolon", {}, 2),
-        ]
-        consumed = 0
-        for name, kwargs, needs in real_variants:
-            targets = available[consumed : consumed + needs]
-            if len(targets) < needs:
-                probes.append(
-                    {
-                        "probe": name,
-                        "outcome": "skipped",
-                        "reason": f"needs {needs} message(s), not enough left",
-                    }
-                )
-                continue
-            consumed += needs
-            msg_id = ";".join(targets)
-            if name.endswith("fresh_session"):
-                # Guarded for the same reason: a re-login that fails is a
-                # finding about the device, not a reason to lose the run.
-                with contextlib.suppress(Exception):
-                    await api.login()
-            record = await _capture(
-                coordinator,
-                name,
-                lambda i=msg_id, k=kwargs: _delete_raw(coordinator, i, **k),
-                sent=_redacted_body(
-                    msg_id,
-                    mem_store=kwargs.get("mem_store"),
-                    not_callback=bool(kwargs.get("not_callback")),
-                ),
-            )
-            record["id_targeted"] = msg_id
-            if name.endswith("delayed_relist"):
-                # A router that deletes lazily would be reported as refusing,
-                # because the check re-lists at once.
-                await asyncio.sleep(LAZY_DELETE_WAIT)
-                record["waited_seconds"] = LAZY_DELETE_WAIT
-            with contextlib.suppress(Exception):
-                record["ids_after"] = await _surviving_ids(coordinator)
-            probes.append(record)
+        if not sweep:
+            report["completed"] = True
+            return
+
+        # --- 21. The axes crossed, where a session allows it ------------
+        await _combination_rungs(coordinator, report, probes)
+
+        await _real_message_rungs(coordinator, report, probes)
 
         await _confirmed_variant_rungs(coordinator, probes, working, working_token)
-
         # --- 15. The integration's own path, unmodified ---------------------
         # Everything above builds its own request, so none of it exercises
         # delete_all, its verification step, or the write-failure recording
@@ -1666,6 +1979,80 @@ async def _run_rungs(
         with contextlib.suppress(Exception):
             report["counters_after"] = await _counters(coordinator)
         report["completed"] = True
+
+
+async def _real_message_rungs(
+    coordinator: ZTERouterDataUpdateCoordinator,
+    report: dict[str, Any],
+    probes: list[dict[str, Any]],
+) -> None:
+    """The delete ladder, one variant per message, messages already doomed.
+
+    Extracted from the sequence so that reading the sequence shows which
+    stages an action runs, rather than sixty lines of one of them.
+    """
+    api = coordinator.api
+    # --- 8 onward. Real messages, one variant each ----------------------
+    # Id, tag and date only. Whether deletion depends on read state or on
+    # age is a live question; the message itself answers nothing.
+    # Guarded: a listing that fails here used to abort the run and take
+    # every finding above it with it.
+    report["messages_before"] = []
+    with contextlib.suppress(Exception):
+        report["messages_before"] = await _message_summary(coordinator)
+    available = [str(entry["id"]) for entry in report["messages_before"]]
+    report["messages_available"] = list(available)
+    real_variants: list[tuple[str, dict[str, Any], int]] = [
+        ("8_single_id", {}, 1),
+        # Repeated so a failure can be told apart from a one-off.
+        ("9_single_id_repeat", {}, 1),
+        ("10_single_id_store_all", {"mem_store": SMS_STORE_ALL}, 1),
+        ("11_single_id_not_callback", {"not_callback": True}, 1),
+        ("12_single_id_delayed_relist", {}, 1),
+        ("13_single_id_fresh_session", {}, 1),
+        # The form the Delete All button actually sends. Nothing above
+        # tests it, and a router that accepts one id but refuses a batch
+        # would pass every rung above while the button kept failing.
+        ("14_batch_semicolon", {}, 2),
+    ]
+    consumed = 0
+    for name, kwargs, needs in real_variants:
+        targets = available[consumed : consumed + needs]
+        if len(targets) < needs:
+            probes.append(
+                {
+                    "probe": name,
+                    "outcome": "skipped",
+                    "reason": f"needs {needs} message(s), not enough left",
+                }
+            )
+            continue
+        consumed += needs
+        msg_id = ";".join(targets)
+        if name.endswith("fresh_session"):
+            # Guarded for the same reason: a re-login that fails is a
+            # finding about the device, not a reason to lose the run.
+            with contextlib.suppress(Exception):
+                await api.login()
+        record = await _capture(
+            coordinator,
+            name,
+            lambda i=msg_id, k=kwargs: _delete_raw(coordinator, i, **k),
+            sent=_redacted_body(
+                msg_id,
+                mem_store=kwargs.get("mem_store"),
+                not_callback=bool(kwargs.get("not_callback")),
+            ),
+        )
+        record["id_targeted"] = msg_id
+        if name.endswith("delayed_relist"):
+            # A router that deletes lazily would be reported as refusing,
+            # because the check re-lists at once.
+            await asyncio.sleep(LAZY_DELETE_WAIT)
+            record["waited_seconds"] = LAZY_DELETE_WAIT
+        with contextlib.suppress(Exception):
+            record["ids_after"] = await _surviving_ids(coordinator)
+        probes.append(record)
 
 
 async def _login_stage(
