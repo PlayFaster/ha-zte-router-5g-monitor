@@ -403,6 +403,7 @@ async def test_api_get_ad_new_gen(mock_aiohttp_client):
         # `get_ad` now assures the session first — see the stale-session tests.
         patch.object(api, "_ensure_session", AsyncMock()),
         patch.object(api, "get_version", return_value="MC888_VER"),
+        patch.object(api, "get_cr_version", return_value="CR_VER"),
         patch.object(api, "get_rd", return_value="test_rd"),
     ):
         ad = await api.get_ad()
@@ -1600,8 +1601,13 @@ async def test_data_volume_write_reads_the_clear_day_aliases(mock_aiohttp_client
         mock_aiohttp_client.post.return_value = MockResponse(json_data={"result": "ok"})
         await api.set_data_volume_settings(current)
 
-    # Read under an alias, written back under the name the router expects.
-    assert "traffic_clear_date=9" in mock_aiohttp_client.post.call_args[1]["data"]
+    # Written back under the spelling this device answered, not the canonical
+    # one. `DATA_LIMIT_SETTING` replaces the whole form, and the router's own
+    # client sends the names its firmware uses: the MC888 Pro of issue #56
+    # builds that form from `flux_clear_date`, `flux_data_volume_limit_size`
+    # and their siblings, which are exactly the names it answers.
+    assert "data_volume_clear_date=9" in mock_aiohttp_client.post.call_args[1]["data"]
+    assert "traffic_clear_date=" not in mock_aiohttp_client.post.call_args[1]["data"]
 
 
 @pytest.mark.asyncio
@@ -1709,6 +1715,7 @@ async def test_a_write_checks_the_session_before_deriving_its_token(
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),  # probe
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "abc"}),
     ]
 
@@ -1737,6 +1744,7 @@ async def test_a_dead_session_is_renewed_before_the_token_is_built(
         MockResponse(json_data={"wan_connect_status": ""}),  # dead session
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),  # after
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "post-login-value"}),
     ]
     login = AsyncMock(return_value="stok=fresh")
@@ -1766,6 +1774,7 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "abc"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
@@ -2111,3 +2120,152 @@ async def test_a_non_object_chunk_response_contributes_nothing(mock_aiohttp_clie
     )
 
     assert await api._batch_get(["a_one"]) == {}
+
+
+# ---------------------------------------------------------------------------
+# The write token, pinned to tokens two routers actually accepted
+# ---------------------------------------------------------------------------
+
+# Captured from each router's own web interface while it carried out a delete
+# the router honoured. Firmware strings and a one-time nonce: nothing here
+# belongs to a person, and the token is spent.
+_ACCEPTED_TOKENS = [
+    pytest.param(
+        "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
+        "CR_ABPLMC888PROV1.0.1B04",
+        "AB79DB84D9C5B7F8AEBB5A69AFA59D7B3E2A6365160528A9B483DA205CDF8689",
+        "3D4B9F8C93FDB14C296184ADEE53DD1B44B0350CA1C2E287AC8FEACBB15DD51B",
+        id="mc888_pro_answers_cr_version",
+    ),
+    pytest.param(
+        "IRL_H3G_MC7010DV1.0.0B03",
+        "",
+        "92a9cd16cee3a478c0c2cffa014587ee",
+        "2f8c7ec23453048dace22de19bdf934e",
+        id="mc7010_does_not",
+    ),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("version", "cr_version", "rd", "expected"), _ACCEPTED_TOKENS)
+async def test_the_token_matches_one_the_router_accepted(
+    mock_aiohttp_client, version, cr_version, rd, expected
+):
+    """Both operands, or the MC888 Pro refuses every write.
+
+    Issue #56: no write of any kind was accepted by that device. Its own web
+    interface computes `hash(hash(wa_inner_version + cr_version) + RD)`, and
+    the token it sent on a successful delete reproduces only with both halves.
+    Omitting `cr_version` — which this integration did until `[3.3.21-dev1]` —
+    yields a well-formed token the router rejects.
+
+    The MC7010 case is the other half of the guarantee: it does not answer
+    `cr_version`, so the operand appends an empty string and the digest is
+    exactly what shipped before.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"wa_inner_version": version}),
+        MockResponse(json_data={"cr_version": cr_version}),
+        MockResponse(json_data={"RD": rd}),
+    ]
+
+    assert await api.get_ad() == expected
+
+
+@pytest.mark.asyncio
+async def test_cr_version_is_read_once_per_firmware(mock_aiohttp_client):
+    """It is static per firmware, so a second write must not re-read it."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"cr_version": "CR_1"}),
+        MockResponse(json_data={"RD": "abc"}),
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"RD": "def"}),
+    ]
+
+    first = await api.get_ad()
+    second = await api.get_ad()
+
+    assert first != second
+    assert api._cr_version_cache == ("MC7010V1", "CR_1")
+
+
+@pytest.mark.asyncio
+async def test_a_firmware_change_discards_the_cached_cr_version(mock_aiohttp_client):
+    """Both strings change together, so the pair cannot outlive the firmware."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    api._cr_version_cache = ("OLD_VERSION", "CR_OLD")
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"wa_inner_version": "NEW_VERSION"}),
+        MockResponse(json_data={"cr_version": "CR_NEW"}),
+        MockResponse(json_data={"RD": "abc"}),
+    ]
+
+    await api.get_ad()
+
+    assert api._cr_version_cache == ("NEW_VERSION", "CR_NEW")
+
+
+@pytest.mark.asyncio
+async def test_a_device_that_answers_no_cr_version_still_writes(mock_aiohttp_client):
+    """Answered-and-empty is a real answer, and the token is unchanged by it.
+
+    The reference MC7010 lists `cr_version` under `probed_no_answer`, so the
+    operand appends an empty string and the digest is what shipped before.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03"}),
+        MockResponse(json_data={"cr_version": ""}),
+        MockResponse(json_data={"RD": "92a9cd16cee3a478c0c2cffa014587ee"}),
+    ]
+
+    assert await api.get_ad() == "2f8c7ec23453048dace22de19bdf934e"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_cr_version_read_stops_the_write(mock_aiohttp_client):
+    """A read that fails is not an empty value, and must not be treated as one.
+
+    Answered-and-empty gives the right token on a device with no `cr_version`.
+    A failed read on a device that has one would give a single-operand token —
+    the fault of issue #56 — so the write is refused here rather than sent in a
+    form the router will reject.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03"}),
+        aiohttp.ClientError("router closed the connection"),
+    ]
+
+    with pytest.raises(ZTEConnectionError):
+        await api.get_ad()
