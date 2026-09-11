@@ -160,6 +160,7 @@ class _Tokenizer:
         """Initialize an empty token map."""
         self._tokens: dict[tuple[str, str], str] = {}
         self._counts: dict[str, int] = {}
+        self._secrets: set[str] = set()
 
     def token(self, prefix: str, value: str) -> str:
         """Return a stable token for this value under this prefix."""
@@ -168,6 +169,26 @@ class _Tokenizer:
             self._counts[prefix] = self._counts.get(prefix, 0) + 1
             self._tokens[key] = f"{prefix}-{self._counts[prefix]}"
         return self._tokens[key]
+
+    def note(self, value: str) -> None:
+        """Record a value replaced outright rather than tokenized.
+
+        `TO_REDACT` and `CARRIER_KEYS` become `**REDACTED**`, so the token map
+        never sees them — and a check built only on that map would not know an
+        IMEI when it met one somewhere else in the download.
+        """
+        self._secrets.add(value)
+
+    def known_values(self) -> set[str]:
+        """Every real value this download has already tokenized.
+
+        Used to check text that is otherwise exempt from the sweep. Values
+        shorter than six characters are excluded: a network provider recorded
+        as `3` matches somewhere in any body of text, and treating that as a
+        leak would sweep everything.
+        """
+        seen = {value for _prefix, value in self._tokens} | self._secrets
+        return {value for value in seen if len(value) >= 6}
 
 
 def _summarize_apn(value: str, tokenizer: _Tokenizer) -> str:
@@ -252,6 +273,8 @@ def _sanitize_payload(data: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, 
 
     for key, value in data.items():
         if key in TO_REDACT or key in CARRIER_KEYS:
+            if isinstance(value, str) and value:
+                tokenizer.note(value)
             clean[key] = REDACTED if value not in (None, "") else value
             continue
 
@@ -926,11 +949,26 @@ def _sanitize_probe(probe: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, A
     without = {key: value for key, value in probe.items() if key != "source_capture"}
     clean = cast("dict[str, Any]", _sanitize_walk(without, tokenizer))
     files = capture.get("files", {}) if isinstance(capture, dict) else {}
+    # The exemption is checked, not assumed. These files are firmware on every
+    # device seen so far, but "so far" is one model: a build that embedded a
+    # serial, an address or a subscriber identifier in a served script would
+    # put it into a file written to be attached to a public issue. Any source
+    # carrying a value this download has already tokenized is swept like
+    # anything else, and named.
+    known = tokenizer.known_values()
+    kept: dict[str, Any] = {}
+    swept: list[str] = []
+    for path, text in sources.items():
+        if isinstance(text, str) and any(value in text for value in known):
+            kept[path] = _sweep(text, tokenizer)
+            swept.append(path)
+        else:
+            kept[path] = deepcopy(text)
     clean["source_capture"] = {
         "files": _sanitize_walk(files, tokenizer),
-        # Verbatim. See the docstring.
-        "sources": deepcopy(sources),
-        "sources_are_unswept": True,
+        "sources": kept,
+        "sources_are_unswept": not swept,
+        "sources_swept": sorted(swept),
     }
     return clean
 

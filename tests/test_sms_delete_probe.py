@@ -2230,5 +2230,6 @@ async def test_the_crawl_is_seeded_from_the_static_list_too() -> None:
 
 def test_a_marker_captured_fewer_than_four_times_ends_the_scan() -> None:
     """The bound exists for a marker that occurs throughout a bundle."""
+    assert _captures("no matches here", "X") == []
     assert len(_captures("a X b X c", "X")) == 2
     assert len(_captures("X" * 10, "X")) == 4

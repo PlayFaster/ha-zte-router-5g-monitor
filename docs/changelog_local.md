@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.20-dev4\] - 2026-09-11 - Sweep Exemption Verified, Bundle List Corrected, Hardware Check Improved](#3320-dev4---2026-09-11---sweep-exemption-verified-bundle-list-corrected-hardware-check-improved)
   - [\[3.3.20-dev3\] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send](#3320-dev3---2026-09-11---sms-probe-v7-the-capture-made-fit-to-send)
   - [\[3.3.20-dev2\] - 2026-09-11 - SMS Probe V7: Three Probe Actions, and the Full Source Capture](#3320-dev2---2026-09-11---sms-probe-v7-three-probe-actions-and-the-full-source-capture)
   - [\[3.3.20-dev1\] - 20206-09-11 - CI Bump Ruff](#3320-dev1---20206-09-11---ci-bump-ruff)
@@ -100,7 +101,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -158,7 +159,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -166,7 +167,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -269,6 +270,27 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.20-dev4] - 2026-09-11 - Sweep Exemption Verified, Bundle List Corrected, Hardware Check Improved
+
+### Summary
+
+Three changes arising from preparing the probe capture to be sent to the reporter of issue #56. Two harden what the capture publishes and what discovery reads; the third removes a hardware assertion that failed on device state rather than on any fault.
+
+### Fixed
+
+- **The sweep exemption is checked rather than assumed.** `[3.3.20-dev3]` exempted the captured router source from the diagnostics sweep, on the grounds that those files are firmware carrying nothing belonging to the person who ran the probe. That held on the two builds this project can measure, which is two builds, and the file is written to be attached to a public issue. Each captured file is now checked against the identifiers the download has already handled; any file carrying one is swept like anything else and named in `sources_swept`, and `sources_are_unswept` reports whether the exemption held. Values replaced outright by `TO_REDACT` and `CARRIER_KEYS` never reached the token map, so a check built on that map alone would not have recognised an IMEI — `_Tokenizer.note` now records them.
+
+- **The static bundle list named a file neither device serves.** `JS_BUNDLES` carried `js/statusBar.js`. Both the MC7010 and the MC888 Pro answer 404 there and serve it at `js/status/statusBar.js`: 26 KB of the router's own source, one of the larger sources of `cmd` names, dropped silently by four diagnostics downloads. The correct path is added, the old one kept in case a model serves it, and `js/util.js`, `js/router.js`, `js/login.js` and `js/language.js` added alongside — modules the loader reaches through dependency arrays, which name-based discovery never saw.
+
+- **The data-volume hardware check failed on device state.** `check_data_volume_form` nudges the alert percentage, writes the all-or-nothing six-field form and reads the value back. With the data limit switch off, the router accepts the form, answers success and applies nothing, so the read-back showed `81 -> 81` and the assertion failed although nothing was wrong. The section already guarded for this by testing whether the alert percentage was readable — but on this firmware it stays readable when the switch is off, so the proxy and the real precondition had come apart. The switch is now read first, turned on and verified if it is off, and returned to off and verified at the end. The cap remains untouched, on the original grounds: a stranded cap can stop the router passing traffic, while a limit switch left on with the user's own cap behind it is the state the router was already configured for.
+
+### Verified
+
+- The MC7010 capture, 224,562 characters, was scanned for the device's own identifiers before the exemption was accepted: no IMEI, IMSI or ICCID, no MAC, no routable address, no MSISDN, and nothing matching the host or credentials.
+- Discovery yield on the MC7010 with the corrected bundle list: names probed 610 to 832, populated fields 108 to 109. The two-run stability assertions in `scripts/diag_check.py` still pass.
+- `Hardware: Check Device` exercised both ways on the MC7010. With the switch already on, 19 of 19 pass and the new branch does not run. With the switch deliberately turned off first, 21 of 21 pass: the switch is enabled and verified, the form applies `81 -> 80`, the percentage is restored, and the switch is returned to off and verified. The device is left as it was found.
+- 1,611 tests, 100% line and branch coverage on `diagnostics.py`. Ruff, ruff format and mypy `--strict` clean.
+
 ## [3.3.20-dev3] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send
 
 ### Summary
@@ -292,7 +314,7 @@ The first `confirm` run on the reference MC7010 produced a download carrying the
 ### Verified
 
 - Rehearsed against the MC7010. `24c` returns rather than raising: `cr_version` empty, `wa_inner_version` and `hardware_version` answered. The crawl fetched 45 files, returned 17, and was not capped.
-- 1,609 tests, 100% line and branch coverage on `sms_delete_probe.py` — including the `_captures` bound, which was the one partial branch left by `[3.3.20-dev2]`. Ruff, ruff format, mypy `--strict`, McCabe, test depth and assertion audit clean.
+- 1,611 tests, 100% line and branch coverage on `sms_delete_probe.py` — including the `_captures` bound, which was the one partial branch left by `[3.3.20-dev2]`. Ruff, ruff format, mypy `--strict`, McCabe, test depth and assertion audit clean.
 
 ### Known Issues
 

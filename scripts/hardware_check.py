@@ -597,13 +597,43 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
     used that entity.
 
     Only `data_volume_alert_percent` is moved, and it is put straight back. The
-    cap and the limit switch are deliberately untouched: this must remain safe
-    to strand, and a stranded alert percentage warns at a slightly wrong point
-    whereas a stranded cap can stop the router passing traffic.
+    cap is deliberately untouched: this must remain safe to strand, and a
+    stranded alert percentage warns at a slightly wrong point whereas a
+    stranded cap can stop the router passing traffic.
+
+    The limit switch is a precondition rather than a subject. With it off, the
+    router accepts the form and answers success while applying nothing, so the
+    read-back reports a write that did not happen and the check fails for a
+    reason that is not a fault. It is turned on if it is off, verified, and put
+    back at the end. Unlike the cap it strands nothing: a limit switch left on
+    with the user's own cap behind it is the state the router was already
+    configured for.
     """
     print(_cyan("\n[4] The data-volume form (alert percentage only)"))
 
     current = await api.get_params(list(api.DATA_VOLUME_FIELDS))
+    switch_was = str(current.get("data_volume_limit_switch") or "")
+    if switch_was == "0":
+        try:
+            await api.set_data_volume_settings(current, data_volume_limit_switch="1")
+            now = str(
+                (await api.get_params(["data_volume_limit_switch"])).get(
+                    "data_volume_limit_switch"
+                )
+            )
+        except Exception as err:  # noqa: BLE001 - reporting, not handling
+            now = f"{type(err).__name__}: {err}"
+        report.record(
+            now == "1",
+            "data limit switch enabled for this section",
+            f"0 -> {now!r}",
+        )
+        if now != "1":
+            # Without it the form below applies nothing, and every assertion
+            # after this point would report a fault that is not one.
+            return
+        current = await api.get_params(list(api.DATA_VOLUME_FIELDS))
+
     original = current.get("data_volume_alert_percent")
     if original is None or not str(original).strip():
         report.record(
@@ -670,6 +700,23 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
             str(back) == str(original),
             f"alert percentage restored to {original}",
         )
+
+    # The switch goes back only if this section turned it on.
+    if switch_was == "0":
+        with contextlib.suppress(Exception):
+            latest = await api.get_params(list(api.DATA_VOLUME_FIELDS))
+            if str(latest.get("data_volume_limit_switch")) != "0":
+                await api.set_data_volume_settings(latest, data_volume_limit_switch="0")
+            off = str(
+                (await api.get_params(["data_volume_limit_switch"])).get(
+                    "data_volume_limit_switch"
+                )
+            )
+            report.record(
+                off == "0",
+                "data limit switch returned to off",
+                f"router reports {off!r}",
+            )
 
 
 async def check_logout_ends_the_session(api: ZTERouterAPI, report: Report) -> None:

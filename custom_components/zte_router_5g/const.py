@@ -269,12 +269,24 @@ DISCOVERY_SETTLE_SECONDS = 2
 # Bundles the router serves for its own admin UI, which is a client of this
 # same API. `docs/zte_how_to_access.md` names these as the sources the
 # 2026-07-29 mining pass crawled to recover 175 `cmd` names.
+# `js/statusBar.js` is kept because a model may serve it there, but neither
+# device this project can measure does: both answer 404, and the file is at
+# `js/status/statusBar.js` on each. Four diagnostics downloads dropped that
+# 26 KB module silently, and it is one of the larger sources of `cmd` names.
 JS_BUNDLES: tuple[str, ...] = (
     "js/service.js",
+    "js/status/statusBar.js",
     "js/statusBar.js",
     "js/home.js",
     "js/main.js",
     "js/app.js",
+    # Reached through dependency arrays rather than the loader's `paths` map,
+    # so name-based discovery never saw them. `js/util.js` and `js/router.js`
+    # are the two largest after `service.js`.
+    "js/util.js",
+    "js/router.js",
+    "js/login.js",
+    "js/language.js",
 )
 
 DISCOVERY_CANDIDATES: list[str] = [

@@ -529,3 +529,43 @@ async def test_the_capture_is_not_published_twice(entry_with_a_capture) -> None:
 
     assert "delete_probe" not in result["entry"]["data"]
     assert "source_capture" in result["sms"]["delete_probe"]
+
+
+async def test_a_source_carrying_a_known_identifier_is_swept_and_named(
+    entry_with_a_capture,
+) -> None:
+    """The exemption is checked against this download's own tokenized values.
+
+    Firmware has carried nothing sensitive on either device measured, but that
+    is two builds. A served script embedding a subscriber identifier would
+    otherwise reach a file written to be attached to a public issue.
+    """
+    probe = entry_with_a_capture.runtime_data.api.delete_probe
+    probe["source_capture"]["sources"]["js/leaky.js"] = (
+        f'var x="{FAKE_IMEI}";{FIRMWARE_SOURCE}'
+    )
+
+    result = await async_get_config_entry_diagnostics(None, entry_with_a_capture)
+
+    capture = result["sms"]["delete_probe"]["source_capture"]
+    assert capture["sources_swept"] == ["js/leaky.js"]
+    assert capture["sources_are_unswept"] is False
+    assert FAKE_IMEI not in json.dumps(result, default=str)
+    # The clean file is still published as the router served it.
+    assert capture["sources"]["js/service.js"] == FIRMWARE_SOURCE
+
+
+async def test_an_empty_secret_is_not_recorded_as_a_known_value(
+    diagnostics_entry,
+) -> None:
+    """A key present but unanswered holds nothing to check a capture against."""
+    object.__setattr__(
+        diagnostics_entry,
+        "data",
+        {**dict(diagnostics_entry.data), "imei": ""},
+    )
+    diagnostics_entry.runtime_data.data = {**ROUTER_PAYLOAD, "sim_iccid": ""}
+
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+
+    assert result["data"]["sim_iccid"] == ""
