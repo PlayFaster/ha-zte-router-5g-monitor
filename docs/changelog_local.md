@@ -5,7 +5,13 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.19\] - 2026-09-10 - Release: Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
+  - [\[3.3.20\] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions](#3320---2026-09-11---probe-v7-release-diagnostic-source-crawl-and-tiered-probing-actions)
+  - [\[3.3.20-dev5\] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic](#3320-dev5---2026-09-11---browser-write-capture-a-tool-outside-the-repository-and-the-first-verified-token-arithmetic)
+  - [\[3.3.20-dev4\] - 2026-09-11 - Sweep Exemption Verified, Bundle List Corrected, Hardware Check Improved](#3320-dev4---2026-09-11---sweep-exemption-verified-bundle-list-corrected-hardware-check-improved)
+  - [\[3.3.20-dev3\] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send](#3320-dev3---2026-09-11---sms-probe-v7-the-capture-made-fit-to-send)
+  - [\[3.3.20-dev2\] - 2026-09-11 - SMS Probe V7: Three Probe Actions, and the Full Source Capture](#3320-dev2---2026-09-11---sms-probe-v7-three-probe-actions-and-the-full-source-capture)
+  - [\[3.3.20-dev1\] - 20206-09-11 - CI Bump Ruff](#3320-dev1---20206-09-11---ci-bump-ruff)
+  - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
   - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-that-could-not-report-what-they-measured)
   - [\[3.3.19-dev1\] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At](#3319-dev1---2026-09-10---sms-probe-v6-the-routers-own-web-client-is-read-rather-than-guessed-at)
   - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
@@ -266,7 +272,156 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.19] - 2026-09-10 - Release: Web UI Client Inspection and Browser-Aligned Diagnostic Probing
+## [3.3.20] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V7**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) with an `action` selector offering three diagnostic tiers: `capture` (lightweight read-only JavaScript module and configuration crawl), `confirm` (focused write rungs with immediate read-back verification), and `full` (exhaustive multi-axis formula sweep).
+- **Transitive Web UI Source Crawl**: Diagnostic capture now executes a dependency crawl across served router modules (`<script>`, RequireJS `paths`, `shim` configurations, and module directories), saving verbatim script extracts in diagnostic downloads. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+
+### Added
+
+- **Tiered Probe Actions**: `zte_router_5g.sms_delete_probe` now accepts an `action` parameter (`capture`, `confirm`, `full`), defaulting to read-only `capture` to prevent unnecessary router load and lockout risks.
+- **Transitive Script Dependency Crawl**: Automated discovery now follows AMD/RequireJS module dependencies, resolving aliases and model-specific script paths to capture exact client-side write handling routines.
+
+### Changed
+
+- **Crawl Budget and Bundle Path Corrections**: Expanded the discovery fetch ceiling to 90 files and updated static script locations to resolve bundle paths across varied ZTE firmware layouts.
+- **Diagnostics Sanitizer Integrity**: Captured router firmware source scripts are preserved intact during diagnostics export generation, with verification flags ensuring accurate reporting.
+
+## [3.3.20-dev5] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic
+
+### Summary
+
+No code in this repository changed. This entry records a diagnostic tool built and rehearsed for issue #56 that is delivered to the reporter directly rather than shipped, and the findings it produced on the reference MC7010 — which include the first arithmetic confirmation of the write token against a real, successful delete.
+
+It is recorded because the findings bear on core code, because the tool will be referred to in the issue thread, and because a later reader will otherwise find measurements in the notes with no account of where they came from.
+
+### Added, outside the repository
+
+- **A browser capture tool, in two forms.** A commented JavaScript source file and a one-line bookmarklet built from it. It wraps `XMLHttpRequest` — which is what the router's jQuery uses — records requests to `goform_set_cmd_process`, and presents a small panel with a count and a download button. The reporter needs no developer tools: the bookmarklet is added as a bookmark and clicked on the router's page.
+
+- **Version 2 adds the token inputs.** The first version captured the write but not the `RD` value the token was built from, and `RD` is single-use, so the arithmetic could not be checked. Version 2 keeps the recent reads whose requested values are all on a fixed eight-name allow-list of version and token fields, attaches the most recent of them to each write, and records the page's `rd0`, `rd1`, whether `hex_md5` and `hex_sha256` are defined, and the firmware flags from the loader's `config/config` module.
+
+### Findings
+
+- **The write token is confirmed arithmetically.** From the capture's own values — `rd0 = IRL_H3G_MC7010DV1.0.0B03`, `rd1` empty, `RD = 92a9cd16cee3a478c0c2cffa014587ee` — `md5(md5(rd0 + rd1) + RD)` reproduces the `AD` the browser sent, `2f8c7ec23453048dace22de19bdf934e`, on a delete the router answered with `{"result":"success"}`. Everything before this was inference from minified source; this is the digest matching the one the device accepted.
+
+- **`RD` is re-read immediately before each write.** The captured read precedes its write by 21 milliseconds.
+
+- **The browser's delete form differs from the integration's in three respects**, each previously inferred and now measured: the message id carries a trailing semicolon, `notCallback=true` is present, and `AD` is the last field rather than the fourth. The headers add `X-Requested-With: XMLHttpRequest` and `charset=UTF-8`. No bank selector is sent, confirming what `_record_delete` documents as an assumption.
+
+- **The firmware states how it wants to be authenticated.** `require("config/config")` on the live page returns `ACCESSIBLE_ID_SUPPORT: true`, `LOGIN_SECURITY_SUPPORT: true`, `MAX_LOGIN_COUNT: 5`, `PASSWORD_ENCODE: true`, `PASSWORD_ENCODE_SHA256: true` and `WEB_ATTR_IF_SUPPORT_SHA256: 2`. The same values are in `js/config/config.js`, which the probe's crawl already downloads, so they are reachable without a browser. This bears directly on `_ad_hash_func`, which selects MD5 or SHA-256 by testing whether the model string contains `MC888` or `MC889` — a guess where the firmware supplies an answer. `WEB_ATTR_IF_SUPPORT_SHA256` reads `2` on a device that uses MD5, so the meaning of its values is not yet established and needs a second device before it can be relied on.
+
+### Verified
+
+- Rehearsed on the MC7010 against the live router. The capture records a write with its body, status, response and response headers; it pairs the preceding `cmd=RD` read with it; and it reports the page globals and firmware flags.
+- A read for `sms_data_total,sms_unread_num` was fired during the rehearsal and confirmed absent from the capture: a read is kept only when every value it asks for is on the allow-list, so message data is excluded rather than filtered.
+- A request carrying a marker password was fired and confirmed absent: login requests are dropped before anything is stored.
+- Running the tool twice returns "Already armed" rather than wrapping the request machinery a second time. A single arm on a clean page records one request per request.
+
+### Known Issues
+
+- Cookies, `Referer`, `Origin` and `User-Agent` cannot be captured: the browser sets them after the hook runs. `Origin` is the most consequential — a firmware requiring it on writes would refuse Home Assistant every time while the captured and sent requests looked identical in every comparable field.
+- The rehearsal could not produce an authenticated write. Every write sent during it was unauthenticated and drew `{"result":"failure"}`; the successful captures came from the maintainer operating the web interface directly.
+- A first bookmarklet build replaced the page with the tool's return string, a `javascript:` URL evaluating to a value being treated as a document. The body is now wrapped in `void`. The rehearsal had only ever run the collapsed body through the debugger, where a return value is discarded, so the one path that mattered was the one not exercised.
+
+## [3.3.20-dev4] - 2026-09-11 - Sweep Exemption Verified, Bundle List Corrected, Hardware Check Improved
+
+### Summary
+
+Three changes arising from preparing the probe capture to be sent to the reporter of issue #56. Two harden what the capture publishes and what discovery reads; the third removes a hardware assertion that failed on device state rather than on any fault.
+
+### Fixed
+
+- **The sweep exemption is checked rather than assumed.** `[3.3.20-dev3]` exempted the captured router source from the diagnostics sweep, on the grounds that those files are firmware carrying nothing belonging to the person who ran the probe. That held on the two builds this project can measure, which is two builds, and the file is written to be attached to a public issue. Each captured file is now checked against the identifiers the download has already handled; any file carrying one is swept like anything else and named in `sources_swept`, and `sources_are_unswept` reports whether the exemption held. Values replaced outright by `TO_REDACT` and `CARRIER_KEYS` never reached the token map, so a check built on that map alone would not have recognised an IMEI — `_Tokenizer.note` now records them.
+
+- **The static bundle list named a file neither device serves.** `JS_BUNDLES` carried `js/statusBar.js`. Both the MC7010 and the MC888 Pro answer 404 there and serve it at `js/status/statusBar.js`: 26 KB of the router's own source, one of the larger sources of `cmd` names, dropped silently by four diagnostics downloads. The correct path is added, the old one kept in case a model serves it, and `js/util.js`, `js/router.js`, `js/login.js` and `js/language.js` added alongside — modules the loader reaches through dependency arrays, which name-based discovery never saw.
+
+- **The data-volume hardware check failed on device state.** `check_data_volume_form` nudges the alert percentage, writes the all-or-nothing six-field form and reads the value back. With the data limit switch off, the router accepts the form, answers success and applies nothing, so the read-back showed `81 -> 81` and the assertion failed although nothing was wrong. The section already guarded for this by testing whether the alert percentage was readable — but on this firmware it stays readable when the switch is off, so the proxy and the real precondition had come apart. The switch is now read first, turned on and verified if it is off, and returned to off and verified at the end. The cap remains untouched, on the original grounds: a stranded cap can stop the router passing traffic, while a limit switch left on with the user's own cap behind it is the state the router was already configured for.
+
+### Verified
+
+- The MC7010 capture, 224,562 characters, was scanned for the device's own identifiers before the exemption was accepted: no IMEI, IMSI or ICCID, no MAC, no routable address, no MSISDN, and nothing matching the host or credentials.
+- Discovery yield on the MC7010 with the corrected bundle list: names probed 610 to 832, populated fields 108 to 109. The two-run stability assertions in `scripts/diag_check.py` still pass.
+- `Hardware: Check Device` exercised both ways on the MC7010. With the switch already on, 19 of 19 pass and the new branch does not run. With the switch deliberately turned off first, 21 of 21 pass: the switch is enabled and verified, the form applies `81 -> 80`, the percentage is restored, and the switch is returned to off and verified. The device is left as it was found.
+- 1,611 tests, 100% line and branch coverage on `diagnostics.py`. Ruff, ruff format and mypy `--strict` clean.
+
+## [3.3.20-dev3] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send
+
+### Summary
+
+The first `confirm` run on the reference MC7010 produced a download carrying the router's own source, and reading it showed three faults in how that source is captured and published, plus one rung that never ran. All four would have cost a round trip with the reporter of issue #56, which is what this probe exists to avoid.
+
+### Fixed
+
+- **The token-operand rung never ran.** `24c` reads four version keys in one request. Three of them are unanswered on the reference device, so `_classify_session` judged the reply an expired session and the rung raised `ZTEAuthError` instead of reporting. The read itself had succeeded, and its payload was visible in the rejection record. It now passes `requested=`, so the absent-key guard knows which names were asked for. This is the one rung whose answer could change what gets fixed in `get_ad`, which derives the write token from `wa_inner_version` alone — correct only where `cr_version` is unanswered.
+
+- **The diagnostics sanitizer rewrote the captured firmware.** `_sanitize_walk` sweeps every string in the probe report, and the report now carries the scripts the router serves. On the reference device the literal `"0.0.0.0"` in `js/service.js` was published as `"ip-7"`. These files are firmware, identical on every unit of a build, and carry nothing belonging to whoever ran the probe; sweeping them alters the code the capture exists to preserve. `source_capture.sources` is now exempt and flagged as such with `sources_are_unswept`. Everything else in the report, the file list included, is swept as before.
+
+- **The capture was published twice.** The report is persisted into the config entry so it survives a restart, and it is also published under `sms.delete_probe`. Both were rendered, at 190 KB each, taking one download to 658 KB — and because the two went through different sanitizing paths, they differed. The entry copy no longer carries it.
+
+- **The crawl started from what the index declares.** The device of issue #56 reported "index: no scripts named" on four downloads, so a crawl seeded only from the index starts there from nothing. It is now seeded from `const.JS_BUNDLES` as well. On the reference device this immediately surfaced `js/statusBar.js` as a listed file the router does not serve — the path in the static list is wrong, the real one being `js/status/statusBar.js` — which four downloads had skipped silently.
+
+### Changed
+
+- **Crawl budget raised from 60 files to 90.** The reference MC7010 used 45. The MC888 Pro runs a later and larger web UI that has never been measured, and a crawl capped part-way through returns a partial answer to a question that costs a round trip to ask again.
+
+### Verified
+
+- Rehearsed against the MC7010. `24c` returns rather than raising: `cr_version` empty, `wa_inner_version` and `hardware_version` answered. The crawl fetched 45 files, returned 17, and was not capped.
+- 1,611 tests, 100% line and branch coverage on `sms_delete_probe.py` — including the `_captures` bound, which was the one partial branch left by `[3.3.20-dev2]`. Ruff, ruff format, mypy `--strict`, McCabe, test depth and assertion audit clean.
+
+### Known Issues
+
+- `Hardware: Check Device` fails one assertion, "six-field form accepted and applied". The reference device's `data_volume_limit_switch` currently reads `0`, and the firmware ignores a size change while the limit is disabled. Device state, not a code fault.
+
+## [3.3.20-dev2] - 2026-09-11 - SMS Probe V7: Three Probe Actions, and the Full Source Capture
+
+### Summary
+
+Six probe versions decided in advance what was worth extracting from the router's web client, and each one answered the questions chosen before it ran. The question that mattered was outside every window: where the firmware assigns the globals its write token is built from. Version 7 stops mining and returns the source.
+
+The run is also split. The write ladder consumes most of a fifteen-minute budget and can exhaust a router's login attempts; the capture needs neither. Held in one run, the cheap stage could be lost to a failure in the expensive one.
+
+### Added
+
+- **`action` on `zte_router_5g.sms_delete_probe`, defaulting to `capture`.** `capture` is read-only and runs the source crawl, the token-operand read and the existing marker mining. `confirm` adds the write rungs that are few enough to read back individually — rungs 3 to 7, the fourteen transports, the browser-aligned forms and the session proof. `full` is every rung the module has ever carried, including the 1,548-rule token sweep, the nineteen login variants, the crossed axes and the real-message delete ladder. Nothing was removed; the expensive stages are switched off rather than deleted.
+
+- **The capture runs first and is persisted before any write is attempted.** A lockout or a timeout in a later stage can no longer cost the one stage expected to return something new.
+
+- **Rung `24a`, a transitive source crawl.** References are followed to a fixed point rather than read from any single declaration: `<script src>`, `data-main`, `require.config` `paths`, `define` and `require` dependency arrays, `shim` lists, and path-shaped string literals in the router's own files. Aliases resolve through the loader's own `paths` map. Third-party libraries are followed for the modules they name but not returned. Each file carries its HTTP status, byte count and SHA-256, and a listed file that is not served is reported rather than skipped.
+
+- **The model-specific module directory.** `DEVICE:"cpe/MF253V"` in the served config names a directory the loader composes at runtime; nothing refers to those files by name, so no amount of reference-following reaches them. They are now derived from that literal.
+
+- **Rung `24b`, the `rd0`/`rd1` assignment sites**, extracted verbatim with 300 bytes either side.
+
+- **Rung `24c`, whether the device answers `cr_version`.** `get_ad` derives the write token from `wa_inner_version` alone, which equals the firmware's `rd0 + rd1` only where `cr_version` is unanswered.
+
+### Fixed
+
+- **Discovery read a third of the router's own code.** The reference MC7010 loads thirty-one files. Probe v6 fetched twenty-two, and the nine it missed include `js/app.js`, `js/util.js`, `js/router.js`, `js/login.js`, `js/language.js`, `js/logout.js` and `js/status/statusBar.js` — reached through dependency arrays inside `js/app.js` rather than named in the `paths` map the probe parsed. The crawl fetches all thirty-one.
+
+### Verified
+
+- The `rd0`/`rd1` derivation is resolved on the reference device. Read at runtime in the browser: `rd0` carries the `wa_inner_version` string, `rd1` is empty. `js/language.js` assigns both from `rd_params0`/`rd_params1`, and `js/login.js` refills them when either is empty. The token the browser computes is the token this integration sends.
+- Rehearsed against the MC7010: 43 files fetched, all 31 the browser loads, 16 returned, 219 KB. Three defects found only by running against hardware — loader aliases resolved as literal paths and fabricating eighteen absent files; a shim pattern loose enough to match a country-code table and exhaust the file budget; and the model directory, unreachable by reference.
+- 1,603 tests, 100% line and branch coverage on `sms_delete_probe.py`. Ruff, ruff format, mypy `--strict`, McCabe, test depth and assertion audit clean.
+- `_run_rungs` reached complexity 21; the real-message delete ladder is now `_real_message_rungs`.
+
+### Known Issues
+
+- Rung `24c` raises `ZTEAuthError` on the reference device. It reads four version keys in one request, three of which are unanswered there, and the session classifier judges the result expired. The read itself succeeds and the payload is recorded in the rejection.
+- Captured JavaScript passes through the diagnostics sanitiser, which rewrites address-shaped literals: `"0.0.0.0"` in `js/service.js` is recorded as `"ip-7"` in one of the two copies.
+- The capture is serialised twice in a diagnostics download, at `/data/entry/data/delete_probe` and `/data/sms/delete_probe`.
+
+## [3.3.20-dev1] - 20206-09-11 - CI Bump Ruff
+
+### Bumps
+
+- **Validate Bump**: Update `ruff` from 0.16.5 to 0.16.6
+
+## [3.3.19] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing
 
 ### Summary
 

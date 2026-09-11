@@ -261,3 +261,18 @@ sms_delete_probe:
       required: true
       selector:
         boolean:
+    action:
+      name: How far to go
+      description:
+        capture downloads the router's own scripts and writes nothing - it is the
+        default and deletes nothing. confirm adds about twenty writes, each checked by
+        reading the value back. full runs every test this probe has ever carried, takes
+        up to fifteen minutes, and deletes messages.
+      required: false
+      default: capture
+      selector:
+        select:
+          options:
+            - capture
+            - confirm
+            - full

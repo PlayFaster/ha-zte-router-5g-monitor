@@ -100,6 +100,9 @@ SERVICE_SMS_DELETE_PROBE_SCHEMA = vol.Schema(
     {
         vol.Optional("entry_id"): str,
         vol.Required("confirm"): vol.All(bool, vol.Equal(True)),
+        vol.Optional("action", default="capture"): vol.In(
+            ("capture", "confirm", "full")
+        ),
     }
 )
 
@@ -453,7 +456,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def _handle_sms_delete_probe(call: ServiceCall) -> dict[str, Any]:
         from .sms_delete_probe import run_probe
 
-        return await run_probe(_get_coordinator(hass, call.data))
+        return await run_probe(
+            _get_coordinator(hass, call.data),
+            call.data.get("action", "capture"),
+        )
 
     hass.services.async_register(
         DOMAIN,

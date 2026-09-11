@@ -29,7 +29,7 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
@@ -160,6 +160,7 @@ class _Tokenizer:
         """Initialize an empty token map."""
         self._tokens: dict[tuple[str, str], str] = {}
         self._counts: dict[str, int] = {}
+        self._secrets: set[str] = set()
 
     def token(self, prefix: str, value: str) -> str:
         """Return a stable token for this value under this prefix."""
@@ -168,6 +169,26 @@ class _Tokenizer:
             self._counts[prefix] = self._counts.get(prefix, 0) + 1
             self._tokens[key] = f"{prefix}-{self._counts[prefix]}"
         return self._tokens[key]
+
+    def note(self, value: str) -> None:
+        """Record a value replaced outright rather than tokenized.
+
+        `TO_REDACT` and `CARRIER_KEYS` become `**REDACTED**`, so the token map
+        never sees them — and a check built only on that map would not know an
+        IMEI when it met one somewhere else in the download.
+        """
+        self._secrets.add(value)
+
+    def known_values(self) -> set[str]:
+        """Every real value this download has already tokenized.
+
+        Used to check text that is otherwise exempt from the sweep. Values
+        shorter than six characters are excluded: a network provider recorded
+        as `3` matches somewhere in any body of text, and treating that as a
+        leak would sweep everything.
+        """
+        seen = {value for _prefix, value in self._tokens} | self._secrets
+        return {value for value in seen if len(value) >= 6}
 
 
 def _summarize_apn(value: str, tokenizer: _Tokenizer) -> str:
@@ -231,12 +252,29 @@ def _sanitize_sms(block: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any
     return clean
 
 
+def _entry_data_without_probe(entry: ConfigEntry) -> dict[str, Any]:
+    """The stored entry data, less the probe report.
+
+    The report is persisted into the entry so it survives a restart, and it is
+    already published under `sms.delete_probe`. Carrying it twice doubled a
+    download to 658 KB once the probe began returning the router's own source,
+    and the two copies were sanitized by different paths, so they differed.
+    """
+    return {
+        key: value
+        for key, value in deepcopy(dict(entry.data)).items()
+        if key != "delete_probe"
+    }
+
+
 def _sanitize_payload(data: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
     """Sanitize the router payload in place on a copy."""
     clean: dict[str, Any] = {}
 
     for key, value in data.items():
         if key in TO_REDACT or key in CARRIER_KEYS:
+            if isinstance(value, str) and value:
+                tokenizer.note(value)
             clean[key] = REDACTED if value not in (None, "") else value
             continue
 
@@ -490,7 +528,7 @@ def _sms_section(
         # The probe's findings, when the temporary diagnostic action has been
         # run. Absent otherwise.
         "delete_probe": (
-            _sanitize_walk(probe, tokenizer) if isinstance(probe, dict) else None
+            _sanitize_probe(probe, tokenizer) if isinstance(probe, dict) else None
         ),
     }
 
@@ -551,7 +589,7 @@ async def async_get_config_entry_diagnostics(
     entry_data = (
         _guarded(
             "entry.data",
-            lambda: _sanitize_payload(deepcopy(dict(entry.data)), tokenizer),
+            lambda: _sanitize_payload(_entry_data_without_probe(entry), tokenizer),
             errors,
         )
         or {}
@@ -887,6 +925,52 @@ def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]
             for note in out["notes"]
         ]
     return out
+
+
+def _sanitize_probe(probe: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
+    """Sweep the probe report, leaving the captured source untouched.
+
+    `source_capture.sources` holds the scripts the router serves to anyone who
+    opens its address. They are firmware, identical on every unit of a build,
+    and carry no value belonging to the person who ran the probe. Sweeping them
+    rewrites the code itself: an address-shaped literal in the router's own
+    JavaScript — `"0.0.0.0"` in `js/service.js` on the reference device —
+    becomes a token, and the capture then differs from what the router sent.
+    The capture exists to be read as source, so it is exempted rather than
+    swept.
+
+    Everything else in the report is swept as before, including the file list,
+    whose paths and digests are ours rather than the device's.
+    """
+    capture = probe.get("source_capture")
+    sources = capture.get("sources") if isinstance(capture, dict) else None
+    if not isinstance(sources, dict):
+        return cast("dict[str, Any]", _sanitize_walk(probe, tokenizer))
+    without = {key: value for key, value in probe.items() if key != "source_capture"}
+    clean = cast("dict[str, Any]", _sanitize_walk(without, tokenizer))
+    files = capture.get("files", {}) if isinstance(capture, dict) else {}
+    # The exemption is checked, not assumed. These files are firmware on every
+    # device seen so far, but "so far" is one model: a build that embedded a
+    # serial, an address or a subscriber identifier in a served script would
+    # put it into a file written to be attached to a public issue. Any source
+    # carrying a value this download has already tokenized is swept like
+    # anything else, and named.
+    known = tokenizer.known_values()
+    kept: dict[str, Any] = {}
+    swept: list[str] = []
+    for path, text in sources.items():
+        if isinstance(text, str) and any(value in text for value in known):
+            kept[path] = _sweep(text, tokenizer)
+            swept.append(path)
+        else:
+            kept[path] = deepcopy(text)
+    clean["source_capture"] = {
+        "files": _sanitize_walk(files, tokenizer),
+        "sources": kept,
+        "sources_are_unswept": not swept,
+        "sources_swept": sorted(swept),
+    }
+    return clean
 
 
 def _sanitize_walk(value: Any, tokenizer: _Tokenizer) -> Any:
