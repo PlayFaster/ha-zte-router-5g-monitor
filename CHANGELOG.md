@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.20] - 2026-09-11 - Release: Probe v7 Diagnostic Source Crawl and Tiered Probing Actions
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V7**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) with an `action` selector offering three diagnostic tiers: `capture` (lightweight read-only JavaScript module and configuration crawl), `confirm` (focused write rungs with immediate read-back verification), and `full` (exhaustive multi-axis formula sweep).
+- **Transitive Web UI Source Crawl**: Diagnostic capture now executes a dependency crawl across served router modules (`<script>`, RequireJS `paths`, `shim` configurations, and module directories), saving verbatim script extracts in diagnostic downloads. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+
+### Added
+
+- **Tiered Probe Actions**: `zte_router_5g.sms_delete_probe` now accepts an `action` parameter (`capture`, `confirm`, `full`), defaulting to read-only `capture` to prevent unnecessary router load and lockout risks.
+- **Transitive Script Dependency Crawl**: Automated discovery now follows AMD/RequireJS module dependencies, resolving aliases and model-specific script paths to capture exact client-side write handling routines.
+
+### Changed
+
+- **Crawl Budget and Bundle Path Corrections**: Expanded the discovery fetch ceiling to 90 files and updated static script locations to resolve bundle paths across varied ZTE firmware layouts.
+- **Diagnostics Sanitizer Integrity**: Captured router firmware source scripts are preserved intact during diagnostics export generation, with verification flags ensuring accurate reporting.
+
+---
+
 ## [3.3.19] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing
 
 ### Summary
@@ -684,6 +703,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.20\] - 2026-09-11 - Release: Probe v7 Diagnostic Source Crawl and Tiered Probing Actions](#3320---2026-09-11---release-probe-v7-diagnostic-source-crawl-and-tiered-probing-actions)
   - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
   - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
