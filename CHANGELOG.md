@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.21] - Release - 2026-09-11 - MC888 Pro Write Token
+
+### Fixed
+
+- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version` — read from `js/service.js` on both devices this project can measure.
+
+### Added
+
+- **`get_cr_version`**, which reads the key once per firmware and caches it against the `wa_inner_version` it was read with. A caller that already holds the version passes it in, so deriving a token costs one extra request on the first write after a firmware change and none after that.
+
+### Changed
+
+- **A failed `cr_version` read stops the write rather than degrading it.** Answered-and-empty and unreadable look alike and are not: the first gives the correct token on a device without a `cr_version`, the second would give a single-operand token on a device that has one — the fault above. `get_version` is deliberately not reused inside the new reader, because it answers `None` on a dead session rather than raising.
+
 ## [3.3.20] - 2026-09-11 - Release: Probe v7 Diagnostic Source Crawl and Tiered Probing Actions
 
 ### Summary
@@ -703,6 +717,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.21\] - Release - 2026-09-11 - MC888 Pro Write Token](#3321---release---2026-09-11---mc888-pro-write-token)
   - [\[3.3.20\] - 2026-09-11 - Release: Probe v7 Diagnostic Source Crawl and Tiered Probing Actions](#3320---2026-09-11---release-probe-v7-diagnostic-source-crawl-and-tiered-probing-actions)
   - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
   - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)

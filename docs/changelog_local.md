@@ -5,8 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.20\] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions](#3320---2026-09-11---probe-v7-release-diagnostic-source-crawl-and-tiered-probing-actions)
+  - [\[3.3.21\] - Release - 2026-09-11 - MC888 Pro Write Token](#3321---release---2026-09-11---mc888-pro-write-token)
   - [\[3.3.21-dev1\] - 2026-09-11 - The Write Token Carries Both Operands: The Cause of Issue #56](#3321-dev1---2026-09-11---the-write-token-carries-both-operands-the-cause-of-issue-56)
+  - [\[3.3.20\] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions](#3320---2026-09-11---probe-v7-release-diagnostic-source-crawl-and-tiered-probing-actions)
   - [\[3.3.20-dev5\] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic](#3320-dev5---2026-09-11---browser-write-capture-a-tool-outside-the-repository-and-the-first-verified-token-arithmetic)
   - [\[3.3.20-dev4\] - 2026-09-11 - Sweep Exemption Verified, Bundle List Corrected, Hardware Check Improved](#3320-dev4---2026-09-11---sweep-exemption-verified-bundle-list-corrected-hardware-check-improved)
   - [\[3.3.20-dev3\] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send](#3320-dev3---2026-09-11---sms-probe-v7-the-capture-made-fit-to-send)
@@ -273,22 +274,19 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.20] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions
+## [3.3.21] - Release - 2026-09-11 - MC888 Pro Write Token
 
-### Summary
+### Fixed
 
-- **Temporary SMS Deletion Diagnostic Probe V7**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) with an `action` selector offering three diagnostic tiers: `capture` (lightweight read-only JavaScript module and configuration crawl), `confirm` (focused write rungs with immediate read-back verification), and `full` (exhaustive multi-axis formula sweep).
-- **Transitive Web UI Source Crawl**: Diagnostic capture now executes a dependency crawl across served router modules (`<script>`, RequireJS `paths`, `shim` configurations, and module directories), saving verbatim script extracts in diagnostic downloads. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version` — read from `js/service.js` on both devices this project can measure.
 
 ### Added
 
-- **Tiered Probe Actions**: `zte_router_5g.sms_delete_probe` now accepts an `action` parameter (`capture`, `confirm`, `full`), defaulting to read-only `capture` to prevent unnecessary router load and lockout risks.
-- **Transitive Script Dependency Crawl**: Automated discovery now follows AMD/RequireJS module dependencies, resolving aliases and model-specific script paths to capture exact client-side write handling routines.
+- **`get_cr_version`**, which reads the key once per firmware and caches it against the `wa_inner_version` it was read with. A caller that already holds the version passes it in, so deriving a token costs one extra request on the first write after a firmware change and none after that.
 
 ### Changed
 
-- **Crawl Budget and Bundle Path Corrections**: Expanded the discovery fetch ceiling to 90 files and updated static script locations to resolve bundle paths across varied ZTE firmware layouts.
-- **Diagnostics Sanitizer Integrity**: Captured router firmware source scripts are preserved intact during diagnostics export generation, with verification flags ensuring accurate reporting.
+- **A failed `cr_version` read stops the write rather than degrading it.** Answered-and-empty and unreadable look alike and are not: the first gives the correct token on a device without a `cr_version`, the second would give a single-operand token on a device that has one — the fault above. `get_version` is deliberately not reused inside the new reader, because it answers `None` on a dead session rather than raising.
 
 ## [3.3.21-dev1] - 2026-09-11 - The Write Token Carries Both Operands: The Cause of Issue #56
 
@@ -323,6 +321,23 @@ The evidence is a capture of the reporter's own web interface deleting a message
 
 - Whether this resolves issue #56 is unconfirmed. The reporter's device has never been sent a `DELETE_SMS` carrying a correct token: the probe's token sweep screened every candidate through a `DATA_LIMIT_SETTING` form his firmware rejects on its field names, and the delete rungs all used the shipped single-operand token, so the two halves never met.
 - The temporary SMS probe is untouched and still carries its own screening flaw.
+
+## [3.3.20] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions
+
+### Summary
+
+- **Temporary SMS Deletion Diagnostic Probe V7**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) with an `action` selector offering three diagnostic tiers: `capture` (lightweight read-only JavaScript module and configuration crawl), `confirm` (focused write rungs with immediate read-back verification), and `full` (exhaustive multi-axis formula sweep).
+- **Transitive Web UI Source Crawl**: Diagnostic capture now executes a dependency crawl across served router modules (`<script>`, RequireJS `paths`, `shim` configurations, and module directories), saving verbatim script extracts in diagnostic downloads. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
+
+### Added
+
+- **Tiered Probe Actions**: `zte_router_5g.sms_delete_probe` now accepts an `action` parameter (`capture`, `confirm`, `full`), defaulting to read-only `capture` to prevent unnecessary router load and lockout risks.
+- **Transitive Script Dependency Crawl**: Automated discovery now follows AMD/RequireJS module dependencies, resolving aliases and model-specific script paths to capture exact client-side write handling routines.
+
+### Changed
+
+- **Crawl Budget and Bundle Path Corrections**: Expanded the discovery fetch ceiling to 90 files and updated static script locations to resolve bundle paths across varied ZTE firmware layouts.
+- **Diagnostics Sanitizer Integrity**: Captured router firmware source scripts are preserved intact during diagnostics export generation, with verification flags ensuring accurate reporting.
 
 ## [3.3.20-dev5] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic
 
