@@ -82,3 +82,17 @@ async def test_sensitive_keys_are_categorized():
     # Carrier identity locates the subscriber; no diagnostic value.
     assert "network_provider" in CARRIER_KEYS
     assert "mdm_mcc" in CARRIER_KEYS
+
+
+def test_witness_list_survives_a_collaborator_that_did_not_return_a_list():
+    """`session_witnesses` is read through a guard that answers `None` on error.
+
+    The download is serialized only after every section has been built, so a
+    value of the wrong type fails the whole file at the last moment and past
+    every other check. An unreadable witness list is reported as no witnesses.
+    """
+    from custom_components.zte_router_5g.diagnostics import _string_list
+
+    assert _string_list(None) == []
+    assert _string_list("wan_connect_status") == []
+    assert _string_list(["wan_connect_status", 7, None]) == ["wan_connect_status"]

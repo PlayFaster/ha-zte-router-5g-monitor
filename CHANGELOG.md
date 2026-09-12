@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
-- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version` — read from `js/service.js` on both devices this project can measure.
+- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version`, read from `js/service.js` on both devices available for testing.
 
 ### Added
 
@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **A failed `cr_version` read stops the write rather than degrading it.** Answered-and-empty and unreadable look alike and are not: the first gives the correct token on a device without a `cr_version`, the second would give a single-operand token on a device that has one — the fault above. `get_version` is deliberately not reused inside the new reader, because it answers `None` on a dead session rather than raising.
+- **A failed `cr_version` read raises rather than returning an empty value.** An answered-but-empty value and an unreadable one are different: the first produces the correct token on a device without a `cr_version`, while the second would produce a single-operand token on a device that has one. `get_version` is not reused inside the new reader because it returns `None` on a dead session instead of raising.
 
 ## [3.3.20] - 2026-09-11 - Release: Probe v7 Diagnostic Source Crawl and Tiered Probing Actions
 

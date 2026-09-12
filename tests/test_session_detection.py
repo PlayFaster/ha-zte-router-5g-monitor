@@ -574,3 +574,83 @@ def test_the_third_key_cannot_vote_a_dead_session_alive() -> None:
         _classify_session(same_state_with_the_chosen_key, list(_SESSION_CHECK_KEYS))
         == "expired"
     )
+
+
+def test_witnesses_are_spread_across_name_families() -> None:
+    """Three readings of one subsystem are one witness, not three.
+
+    Alphabetical ordering over the MC888 Pro's populated keys selects
+    `APN_config0`, `APN_config1` and `APN_config2` — values that blank
+    together or not at all. Independent failure is the whole point of taking
+    three, so a key from another family is preferred over a second from the
+    same one.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset()
+    api._populated_keys = frozenset(
+        {"APN_config0", "APN_config1", "APN_config2", "network_type", "sms_unread_num"}
+    )
+
+    witnesses = api.session_witnesses()
+
+    assert len(witnesses) == 3
+    assert (
+        len({k.split("_", 1)[0].rstrip("0123456789").lower() for k in witnesses}) == 3
+    )
+
+
+def test_one_family_still_yields_witnesses() -> None:
+    """Preference, not exclusion: a device with a single family is not starved."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset()
+    api._populated_keys = frozenset({"APN_config0", "APN_config1", "APN_config2"})
+
+    assert len(api.session_witnesses()) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_is_undecidable_when_no_key_can_witness(
+    mock_aiohttp_client,
+) -> None:
+    """No witness means no verdict — and no read taken to pretend otherwise.
+
+    The counterpart of the pre-write case: a device that cannot prove its own
+    session must not have a refusal reclassified as an expiry on no evidence.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset({"ppp_status", "model_name"})
+    api._populated_keys = frozenset({"ppp_status", "model_name"})
+
+    with patch.object(api, "_request", new=AsyncMock()) as request:
+        verdict = await api.note_write_refusal("DELETE_SMS")
+
+    assert verdict == "undecidable"
+    assert not request.called
+    assert api.last_session_check["verdict"] == "undecidable after refusal"
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_on_a_dead_session_asks_for_reauthentication(
+    mock_aiohttp_client,
+) -> None:
+    """A refusal the read proves was an expiry is raised as an auth error.
+
+    Home Assistant starts a reauthentication flow for `ZTEAuthError` and
+    reports anything else as a failed command. A write refused because the
+    session had gone is the first of those, not the second.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset({"model_name"})
+    api._populated_keys = frozenset({"wan_connect_status", "model_name"})
+
+    # Every authenticated key blank while the unauthenticated one answers:
+    # the shape of a session the router has dropped.
+    answer = {"wan_connect_status": "", "model_name": "MC7010"}
+
+    with (
+        patch.object(api, "_request", new=AsyncMock(return_value=answer)),
+        pytest.raises(ZTEAuthError),
+    ):
+        await api.note_write_refusal("DELETE_SMS")
+
+    assert api.last_session_check["verdict"] == "expired"

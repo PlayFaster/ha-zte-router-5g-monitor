@@ -1057,6 +1057,27 @@ class ZTERouterAPI:
             _LOGGER.debug("Failed to decode hex string '%s'", hex_str)
             return "[Decoding Error]"
 
+    def _hex_decode_number(self, value: str) -> str:
+        """Decode a sender number, falling back to the value as sent.
+
+        Separate from `_hex_decode` because the two fields fail differently.
+        A message *body* that will not decode is damaged, and `[Decoding
+        Error]` is the honest report — half-rendering a truncated payload
+        would be worse. A *number* that will not decode is usually not damaged
+        at all: an alphanumeric sender id, and on some firmware a plain
+        international number, arrives as literal text where the same field
+        carries UTF-16BE hex from other senders. Reporting those as
+        `[Decoding Error]` loses a value that was never encoded, which is what
+        the MC888 Pro download of issue #56 shows on every message.
+
+        Only a genuine decode failure falls back. An empty value stays empty,
+        and a value that decodes is decoded, both exactly as before.
+        """
+        decoded = self._hex_decode(value)
+        if decoded == "[Decoding Error]":
+            return value
+        return decoded
+
     def _require_contract(self, data: Any, key: str, cmd: str) -> None:
         """Fail loudly when a response is missing the key it must carry.
 
@@ -1193,6 +1214,27 @@ class ZTERouterAPI:
             return False
         return str(result).lower() not in ("success", "0", "ok")
 
+    def write_headers(self) -> dict[str, str]:
+        """The headers the router's own page sends with a `goform` write.
+
+        Kept in one place because there are nine write sites, and nine copies
+        of a header dict drift apart. Until v3.3.22 every site sent
+        `Content-Type` alone while the device's own client sends four more.
+        No firmware is known to require them, but the MC888 Pro of issue #56
+        refuses writes for reasons not yet identified, and matching the
+        request the device is known to accept removes one class of difference
+        without changing what any command does.
+
+        `Origin` is derived from `self.referer` rather than stored, because
+        the referer is rewritten when the protocol is discovered.
+        """
+        return {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "X-Requested-With": "XMLHttpRequest",
+            "Origin": self.referer.rstrip("/"),
+        }
+
     def session_witnesses(self) -> list[str]:
         """Keys that can prove this device's session, newest evidence first.
 
@@ -1225,8 +1267,39 @@ class ZTERouterAPI:
         # Seeded names first where the device populates them — they are the
         # cheap, well-understood ones — then whatever else it proved it answers.
         witnesses = [k for k in seeded if k in self._populated_keys]
-        witnesses += [k for k in observed if k not in witnesses]
+        # Spread the remainder across name families rather than taking the
+        # first three alphabetically. On the MC888 Pro that ordering selects
+        # `APN_config0`, `APN_config1` and `APN_config2` — three readings of
+        # one subsystem, which blank together or not at all. Three keys that
+        # can fail independently are three witnesses; three that cannot are
+        # one. Stems are a heuristic over names, so this only reorders the
+        # candidates: anything left over is still appended below, and a device
+        # with a single family is no worse off than before.
+        seen_stems = {self._witness_stem(k) for k in witnesses}
+        spread = []
+        leftover = []
+        for key in observed:
+            if key in witnesses:
+                continue
+            stem = self._witness_stem(key)
+            if stem in seen_stems:
+                leftover.append(key)
+            else:
+                seen_stems.add(stem)
+                spread.append(key)
+        witnesses += spread + leftover
         return witnesses[:3]
+
+    @staticmethod
+    def _witness_stem(key: str) -> str:
+        """The name family a key belongs to, for witness diversity.
+
+        The first underscore-delimited segment with trailing digits removed:
+        `APN_config0` and `APN_config1` share `apn`, `wan_connect_status` is
+        `wan`, `ppp_status` is `ppp`. Deliberately crude — it is used to
+        prefer one ordering over another, never to exclude a key.
+        """
+        return key.split("_", 1)[0].rstrip("0123456789").lower()
 
     def _session_check_request(self, witnesses: list[str]) -> list[str]:
         """The witnesses, plus one key that answers without a session.
@@ -2795,7 +2868,7 @@ class ZTERouterAPI:
         if not self.session_active:
             return
 
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        headers = self.write_headers()
         try:
             # LOGOUT is a command like any other on this API and needs an AD
             # token. Without it the router answers `{"result":"failure"}` and
@@ -3034,7 +3107,7 @@ class ZTERouterAPI:
             if messages:
                 msg = messages[0]
                 msg["content_decoded"] = self._hex_decode(msg.get("content", ""))
-                msg["number_decoded"] = self._hex_decode(msg.get("number", ""))
+                msg["number_decoded"] = self._hex_decode_number(msg.get("number", ""))
                 msg["date_decoded"] = self._parse_date(msg.get("date", ""))
                 msg_out = cast(dict[str, Any], msg)
         except (ZTEAuthError, ZTEConnectionError):
@@ -3056,9 +3129,7 @@ class ZTERouterAPI:
         """
         ad = await self.get_ad()
         payload = f"isTest=false&goformId=REBOOT_DEVICE&AD={ad}"
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
@@ -3072,10 +3143,19 @@ class ZTERouterAPI:
         is recorded beside the attempt. It changes nothing about the request.
         """
         ad = await self.get_ad()
-        payload = f"isTest=false&goformId=DELETE_SMS&msg_id={msg_id}&AD=" + ad
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        # The router's own page sends every id semicolon-*terminated*, not
+        # semicolon-*separated*: a single delete goes out as `msg_id=16;`, and
+        # a batch as `1;2;`. Captured from the MC888 Pro of issue #56 on
+        # 2026-09-11. `notCallback=true` travels with it there, as it already
+        # does on this integration's `SEND_SMS`. Appended rather than assumed,
+        # because `delete_all` joins its ids here and elsewhere a caller may
+        # pass a string that already ends in one.
+        sent_ids = msg_id if msg_id.endswith(";") else f"{msg_id};"
+        payload = (
+            f"isTest=false&goformId=DELETE_SMS&msg_id={sent_ids}"
+            f"&notCallback=true&AD={ad}"
+        )
+        headers = self.write_headers()
         ids = [part for part in msg_id.split(";") if part]
         # Read before the request: `_request` clears it once one has gone out.
         was_fresh = self._session_was_fresh
@@ -3209,9 +3289,7 @@ class ZTERouterAPI:
             f"&MessageBody={hex_msg}&encode_type={encode_type}"
             f"&ID=-1&sms_time={sms_time}&AD={ad}"
         )
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
@@ -3240,7 +3318,7 @@ class ZTERouterAPI:
             messages = resp_json["messages"]
             for msg in messages:
                 msg["content_decoded"] = self._hex_decode(msg.get("content", ""))
-                msg["number_decoded"] = self._hex_decode(msg.get("number", ""))
+                msg["number_decoded"] = self._hex_decode_number(msg.get("number", ""))
                 msg["date_decoded"] = self._parse_date(msg.get("date", ""))
             return cast(list[dict[str, Any]], messages)
         except (ZTEAuthError, ZTEConnectionError):
@@ -3408,9 +3486,7 @@ class ZTERouterAPI:
             f"&apn_mode=manual&apn_action=set_default&set_default_flag=1"
             f"&pdp_type={pdp_type}&index={index}&AD={ad}"
         )
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
@@ -3520,9 +3596,7 @@ class ZTERouterAPI:
 
         ad = await self.get_ad()
         payload = f"isTest=false&goformId=APN_PROC_EX&{body}&AD={ad}"
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
@@ -3535,9 +3609,7 @@ class ZTERouterAPI:
         payload = (
             f"isTest=false&goformId=ODU_LED_SWITCH_SET&ODU_led_switch={status}&AD={ad}"
         )
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
@@ -3644,9 +3716,7 @@ class ZTERouterAPI:
         ad = await self.get_ad()
         body = "&".join(f"{k}={v}" for k, v in payload_fields.items())
         payload = f"isTest=false&goformId=DATA_LIMIT_SETTING&{body}&AD={ad}"
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
@@ -3672,9 +3742,7 @@ class ZTERouterAPI:
             f"isTest=false&goformId=SET_BEARER_PREFERENCE"
             f"&BearerPreference={preference}&AD={ad}"
         )
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
+        headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )

@@ -2028,6 +2028,37 @@ def test_empty_hex_is_empty_not_an_error():
     assert api._hex_decode("") == ""
 
 
+def test_sender_number_falls_back_to_the_value_as_sent():
+    """A number that is not hex is passed through, not reported as an error.
+
+    Alphanumeric sender ids and, on some firmware, plain international
+    numbers arrive as literal text in the same field that carries UTF-16BE
+    hex from other senders. `[Decoding Error]` there discards a value that
+    was never encoded — the MC888 Pro of issue #56 shows it on every message.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode_number("Vodafone") == "Vodafone"
+    assert api._hex_decode_number("+353871234567") == "+353871234567"
+
+
+def test_sender_number_still_decodes_and_still_empties():
+    """The fallback is scoped: encoded numbers decode, absent ones stay empty."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode_number("00480065006c006c006f") == "Hello"
+    assert api._hex_decode_number("") == ""
+
+
+def test_message_content_is_not_given_the_number_fallback():
+    """A damaged body must still report a failure rather than render raw hex.
+
+    Guards the scope of the fallback above. Sharing one decoder between the
+    two fields would silently reinstate the half-rendered truncated message
+    that `_hex_decode` was written to stop.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode("004100") == "[Decoding Error]"
+
+
 # ---------------------------------------------------------------------------
 # Splitting a mandatory batch by URL budget
 # ---------------------------------------------------------------------------
