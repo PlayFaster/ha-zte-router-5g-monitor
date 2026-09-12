@@ -119,7 +119,12 @@ _WRITES: list[tuple[str, object, str, set[str]]] = [
         {"Number", "MessageBody", "ID", "encode_type", "sms_time", "notCallback"},
     ),
     (
-        "delete_sms",  # NOT hardware-verified by script — destroys data
+        # Not hardware-verified *by this script* — it destroys data, and
+        # `scripts/write_classification.py` marks it NEVER_AUTOMATED. Verified
+        # by hand against the reference MC7010 on 2026-09-12: `msg_id=153%3B`
+        # deleted message 153, and a batched `152%3B151%3B150%3B149%3B144%3B`
+        # emptied the inbox, both confirmed by re-listing.
+        "delete_sms",
         lambda api: api.delete_sms("1"),
         "DELETE_SMS",
         {"msg_id", "notCallback"},
@@ -245,7 +250,8 @@ async def test_delete_payload_matches_the_captured_browser_request(
     16 successfully: `isTest=false&goformId=DELETE_SMS&msg_id=16%3B` — a
     semicolon-terminated id, percent-encoded — `&notCallback=true&AD=...`.
     Both fields were missing here, and that device refuses every write it is
-    sent. The two MC7010 captures taken the same day carry the same form.
+    sent. The two MC7010 captures taken the same day carry the same form, and
+    this exact payload shape was accepted by that device on 2026-09-12.
 
     Locked as an ordered comparison rather than a field set, because the set
     check above cannot see a `16` that should be `16%3B`.

@@ -5,6 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.22\] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection](#3322---2026-09-12---release-browser-aligned-sms-deletion-payloads-and-dynamic-session-key-selection)
+  - [\[3.3.22-dev4\] - 2026-09-12 - Hardware Verification on the Reference MC7010](#3322-dev4---2026-09-12---hardware-verification-on-the-reference-mc7010)
   - [\[3.3.22-dev3\] - 2026-09-12 - Delete Id Encoding Corrected; Writes Are Never Resent](#3322-dev3---2026-09-12---delete-id-encoding-corrected-writes-are-never-resent)
   - [\[3.3.22-dev2\] - 2026-09-12 - SMS Delete Form Matched to the Device's Own Request](#3322-dev2---2026-09-12---sms-delete-form-matched-to-the-devices-own-request)
   - [\[3.3.22-dev1\] - 2026-09-12 - Session Check Keys Selected Per Device](#3322-dev1---2026-09-12---session-check-keys-selected-per-device)
@@ -277,6 +279,55 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.22] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection
+
+### Summary
+
+- **Browser-Aligned SMS Deletion Payloads**: Aligned `DELETE_SMS` form formatting with browser client requests across tested hardware models, ensuring single and batched message identifiers include proper percent-encoded semicolon terminators (`%3B`) and the required `notCallback=true` parameter.
+- **Dynamic Pre-Write Session Key Selection**: Pre-write session validation now dynamically selects populated status keys per device (excluding unauthenticated endpoints and unpopulated fields like `wan_connect_status`), preventing blocked write commands across varied firmware configurations.
+- **Write Replay Safety**: Replay on authentication recovery is now restricted exclusively to read requests, guaranteeing SMS sends and configuration writes are never duplicated.
+
+### Fixed
+
+- **Message ID Encoding**: Fixed message deletion formatting to percent-encode terminating semicolons (`msg_id=16%3B`), ensuring single and batch deletions parse cleanly across router CGI engines.
+- **SMS Deletion Parameter Alignment**: Added `notCallback=true` to `DELETE_SMS` command payloads to match browser client write specifications.
+- **Dynamic Pre-Write Session Validation**: Prevented pre-write session check failures on models where `wan_connect_status` is unpopulated by evaluating active session keys discovered during coordinator polling.
+- **Write Replay Guard**: Excluded write operations from automatic retry-after-login routines, ensuring SMS messages and settings changes are never executed more than once.
+- **Unencoded Sender Numbers**: Resolved `[Decoding Error]` warnings when parsing plain-text or alphanumeric sender addresses in incoming SMS messages.
+
+### Changed
+
+- **Standardized Write Request Headers**: All write operations now share unified browser-matched headers (`Accept`, `X-Requested-With`, `Origin`, and `charset=UTF-8`).
+- **Post-Refusal Error Classification**: Write refusals are classified via post-response diagnostics without replaying the command.
+
+## [3.3.22-dev4] - 2026-09-12 - Hardware Verification on the Reference MC7010
+
+### Summary
+
+`[3.3.22-dev2]` and `[3.3.22-dev3]` were built entirely from browser captures and test doubles, and had never been sent to a router. They have now been run against the reference MC7010. Every change holds, including the two that carried a risk of breaking a device that previously worked.
+
+All four write paths now have hardware evidence behind them: the data-limit form, a single delete, a batched delete and a send. One documented claim was found to be wrong and is corrected.
+
+### Verified
+
+- **The encoded delete form is accepted.** `msg_id=153%3B` removed message 153, and a batched `msg_id=152%3B151%3B150%3B149%3B144%3B` emptied the inbox. Both were confirmed by re-listing rather than by the router's own `{"result":"success"}`, which this API returns for deletions it does not perform. This is the first time either form has been sent to a router by this integration.
+
+- **The header set does not break a device that was working.** A `DATA_LIMIT_SETTING` write carrying `charset=UTF-8`, `Accept`, `X-Requested-With` and `Origin` moved the alert percentage from 81 to 79 and restored it. That was the open risk in `[3.3.22-dev2]`: the content type changed on all nine write sites, and a firmware matching it exactly would have refused writes it previously accepted.
+
+- **Witness selection behaves as designed on hardware.** Before a poll the device selects nothing and no check is made. After one it selects `wan_connect_status`, `ppp_status` and `APN_config0` — three different name families, which is what the spreading rule in `[3.3.22-dev2]` was for — and the check returns `live`.
+
+- **`SEND_SMS` sends with the new headers.** One message was delivered to a nominated handset and the sent counter moved from 0 to 1. The router answers no number of its own — `msisdn` and thirteen other spellings all read blank — so the destination was supplied at run time rather than derived, and is not recorded anywhere.
+
+### Fixed
+
+- **`repairs.py` failed `mypy`.** Three flow steps were annotated `data_entry_flow.FlowResult` where Home Assistant now expects `RepairsFlowResult`. The file had not changed since v3.3.4-dev20, so this is drift in Home Assistant rather than a regression here. The change was made during `[3.3.22-dev3]` and is carried in that commit; it is recorded here because that entry does not mention it. Verified in this release's validation run.
+
+- **A refused write does not prompt for re-authentication**, contrary to what `note_write_refusal` and the `[3.3.22-dev1]` entry both stated. `ConfigEntryAuthFailed` is raised only by the coordinator on the poll path, so a `ZTEAuthError` from a button press surfaces on the action and nothing else; the next poll is what asks the user to sign in again. Both texts are corrected.
+
+### Changed
+
+- The payload-shape lock records that the delete form was confirmed on hardware, and why the standing hardware check still does not exercise it: `scripts/write_classification.py` classifies `delete_sms` as `NEVER_AUTOMATED`, so automating it would destroy a message on every validation run.
+
 ## [3.3.22-dev3] - 2026-09-12 - Delete Id Encoding Corrected; Writes Are Never Resent
 
 ### Summary
@@ -373,7 +424,7 @@ The token and field-name fixes in `[3.3.21-dev1]` are therefore still untested o
 
 ### Changed
 
-- **A refused write is classified after the response, and never replayed.** `note_write_refusal` performs one read after the router has answered. A refusal with a dead session raises `ZTEAuthError` so Home Assistant can prompt for re-authentication; any other refusal keeps its existing error. The write is not resent: replaying was tested on hardware in an earlier release and did not work, and a replayed `SEND_SMS` can deliver the message twice.
+- **A refused write is classified after the response, and never replayed.** `note_write_refusal` performs one read after the router has answered. A refusal with a dead session raises `ZTEAuthError`, naming the session as the cause; any other refusal keeps its existing error. (Corrected in `[3.3.22-dev4]`: this entry said the exception prompts for re-authentication. It does not — only the poll path raises `ConfigEntryAuthFailed`.) The write is not resent: replaying was tested on hardware in an earlier release and did not work, and a replayed `SEND_SMS` can deliver the message twice.
 
 - **The session check now includes one key that answers without a session.** `_classify_session` compares two classes of key; a request carrying only authenticated keys returns `undecidable`, and the caller then falls back to the older all-blank rule.
 

@@ -1141,9 +1141,15 @@ class ZTERouterAPI:
         The pre-write check answers "is this session alive" by prediction; this
         answers it by evidence, once the router has already spoken. A refusal
         with a provably live session is a real refusal and keeps its own error.
-        A refusal with a provably dead session raises `ZTEAuthError`, so Home
-        Assistant can prompt for re-authentication rather than reporting that
-        the device declined a command it never saw.
+        A refusal with a provably dead session raises `ZTEAuthError`, which
+        names the session as the cause rather than reporting that the device
+        declined a command it never saw.
+
+        That exception does **not** start a reauthentication flow, and earlier
+        wording here and in the `[3.3.22-dev1]` changelog entry said it did.
+        `ConfigEntryAuthFailed` is raised only by the coordinator, on the poll
+        path; an exception from a button press surfaces on the action and
+        nothing else. The next poll is what asks the user to sign in again.
 
         **It never replays the write.** Renewing the session and resending was
         tried on hardware and did not work, and for `SEND_SMS` a replay can
