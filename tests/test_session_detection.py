@@ -65,7 +65,7 @@ def _full_core_response(populated: dict[str, str] | None = None) -> dict[str, st
         {
             "imei": "864155042229309",
             "model_name": "MC7010",
-            "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03",
+            "wa_inner_version": "xx_xxx_MC7010DV1.0.0B03",
         }
     )
     if populated:
@@ -76,7 +76,7 @@ def _full_core_response(populated: dict[str, str] | None = None) -> dict[str, st
 DEAD_SESSION_CORE = {
     "imei": "864155042229309",
     "model_name": "MC7010",
-    "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03",
+    "wa_inner_version": "xx_xxx_MC7010DV1.0.0B03",
     "network_type": "",
     "signalbar": "",
     "wan_connect_status": "",
@@ -226,7 +226,7 @@ async def test_expired_session_triggers_a_relogin(mock_aiohttp_client) -> None:
     api.last_activity = datetime.now(UTC)
     # The full batch, not an abbreviation. A dead session on this API echoes
     # every requested key back — measured on MC7010 firmware
-    # `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-30, where a cookieless read
+    # `xx_xxx_MC7010DV1.0.0B03` on 2026-08-30, where a cookieless read
     # returned 80 of 80 core keys with none absent. An eight-key stand-in is
     # a shape the router does not produce, and the classifier now declines to
     # rule on a response that dropped most of its request.
@@ -369,7 +369,7 @@ async def test_drift_can_now_fire(coordinator) -> None:
     response is correctly seen as resolving none of the contract.
     """
     coordinator._drift_baseline = {"network_type", "signalbar"}
-    drifted = {"wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03", "unexpected": "1"}
+    drifted = {"wa_inner_version": "xx_xxx_MC7010DV1.0.0B03", "unexpected": "1"}
 
     verdicts = [coordinator._check_contract_drift(drifted) for _ in range(3)]
 
@@ -439,6 +439,10 @@ async def test_the_session_check_reads_every_key_it_classifies_on(
     device that never populates that key.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    # The device populates the seeded names. Stated rather than assumed:
+    # since v3.3.22-dev3 an API object that has not polled has no witness at
+    # all, and the check it would otherwise build is skipped.
+    api._populated_keys = frozenset(_SESSION_CHECK_KEYS)
     seen: dict[str, object] = {}
 
     async def record(_method, path, **kwargs):
@@ -449,11 +453,61 @@ async def test_the_session_check_reads_every_key_it_classifies_on(
     with patch.object(api, "_request", side_effect=record):
         await api._ensure_session()
 
-    for key in _SESSION_CHECK_KEYS:
+    # The seeded names the device populates, less any the constant already
+    # knows answer without a session — those prove nothing and were never
+    # witnesses.
+    witnesses = api.session_witnesses()
+    assert witnesses == [
+        k for k in _SESSION_CHECK_KEYS if k not in _UNAUTHENTICATED_KEYS
+    ]
+    for key in witnesses:
         assert key in str(seen["path"])
-    # Passed so the absent-key guard applies: a device answering none of these
-    # is a truncated read, not an expiry.
-    assert seen["requested"] == list(_SESSION_CHECK_KEYS)
+    # A companion key that answers without a session travels with them, or
+    # `_classify_session` has only one class to look at and cannot rule.
+    requested = seen["requested"]
+    assert set(witnesses) <= set(requested)
+    assert set(requested) & _UNAUTHENTICATED_KEYS, (
+        "the check carries no unauthenticated key, so its verdict is undecidable"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_write_is_not_blocked_when_no_key_can_witness_the_session(
+    mock_aiohttp_client,
+) -> None:
+    """The MC888 Pro of issue #56, exactly as its download records it.
+
+    `ppp_status` and `model_name` are served without a session there, so
+    neither proves one, and `wan_connect_status` — the only seeded name left —
+    is blank at all times. Once that device's sessionless set was measured
+    rather than assumed, the check had no witness and scored every write as an
+    expired session. Three writes were reported failed against an empty
+    `write_failures`, because none of them was ever sent.
+
+    A device whose session cannot be judged from a read is not a device whose
+    writes should be blocked.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset(
+        {"ppp_status", "model_name", "network_type", "wa_inner_version", "imei"}
+    )
+    # What his poll returns: the seeded witness blank, the populated ones all
+    # served without a session.
+    api._populated_keys = frozenset({"ppp_status", "model_name", "network_type"})
+
+    called = False
+
+    async def record(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return {}
+
+    with patch.object(api, "_request", side_effect=record):
+        await api._ensure_session()
+
+    assert api.session_witnesses() == []
+    assert not called, "a write was blocked on a device that cannot witness itself"
+    assert api.last_session_check["verdict"].startswith("no witness")
 
 
 @pytest.mark.parametrize(
@@ -524,3 +578,132 @@ def test_the_third_key_cannot_vote_a_dead_session_alive() -> None:
         _classify_session(same_state_with_the_chosen_key, list(_SESSION_CHECK_KEYS))
         == "expired"
     )
+
+
+def test_witnesses_are_spread_across_name_families() -> None:
+    """Three readings of one subsystem are one witness, not three.
+
+    Alphabetical ordering over the MC888 Pro's populated keys selects
+    `APN_config0`, `APN_config1` and `APN_config2` — values that blank
+    together or not at all. Independent failure is the whole point of taking
+    three, so a key from another family is preferred over a second from the
+    same one.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset()
+    api._populated_keys = frozenset(
+        {"APN_config0", "APN_config1", "APN_config2", "network_type", "sms_unread_num"}
+    )
+
+    witnesses = api.session_witnesses()
+
+    assert len(witnesses) == 3
+    assert (
+        len({k.split("_", 1)[0].rstrip("0123456789").lower() for k in witnesses}) == 3
+    )
+
+
+def test_one_family_still_yields_witnesses() -> None:
+    """Preference, not exclusion: a device with a single family is not starved."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset()
+    api._populated_keys = frozenset({"APN_config0", "APN_config1", "APN_config2"})
+
+    assert len(api.session_witnesses()) == 3
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_is_undecidable_when_no_key_can_witness(
+    mock_aiohttp_client,
+) -> None:
+    """No witness means no verdict — and no read taken to pretend otherwise.
+
+    The counterpart of the pre-write case: a device that cannot prove its own
+    session must not have a refusal reclassified as an expiry on no evidence.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset({"ppp_status", "model_name"})
+    api._populated_keys = frozenset({"ppp_status", "model_name"})
+
+    with patch.object(api, "_request", new=AsyncMock()) as request:
+        verdict = await api.note_write_refusal("DELETE_SMS")
+
+    assert verdict == "undecidable"
+    assert not request.called
+    assert api.last_session_check["verdict"] == "undecidable after refusal"
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_on_a_dead_session_asks_for_reauthentication(
+    mock_aiohttp_client,
+) -> None:
+    """A refusal the read proves was an expiry is raised as an auth error.
+
+    Home Assistant starts a reauthentication flow for `ZTEAuthError` and
+    reports anything else as a failed command. A write refused because the
+    session had gone is the first of those, not the second.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset({"model_name"})
+    api._populated_keys = frozenset({"wan_connect_status", "model_name"})
+
+    # Every authenticated key blank while the unauthenticated one answers:
+    # the shape of a session the router has dropped.
+    answer = {"wan_connect_status": "", "model_name": "MC7010"}
+
+    with (
+        patch.object(api, "_request", new=AsyncMock(return_value=answer)),
+        pytest.raises(ZTEAuthError),
+    ):
+        await api.note_write_refusal("DELETE_SMS")
+
+    assert api.last_session_check["verdict"] == "expired"
+
+
+@pytest.mark.asyncio
+async def test_an_unpolled_device_has_no_witness_and_is_not_blocked() -> None:
+    """Before the first poll there is no evidence, so no check is made.
+
+    Returning the seeded names instead reinstates the fault this mechanism
+    was written for, in the window between a restart and the first completed
+    poll: on the MC888 Pro the seeded set reduces to `wan_connect_status`,
+    which is blank at all times there, so the check scores an expiry and
+    blocks a write that would have been accepted.
+
+    The pre-write check is an optimisation, not a gate. Skipping it costs at
+    most one refused write, which `note_write_refusal` then classifies from
+    the router's own answer.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset()
+
+    assert api.session_witnesses() == []
+
+    with patch.object(api, "_request", new=AsyncMock()) as request:
+        await api._ensure_session()
+
+    assert not request.called, "a device with no witness was still probed"
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_is_undecidable_when_the_check_cannot_be_read(
+    mock_aiohttp_client,
+) -> None:
+    """An unreadable check says nothing about the refusal it followed.
+
+    The read is taken after the router has already answered, so it may fail
+    for its own reasons. A refusal must keep its own error in that case, not
+    be reclassified as an expiry on a read that never arrived.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset({"model_name"})
+    api._populated_keys = frozenset({"wan_connect_status", "model_name"})
+
+    with patch.object(
+        api, "_request", new=AsyncMock(side_effect=ZTEConnectionError("unreachable"))
+    ):
+        verdict = await api.note_write_refusal("SEND_SMS")
+
+    assert verdict == "undecidable"
+    assert api.last_session_check["verdict"] == "unreadable after refusal"
+    assert api.last_session_check["after"] == "SEND_SMS"

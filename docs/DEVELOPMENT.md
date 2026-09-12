@@ -307,7 +307,7 @@ The fix is not a better total. It is to test a relationship between two classes 
 | `not_ready` | everything blank | reachable, nothing to report yet |
 | `undecidable` | no unauthenticated key requested, **or most of the request came back absent** | fall back to the weaker rule |
 
-**A verdict of `expired` requires the router to have answered what was asked** (added 3.3.5-dev2). A dead session on this API echoes every requested key back as an empty string; it does not drop them. Measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31, where a cookieless batch read returned 80 of 80 core and 36 of 36 extended keys with none absent. Keys going _missing_ is therefore a different fault — a truncated or refused request, or firmware key-name drift — and `_classify_session` declines to rule once more than `ABSENT_KEY_PROPORTION_LIMIT` of the requested authenticated keys are absent.
+**A verdict of `expired` requires the router to have answered what was asked** (added 3.3.5-dev2). A dead session on this API echoes every requested key back as an empty string; it does not drop them. Measured on MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` on 2026-08-31, where a cookieless batch read returned 80 of 80 core and 36 of 36 extended keys with none absent. Keys going _missing_ is therefore a different fault — a truncated or refused request, or firmware key-name drift — and `_classify_session` declines to rule once more than `ABSENT_KEY_PROPORTION_LIMIT` of the requested authenticated keys are absent.
 
 Two constraints on that guard, both learned by breaking them:
 

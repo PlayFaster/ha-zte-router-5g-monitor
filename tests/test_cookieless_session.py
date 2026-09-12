@@ -1,6 +1,6 @@
 """Sessions the router does not carry in a `stok` cookie.
 
-Issue #56: an MC888 Pro on `CR_ABPLMC888PROV1.0.1B04` answers a successful
+Issue #56: an MC888 Pro on `CR_xxxxMC888PROV1.0.1B04` answers a successful
 `LOGIN` with `{"result":"0"}` and no `Set-Cookie` at all, binding the session
 to the client address instead. Testing the cookie alone scored that success as
 a connection failure and reported it to the user as an unreachable router.
@@ -285,7 +285,7 @@ async def test_the_single_user_form_keeps_username_when_one_is_configured(
 ):
     """Measured, not inherited from the reference implementation.
 
-    On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` both `username=` and
+    On MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` both `username=` and
     `user=` are accepted on `LOGIN` and yield a usable session, but omitting
     the field — which is `mc.py`'s shape for this form — makes the router
     close the connection without answering.
@@ -365,7 +365,7 @@ async def test_every_cookie_in_the_response_is_replayed(mock_aiohttp_client):
 async def test_a_session_cookie_named_zsidn_is_replayed(mock_aiohttp_client):
     """The reported defect, from the reporter's own diagnostics.
 
-    An MC888 Pro on `BD_ABPLMC888PROMODV1.0.0B01` answers a successful
+    An MC888 Pro on `xx_xxxxMC888PROMODV1.0.0B01` answers a successful
     `LOGIN` with `{"result":"0"}` and a cookie named `zsidn`. Matching the
     literal name `stok` discarded it, so every request went out
     unauthenticated and six of eighty-two keys came back populated behind a

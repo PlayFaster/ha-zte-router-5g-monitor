@@ -57,7 +57,7 @@ GOOD_PAYLOAD: dict[str, Any] = {
     "signalbar": "4",
     "realtime_time": "3600",
     "wan_connect_status": "ppp_connected",
-    "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B01",
+    "wa_inner_version": "xx_xxx_MC7010DV1.0.0B01",
     "model_name": "MC7010",
     "lte_rsrp": "-95",
     "lte_rsrq": "-11",
@@ -92,7 +92,7 @@ CAPACITY_PAYLOAD: dict[str, Any] = {
 #
 # Built over the whole core batch, not over `GOOD_PAYLOAD` alone. The router
 # echoes every key it was asked for whether or not the session is alive —
-# measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-30, where
+# measured on MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` on 2026-08-30, where
 # a cookieless read returned 80 of 80 core keys with none absent. The
 # classifier now weighs how much of the request came back, so a fake that
 # answers a fraction of it is a shape the router never produces and is

@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -119,10 +119,15 @@ _WRITES: list[tuple[str, object, str, set[str]]] = [
         {"Number", "MessageBody", "ID", "encode_type", "sms_time", "notCallback"},
     ),
     (
-        "delete_sms",  # NOT hardware-verified by script — destroys data
+        # Not hardware-verified *by this script* — it destroys data, and
+        # `scripts/write_classification.py` marks it NEVER_AUTOMATED. Verified
+        # by hand against the reference MC7010 on 2026-09-12: `msg_id=153%3B`
+        # deleted message 153, and a batched `152%3B151%3B150%3B149%3B144%3B`
+        # emptied the inbox, both confirmed by re-listing.
+        "delete_sms",
         lambda api: api.delete_sms("1"),
         "DELETE_SMS",
-        {"msg_id"},
+        {"msg_id", "notCallback"},
     ),
 ]
 
@@ -209,8 +214,8 @@ async def test_delete_all_reuses_the_delete_payload(mock_aiohttp_client):
 
     payload = mock_aiohttp_client.post.call_args_list[1][1]["data"]
     assert "goformId=DELETE_SMS" in payload
-    assert re.search(r"msg_id=1;2(&|$)", payload), (
-        f"ids are no longer semicolon-joined: {payload}"
+    assert re.search(r"msg_id=1%3B2%3B(&|$)", payload), (
+        f"ids are no longer semicolon-terminated and encoded: {payload}"
     )
 
 
@@ -233,3 +238,119 @@ def test_every_write_command_has_a_locked_shape():
         "Add an entry to _WRITES so a future change to what it sends cannot "
         "pass unnoticed."
     )
+
+
+@pytest.mark.asyncio
+async def test_delete_payload_matches_the_captured_browser_request(
+    mock_aiohttp_client,
+):
+    """The delete form, field for field, as the router's own page sends it.
+
+    Captured from the MC888 Pro of issue #56 on 2026-09-11, deleting message
+    16 successfully: `isTest=false&goformId=DELETE_SMS&msg_id=16%3B` — a
+    semicolon-terminated id, percent-encoded — `&notCallback=true&AD=...`.
+    Both fields were missing here, and that device refuses every write it is
+    sent. The two MC7010 captures taken the same day carry the same form, and
+    this exact payload shape was accepted by that device on 2026-09-12.
+
+    Locked as an ordered comparison rather than a field set, because the set
+    check above cannot see a `16` that should be `16%3B`.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "success"}
+    )
+
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+        patch.object(api, "_ensure_session"),
+    ):
+        await api.delete_sms("16")
+
+    payload = mock_aiohttp_client.post.call_args[1]["data"]
+    assert payload == (
+        "isTest=false&goformId=DELETE_SMS&msg_id=16%3B&notCallback=true&AD=test_ad"
+    )
+
+
+@pytest.mark.asyncio
+async def test_delete_does_not_double_the_terminator(mock_aiohttp_client):
+    """A caller that already terminated its ids gets them back unchanged.
+
+    `delete_all` joins ids here, and a service call may pass either form.
+    `16%3B%3B` is not what the device was captured accepting. The encoding
+    is asserted too: a bare `;` is still a parameter separator to some CGI
+    parsers, which would drop the terminator and truncate a batch at the
+    first id.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "success"}
+    )
+
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+        patch.object(api, "_ensure_session"),
+    ):
+        await api.delete_sms("1;2;")
+
+    payload = mock_aiohttp_client.post.call_args[1]["data"]
+    assert "msg_id=1%3B2%3B&" in payload
+    assert "%3B%3B" not in payload
+    assert ";" not in payload, f"a bare semicolon reached the wire: {payload}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("label", "call", "goform_id", "expected"),
+    _WRITES,
+    ids=[w[0] for w in _WRITES],
+)
+async def test_every_write_sends_the_headers_the_router_expects(
+    mock_aiohttp_client, label, call, goform_id, expected
+):
+    """Nine write sites, one header set.
+
+    The router's own page sends a charset on the content type, an `Accept`,
+    an `X-Requested-With` and an `Origin`. Every site here sent `Content-Type`
+    alone. Parametrized over the same table as the payload shapes so a new
+    command cannot be added with a header dict of its own.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "success"}
+    )
+
+    with (
+        patch.object(api, "get_ad", return_value="test_ad"),
+        patch.object(api, "login"),
+        patch.object(api, "_ensure_session"),
+    ):
+        await call(api)
+
+    sent = mock_aiohttp_client.post.call_args[1]["headers"]
+    assert sent["Content-Type"] == (
+        "application/x-www-form-urlencoded; charset=UTF-8"
+    ), f"{label}: the charset is missing from the content type"
+    assert sent["X-Requested-With"] == "XMLHttpRequest", f"{label}"
+    assert sent["Accept"].startswith("application/json"), f"{label}"
+    assert sent["Origin"] == "http://192.168.0.1", f"{label}: origin is wrong"
+    assert sent["Referer"] == "http://192.168.0.1/index.html", f"{label}"
+
+
+def test_origin_follows_the_discovered_protocol():
+    """`Origin` is derived, not stored — the referer is rewritten on discovery."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    api.referer = "https://192.168.0.1/"
+    assert api.write_headers()["Origin"] == "https://192.168.0.1"

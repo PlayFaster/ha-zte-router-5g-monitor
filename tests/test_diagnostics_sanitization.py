@@ -69,7 +69,7 @@ ROUTER_PAYLOAD = {
     },
     # --- must survive: this is the diagnostic substance ---
     "model_name": "MC7010",
-    "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B01",
+    "wa_inner_version": "xx_xxx_MC7010DV1.0.0B01",
     "hardware_version": "WR_A1",
     "network_type": "ENDC",
     "signalbar": "4",
@@ -104,7 +104,7 @@ SECRETS = (
 
 SUBSTANCE = (
     "MC7010",
-    "IRL_H3G_MC7010DV1.0.0B01",
+    "xx_xxx_MC7010DV1.0.0B01",
     "WR_A1",
     "ENDC",
     "-95.5",

@@ -7,7 +7,7 @@ that gap: the payload behind a non-live verdict, the verdict and key map, and
 what the login response looked like.
 
 The absent-key rule is here too because it decides what counts as a rejection.
-Its premise was measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on
+Its premise was measured on MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` on
 2026-08-30: a cookieless batch read returned 80 of 80 core and 36 of 36
 extended keys with none absent, so a dead session echoes its request back
 rather than dropping it.

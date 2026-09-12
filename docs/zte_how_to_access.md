@@ -6,7 +6,7 @@ This document details how this integration navigates the ZTE `goform` interface 
 
 Everything below is drawn from `custom_components/zte_router_5g/api.py` and verified against live hardware. Where a claim was confirmed against a specific model or firmware, that is stated.
 
-**Last verified against hardware:** 2026-09-02, MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`, at `[3.3.9-dev11]`.
+**Last verified against hardware:** 2026-09-02, MC7010 firmware `xx_xxx_MC7010DV1.0.0B03`, at `[3.3.9-dev11]`.
 
 ---
 
@@ -46,13 +46,13 @@ Login is a challenge-response over SHA-256, not a credential POST. Four steps, i
    | `LOGIN`            | `username=`    | None         |
    | `LOGIN_MULTI_USER` | `user=`        | `AD=<token>` |
 
-   The multi-user shape follows `mc.py`. The single-user shape is measured: on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` both spellings are accepted on `LOGIN` and yield a usable session, while omitting the field makes the router close the connection without answering. The login-time `AD` is derived by `_login_ad()` from `wa_inner_version` and `RD`, both of which answer without a session; a router that will not return `RD` gets the attempt without the token rather than a failed login.
+   The multi-user shape follows `mc.py`. The single-user shape is measured: on MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` both spellings are accepted on `LOGIN` and yield a usable session, while omitting the field makes the router close the connection without answering. The login-time `AD` is derived by `_login_ad()` from `wa_inner_version` and `RD`, both of which answer without a session; a router that will not return `RD` gets the attempt without the token rather than a failed login.
 
-**The session cookie is not always called `stok`.** An MC888 Pro on `BD_ABPLMC888PROMODV1.0.0B01` names it `zsidn`, confirmed from that device's own diagnostics download (issue #56). The client keeps every cookie the login response sets and replays all of them, rather than looking for one name — which cookie carries the session is the router's business, and a rule for telling them apart does not survive contact with a firmware nobody has seen.
+**The session cookie is not always called `stok`.** An MC888 Pro on `xx_xxxxMC888PROMODV1.0.0B01` names it `zsidn`, confirmed from that device's own diagnostics download (issue #56). The client keeps every cookie the login response sets and replays all of them, rather than looking for one name — which cookie carries the session is the router's business, and a rule for telling them apart does not survive contact with a firmware nobody has seen.
 
 The session token most often arrives as a **`stok` cookie**, which is then sent as a literal `Cookie: stok=<value>` header on every subsequent request. The value is stripped of surrounding double quotes before use — some firmware quotes it, and passing the quoted form back produces a silent session failure rather than an error.
 
-**Not every firmware issues one.** An MC888 Pro on `CR_ABPLMC888PROV1.0.1B04` answers a successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie` at all, binding the session to the client address instead; reported as issue #56 and analyzed in `.notes/issues/other_router_access/mc888_pro_login_failed_missing_stok_56.md`. A login is therefore established on a cookie **or** an explicit success `result`, and a session with no cookie sends no `Cookie` header. A response carrying neither a cookie nor a success `result` has established nothing and is reported as a connection error.
+**Not every firmware issues one.** An MC888 Pro on `CR_xxxxMC888PROV1.0.1B04` answers a successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie` at all, binding the session to the client address instead; reported as issue #56 and analyzed in `.notes/issues/other_router_access/mc888_pro_login_failed_missing_stok_56.md`. A login is therefore established on a cookie **or** an explicit success `result`, and a session with no cookie sends no `Cookie` header. A response carrying neither a cookie nor a success `result` has established nothing and is reported as a connection error.
 
 The token is looked for in four places before that conclusion is drawn (`_extract_stok`), because a token that exists but is not found is worse than none — the session is replayed without it and the router answers by echoing the authenticated keys back empty:
 
@@ -209,7 +209,7 @@ The middle state is the one that surprises. On the MC7010, `data_volume_clear_da
 
 #### Refusal — the fourth state
 
-Measured 2026-09-02 on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`. Eleven `tr069_` configuration names — `tr069_CPEPortNo`, `tr069_CertEnable`, `tr069_ConnectionRequestPassword`, `tr069_ConnectionRequestUname`, `tr069_DataModule`, `tr069_PeriodicInformEnable`, `tr069_PeriodicInformInterval`, `tr069_ServerPassword`, `tr069_ServerURL`, `tr069_ServerUsername`, `tr069_Webui_DataModuleSupport` — each answer `{"result": "failure"}` in 40 to 60 milliseconds. `tr069_ReqURL` answers normally on the same device, with a live ACS callback URL on port 7547, so the prefix is not refused as a block.
+Measured 2026-09-02 on MC7010 firmware `xx_xxx_MC7010DV1.0.0B03`. Eleven `tr069_` configuration names — `tr069_CPEPortNo`, `tr069_CertEnable`, `tr069_ConnectionRequestPassword`, `tr069_ConnectionRequestUname`, `tr069_DataModule`, `tr069_PeriodicInformEnable`, `tr069_PeriodicInformInterval`, `tr069_ServerPassword`, `tr069_ServerURL`, `tr069_ServerUsername`, `tr069_Webui_DataModuleSupport` — each answer `{"result": "failure"}` in 40 to 60 milliseconds. `tr069_ReqURL` answers normally on the same device, with a live ACS callback URL on port 7547, so the prefix is not refused as a block.
 
 Three consequences, each of which has caused a defect here:
 
@@ -743,7 +743,7 @@ An unreadable or implausible offset now costs the offset and not the timestamp. 
 
 Both times this interface has been extended, the same two-step method found things that guesswork did not. Recorded so it can be repeated rather than reinvented.
 
-**This is now automated.** `api.mine_candidate_names()` fetches the bundles and extracts their `cmd=` literals when a diagnostics download is generated, and the result is probed and published in that file. Measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-09-02: `js/service.js` carries **642 names**, `home.js` 62, `main.js` 24 and `app.js` 4, for 619 distinct names after write commands are excluded. On that device `js/statusBar.js` answers HTTP 404 and the index page names no scripts, but the static bundle list is kept as named below, because a bundle absent on one firmware may be present on another.
+**This is now automated.** `api.mine_candidate_names()` fetches the bundles and extracts their `cmd=` literals when a diagnostics download is generated, and the result is probed and published in that file. Measured on MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` on 2026-09-02: `js/service.js` carries **642 names**, `home.js` 62, `main.js` 24 and `app.js` 4, for 619 distinct names after write commands are excluded. On that device `js/statusBar.js` answers HTTP 404 and the index page names no scripts, but the static bundle list is kept as named below, because a bundle absent on one firmware may be present on another.
 
 **Mining one device is not enough, and the two facts are independent.** Whether a device's web UI _mentions_ a name and whether the device _answers_ it are separate questions. The MC888 Pro answered 102 names that appear nowhere in the MC7010's mined set, its values or its no-answer list. Every device is therefore probed with the union of names seen anywhere — `known_names.py`, 758 observed names plus 21 that another project expects — as well as with its own mined set. Measured effect on the reference device: 90 names answered before the union, 102 after.
 
@@ -809,7 +809,7 @@ So the test is **"every value is an empty string"**, not "these named keys are e
 
 Note that an **empty inbox** returns `{"messages":[]}` — the contract key is present. That is what makes "no messages" distinguishable from "no session", and any check here must preserve the distinction.
 
-**The keys are echoed, not omitted.** A dead session returns every key the request asked for, with the values blanked; it does not shorten the response. Measured on firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31 by sending a batch read with no session cookie: 80 of 80 core keys and 36 of 36 extended keys came back, none absent. That experiment also reproduced the unauthenticated set exactly — `imei`, `model_name` and `wa_inner_version` in the core batch, `opms_wan_mode` and `opms_wan_auto_mode` in the extended one — which is the same set the invalidated-`stok` replay produced, so the two experiments agree on this device.
+**The keys are echoed, not omitted.** A dead session returns every key the request asked for, with the values blanked; it does not shorten the response. Measured on firmware `xx_xxx_MC7010DV1.0.0B03` on 2026-08-31 by sending a batch read with no session cookie: 80 of 80 core keys and 36 of 36 extended keys came back, none absent. That experiment also reproduced the unauthenticated set exactly — `imei`, `model_name` and `wa_inner_version` in the core batch, `opms_wan_mode` and `opms_wan_auto_mode` in the extended one — which is the same set the invalidated-`stok` replay produced, so the two experiments agree on this device.
 
 A key going **missing** is therefore a different fault from a key coming back **empty**: a truncated or refused request, or a firmware that spells it differently. Since 3.3.5-dev2 the client will not read an expired session from a response that lost most of its request.
 

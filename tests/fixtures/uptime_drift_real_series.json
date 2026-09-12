@@ -283,7 +283,7 @@
   ],
   "source": {
     "device": "ZTE MC7010",
-    "firmware": "IRL_H3G_MC7010DV1.0.0B03",
+    "firmware": "xx_xxx_MC7010DV1.0.0B03",
     "captured_utc": "2026-09-01T16:58:38+00:00",
     "entity": "sensor.zte_5g_system_uptime_duration"
   }

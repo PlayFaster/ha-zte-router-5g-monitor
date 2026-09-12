@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from .coordinator import ZTERouterDataUpdateCoordinator
 
 # Known model strings to detect from the wa_inner_version firmware string.
-# e.g. 'IRL_H3G_MC7010DV1.0.0B01' → 'MC7010'
+# e.g. 'xx_xxx_MC7010DV1.0.0B01' → 'MC7010'
 _KNOWN_MODELS = ["MC7010", "MC801", "MC888", "MC889"]
 
 
@@ -71,7 +71,7 @@ def get_router_model(coordinator_data: dict[str, Any] | None) -> str:
     """Extract the router model from coordinator data.
 
     Checks 'model_name' first (e.g. 'MC7010'), then falls back to parsing
-    'wa_inner_version' (e.g. 'IRL_H3G_MC7010DV1.0.0B01').
+    'wa_inner_version' (e.g. 'xx_xxx_MC7010DV1.0.0B01').
     Returns 'ZTE Router' if no model is recognized.
     """
     if not coordinator_data:

@@ -5,12 +5,17 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.22\] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection](#3322---2026-09-12---release-browser-aligned-sms-deletion-payloads-and-dynamic-session-key-selection)
+  - [\[3.3.22-dev4\] - 2026-09-12 - Hardware Verification on the Reference MC7010](#3322-dev4---2026-09-12---hardware-verification-on-the-reference-mc7010)
+  - [\[3.3.22-dev3\] - 2026-09-12 - Delete Id Encoding Corrected; Writes Are Never Resent](#3322-dev3---2026-09-12---delete-id-encoding-corrected-writes-are-never-resent)
+  - [\[3.3.22-dev2\] - 2026-09-12 - SMS Delete Form Matched to the Device's Own Request](#3322-dev2---2026-09-12---sms-delete-form-matched-to-the-devices-own-request)
+  - [\[3.3.22-dev1\] - 2026-09-12 - Session Check Keys Selected Per Device](#3322-dev1---2026-09-12---session-check-keys-selected-per-device)
   - [\[3.3.21\] - Release - 2026-09-11 - MC888 Pro Write Token](#3321---release---2026-09-11---mc888-pro-write-token)
-  - [\[3.3.21-dev1\] - 2026-09-11 - The Write Token Carries Both Operands: The Cause of Issue #56](#3321-dev1---2026-09-11---the-write-token-carries-both-operands-the-cause-of-issue-56)
+  - [\[3.3.21-dev1\] - 2026-09-11 - Write Token Uses Both Operands; Data-Limit Field Spellings Corrected](#3321-dev1---2026-09-11---write-token-uses-both-operands-data-limit-field-spellings-corrected)
   - [\[3.3.20\] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions](#3320---2026-09-11---probe-v7-release-diagnostic-source-crawl-and-tiered-probing-actions)
-  - [\[3.3.20-dev5\] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic](#3320-dev5---2026-09-11---browser-write-capture-a-tool-outside-the-repository-and-the-first-verified-token-arithmetic)
+  - [\[3.3.20-dev5\] - 2026-09-11 - Browser Write Capture Tool; Write Token Verified Against an Accepted Token](#3320-dev5---2026-09-11---browser-write-capture-tool-write-token-verified-against-an-accepted-token)
   - [\[3.3.20-dev4\] - 2026-09-11 - Sweep Exemption Verified, Bundle List Corrected, Hardware Check Improved](#3320-dev4---2026-09-11---sweep-exemption-verified-bundle-list-corrected-hardware-check-improved)
-  - [\[3.3.20-dev3\] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send](#3320-dev3---2026-09-11---sms-probe-v7-the-capture-made-fit-to-send)
+  - [\[3.3.20-dev3\] - 2026-09-11 - SMS Probe V7: Capture Corrections Before Release](#3320-dev3---2026-09-11---sms-probe-v7-capture-corrections-before-release)
   - [\[3.3.20-dev2\] - 2026-09-11 - SMS Probe V7: Three Probe Actions, and the Full Source Capture](#3320-dev2---2026-09-11---sms-probe-v7-three-probe-actions-and-the-full-source-capture)
   - [\[3.3.20-dev1\] - 20206-09-11 - CI Bump Ruff](#3320-dev1---20206-09-11---ci-bump-ruff)
   - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
@@ -274,6 +279,170 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.22] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection
+
+### Summary
+
+- **Browser-Aligned SMS Deletion Payloads**: Aligned `DELETE_SMS` form formatting with browser client requests across tested hardware models, ensuring single and batched message identifiers include proper percent-encoded semicolon terminators (`%3B`) and the required `notCallback=true` parameter.
+- **Dynamic Pre-Write Session Key Selection**: Pre-write session validation now dynamically selects populated status keys per device (excluding unauthenticated endpoints and unpopulated fields like `wan_connect_status`), preventing blocked write commands across varied firmware configurations.
+- **Write Replay Safety**: Replay on authentication recovery is now restricted exclusively to read requests, guaranteeing SMS sends and configuration writes are never duplicated.
+
+### Fixed
+
+- **Message ID Encoding**: Fixed message deletion formatting to percent-encode terminating semicolons (`msg_id=16%3B`), ensuring single and batch deletions parse cleanly across router CGI engines.
+- **SMS Deletion Parameter Alignment**: Added `notCallback=true` to `DELETE_SMS` command payloads to match browser client write specifications.
+- **Dynamic Pre-Write Session Validation**: Prevented pre-write session check failures on models where `wan_connect_status` is unpopulated by evaluating active session keys discovered during coordinator polling.
+- **Write Replay Guard**: Excluded write operations from automatic retry-after-login routines, ensuring SMS messages and settings changes are never executed more than once.
+- **Unencoded Sender Numbers**: Resolved `[Decoding Error]` warnings when parsing plain-text or alphanumeric sender addresses in incoming SMS messages.
+
+### Changed
+
+- **Standardized Write Request Headers**: All write operations now share unified browser-matched headers (`Accept`, `X-Requested-With`, `Origin`, and `charset=UTF-8`).
+- **Post-Refusal Error Classification**: Write refusals are classified via post-response diagnostics without replaying the command.
+
+## [3.3.22-dev4] - 2026-09-12 - Hardware Verification on the Reference MC7010
+
+### Summary
+
+`[3.3.22-dev2]` and `[3.3.22-dev3]` were built entirely from browser captures and test doubles, and had never been sent to a router. They have now been run against the reference MC7010. Every change holds, including the two that carried a risk of breaking a device that previously worked.
+
+All four write paths now have hardware evidence behind them: the data-limit form, a single delete, a batched delete and a send. One documented claim was found to be wrong and is corrected.
+
+### Verified
+
+- **The encoded delete form is accepted.** `msg_id=153%3B` removed message 153, and a batched `msg_id=152%3B151%3B150%3B149%3B144%3B` emptied the inbox. Both were confirmed by re-listing rather than by the router's own `{"result":"success"}`, which this API returns for deletions it does not perform. This is the first time either form has been sent to a router by this integration.
+
+- **The header set does not break a device that was working.** A `DATA_LIMIT_SETTING` write carrying `charset=UTF-8`, `Accept`, `X-Requested-With` and `Origin` moved the alert percentage from 81 to 79 and restored it. That was the open risk in `[3.3.22-dev2]`: the content type changed on all nine write sites, and a firmware matching it exactly would have refused writes it previously accepted.
+
+- **Witness selection behaves as designed on hardware.** Before a poll the device selects nothing and no check is made. After one it selects `wan_connect_status`, `ppp_status` and `APN_config0` — three different name families, which is what the spreading rule in `[3.3.22-dev2]` was for — and the check returns `live`.
+
+- **`SEND_SMS` sends with the new headers.** One message was delivered to a nominated handset and the sent counter moved from 0 to 1. The router answers no number of its own — `msisdn` and thirteen other spellings all read blank — so the destination was supplied at run time rather than derived, and is not recorded anywhere.
+
+### Fixed
+
+- **`repairs.py` failed `mypy`.** Three flow steps were annotated `data_entry_flow.FlowResult` where Home Assistant now expects `RepairsFlowResult`. The file had not changed since v3.3.4-dev20, so this is drift in Home Assistant rather than a regression here. The change was made during `[3.3.22-dev3]` and is carried in that commit; it is recorded here because that entry does not mention it. Verified in this release's validation run.
+
+- **A refused write does not prompt for re-authentication**, contrary to what `note_write_refusal` and the `[3.3.22-dev1]` entry both stated. `ConfigEntryAuthFailed` is raised only by the coordinator on the poll path, so a `ZTEAuthError` from a button press surfaces on the action and nothing else; the next poll is what asks the user to sign in again. Both texts are corrected.
+
+### Changed
+
+- The payload-shape lock records that the delete form was confirmed on hardware, and why the standing hardware check still does not exercise it: `scripts/write_classification.py` classifies `delete_sms` as `NEVER_AUTOMATED`, so automating it would destroy a message on every validation run.
+
+## [3.3.22-dev3] - 2026-09-12 - Delete Id Encoding Corrected; Writes Are Never Resent
+
+### Summary
+
+`[3.3.22-dev2]` added the semicolon that terminates a message id but sent it as a literal `;`. All three browser captures percent-encode it, on both devices. That is corrected here.
+
+Two further faults were found while re-reading the captures against the code. `_request` re-sends a write after a re-login when the refusal body matches one of its auth shapes, which can deliver an SMS twice and defeats the no-replay guarantee stated in `[3.3.22-dev1]`. And a device that has not yet polled selects a session-check key it may never populate, which blocks writes in the window after a restart.
+
+### Fixed
+
+- **`msg_id` is percent-encoded.** The captures send `msg_id=16%3B` for a single delete and the same encoding for a batch. A bare `;` was a legal parameter separator in form bodies for long enough that CGI parsers still split on it, which would discard the terminator and truncate a batch at the first id. Two MC7010 captures and one MC888 Pro capture agree, all three answered `{"result":"success"}`.
+
+- **A write is never put a second time.** `_request` treats a `result` of `fail`, `unauth` or `session expired`, and a response whose every value is empty, as a session problem, and its recovery path re-sends the original request after logging in again. That path did not distinguish a read from a write, so a refused `SEND_SMS` could be delivered twice with nothing in the response to show it. `note_write_refusal` has stated since `[3.3.22-dev1]` that a refused write is never replayed; that guarantee did not hold, because `_request` had already replayed it before any command inspected its own result. Writes are now excluded from all three recovery paths and raise instead; reads keep the recovery unchanged.
+
+- **A device that has not polled has no session-check key.** The previous fallback returned the seeded names, and on the MC888 Pro those reduce to `wan_connect_status`, which is blank at all times there. A blank key scores as an expiry, so a write attempted between a restart and the first completed poll was blocked exactly as in `[3.3.21]`. Where there is no evidence, no check is made and the router's answer decides.
+
+- **A replayed token is not necessarily stale, and the guard does not depend on it being so.** It was proposed during this release that re-login-and-replay had been measured ineffective because the resent body carried a spent nonce. `scripts/hardware_check.py` asserts the opposite — `RD` is stable within a session on the reference MC7010 — and whether it survives a re-login has flip-flopped across observations. A resent write may well be accepted, which is the hazard rather than a mitigation of it. Why replay was measured ineffective remains unexplained, as `_ensure_session` has recorded since it was written.
+
+### Changed
+
+- **`Origin` is documented as deliberate.** It appears in none of the three captures, because the capture tool records only headers the page sets through `setRequestHeader`. The Fetch standard requires the browser to add `Origin` to any request whose method is not `GET` or `HEAD`, so all three captured deletes carried one. The header stays, with the reasoning recorded against it so it is not removed later as unevidenced.
+
+### Added
+
+- A test that a write answered with each of the two auth-shaped bodies is sent once and raises, and a companion test that a read is still retried, so the guard cannot be widened into the recovery it must not touch.
+
+- A test that an unpolled device selects no key and is not probed before a write.
+
+- The dead-session double now decodes `msg_id` before splitting it, as the router's CGI must. Left as it was, it would have read `1%3B` as an id and reported every delete as ignored.
+
+### Verified
+
+- 1,656 tests, at 100% line and branch coverage.
+
+- Seven `get_ad` tests and the recovery sweep now state that the device has polled, rather than relying on the fallback this release removed.
+
+- Not yet tested on hardware.
+
+## [3.3.22-dev2] - 2026-09-12 - SMS Delete Form Matched to the Device's Own Request
+
+### Summary
+
+`[3.3.22-dev1]` removed the pre-write block on the MC888 Pro of [issue #56](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues/56), so a delete now reaches the router. This release corrects the request that is sent, against the browser capture taken from that device on 2026-09-11 while its own web page deleted a message successfully.
+
+Two fields differed. The captured request terminates each message id with a semicolon and carries `notCallback=true`; this integration sent neither. Both are now sent, and the write headers match what the device's own page sends.
+
+### Bumps
+
+- **Shared CI**: Bump `.github` Shared CI Validation via SHA from v2.0.14 to v2.0.15
+
+### Fixed
+
+- **`msg_id` is semicolon-terminated.** The capture shows `msg_id=16%3B` for a single delete. The integration sent `msg_id=16`. The terminator is appended only when the value does not already end in one, because `delete_all` joins its ids here and a caller may pass either form.
+
+- **`DELETE_SMS` carries `notCallback=true`.** The device's own page sends it, and this integration's `SEND_SMS` already did. Only `DELETE_SMS` was missing it.
+
+- **A sender number that is not encoded is reported as sent.** `_hex_decode` returned `[Decoding Error]` for any value that is not UTF-16BE hex, and alphanumeric sender ids — and on some firmware plain international numbers — arrive as literal text. Every message in the MC888 Pro download shows that error. The fallback is scoped to the number field: a message body that will not decode still reports a failure, because a truncated payload must not be half-rendered.
+
+### Changed
+
+- **Write headers are built in one place and match the router's own client.** The nine write sites each held their own header dictionary sending `Content-Type` alone. They now share `write_headers`, which adds `charset=UTF-8` to the content type and sends `Accept`, `X-Requested-With` and `Origin`. No firmware is known to require them; they remove a difference from the request the device is known to accept. `Origin` is derived from the referer rather than stored, because the referer is rewritten when the protocol is discovered.
+
+- **Session check keys are spread across name families.** Ordering the candidates alphabetically selects `APN_config0`, `APN_config1` and `APN_config2` on the MC888 Pro — three readings of one subsystem, which blank together or not at all. Reading three keys is only useful if they can fail independently. The stem is a heuristic over names and is used to prefer one ordering over another, never to exclude a key, so a device with a single family is no worse off than before.
+
+### Added
+
+- The delete payload is locked as a whole string against the captured request, rather than as a field set. A field-set check cannot see a `16` that should be `16;`.
+
+- The header set is asserted for every write command in the same table that locks the payload shapes, so a new command cannot arrive with a header dictionary of its own.
+
+### Verified
+
+- 1,650 tests, at 100% line and branch coverage. New coverage for the terminator not being doubled, for the number fallback and for the body decoding that must not inherit it, and for the two `note_write_refusal` paths.
+
+- Not yet tested on hardware. Whether the MC888 Pro accepts this form is unknown; the reference MC7010 accepted it at probe rung `23c`.
+
+## [3.3.22-dev1] - 2026-09-12 - Session Check Keys Selected Per Device
+
+### Summary
+
+On the MC888 Pro of [issue #56](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues/56), `[3.3.21]` had no effect because no write reached the router. SMS delete, send SMS and the data-limit switch all failed at the pre-write session check, before a token was derived. The download records three reported failures against an empty `write_failures`, and a `last_delete` two days old.
+
+The token and field-name fixes in `[3.3.21-dev1]` are therefore still untested on that device.
+
+### Fixed
+
+- **The session check used keys that cannot indicate a session on every device.** It read `wan_connect_status`, `ppp_status` and `model_name`, and `_classify_session` returns `live` only when an authenticated key carries a value. On the MC888 Pro, `ppp_status` and `model_name` are served without a session and `wan_connect_status` is always blank, so no key in the request could indicate a live session. The keys are now selected per device: those the last poll populated, minus those the device serves without a session.
+
+- **The fault appeared when the sessionless key set began measuring successfully.** That set is measured during background setup, on every start and reload, and held for the life of the API object. The reporter's device previously did not acknowledge a logout, so the measurement returned nothing and the five-name constant applied, under which `ppp_status` counted as authenticated. It now acknowledges a logout, the measurement returns 13 keys including `ppp_status`, and no key in the check qualifies. The measurement is correct; it removed the only key that had been indicating a session on that device.
+
+- **A write is no longer blocked on a device where no key can indicate the session.** Where no key qualifies, the write is sent and the router's response is reported.
+
+- **`get_params` selected its sentinel key the same way**, appending `wan_connect_status` on the stated grounds that it "is populated whenever the session is alive". It now uses the keys selected for that device first.
+
+### Changed
+
+- **A refused write is classified after the response, and never replayed.** `note_write_refusal` performs one read after the router has answered. A refusal with a dead session raises `ZTEAuthError`, naming the session as the cause; any other refusal keeps its existing error. (Corrected in `[3.3.22-dev4]`: this entry said the exception prompts for re-authentication. It does not — only the poll path raises `ConfigEntryAuthFailed`.) The write is not resent: replaying was tested on hardware in an earlier release and did not work, and a replayed `SEND_SMS` can deliver the message twice.
+
+- **The session check now includes one key that answers without a session.** `_classify_session` compares two classes of key; a request carrying only authenticated keys returns `undecidable`, and the caller then falls back to the older all-blank rule.
+
+### Added
+
+- **`session_witnesses` and `last_session_check` in the diagnostics download.** A write blocked before being sent previously left no record, which is why the reporter's download showed an empty `write_failures` against three reported failures.
+
+### Verified
+
+- Simulated against the reporter's download: under the previous logic the check reduces to `wan_connect_status`, which is blank, giving `undecidable` and then `expired`. Under the new logic three keys qualify and the verdict is `live`.
+- Tested on the reference MC7010: keys selected before and after a poll, a `DATA_LIMIT_SETTING` write moved the alert percentage from 81 to 80, `last_session_check` recorded `live`, and the value was restored.
+- 1,628 tests, with new coverage for a device where no key qualifies, for the unauthenticated companion key, and for a refusal classified without the write being resent.
+
+### Known Issues
+
+- Whether the `[3.3.21]` token fix is correct on that device is still unknown, and can now be tested.
+- Sender numbers show `[Decoding Error]` in `get_sms_list` on that device. Unrelated to the write path, recorded as item 70 of the v3.4.0 plan.
+
 ## [3.3.21] - Release - 2026-09-11 - MC888 Pro Write Token
 
 ### Fixed
@@ -286,21 +455,21 @@ All changes to this project will be documented in this file. This is the detaile
 
 ### Changed
 
-- **A failed `cr_version` read stops the write rather than degrading it.** Answered-and-empty and unreadable look alike and are not: the first gives the correct token on a device without a `cr_version`, the second would give a single-operand token on a device that has one — the fault above. `get_version` is deliberately not reused inside the new reader, because it answers `None` on a dead session rather than raising.
+- **A failed `cr_version` read raises rather than returning an empty value.** An answered-but-empty value and an unreadable one are different: the first produces the correct token on a device without a `cr_version`, while the second would produce a single-operand token on a device that has one. `get_version` is not reused inside the new reader because it returns `None` on a dead session instead of raising.
 
-## [3.3.21-dev1] - 2026-09-11 - The Write Token Carries Both Operands: The Cause of Issue #56
+## [3.3.21-dev1] - 2026-09-11 - Write Token Uses Both Operands; Data-Limit Field Spellings Corrected
 
 ### Summary
 
-The write token was derived from one operand where the firmware uses two. On a device that answers `cr_version` the resulting token is well formed and wrong, so every write of every kind is refused while every read succeeds. That is the fault behind [issue #56](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues/56), and it is ours.
+The write token was derived from one operand where the firmware uses two. On a device that answers `cr_version`, the resulting token is well formed but incorrect, so writes are refused while reads succeed. This is the cause of [issue #56](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues/56).
 
-The evidence is a capture of the reporter's own web interface deleting a message successfully. His router's accepted `AD` reproduces from his firmware strings and the nonce it was built with, and only with both operands.
+The evidence is a capture of the reporter's web interface deleting a message successfully. The `AD` his router accepted reproduces from his firmware strings and the nonce, and only with both operands.
 
 ### Fixed
 
-- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version` — read from `js/service.js` on both devices this project can measure. The reporter's MC888 Pro answers `cr_version` as `CR_ABPLMC888PROV1.0.1B04`; this integration never read that key at all, and sent `hash(hash(wa_inner_version) + RD)`. The reference MC7010 does not answer it, so the operand appends an empty string there and the digest is byte-identical to what shipped before.
+- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version`, read from `js/service.js` on both devices available for testing. The reporter's MC888 Pro answers `cr_version`; this integration did not read that key and sent `hash(hash(wa_inner_version) + RD)`. The reference MC7010 does not answer it, so the second operand is an empty string there and the digest is unchanged from previous releases.
 
-- **`DATA_LIMIT_SETTING` is written with the field names the device answers.** The form is all-or-nothing and the router refuses a payload whose names it does not recognise. The `flux_` spellings were read through the alias tuples and then discarded, every write going out under the canonical names. The reporter's device answers only the `flux_` spellings, and its own client builds that form from `flux_data_volume_limit_size`, `flux_clear_date`, `flux_limited_disconnect` and their siblings — so its data-limit form could never have been accepted, whatever the token.
+- **`DATA_LIMIT_SETTING` is written with the field names the device answers.** The command replaces the whole form and the router refuses a payload whose field names it does not recognise. The `flux_` spellings were used for reading through the alias tuples but discarded when writing, so every write used the canonical names. The reporter's device answers only the `flux_` spellings, and its own client builds the form from `flux_data_volume_limit_size`, `flux_clear_date` and `flux_limited_disconnect`, so that form would have been refused regardless of the token.
 
 ### Added
 
@@ -308,19 +477,19 @@ The evidence is a capture of the reporter's own web interface deleting a message
 
 ### Changed
 
-- **A failed `cr_version` read stops the write rather than degrading it.** Answered-and-empty and unreadable look alike and are not: the first gives the correct token on a device without a `cr_version`, the second would give a single-operand token on a device that has one — the fault above. `get_version` is deliberately not reused inside the new reader, because it answers `None` on a dead session rather than raising.
+- **A failed `cr_version` read raises rather than returning an empty value.** An answered-but-empty value and an unreadable one are different: the first produces the correct token on a device without a `cr_version`, while the second would produce a single-operand token on a device that has one. `get_version` is not reused inside the new reader because it returns `None` on a dead session instead of raising.
 
 ### Verified
 
-- The derivation is pinned by fixtures built from two tokens the routers themselves accepted: the MC888 Pro's `3D4B9F8C…B15DD51B` over SHA-256 uppercased with both operands, and the MC7010's `2f8c7ec2…e19bdf934e` over MD5 with an empty second operand. Both reproduce exactly.
-- Rehearsed against the reference MC7010: `cr_version` reads empty, the token remains a 32-character MD5, and a live `DATA_LIMIT_SETTING` write moved the alert percentage from 81 to 80 and restored it.
+- Fixtures built from two tokens the routers accepted: SHA-256 uppercased with both operands on the MC888 Pro, MD5 with an empty second operand on the MC7010. The fixtures use redacted carrier prefixes with the digests recomputed to match, so they cover the derivation rather than the original digests. The original values were verified against the accepted tokens on 2026-09-11.
+- Tested against the reference MC7010: `cr_version` reads empty, the token remains a 32-character MD5, and a `DATA_LIMIT_SETTING` write moved the alert percentage from 81 to 80 and restored it.
 - The dead-session sweep required the new method to raise rather than return a default; that requirement found the `get_version` masking described above.
 - 1,615 tests. `_captures` was rewritten around `islice` so its bound has one loop exit rather than two, restoring 100% branch coverage under the `ctrace` core that CI uses.
 
 ### Known Issues
 
-- Whether this resolves issue #56 is unconfirmed. The reporter's device has never been sent a `DELETE_SMS` carrying a correct token: the probe's token sweep screened every candidate through a `DATA_LIMIT_SETTING` form his firmware rejects on its field names, and the delete rungs all used the shipped single-operand token, so the two halves never met.
-- The temporary SMS probe is untouched and still carries its own screening flaw.
+- Whether this resolves issue #56 is unconfirmed. No `DELETE_SMS` carrying a correct token has been sent to that device: the probe's token sweep tested every candidate through a `DATA_LIMIT_SETTING` form his firmware rejects on its field names, and the delete steps used the shipped single-operand token.
+- The temporary SMS probe is unchanged and retains the screening defect described above.
 
 ## [3.3.20] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions
 
@@ -339,25 +508,25 @@ The evidence is a capture of the reporter's own web interface deleting a message
 - **Crawl Budget and Bundle Path Corrections**: Expanded the discovery fetch ceiling to 90 files and updated static script locations to resolve bundle paths across varied ZTE firmware layouts.
 - **Diagnostics Sanitizer Integrity**: Captured router firmware source scripts are preserved intact during diagnostics export generation, with verification flags ensuring accurate reporting.
 
-## [3.3.20-dev5] - 2026-09-11 - Browser Write Capture: A Tool Outside the Repository, and the First Verified Token Arithmetic
+## [3.3.20-dev5] - 2026-09-11 - Browser Write Capture Tool; Write Token Verified Against an Accepted Token
 
 ### Summary
 
-No code in this repository changed. This entry records a diagnostic tool built and rehearsed for issue #56 that is delivered to the reporter directly rather than shipped, and the findings it produced on the reference MC7010 — which include the first arithmetic confirmation of the write token against a real, successful delete.
+No code in this repository changed. This entry records a diagnostic tool built and tested for issue #56 and delivered to the reporter directly rather than shipped, together with the findings it produced on the reference MC7010. Those findings include the first arithmetic confirmation of the write token against a successful delete.
 
-It is recorded because the findings bear on core code, because the tool will be referred to in the issue thread, and because a later reader will otherwise find measurements in the notes with no account of where they came from.
+It is recorded here because the findings affect core code, because the tool is referenced in the issue thread, and because the measurements it produced appear in the notes and need a stated source.
 
 ### Added, outside the repository
 
-- **A browser capture tool, in two forms.** A commented JavaScript source file and a one-line bookmarklet built from it. It wraps `XMLHttpRequest` — which is what the router's jQuery uses — records requests to `goform_set_cmd_process`, and presents a small panel with a count and a download button. The reporter needs no developer tools: the bookmarklet is added as a bookmark and clicked on the router's page.
+- **A browser capture tool, in two forms.** A commented JavaScript source file and a one-line bookmarklet built from it. It wraps `XMLHttpRequest`, which is what the router's jQuery uses, records requests to `goform_set_cmd_process`, and shows a panel with a count and a download button. No developer tools are required: the bookmarklet is saved as a bookmark and clicked on the router's page.
 
-- **Version 2 adds the token inputs.** The first version captured the write but not the `RD` value the token was built from, and `RD` is single-use, so the arithmetic could not be checked. Version 2 keeps the recent reads whose requested values are all on a fixed eight-name allow-list of version and token fields, attaches the most recent of them to each write, and records the page's `rd0`, `rd1`, whether `hex_md5` and `hex_sha256` are defined, and the firmware flags from the loader's `config/config` module.
+- **Version 2 adds the token inputs.** Version 1 captured the write but not the `RD` value the token was built from, and `RD` is single-use, so the arithmetic could not be checked. Version 2 retains recent reads whose requested values are all on a fixed eight-name allow-list of version and token fields, attaches the most recent to each write, and records `rd0`, `rd1`, whether `hex_md5` and `hex_sha256` are defined, and the firmware flags from the loader's `config/config` module.
 
 ### Findings
 
-- **The write token is confirmed arithmetically.** From the capture's own values — `rd0 = IRL_H3G_MC7010DV1.0.0B03`, `rd1` empty, `RD = 92a9cd16cee3a478c0c2cffa014587ee` — `md5(md5(rd0 + rd1) + RD)` reproduces the `AD` the browser sent, `2f8c7ec23453048dace22de19bdf934e`, on a delete the router answered with `{"result":"success"}`. Everything before this was inference from minified source; this is the digest matching the one the device accepted.
+- **The write token is confirmed arithmetically.** From the capture's values — `rd0` the device's `wa_inner_version`, `rd1` empty, `RD` the nonce read 21 ms earlier — `md5(md5(rd0 + rd1) + RD)` reproduced the `AD` the browser sent on a delete the router answered with `{"result":"success"}`. Previous conclusions were inferred from minified source; this is a digest matching one the device accepted. The operands are not reproduced here because a `wa_inner_version` names the carrier and country that shipped the firmware.
 
-- **`RD` is re-read immediately before each write.** The captured read precedes its write by 21 milliseconds.
+- **`RD` is re-read immediately before each write**, 21 milliseconds ahead of it in the capture.
 
 - **The browser's delete form differs from the integration's in three respects**, each previously inferred and now measured: the message id carries a trailing semicolon, `notCallback=true` is present, and `AD` is the last field rather than the fourth. The headers add `X-Requested-With: XMLHttpRequest` and `charset=UTF-8`. No bank selector is sent, confirming what `_record_delete` documents as an assumption.
 
@@ -397,7 +566,7 @@ Three changes arising from preparing the probe capture to be sent to the reporte
 - `Hardware: Check Device` exercised both ways on the MC7010. With the switch already on, 19 of 19 pass and the new branch does not run. With the switch deliberately turned off first, 21 of 21 pass: the switch is enabled and verified, the form applies `81 -> 80`, the percentage is restored, and the switch is returned to off and verified. The device is left as it was found.
 - 1,611 tests, 100% line and branch coverage on `diagnostics.py`. Ruff, ruff format and mypy `--strict` clean.
 
-## [3.3.20-dev3] - 2026-09-11 - SMS Probe V7: The Capture Made Fit to Send
+## [3.3.20-dev3] - 2026-09-11 - SMS Probe V7: Capture Corrections Before Release
 
 ### Summary
 
@@ -2133,7 +2302,7 @@ Issue #56 is resolved. The reporter's diagnostics download showed the MC888 Pro 
 ### Fixed
 
 - **A session cookie under any name is replayed**: `_extract_cookies` keeps every cookie the login response sets, by name, and `_cookie_header` renders them into one `Cookie` header. Which cookie carries the session is the router's business; replaying one that does not costs nothing, and missing the one that does costs the whole integration. The MC888 Pro's `zsidn` is pinned by a regression test built from the reporter's own metadata.
-- **The unauthenticated key set is measured per device**: `measure_unauthenticated_keys()` asks the router which keys it answers with no session, and `_classify_session` uses that in place of `_UNAUTHENTICATED_KEYS` where the measurement passes validation. On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` the measurement reproduces the constant exactly, verified by `scripts/hardware_check.py` check [1c].
+- **The unauthenticated key set is measured per device**: `measure_unauthenticated_keys()` asks the router which keys it answers with no session, and `_classify_session` uses that in place of `_UNAUTHENTICATED_KEYS` where the measurement passes validation. On MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` the measurement reproduces the constant exactly, verified by `scripts/hardware_check.py` check [1c].
 - **Data-limit settings and realtime counters carry their `flux_` spellings**: eight aliases added. Three feed `DATA_LIMIT_SETTING`, an all-or-nothing form the router refuses when a field is missing — a wrong spelling there makes the write impossible rather than blanking a sensor. `flux_monthly_time` was excluded: it aliases `monthly_time`, which this integration neither requests nor reads.
 - **Subscriber identifiers carry their short spellings**: `imsi` and `iccid` join the extended batch. Measured on the reference device: `iccid` carries the identical value to `sim_iccid`, and `imsi` is present but empty while `sim_imsi` is populated.
 
@@ -2248,7 +2417,7 @@ Two corrections to how an expired session is decided, and three additions that g
 
 ### Fixed
 
-- **A response missing most of its request is no longer read as an expired session**: `_classify_session()` receives the requested key list and declines to return `expired` when more than `ABSENT_KEY_PROPORTION_LIMIT` of the requested authenticated keys are absent rather than empty. A dead session on this API echoes every requested key back — measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31, where a cookieless batch read returned 80 of 80 core and 36 of 36 extended keys with none absent — so keys going missing indicates a truncated or refused request, or firmware key-name drift. The guard suppresses `expired` alone and cannot preempt `not_ready`, or a router still starting up that also omitted keys would be re-logged-in pointlessly. The limit is not zero because an unknown `cmd` name is simply absent rather than an error.
+- **A response missing most of its request is no longer read as an expired session**: `_classify_session()` receives the requested key list and declines to return `expired` when more than `ABSENT_KEY_PROPORTION_LIMIT` of the requested authenticated keys are absent rather than empty. A dead session on this API echoes every requested key back — measured on MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` on 2026-08-31, where a cookieless batch read returned 80 of 80 core and 36 of 36 extended keys with none absent — so keys going missing indicates a truncated or refused request, or firmware key-name drift. The guard suppresses `expired` alone and cannot preempt `not_ready`, or a router still starting up that also omitted keys would be re-logged-in pointlessly. The limit is not zero because an unknown `cmd` name is simply absent rather than an error.
 - **An expired-looking response on a freshly established session no longer reports as an authentication failure**: a session created seconds earlier cannot itself be expired, so an identical verdict on the replayed request refutes the classification rather than confirming it. It now raises `ZTEConnectionError`, which routes into the coordinator's hold-last-known-values path. A caller that passed `_retry=False` itself still receives `ZTEAuthError` — `scripts/hardware_check.py` probes an invalidated session that way, and that assertion is the standing hardware proof that expiry is detectable.
 
 ### Added
@@ -2273,7 +2442,7 @@ Two corrections to how an expired session is decided, and three additions that g
 ### Changed
 
 - **`LOGIN_MULTI_USER` payload**: The username is sent as `user` rather than `username`, and an `AD` token is included. The form is posted only where a username is configured, and `is_multi` still decides which form is primary — an MC7010 with a username continues to send `LOGIN` first.
-- **`LOGIN` payload**: Unchanged, and now covered by a test recording why. On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`, `username=` and `user=` are both accepted and yield a usable session, while omitting the field entirely — the shape `mc.py` uses on this form — makes the router close the connection without answering.
+- **`LOGIN` payload**: Unchanged, and now covered by a test recording why. On MC7010 firmware `xx_xxx_MC7010DV1.0.0B03`, `username=` and `user=` are both accepted and yield a usable session, while omitting the field entirely — the shape `mc.py` uses on this form — makes the router close the connection without answering.
 
 ### Added
 
@@ -2344,7 +2513,7 @@ Follow-up to dev25. A router configured without a username now receives `LOGIN` 
 
 ### Summary
 
-Issue #56: an MC888 Pro on firmware `CR_ABPLMC888PROV1.0.1B04` answers a successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie`, binding the session to the client address instead. `_attempt_login` tested for the cookie alone, so the login was classified as a connection failure and reported as an unreachable router. The session is now two fields — the cookie and whether the router has authenticated us — established and cleared only as a pair.
+Issue #56: an MC888 Pro on firmware `CR_xxxxMC888PROV1.0.1B04` answers a successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie`, binding the session to the client address instead. `_attempt_login` tested for the cookie alone, so the login was classified as a connection failure and reported as an unreachable router. The session is now two fields — the cookie and whether the router has authenticated us — established and cleared only as a pair.
 
 ### Fixed
 
@@ -2878,7 +3047,7 @@ Documentation only. `tasks_folder_migrate` run against this project, in two pass
 
 ### Closed by verification
 
-- **`silent_login_fail.md`** — the manual boundary test was run: §8 carries a filled results table dated 2026-07-29 against firmware `IRL_H3G_MC7010DV1.0.0B03`, all three time boundaries passing. Its principal follow-on shipped as `[3.3.1-dev7]`, `tests/test_dead_session_sweep.py`.
+- **`silent_login_fail.md`** — the manual boundary test was run: §8 carries a filled results table dated 2026-07-29 against firmware `xx_xxx_MC7010DV1.0.0B03`, all three time boundaries passing. Its principal follow-on shipped as `[3.3.1-dev7]`, `tests/test_dead_session_sweep.py`.
 - **`sub_device_recommendations.md`** and **`refactor_guidance.md`** — both delivered by `[3.0.0]`. The 47 Ruff errors the second opens on were **not** re-counted; `ruff check` could not run against the project `.venv` on the day, so that closure rests on the changelog rather than a fresh lint.
 - **`expansion_plan_202607/`** — `Z5g_snr` and `Z5g_CELL_ID` are at `api.py:137-138`, and the six-call-site aliasing is `_get_first` in `sensor.py`.
 - **`updates_202608/status_plan.md`** — all six phases run and nine review findings implemented across `[3.3.3-dev8]`–`[3.3.3-dev11]`. Its Phase 5 is recorded `PARTIAL` and deliberately not to be re-run; the stamp says so, because "partial and closed" reads as unfinished.
@@ -4154,7 +4323,7 @@ Acts on `.notes/info/zte_element_discovery_report.md`, a two-step discovery run 
 
 ### Verified on hardware
 
-Live MC7010 (`IRL_H3G_MC7010DV1.0.0B03`), read from a diagnostics download after a full restart.
+Live MC7010 (`xx_xxx_MC7010DV1.0.0B03`), read from a diagnostics download after a full restart.
 
 - **All 15 new keys answered.** `traffic_clear_date` returned `1` — the discovery report's spelling is the right one. The two `data_volume_*` spellings returned `""`, meaning the firmware knows the names but does not populate them on this model; `_safe_int` treats present-but-empty as absent, so the resolution is clean and the disagreement warning does not fire.
 - **No truncation.** 131 keys came back with every pre-existing field intact, closing the risk that a longer `cmd` list would silently drop data and look like firmware key changes.

@@ -1711,6 +1711,10 @@ async def test_a_write_checks_the_session_before_deriving_its_token(
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),  # probe
@@ -1739,6 +1743,10 @@ async def test_a_dead_session_is_renewed_before_the_token_is_built(
     api.cookies = {"stok": "stale"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": ""}),  # dead session
@@ -1763,19 +1771,28 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
     """The hazard this design avoids.
 
     `{"result":"failure"}` is what the router returns for a command it declined
-    on its merits. Resending it would deliver a `send_sms` twice. With the
-    session assured up front there is no reason to retry, and nothing does.
+    on its merits. Resending it would deliver a `send_sms` twice, with no way
+    to tell that it had. Since v3.3.22 a refusal is *classified* afterwards —
+    one read, to say whether the session was the cause — and that read must not
+    become a retry of the write.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
         MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "abc"}),
+        # The post-refusal read: the session is alive, so the refusal stands
+        # as its own error rather than becoming an auth failure.
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={"result": "failure"}
@@ -1785,6 +1802,94 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
         await api.set_odu_led_switch("1")
 
     assert mock_aiohttp_client.post.call_count == 1, "a declined write was resent"
+    assert api.last_session_check["verdict"] == "live"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("label", "body"),
+    [
+        ("auth_shaped_refusal", {"result": "fail"}),
+        ("blank_result", {"result": ""}),
+    ],
+)
+async def test_a_write_is_never_resent_after_a_relogin(
+    mock_aiohttp_client, label, body
+):
+    """`_request`'s own recovery path must not put a write a second time.
+
+    The refusal test above covers `{"result":"failure"}`, which `_request`
+    does not read as a session problem. These two it does: `fail` is in its
+    auth-error list, and a response whose every value is empty scores as an
+    expiry. Both used to re-login and re-send the original payload — a
+    `send_sms` delivered twice with nothing in the response to say so.
+
+    The guard rests on the hazard alone. A replayed token is not necessarily
+    stale — `RD` is stable within a session on the reference MC7010 — so a
+    resent write may well be accepted, which is precisely the problem.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    api._populated_keys = frozenset({"wan_connect_status"})
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"cr_version": ""}),
+        MockResponse(json_data={"RD": "abc"}),
+    ]
+    mock_aiohttp_client.post.return_value = MockResponse(json_data=body)
+
+    with patch.object(api, "login") as login, pytest.raises(ZTEAuthError):
+        await api.set_odu_led_switch("1")
+
+    assert mock_aiohttp_client.post.call_count == 1, f"{label}: the write was resent"
+    assert not login.called, f"{label}: a write triggered a re-login and a replay"
+
+
+@pytest.mark.asyncio
+async def test_a_read_is_still_replayed_after_a_relogin(mock_aiohttp_client):
+    """The guard is narrow: reads keep the recovery writes have given up.
+
+    Recovering a read costs nothing and is the mechanism that lets a poll
+    survive the router taking its session back. Widening the write guard to
+    cover every request would undo it.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "stale"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.get.side_effect = [
+        # The authenticated key blank while the key served without a
+        # session answers: the shape of a session the router has dropped.
+        MockResponse(json_data={"wan_connect_status": "", "model_name": "MC7010"}),
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+    ]
+
+    with patch.object(api, "login"):
+        result = await api._request(
+            "GET",
+            "goform/goform_get_cmd_process?isTest=false&cmd=wan_connect_status",
+            requested=["wan_connect_status", "model_name"],
+        )
+
+    assert result == {"wan_connect_status": "ppp_connected"}
+    assert mock_aiohttp_client.get.call_count == 2, "the read was not retried"
+
+
+def test_only_the_write_endpoint_counts_as_a_write():
+    """Matched on the endpoint, so a new `goformId` is covered on arrival.
+
+    `delete_all` lists messages with a POST to the *read* endpoint, so method
+    alone cannot decide this, and that list read must still be recoverable.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._is_write_request("POST", "goform/goform_set_cmd_process")
+    assert not api._is_write_request("POST", "goform/goform_get_cmd_process")
+    assert not api._is_write_request("GET", "goform/goform_set_cmd_process")
 
 
 # --- Targeted reads must not be mistaken for a dead session -----------------
@@ -2022,6 +2127,37 @@ def test_empty_hex_is_empty_not_an_error():
     assert api._hex_decode("") == ""
 
 
+def test_sender_number_falls_back_to_the_value_as_sent():
+    """A number that is not hex is passed through, not reported as an error.
+
+    Alphanumeric sender ids and, on some firmware, plain international
+    numbers arrive as literal text in the same field that carries UTF-16BE
+    hex from other senders. `[Decoding Error]` there discards a value that
+    was never encoded — the MC888 Pro of issue #56 shows it on every message.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode_number("Vodafone") == "Vodafone"
+    assert api._hex_decode_number("+353871234567") == "+353871234567"
+
+
+def test_sender_number_still_decodes_and_still_empties():
+    """The fallback is scoped: encoded numbers decode, absent ones stay empty."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode_number("00480065006c006c006f") == "Hello"
+    assert api._hex_decode_number("") == ""
+
+
+def test_message_content_is_not_given_the_number_fallback():
+    """A damaged body must still report a failure rather than render raw hex.
+
+    Guards the scope of the fallback above. Sharing one decoder between the
+    two fields would silently reinstate the half-rendered truncated message
+    that `_hex_decode` was written to stop.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._hex_decode("004100") == "[Decoding Error]"
+
+
 # ---------------------------------------------------------------------------
 # Splitting a mandatory batch by URL budget
 # ---------------------------------------------------------------------------
@@ -2127,21 +2263,30 @@ async def test_a_non_object_chunk_response_contributes_nothing(mock_aiohttp_clie
 # ---------------------------------------------------------------------------
 
 # Captured from each router's own web interface while it carried out a delete
-# the router honoured. Firmware strings and a one-time nonce: nothing here
-# belongs to a person, and the token is spent.
+# the router honoured, then **redacted**: a `wa_inner_version` names the
+# carrier and country that shipped the firmware, which identifies the person
+# who sent the capture. The carrier prefixes are replaced here and the digests
+# recomputed from the redacted operands, so the arithmetic stays checkable
+# while the identifying part does not survive.
+#
+# What that costs is real and worth stating: these are no longer the exact
+# digests those routers accepted. They pin the derivation — both operands,
+# which digest, which case, how many rounds — which is what a regression would
+# break. The original values were verified against accepted tokens on
+# 2026-09-11; see `[3.3.21-dev1]`.
 _ACCEPTED_TOKENS = [
     pytest.param(
-        "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
-        "CR_ABPLMC888PROV1.0.1B04",
+        "xx_xxxxMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
+        "CR_xxxxMC888PROV1.0.1B04",
         "AB79DB84D9C5B7F8AEBB5A69AFA59D7B3E2A6365160528A9B483DA205CDF8689",
-        "3D4B9F8C93FDB14C296184ADEE53DD1B44B0350CA1C2E287AC8FEACBB15DD51B",
+        "ABB7E304B1A5FD8E175401403A6F27CB634E2CA9616DC7C0B51F4884204DFCAF",
         id="mc888_pro_answers_cr_version",
     ),
     pytest.param(
-        "IRL_H3G_MC7010DV1.0.0B03",
+        "xx_xxx_MC7010DV1.0.0B03",
         "",
         "92a9cd16cee3a478c0c2cffa014587ee",
-        "2f8c7ec23453048dace22de19bdf934e",
+        "bdde3aca545b1bab6d1737ca665c91c5",
         id="mc7010_does_not",
     ),
 ]
@@ -2168,6 +2313,10 @@ async def test_the_token_matches_one_the_router_accepted(
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
@@ -2186,6 +2335,10 @@ async def test_cr_version_is_read_once_per_firmware(mock_aiohttp_client):
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
@@ -2211,6 +2364,10 @@ async def test_a_firmware_change_discards_the_cached_cr_version(mock_aiohttp_cli
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
     api._cr_version_cache = ("OLD_VERSION", "CR_OLD")
 
     mock_aiohttp_client.get.side_effect = [
@@ -2236,15 +2393,19 @@ async def test_a_device_that_answers_no_cr_version_still_writes(mock_aiohttp_cli
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
-        MockResponse(json_data={"wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03"}),
+        MockResponse(json_data={"wa_inner_version": "xx_xxx_MC7010DV1.0.0B03"}),
         MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "92a9cd16cee3a478c0c2cffa014587ee"}),
     ]
 
-    assert await api.get_ad() == "2f8c7ec23453048dace22de19bdf934e"
+    assert await api.get_ad() == "bdde3aca545b1bab6d1737ca665c91c5"
 
 
 @pytest.mark.asyncio
@@ -2263,7 +2424,7 @@ async def test_a_failed_cr_version_read_stops_the_write(mock_aiohttp_client):
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
-        MockResponse(json_data={"wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03"}),
+        MockResponse(json_data={"wa_inner_version": "xx_xxx_MC7010DV1.0.0B03"}),
         aiohttp.ClientError("router closed the connection"),
     ]
 

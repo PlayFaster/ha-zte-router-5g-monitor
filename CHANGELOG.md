@@ -4,11 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.22] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection
+
+### Summary
+
+- **Browser-Aligned SMS Deletion Payloads**: Aligned `DELETE_SMS` form formatting with browser client requests across tested hardware models, ensuring single and batched message identifiers include proper percent-encoded semicolon terminators (`%3B`) and the required `notCallback=true` parameter.
+- **Dynamic Pre-Write Session Key Selection**: Pre-write session validation now dynamically selects populated status keys per device (excluding unauthenticated endpoints and unpopulated fields like `wan_connect_status`), preventing blocked write commands across varied firmware configurations.
+- **Write Replay Safety**: Replay on authentication recovery is now restricted exclusively to read requests, guaranteeing SMS sends and configuration writes are never duplicated.
+
+### Fixed
+
+- **Message ID Encoding**: Fixed message deletion formatting to percent-encode terminating semicolons (`msg_id=16%3B`), ensuring single and batch deletions parse cleanly across router CGI engines.
+- **SMS Deletion Parameter Alignment**: Added `notCallback=true` to `DELETE_SMS` command payloads to match browser client write specifications.
+- **Dynamic Pre-Write Session Validation**: Prevented pre-write session check failures on models where `wan_connect_status` is unpopulated by evaluating active session keys discovered during coordinator polling.
+- **Write Replay Guard**: Excluded write operations from automatic retry-after-login routines, ensuring SMS messages and settings changes are never executed more than once.
+- **Unencoded Sender Numbers**: Resolved `[Decoding Error]` warnings when parsing plain-text or alphanumeric sender addresses in incoming SMS messages.
+
+### Changed
+
+- **Standardized Write Request Headers**: All write operations now share unified browser-matched headers (`Accept`, `X-Requested-With`, `Origin`, and `charset=UTF-8`).
+- **Post-Refusal Error Classification**: Write refusals are classified via post-response diagnostics without replaying the command.
+
+---
+
 ## [3.3.21] - Release - 2026-09-11 - MC888 Pro Write Token
 
 ### Fixed
 
-- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version` — read from `js/service.js` on both devices this project can measure.
+- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version`, read from `js/service.js` on both devices available for testing.
 
 ### Added
 
@@ -16,7 +39,7 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **A failed `cr_version` read stops the write rather than degrading it.** Answered-and-empty and unreadable look alike and are not: the first gives the correct token on a device without a `cr_version`, the second would give a single-operand token on a device that has one — the fault above. `get_version` is deliberately not reused inside the new reader, because it answers `None` on a dead session rather than raising.
+- **A failed `cr_version` read raises rather than returning an empty value.** An answered-but-empty value and an unreadable one are different: the first produces the correct token on a device without a `cr_version`, while the second would produce a single-operand token on a device that has one. `get_version` is not reused inside the new reader because it returns `None` on a dead session instead of raising.
 
 ## [3.3.20] - 2026-09-11 - Release: Probe v7 Diagnostic Source Crawl and Tiered Probing Actions
 

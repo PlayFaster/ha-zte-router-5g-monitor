@@ -143,7 +143,7 @@ VERIFY_EVERY = 25
 LIVENESS_KEYS = _SESSION_CHECK_KEYS
 
 # The timestamp a ZTE firmware string carries, e.g.
-# `BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]`. One candidate strips it
+# `xx_xxxxMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]`. One candidate strips it
 # on the theory that the router's own JavaScript hashes the bare version.
 _TIMESTAMP = re.compile(r"\s*\[[^\]]*\]\s*$")
 
