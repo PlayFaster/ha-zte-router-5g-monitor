@@ -135,9 +135,9 @@ class _FakePost:
 # digest on a given device — which is how v3 reported twelve candidates where
 # the router received nine.
 _MC888_VALUES = {
-    "wa": "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
-    "wav": "BD_ABPLMC888PROMODV1.0.1B03",
-    "cr": "CR_ABPLMC888PROV1.0.1B04",
+    "wa": "xx_xxxxMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
+    "wav": "xx_xxxxMC888PROMODV1.0.1B03",
+    "cr": "CR_xxxxMC888PROV1.0.1B04",
     "hw": "MC888 Pro_HWV1.0",
     "model": "MC888 Pro",
     "ld": "L" * 64,

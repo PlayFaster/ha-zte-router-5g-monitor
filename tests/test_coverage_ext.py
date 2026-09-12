@@ -206,6 +206,9 @@ async def test_api_get_ad_raises_when_rd_is_unavailable(mock_aiohttp_client):
     with (
         patch.object(api, "_ensure_session", AsyncMock()),
         patch.object(api, "get_version", return_value="MC7010_V1"),
+        # The second operand is read between the version and `RD`; this test is
+        # about the `RD` half, so it is stubbed rather than exercised here.
+        patch.object(api, "get_cr_version", return_value=""),
         patch.object(api, "get_rd", return_value=""),
         pytest.raises(ZTEConnectionError, match="did not return RD"),
     ):

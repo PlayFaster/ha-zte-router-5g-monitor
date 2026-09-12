@@ -18,9 +18,9 @@ vocabulary the firmware itself publishes in its web pages.
 Provenance, and the two kinds are not equivalent:
 
   - **Observed.** A device mined or answered the name.
-      - MC7010, firmware `IRL_H3G_MC7010DV1.0.0B03`, mined and probed
+      - MC7010, firmware `xx_xxx_MC7010DV1.0.0B03`, mined and probed
         2026-09-02.
-      - MC888 Pro, firmware `BD_ABPLMC888PROMODV1.0.0B01`, from the
+      - MC888 Pro, firmware `xx_xxxxMC888PROMODV1.0.0B01`, from the
         diagnostics downloads attached to issue #56 on 2026-09-01 and
         2026-09-02. The second was taken on 3.3.9 with three canaries held,
         so the names it left silent are absent rather than unproven, and it

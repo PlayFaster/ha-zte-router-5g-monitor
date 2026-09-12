@@ -123,7 +123,20 @@ _VOLATILE = re.compile(
     # entry after it and reports a dozen differences for one real one. The
     # counts those notes carry are asserted directly below instead, which is
     # the precise form of the same check.
-    r"|^/_elapsed$|^/discovery/notes/)"
+    r"|^/_elapsed$|^/discovery/notes/"
+    # The sessionless measurement, which depends on the router acknowledging a
+    # logout and is not reliable back to back. Observed on the reference
+    # MC7010: the first pass logged out, was acknowledged and measured 7 keys;
+    # the second logged out seconds later and was not acknowledged, so it
+    # measured nothing and kept the constant. Both readings are correct
+    # reports of what happened; demanding they match asserts something about
+    # the router's mood rather than about the download.
+    #
+    # The consequences are asserted directly instead — the canary pool and
+    # the probe counts below — so excluding these loses no coverage.
+    r"|^/logout_acknowledged$|^/measurement_note$"
+    r"|^/unauthenticated_keys/|^/discovery/sessionless_measurement$"
+    r"|^/discovery/canary_pool/served_without_a_session$)"
 )
 
 # A pseudonym assigned by `diagnostics._Tokenizer`. Its docstring is explicit
@@ -647,8 +660,20 @@ def check_stability(
     # comparison below already excludes them for the same reason; excluding
     # them here as well keeps the two halves of this check consistent. What
     # the notes carry is asserted directly by the count checks that follow.
-    fields_left = {path for path in left if not _NOTE_PATH.match(path)}
-    fields_right = {path for path in right if not _NOTE_PATH.match(path)}
+    # `_VOLATILE` too, and for the same reason as the value comparison: a
+    # measurement the router declined to allow produces an *absent* list
+    # rather than a different one, so the two passes differ in their set of
+    # paths as well as in their values.
+    fields_left = {
+        path
+        for path in left
+        if not _NOTE_PATH.match(path) and not _VOLATILE.search(path)
+    }
+    fields_right = {
+        path
+        for path in right
+        if not _NOTE_PATH.match(path) and not _VOLATILE.search(path)
+    }
 
     report.record(
         fields_left == fields_right,

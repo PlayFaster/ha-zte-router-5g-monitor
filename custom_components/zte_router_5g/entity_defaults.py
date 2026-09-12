@@ -49,7 +49,7 @@ class _HasEnabledDefault(Protocol):
 # 2026-09-02 diagnostics download attached to issue #56, not an inference
 # about what a model probably supports.
 MODEL_OVERLAY: Final[dict[str, dict[str, bool]]] = {
-    # ZTE MC888 Pro, firmware `CR_ABPLMC888PROV1.0.1B04`.
+    # ZTE MC888 Pro, firmware `CR_xxxxMC888PROV1.0.1B04`.
     #
     # The bare LTE vocabulary is present and empty on this firmware — its own
     # web pages request `lte_rsrq`, `lte_rssi` and `lte_snr` and the router
@@ -73,7 +73,7 @@ MODEL_OVERLAY: Final[dict[str, dict[str, bool]]] = {
         "rssi": True,
         "sinr": True,
     },
-    # ZTE MC7010, firmware `IRL_H3G_MC7010DV1.0.0B03`.
+    # ZTE MC7010, firmware `xx_xxx_MC7010DV1.0.0B03`.
     #
     # An outdoor unit with no WiFi of its own. It answers neither
     # `wifi_access_sta_num` nor `wifi_onoff_state`, so the two sensors that

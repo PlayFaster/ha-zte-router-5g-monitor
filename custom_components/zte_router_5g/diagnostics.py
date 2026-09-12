@@ -533,6 +533,13 @@ def _sms_section(
     }
 
 
+def _string_list(value: Any) -> list[str]:
+    """A list of strings, or an empty one. Never whatever it was handed."""
+    if not isinstance(value, list):
+        return []
+    return [item for item in value if isinstance(item, str)]
+
+
 def _scalar(value: Any) -> Any:
     """Return a value only when it is a JSON scalar, else `None`.
 
@@ -622,6 +629,7 @@ async def async_get_config_entry_diagnostics(
     # Fetched for the download, not taken from the poll: a poll keeps only the
     # newest message. Guarded like discovery — a router that refuses the list
     # must not cost the reporter the whole file.
+    check = getattr(coordinator.api, "last_session_check", None)
     snapshot = await _async_guarded(
         "sms", coordinator.async_fetch_sms_snapshot(), errors
     )
@@ -703,6 +711,16 @@ async def async_get_config_entry_diagnostics(
         "unauthenticated_keys": sorted(coordinator.api.unauthenticated_keys)
         if isinstance(coordinator.api.unauthenticated_keys, (set, frozenset))
         else [],
+        # Which keys can prove this device's session, and what the last check
+        # concluded. A write blocked before it was sent left no other trace:
+        # the MC888 Pro of issue #56 reported three failed writes against an
+        # empty `write_failures`, because none of them was ever attempted.
+        "session_witnesses": _string_list(
+            _guarded("session_witnesses", coordinator.api.session_witnesses, errors)
+        ),
+        "last_session_check": _sanitize_walk(check, tokenizer)
+        if isinstance(check, dict)
+        else None,
         # Which candidate names this device answered. Values only for the
         # names classified safe in `const.DISCOVERY_VALUE_SAFE`; everything
         # else reports shape and length, because `_sanitize_payload` matches

@@ -65,7 +65,7 @@ def _full_core_response(populated: dict[str, str] | None = None) -> dict[str, st
         {
             "imei": "864155042229309",
             "model_name": "MC7010",
-            "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03",
+            "wa_inner_version": "xx_xxx_MC7010DV1.0.0B03",
         }
     )
     if populated:
@@ -76,7 +76,7 @@ def _full_core_response(populated: dict[str, str] | None = None) -> dict[str, st
 DEAD_SESSION_CORE = {
     "imei": "864155042229309",
     "model_name": "MC7010",
-    "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03",
+    "wa_inner_version": "xx_xxx_MC7010DV1.0.0B03",
     "network_type": "",
     "signalbar": "",
     "wan_connect_status": "",
@@ -226,7 +226,7 @@ async def test_expired_session_triggers_a_relogin(mock_aiohttp_client) -> None:
     api.last_activity = datetime.now(UTC)
     # The full batch, not an abbreviation. A dead session on this API echoes
     # every requested key back — measured on MC7010 firmware
-    # `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-30, where a cookieless read
+    # `xx_xxx_MC7010DV1.0.0B03` on 2026-08-30, where a cookieless read
     # returned 80 of 80 core keys with none absent. An eight-key stand-in is
     # a shape the router does not produce, and the classifier now declines to
     # rule on a response that dropped most of its request.
@@ -369,7 +369,7 @@ async def test_drift_can_now_fire(coordinator) -> None:
     response is correctly seen as resolving none of the contract.
     """
     coordinator._drift_baseline = {"network_type", "signalbar"}
-    drifted = {"wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03", "unexpected": "1"}
+    drifted = {"wa_inner_version": "xx_xxx_MC7010DV1.0.0B03", "unexpected": "1"}
 
     verdicts = [coordinator._check_contract_drift(drifted) for _ in range(3)]
 
@@ -449,11 +449,61 @@ async def test_the_session_check_reads_every_key_it_classifies_on(
     with patch.object(api, "_request", side_effect=record):
         await api._ensure_session()
 
-    for key in _SESSION_CHECK_KEYS:
+    # Before a poll there is no evidence about this device, so the seeded
+    # names stand — less any the constant already knows answer without a
+    # session, which prove nothing and were never witnesses.
+    witnesses = api.session_witnesses()
+    assert witnesses == [
+        k for k in _SESSION_CHECK_KEYS if k not in _UNAUTHENTICATED_KEYS
+    ]
+    for key in witnesses:
         assert key in str(seen["path"])
-    # Passed so the absent-key guard applies: a device answering none of these
-    # is a truncated read, not an expiry.
-    assert seen["requested"] == list(_SESSION_CHECK_KEYS)
+    # A companion key that answers without a session travels with them, or
+    # `_classify_session` has only one class to look at and cannot rule.
+    requested = seen["requested"]
+    assert set(witnesses) <= set(requested)
+    assert set(requested) & _UNAUTHENTICATED_KEYS, (
+        "the check carries no unauthenticated key, so its verdict is undecidable"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_write_is_not_blocked_when_no_key_can_witness_the_session(
+    mock_aiohttp_client,
+) -> None:
+    """The MC888 Pro of issue #56, exactly as its download records it.
+
+    `ppp_status` and `model_name` are served without a session there, so
+    neither proves one, and `wan_connect_status` — the only seeded name left —
+    is blank at all times. Once that device's sessionless set was measured
+    rather than assumed, the check had no witness and scored every write as an
+    expired session. Three writes were reported failed against an empty
+    `write_failures`, because none of them was ever sent.
+
+    A device whose session cannot be judged from a read is not a device whose
+    writes should be blocked.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset(
+        {"ppp_status", "model_name", "network_type", "wa_inner_version", "imei"}
+    )
+    # What his poll returns: the seeded witness blank, the populated ones all
+    # served without a session.
+    api._populated_keys = frozenset({"ppp_status", "model_name", "network_type"})
+
+    called = False
+
+    async def record(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return {}
+
+    with patch.object(api, "_request", side_effect=record):
+        await api._ensure_session()
+
+    assert api.session_witnesses() == []
+    assert not called, "a write was blocked on a device that cannot witness itself"
+    assert api.last_session_check["verdict"].startswith("no witness")
 
 
 @pytest.mark.parametrize(

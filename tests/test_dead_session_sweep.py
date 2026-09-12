@@ -47,7 +47,7 @@ _HEALTHY: dict[str, Any] = {
     "result": "success",
     "LD": "ABC123",
     "RD": "1ca9f84e0314259ddb072fba15e42061",
-    "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03",
+    "wa_inner_version": "xx_xxx_MC7010DV1.0.0B03",
     "cr_version": "CR1",
     "cell_id": "1234",
     "network_type": "5G",
@@ -106,6 +106,9 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     "get_ad": (),
     "get_rd": (),
     "get_cr_version": (),
+    # Asks, after a refusal, whether the session was the cause. A dead session
+    # is what it exists to detect, so it raises there like any other method.
+    "note_write_refusal": ("DELETE_SMS",),
     "reboot": (),
     "delete_sms": ("1",),
     "delete_all": (),

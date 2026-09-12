@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.22-dev1\] - 2026-09-12 - Writes Were Blocked Before They Were Sent: The Session Check Learns Its Witnesses](#3322-dev1---2026-09-12---writes-were-blocked-before-they-were-sent-the-session-check-learns-its-witnesses)
   - [\[3.3.21\] - Release - 2026-09-11 - MC888 Pro Write Token](#3321---release---2026-09-11---mc888-pro-write-token)
   - [\[3.3.21-dev1\] - 2026-09-11 - The Write Token Carries Both Operands: The Cause of Issue #56](#3321-dev1---2026-09-11---the-write-token-carries-both-operands-the-cause-of-issue-56)
   - [\[3.3.20\] - 2026-09-11 - Probe v7 Release: Diagnostic Source Crawl and Tiered Probing Actions](#3320---2026-09-11---probe-v7-release-diagnostic-source-crawl-and-tiered-probing-actions)
@@ -105,7 +106,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.4-dev8\] - 2026-08-25 - HTTP Transport Mock Harness; API Error Simulation Suite](#334-dev8---2026-08-25---http-transport-mock-harness-api-error-simulation-suite)
   - [\[3.3.4-dev7\] - 2026-08-25 - Interactive Re-Authentication Repair Flow; Frequency Unit Selector and Privacy](#334-dev7---2026-08-25---interactive-re-authentication-repair-flow-frequency-unit-selector-and-privacy)
   - [\[3.3.4-dev6\] - 2026-08-25 - Shared CI and Linter Bumps; HA Compatibility Floor; Sensor Manifest Documentation](#334-dev6---2026-08-25---shared-ci-and-linter-bumps-ha-compatibility-floor-sensor-manifest-documentation)
-  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x_proj_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
+  - [\[3.3.4-dev5\] - 2026-08-25 - Cross-Project Architectural Invariants Audit in x\_proj\_chores.md](#334-dev5---2026-08-25---cross-project-architectural-invariants-audit-in-x_proj_choresmd)
   - [\[3.3.4-dev4\] - 2026-08-24 - Documentation: APN Auto-Mode Behavior and Project Notes Structure](#334-dev4---2026-08-24---documentation-apn-auto-mode-behavior-and-project-notes-structure)
   - [\[3.3.4-dev3\] - 2026-08-24 - Internal Notes Migration to Standardized .notes/tasks/ Structure](#334-dev3---2026-08-24---internal-notes-migration-to-standardized-notestasks-structure)
   - [\[3.3.4-dev2\] - 2026-08-14 - Tooling Bumps: Zizmor, MyPy, JSONSchema, PHACC; AGENTS and Changelog Refinements](#334-dev2---2026-08-14---tooling-bumps-zizmor-mypy-jsonschema-phacc-agents-and-changelog-refinements)
@@ -163,7 +164,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-rc3\] - 2026-07-28 - Entity About Attribute Suite: 63 Entities and Unrecorded Storage Policy](#330-rc3---2026-07-28---entity-about-attribute-suite-63-entities-and-unrecorded-storage-policy)
   - [\[3.3.0-rc2\] - 2026-07-28 - External Code Review Triage: Idle Timeout Invariant and SMS Pagination Documentation](#330-rc2---2026-07-28---external-code-review-triage-idle-timeout-invariant-and-sms-pagination-documentation)
   - [\[3.3.0-dev14\] - 2026-07-27 - Documentation Reconciliation: Session Recovery Architecture and Drift Attributes](#330-dev14---2026-07-27---documentation-reconciliation-session-recovery-architecture-and-drift-attributes)
-  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
+  - [\[3.3.0-dev13\] - 2026-07-27 - Technical Debt and File Structure Synchronization: DEVELOPMENT.md and proj\_structure.md](#330-dev13---2026-07-27---technical-debt-and-file-structure-synchronization-developmentmd-and-proj_structuremd)
   - [\[3.3.0-dev12\] - 2026-07-27 - Generalized Session Expiry Detection and SMS Endpoint Contract Assertions](#330-dev12---2026-07-27---generalized-session-expiry-detection-and-sms-endpoint-contract-assertions)
   - [\[3.3.0-dev11\] - 2026-07-27 - Documentation: Device-Registry Compatibility Shims and System Root Architecture in AGENTS.md](#330-dev11---2026-07-27---documentation-device-registry-compatibility-shims-and-system-root-architecture-in-agentsmd)
   - [\[3.3.0-dev10\] - 2026-07-27 - Standards Conformance: Retirement of Section 3 Hardware Root Deviation](#330-dev10---2026-07-27---standards-conformance-retirement-of-section-3-hardware-root-deviation)
@@ -171,7 +172,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.0-dev8\] - 2026-07-27 - Standards Conformance: Comprehensive Multi-Platform Icon and Device Class Tests](#330-dev8---2026-07-27---standards-conformance-comprehensive-multi-platform-icon-and-device-class-tests)
   - [\[3.3.0-dev7\] - 2026-07-27 - Recorder Policy: Unrecorded Attributes Enforcement and Binary Sensor Attribute Fixes](#330-dev7---2026-07-27---recorder-policy-unrecorded-attributes-enforcement-and-binary-sensor-attribute-fixes)
   - [\[3.3.0-dev6\] - 2026-07-27 - Integration Health: Firmware Key Change Attribute Publication](#330-dev6---2026-07-27---integration-health-firmware-key-change-attribute-publication)
-  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte_how_to_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
+  - [\[3.3.0-dev5\] - 2026-07-27 - Documentation: ZTE goform Protocol Reference and API Failure Modes in zte\_how\_to\_access.md](#330-dev5---2026-07-27---documentation-zte-goform-protocol-reference-and-api-failure-modes-in-zte_how_to_accessmd)
   - [\[3.3.0-dev4\] - 2026-07-27 - Cross-Project Standards Alignment: Health Attributes, Strike Limits, and Compat Shims](#330-dev4---2026-07-27---cross-project-standards-alignment-health-attributes-strike-limits-and-compat-shims)
   - [\[3.3.0-dev3\] - 2026-07-27 - Repair Framework: Router Unreachable Repair Issue and Standards Record Corrections](#330-dev3---2026-07-27---repair-framework-router-unreachable-repair-issue-and-standards-record-corrections)
   - [\[3.3.0-dev2\] - 2026-07-27 - Integration Quality Scale Audit: Translatable Exceptions and Error Classification](#330-dev2---2026-07-27---integration-quality-scale-audit-translatable-exceptions-and-error-classification)
@@ -274,6 +275,45 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.22-dev1] - 2026-09-12 - Writes Were Blocked Before They Were Sent: The Session Check Learns Its Witnesses
+
+### Summary
+
+On the MC888 Pro of [issue #56](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues/56), `[3.3.21]` changed nothing, because no write reached the router. SMS delete, send SMS and the data-limit switch all failed inside Home Assistant, at the session check, before a token was derived. The download shows it plainly: three reported failures against an empty `write_failures`, and a `last_delete` two days stale.
+
+The token and field-name fixes in `[3.3.21-dev1]` remain untested on that device. Nothing has yet been sent for it to accept or refuse.
+
+### Fixed
+
+- **The session check chose witnesses that cannot witness.** It read `wan_connect_status`, `ppp_status` and `model_name`, and `_classify_session` rules `live` only when an _authenticated_ key carries a value. On that device `ppp_status` and `model_name` are served without a session, so neither proves one, and `wan_connect_status` is blank at all times. The check is now built from keys the device is observed to populate, minus the set it serves without a session — chosen per device rather than fixed.
+
+- **Measuring the sessionless set correctly is what exposed it.** That set is measured during background setup, on every start and reload, and adopted for the life of the API object. Until recently the reporter's device did not acknowledge a logout, so the measurement returned nothing and the five-name constant stood — under which `ppp_status` counted as authenticated and proved his session by accident. His device now acknowledges a logout, the measurement succeeds and returns 13 keys including `ppp_status`, and the check is left with no valid witness. The measurement is correct; what it removed was the last thing that happened to be working.
+
+- **A device that cannot witness its own session no longer has its writes blocked.** Where nothing qualifies, the write is sent and the router's answer decides. A prediction that cannot be made must not stand in for an answer that can.
+
+- **`get_params` chose its sentinel the same way**, appending `wan_connect_status` on the stated grounds that it "is populated whenever the session is alive". It takes the device's own witnesses first now.
+
+### Changed
+
+- **A refused write is classified after the fact, and never replayed.** `note_write_refusal` takes one read once the router has already answered: a refusal with a provably dead session raises `ZTEAuthError` so Home Assistant can prompt for re-authentication, and any other refusal keeps its own error. Replaying was tried on hardware in an earlier release and did not work, and for `SEND_SMS` a replay can deliver the message twice with no way to tell that it did — so the classification is evidence, not recovery.
+
+- **The session check carries a companion key.** Witnesses supply only the authenticated half of what `_classify_session` compares; one key that answers without a session travels with them, or the verdict is `undecidable` and the caller falls back to the weak all-blank rule.
+
+### Added
+
+- **`session_witnesses` and `last_session_check` in the diagnostics download.** A write blocked before it was sent previously left no trace at all, which is why the reporter's download showed three failures and an empty `write_failures`.
+
+### Verified
+
+- Simulated against the reporter's own download: under the previous logic his witnesses reduce to `wan_connect_status`, which is blank, and the verdict is `undecidable` falling through to expired. Under the new logic three witnesses are found and the verdict is `live`.
+- Rehearsed on the reference MC7010: witnesses derived before and after a poll, a live `DATA_LIMIT_SETTING` write moved the alert percentage 81 to 80, `last_session_check` recorded `live`, and the value was restored.
+- 1,628 tests. New coverage for a device with no possible witness, for the companion key, and for a refusal being classified without being resent.
+
+### Known Issues
+
+- Whether `[3.3.21]`'s token fix is correct on that device is still unknown, and now testable for the first time.
+- Sender numbers show `[Decoding Error]` in `get_sms_list` on that device. Unrelated to the write path, recorded as item 70 of the v3.4.0 plan.
+
 ## [3.3.21] - Release - 2026-09-11 - MC888 Pro Write Token
 
 ### Fixed
@@ -298,7 +338,7 @@ The evidence is a capture of the reporter's own web interface deleting a message
 
 ### Fixed
 
-- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version` — read from `js/service.js` on both devices this project can measure. The reporter's MC888 Pro answers `cr_version` as `CR_ABPLMC888PROV1.0.1B04`; this integration never read that key at all, and sent `hash(hash(wa_inner_version) + RD)`. The reference MC7010 does not answer it, so the operand appends an empty string there and the digest is byte-identical to what shipped before.
+- **`get_ad` hashes `wa_inner_version + cr_version`.** The router's own client computes `hash(hash(rd0 + rd1) + RD)`, where `rd0` is `wa_inner_version` and `rd1` is `cr_version` — read from `js/service.js` on both devices this project can measure. The reporter's MC888 Pro answers `cr_version` as `CR_xxxxMC888PROV1.0.1B04`; this integration never read that key at all, and sent `hash(hash(wa_inner_version) + RD)`. The reference MC7010 does not answer it, so the operand appends an empty string there and the digest is byte-identical to what shipped before.
 
 - **`DATA_LIMIT_SETTING` is written with the field names the device answers.** The form is all-or-nothing and the router refuses a payload whose names it does not recognise. The `flux_` spellings were read through the alias tuples and then discarded, every write going out under the canonical names. The reporter's device answers only the `flux_` spellings, and its own client builds that form from `flux_data_volume_limit_size`, `flux_clear_date`, `flux_limited_disconnect` and their siblings — so its data-limit form could never have been accepted, whatever the token.
 
@@ -312,7 +352,7 @@ The evidence is a capture of the reporter's own web interface deleting a message
 
 ### Verified
 
-- The derivation is pinned by fixtures built from two tokens the routers themselves accepted: the MC888 Pro's `3D4B9F8C…B15DD51B` over SHA-256 uppercased with both operands, and the MC7010's `2f8c7ec2…e19bdf934e` over MD5 with an empty second operand. Both reproduce exactly.
+- The derivation is pinned by fixtures built from two tokens the routers themselves accepted — SHA-256 uppercased with both operands on the MC888 Pro, MD5 with an empty second operand on the MC7010. The fixtures carry redacted carrier prefixes with the digests recomputed to match, so they pin the derivation rather than the original digests; the originals were verified against the accepted tokens on 2026-09-11.
 - Rehearsed against the reference MC7010: `cr_version` reads empty, the token remains a 32-character MD5, and a live `DATA_LIMIT_SETTING` write moved the alert percentage from 81 to 80 and restored it.
 - The dead-session sweep required the new method to raise rather than return a default; that requirement found the `get_version` masking described above.
 - 1,615 tests. `_captures` was rewritten around `islice` so its bound has one loop exit rather than two, restoring 100% branch coverage under the `ctrace` core that CI uses.
@@ -355,7 +395,7 @@ It is recorded because the findings bear on core code, because the tool will be 
 
 ### Findings
 
-- **The write token is confirmed arithmetically.** From the capture's own values — `rd0 = IRL_H3G_MC7010DV1.0.0B03`, `rd1` empty, `RD = 92a9cd16cee3a478c0c2cffa014587ee` — `md5(md5(rd0 + rd1) + RD)` reproduces the `AD` the browser sent, `2f8c7ec23453048dace22de19bdf934e`, on a delete the router answered with `{"result":"success"}`. Everything before this was inference from minified source; this is the digest matching the one the device accepted.
+- **The write token is confirmed arithmetically.** From the capture's own values — `rd0` the device's `wa_inner_version`, `rd1` empty, `RD` the nonce read 21 ms earlier — `md5(md5(rd0 + rd1) + RD)` reproduced the `AD` the browser sent on a delete the router answered with `{"result":"success"}`. Everything before this was inference from minified source; this was the digest matching the one the device accepted. The operands are not reproduced here: a `wa_inner_version` names the carrier and country that shipped the firmware, which identifies the person who sent the capture.
 
 - **`RD` is re-read immediately before each write.** The captured read precedes its write by 21 milliseconds.
 
@@ -2133,7 +2173,7 @@ Issue #56 is resolved. The reporter's diagnostics download showed the MC888 Pro 
 ### Fixed
 
 - **A session cookie under any name is replayed**: `_extract_cookies` keeps every cookie the login response sets, by name, and `_cookie_header` renders them into one `Cookie` header. Which cookie carries the session is the router's business; replaying one that does not costs nothing, and missing the one that does costs the whole integration. The MC888 Pro's `zsidn` is pinned by a regression test built from the reporter's own metadata.
-- **The unauthenticated key set is measured per device**: `measure_unauthenticated_keys()` asks the router which keys it answers with no session, and `_classify_session` uses that in place of `_UNAUTHENTICATED_KEYS` where the measurement passes validation. On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` the measurement reproduces the constant exactly, verified by `scripts/hardware_check.py` check [1c].
+- **The unauthenticated key set is measured per device**: `measure_unauthenticated_keys()` asks the router which keys it answers with no session, and `_classify_session` uses that in place of `_UNAUTHENTICATED_KEYS` where the measurement passes validation. On MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` the measurement reproduces the constant exactly, verified by `scripts/hardware_check.py` check [1c].
 - **Data-limit settings and realtime counters carry their `flux_` spellings**: eight aliases added. Three feed `DATA_LIMIT_SETTING`, an all-or-nothing form the router refuses when a field is missing — a wrong spelling there makes the write impossible rather than blanking a sensor. `flux_monthly_time` was excluded: it aliases `monthly_time`, which this integration neither requests nor reads.
 - **Subscriber identifiers carry their short spellings**: `imsi` and `iccid` join the extended batch. Measured on the reference device: `iccid` carries the identical value to `sim_iccid`, and `imsi` is present but empty while `sim_imsi` is populated.
 
@@ -2248,7 +2288,7 @@ Two corrections to how an expired session is decided, and three additions that g
 
 ### Fixed
 
-- **A response missing most of its request is no longer read as an expired session**: `_classify_session()` receives the requested key list and declines to return `expired` when more than `ABSENT_KEY_PROPORTION_LIMIT` of the requested authenticated keys are absent rather than empty. A dead session on this API echoes every requested key back — measured on MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31, where a cookieless batch read returned 80 of 80 core and 36 of 36 extended keys with none absent — so keys going missing indicates a truncated or refused request, or firmware key-name drift. The guard suppresses `expired` alone and cannot preempt `not_ready`, or a router still starting up that also omitted keys would be re-logged-in pointlessly. The limit is not zero because an unknown `cmd` name is simply absent rather than an error.
+- **A response missing most of its request is no longer read as an expired session**: `_classify_session()` receives the requested key list and declines to return `expired` when more than `ABSENT_KEY_PROPORTION_LIMIT` of the requested authenticated keys are absent rather than empty. A dead session on this API echoes every requested key back — measured on MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` on 2026-08-31, where a cookieless batch read returned 80 of 80 core and 36 of 36 extended keys with none absent — so keys going missing indicates a truncated or refused request, or firmware key-name drift. The guard suppresses `expired` alone and cannot preempt `not_ready`, or a router still starting up that also omitted keys would be re-logged-in pointlessly. The limit is not zero because an unknown `cmd` name is simply absent rather than an error.
 - **An expired-looking response on a freshly established session no longer reports as an authentication failure**: a session created seconds earlier cannot itself be expired, so an identical verdict on the replayed request refutes the classification rather than confirming it. It now raises `ZTEConnectionError`, which routes into the coordinator's hold-last-known-values path. A caller that passed `_retry=False` itself still receives `ZTEAuthError` — `scripts/hardware_check.py` probes an invalidated session that way, and that assertion is the standing hardware proof that expiry is detectable.
 
 ### Added
@@ -2273,7 +2313,7 @@ Two corrections to how an expired session is decided, and three additions that g
 ### Changed
 
 - **`LOGIN_MULTI_USER` payload**: The username is sent as `user` rather than `username`, and an `AD` token is included. The form is posted only where a username is configured, and `is_multi` still decides which form is primary — an MC7010 with a username continues to send `LOGIN` first.
-- **`LOGIN` payload**: Unchanged, and now covered by a test recording why. On MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`, `username=` and `user=` are both accepted and yield a usable session, while omitting the field entirely — the shape `mc.py` uses on this form — makes the router close the connection without answering.
+- **`LOGIN` payload**: Unchanged, and now covered by a test recording why. On MC7010 firmware `xx_xxx_MC7010DV1.0.0B03`, `username=` and `user=` are both accepted and yield a usable session, while omitting the field entirely — the shape `mc.py` uses on this form — makes the router close the connection without answering.
 
 ### Added
 
@@ -2344,7 +2384,7 @@ Follow-up to dev25. A router configured without a username now receives `LOGIN` 
 
 ### Summary
 
-Issue #56: an MC888 Pro on firmware `CR_ABPLMC888PROV1.0.1B04` answers a successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie`, binding the session to the client address instead. `_attempt_login` tested for the cookie alone, so the login was classified as a connection failure and reported as an unreachable router. The session is now two fields — the cookie and whether the router has authenticated us — established and cleared only as a pair.
+Issue #56: an MC888 Pro on firmware `CR_xxxxMC888PROV1.0.1B04` answers a successful `LOGIN` with `{"result":"0"}` and no `Set-Cookie`, binding the session to the client address instead. `_attempt_login` tested for the cookie alone, so the login was classified as a connection failure and reported as an unreachable router. The session is now two fields — the cookie and whether the router has authenticated us — established and cleared only as a pair.
 
 ### Fixed
 
@@ -2878,7 +2918,7 @@ Documentation only. `tasks_folder_migrate` run against this project, in two pass
 
 ### Closed by verification
 
-- **`silent_login_fail.md`** — the manual boundary test was run: §8 carries a filled results table dated 2026-07-29 against firmware `IRL_H3G_MC7010DV1.0.0B03`, all three time boundaries passing. Its principal follow-on shipped as `[3.3.1-dev7]`, `tests/test_dead_session_sweep.py`.
+- **`silent_login_fail.md`** — the manual boundary test was run: §8 carries a filled results table dated 2026-07-29 against firmware `xx_xxx_MC7010DV1.0.0B03`, all three time boundaries passing. Its principal follow-on shipped as `[3.3.1-dev7]`, `tests/test_dead_session_sweep.py`.
 - **`sub_device_recommendations.md`** and **`refactor_guidance.md`** — both delivered by `[3.0.0]`. The 47 Ruff errors the second opens on were **not** re-counted; `ruff check` could not run against the project `.venv` on the day, so that closure rests on the changelog rather than a fresh lint.
 - **`expansion_plan_202607/`** — `Z5g_snr` and `Z5g_CELL_ID` are at `api.py:137-138`, and the six-call-site aliasing is `_get_first` in `sensor.py`.
 - **`updates_202608/status_plan.md`** — all six phases run and nine review findings implemented across `[3.3.3-dev8]`–`[3.3.3-dev11]`. Its Phase 5 is recorded `PARTIAL` and deliberately not to be re-run; the stamp says so, because "partial and closed" reads as unfinished.
@@ -4154,7 +4194,7 @@ Acts on `.notes/info/zte_element_discovery_report.md`, a two-step discovery run 
 
 ### Verified on hardware
 
-Live MC7010 (`IRL_H3G_MC7010DV1.0.0B03`), read from a diagnostics download after a full restart.
+Live MC7010 (`xx_xxx_MC7010DV1.0.0B03`), read from a diagnostics download after a full restart.
 
 - **All 15 new keys answered.** `traffic_clear_date` returned `1` — the discovery report's spelling is the right one. The two `data_volume_*` spellings returned `""`, meaning the firmware knows the names but does not populate them on this model; `_safe_int` treats present-but-empty as absent, so the resolution is clean and the disagreement warning does not fire.
 - **No truncation.** 131 keys came back with every pre-existing field intact, closing the risk that a longer `cmd` list would silently drop data and look like firmware key changes.

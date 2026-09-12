@@ -33,7 +33,7 @@ from custom_components.zte_router_5g.const import (
 ROUTER_DATA = {
     "network_type": "ENDC",
     "signalbar": "4",
-    "wa_inner_version": "IRL_H3G_MC7010DV1.0.0B01",
+    "wa_inner_version": "xx_xxx_MC7010DV1.0.0B01",
     "model_name": "MC7010",
     "realtime_time": "3600",
 }

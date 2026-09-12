@@ -1763,8 +1763,10 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
     """The hazard this design avoids.
 
     `{"result":"failure"}` is what the router returns for a command it declined
-    on its merits. Resending it would deliver a `send_sms` twice. With the
-    session assured up front there is no reason to retry, and nothing does.
+    on its merits. Resending it would deliver a `send_sms` twice, with no way
+    to tell that it had. Since v3.3.22 a refusal is *classified* afterwards —
+    one read, to say whether the session was the cause — and that read must not
+    become a retry of the write.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "live"}
@@ -1776,6 +1778,9 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
         MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "abc"}),
+        # The post-refusal read: the session is alive, so the refusal stands
+        # as its own error rather than becoming an auth failure.
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={"result": "failure"}
@@ -1785,6 +1790,7 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
         await api.set_odu_led_switch("1")
 
     assert mock_aiohttp_client.post.call_count == 1, "a declined write was resent"
+    assert api.last_session_check["verdict"] == "live"
 
 
 # --- Targeted reads must not be mistaken for a dead session -----------------
@@ -2127,21 +2133,30 @@ async def test_a_non_object_chunk_response_contributes_nothing(mock_aiohttp_clie
 # ---------------------------------------------------------------------------
 
 # Captured from each router's own web interface while it carried out a delete
-# the router honoured. Firmware strings and a one-time nonce: nothing here
-# belongs to a person, and the token is spent.
+# the router honoured, then **redacted**: a `wa_inner_version` names the
+# carrier and country that shipped the firmware, which identifies the person
+# who sent the capture. The carrier prefixes are replaced here and the digests
+# recomputed from the redacted operands, so the arithmetic stays checkable
+# while the identifying part does not survive.
+#
+# What that costs is real and worth stating: these are no longer the exact
+# digests those routers accepted. They pin the derivation — both operands,
+# which digest, which case, how many rounds — which is what a regression would
+# break. The original values were verified against accepted tokens on
+# 2026-09-11; see `[3.3.21-dev1]`.
 _ACCEPTED_TOKENS = [
     pytest.param(
-        "BD_ABPLMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
-        "CR_ABPLMC888PROV1.0.1B04",
+        "xx_xxxxMC888PROMODV1.0.0B01 [Oct 16 2025 21:15:14]",
+        "CR_xxxxMC888PROV1.0.1B04",
         "AB79DB84D9C5B7F8AEBB5A69AFA59D7B3E2A6365160528A9B483DA205CDF8689",
-        "3D4B9F8C93FDB14C296184ADEE53DD1B44B0350CA1C2E287AC8FEACBB15DD51B",
+        "ABB7E304B1A5FD8E175401403A6F27CB634E2CA9616DC7C0B51F4884204DFCAF",
         id="mc888_pro_answers_cr_version",
     ),
     pytest.param(
-        "IRL_H3G_MC7010DV1.0.0B03",
+        "xx_xxx_MC7010DV1.0.0B03",
         "",
         "92a9cd16cee3a478c0c2cffa014587ee",
-        "2f8c7ec23453048dace22de19bdf934e",
+        "bdde3aca545b1bab6d1737ca665c91c5",
         id="mc7010_does_not",
     ),
 ]
@@ -2239,12 +2254,12 @@ async def test_a_device_that_answers_no_cr_version_still_writes(mock_aiohttp_cli
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
-        MockResponse(json_data={"wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03"}),
+        MockResponse(json_data={"wa_inner_version": "xx_xxx_MC7010DV1.0.0B03"}),
         MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "92a9cd16cee3a478c0c2cffa014587ee"}),
     ]
 
-    assert await api.get_ad() == "2f8c7ec23453048dace22de19bdf934e"
+    assert await api.get_ad() == "bdde3aca545b1bab6d1737ca665c91c5"
 
 
 @pytest.mark.asyncio
@@ -2263,7 +2278,7 @@ async def test_a_failed_cr_version_read_stops_the_write(mock_aiohttp_client):
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
-        MockResponse(json_data={"wa_inner_version": "IRL_H3G_MC7010DV1.0.0B03"}),
+        MockResponse(json_data={"wa_inner_version": "xx_xxx_MC7010DV1.0.0B03"}),
         aiohttp.ClientError("router closed the connection"),
     ]
 

@@ -311,7 +311,7 @@ async def check_session_assumptions(
 
     # This device issues a stok. Recorded rather than scored, because a device
     # that does not is a supported configuration — an MC888 Pro on
-    # `CR_ABPLMC888PROV1.0.1B04` binds the session to the client address and
+    # `CR_xxxxMC888PROV1.0.1B04` binds the session to the client address and
     # sends no cookie at all (issue #56). Capturing it makes the reference
     # router the documented baseline for `_extract_stok`.
     report.captured["login_cookie_names"] = sorted(api.cookies)

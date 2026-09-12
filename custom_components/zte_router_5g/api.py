@@ -263,7 +263,7 @@ _EXTENDED_PARAMS: list[str] = [
     "sim_imsi",
     "sim_iccid",
     # The shorter spellings the rest of the goform family uses. Measured on
-    # MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-31: `iccid`
+    # MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` on 2026-08-31: `iccid`
     # carries the identical value to `sim_iccid`, and `imsi` is present but
     # empty while `sim_imsi` is populated — the ordinary alias case. Placed in
     # the extended batch because the core batch is the one bounded by URL
@@ -868,6 +868,13 @@ class ZTERouterAPI:
         # token's first operand, read once and held against the version it
         # belongs to. See `get_cr_version`.
         self._cr_version_cache: tuple[str, str] | None = None
+        # Keys this device was observed to populate while authenticated,
+        # from the most recent successful poll. Empty until one completes.
+        # See `session_witnesses`.
+        self._populated_keys: frozenset[str] = frozenset()
+        # What the last pre-write session check asked and concluded,
+        # published in the download so a blocked write is visible.
+        self.last_session_check: dict[str, Any] | None = None
         # Every delete attempt, including the ones that raised. `last_delete`
         # holds only the most recent and only when the request returned; a
         # refused delete raises inside `_request`, so the record that mattered
@@ -1090,6 +1097,81 @@ class ZTERouterAPI:
                 f"write."
             )
 
+    async def _require_write_success(
+        self, data: Any, cmd: str, timeout_sec: int | None = None
+    ) -> None:
+        """Fail loudly on a refused write, having first asked why.
+
+        `_require_success` says the router declined. This asks, before that
+        error reaches the user, whether the session was the reason — the
+        question the pre-write check used to answer by prediction and now
+        answers by evidence. `note_write_refusal` raises `ZTEAuthError` where
+        the session is provably gone; otherwise the refusal stands as its own
+        error.
+        """
+        if not self._is_refusal(data):
+            return
+        await self.note_write_refusal(cmd, timeout_sec=timeout_sec)
+        self._require_success(data, cmd)
+
+    async def note_write_refusal(self, cmd: str, timeout_sec: int | None = None) -> str:
+        """Decide, after a refusal, whether the session was the cause.
+
+        The pre-write check answers "is this session alive" by prediction; this
+        answers it by evidence, once the router has already spoken. A refusal
+        with a provably live session is a real refusal and keeps its own error.
+        A refusal with a provably dead session raises `ZTEAuthError`, so Home
+        Assistant can prompt for re-authentication rather than reporting that
+        the device declined a command it never saw.
+
+        **It never replays the write.** Renewing the session and resending was
+        tried on hardware and did not work, and for `SEND_SMS` a replay can
+        deliver the message twice with no way to tell that it did.
+
+        Costs one short read, and only on the failure path.
+        """
+        witnesses = self.session_witnesses()
+        if not witnesses:
+            self.last_session_check = {
+                "witnesses": [],
+                "verdict": "undecidable after refusal",
+                "after": cmd,
+            }
+            return "undecidable"
+        request = self._session_check_request(witnesses)
+        path = (
+            "goform/goform_get_cmd_process?multi_data=1&isTest=false&cmd="
+            + ",".join(request)
+        )
+        try:
+            answer = await self._request(
+                "GET",
+                path,
+                timeout_sec=timeout_sec,
+                requested=request,
+                classify=False,
+                _retry=False,
+            )
+        except (ZTEAuthError, ZTEConnectionError):
+            self.last_session_check = {
+                "witnesses": witnesses,
+                "verdict": "unreadable after refusal",
+                "after": cmd,
+            }
+            return "undecidable"
+        verdict = _classify_session(answer, request, self.unauthenticated_key_set())
+        self.last_session_check = {
+            "witnesses": witnesses,
+            "verdict": verdict,
+            "after": cmd,
+        }
+        if verdict == "expired":
+            raise ZTEAuthError(
+                f"Session expired/unauthorized: the router refused {cmd} and a "
+                f"read taken immediately afterwards shows the session is gone."
+            )
+        return verdict
+
     @staticmethod
     def _is_refusal(data: Any) -> bool:
         """Return whether a response is an explicit non-success ``result``.
@@ -1110,6 +1192,54 @@ class ZTERouterAPI:
         if result is None:
             return False
         return str(result).lower() not in ("success", "0", "ok")
+
+    def session_witnesses(self) -> list[str]:
+        """Keys that can prove this device's session, newest evidence first.
+
+        A witness has to satisfy two conditions at once, and until v3.3.22 only
+        the first was checked. It must not be served without a session, or a
+        value proves nothing. And **this device must actually populate it**, or
+        its blankness proves nothing either.
+
+        `_SESSION_CHECK_KEYS` satisfied the first condition and was assumed to
+        satisfy the second. On the MC888 Pro of issue #56 it does not:
+        `ppp_status` and `model_name` are both served without a session there,
+        and `wan_connect_status` — the only one left — is blank at all times.
+        Once that device's sessionless set was measured rather than assumed,
+        every write was scored against a witness the device never populates,
+        and every write was refused before it was sent.
+
+        Returns an empty list when nothing qualifies, which is a real answer:
+        the session cannot be judged from a read on this device, so nothing
+        should be blocked on the attempt.
+        """
+        unauthenticated = self.unauthenticated_key_set()
+        seeded = [k for k in _SESSION_CHECK_KEYS if k not in unauthenticated]
+        if not self._populated_keys:
+            # Nothing polled yet, so there is no evidence either way. The
+            # seeded names are the long-standing behaviour and stay in force:
+            # an empty list here would mean "measured, and nothing qualifies",
+            # which is a much stronger statement than "not measured".
+            return seeded[:3]
+        observed = sorted(self._populated_keys - unauthenticated)
+        # Seeded names first where the device populates them — they are the
+        # cheap, well-understood ones — then whatever else it proved it answers.
+        witnesses = [k for k in seeded if k in self._populated_keys]
+        witnesses += [k for k in observed if k not in witnesses]
+        return witnesses[:3]
+
+    def _session_check_request(self, witnesses: list[str]) -> list[str]:
+        """The witnesses, plus one key that answers without a session.
+
+        `_classify_session` rules by comparing two classes of key. Witnesses
+        supply only the authenticated half; without an unauthenticated one
+        alongside them the verdict is `undecidable` and the caller falls back
+        to "everything is blank, so the session is gone" — the weak rule this
+        whole mechanism exists to replace.
+        """
+        unauthenticated = sorted(self.unauthenticated_key_set())
+        companion = [k for k in unauthenticated if k not in witnesses][:1]
+        return [*witnesses, *companion]
 
     async def _ensure_session(self, timeout_sec: int | None = None) -> None:
         """Confirm the session before a write derives its ``AD`` token.
@@ -1153,14 +1283,30 @@ class ZTERouterAPI:
         `requested` is passed so the absent-key guard applies: a device that
         answers none of these is a truncated read or firmware key-name drift,
         and must not be scored as an expiry.
+
+        **The keys are chosen per device, and the check is skipped when none
+        qualifies.** See `session_witnesses`. A device whose session cannot be
+        judged from a read is not a device whose writes should be blocked: the
+        write is sent, and the router's own answer decides. That is the only
+        part of this guard that moved — a refusal is still classified, but
+        afterwards, by `note_write_refusal`, and never replayed.
         """
+        witnesses = self.session_witnesses()
+        if not witnesses:
+            self.last_session_check = {
+                "witnesses": [],
+                "verdict": "no witness available; the write was not blocked",
+            }
+            return
+        request = self._session_check_request(witnesses)
         await self._request(
             "GET",
             "goform/goform_get_cmd_process?multi_data=1&isTest=false"
-            "&sms_received_flag_flag=0&cmd=" + ",".join(_SESSION_CHECK_KEYS),
+            "&sms_received_flag_flag=0&cmd=" + ",".join(request),
             timeout_sec=timeout_sec,
-            requested=list(_SESSION_CHECK_KEYS),
+            requested=request,
         )
+        self.last_session_check = {"witnesses": witnesses, "verdict": "live"}
 
     def _parse_date(self, date_str: str) -> str | None:
         """Decode a received message's timestamp, offset included.
@@ -1682,7 +1828,7 @@ class ZTERouterAPI:
         # carries (measured 2026-08-30, all four combinations).
         #
         # `LOGIN` keeps `username=`. That is measured, not inherited: on
-        # MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03` both spellings are
+        # MC7010 firmware `xx_xxx_MC7010DV1.0.0B03` both spellings are
         # accepted and yield a usable session, while omitting the field
         # entirely — Kajkac's shape for this form — makes the router close the
         # connection without answering.
@@ -1794,7 +1940,7 @@ class ZTERouterAPI:
         """Return every cookie the login response set, by name.
 
         **Does not decide which cookie is the session.** An MC888 Pro on
-        `BD_ABPLMC888PROMODV1.0.0B01` names its session cookie `zsidn`, not
+        `xx_xxxxMC888PROMODV1.0.0B01` names its session cookie `zsidn`, not
         `stok` (issue #56), and the previous form matched the literal name
         `stok` in four places — so the cookie was received, ignored, and every
         subsequent request went out unauthenticated. The router then answered
@@ -2763,6 +2909,10 @@ class ZTERouterAPI:
             )
             if isinstance(data, dict):
                 merged.update(data)
+        if merged:
+            self._populated_keys = frozenset(
+                key for key, value in merged.items() if value not in ("", None)
+            )
         return merged
 
     async def get_params(
@@ -2804,8 +2954,16 @@ class ZTERouterAPI:
         # more than half the request came back missing; appending four
         # spellings to a one-key read, three of them absent, crosses that line
         # and returns `undecidable`.
+        # A sentinel this device leaves permanently blank is worse than none:
+        # it cannot distinguish "these fields are empty" from "the session is
+        # gone", which is what `wan_connect_status` does on an MC888 Pro. The
+        # device's own witnesses come first for that reason; the contract names
+        # remain as the fallback for a device that has not polled yet.
         unauthenticated = self.unauthenticated_key_set()
-        usable = [k for k in _SESSION_SENTINELS if k not in unauthenticated]
+        witnesses = self.session_witnesses()
+        usable = witnesses or [
+            k for k in _SESSION_SENTINELS if k not in unauthenticated
+        ]
         for sentinel in (usable or list(_SESSION_SENTINELS))[:2]:
             if sentinel not in request:
                 request.append(sentinel)
@@ -2904,7 +3062,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
-        self._require_success(res, "REBOOT_DEVICE")
+        await self._require_write_success(res, "REBOOT_DEVICE")
         return 200
 
     async def delete_sms(self, msg_id: str, listed_with: str | None = None) -> int:
@@ -2945,7 +3103,7 @@ class ZTERouterAPI:
             )
             raise
         self._record_delete(msg_id, res, listed_with)
-        self._require_success(res, "DELETE_SMS")
+        await self._require_write_success(res, "DELETE_SMS")
         return 200
 
     async def delete_all(self) -> int:
@@ -3057,7 +3215,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
-        self._require_success(res, "SEND_SMS")
+        await self._require_write_success(res, "SEND_SMS")
         return 200
 
     async def get_sms_messages(
@@ -3161,7 +3319,7 @@ class ZTERouterAPI:
         Cannot reuse `get_ad()`, which asserts the session first and reads
         `RD` through the authenticated path — neither is available before a
         login. `LD`, `wa_inner_version` and `RD` are all served without a
-        session, confirmed against MC7010 firmware `IRL_H3G_MC7010DV1.0.0B03`
+        session, confirmed against MC7010 firmware `xx_xxx_MC7010DV1.0.0B03`
         on 2026-08-30 by computing this token before any session existed.
 
         Returns `None` rather than raising when `RD` cannot be read. The
@@ -3256,7 +3414,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
-        self._require_success(res, "APN_PROC_EX")
+        await self._require_write_success(res, "APN_PROC_EX")
         return cast(dict[str, Any], res)
 
     @staticmethod
@@ -3368,7 +3526,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
-        self._require_success(res, "APN_PROC_EX")
+        await self._require_write_success(res, "APN_PROC_EX")
         return cast(dict[str, Any], res)
 
     async def set_odu_led_switch(self, status: str) -> dict[str, Any]:
@@ -3383,7 +3541,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
-        self._require_success(res, "ODU_LED_SWITCH_SET")
+        await self._require_write_success(res, "ODU_LED_SWITCH_SET")
         return cast(dict[str, Any], res)
 
     # Every field `DATA_LIMIT_SETTING` expects, and the response key each is
@@ -3492,7 +3650,7 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
-        self._require_success(res, "DATA_LIMIT_SETTING")
+        await self._require_write_success(res, "DATA_LIMIT_SETTING")
         return cast(dict[str, Any], res)
 
     async def set_data_limit_switch(
@@ -3520,5 +3678,5 @@ class ZTERouterAPI:
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
-        self._require_success(res, "SET_BEARER_PREFERENCE")
+        await self._require_write_success(res, "SET_BEARER_PREFERENCE")
         return cast(dict[str, Any], res)

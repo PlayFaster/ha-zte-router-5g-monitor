@@ -48,7 +48,7 @@ SESSION_IDLE_RESET_SECONDS = 150
 #
 # An expired session on this API echoes the requested keys back as empty
 # strings; it does not drop them. Measured on MC7010 firmware
-# `IRL_H3G_MC7010DV1.0.0B03` on 2026-08-30, where a cookieless read returned
+# `xx_xxx_MC7010DV1.0.0B03` on 2026-08-30, where a cookieless read returned
 # 80 of 80 core and 36 of 36 extended keys with none absent. Keys going
 # *missing* is therefore a different fault — a truncated or refused request,
 # or firmware key-name drift — and must not be read as a dead session.
