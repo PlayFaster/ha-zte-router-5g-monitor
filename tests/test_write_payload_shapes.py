@@ -209,8 +209,8 @@ async def test_delete_all_reuses_the_delete_payload(mock_aiohttp_client):
 
     payload = mock_aiohttp_client.post.call_args_list[1][1]["data"]
     assert "goformId=DELETE_SMS" in payload
-    assert re.search(r"msg_id=1;2;(&|$)", payload), (
-        f"ids are no longer semicolon-terminated: {payload}"
+    assert re.search(r"msg_id=1%3B2%3B(&|$)", payload), (
+        f"ids are no longer semicolon-terminated and encoded: {payload}"
     )
 
 
@@ -242,12 +242,13 @@ async def test_delete_payload_matches_the_captured_browser_request(
     """The delete form, field for field, as the router's own page sends it.
 
     Captured from the MC888 Pro of issue #56 on 2026-09-11, deleting message
-    16 successfully: `isTest=false&goformId=DELETE_SMS&msg_id=16%3B` —
-    a semicolon-*terminated* id — `&notCallback=true&AD=...`. Both of those
-    were missing here, and that device refuses every write it is sent.
+    16 successfully: `isTest=false&goformId=DELETE_SMS&msg_id=16%3B` — a
+    semicolon-terminated id, percent-encoded — `&notCallback=true&AD=...`.
+    Both fields were missing here, and that device refuses every write it is
+    sent. The two MC7010 captures taken the same day carry the same form.
 
     Locked as an ordered comparison rather than a field set, because the set
-    check above cannot see a `16` that should be `16;`.
+    check above cannot see a `16` that should be `16%3B`.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "test"}
@@ -266,7 +267,7 @@ async def test_delete_payload_matches_the_captured_browser_request(
 
     payload = mock_aiohttp_client.post.call_args[1]["data"]
     assert payload == (
-        "isTest=false&goformId=DELETE_SMS&msg_id=16;&notCallback=true&AD=test_ad"
+        "isTest=false&goformId=DELETE_SMS&msg_id=16%3B&notCallback=true&AD=test_ad"
     )
 
 
@@ -275,7 +276,10 @@ async def test_delete_does_not_double_the_terminator(mock_aiohttp_client):
     """A caller that already terminated its ids gets them back unchanged.
 
     `delete_all` joins ids here, and a service call may pass either form.
-    `16;;` is not what the device was captured accepting.
+    `16%3B%3B` is not what the device was captured accepting. The encoding
+    is asserted too: a bare `;` is still a parameter separator to some CGI
+    parsers, which would drop the terminator and truncate a batch at the
+    first id.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "test"}
@@ -293,8 +297,9 @@ async def test_delete_does_not_double_the_terminator(mock_aiohttp_client):
         await api.delete_sms("1;2;")
 
     payload = mock_aiohttp_client.post.call_args[1]["data"]
-    assert "msg_id=1;2;&" in payload
-    assert ";;" not in payload
+    assert "msg_id=1%3B2%3B&" in payload
+    assert "%3B%3B" not in payload
+    assert ";" not in payload, f"a bare semicolon reached the wire: {payload}"
 
 
 @pytest.mark.asyncio

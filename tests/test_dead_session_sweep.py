@@ -28,12 +28,14 @@ Live findings this encodes (MC7010 `V1.0.0B03`, 2026-07-29, see
 
 import inspect
 import re
+import urllib.parse
 from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 
 from custom_components.zte_router_5g.api import (
+    _SESSION_CHECK_KEYS,
     ZTEAuthError,
     ZTEConnectionError,
     ZTERouterAPI,
@@ -222,7 +224,12 @@ class _DyingSession:
         if "goformId=DELETE_SMS" in body:
             match = re.search(r"msg_id=([^&]*)", body)
             if match:
-                self.deleted |= {part for part in match.group(1).split(";") if part}
+                # Decoded before splitting, as the router's CGI must: since
+                # v3.3.22-dev3 the separator goes out percent-encoded, and a
+                # double that split the raw value would take `1%3B` for an id
+                # and report every delete as ignored.
+                ids = urllib.parse.unquote(match.group(1))
+                self.deleted |= {part for part in ids.split(";") if part}
         return MockResponse(json_data=self._healthy())
 
     def get(self, *args: Any, **kwargs: Any) -> MockResponse:
@@ -336,6 +343,11 @@ async def test_methods_recover_when_the_session_can_be_renewed(method_name):
     api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "stale"}
     api.session_active = True
+    # A polled device, which is what every caller here models: an API object
+    # that has never polled has no session witness and skips the pre-write
+    # check, so a write would reach the router without the renewal this test
+    # exists to prove.
+    api._populated_keys = frozenset(_SESSION_CHECK_KEYS)
 
     result = await getattr(api, method_name)(*_CALLS[method_name])
 

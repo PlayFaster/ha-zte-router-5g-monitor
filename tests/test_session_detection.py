@@ -439,6 +439,10 @@ async def test_the_session_check_reads_every_key_it_classifies_on(
     device that never populates that key.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    # The device populates the seeded names. Stated rather than assumed:
+    # since v3.3.22-dev3 an API object that has not polled has no witness at
+    # all, and the check it would otherwise build is skipped.
+    api._populated_keys = frozenset(_SESSION_CHECK_KEYS)
     seen: dict[str, object] = {}
 
     async def record(_method, path, **kwargs):
@@ -449,9 +453,9 @@ async def test_the_session_check_reads_every_key_it_classifies_on(
     with patch.object(api, "_request", side_effect=record):
         await api._ensure_session()
 
-    # Before a poll there is no evidence about this device, so the seeded
-    # names stand — less any the constant already knows answer without a
-    # session, which prove nothing and were never witnesses.
+    # The seeded names the device populates, less any the constant already
+    # knows answer without a session — those prove nothing and were never
+    # witnesses.
     witnesses = api.session_witnesses()
     assert witnesses == [
         k for k in _SESSION_CHECK_KEYS if k not in _UNAUTHENTICATED_KEYS
@@ -654,3 +658,52 @@ async def test_a_refusal_on_a_dead_session_asks_for_reauthentication(
         await api.note_write_refusal("DELETE_SMS")
 
     assert api.last_session_check["verdict"] == "expired"
+
+
+@pytest.mark.asyncio
+async def test_an_unpolled_device_has_no_witness_and_is_not_blocked() -> None:
+    """Before the first poll there is no evidence, so no check is made.
+
+    Returning the seeded names instead reinstates the fault this mechanism
+    was written for, in the window between a restart and the first completed
+    poll: on the MC888 Pro the seeded set reduces to `wan_connect_status`,
+    which is blank at all times there, so the check scores an expiry and
+    blocks a write that would have been accepted.
+
+    The pre-write check is an optimisation, not a gate. Skipping it costs at
+    most one refused write, which `note_write_refusal` then classifies from
+    the router's own answer.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset()
+
+    assert api.session_witnesses() == []
+
+    with patch.object(api, "_request", new=AsyncMock()) as request:
+        await api._ensure_session()
+
+    assert not request.called, "a device with no witness was still probed"
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_is_undecidable_when_the_check_cannot_be_read(
+    mock_aiohttp_client,
+) -> None:
+    """An unreadable check says nothing about the refusal it followed.
+
+    The read is taken after the router has already answered, so it may fail
+    for its own reasons. A refusal must keep its own error in that case, not
+    be reclassified as an expiry on a read that never arrived.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.unauthenticated_keys = frozenset({"model_name"})
+    api._populated_keys = frozenset({"wan_connect_status", "model_name"})
+
+    with patch.object(
+        api, "_request", new=AsyncMock(side_effect=ZTEConnectionError("unreachable"))
+    ):
+        verdict = await api.note_write_refusal("SEND_SMS")
+
+    assert verdict == "undecidable"
+    assert api.last_session_check["verdict"] == "unreadable after refusal"
+    assert api.last_session_check["after"] == "SEND_SMS"

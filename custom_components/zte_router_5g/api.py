@@ -1214,6 +1214,17 @@ class ZTERouterAPI:
             return False
         return str(result).lower() not in ("success", "0", "ok")
 
+    @staticmethod
+    def _is_write_request(method: str, path: str) -> bool:
+        """Whether this request changes something on the router.
+
+        Used to decide what may be put a second time after a re-login.
+        Matched on the endpoint rather than on a command list, because
+        `goform_set_cmd_process` is the only path that writes and a new
+        `goformId` must not have to be remembered here to be covered.
+        """
+        return method.upper() == "POST" and "goform_set_cmd_process" in path
+
     def write_headers(self) -> dict[str, str]:
         """The headers the router's own page sends with a `goform` write.
 
@@ -1225,8 +1236,16 @@ class ZTERouterAPI:
         request the device is known to accept removes one class of difference
         without changing what any command does.
 
-        `Origin` is derived from `self.referer` rather than stored, because
-        the referer is rewritten when the protocol is discovered.
+        `Origin` is sent deliberately and is **not** to be removed as
+        unevidenced. It does not appear in any of the three browser captures,
+        but those record only what the page sets through `setRequestHeader`;
+        the Fetch standard requires the browser to add `Origin` to every
+        request whose method is not `GET` or `HEAD`, so all three captured
+        deletes carried one. Its absence from the file is a limit of the
+        instrument.
+
+        It is derived from `self.referer` rather than stored, because the
+        referer is rewritten when the protocol is discovered.
         """
         return {
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -1258,11 +1277,21 @@ class ZTERouterAPI:
         unauthenticated = self.unauthenticated_key_set()
         seeded = [k for k in _SESSION_CHECK_KEYS if k not in unauthenticated]
         if not self._populated_keys:
-            # Nothing polled yet, so there is no evidence either way. The
-            # seeded names are the long-standing behaviour and stay in force:
-            # an empty list here would mean "measured, and nothing qualifies",
-            # which is a much stronger statement than "not measured".
-            return seeded[:3]
+            # Nothing polled yet, so there is no evidence about which of the
+            # seeded names this device populates. Returning them anyway
+            # reinstates the fault this method was written for, in the window
+            # between a restart or a reload and the first completed poll: on
+            # the MC888 Pro the seeded set reduces to `wan_connect_status`,
+            # which is blank at all times there, and a blank witness scores as
+            # an expiry and blocks the write.
+            #
+            # No witness is the honest answer. The pre-write check is an
+            # optimisation — it turns a refusal into a re-login before the
+            # command is spent — and skipping it costs at most one refused
+            # write, which `note_write_refusal` then classifies from the
+            # router's own answer. `_batch_get` fills this set on the first
+            # poll, so the window is short.
+            return []
         observed = sorted(self._populated_keys - unauthenticated)
         # Seeded names first where the device populates them — they are the
         # cheap, well-understood ones — then whatever else it proved it answers.
@@ -1593,6 +1622,27 @@ class ZTERouterAPI:
         if authenticated and not self.session_active:
             await self.login(timeout_sec=timeout_sec)
 
+        # A read may be put again after a re-login; a write may not, and the
+        # distinction has to be made here rather than in each caller, because
+        # all three recovery paths below re-send whatever they were given.
+        #
+        # The reason is the hazard, not the odds of success. A resent
+        # `SEND_SMS` can deliver the message twice with nothing in the
+        # response to say that it did, and `{"result":"failure"}` is equally
+        # what the router returns for a command it declined on its merits.
+        #
+        # It is **not** that the replayed token must be stale. `RD` is stable
+        # within a session on the reference MC7010 — `scripts/hardware_check.py`
+        # asserts exactly that — and whether it survives a re-login has
+        # flip-flopped across observations. A replayed body may well carry a
+        # valid token. Why re-login-and-replay was nonetheless measured as
+        # ineffective is still unexplained; see `_ensure_session`.
+        #
+        # A write that looks like an expiry therefore raises instead, and
+        # Home Assistant prompts for re-authentication with nothing sent
+        # twice.
+        replayable = _retry and not self._is_write_request(method, path)
+
         url = f"{self.referer}{path}"
         req_headers = {"Referer": f"{self.referer}index.html"}
         if headers:
@@ -1659,7 +1709,7 @@ class ZTERouterAPI:
 
         # Validate parsed response and handle redirects/HTML
         if is_html_page:
-            if authenticated and _retry:
+            if authenticated and replayable:
                 _LOGGER.debug("Detected HTML redirect/response; renewing session")
                 return await self._replay_after_login(
                     method,
@@ -1685,7 +1735,7 @@ class ZTERouterAPI:
             )
 
         if resp_json is None:
-            if authenticated and _retry:
+            if authenticated and replayable:
                 _LOGGER.debug("JSON parse failed; renewing session")
                 return await self._replay_after_login(
                     method,
@@ -1707,7 +1757,7 @@ class ZTERouterAPI:
             requested,
             classify=classify,
             authenticated=authenticated,
-            retry=_retry,
+            retry=replayable,
             after_relogin=_after_relogin,
         ):
             return await self._replay_after_login(
@@ -3144,15 +3194,23 @@ class ZTERouterAPI:
         """
         ad = await self.get_ad()
         # The router's own page sends every id semicolon-*terminated*, not
-        # semicolon-*separated*: a single delete goes out as `msg_id=16;`, and
-        # a batch as `1;2;`. Captured from the MC888 Pro of issue #56 on
-        # 2026-09-11. `notCallback=true` travels with it there, as it already
-        # does on this integration's `SEND_SMS`. Appended rather than assumed,
-        # because `delete_all` joins its ids here and elsewhere a caller may
-        # pass a string that already ends in one.
+        # semicolon-*separated*: a single delete goes out as `msg_id=16%3B`,
+        # and a batch as `1%3B2%3B`. Three browser captures agree — two from
+        # the reference MC7010 and one from the MC888 Pro of issue #56, all
+        # taken on 2026-09-11 and all answered `{"result":"success"}`.
+        #
+        # **The semicolon is percent-encoded.** A bare `;` was a legal
+        # parameter separator in form bodies for long enough that CGI parsers
+        # still split on it, which would discard the terminator this change
+        # exists to add and, for a batch, truncate the id list at the first
+        # one. The captures encode it; so does this.
+        #
+        # The terminator is appended rather than assumed, because `delete_all`
+        # joins its ids here and a caller may pass either form.
         sent_ids = msg_id if msg_id.endswith(";") else f"{msg_id};"
         payload = (
-            f"isTest=false&goformId=DELETE_SMS&msg_id={sent_ids}"
+            f"isTest=false&goformId=DELETE_SMS"
+            f"&msg_id={urllib.parse.quote(sent_ids, safe='')}"
             f"&notCallback=true&AD={ad}"
         )
         headers = self.write_headers()

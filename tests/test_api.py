@@ -1711,6 +1711,10 @@ async def test_a_write_checks_the_session_before_deriving_its_token(
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),  # probe
@@ -1739,6 +1743,10 @@ async def test_a_dead_session_is_renewed_before_the_token_is_built(
     api.cookies = {"stok": "stale"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": ""}),  # dead session
@@ -1772,6 +1780,10 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
@@ -1791,6 +1803,93 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
 
     assert mock_aiohttp_client.post.call_count == 1, "a declined write was resent"
     assert api.last_session_check["verdict"] == "live"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("label", "body"),
+    [
+        ("auth_shaped_refusal", {"result": "fail"}),
+        ("blank_result", {"result": ""}),
+    ],
+)
+async def test_a_write_is_never_resent_after_a_relogin(
+    mock_aiohttp_client, label, body
+):
+    """`_request`'s own recovery path must not put a write a second time.
+
+    The refusal test above covers `{"result":"failure"}`, which `_request`
+    does not read as a session problem. These two it does: `fail` is in its
+    auth-error list, and a response whose every value is empty scores as an
+    expiry. Both used to re-login and re-send the original payload — a
+    `send_sms` delivered twice with nothing in the response to say so.
+
+    The guard rests on the hazard alone. A replayed token is not necessarily
+    stale — `RD` is stable within a session on the reference MC7010 — so a
+    resent write may well be accepted, which is precisely the problem.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    api._populated_keys = frozenset({"wan_connect_status"})
+
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
+        MockResponse(json_data={"cr_version": ""}),
+        MockResponse(json_data={"RD": "abc"}),
+    ]
+    mock_aiohttp_client.post.return_value = MockResponse(json_data=body)
+
+    with patch.object(api, "login") as login, pytest.raises(ZTEAuthError):
+        await api.set_odu_led_switch("1")
+
+    assert mock_aiohttp_client.post.call_count == 1, f"{label}: the write was resent"
+    assert not login.called, f"{label}: a write triggered a re-login and a replay"
+
+
+@pytest.mark.asyncio
+async def test_a_read_is_still_replayed_after_a_relogin(mock_aiohttp_client):
+    """The guard is narrow: reads keep the recovery writes have given up.
+
+    Recovering a read costs nothing and is the mechanism that lets a poll
+    survive the router taking its session back. Widening the write guard to
+    cover every request would undo it.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "stale"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    mock_aiohttp_client.get.side_effect = [
+        # The authenticated key blank while the key served without a
+        # session answers: the shape of a session the router has dropped.
+        MockResponse(json_data={"wan_connect_status": "", "model_name": "MC7010"}),
+        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+    ]
+
+    with patch.object(api, "login"):
+        result = await api._request(
+            "GET",
+            "goform/goform_get_cmd_process?isTest=false&cmd=wan_connect_status",
+            requested=["wan_connect_status", "model_name"],
+        )
+
+    assert result == {"wan_connect_status": "ppp_connected"}
+    assert mock_aiohttp_client.get.call_count == 2, "the read was not retried"
+
+
+def test_only_the_write_endpoint_counts_as_a_write():
+    """Matched on the endpoint, so a new `goformId` is covered on arrival.
+
+    `delete_all` lists messages with a POST to the *read* endpoint, so method
+    alone cannot decide this, and that list read must still be recoverable.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    assert api._is_write_request("POST", "goform/goform_set_cmd_process")
+    assert not api._is_write_request("POST", "goform/goform_get_cmd_process")
+    assert not api._is_write_request("GET", "goform/goform_set_cmd_process")
 
 
 # --- Targeted reads must not be mistaken for a dead session -----------------
@@ -2214,6 +2313,10 @@ async def test_the_token_matches_one_the_router_accepted(
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
@@ -2232,6 +2335,10 @@ async def test_cr_version_is_read_once_per_firmware(mock_aiohttp_client):
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
@@ -2257,6 +2364,10 @@ async def test_a_firmware_change_discards_the_cached_cr_version(mock_aiohttp_cli
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
     api._cr_version_cache = ("OLD_VERSION", "CR_OLD")
 
     mock_aiohttp_client.get.side_effect = [
@@ -2282,6 +2393,10 @@ async def test_a_device_that_answers_no_cr_version_still_writes(mock_aiohttp_cli
     api.cookies = {"stok": "live"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
+    # A witness the device is known to populate, so the pre-write session
+    # check still runs: since v3.3.22-dev3 an API object that has not polled
+    # has no witness and skips the check entirely.
+    api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
         MockResponse(json_data={"wan_connect_status": "ppp_connected"}),

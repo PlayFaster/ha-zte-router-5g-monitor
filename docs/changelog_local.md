@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.22-dev3\] - 2026-09-12 - Delete Id Encoding Corrected; Writes Are Never Resent](#3322-dev3---2026-09-12---delete-id-encoding-corrected-writes-are-never-resent)
   - [\[3.3.22-dev2\] - 2026-09-12 - SMS Delete Form Matched to the Device's Own Request](#3322-dev2---2026-09-12---sms-delete-form-matched-to-the-devices-own-request)
   - [\[3.3.22-dev1\] - 2026-09-12 - Session Check Keys Selected Per Device](#3322-dev1---2026-09-12---session-check-keys-selected-per-device)
   - [\[3.3.21\] - Release - 2026-09-11 - MC888 Pro Write Token](#3321---release---2026-09-11---mc888-pro-write-token)
@@ -275,6 +276,44 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.22-dev3] - 2026-09-12 - Delete Id Encoding Corrected; Writes Are Never Resent
+
+### Summary
+
+`[3.3.22-dev2]` added the semicolon that terminates a message id but sent it as a literal `;`. All three browser captures percent-encode it, on both devices. That is corrected here.
+
+Two further faults were found while re-reading the captures against the code. `_request` re-sends a write after a re-login when the refusal body matches one of its auth shapes, which can deliver an SMS twice and defeats the no-replay guarantee stated in `[3.3.22-dev1]`. And a device that has not yet polled selects a session-check key it may never populate, which blocks writes in the window after a restart.
+
+### Fixed
+
+- **`msg_id` is percent-encoded.** The captures send `msg_id=16%3B` for a single delete and the same encoding for a batch. A bare `;` was a legal parameter separator in form bodies for long enough that CGI parsers still split on it, which would discard the terminator and truncate a batch at the first id. Two MC7010 captures and one MC888 Pro capture agree, all three answered `{"result":"success"}`.
+
+- **A write is never put a second time.** `_request` treats a `result` of `fail`, `unauth` or `session expired`, and a response whose every value is empty, as a session problem, and its recovery path re-sends the original request after logging in again. That path did not distinguish a read from a write, so a refused `SEND_SMS` could be delivered twice with nothing in the response to show it. `note_write_refusal` has stated since `[3.3.22-dev1]` that a refused write is never replayed; that guarantee did not hold, because `_request` had already replayed it before any command inspected its own result. Writes are now excluded from all three recovery paths and raise instead; reads keep the recovery unchanged.
+
+- **A device that has not polled has no session-check key.** The previous fallback returned the seeded names, and on the MC888 Pro those reduce to `wan_connect_status`, which is blank at all times there. A blank key scores as an expiry, so a write attempted between a restart and the first completed poll was blocked exactly as in `[3.3.21]`. Where there is no evidence, no check is made and the router's answer decides.
+
+- **A replayed token is not necessarily stale, and the guard does not depend on it being so.** It was proposed during this release that re-login-and-replay had been measured ineffective because the resent body carried a spent nonce. `scripts/hardware_check.py` asserts the opposite — `RD` is stable within a session on the reference MC7010 — and whether it survives a re-login has flip-flopped across observations. A resent write may well be accepted, which is the hazard rather than a mitigation of it. Why replay was measured ineffective remains unexplained, as `_ensure_session` has recorded since it was written.
+
+### Changed
+
+- **`Origin` is documented as deliberate.** It appears in none of the three captures, because the capture tool records only headers the page sets through `setRequestHeader`. The Fetch standard requires the browser to add `Origin` to any request whose method is not `GET` or `HEAD`, so all three captured deletes carried one. The header stays, with the reasoning recorded against it so it is not removed later as unevidenced.
+
+### Added
+
+- A test that a write answered with each of the two auth-shaped bodies is sent once and raises, and a companion test that a read is still retried, so the guard cannot be widened into the recovery it must not touch.
+
+- A test that an unpolled device selects no key and is not probed before a write.
+
+- The dead-session double now decodes `msg_id` before splitting it, as the router's CGI must. Left as it was, it would have read `1%3B` as an id and reported every delete as ignored.
+
+### Verified
+
+- 1,656 tests, at 100% line and branch coverage.
+
+- Seven `get_ad` tests and the recovery sweep now state that the device has polled, rather than relying on the fallback this release removed.
+
+- Not yet tested on hardware.
 
 ## [3.3.22-dev2] - 2026-09-12 - SMS Delete Form Matched to the Device's Own Request
 
