@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.23\] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking](#3323---2026-09-13---release-asynchronous-sms-deletion-verification-and-send-outcome-tracking)
   - [\[3.3.23-dev1\] - 2026-09-13 - A Completed Delete Stops Reporting as a Failure](#3323-dev1---2026-09-13---a-completed-delete-stops-reporting-as-a-failure)
   - [\[3.3.22\] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection](#3322---2026-09-12---release-browser-aligned-sms-deletion-payloads-and-dynamic-session-key-selection)
   - [\[3.3.22-dev4\] - 2026-09-12 - Hardware Verification on the Reference MC7010](#3322-dev4---2026-09-12---hardware-verification-on-the-reference-mc7010)
@@ -279,6 +280,23 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.23] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking
+
+### Summary
+
+- **Asynchronous SMS Deletion Verification**: Updated post-deletion verification to poll until router inbox state settles (up to a 15-second window), preventing completed deletions from being prematurely flagged as failures on routers with asynchronous storage processing.
+- **SMS Send Outcome Tracking**: Added pre- and post-send counter comparisons (`sms_nv_send_total` vs `sms_nv_draftbox_total`), accurately reporting when a router saves an outgoing message to drafts instead of transmitting it.
+
+### Fixed
+
+- **Premature Deletion Failure Reporting**: Fixed false-negative deletion errors where routers acknowledge command acceptance immediately but require several seconds to purge message records from flash storage.
+- **Draft SMS Misclassification**: Prevented stored/drafted outgoing SMS messages from being misreported as successfully delivered transmissions.
+
+### Added
+
+- **Diagnostic Deletion Timings**: Captured detailed per-attempt re-list timings and `sms_cmd_status_info` metadata in diagnostic exports to track firmware deletion latency.
+- **Observational Send Counter Verification**: Logged sent and draftbox counter transitions surrounding SMS transmissions in diagnostic downloads without triggering unwanted session re-authentications.
 
 ## [3.3.23-dev1] - 2026-09-13 - A Completed Delete Stops Reporting as a Failure
 

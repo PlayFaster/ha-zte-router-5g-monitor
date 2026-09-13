@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.23] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking
+
+### Summary
+
+- **Asynchronous SMS Deletion Verification**: Updated post-deletion verification to poll until router inbox state settles (up to a 15-second window), preventing completed deletions from being prematurely flagged as failures on routers with asynchronous storage processing.
+- **SMS Send Outcome Tracking**: Added pre- and post-send counter comparisons (`sms_nv_send_total` vs `sms_nv_draftbox_total`), accurately reporting when a router saves an outgoing message to drafts instead of transmitting it.
+
+### Fixed
+
+- **Premature Deletion Failure Reporting**: Fixed false-negative deletion errors where routers acknowledge command acceptance immediately but require several seconds to purge message records from flash storage.
+- **Draft SMS Misclassification**: Prevented stored/drafted outgoing SMS messages from being misreported as successfully delivered transmissions.
+
+### Added
+
+- **Diagnostic Deletion Timings**: Captured detailed per-attempt re-list timings and `sms_cmd_status_info` metadata in diagnostic exports to track firmware deletion latency.
+- **Observational Send Counter Verification**: Logged sent and draftbox counter transitions surrounding SMS transmissions in diagnostic downloads without triggering unwanted session re-authentications.
+
+---
+
 ## [3.3.22] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection
 
 ### Summary
