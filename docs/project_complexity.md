@@ -1,11 +1,11 @@
 # Project Complexity & Health: ha-zte-router-5g-monitor
 
-**Last Measured:** 2026-09-13T17:07:30.696493+00:00 · **Release:** `3.3.22` · **Dev Version:** `3.3.23`
+**Last Measured:** 2026-09-13T20:06:30.676621+00:00 · **Release:** `3.3.23` · **Dev Version:** `3.3.23`
 
 ## 1. Executive Summary
 
 | Metric | Value | Verdict / Evaluation |
-| :--- | :---: | :--- |
+| :-- | :-: | :-- |
 | **PlayFaster Health Index** | **`60` / 100** | `ACTION REQUIRED` ($\ge 90$ Excellent · $\ge 80$ Good · $\ge 70$ Warning) |
 | **Max McCabe Complexity ($V(G)$)** | **19** | `PASS (<20)` in `_request` ($< 20$ Pass · $20–23$ Warn · $\ge 24$ Fail) |
 | **Mean Complexity per Routine** | **3.03** | Across 390 routines (Ideal $< 4.0$ per routine) |
@@ -27,12 +27,12 @@
 | **Platform SLOC / Entity** | **24.8 lines/entity** | Target 20 – 45 lines/entity declarative efficiency |
 | **Test-to-Source Ratio** | **1.39×** | 15,056 test lines ($\ge 1.5×$ recommended) |
 | **Pytest Coverage** | **100%** | 1671 tests executed |
-| **Pytest Duration** | **609.94s** | Full test suite wall-clock execution time |
+| **Pytest Duration** | **344.04s** | Full test suite wall-clock execution time |
 
 ## 2. High Complexity Routines ($\ge 10$)
 
 | Score | Routine Symbol | Location | Status |
-| :---: | :--- | :--- | :--- |
+| :-: | :-- | :-- | :-- |
 | **19** | `_request` | `api.py:1673` | `ELEVATED` |
 | **19** | `_attempt` | `sms_delete_probe.py:1213` | `ELEVATED` |
 | **17** | `_run_rungs` | `sms_delete_probe.py:1729` | `ELEVATED` |
@@ -53,7 +53,7 @@
 ## 3. Active Code Suppressions (`custom_components/`)
 
 | Line | Rule Bypassed | File |
-| :---: | :--- | :--- |
+| :-: | :-- | :-- |
 | 223 | `BLE001` | `__init__.py` |
 | 1053 | `BLE001` | `api.py` |
 | 2384 | `BLE001` | `api.py` |
@@ -100,7 +100,7 @@
 ### 4.1 High Comment Density Files (> 25% comments/code)
 
 | Module | Rationale / Advisory |
-| :--- | :--- |
+| :-- | :-- |
 | `api.py` | Inspect for commented-out dead code or procedural narration |
 | `const.py` | Inspect for commented-out dead code or procedural narration |
 | `coordinator.py` | Inspect for commented-out dead code or procedural narration |
@@ -111,7 +111,7 @@
 ### 4.2 Contiguous Comment Blocks (> 8 lines)
 
 | Location | Length | Advisory |
-| :--- | :---: | :--- |
+| :-- | :-: | :-- |
 | `const.py:170` | 30 lines | Long procedural block; consider moving architecture notes to docs |
 | `sms_delete_probe.py:851` | 24 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:1567` | 21 lines | Long procedural block; consider moving architecture notes to docs |
@@ -192,7 +192,7 @@
 ### 4.3 Routines with Comments Exceeding Code Lines
 
 | Routine | Location | Comments / Code | Advisory |
-| :--- | :--- | :---: | :--- |
+| :-- | :-- | :-: | :-- |
 | `__init__` | `api.py:799` | 67 comm / 41 code | Comments exceed code statements; verify against procedural narration |
 | `get_ad` | `api.py:3583` | 22 comm / 18 code | Comments exceed code statements; verify against procedural narration |
 | `session_witnesses` | `api.py:1332` | 24 comm / 21 code | Comments exceed code statements; verify against procedural narration |

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.3.23] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking
+## [3.3.24] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking
 
 ### Summary
 
@@ -28,7 +28,7 @@ All notable changes to this project will be documented in this file.
 ### Summary
 
 - **Browser-Aligned SMS Deletion Payloads**: Aligned `DELETE_SMS` form formatting with browser client requests across tested hardware models, ensuring single and batched message identifiers include proper percent-encoded semicolon terminators (`%3B`) and the required `notCallback=true` parameter.
-- **Dynamic Pre-Write Session Key Selection**: Pre-write session validation now dynamically selects populated status keys per device (excluding unauthenticated endpoints and unpopulated fields like `wan_connect_status`), preventing blocked write commands across varied firmware configurations.
+- **Dynamic Pre-Write Session Key Selection**: Pre-write session validation now dynamically selects populated status keys per device (excluding unauthenticated endpoints and unpopulated fields like `wan_connect_status`), preventing blocked write commands across varied firmware configurations
 - **Write Replay Safety**: Replay on authentication recovery is now restricted exclusively to read requests, guaranteeing SMS sends and configuration writes are never duplicated.
 
 ### Fixed
@@ -759,6 +759,8 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.24\] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking](#3324---2026-09-13---release-asynchronous-sms-deletion-verification-and-send-outcome-tracking)
+  - [\[3.3.22\] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection](#3322---2026-09-12---release-browser-aligned-sms-deletion-payloads-and-dynamic-session-key-selection)
   - [\[3.3.21\] - Release - 2026-09-11 - MC888 Pro Write Token](#3321---release---2026-09-11---mc888-pro-write-token)
   - [\[3.3.20\] - 2026-09-11 - Release: Probe v7 Diagnostic Source Crawl and Tiered Probing Actions](#3320---2026-09-11---release-probe-v7-diagnostic-source-crawl-and-tiered-probing-actions)
   - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
