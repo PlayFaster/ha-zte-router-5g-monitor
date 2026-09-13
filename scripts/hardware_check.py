@@ -132,6 +132,14 @@ RECONNECT_SETTLE = 12.0
 # write causes routinely outlasts a single request timeout.
 RECONNECT_RETRY = 8.0
 
+# A LOGOUT leaves this router briefly unwilling to accept a new session: it
+# answers the next login with `{"result":"failure"}` for a short period. The
+# same behaviour is why `scripts/diag_check.py` cannot rely on a logout being
+# acknowledged on back-to-back runs. Measured as transient, so the re-login
+# after the logout check retries rather than failing the run.
+RELOGIN_PAUSE = 3.0
+RELOGIN_ATTEMPTS = 3
+
 # NR5G keys the router populates only while registered on 5G. Absent on a 4G
 # return, which is a network state rather than the blanked-payload fault the
 # reboot check is looking for.
@@ -246,6 +254,45 @@ def _kill_session(api: ZTERouterAPI, session: aiohttp.ClientSession) -> None:
     session.cookie_jar.clear(predicate=lambda cookie: cookie.key == "stok")
 
 
+async def _resume_session(api: ZTERouterAPI, report: Report, *, after: str) -> bool:
+    """Re-establish the session after a check that deliberately ended it.
+
+    **Never raises.** The bare `await api.login()` this replaces sat in a
+    `finally`, so a router that declined the new session killed the whole run
+    from inside cleanup code: on 2026-09-13 the logout check passed and the run
+    died on the next line with a traceback, losing the refused-write check and
+    the payload capture, and printing no banner at all. A diagnostic script that
+    cannot reconnect must say so and carry on to whatever does not need the
+    connection, not abort.
+
+    Retries because the refusal is transient. This router answers the first
+    login after a LOGOUT with `{"result":"failure"}` for a few seconds.
+    """
+    last: Exception | None = None
+    for attempt in range(RELOGIN_ATTEMPTS):
+        if attempt:
+            await asyncio.sleep(RELOGIN_PAUSE)
+        try:
+            await api.login()
+        except Exception as err:  # noqa: BLE001 - reporting, not handling
+            last = err
+            continue
+        if attempt:
+            print(
+                _dim(
+                    f"    reconnected after {after} on attempt {attempt + 1} "
+                    f"({RELOGIN_PAUSE * attempt:.0f}s)"
+                )
+            )
+        return True
+    report.record(
+        False,
+        f"the session can be re-established after {after}",
+        f"{type(last).__name__}: {last}",
+    )
+    return False
+
+
 async def check_session_assumptions(
     api: ZTERouterAPI, session: aiohttp.ClientSession, report: Report
 ) -> None:
@@ -270,7 +317,8 @@ async def check_session_assumptions(
     # answer — `_ensure_session` derives AD *after* the session is assured, so
     # the question does not arise. It is captured because a change here would
     # be the first sign that the token scheme had been reworked.
-    await api.login()
+    if not await _resume_session(api, report, after="the RD stability reads"):
+        return
     after_login = (await api._request("GET", RD_PATH, _retry=False))["RD"]
     report.captured["rd_survives_relogin"] = after_login == live
     print(
@@ -292,7 +340,8 @@ async def check_session_assumptions(
             "the all-values-empty rule did not fire — write recovery depends on it",
         )
 
-    await api.login()
+    if not await _resume_session(api, report, after="the dead-session probe"):
+        return
 
     # The session is one piece of state held in two fields, and a site that
     # moves one without the other is not visible from the outside: the client
@@ -466,7 +515,7 @@ async def _check_logout_then_probe(api: ZTERouterAPI, report: Report) -> None:
     )
     report.captured["measured_unauthenticated_keys"] = sorted(measured)
 
-    await api.login()
+    await _resume_session(api, report, after="the sessionless-key measurement")
 
 
 async def check_js_mining_yield(api: ZTERouterAPI, report: Report) -> None:
@@ -755,7 +804,7 @@ async def check_logout_ends_the_session(api: ZTERouterAPI, report: Report) -> No
                 "the session survived LOGOUT — the user's web UI stays locked",
             )
     finally:
-        await api.login()
+        await _resume_session(api, report, after="the logout check")
 
 
 # ---------------------------------------------------------------------------
@@ -1741,7 +1790,28 @@ async def main() -> int:
             session, options["host"], options.get("username"), options["password"]
         )
         await api.try_set_protocol()
-        await api.login()
+        try:
+            await api.login()
+        except Exception as err:  # noqa: BLE001 - reporting, not handling
+            # Nothing in this script can run without a session, but a traceback
+            # is the wrong way to say so: it buries the reason and prints no
+            # banner, so a caller reading `.reports/hardware_check.txt` cannot
+            # tell a refused login from a crashed script.
+            print(
+                _red(
+                    f"\n✖  Hardware check: could not connect to "
+                    f"{options['host']}  ({type(err).__name__}: {err})"
+                )
+            )
+            print(
+                _dim(
+                    "     This router permits one session. A login refused with "
+                    "`result=failure` or `result=3` is usually a competing "
+                    "session or too many recent attempts — MAX_LOGIN_COUNT is 5 "
+                    "on this firmware. Wait a minute and re-run."
+                )
+            )
+            return 1
         print(f"connected to {options['host']}")
         _warn_about_competing_sessions()
 

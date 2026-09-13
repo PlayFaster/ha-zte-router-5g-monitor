@@ -1,5 +1,6 @@
 """ZTE Router 5G API client."""
 
+import asyncio
 import contextlib
 import hashlib
 import logging
@@ -28,6 +29,8 @@ from .const import (
     JS_BUNDLES,
     MINED_CHUNK_SIZE,
     SESSION_IDLE_RESET_SECONDS,
+    SMS_DELETE_VERIFY_INTERVAL,
+    SMS_DELETE_VERIFY_SECONDS,
 )
 from .helpers import is_gsm7
 from .known_names import EXPECTED_NAMES, KNOWN_NAMES, REFUSABLE_NAMES
@@ -875,6 +878,10 @@ class ZTERouterAPI:
         # What the last pre-write session check asked and concluded,
         # published in the download so a blocked write is visible.
         self.last_session_check: dict[str, Any] | None = None
+        # The sent and draft totals either side of the most recent `SEND_SMS`.
+        # Counts only. See `_classify_send`, and the MC888 Pro that stores
+        # messages it does not transmit.
+        self.last_send: dict[str, Any] | None = None
         # Every delete attempt, including the ones that raised. `last_delete`
         # holds only the most recent and only when the request returned; a
         # refused delete raises inside `_request`, so the record that mattered
@@ -993,10 +1000,72 @@ class ZTERouterAPI:
         if self.last_delete is not None:
             self.last_delete["keep_last"] = keep_last
 
-    def _record_delete_survivors(self, surviving: list[str]) -> None:
-        """Add the post-delete check's finding to the record above."""
-        if self.last_delete is not None:
-            self.last_delete["ids_surviving"] = sorted(surviving)
+    def _record_delete_survivors(
+        self, surviving: list[str], attempts: list[dict[str, Any]]
+    ) -> None:
+        """Add the post-delete check's finding to the record above.
+
+        `attempts` is the verification series — one entry per re-list, with the
+        milliseconds elapsed since the delete and the ids still present. It is
+        the measurement that sizes `SMS_DELETE_VERIFY_SECONDS`: this project can
+        time its own device and cannot time anyone else's, and a window chosen
+        from the fast one is the wrong window for the slow one.
+
+        Ids and integers only. `diagnostics.py` publishes `last_delete` with a
+        `deepcopy` and no sanitizing, on the stated grounds that it holds
+        nothing but ids and a result code, so nothing richer may be put here.
+        """
+        if self.last_delete is None:
+            return
+        self.last_delete["ids_surviving"] = sorted(surviving)
+        self.last_delete["verify_attempts"] = attempts
+        self.last_delete["verify_elapsed_ms"] = attempts[-1]["after_ms"]
+        self.last_delete["verify_settled"] = not surviving
+
+    async def _record_delete_command_status(self) -> None:
+        """Record the *shape* of `sms_cmd_status_info` after a delete.
+
+        Both devices' clients poll this command on success rather than trusting
+        the result, so it is the firmware's own completion signal. On the
+        reference MC7010 it answers `{"messages": []}` at all times — idle,
+        during a single delete, during a 32-id batch, and when called with
+        `page`/`data_per_page`/`mem_store`/`tags` — so it cannot be built on
+        here. Whether another device populates it is unknown, and one read is
+        what it costs to find out.
+
+        **Shape only, never content.** The command returns a `messages` list
+        whose entries have never been observed, and `last_delete` reaches the
+        download unsanitized, so recording the payload could put message text
+        in a file a reporter attaches to a public issue.
+
+        Best effort: this runs after the router has already answered, and a
+        failure here must not turn a completed delete into an error.
+        """
+        if self.last_delete is None:
+            return
+        try:
+            answer = await self._request(
+                "GET",
+                "goform/goform_get_cmd_process?isTest=false&cmd=sms_cmd_status_info",
+                classify=False,
+                _retry=False,
+            )
+        except Exception as err:  # noqa: BLE001 - observational, never fatal
+            self.last_delete["cmd_status"] = {"unreadable": type(err).__name__}
+            return
+        entries = answer.get("messages") if isinstance(answer, dict) else None
+        if not isinstance(entries, list):
+            self.last_delete["cmd_status"] = {
+                "shape": type(answer).__name__,
+                "keys": sorted(answer)[:8] if isinstance(answer, dict) else [],
+            }
+            return
+        self.last_delete["cmd_status"] = {
+            "entries": len(entries),
+            "keys": sorted(entries[0])[:12]
+            if entries and isinstance(entries[0], dict)
+            else [],
+        }
 
     def _record_unparsable(self, status: int, body: str) -> None:
         """Hold a preview of a response that was not JSON at all.
@@ -1364,12 +1433,16 @@ class ZTERouterAPI:
         It must happen *before* the write, not after it fails. Recovering
         afterwards was tried first and **verified not to work on hardware**: the
         session was renewed and the write replayed, and the router refused it
-        again. Why is not established — a first guess that ``RD`` rotates on
-        re-login, invalidating the ``AD`` in the replayed payload, was itself
-        disproved by `scripts/hardware_check.py`, which observed ``RD``
-        surviving a re-login. What *is* established, by repeated hardware runs,
-        is that assuring the session first works and recovering afterwards does
-        not. The design rests on the measurement, not on the explanation.
+        again. Why is still not established, and the design rests on the
+        measurement rather than on an explanation.
+
+        What is known about ``RD``, measured 2026-09-13: two consecutive reads
+        return the same value, a pause without a write does not change it, and a
+        write does. A browser capture of three deletes in one session carries
+        three different values. The trigger is not established from the samples
+        taken, so "the replayed token was spent" remains possible and unproven —
+        it has been offered and withdrawn twice in these notes, and is recorded
+        here as an open question rather than a third conclusion.
 
         Retrying is also unattractive on its own terms: ``{"result":"failure"}``
         is equally what the router returns for a command it declined on its
@@ -1637,12 +1710,13 @@ class ZTERouterAPI:
         # response to say that it did, and `{"result":"failure"}` is equally
         # what the router returns for a command it declined on its merits.
         #
-        # It is **not** that the replayed token must be stale. `RD` is stable
-        # within a session on the reference MC7010 — `scripts/hardware_check.py`
-        # asserts exactly that — and whether it survives a re-login has
-        # flip-flopped across observations. A replayed body may well carry a
-        # valid token. Why re-login-and-replay was nonetheless measured as
-        # ineffective is still unexplained; see `_ensure_session`.
+        # It is **not** that the replayed token must be stale, and not that it
+        # must be valid either. `scripts/hardware_check.py` asserts `RD` is
+        # stable across two consecutive *reads*, which is a narrower claim than
+        # stability across a write: measured 2026-09-13, a write does change it.
+        # Whether a replayed body carries a spent nonce is therefore open. Why
+        # re-login-and-replay was measured as ineffective is still unexplained;
+        # see `_ensure_session`.
         #
         # A write that looks like an expiry therefore raises instead, and
         # Home Assistant prompts for re-authentication with nothing sent
@@ -3311,13 +3385,40 @@ class ZTERouterAPI:
         A failure to re-list is not a failure to delete. Callers run this
         inside their own `try`, so a timeout surfaces as the connection error
         it is rather than as a false report that the messages survived.
+
+        **It re-lists until the window closes, not once.** `{"result":"success"}`
+        on this API means the command was accepted, not that it has been
+        carried out, and how long the difference lasts is a property of the
+        device. Checking once reported a completed delete as a failure on the
+        MC888 Pro of issue #56: 9 of 10 requested ids, and on a separate
+        attempt a single id, were still listed at an immediate re-list and gone
+        later. The reference MC7010 settles on the first pass — it empties 32
+        ids within about a second — so the window costs it nothing.
+
+        The loop exits on the first clean pass. A survivor at the end of the
+        window is still a failure, reported exactly as before: the silent
+        success this check exists to catch is unaffected, only the moment it
+        is judged.
         """
         wanted = {str(i) for i in ids}
-        remaining = await self.get_sms_messages(mem_store=SMS_STORE_ALL, tags="10")
-        surviving = [
-            str(msg.get("id")) for msg in remaining if str(msg.get("id")) in wanted
-        ]
-        self._record_delete_survivors(surviving)
+        started = monotonic()
+        attempts: list[dict[str, Any]] = []
+        surviving: list[str] = []
+        while True:
+            remaining = await self.get_sms_messages(mem_store=SMS_STORE_ALL, tags="10")
+            surviving = [
+                str(msg.get("id")) for msg in remaining if str(msg.get("id")) in wanted
+            ]
+            elapsed = (monotonic() - started) * 1000
+            attempts.append(
+                {"after_ms": round(elapsed), "remaining": sorted(surviving)}
+            )
+            if not surviving or elapsed >= SMS_DELETE_VERIFY_SECONDS * 1000:
+                break
+            await asyncio.sleep(SMS_DELETE_VERIFY_INTERVAL)
+
+        self._record_delete_survivors(surviving, attempts)
+        await self._record_delete_command_status()
         if surviving:
             raise ZTEConnectionError(
                 f"Router accepted DELETE_SMS and kept {len(surviving)} of "
@@ -3327,7 +3428,23 @@ class ZTERouterAPI:
             )
 
     async def send_sms(self, number: str, message: str) -> int:
-        """Send an SMS message via the router."""
+        """Send an SMS message via the router.
+
+        **A success here means the router accepted the message, not that it
+        sent it.** On the MC888 Pro of issue #56 two `SEND_SMS` calls answered
+        `{"result":"success"}` and left `sms_nv_send_total` at `0` with
+        `sms_nv_draftbox_total` at `2`, both messages carrying `tag: "3"`, and
+        neither arrived; the same command on the reference MC7010 moved
+        `sms_nv_send_total` from 0 to 1 and the message was received. The
+        reporter's own web interface also fails to send, so the cause is below
+        this integration — but reporting it as a plain success is what made it
+        look like one.
+
+        The counters are therefore read either side of the write and the pair
+        recorded. They decide nothing unless they positively disagree: see
+        `_classify_send`.
+        """
+        before = await self._send_counters()
         ad = await self.get_ad()
         # Convert message to hex utf-16-be. This stays UTF-16BE for both
         # encodings — `encode_type` tells the router which DCS to put on the
@@ -3358,7 +3475,79 @@ class ZTERouterAPI:
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
         )
         await self._require_write_success(res, "SEND_SMS")
+        await self._classify_send(before)
         return 200
+
+    async def _send_counters(self) -> dict[str, str] | None:
+        """The sent and draft totals, or `None` when they cannot be read.
+
+        Reads `sms_capacity_info` directly rather than through
+        `get_sms_capacity`, and with `classify=False, _retry=False`.
+        **An observational read must not recover a session.** Through the public
+        method an unreadable answer sends `_request` down the replay path, which
+        logs in again — so a reading taken only to describe a send would renew
+        the session, spend a login against `MAX_LOGIN_COUNT`, and change the
+        state of the thing being described.
+
+        Best effort on purpose: a device that does not report these counters
+        must send exactly as it does today.
+        """
+        try:
+            capacity = await self._request(
+                "GET",
+                "goform/goform_get_cmd_process?isTest=false&cmd=sms_capacity_info",
+                classify=False,
+                _retry=False,
+            )
+        except Exception as err:  # noqa: BLE001 - observational, never fatal
+            _LOGGER.debug("Send counters unreadable: %s", err)
+            return None
+        if not isinstance(capacity, dict):
+            return None
+        return {
+            key: str(capacity.get(key, ""))
+            for key in ("sms_nv_send_total", "sms_nv_draftbox_total")
+        }
+
+    async def _classify_send(self, before: dict[str, str] | None) -> None:
+        """Report a message the router stored instead of sending.
+
+        **Only a positive disagreement speaks.** The draft total must have
+        risen *and* the sent total must not have — anything else, including a
+        counter that cannot be read, a counter that did not move, and a device
+        that reports neither, leaves the send reported exactly as before. A
+        rule that fired on absent evidence would be a new false failure, which
+        is the fault class this release exists to remove.
+
+        Raised as a `ZTEConnectionError` so it reaches the user by the route a
+        refused write already takes. The message was accepted by the router, so
+        nothing is retried and nothing is resent.
+        """
+        if before is None:
+            return
+        after = await self._send_counters()
+        if after is None:
+            return
+        self.last_send = {"counters_before": before, "counters_after": after}
+
+        def moved(key: str) -> int | None:
+            was, now = before.get(key, ""), after.get(key, "")
+            if not was.isdigit() or not now.isdigit():
+                return None
+            return int(now) - int(was)
+
+        sent = moved("sms_nv_send_total")
+        draft = moved("sms_nv_draftbox_total")
+        if sent is None or draft is None:
+            return
+        if draft > 0 and sent <= 0:
+            raise ZTEConnectionError(
+                "The router stored the message instead of sending it: its draft "
+                f"count rose by {draft} and its sent count did not move. The "
+                "message was accepted but not transmitted, which on the "
+                "hardware seen so far means the network or SIM declined it "
+                "rather than the router."
+            )
 
     async def get_sms_messages(
         self, mem_store: str = "1", tags: str = "10", timeout_sec: int | None = None

@@ -477,6 +477,7 @@ def _sms_section(
     # after each section has succeeded, so a stand-in that is not a list or
     # dict fails the whole file at the last moment.
     failures = coordinator.api.write_failures
+    send_record = getattr(coordinator.api, "last_send", None)
     probe = getattr(coordinator.api, "delete_probe", None)
     return {
         "fetched": isinstance(snapshot, dict),
@@ -513,6 +514,12 @@ def _sms_section(
         "last_delete": (
             deepcopy(delete_record) if isinstance(delete_record, dict) else None
         ),
+        # The sent and draft totals either side of the most recent `SEND_SMS`.
+        # Counts only. This is how "the router stored it and did not send it"
+        # becomes visible without the reporter spending another message: on the
+        # MC888 Pro of issue #56 the sent total stayed at 0 while the draft
+        # total reached 2.
+        "last_send": (deepcopy(send_record) if isinstance(send_record, dict) else None),
         # Failed writes, including the ones that raised before any result was
         # returned. `last_delete` above only ever holds an attempt whose
         # request came back; a refused delete raises first, which is how four

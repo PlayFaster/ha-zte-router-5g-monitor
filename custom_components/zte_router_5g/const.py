@@ -199,6 +199,29 @@ SMS_MAX_CHARS_UNICODE = 335
 # single call.
 BATCH_URL_MAX_CHARS = 1600
 
+# How long `verify_deleted` keeps re-listing before it calls a message
+# surviving, and how long it waits between passes.
+#
+# This API answers `{"result":"success"}` for a delete before the firmware has
+# carried it out, and how long that takes is a property of the device. The
+# reference MC7010 is effectively synchronous — 32 ids in one request, the bank
+# empty within about a second, a single delete done roughly 45 ms after the
+# POST returned — so it settles on the first pass and the window costs it
+# nothing. The MC888 Pro of issue #56 left 9 of 10 requested ids, and a single
+# id, still listed at an immediate re-list, with everything gone later; the
+# reporter could only say "eventually".
+#
+# Fifteen seconds is therefore chosen to cover an unmeasured latency, not
+# because anything measured needs it. `last_delete.verify_attempts` records
+# each pass, so the next download sizes this from the device that needs it
+# rather than from the one that does not.
+#
+# Named in seconds rather than as a strike count deliberately: the loop exits
+# on the first clean pass, so the number of passes is not the gate and
+# `check_test_depth.py` should not read it as one.
+SMS_DELETE_VERIFY_SECONDS = 15.0
+SMS_DELETE_VERIFY_INTERVAL = 1.0
+
 # How many canaries a probe carries. One key is a single point of failure in
 # both directions: a metric that legitimately empties reads as a lost session,
 # and a key that turns out to be served without one reports a healthy session

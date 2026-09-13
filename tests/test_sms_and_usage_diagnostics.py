@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from custom_components.zte_router_5g import api as api_module
 from custom_components.zte_router_5g.api import ZTEConnectionError, ZTERouterAPI
 from custom_components.zte_router_5g.diagnostics import (
     async_get_config_entry_diagnostics,
@@ -398,15 +399,21 @@ async def test_delete_all_raises_when_the_router_keeps_a_message(mock_aiohttp_cl
         MockResponse(json_data={"messages": [{"id": "2"}]}),
     ]
 
+    # One pass, so this still asserts what it was written to assert: that a
+    # surviving id is reported. The retry window added in `[3.3.23-dev1]` is
+    # exercised by its own tests; widening it here would only make this test
+    # slow, and the property under test is the verdict, not the timing.
     with (
         patch.object(api, "login"),
         patch.object(api, "get_ad", return_value="ad"),
+        patch.object(api_module, "SMS_DELETE_VERIFY_SECONDS", 0),
         pytest.raises(ZTEConnectionError, match="kept 1 of 2"),
     ):
         await api.delete_all()
 
     assert api.last_delete["ids_requested"] == ["1", "2"]
     assert api.last_delete["ids_surviving"] == ["2"]
+    assert api.last_delete["verify_settled"] is False
 
 
 async def test_a_message_arriving_during_the_delete_is_not_a_failure(
@@ -461,7 +468,7 @@ async def test_survivors_recorded_against_no_attempt_are_dropped(
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
 
-    api._record_delete_survivors(["1"])
+    api._record_delete_survivors(["1"], [{"after_ms": 0, "remaining": ["1"]}])
 
     assert api.last_delete is None
 
@@ -526,3 +533,139 @@ async def test_an_empty_bank_deletes_nothing_and_verifies_nothing(
 
     assert api.last_delete is None
     assert mock_aiohttp_client.post.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_a_slow_delete_is_not_reported_as_a_failure(mock_aiohttp_client):
+    """The fault this release exists to remove.
+
+    `{"result":"success"}` means the command was accepted, not carried out. On
+    the MC888 Pro of issue #56 nine of ten requested ids were still listed at
+    an immediate re-list and gone later, so the button reported a failure for a
+    delete that worked. The check now re-lists until the window closes.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    mock_aiohttp_client.post.side_effect = [
+        MockResponse(json_data={"messages": [{"id": "1"}, {"id": "2"}]}),
+        MockResponse(json_data={"result": "success"}),
+        # Two passes still show them, the third is clean.
+        MockResponse(json_data={"messages": [{"id": "1"}, {"id": "2"}]}),
+        MockResponse(json_data={"messages": [{"id": "2"}]}),
+        MockResponse(json_data={"messages": []}),
+    ]
+
+    with (
+        patch.object(api, "login"),
+        patch.object(api, "get_ad", return_value="ad"),
+        patch.object(api_module, "SMS_DELETE_VERIFY_INTERVAL", 0),
+        patch.object(api, "_record_delete_command_status"),
+    ):
+        assert await api.delete_all() == 200
+
+    assert api.last_delete["ids_surviving"] == []
+    assert api.last_delete["verify_settled"] is True
+    attempts = api.last_delete["verify_attempts"]
+    assert [a["remaining"] for a in attempts] == [["1", "2"], ["2"], []], (
+        "the series must record every pass, not just the last"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_verification_window_is_bounded(mock_aiohttp_client):
+    """A message that never goes is still a failure, reported as before.
+
+    The window defers the verdict; it does not remove it. Without this the
+    settle would turn the silent-success detection into a delay.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    listing = MockResponse(json_data={"messages": [{"id": "1"}]})
+    mock_aiohttp_client.post.side_effect = [
+        MockResponse(json_data={"messages": [{"id": "1"}]}),
+        MockResponse(json_data={"result": "success"}),
+        *[MockResponse(json_data={"messages": [{"id": "1"}]}) for _ in range(8)],
+    ]
+    assert listing is not None
+
+    with (
+        patch.object(api, "login"),
+        patch.object(api, "get_ad", return_value="ad"),
+        patch.object(api_module, "SMS_DELETE_VERIFY_INTERVAL", 0),
+        patch.object(api_module, "SMS_DELETE_VERIFY_SECONDS", 0.0001),
+        patch.object(api, "_record_delete_command_status"),
+        pytest.raises(ZTEConnectionError, match="kept 1 of 1"),
+    ):
+        await api.delete_all()
+
+    assert api.last_delete["verify_settled"] is False
+
+
+@pytest.mark.asyncio
+async def test_the_command_status_is_recorded_as_shape_not_content(
+    mock_aiohttp_client,
+):
+    """`last_delete` reaches the download unsanitized, so only shape may go in.
+
+    `sms_cmd_status_info` returns a `messages` list whose entries have never
+    been observed on any device. Recording the payload could put message text
+    into a file a reporter attaches to a public issue.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_delete = {}
+
+    entry = {"id": "7", "content": "00480069", "state": "2"}
+    with patch.object(
+        api, "_request", new=AsyncMock(return_value={"messages": [entry]})
+    ):
+        await api._record_delete_command_status()
+
+    status = api.last_delete["cmd_status"]
+    assert status == {"entries": 1, "keys": ["content", "id", "state"]}
+    assert "00480069" not in str(status), "a message body reached the record"
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_command_status_is_not_fatal(mock_aiohttp_client):
+    """It runs after the router has already answered, so it may fail alone."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.last_delete = {}
+
+    with patch.object(
+        api, "_request", new=AsyncMock(side_effect=ZTEConnectionError("gone"))
+    ):
+        await api._record_delete_command_status()
+
+    assert api.last_delete["cmd_status"] == {"unreadable": "ZTEConnectionError"}
+
+
+@pytest.mark.asyncio
+async def test_a_command_status_that_is_not_a_list_records_its_shape(
+    mock_aiohttp_client,
+):
+    """No device has been seen answering this, so the other shape is covered."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.last_delete = {}
+
+    with patch.object(api, "_request", new=AsyncMock(return_value={"state": "idle"})):
+        await api._record_delete_command_status()
+
+    assert api.last_delete["cmd_status"] == {"shape": "dict", "keys": ["state"]}
+
+
+@pytest.mark.asyncio
+async def test_the_status_record_is_skipped_with_no_delete_to_attach_it_to(
+    mock_aiohttp_client,
+):
+    """Nothing to annotate means no read is taken."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.last_delete = None
+
+    with patch.object(api, "_request", new=AsyncMock()) as request:
+        await api._record_delete_command_status()
+
+    assert not request.called
