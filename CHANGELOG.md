@@ -28,7 +28,7 @@ All notable changes to this project will be documented in this file.
 ### Summary
 
 - **Browser-Aligned SMS Deletion Payloads**: Aligned `DELETE_SMS` form formatting with browser client requests across tested hardware models, ensuring single and batched message identifiers include proper percent-encoded semicolon terminators (`%3B`) and the required `notCallback=true` parameter.
-- **Dynamic Pre-Write Session Key Selection**: Pre-write session validation now dynamically selects populated status keys per device (excluding unauthenticated endpoints and unpopulated fields like `wan_connect_status`), preventing blocked write commands across varied firmware configurations.
+- **Dynamic Pre-Write Session Key Selection**: Pre-write session validation now dynamically selects populated status keys per device (excluding unauthenticated endpoints and unpopulated fields like `wan_connect_status`), preventing blocked write commands across varied firmware configurations
 - **Write Replay Safety**: Replay on authentication recovery is now restricted exclusively to read requests, guaranteeing SMS sends and configuration writes are never duplicated.
 
 ### Fixed
