@@ -44,7 +44,7 @@ The following ZTE 5G and 4G CPE models use the **ZTE `goform` HTTP API** (`gofor
 
 1. **Shared Batch Endpoint**: They respond to `GET goform_get_cmd_process?multi_data=1&cmd=...` with flat JSON objects.
 2. **Identical Login Challenge**: They utilize the `LD` token salt challenge + double SHA-256 password hash + `stok` cookie.
-3. **Built-in `AD` Token branching**: ZRM automatically switches between MD5 (MC7010/MC801) and SHA-256 (MC888/MC889) based on the router's firmware version string.
+3. **Built-in `AD` Token branching**: ZRM automatically switches between MD5 (MC7010/MC801) and SHA-256 (MC888/MC889) based on the router's firmware version string. The token itself is `hash(hash(wa_inner_version + cr_version) + RD)`; a device that does not answer `cr_version`, the MC7010 among them, contributes an empty second operand. Confirmed against a token an MC888 Pro accepted, 2026-09-11. The digest choice is a heuristic on the model string and is the one branch here that an unlisted SHA-256 model would get wrong.
 4. **Per-model entity defaults**: which entities start enabled is resolved per router model, because models answer different subsets of the parameter set. The MC888 Pro reports its signal quality under `network_`-prefixed names an MC7010 does not use, so **RSSI** and **SINR** start enabled there and the five LTE and 5G sensors it cannot fill start disabled; the MC7010 has no WiFi of its own, so the two WiFi sensors start disabled there and enabled everywhere else. An unrecognised model gets the standard set. Curated from diagnostics captures, never measured at runtime — see `entity_defaults.MODEL_OVERLAY`. `check_sensor_manifest.py --verify-ha` reads the same overlay and resolves against it, so an entity the overlay disables for the connected model reading `unknown` is the expected result and is reported as a note rather than a finding. Only the disabling half is honoured there: the overlay also enables **RSSI** and **SINR** on the MC888 Pro, and acting on that would subject them to a liveness check on hardware the tool has never run against.
 5. **Cross-model parameter spellings**: 36 alternate spellings resolve to the same entities, so a router using the `network_` or `flux_` vocabulary populates sensors named for the bare one.
 
@@ -96,8 +96,18 @@ ZRM will **NOT** work with the following router families because they use fundam
 | Router Family | Representative Models | API Protocol | Primary Focus | ZRM Compatibility | Alternative Integration |
 | :-- | :-- | :-- | :-- | :-- | :-- |
 | **ZTE 5G/4G CPE (MC Series)** | MC7010, MC801A, MC888, MC889 | `goform` HTTP API | 5G/LTE Signal, WAN Status, SMS | ✅ **Supported** (MC7010 tested on hardware; MC888 Pro verified from diagnostics captures) | **ZRM** (`zte_router_5g`) |
-| **ZTE Next-Gen 5G CPE (G5 Series)** | G5TC, G5TS, G5C, G5 Max | `ubus` JSON-RPC API | 5G Signal & Router Status | ❌ Incompatible | [`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router) |
-| **ZTE Landline Broadband / Fiber ONTs** | F6640, F680, H288A, H388X, FIBRA6S | `_type=` Lua / XML API | LAN Device Tracking & Mesh Topology | ❌ Incompatible | [`zte_tracker`](https://github.com/juacas/zte_tracker) / [`ha-zte-fibra`](https://github.com/AldenDana/ha-zte-fibra) |
+
+**Reads and writes are different questions.** Reads are expected to work broadly: discovery builds entities from the names a device actually answers, so a name an unknown model does not report is absent rather than an error. Writes depend on the device's own token and request form, and are confirmed on two models only.
+
+|  | MC7010 | MC888 Pro |
+| :-- | :-- | :-- |
+| Reads | Tested on hardware | Confirmed from downloads, 97 names populated |
+| Data-limit switch | Works | Works, from `[3.3.22]` |
+| SMS delete | Works, effectively synchronous | Works, but completes after the integration's check looks |
+| SMS send | Works, message received | Accepted and stored as a draft; nothing transmitted, and the router's own web interface fails to send too |
+| APN, bearer, LED, reboot | Works | Untested |
+
+A control that appears to do nothing is the reason a diagnostics download is asked for first: this API answers `200 OK` with `{"result":"success"}` for writes it does not perform, so a silent refusal cannot be told from a completed write any other way. | **ZTE Next-Gen 5G CPE (G5 Series)** | G5TC, G5TS, G5C, G5 Max | `ubus` JSON-RPC API | 5G Signal & Router Status | ❌ Incompatible | [`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router) | | **ZTE Landline Broadband / Fiber ONTs** | F6640, F680, H288A, H388X, FIBRA6S | `_type=` Lua / XML API | LAN Device Tracking & Mesh Topology | ❌ Incompatible | [`zte_tracker`](https://github.com/juacas/zte_tracker) / [`ha-zte-fibra`](https://github.com/AldenDana/ha-zte-fibra) |
 
 ---
 

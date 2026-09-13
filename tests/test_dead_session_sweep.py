@@ -20,9 +20,14 @@ without an entry in `_CALLS`.
 
 Live findings this encodes (MC7010 `V1.0.0B03`, 2026-07-29, see
 `.notes/issues/silent_login_fail.md`):
-- `RD` is a **static per-device seed**, so `AD` is constant per router and a
-  payload retried after re-login carries a still-valid token. The double
-  therefore does not need to model token scoping.
+- `RD` is **not** a static per-device seed, and an earlier revision of this
+  header said it was — using it to justify the double not modelling token
+  scoping. Measured 2026-09-13: two consecutive reads return the same value, a
+  3-second pause with no write does not change it, and a **write** does. A
+  browser capture of three deletes in one session carries three different `RD`
+  values. What triggers the rotation is not established from five samples, so
+  the double still does not model token scoping — but that is now a stated
+  limitation rather than a consequence of a static seed.
 - A dead session answers with every value an empty string.
 """
 

@@ -381,6 +381,15 @@ async def test_api_delete_all_success(mock_aiohttp_client):
         # found by listing the combined bank.
         "mem_store_sent": None,
         "listed_with": "2",
+        # The verification series. One pass here: the re-list came back clean,
+        # so the loop exited immediately and the window was never used.
+        "verify_attempts": [{"after_ms": 0, "remaining": []}],
+        "verify_elapsed_ms": 0,
+        "verify_settled": True,
+        # `sms_cmd_status_info` is read once after a delete, shape only. The
+        # mock has no response queued for it, which is the unreadable case and
+        # must never be fatal.
+        "cmd_status": {"unreadable": "ZTEConnectionError"},
     }
 
 
@@ -2430,3 +2439,155 @@ async def test_a_failed_cr_version_read_stops_the_write(mock_aiohttp_client):
 
     with pytest.raises(ZTEConnectionError):
         await api.get_ad()
+
+
+# --- A send the router stores instead of sending ----------------------------
+#
+# Measured on the MC888 Pro of issue #56: two `SEND_SMS` calls answered
+# `{"result":"success"}`, `sms_nv_send_total` stayed at 0, `sms_nv_draftbox_total`
+# reached 2, both messages carried `tag: "3"`, and neither arrived. The same
+# command on the reference MC7010 moved the sent counter 0 -> 1 and the message
+# was received.
+
+
+def _capacity(sent: str, draft: str) -> MockResponse:
+    """A `sms_capacity_info` answer carrying just the two counters that matter."""
+    return MockResponse(
+        json_data={"sms_nv_send_total": sent, "sms_nv_draftbox_total": draft}
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_stored_send_is_reported_rather_than_called_a_success(
+    mock_aiohttp_client,
+):
+    """The draft total rose and the sent total did not. That is not a send."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.side_effect = [_capacity("0", "1"), _capacity("0", "2")]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "success"}
+    )
+
+    with (
+        patch.object(api, "get_ad", return_value="ad"),
+        pytest.raises(ZTEConnectionError, match="stored the message instead"),
+    ):
+        await api.send_sms("+123456", "Hello")
+
+    assert api.last_send == {
+        "counters_before": {"sms_nv_send_total": "0", "sms_nv_draftbox_total": "1"},
+        "counters_after": {"sms_nv_send_total": "0", "sms_nv_draftbox_total": "2"},
+    }
+
+
+@pytest.mark.asyncio
+async def test_a_real_send_is_left_alone(mock_aiohttp_client):
+    """The sent counter moved, which is what the MC7010 does."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.side_effect = [_capacity("0", "0"), _capacity("1", "0")]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "success"}
+    )
+
+    with patch.object(api, "get_ad", return_value="ad"):
+        assert await api.send_sms("+123456", "Hello") == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("label", "before", "after"),
+    [
+        ("neither counter moved", ("0", "0"), ("0", "0")),
+        ("both rose, so the send also happened", ("0", "0"), ("1", "1")),
+        ("the counters are not numbers", ("", ""), ("", "")),
+        ("the device reports them blank", ("0", "0"), ("", "")),
+    ],
+)
+async def test_only_a_positive_disagreement_reports_a_stored_send(
+    mock_aiohttp_client, label, before, after
+):
+    """Absent evidence must not become a new false failure.
+
+    The rule this release adds exists to stop a success being reported for a
+    message that never went. A rule that fired on silence would replace one
+    false report with another.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.side_effect = [_capacity(*before), _capacity(*after)]
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "success"}
+    )
+
+    with patch.object(api, "get_ad", return_value="ad"):
+        assert await api.send_sms("+123456", "Hello") == 200, label
+
+
+@pytest.mark.asyncio
+async def test_unreadable_counters_leave_the_send_reported_as_before(
+    mock_aiohttp_client,
+):
+    """A device that does not answer `sms_capacity_info` sends as it always did.
+
+    Also asserts the read does not recover the session: through the public
+    `get_sms_capacity` an unreadable answer sends `_request` down the replay
+    path, which would log in again and spend an attempt against
+    `MAX_LOGIN_COUNT` for a reading taken only to describe the send.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+    mock_aiohttp_client.get.side_effect = ZTEConnectionError("no such command")
+    mock_aiohttp_client.post.return_value = MockResponse(
+        json_data={"result": "success"}
+    )
+
+    with (
+        patch.object(api, "get_ad", return_value="ad"),
+        patch.object(api, "login") as login,
+    ):
+        assert await api.send_sms("+123456", "Hello") == 200
+
+    assert api.last_send is None
+    assert not login.called, "an observational read renewed the session"
+
+
+@pytest.mark.asyncio
+async def test_counters_that_are_not_a_mapping_are_declined(mock_aiohttp_client):
+    """`_request` returns whatever the endpoint gave; some answer with a list.
+
+    A device answering `sms_capacity_info` with anything but an object must
+    leave the send reported as before rather than crash describing it.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    with patch.object(api, "_request", new=AsyncMock(return_value=["not", "a", "map"])):
+        assert await api._send_counters() is None
+
+
+@pytest.mark.asyncio
+async def test_a_send_is_left_alone_when_only_the_second_reading_fails(
+    mock_aiohttp_client,
+):
+    """The baseline read can succeed and the follow-up fail.
+
+    Without a baseline *and* a follow-up there is no comparison to make, so the
+    send reports exactly as it did before this check existed.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    with patch.object(api, "_send_counters", new=AsyncMock(return_value=None)):
+        await api._classify_send(
+            {"sms_nv_send_total": "0", "sms_nv_draftbox_total": "0"}
+        )
+
+    assert api.last_send is None

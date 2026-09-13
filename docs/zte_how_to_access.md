@@ -511,7 +511,7 @@ All are `POST`, all carry `Content-Type: application/x-www-form-urlencoded`, all
 | `LOGOUT` | End the session | — (but **`AD` is required**) | `api.py:391` |
 | `REBOOT_DEVICE` | Reboot the router | — | `api.py:584` |
 | `SEND_SMS` | Send a message | `Number`, `MessageBody` (UTF-16BE hex), `encode_type` (`GSM7_default` or `UNICODE`), `ID=-1`, `sms_time`, `notCallback=true` | `api.py:send_sms` |
-| `DELETE_SMS` | Delete one or more messages | `msg_id` — semicolon-separated for a batch | `api.py:596` |
+| `DELETE_SMS` | Delete one or more messages | `msg_id` — semicolon-**terminated** and percent-encoded (`16%3B`, `1%3B2%3B`), plus `notCallback=true`. See below | `api.py:delete_sms` |
 | `APN_PROC_EX` | Set default APN profile, or switch auto/manual | `apn_mode`, `apn_action`, `set_default_flag`, `pdp_type`, `index` | `api.py:721`, `api.py:737` |
 | `ODU_LED_SWITCH_SET` | Outdoor-unit LED on/off | `ODU_led_switch` (`1`/`0`) | `api.py:749` |
 | `DATA_LIMIT_SETTING` | **The entire data-volume form** — see below | `data_volume_limit_switch`, `data_volume_limit_unit`, `data_volume_limit_size`, `data_volume_alert_percent`, `wan_auto_clear_flow_data_switch`, `traffic_clear_date` | `api.py:763` |
@@ -584,9 +584,15 @@ Two consequences:
 - **Any write to this form must send all six fields**, sourced from the last successful poll — a read-modify-write, with the field being changed substituted in.
 - `traffic_clear_date` and `wan_auto_clear_flow_data_switch` have **no separate `goformId`**. They are written through this form or not at all. `SET_DATA_VOLUME_LIMIT`, proposed by an earlier internal analysis, does not exist in the firmware.
 
-**Delete-all is currently a client-side loop** (`delete_all`, `api.py:608`): query the message list, collect the IDs, and issue one `DELETE_SMS` with them joined by `;`.
+**The id list is semicolon-terminated, not semicolon-separated, and the semicolons are percent-encoded.** Both devices' own clients build it as `ids.join(";") + ";"` and the browser encodes it, so a single delete goes out as `msg_id=16%3B` and a batch as `msg_id=1%3B2%3B`. Three browser captures taken on 2026-09-11 agree, two from the MC7010 and one from an MC888 Pro. A bare `;` was a legal parameter separator in form bodies for long enough that CGI parsers still split on it, which would discard the terminator and truncate a batch at the first id. Corrected in `[3.3.22-dev2]` and `[3.3.22-dev3]`.
 
-A native **`ALL_DELETE_SMS`** does exist — it takes `which_cgi` and clears router (`nv`) storage in bulk. An earlier revision of this document asserted that no bulk-delete command existed; that was wrong. The loop is kept because it is proven and because it is explicit about which messages it removes, but the native command is the simpler path if this is ever revisited.
+**`{"result":"success"}` on a delete means accepted, not completed.** Both clients poll `sms_cmd_status_info` afterwards rather than trusting the result. Measured 2026-09-13: the MC7010 is effectively synchronous — 32 ids in one request, bank empty within about a second, a single delete done roughly 45 ms after the POST returned — while an MC888 Pro left 9 of 10 ids, and a single id, still listed at an immediate re-list. `sms_cmd_status_info` answers `{"messages": []}` on the MC7010 at all times, including during a 32-id batch, so it is not a usable completion signal there; whether the MC888 Pro populates it is unknown.
+
+**Delete-all is currently a client-side loop** (`delete_all`): query the message list, collect the IDs, and issue one `DELETE_SMS` with them joined and terminated as above.
+
+A native **`ALL_DELETE_SMS`** does exist. It takes `which_cgi`, which both clients source from a caller-supplied `e.location`, and on the MC7010 that value is **`native_inbox`** — read from `js/sms/smslist.js`, reached by `js/config/config.js` → `DEVICE = cpe/MF253V` → `js/config/cpe/MF253V/menu.js`. An earlier revision of this document asserted that no bulk-delete command existed; that was wrong.
+
+Two cautions if it is adopted. `native_inbox` names the **device inbox only** — `js/sms/sim_messages.js` contains no delete-all call, and drafts carry `tag: "3"` rather than sitting in the inbox, so a bulk call may leave both behind where the current loop removes them. And its success handler polls `sms_cmd_status_info` exactly as `DELETE_SMS` does, so it inherits the same completion ambiguity.
 
 ---
 

@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.23-dev1\] - 2026-09-13 - A Completed Delete Stops Reporting as a Failure](#3323-dev1---2026-09-13---a-completed-delete-stops-reporting-as-a-failure)
   - [\[3.3.22\] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection](#3322---2026-09-12---release-browser-aligned-sms-deletion-payloads-and-dynamic-session-key-selection)
   - [\[3.3.22-dev4\] - 2026-09-12 - Hardware Verification on the Reference MC7010](#3322-dev4---2026-09-12---hardware-verification-on-the-reference-mc7010)
   - [\[3.3.22-dev3\] - 2026-09-12 - Delete Id Encoding Corrected; Writes Are Never Resent](#3322-dev3---2026-09-12---delete-id-encoding-corrected-writes-are-never-resent)
@@ -279,6 +280,50 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.23-dev1] - 2026-09-13 - A Completed Delete Stops Reporting as a Failure
+
+### Summary
+
+Writes work on the MC888 Pro of [issue #56](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues/56) from `[3.3.22]`: his download carries an empty `write_failures`, no errors and no refusals. Every delete he reported as failed had in fact completed. What he saw was this integration's own verification, which re-listed once and judged the result before the router had finished.
+
+This release defers that judgement, records the timings so the window can be sized from the device that needs it, and stops reporting a stored message as a sent one.
+
+### Fixed
+
+- **`verify_deleted` re-lists until the window closes.** `{"result":"success"}` on this API means accepted, not carried out, and how long the difference lasts is a property of the device. Nine of ten requested ids, and on a separate attempt a single id, were still listed at an immediate re-list on his router and gone later. The loop exits on the first clean pass: measured on the reference MC7010 at 26 ms and one attempt, so that device pays nothing. A survivor at the end of the window is still a failure, reported in the same words as before.
+
+- **The wait lives inside `verify_deleted`**, so all three delete routes inherit it. A change made at one call site and not the others is how the data-limit field spellings shipped wrong for months.
+
+- **A send that the router stores instead of sending is reported as such.** Two `SEND_SMS` calls on his device answered success and left `sms_nv_send_total` at `0` with `sms_nv_draftbox_total` at `2`, both messages tagged `3`, and neither arrived; the same command on the MC7010 moved the sent counter 0 to 1 and the message was received. His own web interface also fails to send, so the cause is below this integration — but reporting it as a plain success is what made it look like one.
+
+### Added
+
+- **`last_delete.verify_attempts`** — one entry per re-list, with the milliseconds elapsed and the ids still present, plus the total elapsed time and whether it settled. The window is 15 seconds because his latency has never been measured; this is what measures it.
+
+- **`last_delete.cmd_status`** — the shape of `sms_cmd_status_info` after a delete: entry count and key names, never content. Both devices' clients poll that command instead of trusting the result, so it is the firmware's own completion signal, but on the MC7010 it answers `{"messages": []}` at all times, including during a 32-id batch. Whether another device populates it is unknown, and one read is what it costs to find out.
+
+- **`last_send`** in the download: the sent and draft totals either side of the most recent send. Counts only.
+
+### Changed
+
+- **The counter reads are observational and do not recover a session.** Taken with `classify=False, _retry=False` rather than through `get_sms_capacity`, because an unreadable answer on the public path sends `_request` down the replay route, which logs in again — a reading taken only to describe a send would otherwise renew the session, spend an attempt against `MAX_LOGIN_COUNT`, and change the state of the thing it was describing.
+
+- **`RD` is not a static per-device seed**, which `tests/test_dead_session_sweep.py` stated as a live finding and used to justify its double not modelling token scoping. Measured 2026-09-13: two consecutive reads agree, a pause without a write changes nothing, and a write does change it; a browser capture of three deletes in one session carries three values. The trigger is not established from the samples taken, so the double still does not model token scoping, but as a stated limitation. The `[3.3.22-dev4]` entry and two docstrings are corrected accordingly, and whether a replayed write carries a spent nonce is recorded as open rather than answered a third time.
+
+### Considered and not done
+
+- **`ALL_DELETE_SMS`.** Refused on the MC7010 under every plausible `which_cgi` — `native_inbox` from that device's own `js/sms/smslist.js`, plus seven other values and four field shapes, twelve attempts, all `{"result":"failure"}` with 12 messages untouched. Its own client never sends it either: `smslist.js` has five call sites on the batched `deleteMessage` and one on `deleteAllMessages`, and the page has no Delete All control. A capture of select-all-and-delete confirms three batched `DELETE_SMS` requests and no bulk command.
+
+- **Removing `ok` from the write-success vocabulary.** No device has ever answered it, but it is permissive rather than harmful: removing it would turn a working write into an error on any device that does answer it, which is the false-refusal class the guard audit exists to prevent.
+
+### Verified
+
+- 1,671 tests, 100% line and branch coverage.
+
+- On the reference MC7010: the counters read, a real delete settled on its first pass in 26 ms, and `cmd_status` recorded `{"entries": 0}`.
+
+- Not yet tested on the MC888 Pro, which is the device the change is for.
+
 ## [3.3.22] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection
 
 ### Summary
@@ -344,7 +389,7 @@ Two further faults were found while re-reading the captures against the code. `_
 
 - **A device that has not polled has no session-check key.** The previous fallback returned the seeded names, and on the MC888 Pro those reduce to `wan_connect_status`, which is blank at all times there. A blank key scores as an expiry, so a write attempted between a restart and the first completed poll was blocked exactly as in `[3.3.21]`. Where there is no evidence, no check is made and the router's answer decides.
 
-- **A replayed token is not necessarily stale, and the guard does not depend on it being so.** It was proposed during this release that re-login-and-replay had been measured ineffective because the resent body carried a spent nonce. `scripts/hardware_check.py` asserts the opposite — `RD` is stable within a session on the reference MC7010 — and whether it survives a re-login has flip-flopped across observations. A resent write may well be accepted, which is the hazard rather than a mitigation of it. Why replay was measured ineffective remains unexplained, as `_ensure_session` has recorded since it was written.
+- **The guard does not depend on whether a replayed token is stale.** It was proposed during this release that re-login-and-replay had been measured ineffective because the resent body carried a spent nonce. That was withdrawn here on the grounds that `scripts/hardware_check.py` asserts `RD` is stable within a session — which overstated the assertion: it covers two consecutive _reads_. (Corrected in `[3.3.23-dev1]`: a write does change `RD`, measured 2026-09-13, and a browser capture of three deletes in one session carries three values. The trigger is not established, so whether a replayed body carries a spent nonce is open.) The guard rests on the duplicate-delivery hazard, which holds either way.
 
 ### Changed
 
