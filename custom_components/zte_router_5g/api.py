@@ -609,12 +609,19 @@ SESSION_FLAG_OK = "ok"
 # the comparison result is reported.
 SESSION_FLAG_SOURCE = "session_flag"
 
-# What a session-flag read established. `unanswered` is not a failure: it means
-# this device does not implement the key, and the caller falls back to the
-# witness classifier — which may record a verdict but must never block a write.
+# What a session-flag read established. Four answers, and the distinction
+# between the last two is the whole of phase 2.5: `unproven` means the question
+# has not been put under conditions that could answer it, `unanswered` means it
+# was and this device does not implement the key. Treating those alike sent the
+# first write after a restart out on a session already known to be dead.
+#
+# Neither of the two ever blocks a write. `unanswered` falls back to the
+# witness classifier, which may record a verdict; `unproven` buys the answer
+# with one login and then decides.
 SESSION_CONFIRMED = "confirmed"
 SESSION_DENIED = "denied"
 SESSION_UNANSWERED = "unanswered"
+SESSION_UNPROVEN = "unproven"
 
 
 class ZTEConnectionError(Exception):
@@ -981,13 +988,30 @@ class ZTERouterAPI:
         # `_cr_version_cache` is — an upgrade may withdraw a key, and a stale
         # belief here would make a blank answer look like a dead session.
         self._session_flag_seen_for: str | None = None
+        # The other half of the tri-state: the firmware on which a blank answer
+        # was proved to mean the key is absent, established by reading it again
+        # after a login that succeeded. Nothing else proves a negative here, and
+        # a negative recorded on weaker evidence — a login that failed, say —
+        # would put the device behind a permanent wrong belief.
+        self._session_flag_absent_for: str | None = None
         # Keys this device was observed to populate while authenticated,
         # from the most recent successful poll. Empty until one completes.
         # See `session_witnesses`.
         self._populated_keys: frozenset[str] = frozenset()
         # What the last pre-write session check asked and concluded,
-        # published in the download so a blocked write is visible.
-        self.last_session_check: dict[str, Any] | None = None
+        # published in the download so a blocked write is visible. Written
+        # through a property so the history below cannot be bypassed by a
+        # future assignment site.
+        self._last_session_check: dict[str, Any] | None = None
+        # The most recent check that did *not* confirm the session, kept for
+        # the life of this object and never overwritten by a later confirmation.
+        # `last_session_check` is replaced by every check, including the ones a
+        # diagnostics download makes while collecting itself — so reading it
+        # after a failure describes the collection, not the failure. That is
+        # not hypothetical: on 2026-09-14 it produced a wrong conclusion about
+        # the fault phase 2.5 exists to fix, because several successful writes
+        # had run in between.
+        self.last_non_confirmed_session_check: dict[str, Any] | None = None
         # The most recent rejection, kept for the life of this object and
         # never cleared. `last_rejection` is cleared by any live verdict, so
         # that a stale rejection cannot be mistaken for a current fault — a
@@ -1377,7 +1401,11 @@ class ZTERouterAPI:
         verdict is recorded and returned, never raised.
         """
         flag = await self.read_session_flag(timeout_sec=timeout_sec)
-        if flag != SESSION_UNANSWERED:
+        # `unproven` is decided here the way `unanswered` is — by falling
+        # through to the witnesses. Resolving it would mean logging in, and a
+        # login on the failure path of a write that may already have been
+        # carried out buys an answer to the wrong question.
+        if flag in (SESSION_CONFIRMED, SESSION_DENIED):
             self.last_session_check = {
                 "source": SESSION_FLAG_SOURCE,
                 "verdict": flag,
@@ -1450,13 +1478,25 @@ class ZTERouterAPI:
         a re-login. Reaching a non-confirmed verdict here means that login did
         not produce a working session.
 
-        A device that does not answer `loginfo` is never blocked: its verdict
-        comes from the witness classifier, which this does not consult.
+        **It asks what the device can do, not what a field is labelled.** The
+        test used to be that `last_session_check` carried the flag's source
+        with any verdict but `confirmed`, and a device without the key was
+        spared only because the path it takes happens to record a different
+        source string — a literal in another method, with nothing asserting the
+        connection. Once an unproven flag records under the flag's own source,
+        that form would have blocked every send on every device that does not
+        implement `loginfo`, which is issue #56's shape in a new place.
+
+        So: block only where the device is known to implement the key and the
+        router has actually denied the session. A device that does not answer
+        `loginfo` is never blocked, and its witness verdict is not consulted.
         """
+        if not self._session_flag_supported():
+            return
         check = self.last_session_check or {}
         if check.get("source") != SESSION_FLAG_SOURCE:
             return
-        if check.get("verdict") == SESSION_CONFIRMED:
+        if check.get("verdict") != SESSION_DENIED:
             return
         raise ZTEAuthError(
             f"{cmd} was not sent: the router reports it is not logged in, and "
@@ -1624,27 +1664,51 @@ class ZTERouterAPI:
         populates on its way to the token and which is already discarded when
         the version changes. Reading `wa_inner_version` here instead would add
         a request to a check whose whole justification is that it costs one.
+        The firmware rule itself is in `_belief_holds`.
+        """
+        return self._belief_holds("_session_flag_seen_for")
+
+    def _session_flag_absent(self) -> bool:
+        """Whether this device has been proved *not* to implement the key.
+
+        The mirror of `_session_flag_supported`, and held to the same firmware
+        rule for the same reason: an upgrade may add the key, and a negative
+        that outlived the firmware it was measured on would keep a device on
+        the witness fallback forever.
+
+        Proved only one way — a blank answer read again after a login that
+        succeeded. See `_ensure_session`.
+        """
+        return self._belief_holds("_session_flag_absent_for")
+
+    def _belief_holds(self, attr: str) -> bool:
+        """Whether what `attr` records still applies to the firmware running.
+
+        One rule, shared by the positive and the negative so the two cannot
+        drift: a belief recorded before the firmware was known adopts the
+        version as soon as one is, and a belief recorded against a version the
+        device has since moved off is discarded.
 
         **The empty string means "learned, firmware not yet known".** The check
-        runs ahead of the token derivation that fills the cache, so the first
-        `ok` on a fresh object is always recorded without a version beside it.
-        Comparing that against a version the cache acquires moments later
-        discarded the proof on the very same write, and the mechanism then
-        never fired again — found by attacking this rule rather than by any
-        test. The version is adopted when it first becomes known instead; the
-        window between the two is a single write, inside which the firmware
-        cannot have changed.
+        runs ahead of the token derivation that fills `_cr_version_cache`, so
+        the first answer on a fresh object is always recorded without a version
+        beside it. Comparing that against a version the cache acquires moments
+        later discarded the proof on the very same write, and the mechanism
+        then never fired again — found by attacking this rule rather than by
+        any test. The window between the two is a single write, inside which
+        the firmware cannot have changed.
         """
-        if self._session_flag_seen_for is None:
+        recorded: str | None = getattr(self, attr)
+        if recorded is None:
             return False
         current = self._cr_version_cache[0] if self._cr_version_cache else None
-        if not self._session_flag_seen_for:
+        if not recorded:
             if current:
-                self._session_flag_seen_for = current
+                setattr(self, attr, current)
             return True
         if current is None:
             return True
-        return self._session_flag_seen_for == current
+        return recorded == current
 
     def _note_session_replaced(self) -> None:
         """Record how long the session being replaced lasted, if it expired.
@@ -1704,6 +1768,41 @@ class ZTERouterAPI:
         age = (datetime.now(UTC) - self.session_started).total_seconds()
         return age > limit
 
+    @property
+    def last_session_check(self) -> dict[str, Any] | None:
+        """What the most recent pre-write session check concluded."""
+        return self._last_session_check
+
+    @last_session_check.setter
+    def last_session_check(self, check: dict[str, Any] | None) -> None:
+        """Record the check, and keep a copy if it was not a confirmation.
+
+        A property rather than a helper every caller must remember to use:
+        there are eleven assignment sites today and the history is worth
+        exactly as much as its weakest one.
+        """
+        self._last_session_check = check
+        if check and check.get("verdict") != SESSION_CONFIRMED:
+            self.last_non_confirmed_session_check = {
+                **check,
+                "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
+
+    def session_flag_state(self) -> str:
+        """`supported`, `absent` or `unknown`, for this firmware.
+
+        Published because `supported: false` alone cannot be read: it is the
+        answer both for a device that does not implement the key and for one
+        no write has yet reached, and telling those apart is the whole of
+        phase 2.5. A download that says `unknown` is saying the mechanism has
+        not been exercised on this device, not that it does not apply.
+        """
+        if self._session_flag_supported():
+            return "supported"
+        if self._session_flag_absent():
+            return "absent"
+        return "unknown"
+
     def session_flag_report(self) -> dict[str, Any]:
         """What the session flag does on this device, for the download.
 
@@ -1718,8 +1817,10 @@ class ZTERouterAPI:
         device's next download, with no write and nothing asked of its owner.
         """
         return {
+            "state": self.session_flag_state(),
             "supported": self._session_flag_seen_for is not None,
             "confirmed_on_firmware": self._session_flag_seen_for or None,
+            "absent_on_firmware": self._session_flag_absent_for or None,
             "checks": dict(self.session_check_stats),
         }
 
@@ -1759,22 +1860,24 @@ class ZTERouterAPI:
             )
             return SESSION_CONFIRMED
 
-        if not self._session_flag_supported():
-            # Blank, and this device has never been seen to answer `ok`. This
-            # firmware echoes a name it does not implement as an empty string,
-            # so a device without the key and a device with a dead session are
-            # indistinguishable here — and treating that as a denial would put
-            # every write on such a device behind a login it does not need, and
-            # would block `SEND_SMS` on it outright. That is issue #56's shape
-            # in a new place.
-            #
-            # Deliberately *not* resolved by reading other keys alongside this
-            # one. Which keys a device populates is exactly the judgement that
-            # has been wrong three times; a mechanism that needs it is the
-            # mechanism being replaced.
-            return SESSION_UNANSWERED
+        if self._session_flag_supported():
+            return SESSION_DENIED
 
-        return SESSION_DENIED
+        # Blank, and this device has never been seen to answer `ok`. This
+        # firmware echoes a name it does not implement as an empty string, so a
+        # device without the key and a device with a dead session are
+        # indistinguishable *from this read alone* — and treating that as a
+        # denial would put every write on such a device behind a login it does
+        # not need, and would block `SEND_SMS` on it outright. That is issue
+        # #56's shape in a new place.
+        #
+        # Deliberately *not* resolved by reading other keys alongside this one.
+        # Which keys a device populates is exactly the judgement that has been
+        # wrong three times; a mechanism that needs it is the mechanism being
+        # replaced. It is resolved by a login instead — see `_ensure_session`.
+        if self._session_flag_absent():
+            return SESSION_UNANSWERED
+        return SESSION_UNPROVEN
 
     async def _ensure_session(self, timeout_sec: int | None = None) -> None:
         """Confirm the session before a write derives its ``AD`` token.
@@ -1816,19 +1919,38 @@ class ZTERouterAPI:
             self.last_session_check = {"source": SESSION_FLAG_SOURCE, "verdict": flag}
             return
 
-        if flag == SESSION_DENIED:
+        if flag in (SESSION_DENIED, SESSION_UNPROVEN):
+            unproven = flag == SESSION_UNPROVEN
             self.session_check_stats["not_confirmed"] += 1
             try:
                 await self.login(timeout_sec=timeout_sec)
             except (ZTEAuthError, ZTEConnectionError, ZTECredentialsError) as err:
+                # Nothing is concluded from a login that did not happen. On the
+                # unproven branch in particular, recording absence here would
+                # turn a momentary connectivity problem into a belief that
+                # persists for the life of the firmware.
                 self.session_check_stats["relogin_failed"] += 1
+                if unproven:
+                    await self._note_witness_verdict(timeout_sec=timeout_sec)
+                    return
                 self.last_session_check = {
                     "source": SESSION_FLAG_SOURCE,
-                    "verdict": SESSION_DENIED,
+                    "verdict": flag,
                     "relogin": f"{type(err).__name__}: {err}",
                 }
                 return
             flag = await self.read_session_flag(timeout_sec=timeout_sec)
+            if unproven and flag != SESSION_CONFIRMED:
+                # Asked on a session that provably works, and still blank: the
+                # device does not implement the key. Recorded against this
+                # firmware and never asked again on it, which is what keeps the
+                # one extra login from becoming one per write.
+                self._session_flag_absent_for = (
+                    self._cr_version_cache[0] if self._cr_version_cache else ""
+                )
+                self.session_check_stats["relogin_failed"] += 1
+                await self._note_witness_verdict(timeout_sec=timeout_sec)
+                return
             if flag == SESSION_CONFIRMED:
                 # The check earned its round trip: a write was about to be sent
                 # on a session the router had already ended, and was not.

@@ -127,3 +127,33 @@ async def test_the_session_flag_state_is_published(mock_coordinator, mock_config
     assert result["session_flag"]["confirmed_on_firmware"].startswith("IRL")
     assert result["session_flag"]["checks"]["checks"] == 4
     assert "loginfo" not in str(result["session_flag"])
+
+
+async def test_a_check_that_did_not_confirm_survives_the_download(
+    mock_coordinator, mock_config_entry
+):
+    """The record of a failure must outlive the reads that produce the file.
+
+    `last_session_check` is replaced by every check, and producing a download
+    reads the router. Reading it afterwards therefore describes the collection,
+    which on 2026-09-14 produced a wrong conclusion about the fault the file
+    had been collected to explain. The companion field is never overwritten by
+    a confirmation, and is historical by construction.
+    """
+    mock_coordinator.data = {}
+    mock_coordinator.api.last_session_check = {
+        "source": "session_flag",
+        "verdict": "confirmed",
+    }
+    mock_coordinator.api.last_non_confirmed_session_check = {
+        "source": "session_flag",
+        "verdict": "denied",
+        "at": "2026-09-14T12:00:00+00:00",
+    }
+    mock_config_entry.runtime_data = mock_coordinator
+
+    result = await async_get_config_entry_diagnostics(None, mock_config_entry)
+
+    assert result["last_session_check"]["verdict"] == "confirmed"
+    assert result["last_non_confirmed_session_check"]["verdict"] == "denied"
+    assert result["last_non_confirmed_session_check"]["at"].startswith("2026-09-14")

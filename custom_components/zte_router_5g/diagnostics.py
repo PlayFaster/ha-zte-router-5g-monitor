@@ -638,6 +638,7 @@ async def async_get_config_entry_diagnostics(
     # must not cost the reporter the whole file.
     check = getattr(coordinator.api, "last_session_check", None)
     rejection_seen = getattr(coordinator.api, "last_rejection_seen", None)
+    check_seen = getattr(coordinator.api, "last_non_confirmed_session_check", None)
     # Read once and type-checked, like every other optional field here: an api
     # object that does not carry it, or carries something that is not a
     # mapping, must cost the reporter a field rather than the whole file.
@@ -752,6 +753,13 @@ async def async_get_config_entry_diagnostics(
         # those reads used to wipe the very record the file exists to carry.
         "last_rejection_seen": _sanitize_walk(rejection_seen, tokenizer)
         if isinstance(rejection_seen, dict)
+        else None,
+        # The most recent check that did not confirm the session, never
+        # overwritten by a later confirmation. The live field above is replaced
+        # by every check, including the ones producing this file makes, so it
+        # describes the collection rather than the failure being reported.
+        "last_non_confirmed_session_check": _sanitize_walk(check_seen, tokenizer)
+        if isinstance(check_seen, dict)
         else None,
         # Which candidate names this device answered. Values only for the
         # names classified safe in `const.DISCOVERY_VALUE_SAFE`; everything

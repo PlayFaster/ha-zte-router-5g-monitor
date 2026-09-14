@@ -311,6 +311,150 @@ async def _resume_session(api: ZTERouterAPI, report: Report, *, after: str) -> b
     return False
 
 
+async def check_first_write_on_an_untaught_object(
+    options: dict[str, str], report: Report
+) -> None:
+    """Write on a dead session with an object that has learned nothing.
+
+    **Two objects, and the division of labour between them is the whole
+    method.** The session flag is learned at one site and cleared at none, so
+    within a single object the first live write marks the device as
+    implementing `loginfo` and everything after it inherits that. Section 3
+    kills the session but cannot unlearn the flag, so it exercises *dead
+    session, flag known*, while the fault reported on 2026-09-14 needs *dead
+    session, flag unknown* — the state every Home Assistant instance is in
+    after a restart, because only a write reads the key.
+
+    So one object opens a session and ends it, and a second object, which has
+    never derived a token and therefore never asked about the flag, is handed
+    the dead credential and made to write with it.
+
+    **Three other ways of reaching this state were tried first, and each failed
+    for a reason worth keeping.**
+
+    `_kill_session` ends the session with `LOGOUT`, which carries an `AD`
+    token, which is derived through `get_ad` — and `get_ad` runs the pre-write
+    check. Ending a session teaches the flag on the way out, and the first
+    draft of this rung passed while reporting that its own precondition had
+    failed.
+
+    Having a second client take the session does not produce the state either:
+    with the session taken by another object at the same address, `loginfo`
+    still answers `ok` while the victim's writes are refused. The flag is
+    answered for the address rather than for the credential, so contention of
+    that kind is invisible to it — a limitation `[3.3.25-dev4]` already records
+    as beyond any pre-write check.
+
+    Waiting for the session to expire is honest and too slow to be an
+    instrument: on 2026-09-14 the session was still alive after four minutes of
+    waiting, and the rung reached nothing at all.
+    """
+    print(_cyan("\n[0] The first write, on an object that has learned nothing"))
+
+    async with (
+        aiohttp.ClientSession() as opener_session,
+        aiohttp.ClientSession() as fresh,
+    ):
+        opener = ZTERouterAPI(
+            opener_session,
+            options["host"],
+            options.get("username"),
+            options["password"],
+        )
+        await opener.try_set_protocol()
+        try:
+            await opener.login()
+            dead_cookies = dict(opener.cookies)
+            await opener.logout()
+        except Exception as err:  # noqa: BLE001 - reporting, not handling
+            report.record(
+                False,
+                "a session can be opened and ended for the untaught-object check",
+                f"{type(err).__name__}: {err}",
+            )
+            return
+
+        api = ZTERouterAPI(
+            fresh, options["host"], options.get("username"), options["password"]
+        )
+        await api.try_set_protocol()
+        # The credential of the session just ended, on an object that has never
+        # derived a token. `session_active` stays true because a router-side
+        # expiry tells the client nothing — clearing it here would have
+        # `_request` log in before the write, which is the behaviour under test.
+        api.cookies = dead_cookies
+        api.session_active = True
+
+        report.record(
+            api._session_flag_seen_for is None,
+            "precondition: the session flag is unknown on the writing object",
+            f"{api._session_flag_seen_for!r}",
+        )
+        probe = await api._request(
+            "GET",
+            "goform/goform_get_cmd_process",
+            params={"isTest": "false", "cmd": "loginfo"},
+            authenticated=True,
+            classify=False,
+            _retry=False,
+        )
+        if str(probe.get("loginfo", "")).strip() == "ok":
+            # Not scored, because it is not a defect. `loginfo` is answered for
+            # the client's address, not for the credential presented: measured
+            # 2026-09-14, a cookieless read taken immediately after a clean
+            # logout still returned `ok` while another process on this machine
+            # held a session. The state under test is then unreachable, and
+            # failing here would report the presence of a second session as a
+            # fault in the integration.
+            print(
+                f"  {_dim('●  note')}  the router still reports this address "
+                "as logged in "
+                + _dim("(another session shares it; the untaught write was not made)")
+            )
+            # Nothing was written, so there is nothing to restore and no
+            # reason to spend another login: this router permits one session
+            # and limits attempts, and the sections that follow need both.
+            return
+        report.record(
+            api._session_flag_seen_for is None,
+            "precondition: the probe did not teach the flag",
+            f"{api._session_flag_seen_for!r}",
+        )
+
+        setter_name, state_key, values = SAFE_WRITES[0]
+        setter = getattr(api, setter_name)
+        try:
+            await api.login()
+            original = (await api.get_params([state_key]))[state_key]
+            target = values[0] if original == values[1] else values[1]
+            api.cookies = dead_cookies
+            api.session_active = True
+            api._session_flag_seen_for = None
+            await setter(target)
+            observed = (await api.get_params([state_key]))[state_key]
+            report.record(
+                observed == target,
+                f"{setter_name} on a dead session with the flag unknown",
+                f"router reports {observed!r}",
+            )
+        except Exception as err:  # noqa: BLE001 - reporting, not handling
+            report.record(
+                False,
+                f"{setter_name} on a dead session with the flag unknown",
+                f"{type(err).__name__}: {err}",
+            )
+        finally:
+            with contextlib.suppress(Exception):
+                await api.login()
+                if (await api.get_params([state_key]))[state_key] != original:
+                    await setter(original)
+                report.record(
+                    (await api.get_params([state_key]))[state_key] == original,
+                    f"{setter_name} restored to {original!r} after the untaught write",
+                )
+                await api.logout()
+
+
 async def check_session_assumptions(
     api: ZTERouterAPI, session: aiohttp.ClientSession, report: Report
 ) -> None:
@@ -1803,6 +1947,12 @@ async def main() -> int:
     options = _credentials()
     report = Report()
 
+    # Before anything else connects. `loginfo` is answered for the client's
+    # address rather than for the credential presented, so any other live
+    # session from this machine makes the router report the writing object as
+    # logged in and the state under test unreachable. Measured 2026-09-14.
+    await check_first_write_on_an_untaught_object(options, report)
+
     async with aiohttp.ClientSession() as session:
         api = ZTERouterAPI(
             session, options["host"], options.get("username"), options["password"]
@@ -1833,6 +1983,8 @@ async def main() -> int:
         print(f"connected to {options['host']}")
         _warn_about_competing_sessions()
 
+        if not await _resume_session(api, report, after="the untaught-object check"):
+            return 1
         await check_session_assumptions(api, session, report)
         await check_write_round_trip(api, report, hostile=False, session=session)
         await check_write_round_trip(api, report, hostile=True, session=session)

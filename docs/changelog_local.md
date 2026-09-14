@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25-dev7\] - 2026-09-14 - The First Write After a Restart No Longer Goes Out on a Dead Session](#3325-dev7---2026-09-14---the-first-write-after-a-restart-no-longer-goes-out-on-a-dead-session)
   - [\[3.3.25-dev6\] - 2026-09-14 - A Request Becomes a Value; `_request` Splits Into Six Routines](#3325-dev6---2026-09-14---a-request-becomes-a-value-_request-splits-into-six-routines)
   - [\[3.3.25-dev5\] - 2026-09-14 - Replayed Requests Keep the Caller's Classification Setting](#3325-dev5---2026-09-14---replayed-requests-keep-the-callers-classification-setting)
   - [\[3.3.25-dev4\] - 2026-09-14 - Session Lifetime Learned Per Device; Diagnostics Keep the Evidence They Collect](#3325-dev4---2026-09-14---session-lifetime-learned-per-device-diagnostics-keep-the-evidence-they-collect)
@@ -284,6 +285,54 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+
+---
+
+## [3.3.25-dev7] - 2026-09-14 - The First Write After a Restart No Longer Goes Out on a Dead Session
+
+### Summary
+
+After a restart, the first write on an expired session was refused and the integration did nothing to recover it. The session flag answered blank; the code could not tell that from "this device does not implement the key", so it declined to act, sent the write anyway, and reported the router as having rejected a command it never had a chance to accept. It then healed itself, because any later write made while the session was alive taught the flag.
+
+This release gives the flag a third state and buys the answer with one login.
+
+### Fixed
+
+- **An unproven session flag is resolved rather than ignored.** Support is now held per firmware as one of three states — unknown, supported, absent — where it was previously "seen `ok`" or "not seen". A blank answer on an unknown flag triggers exactly one login, and a second read decides: `ok` means the key exists and the session had died, still blank means the device does not implement it, and a login that *failed* concludes nothing at all and leaves the question open for the next write.
+
+  The last branch is not optional. Recording absence on the evidence of a login that did not happen would turn a momentary connectivity problem into a belief that persists for the life of the firmware. The negative is held per firmware for the same reason the positive already was.
+
+  Cost: one extra login the first time a write meets a dead session, and for a device without the key, one login once per firmware and none after.
+
+  **This is a regression from `[3.3.25-dev2]`.** The hardening added there stopped a login storm on devices that lack the key, and its cost was that the one case where recovery matters most — first write, dead session, nothing learned — was the case it declined to act on.
+
+- **The send block asks what the device can do, not what a field is labelled.** `_require_confirmed_session` blocked when `last_session_check` carried the flag's source with any verdict but `confirmed`. A device without the key was spared only because the path it takes happens to record a different source string — a literal in another method, with nothing asserting the connection. The change above records the unproven path under the flag's own source, so left alone that form would have blocked every SMS send on every device that does not implement `loginfo`, which is issue #56's shape in a new place. The block now requires that the device is known to implement the key and that the router actually denied the session.
+
+### Added
+
+- **A record of the last check that did not confirm, which a later confirmation cannot erase.** `last_session_check` is replaced by every check, and producing a diagnostics download reads the router — so read after the event it describes the collection rather than the failure. On 2026-09-14 that produced a wrong conclusion about this very fault, from a download taken after several successful writes. The companion field is never overwritten, carries the time it was recorded, and publishes as history in the same way `last_rejection_seen` does.
+
+- **The download says which of the three states the flag is in**, and the firmware each belief was decided on. `supported: false` alone could not be read: it was the answer both for a device that does not implement the key and for one no write had yet reached, which is the same conflation as the fault.
+
+- **A hardware-check rung that writes on a dead session with an object that has learned nothing** (section `[0]`). Two objects: one opens a session and ends it, and a second, which has never derived a token and so has never asked about the flag, is handed the dead credential and made to write with it. Section 3's dead-session rung cannot reach this state — the flag is learned at one site and cleared at none, so its own earlier sections teach it before the session is killed.
+
+- **Eight tests**, the first of them the state the fault needs: a first write, flag unknown, session dead, asserting that a login happens and the write proceeds. Then that a device which never answers `ok` logs in exactly once, that a failed login leaves the question open, that a send is not blocked on a device without the key and is blocked when a supported flag denies the session, and that the historical record survives a later confirmation.
+
+### Notes
+
+- **The test that would have caught this already existed, and one line of its setup disarmed it.** `test_an_unpolled_device_has_no_witness_and_is_not_blocked` constructs exactly the failing state and then seeds the flag as known before exercising it. Removing that line fails the test on the assertion that a login occurred. Both versions are now kept, because both states are real. It is the third time in two days that a test reported what its author expected rather than what the code does — see the notes to `[3.3.25-dev5]` and `[3.3.25-dev6]`.
+
+- **The new tests and the new rung were written against the unfixed code and run before the fix existed.** Four tests failed, and the rung failed on hardware with the reported error. A test that has never been observed to fail is not evidence, and that is what this fault demonstrated.
+
+- **Three measurements about `loginfo`, made while building the rung, that constrain what any instrument can do.**
+
+  Ending a session with `LOGOUT` teaches the flag on the way out: the command carries an `AD` token, the token is derived through `get_ad`, and `get_ad` runs the pre-write check. The first draft of the rung passed while reporting that its own precondition had failed.
+
+  The flag is answered for the client's address rather than for the credential presented. With a session taken by a second client at the same address, `loginfo` still answered `ok` while the victim's writes were refused; and a cookieless read taken immediately after a clean logout also answered `ok`, because another process on the same machine held a session. The rung therefore prints a note and declines to score where the state is unreachable, since a second session on the address is not a defect in this integration.
+
+  Waiting for a session to expire is honest and too slow to be an instrument: the session was still alive after four minutes.
+
+- **The temporary write-path logging added on 2026-09-14 is removed.** It captured the dead session inside the refused write, which is what identified the fault, and it shipped nothing.
 
 ---
 
