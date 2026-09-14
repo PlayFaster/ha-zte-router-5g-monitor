@@ -5,8 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.3.25-dev4\] - 2026-09-14 - Phase 2: The Next Fault Explains Itself](#3325-dev4---2026-09-14---phase-2-the-next-fault-explains-itself)
-  - [\[3.3.25-dev3\] - 2026-09-14 - The Learned Session Flag Survives the Token Cache](#3325-dev3---2026-09-14---the-learned-session-flag-survives-the-token-cache)
+  - [\[3.3.25-dev4\] - 2026-09-14 - Session Lifetime Learned Per Device; Diagnostics Keep the Evidence They Collect](#3325-dev4---2026-09-14---session-lifetime-learned-per-device-diagnostics-keep-the-evidence-they-collect)
+  - [\[3.3.25-dev3\] - 2026-09-14 - Learned Session Flag No Longer Discarded When the Firmware Cache Fills](#3325-dev3---2026-09-14---learned-session-flag-no-longer-discarded-when-the-firmware-cache-fills)
   - [\[3.3.25-dev2\] - 2026-09-14 - A Blank Session Flag Is Not a Denial Until the Key Is Known to Exist](#3325-dev2---2026-09-14---a-blank-session-flag-is-not-a-denial-until-the-key-is-known-to-exist)
   - [\[3.3.25-dev1\] - 2026-09-14 - The Pre-Write Session Check Asks the Router Instead of Guessing](#3325-dev1---2026-09-14---the-pre-write-session-check-asks-the-router-instead-of-guessing)
   - [\[3.3.24\] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking](#3324---2026-09-13---release-asynchronous-sms-deletion-verification-and-send-outcome-tracking)
@@ -25,16 +25,16 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.20-dev2\] - 2026-09-11 - SMS Probe V7: Three Probe Actions, and the Full Source Capture](#3320-dev2---2026-09-11---sms-probe-v7-three-probe-actions-and-the-full-source-capture)
   - [\[3.3.20-dev1\] - 20206-09-11 - CI Bump Ruff](#3320-dev1---20206-09-11---ci-bump-ruff)
   - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
-  - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-that-could-not-report-what-they-measured)
-  - [\[3.3.19-dev1\] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At](#3319-dev1---2026-09-10---sms-probe-v6-the-routers-own-web-client-is-read-rather-than-guessed-at)
+  - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs Corrected to Record What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-corrected-to-record-what-they-measured)
+  - [\[3.3.19-dev1\] - 2026-09-10 - SMS Probe V6: Parameter Names Read From the Router's Web Client](#3319-dev1---2026-09-10---sms-probe-v6-parameter-names-read-from-the-routers-web-client)
   - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
   - [\[3.3.18-dev1\] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back](#3318-dev1---2026-09-10---sms-probe-v5-every-write-changes-something-and-is-read-back)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
   - [\[3.3.17-dev7\] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened](#3317-dev7---2026-09-10---sms-probe-v4-the-carrier-is-found-before-the-token-space-is-screened)
-  - [\[3.3.17-dev6\] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept](#3317-dev6---2026-09-10---sms-probe-v4-the-axes-crossed-and-every-attempt-kept)
+  - [\[3.3.17-dev6\] - 2026-09-10 - SMS Probe V4: Screening Axes Combined; Every Attempt Recorded](#3317-dev6---2026-09-10---sms-probe-v4-screening-axes-combined-every-attempt-recorded)
   - [\[3.3.17-dev5\] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted](#3317-dev5---2026-09-10---sms-probe-v4-one-attempt-primitive-transport-becomes-an-axis-and-is-adopted)
-  - [\[3.3.17-dev4\] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run](#3317-dev4---2026-09-10---sms-probe-v4-the-winning-login-is-adopted-for-the-rest-of-the-run)
-  - [\[3.3.17-dev3\] - 2026-09-09 - SMS Probe V4: The Five Rungs the Plan Named and the Build Missed](#3317-dev3---2026-09-09---sms-probe-v4-the-five-rungs-the-plan-named-and-the-build-missed)
+  - [\[3.3.17-dev4\] - 2026-09-10 - SMS Probe V4: The Successful Login Variant Is Adopted for the Rest of the Run](#3317-dev4---2026-09-10---sms-probe-v4-the-successful-login-variant-is-adopted-for-the-rest-of-the-run)
+  - [\[3.3.17-dev3\] - 2026-09-09 - SMS Probe V4: Five Missing Rungs Added](#3317-dev3---2026-09-09---sms-probe-v4-five-missing-rungs-added)
   - [\[3.3.17-dev1\] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured](#3317-dev1---2026-09-09---sms-probe-v4-login-stage-generated-token-space-single-use-token-measured)
   - [\[3.3.16\] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas](#3316---2026-09-08---release-multi-key-session-validation-and-sms-probe-v3-token-formulas)
   - [\[3.3.16-dev3\] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest](#3316-dev3---2026-09-08---probe-control-uses-the-shipped-token-path-candidates-take-the-devices-digest)
@@ -54,7 +54,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.12-dev2\] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync](#3312-dev2---2026-09-06---diagnostics-check-re-takes-an-unfinished-pass-shared-ci-tasksjson-sync)
   - [\[3.3.12-dev1\] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json](#3312-dev1---2026-09-06---ci-bump-phacc-update-shared-ci-tasksjson)
   - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
-  - [\[3.3.11-dev3\] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All](#3311-dev3---2026-09-05---sms-timestamps-carry-their-routers-offset-delete-all-means-all)
+  - [\[3.3.11-dev3\] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Covers Both SMS Banks](#3311-dev3---2026-09-05---sms-timestamps-carry-their-routers-offset-delete-all-covers-both-sms-banks)
   - [\[3.3.11-dev2\] - 2026-09-05 - Uptime in the Usage Section Corrected](#3311-dev2---2026-09-05---uptime-in-the-usage-section-corrected)
   - [\[3.3.11-dev1\] - 2026-09-05 - SMS Bank and Data Usage in the Diagnostics Download; Verified SMS Deletion](#3311-dev1---2026-09-05---sms-bank-and-data-usage-in-the-diagnostics-download-verified-sms-deletion)
   - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
@@ -285,7 +285,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3.3.25-dev4] - 2026-09-14 - Phase 2: The Next Fault Explains Itself
+## [3.3.25-dev4] - 2026-09-14 - Session Lifetime Learned Per Device; Diagnostics Keep the Evidence They Collect
 
 ### Summary
 
@@ -331,7 +331,7 @@ The instruments defeated themselves. A rejection was wiped by the file meant to 
 
 ---
 
-## [3.3.25-dev3] - 2026-09-14 - The Learned Session Flag Survives the Token Cache
+## [3.3.25-dev3] - 2026-09-14 - Learned Session Flag No Longer Discarded When the Firmware Cache Fills
 
 ### Summary
 
@@ -898,7 +898,7 @@ The run is also split. The write ladder consumes most of a fifteen-minute budget
 - **Caller-Supplied Form Read-Back Verification**: Fixed state toggle read-back comparisons when using caller-supplied custom forms in diagnostic tests, ensuring accurate write confirmation.
 - **Dynamic Command Parameter Extraction**: Parameters missing from default polling payloads are queried directly from the device rather than omitted during browser-aligned write tests.
 
-## [3.3.19-dev2] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured
+## [3.3.19-dev2] - 2026-09-10 - SMS Probe V6: Two Rungs Corrected to Record What They Measured
 
 ### Summary
 
@@ -917,7 +917,7 @@ The first MC7010 rehearsal of Probe v6 read the router's web client exactly as i
 - 1,586 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 - On the reference MC7010, `23c` sent the browser's exact delete form — `msg_id=130;` with `notCallback` — and the re-listing confirms that message gone.
 
-## [3.3.19-dev1] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At
+## [3.3.19-dev1] - 2026-09-10 - SMS Probe V6: Parameter Names Read From the Router's Web Client
 
 ### Summary
 
@@ -1054,7 +1054,7 @@ A live run of the previous entry on the reference MC7010 showed every screened a
 - 1,563 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 - Two tests added: that the carrier is settled before the first screened rule, and that a screened rule carries the header the carrier established. The second is the one that would have caught this.
 
-## [3.3.17-dev6] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept
+## [3.3.17-dev6] - 2026-09-10 - SMS Probe V4: Screening Axes Combined; Every Attempt Recorded
 
 ### Summary
 
@@ -1118,7 +1118,7 @@ Two audits of this release found the same defect in two places: a value discover
 
 - 1,553 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
-## [3.3.17-dev4] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run
+## [3.3.17-dev4] - 2026-09-10 - SMS Probe V4: The Successful Login Variant Is Adopted for the Rest of the Run
 
 ### Summary
 
@@ -1140,7 +1140,7 @@ A second audit found the login stage recording which variant unlocked the device
 
 - 1,546 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
-## [3.3.17-dev3] - 2026-09-09 - SMS Probe V4: The Five Rungs the Plan Named and the Build Missed
+## [3.3.17-dev3] - 2026-09-09 - SMS Probe V4: Five Missing Rungs Added
 
 ### Summary
 
@@ -1613,7 +1613,7 @@ The shared entity verification tool reported three faults against a healthy inst
 - **Deletion Verification Across All Routes**: All SMS deletion operations (`delete_all_sms`, single `delete_sms`, and the Delete All button) now verify that targeted message IDs were purged from the router, raising an error if messages survive.
 - **Date-Ordered `keep_last` Retention**: The `keep_last` option in `delete_all_sms` now retains the newest messages by date rather than ID across combined storage banks.
 
-## [3.3.11-dev3] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All
+## [3.3.11-dev3] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Covers Both SMS Banks
 
 ### Summary
 
