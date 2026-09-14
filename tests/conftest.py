@@ -59,6 +59,12 @@ def mock_coordinator():
     coordinator.model = "MC7010"
     coordinator.sw_version = "V1.0.0"
     coordinator.imei = "864155042229309"
+    # A diagnostics download crawls the files the router serves. Against a
+    # `MagicMock` api that returns mock objects for every fetch, which land in
+    # the file as values no encoder can serialize. An empty crawl is the honest
+    # stand-in: a device that served nothing. Tests that care about the crawl
+    # patch `web_sources.crawl` with what they mean to exercise.
+    coordinator.api.session.get = MagicMock(side_effect=OSError("no router here"))
     return coordinator
 
 

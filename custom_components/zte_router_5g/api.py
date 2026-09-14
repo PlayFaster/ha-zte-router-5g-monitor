@@ -499,6 +499,22 @@ _BATCH_PATH_PREFIX = (
 #
 # `wan_connect_status` is blank on an MC888 Pro that reports `ppp_connected`
 # under `ppp_status` (issue #56), which is why a single name will not do.
+# Spellings of the two names a write's token is derived from. Every other read
+# in this integration already resolves a concept across spellings; these two
+# were the exception, and a device naming either differently could derive no
+# token at all rather than a wrong one.
+#
+# **The alias resolves the read, never the operand.** The token is
+# `hash(hash(rd0 + rd1) + RD)`, and what is hashed is the *value*. A spelling
+# that silently became the operand would produce a well-formed wrong token —
+# a write refused by the router with nothing to say why, which is the failure
+# this project spent four days on. First spelling that answers wins, and the
+# order is the observed one.
+_TOKEN_READS: dict[str, tuple[str, ...]] = {
+    "wa_inner_version": ("wa_inner_version", "wa_version", "inner_version"),
+    "RD": ("RD", "rd"),
+}
+
 _CONTRACT_CONCEPTS: dict[str, tuple[str, ...]] = {
     "network_type": ("network_type", "strBearer"),
     "signal_bars": ("signalbar",),
@@ -622,6 +638,22 @@ SESSION_CONFIRMED = "confirmed"
 SESSION_DENIED = "denied"
 SESSION_UNANSWERED = "unanswered"
 SESSION_UNPROVEN = "unproven"
+
+
+def _first_spelling(data: Any, spellings: tuple[str, ...]) -> str:
+    """The first spelling this device actually answered, or an empty string.
+
+    This API echoes a name it does not implement as an empty string, so
+    "answered" means populated rather than present. Order is the caller's, and
+    the caller lists the observed spelling first.
+    """
+    if not isinstance(data, dict):
+        return ""
+    for name in spellings:
+        value = data.get(name)
+        if value not in (None, ""):
+            return str(value)
+    return ""
 
 
 class ZTEConnectionError(Exception):
@@ -1054,9 +1086,6 @@ class ZTERouterAPI:
         # later poll: a reporter presses the button and downloads diagnostics
         # afterwards, sometimes days afterwards.
         self.write_failures: list[dict[str, Any]] = []
-        # Set only by the temporary SMS delete probe. Absent from the
-        # download otherwise, and removed with that module.
-        self.delete_probe: dict[str, Any] | None = None
         self.login_metadata: dict[str, Any] = {}
         self._session_was_fresh = False
         # The transport-level facts about the most recent response, kept so a
@@ -1088,12 +1117,26 @@ class ZTERouterAPI:
             self.last_rejection = None
             return
 
-        asked = list(requested) if requested else list(payload)
+        # `keys_absent` is what the caller asked for and did not get back, and
+        # it can only be computed against a list of what was asked. Falling
+        # back to the payload's own keys made the set empty by construction on
+        # every device — `k not in payload` for k drawn from `payload` is never
+        # true — so a field that reads as "the router omitted nothing" was
+        # reporting that nothing had been compared.
+        #
+        # `None` where it cannot be computed, rather than `[]`. The two look
+        # alike in a download and mean opposite things: one says the router
+        # answered everything it was asked, the other says nobody knows.
+        #
+        # Diagnostics only. This runs after the verdict is decided and fills
+        # `last_rejection`; no classification reads it.
         self.last_rejection = {
             "verdict": verdict,
             "keys_populated": sorted(k for k, v in payload.items() if v != ""),
             "keys_empty": sorted(k for k, v in payload.items() if v == ""),
-            "keys_absent": sorted(k for k in asked if k not in payload),
+            "keys_absent": sorted(k for k in requested if k not in payload)
+            if requested
+            else None,
             "payload": dict(payload),
         }
         # The historical copy. Never cleared, so a download can still explain a
@@ -1327,7 +1370,19 @@ class ZTERouterAPI:
         inbox — which is precisely how an expired session surfaced to users as
         "no SMS" rather than as an error (masked_errors_check Class A/B).
         """
-        if not isinstance(data, dict) or key not in data:
+        # Concepts, not names, and for the same reason every read already
+        # resolves one: `wan_connect_status` is blank on an MC888 Pro that
+        # reports the same thing under `ppp_status`, and a check keyed on one
+        # spelling calls that a connection error. A key that names no known
+        # concept keeps its literal test.
+        #
+        # This widens what the check accepts, and deliberately: it sits behind
+        # the expiry detection in `_request` rather than in front of it, so a
+        # spelling it now tolerates has already passed that.
+        spellings = next(
+            (names for names in _CONTRACT_CONCEPTS.values() if key in names), (key,)
+        )
+        if not isinstance(data, dict) or not any(name in data for name in spellings):
             raise ZTEConnectionError(
                 f"Response to {cmd} is missing '{key}' — the session is probably "
                 f"expired or the firmware changed its API. Got: "
@@ -2487,12 +2542,19 @@ class ZTERouterAPI:
 
     async def get_version(self, timeout_sec: int | None = None) -> str | None:
         """Get the router firmware version."""
-        path = "goform/goform_get_cmd_process?isTest=false&cmd=wa_inner_version"
+        spellings = _TOKEN_READS["wa_inner_version"]
+        # Always a multi-key read: every concept here has more than one
+        # spelling, and a special case for a single one would be a branch no
+        # device can reach and no test can honestly exercise.
+        path = (
+            "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd="
+            + ",".join(spellings)
+        )
         try:
             data = await self._request(
                 "GET", path, timeout_sec=timeout_sec, authenticated=False
             )
-            return cast("str | None", data.get("wa_inner_version", ""))
+            return cast("str | None", _first_spelling(data, spellings))
         except (ZTEAuthError, ZTEConnectionError) as e:
             _LOGGER.debug("Failed to get version: %s", e)
             return None
@@ -4391,10 +4453,14 @@ class ZTERouterAPI:
 
     async def get_rd(self, timeout_sec: int | None = None) -> str:
         """Get the RD parameter for AD generation."""
-        path = "goform/goform_get_cmd_process?isTest=false&cmd=RD"
+        spellings = _TOKEN_READS["RD"]
+        path = (
+            "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd="
+            + ",".join(spellings)
+        )
         try:
             data = await self._request("GET", path, timeout_sec=timeout_sec)
-            return cast(str, data.get("RD", ""))
+            return _first_spelling(data, spellings)
         except (ZTEAuthError, ZTEConnectionError):
             # Named first so the swallow below is the explicit exception rather
             # than the fallthrough. Under the previous `except Exception` plus

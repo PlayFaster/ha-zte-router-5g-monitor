@@ -35,6 +35,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from . import web_sources
 from .const import DISCOVERY_VALUE_SAFE
 from .coordinator import ZTERouterDataUpdateCoordinator
 
@@ -621,6 +622,8 @@ async def async_get_config_entry_diagnostics(
     # runtime consumer, so the work is done when the user asks for it and not
     # speculatively for everyone. `run_discovery` never raises — it returns
     # its failures as notes — and the guard is the second line of defence.
+    web_source_report = await _async_web_sources(coordinator, tokenizer, errors)
+
     discovery_raw = await _async_guarded(
         "discovery", coordinator.async_run_discovery(), errors
     )
@@ -747,6 +750,10 @@ async def async_get_config_entry_diagnostics(
         # check does not apply to, and that is unknown for every device but the
         # reference hardware.
         "session_flag": flag_report,
+        # The files the router serves to its own web interface: one record per
+        # file always, and the sources themselves only when something in this
+        # download needs explaining. See `_sources_are_warranted`.
+        "web_sources": web_source_report,
         # The most recent rejection, kept even after a live read cleared the
         # live field. Historical by construction: it says a rejection happened,
         # not that one is happening. Producing this file reads the router, and
@@ -985,6 +992,115 @@ def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]
     return out
 
 
+def _json_safe(value: Any) -> Any:
+    """Return `value` with anything unserializable replaced by its type name.
+
+    The crawl reports what an HTTP response said — a status, a length, a
+    digest — and those come from outside this module. A value that is not a
+    primitive cannot be written to the file, and the failure is not local: the
+    whole download raises at the final `json.dumps`, after every guard has
+    passed, and the reporter gets nothing at all.
+
+    `_guarded` cannot catch that, because it wraps the building of a section
+    and this happens after. So the section is made safe at the point it is
+    built, and an unexpected type costs its own field rather than the file.
+    """
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe(item) for item in value]
+    if value is None or isinstance(value, str | bool | int | float):
+        return value
+    return f"<{type(value).__name__}>"
+
+
+def _sources_are_warranted(coordinator: Any) -> str | None:
+    """Why this download should carry the served sources, or None for the list.
+
+    **The manifest always, the sources only on cause.** Measured on the
+    reference MC7010 on 2026-09-14: the file list costs 5.4 kB and the sources
+    237 kB, against 49 kB for an entire ordinary download. Attaching a quarter
+    of a megabyte of firmware JavaScript to every report, for every user, to
+    answer a question almost none of them have, is the kind of cost that gets a
+    diagnostics file left unread.
+
+    The cause today is a write that failed: the sources say which spellings and
+    which token the device's own client uses, which is exactly what a refused
+    write needs explaining. Phase 4 adds the second — a profile that could not
+    be fully learned — and this is where it goes.
+    """
+    failures = getattr(coordinator.api, "write_failures", None)
+    if failures:
+        return f"{len(failures)} write failure(s) recorded"
+    return None
+
+
+async def _async_web_sources(
+    coordinator: Any, tokenizer: _Tokenizer, errors: list[str]
+) -> dict[str, Any] | None:
+    """Crawl the files the router serves, and decide how much of it publishes.
+
+    Reads only. It follows the device's own references and fetches pages the
+    router serves to anybody who opens its address; it sends no command and
+    changes nothing. Guarded like every other section, because a router that
+    declines a script must cost the reporter a field rather than the file.
+    """
+    result = await _async_guarded(
+        "web_sources", web_sources.crawl(coordinator.api), errors
+    )
+    if not isinstance(result, dict):
+        return None
+    sources = result.pop("sources", {})
+    files = result.pop("files", {})
+    reason = _sources_are_warranted(coordinator)
+    section: dict[str, Any] = {
+        **cast("dict[str, Any]", _sanitize_walk(result, tokenizer)),
+        "files": _sanitize_walk(files, tokenizer),
+        "sources_included": bool(reason),
+        "sources_included_because": reason,
+        # Always, and independent of whether the sources themselves publish:
+        # it is a few dozen short literals, and it is the field that answers
+        # whether another device's firmware speaks a vocabulary this one does
+        # not. Reported, never acted on — see `web_sources.result_vocabulary`.
+        "result_vocabulary": web_sources.result_vocabulary(sources),
+    }
+    if reason:
+        section.update(_keep_sources(sources, tokenizer))
+    return cast("dict[str, Any]", _json_safe(section))
+
+
+def _keep_sources(sources: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
+    """Return the served sources, swept only where they carry a known value.
+
+    They are firmware, identical on every unit of a build, and carry no value
+    belonging to the person who produced the file. Sweeping them rewrites the
+    code itself: an address-shaped literal in the router's own JavaScript —
+    `"0.0.0.0"` in `js/service.js` on the reference device — becomes a token,
+    and the capture then differs from what the router sent. They exist to be
+    read as source, so they are exempted rather than swept.
+
+    **The exemption is checked, not assumed.** "Firmware on every device seen
+    so far" is one model: a build that embedded a serial, an address or a
+    subscriber identifier in a served script would put it into a file written
+    to be attached to a public issue. Any source carrying a value this download
+    has already tokenized is swept like anything else, and named.
+    """
+    known = tokenizer.known_values()
+    kept: dict[str, Any] = {}
+    swept: list[str] = []
+    for path, text in sources.items():
+        if isinstance(text, str) and any(value in text for value in known):
+            kept[path] = _sweep(text, tokenizer)
+            swept.append(path)
+        else:
+            kept[path] = deepcopy(text)
+    return {
+        "sources": kept,
+        "sources_are_unswept": not swept,
+        "sources_swept": sorted(swept),
+    }
+
+
 def _sanitize_probe(probe: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
     """Sweep the probe report, leaving the captured source untouched.
 
@@ -1013,20 +1129,9 @@ def _sanitize_probe(probe: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, A
     # put it into a file written to be attached to a public issue. Any source
     # carrying a value this download has already tokenized is swept like
     # anything else, and named.
-    known = tokenizer.known_values()
-    kept: dict[str, Any] = {}
-    swept: list[str] = []
-    for path, text in sources.items():
-        if isinstance(text, str) and any(value in text for value in known):
-            kept[path] = _sweep(text, tokenizer)
-            swept.append(path)
-        else:
-            kept[path] = deepcopy(text)
     clean["source_capture"] = {
         "files": _sanitize_walk(files, tokenizer),
-        "sources": kept,
-        "sources_are_unswept": not swept,
-        "sources_swept": sorted(swept),
+        **_keep_sources(sources, tokenizer),
     }
     return clean
 

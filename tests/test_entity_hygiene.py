@@ -692,26 +692,12 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "caller reading the transcript is the point. File-level because every "
         "print in the file is the same deliberate choice."
     ),
-    ("sms_delete_probe.py", "noqa: SLF001"): (
-        "Two sites, in a module that exists to be deleted. One takes the "
-        "coordinator's update lock so a routine poll cannot interleave with a "
-        "sequence whose whole value is that each step is attributable; the "
-        "other posts a `DELETE_SMS` built by hand, because the point of the "
-        "probe is to vary a form the API deliberately sends only one way. "
-        "Adding public surface for a temporary diagnostic would outlive it."
-    ),
-    ("sms_delete_probe.py", "noqa: S324"): (
-        "MD5 is one of the digests this router's own firmware uses to derive a "
-        "write token, and one candidate formula reproduces it. The choice is "
-        "the device's, not this code's, and the value is never used to "
-        "authenticate anything here — it is compared against what the router "
-        "accepts. It goes with the module."
-    ),
-    ("sms_delete_probe.py", "noqa: BLE001"): (
-        "Every probe records what happened and moves to the next one. A raised "
-        "exception is the finding, not an error to propagate: stopping at the "
-        "first refusal is exactly the behaviour that left four diagnostics "
-        "downloads with nothing in them."
+    ("web_sources.py", "noqa: BLE001"): (
+        "A file the router declines to serve is a finding, not a failure. The "
+        "crawl records the miss and follows the next reference, because a "
+        "device that answers forty of forty-five files is exactly the evidence "
+        "the download exists to carry, and a raised exception would cost the "
+        "reporter the other forty."
     ),
     ("diag_check.py", "noqa: BLE001"): (
         "The top-level guard that reports an unreachable router instead of "

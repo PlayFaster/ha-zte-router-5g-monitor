@@ -214,6 +214,13 @@ class Report:
         """Start an empty report."""
         self.checks: list[tuple[bool, str, str]] = []
         self.captured: dict[str, Any] = {}
+        self.unrunnable: list[tuple[str, str]] = []
+        self.unreachable: list[tuple[str, str]] = []
+        self.required: list[tuple[str, list[str]]] = []
+        # Set when the router stops answering mid-run, so the banner can say
+        # "could not connect" rather than reporting an assertion failure for
+        # a session that was taken or a device that went away.
+        self.lost_connection: str | None = None
 
     def record(self, ok: bool, name: str, detail: str = "") -> None:
         """Print one result and remember it for the summary."""
@@ -221,6 +228,76 @@ class Report:
         badge = _green("\u2714  PASS") if ok else _red("\u2716  FAIL")
         suffix = _dim(f"  \u2014 {detail}") if detail else ""
         print(f"  {badge}  {name}{suffix}")
+
+    def cannot_run(self, name: str, why: str) -> None:
+        """Record a check that could not be attempted, and fail the run.
+
+        The distinction this class lacked. A restore assertion inside
+        `contextlib.suppress(Exception)` together with its `record` call does
+        not fail when the restore breaks — it *removes the check*: the total
+        falls by one, the run still reports `PASSED`, and the router is left in
+        the changed state. Suppression is right for "cleanup must not mask the
+        original error" and wrong for "cleanup must not report".
+
+        The suppression therefore stays and this is called from its failure
+        path. A check that could not be attempted counts as failed, because
+        what it existed to establish was not established.
+        """
+        self.unrunnable.append((name, why))
+        self.checks.append((False, name, f"could not run: {why}"))
+        print(f"  {_yellow('UNRUN')}  {name}{_dim(f'  - {why}')}")
+
+    def note_unreachable(self, name: str, why: str) -> None:
+        """Record a check whose preconditions the device did not offer.
+
+        Different from `cannot_run`, and the difference is where the cause
+        lies. A precondition the device declines to produce is a fact about
+        the device, not a defect in the integration, and failing on it would
+        make the run depend on conditions nobody here controls.
+
+        Counted, not scored, so `expect` can tell "not offered" from "quietly
+        dropped".
+        """
+        self.unreachable.append((name, why))
+        print(f"  {_dim('*  note')}  {name}{_dim(f'  - {why}')}")
+
+    def must_produce(self, section: str, labels: list[str]) -> None:
+        """Declare the checks a section has to produce before it is believed.
+
+        **Labels, not a count.** A count — for the run or for one section — is
+        wrong in the same way twice: several sections record a different number
+        of results depending on what the device was doing, so any fixed number
+        either fails on a condition that is not a defect or is set so low it
+        proves nothing. Naming them has neither problem, and a shortfall says
+        which check is missing rather than leaving someone to compare totals
+        between runs — which is how the dropped-restore fault was noticed at
+        all, by hand, after it had shipped.
+
+        Prefixes, because most labels carry a measured value. A section lists
+        only what it must produce on every run; anything conditional is left
+        out rather than declared and excused.
+        """
+        self.required.append((section, labels))
+
+    def audit(self) -> None:
+        """Fail the run for any declared check that never appeared.
+
+        A check skipped as unreachable satisfies its declaration: the device
+        declined to offer the state, which is recorded and is not a defect.
+        """
+        seen = [name for _, name, _ in self.checks]
+        noted = [name for name, _ in self.unreachable]
+        for section, labels in self.required:
+            for label in labels:
+                if any(name.startswith(label) for name in seen):
+                    continue
+                if any(name.startswith(label) for name in noted):
+                    continue
+                self.record(
+                    False,
+                    f"{section} produced its declared check: {label}",
+                    "the check did not run and did not say why",
+                )
 
     @property
     def failed(self) -> int:
@@ -272,6 +349,79 @@ async def _kill_session(api: ZTERouterAPI, session: aiohttp.ClientSession) -> No
     session.cookie_jar.clear(predicate=lambda cookie: cookie.key == "stok")
 
 
+async def _session_was_taken(api: ZTERouterAPI) -> bool:
+    """Whether the session this script held was ended by someone else.
+
+    This router grants the session to the newest login and drops the previous
+    one, telling the loser nothing, so a production Home Assistant polling
+    every three minutes interrupts any step spanning that window and the
+    interruption arrives as an assertion failure.
+
+    **It does not ask `loginfo`.** Measured 2026-09-14 with this machine quiet
+    and nothing here holding a session, that key still answered `ok`; what it
+    is scoped to is not established, and a detector built on it would report
+    confidently and wrongly. The evidence used instead is the one this script
+    already relies on in `check_logout_ends_the_session`: the credential we
+    hold is refused, while a fresh login succeeds. That distinguishes a taken
+    session from a router that has gone away, which is what the caller needs.
+    """
+    try:
+        await api._request("GET", PROBE_PATH, _retry=False)
+    except ZTEAuthError:
+        pass
+    except Exception:  # noqa: BLE001 - the router is unreachable, not taken
+        return False
+    else:
+        return False
+    try:
+        await _login_with_retry(api)
+    except Exception:  # noqa: BLE001 - cannot tell; do not claim it was taken
+        return False
+    return True
+
+
+async def _guard_step(
+    api: ZTERouterAPI, report: Report, label: str, err: Exception
+) -> None:
+    """Report one failed step as a lost session or as a real failure.
+
+    Called from a check's own error path. A failure that turns out to be a
+    taken session is not scored: the run could not test what it set out to
+    test, and marking the device wrong for another client's login is the kind
+    of false finding this script exists to remove.
+    """
+    if await _session_was_taken(api):
+        report.note_unreachable(label, "the session was taken by another client")
+        report.lost_connection = report.lost_connection or "session taken mid-run"
+        return
+    report.record(False, label, f"{type(err).__name__}: {err}")
+
+
+async def _login_with_retry(api: ZTERouterAPI) -> None:
+    """Log in, retrying the refusal this firmware answers after a `LOGOUT`.
+
+    This router declines the first login for a few seconds after a session is
+    ended, answering `{"result":"failure"}` — indistinguishable from a wrong
+    password at the call site. Every login that follows a check which
+    deliberately ended a session therefore has to retry, or the check reports
+    a credentials problem it does not have.
+
+    Raises the last error if every attempt fails. Callers that must not raise
+    use `_resume_session`, which wraps this and reports instead.
+    """
+    last: Exception | None = None
+    for attempt in range(RELOGIN_ATTEMPTS):
+        if attempt:
+            await asyncio.sleep(RELOGIN_PAUSE)
+        try:
+            await api.login()
+        except Exception as err:  # noqa: BLE001 - retried, then re-raised
+            last = err
+            continue
+        return
+    raise last or RuntimeError("login failed without an error")
+
+
 async def _resume_session(api: ZTERouterAPI, report: Report, *, after: str) -> bool:
     """Re-establish the session after a check that deliberately ended it.
 
@@ -286,29 +436,16 @@ async def _resume_session(api: ZTERouterAPI, report: Report, *, after: str) -> b
     Retries because the refusal is transient. This router answers the first
     login after a LOGOUT with `{"result":"failure"}` for a few seconds.
     """
-    last: Exception | None = None
-    for attempt in range(RELOGIN_ATTEMPTS):
-        if attempt:
-            await asyncio.sleep(RELOGIN_PAUSE)
-        try:
-            await api.login()
-        except Exception as err:  # noqa: BLE001 - reporting, not handling
-            last = err
-            continue
-        if attempt:
-            print(
-                _dim(
-                    f"    reconnected after {after} on attempt {attempt + 1} "
-                    f"({RELOGIN_PAUSE * attempt:.0f}s)"
-                )
-            )
-        return True
-    report.record(
-        False,
-        f"the session can be re-established after {after}",
-        f"{type(last).__name__}: {last}",
-    )
-    return False
+    try:
+        await _login_with_retry(api)
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.record(
+            False,
+            f"the session can be re-established after {after}",
+            f"{type(err).__name__}: {err}",
+        )
+        return False
+    return True
 
 
 async def check_first_write_on_an_untaught_object(
@@ -339,17 +476,26 @@ async def check_first_write_on_an_untaught_object(
     failed.
 
     Having a second client take the session does not produce the state either:
-    with the session taken by another object at the same address, `loginfo`
-    still answers `ok` while the victim's writes are refused. The flag is
-    answered for the address rather than for the credential, so contention of
-    that kind is invisible to it — a limitation `[3.3.25-dev4]` already records
-    as beyond any pre-write check.
+    with the session taken by another object, `loginfo` still answers `ok`
+    while the victim's writes are refused. Why it does is not established. On
+    2026-09-14, with the devcontainer stopped, no browser session open and
+    nothing on this machine holding a session, cookieless reads still returned
+    `ok` eighteen times over seven minutes. What the flag is scoped to is
+    unknown; the readings are the only facts, and no mechanism should be
+    inferred here from them.
 
     Waiting for the session to expire is honest and too slow to be an
     instrument: on 2026-09-14 the session was still alive after four minutes of
     waiting, and the rung reached nothing at all.
     """
     print(_cyan("\n[0] The first write, on an object that has learned nothing"))
+    report.must_produce(
+        "[0]",
+        [
+            "precondition: the session flag is unknown",
+            "set_odu_led_switch on a dead session with the flag unknown",
+        ],
+    )
 
     async with (
         aiohttp.ClientSession() as opener_session,
@@ -399,17 +545,19 @@ async def check_first_write_on_an_untaught_object(
             _retry=False,
         )
         if str(probe.get("loginfo", "")).strip() == "ok":
-            # Not scored, because it is not a defect. `loginfo` is answered for
-            # the client's address, not for the credential presented: measured
-            # 2026-09-14, a cookieless read taken immediately after a clean
-            # logout still returned `ok` while another process on this machine
-            # held a session. The state under test is then unreachable, and
-            # failing here would report the presence of a second session as a
-            # fault in the integration.
-            print(
-                f"  {_dim('●  note')}  the router still reports this address "
-                "as logged in "
-                + _dim("(another session shares it; the untaught write was not made)")
+            # Not scored, because it is not a defect. This router reports a
+            # logged-in session under conditions this project has not pinned
+            # down: measured 2026-09-14, cookieless reads returned `ok` with
+            # nothing on this machine holding a session at all. Where that
+            # happens the state under test is unreachable, and failing here
+            # would report a device behaviour as a fault in the integration.
+            # Named for the check it skips rather than for the condition that
+            # caused the skip: this section declares that check, and an audit
+            # that cannot match the two reports it as having vanished — which
+            # it did, on the first run after the audit was added.
+            report.note_unreachable(
+                f"{SAFE_WRITES[0][0]} on a dead session with the flag unknown",
+                "the router reports this session as logged in",
             )
             # Nothing was written, so there is nothing to restore and no
             # reason to spend another login: this router permits one session
@@ -424,7 +572,7 @@ async def check_first_write_on_an_untaught_object(
         setter_name, state_key, values = SAFE_WRITES[0]
         setter = getattr(api, setter_name)
         try:
-            await api.login()
+            await _login_with_retry(api)
             original = (await api.get_params([state_key]))[state_key]
             target = values[0] if original == values[1] else values[1]
             api.cookies = dead_cookies
@@ -444,14 +592,22 @@ async def check_first_write_on_an_untaught_object(
                 f"{type(err).__name__}: {err}",
             )
         finally:
-            with contextlib.suppress(Exception):
-                await api.login()
+            label = f"{setter_name} restored to {original!r} after the untaught write"
+            try:
+                await _login_with_retry(api)
                 if (await api.get_params([state_key]))[state_key] != original:
                     await setter(original)
                 report.record(
                     (await api.get_params([state_key]))[state_key] == original,
-                    f"{setter_name} restored to {original!r} after the untaught write",
+                    label,
                 )
+            except Exception as err:  # noqa: BLE001 - reporting, not handling
+                # The suppression this replaces also swallowed the `record`
+                # above, so a restore that broke removed the check instead of
+                # failing it: the total fell by one and the run still passed,
+                # with the router left in the changed state.
+                report.cannot_run(label, f"{type(err).__name__}: {err}")
+            with contextlib.suppress(Exception):
                 await api.logout()
 
 
@@ -465,12 +621,24 @@ async def check_session_assumptions(
     changed and the design needs revisiting.
     """
     print(_cyan("\n[1] Session and token assumptions"))
+    report.must_produce(
+        "[1]",
+        [
+            "RD is stable across two consecutive reads",
+            "a dead session is detectable on a read",
+        ],
+    )
 
+    # Two consecutive reads, and the label says so. It used to claim stability
+    # "within a session", which is broader than the measurement: a write does
+    # change `RD`, so a write landing between these two reads would fail a
+    # check that is not testing writes. Nothing here depends on the wider
+    # claim — `get_ad` derives the token after the session is assured.
     live = (await api._request("GET", RD_PATH, _retry=False))["RD"]
     again = (await api._request("GET", RD_PATH, _retry=False))["RD"]
     report.record(
         live == again,
-        "RD is stable within a session",
+        "RD is stable across two consecutive reads",
         f"{live[:12]}…",
     )
 
@@ -657,6 +825,7 @@ async def _check_logout_then_probe(api: ZTERouterAPI, report: Report) -> None:
     failure that would leave the classifier unable to report an expiry at all.
     """
     print(_cyan("\n[1c] Post-logout measurement against the cookieless read"))
+    report.must_produce("[1c]", ["the router acknowledged the LOGOUT"])
 
     await api.logout()
     report.record(
@@ -694,6 +863,7 @@ async def check_js_mining_yield(api: ZTERouterAPI, report: Report) -> None:
     bundles being fetchable and parseable on live hardware.
     """
     print(_cyan("\n[1d] Mining the router's web UI for cmd names"))
+    report.must_produce("[1d]", ["the router's JavaScript yields cmd names"])
 
     mined, notes = await api.mine_candidate_names()
     for note in notes:
@@ -731,6 +901,7 @@ async def check_no_mined_probe_disturbs_the_poll(
     pressing Download Diagnostics must not cost their entities.
     """
     print(_cyan("\n[1e] A discovery pass leaves the session usable"))
+    report.must_produce("[1e]", ["the poll still answers after a discovery pass"])
 
     result = await api.run_discovery()
     values = result.get("values", {})
@@ -764,6 +935,14 @@ async def check_write_round_trip(
     """Write, read back, restore — optionally with the session taken away first."""
     label = "with a DEAD session" if hostile else "with a live session"
     print(_cyan(f"\n[{3 if hostile else 2}] Safe writes {label}"))
+    # Both halves of every safe write: the write itself and the restore. The
+    # restore is the check that used to disappear, so it is declared rather
+    # than trusted to report itself.
+    report.must_produce(
+        f"[{3 if hostile else 2}]",
+        [f"{name} {label}" for name, _, _ in SAFE_WRITES]
+        + [f"{name} restored to" for name, _, _ in SAFE_WRITES],
+    )
 
     for setter_name, state_key, values in SAFE_WRITES:
         setter = getattr(api, setter_name)
@@ -783,19 +962,19 @@ async def check_write_round_trip(
                 f"{elapsed_ms:.0f} ms, router reports {observed!r}",
             )
         except Exception as err:  # noqa: BLE001 - reporting, not handling
-            report.record(
-                False, f"{setter_name} {label}", f"{type(err).__name__}: {err}"
-            )
+            await _guard_step(api, report, f"{setter_name} {label}", err)
         finally:
-            with contextlib.suppress(Exception):
-                await api.login()
+            label = f"{setter_name} restored to {original!r}"
+            try:
+                await _login_with_retry(api)
                 if (await api.get_params([state_key]))[state_key] != original:
                     await setter(original)
                 restored = (await api.get_params([state_key]))[state_key]
-                report.record(
-                    restored == original,
-                    f"{setter_name} restored to {original!r}",
-                )
+                report.record(restored == original, label)
+            except Exception as err:  # noqa: BLE001 - reporting, not handling
+                # See the note at the untaught-object rung: suppressing the
+                # restore is right, suppressing its report is not.
+                report.cannot_run(label, f"{type(err).__name__}: {err}")
 
 
 async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
@@ -821,6 +1000,10 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
     configured for.
     """
     print(_cyan("\n[4] The data-volume form (alert percentage only)"))
+    report.must_produce(
+        "[4]",
+        ["six-field form accepted and applied", "alert percentage restored to"],
+    )
 
     current = await api.get_params(list(api.DATA_VOLUME_FIELDS))
     switch_was = str(current.get("data_volume_limit_switch") or "")
@@ -898,7 +1081,8 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
     # Restore unconditionally. The retry loop above handles its own exceptions,
     # so nothing escapes before this point — a `finally` here would imply a
     # `try` that no longer exists.
-    with contextlib.suppress(Exception):
+    label = f"alert percentage restored to {original}"
+    try:
         latest = await api.get_params(list(api.DATA_VOLUME_FIELDS))
         if str(latest.get("data_volume_alert_percent")) != str(original):
             await api.set_data_volume_settings(
@@ -907,14 +1091,13 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
         back = (await api.get_params(["data_volume_alert_percent"])).get(
             "data_volume_alert_percent"
         )
-        report.record(
-            str(back) == str(original),
-            f"alert percentage restored to {original}",
-        )
+        report.record(str(back) == str(original), label)
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        report.cannot_run(label, f"{type(err).__name__}: {err}")
 
     # The switch goes back only if this section turned it on.
     if switch_was == "0":
-        with contextlib.suppress(Exception):
+        try:
             latest = await api.get_params(list(api.DATA_VOLUME_FIELDS))
             if str(latest.get("data_volume_limit_switch")) != "0":
                 await api.set_data_volume_settings(latest, data_volume_limit_switch="0")
@@ -927,6 +1110,10 @@ async def check_data_volume_form(api: ZTERouterAPI, report: Report) -> None:
                 off == "0",
                 "data limit switch returned to off",
                 f"router reports {off!r}",
+            )
+        except Exception as err:  # noqa: BLE001 - reporting, not handling
+            report.cannot_run(
+                "data limit switch returned to off", f"{type(err).__name__}: {err}"
             )
 
 
@@ -943,6 +1130,7 @@ async def check_logout_ends_the_session(api: ZTERouterAPI, report: Report) -> No
     The only sound check is to replay the old token and confirm it is rejected.
     """
     print(_cyan("\n[5] Logout actually ends the session"))
+    report.must_produce("[5]", ["the old session token is rejected afterwards"])
 
     stale = dict(api.cookies)
     try:
@@ -1781,6 +1969,9 @@ async def check_refusal_is_not_retried(api: ZTERouterAPI, report: Report) -> Non
     blind retry — for `send_sms` it would deliver the message twice.
     """
     print(_cyan("\n[6] A genuinely refused write"))
+    report.must_produce(
+        "[6]", ["a partial DATA_LIMIT_SETTING form is refused, not silently accepted"]
+    )
     try:
         await api.set_data_volume_settings({}, data_volume_limit_switch="0")
     except Exception as err:  # noqa: BLE001 - the expected outcome
@@ -1801,6 +1992,7 @@ async def check_refusal_is_not_retried(api: ZTERouterAPI, report: Report) -> Non
 async def capture_reference_payloads(api: ZTERouterAPI, report: Report) -> None:
     """Record real responses so mocks can be built from observation."""
     print(_cyan("\n[7] Capturing reference payloads"))
+    report.must_produce("[7]", ["captured live payload shapes"])
     report.captured["core_keys"] = sorted(await api.get_all_data())
     report.captured["extended_keys"] = sorted(await api.get_extended_data())
     report.captured["single_key_read"] = await api.get_params(["ODU_led_switch"])
@@ -1947,10 +2139,11 @@ async def main() -> int:
     options = _credentials()
     report = Report()
 
-    # Before anything else connects. `loginfo` is answered for the client's
-    # address rather than for the credential presented, so any other live
-    # session from this machine makes the router report the writing object as
-    # logged in and the state under test unreachable. Measured 2026-09-14.
+    # Before anything else connects, because a session this script opens is
+    # one more reason the router may report itself logged in. That is the
+    # cheapest of the conditions the rung needs and not all of them, which is
+    # why it declines to score rather than failing when the state is out of
+    # reach.
     await check_first_write_on_an_untaught_object(options, report)
 
     async with aiohttp.ClientSession() as session:
@@ -2008,16 +2201,40 @@ async def main() -> int:
         )
         print(f"\ncaptured -> {target}")
 
+    # After every section and before the banner, so a declared check that never
+    # ran is a failure of this run rather than a difference somebody notices
+    # between two runs.
+    report.audit()
+
     total = len(report.checks)
     passed = total - report.failed
     # The banner lives here rather than in the VS Code task because `tee >(...)`
     # reports the exit status of `tee`, not of this script — a shell-side banner
     # would have to reach for PIPESTATUS to know what actually happened.
+    #
+    # Three outcomes, not two. A run interrupted by a lost session has not
+    # judged the device, and reporting it as `FAILED` sends a reader looking
+    # for a defect in the integration; exit 2 matches `diag_check.py`, where
+    # an unreachable router already means "could not run" rather than "failed".
+    if report.lost_connection and not report.failed:
+        print(
+            _yellow(
+                f"\n\u25cf  Hardware check: INCOMPLETE  ({passed}/{total} passed, "
+                f"{report.lost_connection})"
+            )
+        )
+        return 2
+    if report.unreachable:
+        for name, why in report.unreachable:
+            print(_dim(f"     not reached: {name} — {why}"))
     if report.failed:
         print(_red(f"\n\u2716  Hardware check: FAILED  ({passed}/{total} passed)"))
-    else:
-        print(_green(f"\n\u2714  Hardware check: PASSED  ({passed}/{total})"))
-    return 1 if report.failed else 0
+        if report.unrunnable:
+            for name, why in report.unrunnable:
+                print(_dim(f"     could not run: {name} — {why}"))
+        return 1
+    print(_green(f"\n\u2714  Hardware check: PASSED  ({passed}/{total})"))
+    return 0
 
 
 if __name__ == "__main__":

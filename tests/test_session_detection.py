@@ -43,6 +43,7 @@ from custom_components.zte_router_5g.api import (
     ZTECredentialsError,
     ZTERouterAPI,
     _classify_session,
+    _first_spelling,
     _is_classifiable,
 )
 from custom_components.zte_router_5g.const import DOMAIN
@@ -1327,3 +1328,15 @@ def test_the_flag_state_says_which_of_the_three_it_is(mock_aiohttp_client) -> No
     report = api.session_flag_report()
     assert report["state"] == "supported"
     assert report["absent_on_firmware"] == "FIRMWARE_A"
+
+
+def test_a_token_read_that_answers_nothing_usable_yields_an_empty_string() -> None:
+    """The alias resolver must not raise on a response that is not a mapping.
+
+    `get_rd` degrades quietly by contract — an absent `RD` returns `""` and the
+    caller raises with a message naming the token rather than the transport.
+    A response of the wrong shape entirely has to take the same path.
+    """
+    assert _first_spelling(None, ("RD", "rd")) == ""
+    assert _first_spelling({"RD": ""}, ("RD", "rd")) == ""
+    assert _first_spelling({"rd": "abc"}, ("RD", "rd")) == "abc"

@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25-dev8\] - 2026-09-15 - The Probe Is Removed and Its Only Irreplaceable Part Moves Into Diagnostics](#3325-dev8---2026-09-15---the-probe-is-removed-and-its-only-irreplaceable-part-moves-into-diagnostics)
   - [\[3.3.25-dev7\] - 2026-09-14 - The First Write After a Restart No Longer Goes Out on a Dead Session](#3325-dev7---2026-09-14---the-first-write-after-a-restart-no-longer-goes-out-on-a-dead-session)
   - [\[3.3.25-dev6\] - 2026-09-14 - A Request Becomes a Value; `_request` Splits Into Six Routines](#3325-dev6---2026-09-14---a-request-becomes-a-value-_request-splits-into-six-routines)
   - [\[3.3.25-dev5\] - 2026-09-14 - Replayed Requests Keep the Caller's Classification Setting](#3325-dev5---2026-09-14---replayed-requests-keep-the-callers-classification-setting)
@@ -288,6 +289,82 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.25-dev8] - 2026-09-15 - The Probe Is Removed and Its Only Irreplaceable Part Moves Into Diagnostics
+
+### Summary
+
+The SMS delete probe was a service a person had to run, which deleted real messages, carried sixty-five rungs, and was visible in Developer Tools to anyone who scrolled far enough. It answered the questions that made the write path work, and it has now been asked all of them.
+
+The one capability worth keeping is the crawl of the files the router serves to its own web interface: it writes nothing, deletes nothing, and answers what no other instrument can — which command spellings a firmware uses, where it assigns `RD`, which digest it implements. That moves into the diagnostics download. The probe is deleted around it, and archived as text.
+
+This release also hardens the hardware check, which is the instrument the rest of this work is judged by, and settles three guards the audit flagged.
+
+### Added
+
+- **The diagnostics download reports the files the router serves.** One record per file — path, status, byte count and digest — on every download. The sources themselves only when something needs explaining, which today means a write has failed and tomorrow will also mean a device profile that could not be learned.
+
+  **The split is measured, not guessed.** On the reference MC7010: the manifest costs 5.4 kB and the sources 237 kB, against 49 kB for an entire ordinary download. Attaching a quarter of a megabyte of firmware JavaScript to every report, to answer a question almost nobody has, is how a diagnostics file gets left unread.
+
+- **What this firmware compares a write's `result` against, published and never acted on.** The vocabulary is read from the device's own scripts and reported by operator.
+
+  **It is deliberately not used to widen the accept set**, and the measurement is why. On the reference MC7010 the literals tested against `result` are `success`, `manual_success`, `manual_fail`, `fail` and the digits `0`, `1`, `3`, `4` and `5`. A rule that accepted every literal a device compares against `result` would accept `fail` — a refused write reported to the user as carried out, which is the fault this project exists to remove, installed on purpose. Minified script gives no dependable way to tell which branch a literal belongs to.
+
+  What it does answer is the question the reference hardware cannot: whether another device's firmware speaks a vocabulary this one does not. That arrives with the next download from such a device, and a widening can then be argued from its scripts.
+
+- **Nineteen assertions covering every response shape this router actually produces** (`tests/test_response_shapes.py`), enumerated on hardware rather than imagined. One shape the plan listed turned out not to exist and is asserted as such: a key absent from its own response does not occur, because this firmware echoes every name it is asked and answers an unimplemented one as an empty string.
+
+  1,671 tests at full line and branch coverage did not catch a fault that blocked every write on the reference device, because every one of them handed the classifier a payload somebody had imagined. That is what this file is for.
+
+### Changed
+
+- **The hardware check reports a check it could not run, instead of dropping it.** A restore assertion inside `contextlib.suppress(Exception)` *together with its report* does not fail when the restore breaks — it removes the check: the total falls by one, the run still says `PASSED`, and the router is left in the changed state.
+
+  **Four sites, where the plan recorded one.** Two of them were found while fixing it, and one was added by `[3.3.25-dev7]`, which copied the pattern from an existing site because nothing forbade it. Suppression is right for "cleanup must not mask the original error" and wrong for "cleanup must not report", and the two are now separated everywhere.
+
+- **Each section declares the checks it must produce, and a missing one fails the run.** By label, not by count: several sections record a different number of results depending on what the device was doing, so a fixed number either fails on a condition that is not a defect or is set so low it proves nothing.
+
+  It found a gap on its first run, in the rung `[3.3.25-dev7]` added: when the state under test is unreachable, that rung accounted for its precondition but not for the check it was skipping.
+
+- **A session taken by another client is told from a failed assertion.** This router grants the session to the newest login and drops the previous one silently, so a production Home Assistant polling every three minutes interrupts any step spanning that window — and the interruption used to arrive as an assertion failure against the device.
+
+  **It does not ask `loginfo`.** Measured 2026-09-14 with the machine quiet and nothing holding a session, that key still answered `ok`; what it is scoped to is not established, and a detector built on it would report confidently and wrongly. The evidence used instead is the one the logout check already relies on: the credential we hold is refused while a fresh login succeeds.
+
+- **A run interrupted mid-way reports `INCOMPLETE` and exits 2**, matching `diag_check.py`, where an unreachable router already means "could not run" rather than "failed". A run that never judged the device should not send a reader looking for a defect in the integration.
+
+- **`_require_contract` accepts any spelling of a concept it knows.** It tested one literal name, so an MC888 Pro reporting `ppp_status` where this device reports `wan_connect_status` was a connection error. This widens what the check accepts, deliberately: it sits behind the expiry detection rather than in front of it.
+
+- **The two names a write's token is derived from resolve across spellings**, as every other read in this integration already did. **The alias resolves the read and never the operand** — the token hashes the *value*, and a spelling that silently became the operand would produce a well-formed wrong token, which is a write refused with nothing to say why.
+
+- **Every re-login that follows a check which deliberately ends a session now retries.** This firmware refuses the first login for a few seconds after a `LOGOUT`, answering `{"result":"failure"}` — indistinguishable from a wrong password at the call site.
+
+- **The `RD` assertion is narrowed to what it measures.** It read the value twice in succession and recorded the comparison as stability "within a session", which is broader: a write does change `RD`, so a write landing between the two reads would fail a check that is not testing writes.
+
+### Fixed
+
+- **`keys_absent` says what it means, or says it cannot.** The set was computed against the payload's own keys whenever no explicit list was passed, and `k not in payload` for `k` drawn from `payload` is never true — so a field reading "the router omitted nothing" was reporting that nothing had been compared, on every device. It is now `None` where it cannot be computed: `[]` and `None` look alike in a download and mean opposite things.
+
+  Diagnostics only. The line runs after the verdict is decided and fills `last_rejection`; no classification reads it.
+
+### Removed
+
+- **`sms_delete_probe.py`, and everything that reached it** — the service registration, its schema and handler, the icon entry, the persisted `delete_probe` record and its restore, the API attribute, and the module's own tests.
+
+  It produced most of what is known about the reporter's device in issue #56: the token derivation and both its operands, that `DATA_LIMIT_SETTING` replaces the whole six-field form rather than the fields named, and which command spellings that firmware uses. The faults it was written to find are fixed.
+
+  **Archived at `docs/diag_tools/sms_delete_probe.txt`**, verbatim, with a header saying what it was and that it does not run as it stands. It is not easy to reconstruct and the question "how did the probe check this?" will outlive the file.
+
+### Notes
+
+- **The probe removal cut four attributes out of `ZTERouterAPI.__init__` instead of one.** `write_failures`, `session_started` and `session_lifetimes` went with `delete_probe`. Caught by mypy rather than by the suite, and the constructor was rebuilt from the committed text with only the intended line removed. A pattern-matched removal across a file this size needs its result diffed, not its script trusted — the same lesson as the `[3.3.25-dev6]` restructure, which is now the second time it has been recorded.
+
+- **Item 73 was closed without being built, and without touching the router.** It proposed taking `Referer` from the page an action belongs to. The device's web interface is a hash-routed single-page application — `js/router.js` reads and writes `window.location.hash`, uses no `pushState`, and loads each screen as a template into the existing document — so the document URL never leaves `index.html` and every request a browser makes already carries what this integration sends. The premise was false; verified from the captured sources.
+
+- **The sweep proposed to catch this class of test fault was spiked and abandoned.** The rule — an attribute assigned once outside `__init__` and never cleared — yields 41 candidates, 30 of them seeded across more than 200 test sites, and catches `_boot_time` and the drift accumulators as readily as the session flag. What distinguishes the attribute that caused the fault is semantic, and narrowing the rule needs a curated list, which is a list of the mistakes somebody already thought of. The property is recorded as a convention in `testing_when_writing.md` instead.
+
+- **The download is 54 kB where the probe made it 321 kB**, measured on the reference MC7010 before and after. Hardware check 20 of 20, diagnostics check 47 of 47, 1,646 tests at 100% line and branch coverage.
+
+---
+
 ## [3.3.25-dev7] - 2026-09-14 - The First Write After a Restart No Longer Goes Out on a Dead Session
 
 ### Summary
@@ -328,7 +405,7 @@ This release gives the flag a third state and buys the answer with one login.
 
   Ending a session with `LOGOUT` teaches the flag on the way out: the command carries an `AD` token, the token is derived through `get_ad`, and `get_ad` runs the pre-write check. The first draft of the rung passed while reporting that its own precondition had failed.
 
-  The flag is answered for the client's address rather than for the credential presented. With a session taken by a second client at the same address, `loginfo` still answered `ok` while the victim's writes were refused; and a cookieless read taken immediately after a clean logout also answered `ok`, because another process on the same machine held a session. The rung therefore prints a note and declines to score where the state is unreachable, since a second session on the address is not a defect in this integration.
+  What the flag is scoped to is not established. With a session taken by a second client, `loginfo` still answered `ok` while the victim's writes were refused; and with this machine quiet — the devcontainer stopped, no browser session open, nothing here holding a session — eighteen cookieless reads over seven minutes all answered `ok`. Three explanations were advanced and each was contradicted by the next set of readings, so none is recorded here. The rung prints a note and declines to score where the state is unreachable, since a device behaviour is not a defect in this integration.
 
   Waiting for a session to expire is honest and too slow to be an instrument: the session was still alive after four minutes.
 

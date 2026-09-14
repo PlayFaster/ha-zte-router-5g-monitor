@@ -1,3 +1,21 @@
+# ARCHIVE COPY - NOT PART OF THE INTEGRATION AND NOT LOADED BY IT.
+#
+# `custom_components/zte_router_5g/sms_delete_probe.py`, as it stood at commit
+# 2a0b2e6, kept so that "how did the probe check this?" can be answered after
+# the file itself is gone. Removed from the integration in v3.3.25-dev8; see
+# `README.md` in this directory for what it did and why it went.
+#
+# It does not run as it stands. It imports Home Assistant and several
+# integration internals, and it is registered as a service by
+# `__init__.py`, which no longer knows about it. Restoring it means taking
+# the file from git at the commit above, not renaming this one.
+#
+# Its tests are not archived here. `tests/test_sms_delete_probe.py` at the
+# same commit records what each rung was believed to do, which is a different
+# question from what it did, and it is one `git show` away.
+#
+# The extension is deliberate: it keeps this from being treated as source.
+
 """TEMPORARY — a one-off probe for the SMS deletion fault on issue #56.
 
 **This module is not part of the integration's contract and must be removed.**

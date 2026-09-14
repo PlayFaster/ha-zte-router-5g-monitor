@@ -1,6 +1,6 @@
 """Tests for diagnostics platform."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.zte_router_5g.diagnostics import (
     CARRIER_KEYS,
@@ -157,3 +157,68 @@ async def test_a_check_that_did_not_confirm_survives_the_download(
     assert result["last_session_check"]["verdict"] == "confirmed"
     assert result["last_non_confirmed_session_check"]["verdict"] == "denied"
     assert result["last_non_confirmed_session_check"]["at"].startswith("2026-09-14")
+
+
+async def test_the_sources_publish_only_when_a_write_has_failed(
+    mock_coordinator, mock_config_entry
+):
+    """The manifest always, the sources on cause, and the cause is named.
+
+    Measured on the reference MC7010 on 2026-09-14: the file list costs 5.4 kB
+    and the sources 237 kB, against 49 kB for an entire ordinary download.
+    Attaching a quarter of a megabyte of firmware JavaScript to every report,
+    to answer a question almost nobody has, is how a diagnostics file gets left
+    unread.
+    """
+    mock_coordinator.data = {}
+    mock_coordinator.api.write_failures = []
+    crawled = {
+        "files": {"js/service.js": {"status": 200, "bytes": 4}},
+        "sources": {"js/service.js": 'if(e.result=="success"){ok()}'},
+        "fetched": 1,
+    }
+    mock_config_entry.runtime_data = mock_coordinator
+
+    with patch(
+        "custom_components.zte_router_5g.web_sources.crawl",
+        new=AsyncMock(return_value=dict(crawled)),
+    ):
+        quiet = await async_get_config_entry_diagnostics(None, mock_config_entry)
+
+    assert quiet["web_sources"]["files"]
+    assert quiet["web_sources"]["sources_included"] is False
+    assert quiet["web_sources"]["sources_included_because"] is None
+    assert "sources" not in quiet["web_sources"]
+    # The vocabulary publishes either way: it is a few short literals, and it
+    # is what answers whether another device speaks a vocabulary this one does
+    # not. See `web_sources.result_vocabulary` for why it is never acted on.
+    assert quiet["web_sources"]["result_vocabulary"]["compared_equal"] == ["success"]
+
+    mock_coordinator.api.write_failures = [{"cmd": "DELETE_SMS"}]
+    with patch(
+        "custom_components.zte_router_5g.web_sources.crawl",
+        new=AsyncMock(return_value=dict(crawled)),
+    ):
+        loud = await async_get_config_entry_diagnostics(None, mock_config_entry)
+
+    assert loud["web_sources"]["sources_included"] is True
+    assert "1 write failure" in loud["web_sources"]["sources_included_because"]
+    assert loud["web_sources"]["sources"]["js/service.js"]
+    assert loud["web_sources"]["sources_are_unswept"] is True
+
+
+async def test_a_crawl_that_answers_nothing_costs_a_field_not_the_file(
+    mock_coordinator, mock_config_entry
+):
+    """A router that refuses its own scripts must not cost the whole download."""
+    mock_coordinator.data = {}
+    mock_config_entry.runtime_data = mock_coordinator
+
+    with patch(
+        "custom_components.zte_router_5g.web_sources.crawl",
+        new=AsyncMock(side_effect=OSError("refused")),
+    ):
+        result = await async_get_config_entry_diagnostics(None, mock_config_entry)
+
+    assert result["web_sources"] is None
+    assert result["data"] is not None

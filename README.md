@@ -52,7 +52,26 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 **📟 Router Hardware:**
 
-- **Verified Models**:
+**Reading and writing are not the same question**, and the model list below
+answers only the second.
+
+- **Reading is expected to work broadly.** The integration does not carry a
+  list of what your router reports: it asks the device which parameter names it
+  answers and builds entities from those. A name your firmware does not
+  implement is simply absent, not an error, so a model nobody has tested still
+  produces a working set of sensors.
+- **Writing depends on your router's own token and form.** Changing something —
+  an APN, the ODU LED, a data limit, sending or deleting an SMS — is signed with
+  a token derived the way that firmware derives it, and sent as the form that
+  firmware expects. Both vary by model and by build. That is what the list below
+  records: the models where writes are **confirmed**, not the boundary of what
+  works.
+- **A control that appears to do nothing needs a diagnostics download.** This
+  router API answers `200 OK` with `{"result":"success"}` for writes it does not
+  carry out, so a silent refusal cannot be told from a completed change any
+  other way. See [How do I download diagnostics?](#-how-do-i-download-diagnostics).
+
+- **Writes Confirmed On**:
   - **ZTE MC7010** (5G Outdoor CPE) — **Live Hardware Verified** on firmware `V1.0.0B01` and `V1.0.0B03`.
   - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Diagnostic Capture Verified** on firmware `V1.0.1B04`.
 
@@ -73,6 +92,26 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 > 🔒 **Privacy**: Passwords, credentials, subscriber identifiers (IMSI/ICCID), carrier names, and SMS messages are automatically redacted or pseudonymized before saving.
 >
 > 📖 See [How do I download diagnostics?](#-how-do-i-download-diagnostics) for the full step-by-step guide, and attach your file to a new [GitHub Issue](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues) with your router model and firmware version.
+
+<!-- markdownlint-disable-next-line MD028 -->
+
+> [!TIP] **Reporting a fault: the download first, always**
+>
+> A diagnostics download is the first step for any fault, reading or writing. It
+> carries what the router answered, what the integration made of it, and the
+> record of any write the device refused.
+>
+> **For a write fault only**, there is a second step if the first does not
+> settle it: a browser capture, using the bookmarklet in
+> [`docs/diag_tools/`](docs/diag_tools/). It records the request your router's
+> own web page sends when the same change succeeds there, which is the one thing
+> no download can obtain. Two limits are worth knowing before you reach for it —
+> it compares against the router's web interface, so that interface has to
+> succeed at what Home Assistant could not, and it asks you to run a bookmarklet,
+> which not everyone can or should.
+>
+> **It is the wrong tool for a reading fault.** Reads carry no token and no form,
+> so a download already holds everything a capture would add.
 
 - **Not Compatible (Incompatible Router Families)**:
   - ❌ **ZTE G5-Series Next-Gen Routers (G5TC, G5TS, G5C, G5 Max)** — These use ZTE's OpenWrt-based `/ubus/` JSON-RPC API instead of `goform`. Use **[`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router)** instead.
