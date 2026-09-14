@@ -1986,6 +1986,7 @@ class ZTERouterAPI:
         timeout_sec: int | None = None,
         authenticated: bool = True,
         requested: list[str] | None = None,
+        classify: bool = True,
     ) -> Any:
         """Renew the session and put the same request again, once.
 
@@ -1994,6 +1995,13 @@ class ZTERouterAPI:
         session were dead raises rather than looping. `_after_relogin` marks
         the replay so a fresh session producing an expired-looking response is
         read as the rule not fitting the device, not as an auth failure.
+
+        **`classify` is forwarded, and was not until v3.3.25-dev5.** It was the
+        one parameter of the ten that this method dropped, so a replayed call
+        reverted to the default and could be scored as an expired session — a
+        verdict the caller had explicitly declined. `requested` was forwarded
+        and `classify` was not, and `_session_rejected` reads the two together,
+        which is what marks it an oversight rather than a decision.
         """
         await self.login(timeout_sec=timeout_sec)
         return await self._request(
@@ -2005,6 +2013,7 @@ class ZTERouterAPI:
             timeout_sec=timeout_sec,
             authenticated=authenticated,
             requested=requested,
+            classify=classify,
             _retry=False,
             _after_relogin=True,
         )
@@ -2154,6 +2163,7 @@ class ZTERouterAPI:
                     timeout_sec=timeout_sec,
                     authenticated=authenticated,
                     requested=requested,
+                    classify=classify,
                 )
             self.last_response_preview = body_preview
             self._record_unparsable(status, body_preview)
@@ -2180,6 +2190,7 @@ class ZTERouterAPI:
                     timeout_sec=timeout_sec,
                     authenticated=authenticated,
                     requested=requested,
+                    classify=classify,
                 )
             self.last_response_preview = body_preview
             self._record_unparsable(status, body_preview)
@@ -2203,6 +2214,7 @@ class ZTERouterAPI:
                 timeout_sec=timeout_sec,
                 authenticated=authenticated,
                 requested=requested,
+                classify=classify,
             )
 
         # Only an authenticated call proves the session is still alive, so only

@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25-dev5\] - 2026-09-14 - Replayed Requests Keep the Caller's Classification Setting](#3325-dev5---2026-09-14---replayed-requests-keep-the-callers-classification-setting)
   - [\[3.3.25-dev4\] - 2026-09-14 - Session Lifetime Learned Per Device; Diagnostics Keep the Evidence They Collect](#3325-dev4---2026-09-14---session-lifetime-learned-per-device-diagnostics-keep-the-evidence-they-collect)
   - [\[3.3.25-dev3\] - 2026-09-14 - Learned Session Flag No Longer Discarded When the Firmware Cache Fills](#3325-dev3---2026-09-14---learned-session-flag-no-longer-discarded-when-the-firmware-cache-fills)
   - [\[3.3.25-dev2\] - 2026-09-14 - A Blank Session Flag Is Not a Denial Until the Key Is Known to Exist](#3325-dev2---2026-09-14---a-blank-session-flag-is-not-a-denial-until-the-key-is-known-to-exist)
@@ -282,6 +283,41 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+
+---
+
+## [3.3.25-dev5] - 2026-09-14 - Replayed Requests Keep the Caller's Classification Setting
+
+### Summary
+
+`_replay_after_login` forwarded eight of the ten parameters `_request` takes and dropped `classify`, so a request replayed after a re-login was scored for session expiry even when its caller had explicitly declined that. Found by reading the replay while planning the `_request` restructure, not by any test. Fixed on its own, ahead of that restructure, so the two changes stay separable.
+
+### Fixed
+
+- **A replayed request keeps the classification setting its caller asked for.** `classify=False` means the caller does not want a session verdict drawn from the response. The replay reverted to the default, so the response could be scored as an expired session — a verdict the caller had declined.
+
+  `requested` was forwarded and `classify` was not, and `_session_rejected` reads the two together. That is what marks it an oversight rather than a decision.
+
+  **One caller was exposed.** `_probe_chunk` passes `classify=False` with retry enabled; every other `classify=False` site also sets `_retry=False` and so can never reach a replay. There, a chunk whose replay was classified could raise inside a broad `except`, be logged, and return `None` — the chunk dropped, and discovery reporting fewer names than the device answers. Silent, and presenting as a device that answers less than it does. Discovery probes more than 400 names in chunks, so this is also a candidate explanation for a mined-name yield that varies between runs on the same device.
+
+  The parameter is added to `_replay_after_login` and forwarded at all three sites that call it.
+
+### Added
+
+- **Six tests pinning the contract of the recovery path** (`tests/test_request_replay_contract.py`), written against the code as it stands because the `_request` restructure that follows must be a move and not a rewrite. Each pins a property that was previously emergent — true because of where the code sits rather than because anything asserted it:
+
+  - a router that always answers as though the session were dead is retried exactly once, with exactly one login and exactly two requests put;
+  - a `ZTEAuthError` raised inside the transport block propagates unwrapped, rather than being remapped into a transport failure by the broad clause below it;
+  - a genuine transport failure is still reported as one;
+  - the replay carries the cookie from the **new** session, which is what forbids a future call object from caching assembled headers;
+  - a write is never replayed, because a resent `SEND_SMS` can deliver the message twice with nothing in the response to say that it did;
+  - and the classification setting survives the replay, which is the defect above.
+
+### Notes
+
+- **Writing those tests exposed a fixture fault worth recording.** A bare `ZTERouterAPI` carries `last_activity` at the epoch, so the idle preempt fires before the first request and logs in. Three of the six tests were measuring that rather than the recovery path until `last_activity` was set. The behaviour is correct; the tests were not. It is the third time in two days that a test reported what its author expected rather than what the code does.
+
+- **Hardware baseline taken before this release**, against the reference MC7010: 19 of 19 checks pass, including the dead-session rung that `[3.3.25-dev2]` repaired. Phase 1 and phase 2 are hardware-verified as of this point, which is what makes the `_request` restructure attributable if it goes wrong.
 
 ---
 
