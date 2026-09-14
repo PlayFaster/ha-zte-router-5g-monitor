@@ -43,6 +43,46 @@ LIVE_OPTION_KEYS = frozenset({CONF_SCAN_INTERVAL, CONF_STOP_POLLING})
 # indistinguishable from success at the HTTP layer.
 SESSION_IDLE_RESET_SECONDS = 150
 
+# The preemptive session reset, in its learned form.
+#
+# `SESSION_IDLE_RESET_SECONDS` above is compared against `last_activity`, which
+# is time since the last authenticated request — an idle clock. The boundary it
+# guards is not idle-based: a session polled every ten seconds ended at the same
+# point as one left untouched. Idle time between polls is roughly the scan
+# interval, configurable from 30 to 3600 seconds, so at any interval of 150s or
+# less the preempt never fires at all and every poll past the boundary pays a
+# failed request, a login and a retry.
+#
+# Keying on session *age* fires correctly at every interval, because it measures
+# the clock that actually runs out. But an age threshold carrying a number from
+# one device would fire on every device, which is worse than an idle one. So the
+# threshold is learned from expiries this device actually had, and until enough
+# have been seen the idle reset above is what runs — unchanged behaviour, and
+# the `[3.3.0-rc2]` decision not to rely on reactive detection alone stands.
+#
+# There is no lifetime to hardcode. Four runs on the reference MC7010 inside one
+# hour ended at 15s, 85s and 110-120s, and one could not complete. `[3.3.0-rc2]`
+# separately measured "at or below 200s". A device holding sessions for 300s and
+# one expiring at 20s are both plausible and neither is served by a constant.
+SESSION_AGE_LEARN_MIN_SAMPLES = 3
+# Act on the shortest of the recent samples rather than the shortest ever: a
+# session can end for reasons other than time, and this router grants the
+# session to the newest login, so one web-UI visit would otherwise set a
+# permanent floor.
+SESSION_AGE_LEARN_WINDOW = 10
+# Preempt at this fraction of the learned lifetime.
+SESSION_AGE_SAFETY = 0.8
+# Never preempt below this, whatever is learned. A pathological reading must not
+# turn into a login storm.
+SESSION_AGE_FLOOR_SECONDS = 30.0
+# One check in this many skips the preempt, so the session is allowed to reach
+# its real boundary occasionally. Without it an active preempt destroys every
+# session before it expires, no further expiry is ever observed, and the learned
+# value can never rise again — it would be locked to whatever was first seen,
+# including across a firmware change that lengthened the boundary. The cost is
+# one failed request per sample.
+SESSION_AGE_SAMPLE_EVERY = 10
+
 # Proportion of the *requested* authenticated keys that may be missing from a
 # response before the session classifier declines to rule on it.
 #

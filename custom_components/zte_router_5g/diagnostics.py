@@ -637,6 +637,17 @@ async def async_get_config_entry_diagnostics(
     # newest message. Guarded like discovery — a router that refuses the list
     # must not cost the reporter the whole file.
     check = getattr(coordinator.api, "last_session_check", None)
+    rejection_seen = getattr(coordinator.api, "last_rejection_seen", None)
+    # Read once and type-checked, like every other optional field here: an api
+    # object that does not carry it, or carries something that is not a
+    # mapping, must cost the reporter a field rather than the whole file.
+    flag_report = _guarded(
+        "session_flag",
+        getattr(coordinator.api, "session_flag_report", lambda: None),
+        errors,
+    )
+    if not isinstance(flag_report, dict):
+        flag_report = None
     snapshot = await _async_guarded(
         "sms", coordinator.async_fetch_sms_snapshot(), errors
     )
@@ -727,6 +738,20 @@ async def async_get_config_entry_diagnostics(
         ),
         "last_session_check": _sanitize_walk(check, tokenizer)
         if isinstance(check, dict)
+        else None,
+        # Whether this device implements the firmware's own session flag, and
+        # what the pre-write check has done with it. The raw `loginfo` value is
+        # deliberately absent — it is denied by name and is not what is needed.
+        # `supported` is: a device that has never answered `ok` is one the
+        # check does not apply to, and that is unknown for every device but the
+        # reference hardware.
+        "session_flag": flag_report,
+        # The most recent rejection, kept even after a live read cleared the
+        # live field. Historical by construction: it says a rejection happened,
+        # not that one is happening. Producing this file reads the router, and
+        # those reads used to wipe the very record the file exists to carry.
+        "last_rejection_seen": _sanitize_walk(rejection_seen, tokenizer)
+        if isinstance(rejection_seen, dict)
         else None,
         # Which candidate names this device answered. Values only for the
         # names classified safe in `const.DISCOVERY_VALUE_SAFE`; everything

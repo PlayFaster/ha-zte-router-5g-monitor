@@ -880,6 +880,19 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         device_id = self.imei or f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
         if self.observations.observe(data, device_id):
             await self.observations.async_save()
+        await self._persist_session_lifetimes()
+
+    async def _persist_session_lifetimes(self) -> None:
+        """Carry newly observed session lifetimes into the store.
+
+        Written on the poll path rather than at the moment a session ends,
+        because the api object has no store of its own and a login must not
+        wait on disk. Only a change is written; the list is short and bounded
+        by `SESSION_AGE_LEARN_WINDOW`.
+        """
+        observed = list(getattr(self.api, "session_lifetimes", []))
+        if observed and observed != self.observations.session_lifetimes():
+            await self.observations.async_save_session_lifetimes(observed)
 
     async def async_load_stored_uptime(self) -> None:
         """Load the persisted counter and drift accumulators. Never raises.

@@ -96,3 +96,34 @@ def test_witness_list_survives_a_collaborator_that_did_not_return_a_list():
     assert _string_list(None) == []
     assert _string_list("wan_connect_status") == []
     assert _string_list(["wan_connect_status", 7, None]) == ["wan_connect_status"]
+
+
+async def test_the_session_flag_state_is_published(mock_coordinator, mock_config_entry):
+    """Whether this device implements `loginfo`, and what the check has done.
+
+    The field that settles the one question the reference hardware cannot
+    answer. The MC888 Pro has never been observed with a dead session and its
+    downloads redact the flag's value by name, so whether it implements the key
+    at all is unknown — and that decides whether the pre-write check applies
+    there. `supported` answers it from that device's next download, with no
+    write and nothing asked of its owner.
+
+    The raw value is deliberately absent: it is denied by name and is not what
+    anyone needs.
+    """
+    mock_coordinator.data = {}
+    mock_coordinator.api.session_flag_report = MagicMock(
+        return_value={
+            "supported": True,
+            "confirmed_on_firmware": "IRL_H3G_MC7010DV1.0.0B03",
+            "checks": {"checks": 4, "not_confirmed": 1},
+        }
+    )
+    mock_config_entry.runtime_data = mock_coordinator
+
+    result = await async_get_config_entry_diagnostics(None, mock_config_entry)
+
+    assert result["session_flag"]["supported"] is True
+    assert result["session_flag"]["confirmed_on_firmware"].startswith("IRL")
+    assert result["session_flag"]["checks"]["checks"] == 4
+    assert "loginfo" not in str(result["session_flag"])

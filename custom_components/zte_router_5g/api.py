@@ -30,6 +30,11 @@ from .const import (
     MINED_CHUNK_SIZE,
     REBOOT_VERIFY_INTERVAL,
     REBOOT_VERIFY_SECONDS,
+    SESSION_AGE_FLOOR_SECONDS,
+    SESSION_AGE_LEARN_MIN_SAMPLES,
+    SESSION_AGE_LEARN_WINDOW,
+    SESSION_AGE_SAFETY,
+    SESSION_AGE_SAMPLE_EVERY,
     SESSION_IDLE_RESET_SECONDS,
     SMS_DELETE_VERIFY_INTERVAL,
     SMS_DELETE_VERIFY_SECONDS,
@@ -925,6 +930,37 @@ class ZTERouterAPI:
         # What the last pre-write session check asked and concluded,
         # published in the download so a blocked write is visible.
         self.last_session_check: dict[str, Any] | None = None
+        # The most recent rejection, kept for the life of this object and
+        # never cleared. `last_rejection` is cleared by any live verdict, so
+        # that a stale rejection cannot be mistaken for a current fault — a
+        # property worth keeping. But building a diagnostics download reads
+        # the router, and those reads produce live verdicts, so the field
+        # designed to explain a rejection was wiped by the act of collecting
+        # it. Three attempts to capture the MC7010 fault of 2026-09-14 this
+        # way returned `null` for exactly that reason.
+        #
+        # This companion is explicitly historical: it says a rejection
+        # happened at some point, not that one is happening now. The download
+        # publishes both and labels them as such.
+        self.last_rejection_seen: dict[str, Any] | None = None
+        # How many times the pre-write check has returned a non-confirmed
+        # verdict, and how many of those were followed by a login that then
+        # confirmed. See item 102: the check is an optimisation, and this is
+        # the evidence for whether it earns the round trip it costs.
+        # When the current session was established, and how long previous ones
+        # lasted. The age clock is its own field and is set only by `login`:
+        # `last_activity` is refreshed by every authenticated request, so
+        # reusing it would silently keep idle semantics. See
+        # `SESSION_AGE_LEARN_MIN_SAMPLES` for why the threshold is learned.
+        self.session_started: datetime | None = None
+        self.session_lifetimes: list[float] = []
+        self._age_checks = 0
+        self.session_check_stats: dict[str, int] = {
+            "checks": 0,
+            "not_confirmed": 0,
+            "relogin_confirmed": 0,
+            "relogin_failed": 0,
+        }
         # The sent and draft totals either side of the most recent `SEND_SMS`.
         # Counts only. See `_classify_send`, and the MC888 Pro that stores
         # messages it does not transmit.
@@ -978,6 +1014,9 @@ class ZTERouterAPI:
             "keys_absent": sorted(k for k in asked if k not in payload),
             "payload": dict(payload),
         }
+        # The historical copy. Never cleared, so a download can still explain a
+        # rejection that its own reads have since resolved.
+        self.last_rejection_seen = dict(self.last_rejection)
 
     def _record_delete(
         self,
@@ -1549,6 +1588,83 @@ class ZTERouterAPI:
             return True
         return self._session_flag_seen_for == current
 
+    def _note_session_replaced(self) -> None:
+        """Record how long the session being replaced lasted, if it expired.
+
+        Only expiries teach anything. A session replaced while it was still
+        working — a reconnect, a config reload, a login this integration chose
+        to make — says nothing about the device's boundary, and a session ended
+        by another client taking it says something about that client. Neither is
+        a lifetime.
+
+        The guard is the floor: anything shorter is discarded rather than
+        classified, because the router does not report why a session ended and
+        this project cannot tell the cases apart from the outside.
+        """
+        if self.session_started is None:
+            return
+        lasted = (datetime.now(UTC) - self.session_started).total_seconds()
+        if lasted < SESSION_AGE_FLOOR_SECONDS:
+            return
+        self.session_lifetimes.append(lasted)
+        del self.session_lifetimes[:-SESSION_AGE_LEARN_WINDOW]
+
+    def learned_session_age_limit(self) -> float | None:
+        """When to preemptively replace the session, or None if not yet known.
+
+        The shortest of the recent samples, less a safety margin, never below
+        the floor. Shortest rather than typical because being early costs one
+        login and being late costs a failed request, a login and a retry — the
+        asymmetry the `[3.3.0-rc2]` decision rests on. Recent rather than
+        all-time because a session can end for reasons other than time.
+
+        `None` until enough samples agree, and the idle reset runs meanwhile.
+        """
+        if len(self.session_lifetimes) < SESSION_AGE_LEARN_MIN_SAMPLES:
+            return None
+        return max(
+            SESSION_AGE_FLOOR_SECONDS,
+            min(self.session_lifetimes) * SESSION_AGE_SAFETY,
+        )
+
+    def _session_is_past_its_learned_age(self) -> bool:
+        """Whether the session should be replaced before this request.
+
+        Returns False on the sampling pass. An active preempt destroys every
+        session before it expires, so no further expiry is observed and the
+        learned value can never rise — it would be locked to whatever was first
+        seen, including across a firmware change that lengthened the boundary.
+        Letting one check in `SESSION_AGE_SAMPLE_EVERY` through costs a failed
+        request and keeps the learner fed.
+        """
+        limit = self.learned_session_age_limit()
+        if limit is None or self.session_started is None:
+            return False
+        self._age_checks += 1
+        if self._age_checks % SESSION_AGE_SAMPLE_EVERY == 0:
+            return False
+        age = (datetime.now(UTC) - self.session_started).total_seconds()
+        return age > limit
+
+    def session_flag_report(self) -> dict[str, Any]:
+        """What the session flag does on this device, for the download.
+
+        The raw `loginfo` value never publishes — it matches `_DENY_NAME_RE`
+        in `diagnostics.py`, and the value is not what anyone needs. What is
+        needed is whether this device implements the key at all, because that
+        decides whether the pre-write check applies to it.
+
+        Settles the one question the reference hardware cannot answer: the
+        MC888 Pro has never been observed with a dead session, so whether it
+        implements the flag is unknown. This field answers it from that
+        device's next download, with no write and nothing asked of its owner.
+        """
+        return {
+            "supported": self._session_flag_seen_for is not None,
+            "confirmed_on_firmware": self._session_flag_seen_for or None,
+            "checks": dict(self.session_check_stats),
+        }
+
     async def read_session_flag(self, timeout_sec: int | None = None) -> str:
         """Ask the router directly whether this session is logged in.
 
@@ -1636,15 +1752,18 @@ class ZTERouterAPI:
         Costs one short read (~16 ms) on a path where the write itself is
         ~112 ms.
         """
+        self.session_check_stats["checks"] += 1
         flag = await self.read_session_flag(timeout_sec=timeout_sec)
         if flag == SESSION_CONFIRMED:
             self.last_session_check = {"source": SESSION_FLAG_SOURCE, "verdict": flag}
             return
 
         if flag == SESSION_DENIED:
+            self.session_check_stats["not_confirmed"] += 1
             try:
                 await self.login(timeout_sec=timeout_sec)
             except (ZTEAuthError, ZTEConnectionError, ZTECredentialsError) as err:
+                self.session_check_stats["relogin_failed"] += 1
                 self.last_session_check = {
                     "source": SESSION_FLAG_SOURCE,
                     "verdict": SESSION_DENIED,
@@ -1652,6 +1771,12 @@ class ZTERouterAPI:
                 }
                 return
             flag = await self.read_session_flag(timeout_sec=timeout_sec)
+            if flag == SESSION_CONFIRMED:
+                # The check earned its round trip: a write was about to be sent
+                # on a session the router had already ended, and was not.
+                self.session_check_stats["relogin_confirmed"] += 1
+            else:
+                self.session_check_stats["relogin_failed"] += 1
             self.last_session_check = {
                 "source": SESSION_FLAG_SOURCE,
                 "verdict": flag,
@@ -1904,13 +2029,28 @@ class ZTERouterAPI:
 
         # Preempt an idle-expired session rather than discovering it on failure.
         now = datetime.now(UTC)
-        if (
-            authenticated
-            and self.session_active
-            and (now - self.last_activity).total_seconds() > SESSION_IDLE_RESET_SECONDS
-        ):
-            _LOGGER.debug("Session likely expired due to inactivity; resetting session")
-            self._clear_session()
+        if authenticated and self.session_active:
+            if self._session_is_past_its_learned_age():
+                # The learned form. Session age, not idle time, because the
+                # boundary this guards is not extended by traffic — and because
+                # idle time between polls is the scan interval, so at any
+                # interval below the idle constant the reset never fired at all.
+                _LOGGER.debug(
+                    "Session past its learned age of %.0fs; resetting session",
+                    self.learned_session_age_limit() or 0.0,
+                )
+                self._clear_session()
+            elif (
+                now - self.last_activity
+            ).total_seconds() > SESSION_IDLE_RESET_SECONDS:
+                # Until enough expiries have been seen to learn a limit. This is
+                # the behaviour that has shipped since `[3.3.0-rc2]`, and it
+                # stays: that release declined relying on reactive detection
+                # alone, and nothing here weakens the mechanism.
+                _LOGGER.debug(
+                    "Session likely expired due to inactivity; resetting session"
+                )
+                self._clear_session()
 
         if authenticated and not self.session_active:
             await self.login(timeout_sec=timeout_sec)
@@ -2206,6 +2346,8 @@ class ZTERouterAPI:
         # one refused on a session hours old.
         self._session_was_fresh = True
         self.last_activity = datetime.now(UTC)
+        self._note_session_replaced()
+        self.session_started = self.last_activity
         if not attempt.cookies:
             # Kept because a router answering a success `result` with no
             # cookie at all remains a supported outcome, but no device is now

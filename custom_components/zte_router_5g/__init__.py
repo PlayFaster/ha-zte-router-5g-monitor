@@ -575,6 +575,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # boot-instant check fully functional.
     await coordinator.async_load_stored_uptime()
     await coordinator.observations.async_load()
+    # What this device's sessions have been observed to last, so the pre-write
+    # reset does not have to re-learn it after every restart. Absent or
+    # unreadable resolves to "nothing learned", which routes back to the idle
+    # constant — the store is advisory, never the anchor.
+    coordinator.api.session_lifetimes = coordinator.observations.session_lifetimes()
 
     # Remember which non-live options this entry was set up with, so the update
     # listener can tell a connection change (reload) from a tuning change
