@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25-dev6\] - 2026-09-14 - A Request Becomes a Value; `_request` Splits Into Six Routines](#3325-dev6---2026-09-14---a-request-becomes-a-value-_request-splits-into-six-routines)
   - [\[3.3.25-dev5\] - 2026-09-14 - Replayed Requests Keep the Caller's Classification Setting](#3325-dev5---2026-09-14---replayed-requests-keep-the-callers-classification-setting)
   - [\[3.3.25-dev4\] - 2026-09-14 - Session Lifetime Learned Per Device; Diagnostics Keep the Evidence They Collect](#3325-dev4---2026-09-14---session-lifetime-learned-per-device-diagnostics-keep-the-evidence-they-collect)
   - [\[3.3.25-dev3\] - 2026-09-14 - Learned Session Flag No Longer Discarded When the Firmware Cache Fills](#3325-dev3---2026-09-14---learned-session-flag-no-longer-discarded-when-the-firmware-cache-fills)
@@ -283,6 +284,55 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+
+---
+
+## [3.3.25-dev6] - 2026-09-14 - A Request Becomes a Value; `_request` Splits Into Six Routines
+
+### Summary
+
+`_request` was 146 lines at a McCabe complexity of 21, over the project's action point of 20, and it is the routine every read and every write passes through. It resisted decomposition for one reason: three sites re-issue the original request after a re-login, and while a request was nine loose parameters, no section could be lifted out without carrying that argument list with it.
+
+This release gives a request a name. No behaviour changes.
+
+### Changed
+
+- **A request is now a value.** `_Call` carries the method, path, params, body, caller headers, timeout, `authenticated`, `requested`, `classify` and the two recursion flags. `_request` keeps its signature byte-identical — every caller and every test sees what it always did — and its body is now the construction of a `_Call` and a delegation.
+
+  **Assembled headers are deliberately not on it.** `Referer` and the session `Cookie` are built per attempt from live state, because a replay follows a re-login and must carry the *new* cookie. Caching them would replay the dead one: an authentication failure presenting as a router fault, on the recovery path, where it is least visible.
+
+- **`_request` splits into six routines**, none above a complexity of 8 where the original was 21:
+
+  | Routine | Responsibility |
+  | :-- | :-- |
+  | `_request` | Build the call, delegate. The unchanged public signature |
+  | `_perform` | Preempt, log in if needed, send, dispose |
+  | `_preempt_stale_session` | The two clocks — learned session age, then the idle constant |
+  | `_build_headers` | Referer, caller headers, cookie. Per attempt, never cached |
+  | `_send` | One attempt: transport, HTML marker, JSON parse, exception mapping |
+  | `_dispose` | Login page, unparsable body, rejected session — replay or raise |
+
+  `api.py` reports a maximum complexity of 19 after this, in a routine belonging to the probe that is being removed.
+
+- **The three replay sites become one.** `_replay` unpacks the call and forwards it to `_replay_after_login`, which still goes through `_request` rather than `_perform` — deliberately, because a replay has always been observable as a second call to `_request` and 58 test files patch that method. Routing it past them would change what all of them see, silently, and coverage would not show it because the lines still run.
+
+  This is also the structural answer to `[3.3.25-dev5]`. A forwarding list that someone has to keep complete will eventually fall out of step; a call carries all of its fields or none of them.
+
+### Added
+
+- **Two tests, bringing the recovery-path contract to seven** (`tests/test_request_replay_contract.py`), all written against the previous code so that this release could be verified as a move:
+  - `last_activity` is stamped exactly once per logical request, including when a replay occurs — the property that forbids `_perform` from stamping after disposal returns;
+  - and the classification setting survives a replay, from `[3.3.25-dev5]`.
+
+### Notes
+
+- **Two faults were introduced during the split and caught before release, both worth recording.**
+
+  `_read_html_marker` was written as a coroutine and called without `await`, so HTML detection silently did nothing. Seven contract tests passed anyway — none of them covers that path — and it surfaced as a runtime warning rather than a failure.
+
+  The first draft of `_dispose` also dropped the `last_response_preview` assignment at two sites, changed the text of an error message, and lost three log lines. Five tests caught it. A restructure is only a move if the moved code is compared against the original line by line, and a diff against `HEAD` is what found these, not the suite.
+
+- **Verified against the reference MC7010, before and after.** The hardware check passes 19 of 19 and the diagnostics check 40 of 40, matching the baseline taken ahead of the change. Phase 1 and phase 2 were hardware-verified first precisely so that a failure here would be attributable to this release alone.
 
 ---
 

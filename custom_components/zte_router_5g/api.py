@@ -838,6 +838,64 @@ def _reprobe_notes(
     return notes
 
 
+@dataclass(frozen=True, eq=False)
+class _Call:
+    """One HTTP request to the router, as a value.
+
+    Exists because of the replay. Three sites in `_perform` re-issue the
+    original request after a re-login, and while a request was nine loose
+    parameters, every one of those sites had to name all nine — which is why
+    `_request` grew to 146 lines at a McCabe score of 21 and could not be
+    decomposed: no section could be lifted out without carrying that argument
+    list with it.
+
+    It is also how `[3.3.25-dev5]` became possible. `classify` was dropped by
+    one of the forwarding sites and nothing noticed, because forwarding was a
+    list of names someone had to keep complete. A call carries all of its
+    fields or none of them.
+
+    **Assembled headers are deliberately absent.** `headers` here is what the
+    caller passed and nothing more. The `Referer` and the session `Cookie` are
+    built per attempt from live state, because a replay follows a re-login and
+    must carry the *new* cookie — caching them here would replay the dead one,
+    a silent authentication failure presenting as a router fault, on the
+    recovery path where it is least visible. `test_request_replay_contract`
+    pins it.
+
+    `eq=False` because the fields include dicts: an equality or hash that
+    reached them would fail, and nothing here needs either.
+    """
+
+    method: str
+    path: str
+    params: dict[str, Any] | None = None
+    data: Any = None
+    headers: dict[str, str] | None = None
+    timeout_sec: int | None = None
+    authenticated: bool = True
+    requested: list[str] | None = None
+    classify: bool = True
+    retry: bool = True
+    after_relogin: bool = False
+
+
+@dataclass
+class _Answer:
+    """What one attempt at a request came back with.
+
+    The fields are the locals the transport block used to leave behind for the
+    disposal below it, with the same defaults, so that a response arriving
+    after an early failure records the same status it always did.
+    """
+
+    status: int = 200
+    resp_json: Any = None
+    is_html_page: bool = False
+    body_preview: str = ""
+    content_type: str = ""
+    url_str: str = ""
+
+
 class ZTERouterAPI:
     """Async wrapper for the ZTE Router goform API using aiohttp."""
 
@@ -2033,40 +2091,239 @@ class ZTERouterAPI:
         _retry: bool = True,
         _after_relogin: bool = False,
     ) -> Any:
-        """Centralized request helper that handles session creation and auto-renewal."""
-        tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
+        """Centralized request helper that handles session creation and auto-renewal.
 
-        # Preempt an idle-expired session rather than discovering it on failure.
-        now = datetime.now(UTC)
-        if authenticated and self.session_active:
-            if self._session_is_past_its_learned_age():
-                # The learned form. Session age, not idle time, because the
-                # boundary this guards is not extended by traffic — and because
-                # idle time between polls is the scan interval, so at any
-                # interval below the idle constant the reset never fired at all.
-                _LOGGER.debug(
-                    "Session past its learned age of %.0fs; resetting session",
-                    self.learned_session_age_limit() or 0.0,
-                )
-                self._clear_session()
-            elif (
-                now - self.last_activity
-            ).total_seconds() > SESSION_IDLE_RESET_SECONDS:
-                # Until enough expiries have been seen to learn a limit. This is
-                # the behaviour that has shipped since `[3.3.0-rc2]`, and it
-                # stays: that release declined relying on reactive detection
-                # alone, and nothing here weakens the mechanism.
-                _LOGGER.debug(
-                    "Session likely expired due to inactivity; resetting session"
-                )
-                self._clear_session()
+        The signature is unchanged and every caller and test still sees it. The
+        body is now a `_Call` and a delegation: see `_Call` for why a request
+        had to become a value before any of this could be split up.
+        """
+        return await self._perform(
+            _Call(
+                method=method,
+                path=path,
+                params=params,
+                data=data,
+                headers=headers,
+                timeout_sec=timeout_sec,
+                authenticated=authenticated,
+                requested=requested,
+                classify=classify,
+                retry=_retry,
+                after_relogin=_after_relogin,
+            )
+        )
 
-        if authenticated and not self.session_active:
-            await self.login(timeout_sec=timeout_sec)
+    def _preempt_stale_session(self, authenticated: bool) -> None:
+        """Replace a session that has probably already ended.
+
+        Two clocks, and only one of them is right. `SESSION_IDLE_RESET_SECONDS`
+        measures time since the last authenticated request, but the boundary it
+        guards is not extended by traffic, and idle time between polls is
+        roughly the scan interval — configurable from 30 to 3600 seconds — so at
+        any interval at or below the constant it never fires at all. Session
+        age measures the clock that actually runs out, and fires correctly at
+        every interval, but only once a threshold has been learned from this
+        device; see `SESSION_AGE_LEARN_MIN_SAMPLES`.
+
+        Until then the idle reset runs unchanged. `[3.3.0-rc2]` declined
+        dropping the proactive reset in favour of reactive detection — three
+        round trips instead of two, and the loss of the second line of defence
+        behind the `[3.3.0-dev12]` blank-payload fault — and nothing here
+        weakens it.
+        """
+        if not (authenticated and self.session_active):
+            return
+        if self._session_is_past_its_learned_age():
+            _LOGGER.debug(
+                "Session past its learned age of %.0fs; resetting session",
+                self.learned_session_age_limit() or 0.0,
+            )
+            self._clear_session()
+            return
+        idle = (datetime.now(UTC) - self.last_activity).total_seconds()
+        if idle > SESSION_IDLE_RESET_SECONDS:
+            _LOGGER.debug("Session likely expired due to inactivity; resetting session")
+            self._clear_session()
+
+    def _build_headers(self, call: _Call) -> dict[str, str]:
+        """Assemble the headers for one attempt, from live state.
+
+        Called per attempt and never cached on the call. A replay follows a
+        re-login and must carry the *new* cookie; headers built once and reused
+        would send the dead one, which is an authentication failure presenting
+        as a router fault, on the recovery path where it is least visible.
+        """
+        req_headers = {"Referer": f"{self.referer}index.html"}
+        if call.headers:
+            req_headers.update(call.headers)
+        # A session with no cookie is normal on firmware that binds the
+        # session to the client address; there is simply no header to send.
+        if call.authenticated and self.cookies:
+            req_headers["Cookie"] = _cookie_header(self.cookies)
+        return req_headers
+
+    async def _send(self, call: _Call) -> _Answer:
+        """Put one request and read what came back. No recovery, no verdicts.
+
+        The exception clauses keep their order. `ZTEAuthError` and
+        `ZTEConnectionError` are re-raised ahead of the broad clause because a
+        nested call's error must not be remapped into `Request failed:` — the
+        router blamed for a session problem, which is the class of mislabelling
+        this work exists to remove.
+        """
+        answer = _Answer()
+        tout = (
+            aiohttp.ClientTimeout(total=call.timeout_sec)
+            if call.timeout_sec
+            else self.timeout
+        )
+        try:
+            async with self.session.request(
+                call.method,
+                f"{self.referer}{call.path}",
+                params=call.params,
+                data=call.data,
+                headers=self._build_headers(call),
+                timeout=tout,
+                ssl=False,
+            ) as r:
+                answer.status = r.status
+                self.last_response_status = answer.status
+                self.last_response_header_names = sorted(r.headers)
+                self._session_was_fresh = False
+                answer.content_type = r.headers.get("Content-Type", "")
+                answer.url_str = str(r.url)
+                await self._read_html_marker(r, answer)
+                if not answer.is_html_page:
+                    with contextlib.suppress(
+                        ValueError, TypeError, aiohttp.ContentTypeError
+                    ):
+                        answer.resp_json = await r.json(content_type=None)
+        except (ZTEAuthError, ZTEConnectionError):
+            raise
+        except (TimeoutError, aiohttp.ClientError, RuntimeError, ValueError) as e:
+            # `RuntimeError` covers "Session is closed", which Home Assistant
+            # raises when its shared client session is torn down while a
+            # request is in flight — during a reload, or at shutdown.
+            if call.authenticated:
+                self._clear_session()
+            raise ZTEConnectionError(f"Request failed: {e}") from e
+        return answer
+
+    @staticmethod
+    async def _read_html_marker(r: Any, answer: _Answer) -> None:
+        """Decide whether the router answered with its login page.
+
+        Three signals for one question: a redirect whose URL names
+        `index.html`, an HTML content type, or a body that opens with a tag.
+        The body read has its own guard because a response that cannot be read
+        still has to be reported as something.
+        """
+        if "index.html" in answer.url_str:
+            answer.is_html_page = True
+            return
+        if "text/html" not in answer.content_type:
+            return
+        try:
+            text_body = await r.text()
+            if text_body.strip().startswith("<") or "index.html" in text_body:
+                answer.is_html_page = True
+                answer.body_preview = text_body[:300].strip().replace("\n", " ")
+        except (TimeoutError, aiohttp.ClientError):
+            answer.body_preview = "[Unable to read response body]"
+
+    async def _replay(self, call: _Call) -> Any:
+        """Renew the session and put the same request again, once.
+
+        Goes through `_replay_after_login`, which goes through `_request`
+        rather than `_perform`, deliberately: a replay has always been
+        observable as a second call to `_request`, and 58 test files patch that
+        method. Routing it past them would change what every one of those tests
+        sees, silently, and coverage would not show it because the lines still
+        run.
+
+        This method exists only to unpack the call. Every field it forwards was
+        previously named at three separate sites, and `[3.3.25-dev5]` is what
+        happens when one of those lists falls out of step.
+        """
+        return await self._replay_after_login(
+            call.method,
+            call.path,
+            params=call.params,
+            data=call.data,
+            headers=call.headers,
+            timeout_sec=call.timeout_sec,
+            authenticated=call.authenticated,
+            requested=call.requested,
+            classify=call.classify,
+        )
+
+    async def _dispose(self, call: _Call, answer: _Answer, *, replayable: bool) -> Any:
+        """Turn one answer into a result, a replay, or an error.
+
+        Three ways a response fails to be usable — the login page, a body that
+        is not JSON, and a payload the session classifier rejects — and each
+        either replays or raises. Nothing here retries a write: `replayable`
+        already excludes them.
+        """
+        if answer.is_html_page:
+            if call.authenticated and replayable:
+                _LOGGER.debug("Detected HTML redirect/response; renewing session")
+                return await self._replay(call)
+            self.last_response_preview = answer.body_preview
+            self._record_unparsable(answer.status, answer.body_preview)
+            _LOGGER.error(
+                "Unexpected HTML response from %s (Status: %s, Content-Type: %s): %s",
+                answer.url_str,
+                answer.status,
+                answer.content_type,
+                answer.body_preview,
+            )
+            raise ZTEConnectionError(
+                f"Received unexpected HTML response (Status: {answer.status})"
+            )
+
+        if answer.resp_json is None:
+            if call.authenticated and replayable:
+                _LOGGER.debug("JSON parse failed; renewing session")
+                return await self._replay(call)
+            self.last_response_preview = answer.body_preview
+            self._record_unparsable(answer.status, answer.body_preview)
+            raise ZTEConnectionError("Failed to parse JSON response from router")
+
+        if isinstance(answer.resp_json, dict) and self._session_rejected(
+            answer.resp_json,
+            call.requested,
+            classify=call.classify,
+            authenticated=call.authenticated,
+            retry=replayable,
+            after_relogin=call.after_relogin,
+        ):
+            return await self._replay(call)
+
+        # Only an authenticated call proves the session is still alive, so only
+        # one counts as activity. Unauthenticated endpoints (`LD`, `RD`'s
+        # sibling `wa_inner_version`) answer perfectly well with a dead
+        # session — letting them stamp this clock told the idle check that a
+        # long-idle session was fresh, so the stale `stok` was never cleared.
+        # Every write action calls `get_ad()` -> `get_version()` first, so an
+        # action taken after a pause was exactly the case that broke.
+        #
+        # Stamped here rather than in `_perform` so a replayed request stamps
+        # once, from the call that returns the result, exactly as it always has.
+        if call.authenticated:
+            self.last_activity = datetime.now(UTC)
+        return answer.resp_json
+
+    async def _perform(self, call: _Call) -> Any:
+        """Prepare the session, put the request, and dispose of the answer."""
+        self._preempt_stale_session(call.authenticated)
+        if call.authenticated and not self.session_active:
+            await self.login(timeout_sec=call.timeout_sec)
 
         # A read may be put again after a re-login; a write may not, and the
-        # distinction has to be made here rather than in each caller, because
-        # all three recovery paths below re-send whatever they were given.
+        # distinction is made here rather than in each caller because every
+        # recovery path below re-sends whatever it was given.
         #
         # The reason is the hazard, not the odds of success. A resent
         # `SEND_SMS` can deliver the message twice with nothing in the
@@ -2082,153 +2339,11 @@ class ZTERouterAPI:
         # see `_ensure_session`.
         #
         # A write that looks like an expiry therefore raises instead, and
-        # Home Assistant prompts for re-authentication with nothing sent
-        # twice.
-        replayable = _retry and not self._is_write_request(method, path)
+        # Home Assistant prompts for re-authentication with nothing sent twice.
+        replayable = call.retry and not self._is_write_request(call.method, call.path)
 
-        url = f"{self.referer}{path}"
-        req_headers = {"Referer": f"{self.referer}index.html"}
-        if headers:
-            req_headers.update(headers)
-        # A session with no cookie is normal on firmware that binds the
-        # session to the client address; there is simply no header to send.
-        if authenticated and self.cookies:
-            req_headers["Cookie"] = _cookie_header(self.cookies)
-
-        is_html_page = False
-        status = 200
-        content_type = ""
-        url_str = ""
-        body_preview = ""
-        resp_json = None
-
-        try:
-            async with self.session.request(
-                method,
-                url,
-                params=params,
-                data=data,
-                headers=req_headers,
-                timeout=tout,
-                ssl=False,
-            ) as r:
-                status = r.status
-                self.last_response_status = status
-                self.last_response_header_names = sorted(r.headers)
-                self._session_was_fresh = False
-                content_type = r.headers.get("Content-Type", "")
-                url_str = str(r.url)
-
-                # Check if redirect or HTML response indicates session expiration
-                if "index.html" in url_str:
-                    is_html_page = True
-                elif "text/html" in content_type:
-                    try:
-                        text_body = await r.text()
-                        stripped_body = text_body.strip()
-                        if stripped_body.startswith("<") or "index.html" in text_body:
-                            is_html_page = True
-                            body_preview = text_body[:300].strip().replace("\n", " ")
-                    except (TimeoutError, aiohttp.ClientError):
-                        body_preview = "[Unable to read response body]"
-
-                if not is_html_page:
-                    with contextlib.suppress(
-                        ValueError, TypeError, aiohttp.ContentTypeError
-                    ):
-                        resp_json = await r.json(content_type=None)
-        except (ZTEAuthError, ZTEConnectionError):
-            raise
-        except (TimeoutError, aiohttp.ClientError, RuntimeError, ValueError) as e:
-            # `RuntimeError` covers "Session is closed", which Home Assistant
-            # raises when its shared client session is torn down while a
-            # request is in flight — a diagnostics download taken during a
-            # reload hits exactly that. `ValueError` covers a body that will
-            # not decode. Neither is an `aiohttp.ClientError`, so both used to
-            # escape as themselves.
-            if authenticated:
-                self._clear_session()
-            raise ZTEConnectionError(f"Request failed: {e}") from e
-
-        # Validate parsed response and handle redirects/HTML
-        if is_html_page:
-            if authenticated and replayable:
-                _LOGGER.debug("Detected HTML redirect/response; renewing session")
-                return await self._replay_after_login(
-                    method,
-                    path,
-                    params=params,
-                    data=data,
-                    headers=headers,
-                    timeout_sec=timeout_sec,
-                    authenticated=authenticated,
-                    requested=requested,
-                    classify=classify,
-                )
-            self.last_response_preview = body_preview
-            self._record_unparsable(status, body_preview)
-            _LOGGER.error(
-                "Unexpected HTML response from %s (Status: %s, Content-Type: %s): %s",
-                url_str,
-                status,
-                content_type,
-                body_preview,
-            )
-            raise ZTEConnectionError(
-                f"Received unexpected HTML response (Status: {status})"
-            )
-
-        if resp_json is None:
-            if authenticated and replayable:
-                _LOGGER.debug("JSON parse failed; renewing session")
-                return await self._replay_after_login(
-                    method,
-                    path,
-                    params=params,
-                    data=data,
-                    headers=headers,
-                    timeout_sec=timeout_sec,
-                    authenticated=authenticated,
-                    requested=requested,
-                    classify=classify,
-                )
-            self.last_response_preview = body_preview
-            self._record_unparsable(status, body_preview)
-            raise ZTEConnectionError("Failed to parse JSON response from router")
-
-        # 3. Check JSON structure for session expiry/invalid indicators
-        if isinstance(resp_json, dict) and self._session_rejected(
-            resp_json,
-            requested,
-            classify=classify,
-            authenticated=authenticated,
-            retry=replayable,
-            after_relogin=_after_relogin,
-        ):
-            return await self._replay_after_login(
-                method,
-                path,
-                params=params,
-                data=data,
-                headers=headers,
-                timeout_sec=timeout_sec,
-                authenticated=authenticated,
-                requested=requested,
-                classify=classify,
-            )
-
-        # Only an authenticated call proves the session is still alive, so only
-        # one counts as activity. Unauthenticated endpoints (`LD`, `RD`'s
-        # sibling `wa_inner_version`) answer perfectly well with a dead
-        # session — letting them stamp this clock told the idle check below
-        # that a long-idle session was fresh, so the stale `stok` was never
-        # cleared. Every write action calls `get_ad()` -> `get_version()`
-        # first, so an action taken after a pause was exactly the case that
-        # broke: the unauthenticated version fetch reset the clock immediately
-        # before the authenticated call that needed it.
-        if authenticated:
-            self.last_activity = datetime.now(UTC)
-        return resp_json
+        answer = await self._send(call)
+        return await self._dispose(call, answer, replayable=replayable)
 
     async def try_set_protocol(self, timeout_sec: int = 5) -> None:
         """Identify if router is on http or https with a short timeout."""

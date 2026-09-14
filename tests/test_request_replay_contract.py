@@ -264,3 +264,68 @@ async def test_the_replay_keeps_the_classification_the_caller_asked_for(
     assert seen == [False], (
         "the replay was classified after the caller asked for classify=False"
     )
+
+
+@pytest.mark.asyncio
+async def test_last_activity_is_stamped_once_per_logical_request(
+    mock_aiohttp_client,
+) -> None:
+    """Only the call that returns a result stamps the clock, and only once.
+
+    `last_activity` drives the idle reset, and only an authenticated call
+    proves the session is alive — `[3.3.4-dev25]` records what happened when
+    unauthenticated reads stamped it. When a replay occurs the outer call
+    returns the replay's result, so it is the replay that stamps.
+
+    Pinned because the restructure splits the transport from the disposal, and
+    a `_perform` that stamped after disposal returned would stamp twice.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "dead"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    stamps: list[object] = []
+
+    expired = {"wan_connect_status": "", "model_name": "MC7010"}
+    healthy = {"wan_connect_status": "ppp_connected", "model_name": "MC7010"}
+    mock_aiohttp_client.get.side_effect = [
+        MockResponse(json_data=expired),
+        MockResponse(json_data=healthy),
+    ]
+
+    async def relogin(*_args, **_kwargs):
+        api.session_active = True
+        api.cookies = {"stok": "fresh"}
+
+    class _Watcher:
+        """Counts assignments to `last_activity` without changing them.
+
+        `__set_name__` is not used: the descriptor is attached after the class
+        exists, so Python never calls it.
+        """
+
+        _name = "_watched_last_activity"
+
+        def __get__(self, obj, objtype=None):
+            return getattr(obj, self._name)
+
+        def __set__(self, obj, value):
+            stamps.append(value)
+            object.__setattr__(obj, self._name, value)
+
+    type(api).last_activity = _Watcher()
+    api.last_activity = datetime.now(UTC)
+    stamps.clear()
+
+    try:
+        with patch.object(api, "login", new=AsyncMock(side_effect=relogin)):
+            await api._request(
+                "GET",
+                "goform/goform_get_cmd_process",
+                requested=["wan_connect_status", "model_name"],
+            )
+    finally:
+        del type(api).last_activity
+
+    assert len(stamps) == 1, f"the clock was stamped {len(stamps)} times, not once"
