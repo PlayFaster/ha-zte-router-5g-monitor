@@ -36,6 +36,7 @@ import re
 import urllib.parse
 from datetime import UTC, datetime
 from typing import Any
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -117,6 +118,11 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     # is what it exists to detect, so it raises there like any other method.
     "note_write_refusal": ("DELETE_SMS",),
     "reboot": (),
+    # Asks the router directly whether this session is logged in. It answers
+    # `unanswered` rather than raising when the read fails, which is the whole
+    # point — an optimisation that cannot run must not decide anything — so it
+    # is best-effort here by design.
+    "read_session_flag": (),
     "delete_sms": ("1",),
     "delete_all": (),
     # The post-delete check. A read, and it must behave like one on a dead
@@ -139,6 +145,7 @@ _CALLS: dict[str, tuple[Any, ...]] = {
 # default instead of raising. Each needs a stated reason — this list is a
 # deliberate carve-out, not a place to silence failures.
 _BEST_EFFORT = {
+    "read_session_flag",
     # Runs on unload; an unreachable router must never block teardown, and it
     # always clears local session state regardless of the answer.
     "logout",
@@ -354,7 +361,19 @@ async def test_methods_recover_when_the_session_can_be_renewed(method_name):
     # exists to prove.
     api._populated_keys = frozenset(_SESSION_CHECK_KEYS)
 
-    result = await getattr(api, method_name)(*_CALLS[method_name])
+    if method_name == "reboot":
+        # Reboot is confirmed by the router ceasing to answer, and this mock
+        # answers throughout by design — it exists to model a session that
+        # dies, not a device that restarts. Stubbing the absence check keeps
+        # this test on the property it is actually asserting, which is that the
+        # command reached the router on a renewed session. Reboot's own
+        # verification is covered in `test_api.py`.
+        with patch.object(
+            api, "_router_stopped_answering", new=AsyncMock(return_value=True)
+        ):
+            result = await api.reboot()
+    else:
+        result = await getattr(api, method_name)(*_CALLS[method_name])
 
     if method_name in _BEST_EFFORT or result is None:
         return
@@ -529,9 +548,16 @@ def test_every_public_method_is_covered_by_the_sweep():
 
 
 def test_best_effort_carve_out_stays_small():
-    """Every exemption is a method allowed to fail quietly — keep it deliberate."""
+    """Every exemption is a method allowed to fail quietly — keep it deliberate.
+
+    Raised from five to six in v3.3.25-dev1 for `read_session_flag`, which asks
+    the router whether the session is logged in before a write. It answers
+    `unanswered` instead of raising because a pre-write check that cannot run
+    must not decide anything — the property item 91 exists to establish, and
+    the one whose absence blocked every write on the reference MC7010.
+    """
     assert set(_CALLS) >= _BEST_EFFORT
-    assert len(_BEST_EFFORT) <= 5, (
+    assert len(_BEST_EFFORT) <= 6, (
         "the best-effort list has grown; each entry is a method permitted to "
         "return a default on failure, so each needs a stated reason above"
     )

@@ -372,6 +372,20 @@ async def test_api_delete_all_success(mock_aiohttp_client):
     # `attempted_at` is a wall-clock stamp and is asserted for shape only.
     record = dict(api.last_delete)
     assert record.pop("attempted_at").endswith("+00:00")
+
+    # The two elapsed-millisecond figures are measured, not chosen, so they are
+    # asserted as bounds rather than as values. Pinning them to 0 made this test
+    # fail whenever the machine was busy enough for the first pass to take a
+    # millisecond, which says nothing about the behaviour under test: that the
+    # re-list came back clean on the first pass and the settle window was never
+    # used. `verify_settled` and the empty `remaining` carry that meaning.
+    attempts = record.pop("verify_attempts")
+    elapsed = record.pop("verify_elapsed_ms")
+    assert len(attempts) == 1, "the re-list was clean, so one pass was enough"
+    assert attempts[0]["remaining"] == []
+    assert 0 <= attempts[0]["after_ms"] < 1000
+    assert 0 <= elapsed < 1000
+
     assert record == {
         "ids_requested": ["1", "2"],
         "result": {"result": "ok"},
@@ -381,10 +395,6 @@ async def test_api_delete_all_success(mock_aiohttp_client):
         # found by listing the combined bank.
         "mem_store_sent": None,
         "listed_with": "2",
-        # The verification series. One pass here: the re-list came back clean,
-        # so the loop exited immediately and the window was never used.
-        "verify_attempts": [{"after_ms": 0, "remaining": []}],
-        "verify_elapsed_ms": 0,
         "verify_settled": True,
         # `sms_cmd_status_info` is read once after a delete, shape only. The
         # mock has no response queued for it, which is the unreadable case and
@@ -1506,19 +1516,92 @@ async def test_write_commands_tolerate_a_response_with_no_result_key(
 
 
 @pytest.mark.asyncio
-async def test_reboot_still_raises_on_an_explicit_refusal(mock_aiohttp_client):
-    """An intact `result=failure` means the router declined, not that it restarted."""
+async def test_reboot_reports_a_router_that_kept_answering(mock_aiohttp_client):
+    """A reboot is confirmed by the router going away, not by its answer.
+
+    Measured on an MC7010, 2026-09-14: one `REBOOT_DEVICE` answered
+    `{"result":"failure"}` on a session seconds old and did nothing, and an
+    identically built request minutes later answered `{"result":"success"}`
+    and rebooted the device — `system_uptime` fell from 96036 to 84. The
+    response has been observed to disagree with what the device did in both
+    directions, so a router still answering after the check window is the
+    failure, whatever it said.
+    """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "test"}
     api.session_active = True
     api.last_activity = datetime.now(UTC)
 
-    with patch.object(api, "get_ad", return_value="ad"):
+    with (
+        patch.object(api, "get_ad", return_value="ad"),
+        patch.object(
+            api, "_router_stopped_answering", new=AsyncMock(return_value=False)
+        ),
+    ):
         mock_aiohttp_client.post.return_value = MockResponse(
             json_data={"result": "failure"}, status=200
         )
-        with pytest.raises(ZTEConnectionError, match="rejected"):
+        with pytest.raises(ZTEConnectionError, match="did not restart"):
             await api.reboot()
+
+    # Refused once, retried once: reboot is idempotent in effect, so a second
+    # reboot of a router already rebooting changes nothing.
+    assert mock_aiohttp_client.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_reboot_succeeds_on_the_retry(mock_aiohttp_client):
+    """The case measured on hardware: refused once, accepted moments later.
+
+    On an MC7010, 2026-09-14, one `REBOOT_DEVICE` returned
+    `{"result":"failure"}` on a session seconds old and did nothing; an
+    identically built request minutes later returned `{"result":"success"}`
+    and rebooted the device. The difference has not been established, which is
+    why the retry exists — reboot is idempotent in effect, so a second one
+    against a router already rebooting changes nothing.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    # Still answering after the first attempt, gone after the second.
+    absence = AsyncMock(side_effect=[False, True])
+
+    with (
+        patch.object(api, "get_ad", return_value="ad"),
+        patch.object(api, "_router_stopped_answering", new=absence),
+    ):
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "failure"}, status=200
+        )
+        assert await api.reboot() == 200
+
+    assert mock_aiohttp_client.post.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_reboot_is_confirmed_when_the_router_stops_answering(
+    mock_aiohttp_client,
+):
+    """Absence is the evidence, and a refusal does not override it."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "test"}
+    api.session_active = True
+    api.last_activity = datetime.now(UTC)
+
+    with (
+        patch.object(api, "get_ad", return_value="ad"),
+        patch.object(
+            api, "_router_stopped_answering", new=AsyncMock(return_value=True)
+        ),
+    ):
+        mock_aiohttp_client.post.return_value = MockResponse(
+            json_data={"result": "failure"}, status=200
+        )
+        assert await api.reboot() == 200
+
+    assert mock_aiohttp_client.post.call_count == 1
 
 
 @pytest.mark.asyncio
@@ -1726,7 +1809,7 @@ async def test_a_write_checks_the_session_before_deriving_its_token(
     api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),  # probe
+        MockResponse(json_data={"loginfo": "ok"}),  # the session flag
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
         MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "abc"}),
@@ -1734,8 +1817,10 @@ async def test_a_write_checks_the_session_before_deriving_its_token(
 
     await api.get_ad()
 
-    probe_url = mock_aiohttp_client.get.call_args_list[0][0][0]
-    assert "wan_connect_status" in probe_url, "the session was not checked first"
+    # One key, sent as a parameter rather than in the path. No witnesses travel
+    # with it: key selection must not enter the deciding path.
+    probe = mock_aiohttp_client.get.call_args_list[0]
+    assert probe[1]["params"]["cmd"] == "loginfo", "the session was not checked first"
 
 
 @pytest.mark.asyncio
@@ -1756,10 +1841,13 @@ async def test_a_dead_session_is_renewed_before_the_token_is_built(
     # check still runs: since v3.3.22-dev3 an API object that has not polled
     # has no witness and skips the check entirely.
     api._populated_keys = frozenset({"wan_connect_status"})
+    # This device has answered `loginfo: ok` before, so a blank answer now
+    # means the session is gone rather than that the key is unsupported.
+    api._session_flag_seen_for = ""
 
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data={"wan_connect_status": ""}),  # dead session
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),  # after
+        MockResponse(json_data={"loginfo": ""}),  # the router denies it
+        MockResponse(json_data={"loginfo": "ok"}),  # and confirms after login
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
         MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "post-login-value"}),
@@ -1795,13 +1883,13 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
     api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"loginfo": "ok"}),
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
         MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "abc"}),
-        # The post-refusal read: the session is alive, so the refusal stands
-        # as its own error rather than becoming an auth failure.
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        # The post-refusal read: the router confirms the session, so the
+        # refusal stands as its own error rather than becoming an auth failure.
+        MockResponse(json_data={"loginfo": "ok"}),
     ]
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={"result": "failure"}
@@ -1811,7 +1899,7 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
         await api.set_odu_led_switch("1")
 
     assert mock_aiohttp_client.post.call_count == 1, "a declined write was resent"
-    assert api.last_session_check["verdict"] == "live"
+    assert api.last_session_check["verdict"] == "confirmed"
 
 
 @pytest.mark.asyncio
@@ -1844,7 +1932,7 @@ async def test_a_write_is_never_resent_after_a_relogin(
     api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"loginfo": "ok"}),
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
         MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "abc"}),
@@ -2328,7 +2416,7 @@ async def test_the_token_matches_one_the_router_accepted(
     api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"loginfo": "ok"}),
         MockResponse(json_data={"wa_inner_version": version}),
         MockResponse(json_data={"cr_version": cr_version}),
         MockResponse(json_data={"RD": rd}),
@@ -2350,11 +2438,11 @@ async def test_cr_version_is_read_once_per_firmware(mock_aiohttp_client):
     api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"loginfo": "ok"}),
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
         MockResponse(json_data={"cr_version": "CR_1"}),
         MockResponse(json_data={"RD": "abc"}),
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"loginfo": "ok"}),
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
         MockResponse(json_data={"RD": "def"}),
     ]
@@ -2380,7 +2468,7 @@ async def test_a_firmware_change_discards_the_cached_cr_version(mock_aiohttp_cli
     api._cr_version_cache = ("OLD_VERSION", "CR_OLD")
 
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"loginfo": "ok"}),
         MockResponse(json_data={"wa_inner_version": "NEW_VERSION"}),
         MockResponse(json_data={"cr_version": "CR_NEW"}),
         MockResponse(json_data={"RD": "abc"}),
@@ -2408,7 +2496,7 @@ async def test_a_device_that_answers_no_cr_version_still_writes(mock_aiohttp_cli
     api._populated_keys = frozenset({"wan_connect_status"})
 
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"loginfo": "ok"}),
         MockResponse(json_data={"wa_inner_version": "xx_xxx_MC7010DV1.0.0B03"}),
         MockResponse(json_data={"cr_version": ""}),
         MockResponse(json_data={"RD": "92a9cd16cee3a478c0c2cffa014587ee"}),
@@ -2432,7 +2520,7 @@ async def test_a_failed_cr_version_read_stops_the_write(mock_aiohttp_client):
     api.last_activity = datetime.now(UTC)
 
     mock_aiohttp_client.get.side_effect = [
-        MockResponse(json_data={"wan_connect_status": "ppp_connected"}),
+        MockResponse(json_data={"loginfo": "ok"}),
         MockResponse(json_data={"wa_inner_version": "xx_xxx_MC7010DV1.0.0B03"}),
         aiohttp.ClientError("router closed the connection"),
     ]

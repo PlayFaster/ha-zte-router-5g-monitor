@@ -997,5 +997,38 @@ async def main() -> int:
     return 1 if report.failed else 0
 
 
+async def _main_reporting_unreachability() -> int:
+    """Run the checks, and report an unreachable router rather than crashing.
+
+    This script talks to a live device, so it can fail for reasons that are not
+    findings. The reference MC7010 has been observed to stop answering
+    mid-run — a request timing out with an empty message — and the script then
+    ended on a traceback: no banner, no exit code distinguishable from a failed
+    assertion, and a caller reading `.reports/diag_check.txt` could not tell a
+    device that went away from a check that found something.
+
+    Reaching the router is a precondition, not a check. Losing it is reported
+    as exit code 2, so a run that could not proceed is never mistaken for a run
+    that found a fault.
+    """
+    try:
+        return await main()
+    except Exception as err:  # noqa: BLE001 - reporting, not handling
+        print(
+            _red(
+                "\n✖  Diagnostics check: could not complete — the router "
+                f"stopped answering  ({type(err).__name__}: {err or 'no detail'})"
+            )
+        )
+        print(
+            _dim(
+                "     This is a precondition failure, not a finding. The "
+                "reference device drops connections intermittently under "
+                "repeated requests. Re-run when it is idle."
+            )
+        )
+        return 2
+
+
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    raise SystemExit(asyncio.run(_main_reporting_unreachability()))

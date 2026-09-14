@@ -60,7 +60,7 @@
       "type": "shell"
     },
     {
-      "command": "[ \"${config:project.category}\" = \"theme\" ] && { mkdir -p .reports; printf '–  Skipped: integration only\\n' | tee .reports/manifest_version.txt; } || { mkdir -p .reports && python3 .workbench/check_manifest_version.py; }",
+      "command": "[ \"${config:project.category}\" = \"theme\" ] && { mkdir -p .reports; printf '–  Skipped: integration only\\n' | tee .reports/manifest_version.txt; } || { mkdir -p .reports && python3 .workbench/check_manifest_version.py; echo \"\"; if grep -q \"PASSED\" .reports/manifest_version.txt 2>/dev/null; then echo -e \"\\033[1;32m$(cat .reports/manifest_version.txt)\\033[0m\"; else echo -e \"\\033[1;31m$(cat .reports/manifest_version.txt)\\033[0m\"; fi; }",
       "label": "Manifest: Verify Version",
       "presentation": {
         "panel": "dedicated",

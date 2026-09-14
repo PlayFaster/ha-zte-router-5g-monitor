@@ -222,6 +222,21 @@ BATCH_URL_MAX_CHARS = 1600
 SMS_DELETE_VERIFY_SECONDS = 15.0
 SMS_DELETE_VERIFY_INTERVAL = 1.0
 
+# How long to watch for the router to go away after an accepted reboot, and how
+# often to look.
+#
+# A reboot is the one write this API verifies by absence: the router answers
+# and then stops answering. Measured on an MC7010, 2026-09-14: `REBOOT_DEVICE`
+# returned `{"result":"success"}` in about 0.1 s and the device was unreachable
+# by the next observation, with probes one second apart — so the true interval
+# is under two seconds and was not measured more precisely than that. Five
+# seconds is margin over that observation, not a measurement of it.
+#
+# Twice a second rather than once: a single probe can miss, and the whole point
+# is that the absence is the evidence.
+REBOOT_VERIFY_SECONDS = 5.0
+REBOOT_VERIFY_INTERVAL = 0.5
+
 # How many canaries a probe carries. One key is a single point of failure in
 # both directions: a metric that legitimately empties reads as a lost session,
 # and a key that turns out to be served without one reports a healthy session

@@ -28,6 +28,8 @@ from .const import (
     DISCOVERY_RELOGIN_LIMIT,
     JS_BUNDLES,
     MINED_CHUNK_SIZE,
+    REBOOT_VERIFY_INTERVAL,
+    REBOOT_VERIFY_SECONDS,
     SESSION_IDLE_RESET_SECONDS,
     SMS_DELETE_VERIFY_INTERVAL,
     SMS_DELETE_VERIFY_SECONDS,
@@ -571,6 +573,44 @@ _SESSION_CHECK_KEYS: tuple[str, ...] = (
     "model_name",
 )
 
+# The firmware's own session flag, and the only direct answer this API gives to
+# "am I logged in". Everything above infers session state from ordinary
+# readings — signal, APN, connection status — which vary by model, by firmware,
+# and by whether the router is connected; the witness selection, the populated
+# key filter and the four-way classifier all exist to compensate for that
+# choice of input. The same false positive has been corrected three times:
+# `[3.3.16]` after `wan_connect_status` proved permanently blank on an MC888
+# Pro, `[3.3.21-dev]` after `ppp_status` and `model_name` failed the same way,
+# and 2026-09-14 when the reference MC7010 refused its own deletes on a session
+# seconds old.
+#
+# Measured on the MC7010, 2026-09-14: `ok` with a valid session cookie, `""`
+# with no cookie, and `""` with a forged `stok`. The device's own
+# `js/service.js` decides the same way — it issues `cmd=loginfo` and sets
+# `isLoggedIn` on `case "ok"`.
+#
+# Read with `classify=False`, always. A device that does not implement this key
+# answers `{"loginfo": ""}`, which is a non-empty payload with every value
+# blank; `_request` scores that `undecidable`, then `is_status_expired`, and
+# re-logs in and replays before returning. The caller would then log in again:
+# two or more logins per write against `MAX_LOGIN_COUNT` and a 300s lockout, on
+# hardware nobody can test.
+SESSION_FLAG_KEY = "loginfo"
+SESSION_FLAG_OK = "ok"
+
+# How `last_session_check` names this source. Deliberately not the key itself:
+# `loginfo` matches `_DENY_NAME_RE` in `diagnostics.py`, which is applied
+# anywhere in a name, and the raw value must never publish in any case. Only
+# the comparison result is reported.
+SESSION_FLAG_SOURCE = "session_flag"
+
+# What a session-flag read established. `unanswered` is not a failure: it means
+# this device does not implement the key, and the caller falls back to the
+# witness classifier — which may record a verdict but must never block a write.
+SESSION_CONFIRMED = "confirmed"
+SESSION_DENIED = "denied"
+SESSION_UNANSWERED = "unanswered"
+
 
 class ZTEConnectionError(Exception):
     """Raised when the router cannot be reached."""
@@ -871,6 +911,13 @@ class ZTERouterAPI:
         # token's first operand, read once and held against the version it
         # belongs to. See `get_cr_version`.
         self._cr_version_cache: tuple[str, str] | None = None
+        # The firmware this device was last seen to answer `loginfo: ok` on,
+        # or None. Learned rather than assumed: nothing else establishes that a
+        # device implements the key, because this API echoes a name it does not
+        # implement as an empty string. Held per firmware for the same reason
+        # `_cr_version_cache` is — an upgrade may withdraw a key, and a stale
+        # belief here would make a blank answer look like a dead session.
+        self._session_flag_seen_for: str | None = None
         # Keys this device was observed to populate while authenticated,
         # from the most recent successful poll. Empty until one completes.
         # See `session_witnesses`.
@@ -1225,10 +1272,31 @@ class ZTERouterAPI:
         deliver the message twice with no way to tell that it did.
 
         Costs one short read, and only on the failure path.
+
+        **Asks `loginfo` first.** This carried the same defect as the pre-write
+        check — it ran the same witness selection, and a pool the device
+        answers empty turned a genuine command refusal into "the session is
+        gone". Only a direct denial from the router raises now; a witness
+        verdict is recorded and returned, never raised.
         """
+        flag = await self.read_session_flag(timeout_sec=timeout_sec)
+        if flag != SESSION_UNANSWERED:
+            self.last_session_check = {
+                "source": SESSION_FLAG_SOURCE,
+                "verdict": flag,
+                "after": cmd,
+            }
+            if flag == SESSION_DENIED:
+                raise ZTEAuthError(
+                    f"Session expired/unauthorized: the router refused {cmd} "
+                    f"and reported it is not logged in."
+                )
+            return flag
+
         witnesses = self.session_witnesses()
         if not witnesses:
             self.last_session_check = {
+                "source": "witnesses",
                 "witnesses": [],
                 "verdict": "undecidable after refusal",
                 "after": cmd,
@@ -1250,6 +1318,7 @@ class ZTERouterAPI:
             )
         except (ZTEAuthError, ZTEConnectionError):
             self.last_session_check = {
+                "source": "witnesses",
                 "witnesses": witnesses,
                 "verdict": "unreadable after refusal",
                 "after": cmd,
@@ -1257,16 +1326,46 @@ class ZTERouterAPI:
             return "undecidable"
         verdict = _classify_session(answer, request, self.unauthenticated_key_set())
         self.last_session_check = {
+            "source": "witnesses",
             "witnesses": witnesses,
             "verdict": verdict,
             "after": cmd,
         }
-        if verdict == "expired":
-            raise ZTEAuthError(
-                f"Session expired/unauthorized: the router refused {cmd} and a "
-                f"read taken immediately afterwards shows the session is gone."
-            )
+        # Deliberately not raised. The witness path is the fallback for a
+        # device that does not answer `loginfo`, and its `expired` verdict is
+        # the one this project has now seen be wrong on healthy sessions three
+        # times. The refusal keeps its own error and the verdict is recorded.
         return verdict
+
+    def _require_confirmed_session(self, cmd: str) -> None:
+        """Refuse a write that must not be issued twice, on a doubtful session.
+
+        The only write this guards is `SEND_SMS`, and the reason is specific to
+        it. Every other command is either verified after the fact — the two
+        switches read back, SMS delete re-lists, a reboot is confirmed by the
+        router ceasing to answer — or harmless to repeat, so sending it on an
+        unconfirmed session costs at most a misleading error the next poll
+        corrects. A send has neither property: reporting it as unverified
+        invites the user to send again, and this API gives no way to tell
+        whether the first one went out.
+
+        `_ensure_session` has already run, via `get_ad`, and has already tried
+        a re-login. Reaching a non-confirmed verdict here means that login did
+        not produce a working session.
+
+        A device that does not answer `loginfo` is never blocked: its verdict
+        comes from the witness classifier, which this does not consult.
+        """
+        check = self.last_session_check or {}
+        if check.get("source") != SESSION_FLAG_SOURCE:
+            return
+        if check.get("verdict") == SESSION_CONFIRMED:
+            return
+        raise ZTEAuthError(
+            f"{cmd} was not sent: the router reports it is not logged in, and "
+            f"signing in again did not change that. The command was never "
+            f"issued, so nothing was sent twice."
+        )
 
     @staticmethod
     def _is_refusal(data: Any) -> bool:
@@ -1418,6 +1517,91 @@ class ZTERouterAPI:
         companion = [k for k in unauthenticated if k not in witnesses][:1]
         return [*witnesses, *companion]
 
+    def _session_flag_supported(self) -> bool:
+        """Whether this device has answered `loginfo: ok` on this firmware.
+
+        Until it has, a blank answer is uninformative and must not be read as a
+        denial. See `read_session_flag`.
+
+        The firmware is taken from `_cr_version_cache`, which every write path
+        populates on its way to the token and which is already discarded when
+        the version changes. Reading `wa_inner_version` here instead would add
+        a request to a check whose whole justification is that it costs one.
+
+        **The empty string means "learned, firmware not yet known".** The check
+        runs ahead of the token derivation that fills the cache, so the first
+        `ok` on a fresh object is always recorded without a version beside it.
+        Comparing that against a version the cache acquires moments later
+        discarded the proof on the very same write, and the mechanism then
+        never fired again — found by attacking this rule rather than by any
+        test. The version is adopted when it first becomes known instead; the
+        window between the two is a single write, inside which the firmware
+        cannot have changed.
+        """
+        if self._session_flag_seen_for is None:
+            return False
+        current = self._cr_version_cache[0] if self._cr_version_cache else None
+        if not self._session_flag_seen_for:
+            if current:
+                self._session_flag_seen_for = current
+            return True
+        if current is None:
+            return True
+        return self._session_flag_seen_for == current
+
+    async def read_session_flag(self, timeout_sec: int | None = None) -> str:
+        """Ask the router directly whether this session is logged in.
+
+        Returns `SESSION_CONFIRMED`, `SESSION_DENIED` or `SESSION_UNANSWERED`.
+        See `SESSION_FLAG_KEY` for the measurement and for why this read is
+        never classified.
+
+        A transport failure answers `SESSION_UNANSWERED` rather than raising.
+        This is an optimisation on the write path — it turns a refusal into a
+        re-login before a command is spent — and an optimisation that cannot
+        run must not decide anything.
+        """
+        try:
+            data = await self._request(
+                "GET",
+                "goform/goform_get_cmd_process",
+                params={"isTest": "false", "cmd": SESSION_FLAG_KEY},
+                authenticated=True,
+                classify=False,
+                _retry=False,
+                timeout_sec=timeout_sec,
+            )
+        except Exception:  # noqa: BLE001 - an unusable answer is not a verdict
+            return SESSION_UNANSWERED
+        if not isinstance(data, dict) or SESSION_FLAG_KEY not in data:
+            return SESSION_UNANSWERED
+
+        if str(data[SESSION_FLAG_KEY]).strip() == SESSION_FLAG_OK:
+            # Proof the device implements the key, taken at a moment we know
+            # the session worked. Nothing else establishes that, and without it
+            # a blank answer is meaningless.
+            self._session_flag_seen_for = (
+                self._cr_version_cache[0] if self._cr_version_cache else ""
+            )
+            return SESSION_CONFIRMED
+
+        if not self._session_flag_supported():
+            # Blank, and this device has never been seen to answer `ok`. This
+            # firmware echoes a name it does not implement as an empty string,
+            # so a device without the key and a device with a dead session are
+            # indistinguishable here — and treating that as a denial would put
+            # every write on such a device behind a login it does not need, and
+            # would block `SEND_SMS` on it outright. That is issue #56's shape
+            # in a new place.
+            #
+            # Deliberately *not* resolved by reading other keys alongside this
+            # one. Which keys a device populates is exactly the judgement that
+            # has been wrong three times; a mechanism that needs it is the
+            # mechanism being replaced.
+            return SESSION_UNANSWERED
+
+        return SESSION_DENIED
+
     async def _ensure_session(self, timeout_sec: int | None = None) -> None:
         """Confirm the session before a write derives its ``AD`` token.
 
@@ -1426,68 +1610,98 @@ class ZTERouterAPI:
         empty, which `_request` detects and recovers from. A *write* answers
         ``{"result":"failure"}`` — indistinguishable from a command the router
         declined on its merits — so nothing recovers it, and a control failed on
-        every attempt until some read happened to re-login. That is the reported
-        fault: turning the LED on failed repeatedly after the router's web page
-        had taken the session, until Refresh Now ran the batch poll.
+        every attempt until some read happened to re-login. That is the fault
+        `[3.3.2-rc5]` fixed: turning the LED on failed repeatedly after the
+        router's web page had taken the session, until Refresh Now ran the
+        batch poll.
 
-        It must happen *before* the write, not after it fails. Recovering
-        afterwards was tried first and **verified not to work on hardware**: the
-        session was renewed and the write replayed, and the router refused it
-        again. Why is still not established, and the design rests on the
-        measurement rather than on an explanation.
+        **This never raises, and that is the point.** Its job is to trigger a
+        re-login before the write, not to decide whether the write may be sent.
+        The blocking was never designed — it was inherited from `_request`'s
+        error contract — and it is how the same false positive reached users
+        three times. A write that is unsafe to repeat is blocked by its own
+        caller reading `last_session_check`; see `send_sms`.
 
-        What is known about ``RD``, measured 2026-09-13: two consecutive reads
-        return the same value, a pause without a write does not change it, and a
-        write does. A browser capture of three deletes in one session carries
-        three different values. The trigger is not established from the samples
-        taken, so "the replayed token was spent" remains possible and unproven —
-        it has been offered and withdrawn twice in these notes, and is recorded
-        here as an open question rather than a third conclusion.
+        The sequence:
 
-        Retrying is also unattractive on its own terms: ``{"result":"failure"}``
-        is equally what the router returns for a command it declined on its
-        merits, so resending would deliver a `send_sms` twice.
+        1. Read `loginfo`. Confirmed, and the write proceeds.
+        2. Otherwise log in and read it again.
+        3. Still not confirmed, and the write proceeds anyway. Reaching here
+           means a login did not produce a working session, for reasons the
+           router does not report, and a write is the better way to find out
+           than a refusal we invented.
+        4. A device that does not answer `loginfo` falls back to the witness
+           classifier, which records a verdict and blocks nothing.
 
         Costs one short read (~16 ms) on a path where the write itself is
-        ~112 ms. `_request` does the recovery: a retrying read re-logs-in on its
-        own when the session has gone.
+        ~112 ms.
+        """
+        flag = await self.read_session_flag(timeout_sec=timeout_sec)
+        if flag == SESSION_CONFIRMED:
+            self.last_session_check = {"source": SESSION_FLAG_SOURCE, "verdict": flag}
+            return
 
-        **Reads `_SESSION_CHECK_KEYS`, not one key.** It read
-        `wan_connect_status` alone until v3.3.16, which is blank at all times on
-        an MC888 Pro. A response of one blank value carries no unauthenticated
-        key, so `_classify_session` cannot rule and the caller falls back to
-        "every value is empty, so the session is gone" — permanently true on
-        that device. Every write was refused before it was sent, which is the
-        SMS deletion fault in issue #56. See that constant for why each key is
-        in the list.
+        if flag == SESSION_DENIED:
+            try:
+                await self.login(timeout_sec=timeout_sec)
+            except (ZTEAuthError, ZTEConnectionError, ZTECredentialsError) as err:
+                self.last_session_check = {
+                    "source": SESSION_FLAG_SOURCE,
+                    "verdict": SESSION_DENIED,
+                    "relogin": f"{type(err).__name__}: {err}",
+                }
+                return
+            flag = await self.read_session_flag(timeout_sec=timeout_sec)
+            self.last_session_check = {
+                "source": SESSION_FLAG_SOURCE,
+                "verdict": flag,
+                "relogin": "attempted",
+            }
+            return
 
-        `requested` is passed so the absent-key guard applies: a device that
-        answers none of these is a truncated read or firmware key-name drift,
-        and must not be scored as an expiry.
+        await self._note_witness_verdict(timeout_sec=timeout_sec)
 
-        **The keys are chosen per device, and the check is skipped when none
-        qualifies.** See `session_witnesses`. A device whose session cannot be
-        judged from a read is not a device whose writes should be blocked: the
-        write is sent, and the router's own answer decides. That is the only
-        part of this guard that moved — a refusal is still classified, but
-        afterwards, by `note_write_refusal`, and never replayed.
+    async def _note_witness_verdict(self, timeout_sec: int | None = None) -> None:
+        """Record what the witness classifier makes of the session.
+
+        The fallback for a device that does not answer `loginfo`. It records
+        and never raises: a wrong witness selection is exactly how this check
+        blocked valid writes, and nothing it concludes is trusted enough to
+        spend a command on.
         """
         witnesses = self.session_witnesses()
         if not witnesses:
             self.last_session_check = {
+                "source": "witnesses",
                 "witnesses": [],
                 "verdict": "no witness available; the write was not blocked",
             }
             return
         request = self._session_check_request(witnesses)
-        await self._request(
-            "GET",
-            "goform/goform_get_cmd_process?multi_data=1&isTest=false"
-            "&sms_received_flag_flag=0&cmd=" + ",".join(request),
-            timeout_sec=timeout_sec,
-            requested=request,
-        )
-        self.last_session_check = {"witnesses": witnesses, "verdict": "live"}
+        try:
+            answer = await self._request(
+                "GET",
+                "goform/goform_get_cmd_process?multi_data=1&isTest=false"
+                "&sms_received_flag_flag=0&cmd=" + ",".join(request),
+                timeout_sec=timeout_sec,
+                requested=request,
+                classify=False,
+                _retry=False,
+            )
+        except (ZTEAuthError, ZTEConnectionError):
+            self.last_session_check = {
+                "source": "witnesses",
+                "witnesses": witnesses,
+                "verdict": "unreadable; the write was not blocked",
+            }
+            return
+        self.last_session_check = {
+            "source": "witnesses",
+            "witnesses": witnesses,
+            "verdict": _classify_session(
+                answer, request, self.unauthenticated_key_set()
+            ),
+        }
 
     def _parse_date(self, date_str: str) -> str | None:
         """Decode a received message's timestamp, offset included.
@@ -3247,24 +3461,93 @@ class ZTERouterAPI:
         return msg_out
 
     async def reboot(self) -> int:
-        """Execute a device reboot.
+        """Reboot the router, and confirm it by the router going away.
 
-        A connection error still propagates, exactly as before. It is tempting
-        to swallow it on the theory that the router acknowledges and then
-        drops the link — but that is untested speculation, and it cannot be
-        told apart from a router that was simply unreachable. Swallowing it
-        would report "rebooted" for a router that never received the command,
-        reintroducing the silent-success failure this check exists to remove.
-        An intact ``{"result":"failure"}`` is a refusal and is raised.
+        **The response is not the verification; the disappearance is.**
+        Measured on an MC7010, 2026-09-14: one `REBOOT_DEVICE` answered
+        `{"result":"failure"}` on a session seconds old and did nothing, and an
+        identically built request minutes later answered
+        `{"result":"success"}` and rebooted the device — `system_uptime` fell
+        from 96036 to 84. The response alone has been observed to disagree with
+        what the device did, in both directions, so it is not trusted on its
+        own.
+
+        The write answers before the router becomes unreachable, so a dropped
+        request is not the expected case and is not treated as success on its
+        own either — it is checked the same way as any other outcome.
+
+        Reboot is also the one write that is safe to retry: it is idempotent in
+        effect, and a second reboot of a router already rebooting changes
+        nothing. That is why a refusal here is retried once rather than raised
+        immediately.
+
+        Returns 200 when the router stopped answering. Raises when it is still
+        answering after the check window, which means the command was accepted
+        or refused and the device did not restart either way.
+        """
+        result = await self._attempt_reboot()
+        if result is not None:
+            return result
+        # Refused, and reboot is the one command where an immediate retry is
+        # safe. See the observation above: the same request refused once and
+        # succeeded minutes later, for reasons not established.
+        result = await self._attempt_reboot()
+        if result is not None:
+            return result
+        raise ZTEConnectionError(
+            "The router accepted the reboot command but did not restart: it "
+            "was still answering after "
+            f"{REBOOT_VERIFY_SECONDS:.0f} seconds."
+        )
+
+    async def _attempt_reboot(self) -> int | None:
+        """Send one `REBOOT_DEVICE` and watch for the router to go away.
+
+        Returns 200 when it stops answering, or `None` when it does not — the
+        caller decides whether to retry. A refusal is not raised here, because
+        a refused reboot and an accepted one that did nothing are the same
+        observable state and both are answered by watching.
         """
         ad = await self.get_ad()
         payload = f"isTest=false&goformId=REBOOT_DEVICE&AD={ad}"
         headers = self.write_headers()
-        res = await self._request(
-            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        # A connection error here propagates, exactly as before. Absence is
+        # only evidence once the command was answered: if the request never
+        # reached the router, a router that is not answering afterwards is a
+        # router that was never reachable, and reporting that as a reboot is
+        # the silent success `[3.3.2-rc5]` refused to introduce. Measured on an
+        # MC7010, 2026-09-14: the write answers in about 0.1 s and the device
+        # goes away after, so the answer is the normal case.
+        await self._request(
+            "POST",
+            "goform/goform_set_cmd_process",
+            data=payload,
+            headers=headers,
+            _retry=False,
         )
-        await self._require_write_success(res, "REBOOT_DEVICE")
-        return 200
+        return 200 if await self._router_stopped_answering() else None
+
+    async def _router_stopped_answering(self) -> bool:
+        """Whether the router stops responding within the reboot window."""
+        deadline = monotonic() + REBOOT_VERIFY_SECONDS
+        while monotonic() < deadline:
+            try:
+                await self._request(
+                    "GET",
+                    "goform/goform_get_cmd_process",
+                    params={"isTest": "false", "cmd": "modem_main_state"},
+                    authenticated=False,
+                    classify=False,
+                    _retry=False,
+                    timeout_sec=2,
+                )
+            except (ZTEConnectionError, aiohttp.ClientError, TimeoutError):
+                # Deliberately not a bare `Exception`. This decides that a
+                # reboot happened, and a fault in this integration must never
+                # be read as evidence about the device.
+                return True
+            await asyncio.sleep(REBOOT_VERIFY_INTERVAL)
+        return False
 
     async def delete_sms(self, msg_id: str, listed_with: str | None = None) -> int:
         """Delete SMS.
@@ -3446,6 +3729,7 @@ class ZTERouterAPI:
         """
         before = await self._send_counters()
         ad = await self.get_ad()
+        self._require_confirmed_session("SEND_SMS")
         # Convert message to hex utf-16-be. This stays UTF-16BE for both
         # encodings — `encode_type` tells the router which DCS to put on the
         # wire and how to count segments, it does not change the format of

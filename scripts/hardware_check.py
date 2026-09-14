@@ -238,14 +238,32 @@ def _credentials() -> dict[str, str]:
     raise SystemExit(f"no zte_router_5g entry in {CONFIG_ENTRIES}")
 
 
-def _kill_session(api: ZTERouterAPI, session: aiohttp.ClientSession) -> None:
-    """Reproduce what a web-GUI login does: take the session away.
+async def _kill_session(api: ZTERouterAPI, session: aiohttp.ClientSession) -> None:
+    """Reproduce what a web-GUI login does: end the session on the router.
 
-    The router permits one session, so signing into its web page invalidates
-    Home Assistant's. Replacing the stok is indistinguishable from that as far
-    as every request is concerned.
+    **It logs out rather than corrupting the cookie, and the difference is not
+    cosmetic.** This used to replace the `stok` with a bogus value on the
+    reasoning that doing so "is indistinguishable from [an eviction] as far as
+    every request is concerned". That was true while the only evidence read was
+    ordinary parameter values, which blank either way. It is false now.
+
+    Measured on an MC7010, 2026-09-14: with a bogus `stok` the router still
+    answers `loginfo: ok`, because this client's address genuinely does hold a
+    session — only the cookie presented is wrong. A real takeover ends the
+    session, and `loginfo` then reads `""` within a second, confirmed twice
+    against a login from a browser on another machine.
+
+    So the old simulation produced a state the device cannot be in: a live
+    session reporting itself live, reached with an unusable credential. The
+    pre-write check correctly said the session was fine and the write was then
+    refused — a failure of the simulation, not of the check.
     """
-    api.cookies = {"stok": INVALID_STOK}
+    with contextlib.suppress(Exception):
+        # A logout the router does not acknowledge still ends the session as
+        # far as the next request is concerned, and this is reproducing a loss,
+        # so an unacknowledged one is not a failure of the setup.
+        await api.logout()
+    api.cookies = {}
     # The session stays *marked* active. A router-side eviction does not tell
     # the client anything, and clearing the flag here would have `_request`
     # log in again before the probe ever went out — the opposite of what
@@ -327,7 +345,7 @@ async def check_session_assumptions(
         + _dim("(observation only, nothing depends on it)")
     )
 
-    _kill_session(api, session)
+    await _kill_session(api, session)
     try:
         await api._request("GET", PROBE_PATH, _retry=False)
     except ZTEAuthError:
@@ -610,7 +628,7 @@ async def check_write_round_trip(
 
         try:
             if hostile:
-                _kill_session(api, session)
+                await _kill_session(api, session)
             started = time.monotonic()
             await setter(target)
             elapsed_ms = (time.monotonic() - started) * 1000

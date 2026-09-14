@@ -713,6 +713,17 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "first refusal is exactly the behaviour that left four diagnostics "
         "downloads with nothing in them."
     ),
+    ("diag_check.py", "noqa: BLE001"): (
+        "The top-level guard that reports an unreachable router instead of "
+        "ending on a traceback. It catches broadly on purpose: reaching the "
+        "device is a precondition of every check here, and the reference "
+        "MC7010 has been observed to stop answering mid-run with an empty "
+        "error message. Narrowing this to known transport types would let an "
+        "unexpected one end the script with no banner and an exit code "
+        "indistinguishable from a failed assertion, which is the reporting "
+        "fault the handler exists to remove. It re-raises nothing because it "
+        "returns a distinct exit code, 2, for could-not-run."
+    ),
     ("diag_check.py", "noqa: S104"): (
         "`0.0.0.0` appears in a set of addresses the leak sweep treats as "
         "non-identifying, alongside the broadcast and loopback addresses. It "

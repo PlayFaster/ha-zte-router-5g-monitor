@@ -20,8 +20,8 @@ permissions:
 
 jobs:
   validate:
-    # Branch @main v2.0.15 — update SHA after pushing .github changes
-    uses: PlayFaster/.github/.github/workflows/validate.yaml@b2242c0d3734f53d4da2709b8da7ae50a480843a
+    # Branch @main v2.0.16 — update SHA after pushing .github changes
+    uses: PlayFaster/.github/.github/workflows/validate.yaml@7bbe12f5eb67b6f346a5619d7c5978c501f52907
     with:
       category: integration
       component_name: zte_router_5g

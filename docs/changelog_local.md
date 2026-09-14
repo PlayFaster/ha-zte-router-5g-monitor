@@ -5,6 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25-dev3\] - 2026-09-14 - The Learned Session Flag Survives the Token Cache](#3325-dev3---2026-09-14---the-learned-session-flag-survives-the-token-cache)
+  - [\[3.3.25-dev2\] - 2026-09-14 - A Blank Session Flag Is Not a Denial Until the Key Is Known to Exist](#3325-dev2---2026-09-14---a-blank-session-flag-is-not-a-denial-until-the-key-is-known-to-exist)
+  - [\[3.3.25-dev1\] - 2026-09-14 - The Pre-Write Session Check Asks the Router Instead of Guessing](#3325-dev1---2026-09-14---the-pre-write-session-check-asks-the-router-instead-of-guessing)
   - [\[3.3.24\] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking](#3324---2026-09-13---release-asynchronous-sms-deletion-verification-and-send-outcome-tracking)
   - [\[3.3.24-dev1\] - 2026-09-13 - A Completed Delete Stops Reporting as a Failure](#3324-dev1---2026-09-13---a-completed-delete-stops-reporting-as-a-failure)
   - [\[3.3.22\] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection](#3322---2026-09-12---release-browser-aligned-sms-deletion-payloads-and-dynamic-session-key-selection)
@@ -280,6 +283,134 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.25-dev3] - 2026-09-14 - The Learned Session Flag Survives the Token Cache
+
+### Summary
+
+`[3.3.25-dev2]` made the session flag authoritative only after the device had answered `ok` once. That proof was being discarded on the same write that established it, so the mechanism fired once per API object and never again. Found by attacking the rule deliberately, not by a test.
+
+### Fixed
+
+- **The proof that a device implements `loginfo` is no longer thrown away when the firmware cache fills.** `_session_flag_seen_for` records the firmware the flag was last seen to work on, and `_session_flag_supported` compares it against `_cr_version_cache`. But `_ensure_session` runs *ahead* of the token derivation that populates that cache, so the first `ok` on a fresh object is always recorded with no version beside it — an empty string. `get_ad` then filled the cache moments later, on the same write, and the empty string no longer matched, so every later check answered `unanswered` and fell back to the older classifier.
+
+  The version is now adopted the first time it becomes known. The window between recording the proof and learning the version is a single write, inside which the firmware cannot have changed.
+
+  Demonstrated before the fix: a fresh object answered `confirmed`, the cache was then set as `get_ad` sets it, and the next identical read answered `unanswered`.
+
+### Added
+
+- **A test that drives the exact sequence** — fresh object with no firmware cache, one `ok`, then the cache filling as the token path fills it, then a blank — and asserts the blank is read as a denial. The existing tests all either set the cache first or never set it, which is why none of them saw this.
+
+### Notes
+
+- **This was found by attacking the rule, and it is the second time in two days that the useful signal came from something other than the test suite.** `[3.3.25-dev2]` records the first: 1,695 passing tests against a belief the hardware disproved. A rule is not verified by tests written from the same assumption that produced it.
+
+---
+
+## [3.3.25-dev2] - 2026-09-14 - A Blank Session Flag Is Not a Denial Until the Key Is Known to Exist
+
+### Summary
+
+`[3.3.25-dev1]` treated any non-`ok` answer from `loginfo` as a denial. The hardware check's dead-session rung then failed, and two separate faults sat behind that one failure: the rule could not tell a dead session from a device that does not implement the key, and the check's own simulation had stopped modelling a real session loss. This release corrects both, and clears the remaining validation failures.
+
+### Fixed
+
+- **A blank `loginfo` is read as `unanswered`, not as a denial, until the device has proved the key exists.** This API echoes a name it does not implement as an empty string, so a device without `loginfo` and a device whose session has gone answer identically. Reading that as a denial would have put every write on such a device behind a login it does not need, and would have blocked `SEND_SMS` on it outright — issue #56's shape in a new place, on the hardware that reported it.
+
+  The flag becomes authoritative only after that device has answered `ok` once, at a moment the session provably worked. The proof is held per firmware and discarded when `wa_inner_version` changes, for the same reason `cr_version` is: an upgrade may withdraw a key, and a stale belief would turn a meaningless blank into a denial.
+
+- **`scripts/hardware_check.py` ends the session instead of corrupting the cookie.** `_kill_session` replaced the `stok` with a bogus value, on the stated reasoning that doing so is indistinguishable from an eviction "as far as every request is concerned". That held while the only evidence read was ordinary parameter values, which blank either way. It is false now: with a bogus `stok` the router still answers `loginfo: ok`, because the client's address genuinely does hold a session and only the credential presented is wrong. The simulation produced a state the device cannot be in, the pre-write check correctly reported the session healthy, and the write was then refused. It now logs out.
+
+- **`scripts/diag_check.py` reports an unreachable router instead of ending on a traceback.** The reference device stops answering intermittently under repeated requests, with an empty error message; the script exited with no banner and an exit code indistinguishable from a failed assertion, so a caller reading the transcript could not tell a device that went away from a check that found something. Reaching the router is a precondition, not a check, and losing it now returns exit code 2.
+
+- **A test asserted a measured duration as an exact value.** `test_api_delete_all_success` pinned `verify_elapsed_ms` and `after_ms` to `0`, which failed whenever the machine was busy enough for the first verification pass to take a millisecond. Both are now asserted as bounds; the behaviour under test — that the re-list came back clean on the first pass and the settle window was never used — is carried by `verify_settled` and the empty `remaining`.
+
+- **Two tests asserted nothing.** The classifiability check raised `AssertionError` directly rather than asserting, and the send-block parametrisation relied on the absence of an exception. Both now state their expectation.
+
+### Changed
+
+- **Reading the device's witnesses alongside the flag was implemented and withdrawn the same day.** It resolved the blank-versus-unsupported ambiguity in one round trip, and it put the key selection this mechanism exists to remove back into the deciding path. On a device answering neither the flag nor its witnesses — the MC888 Pro's shape, where `wan_connect_status` is blank at all times — every write would have taken a login it did not need and `SEND_SMS` would have been blocked outright. The flag read asks for one key and nothing else.
+
+- **The suppression allow-list gained the `diag_check.py` top-level guard**, with its reason: reaching the device is a precondition of every check in that script, and narrowing the handler to known transport types would let an unexpected one end the run with no banner — the reporting fault the handler exists to remove.
+
+### Added
+
+- **Four tests for the learned-support rule**: that a blank flag is `unanswered` until the device has answered `ok`; that it becomes a denial afterwards; that the proof does not survive a firmware change; and that the read asks for one key with no witnesses travelling alongside it.
+
+### Notes
+
+- **1,695 unit tests passed against the fault the hardware check found.** The mocks returned what the author believed the device would return, so they confirmed the belief rather than testing it. `[3.3.2-rc5]` recorded the same lesson in the same words: mocks cannot falsify a belief about the device.
+
+- **Detection is not recovery, and this release does not change that.** Measured on an MC7010 twice: a browser login took the session, the check detected it within a second, logged in again and confirmed, and the write was still refused. The likely cause is the browser re-taking the session between the re-login and the request — contention no pre-write check can prevent. `[3.3.2-rc5]` recorded the same observation without establishing a mechanism, and it is still not established.
+
+- **`loginfo` was measured against a real session takeover**, from a browser on a different machine, twice: it flipped from `ok` to blank within one second, alongside the authenticated readings. A forged `stok` is not a test of this and was wrongly cited as one in `[3.3.25-dev1]`.
+
+## [3.3.25-dev1] - 2026-09-14 - The Pre-Write Session Check Asks the Router Instead of Guessing
+
+### Summary
+
+The check that runs before every write inferred session state from ordinary readings — signal, APN, connection status — and refused the write when it read them as blank. Those readings vary by model, by firmware and by whether the router is connected, so the same false positive has now been corrected three times: `[3.3.16]` after `wan_connect_status` proved permanently blank on an MC888 Pro, `[3.3.21-dev]` after `ppp_status` and `model_name` failed the same way, and now, after the reference MC7010 refused its own SMS deletions on a session seconds old.
+
+This release asks the router's own session flag instead, and removes the refusal.
+
+### Fixed
+
+- **The pre-write check reads `loginfo`, the router's own session flag.** The device's `js/service.js` decides the same way — it issues `cmd=loginfo` and sets `isLoggedIn` on `case "ok"` — and the four `"ok"` literals in that file all compare against `loginfo`, none against `result`. Confirmed on an MC7010 on 2026-09-14 against a login from a browser on another machine: the flag flipped from `ok` to blank within one second of the session being taken, twice.
+
+- **The check can no longer fail a write.** `_ensure_session` contains no `raise` and never did — it raised through `_request`, one call away, which is why an AST sweep for `raise` sites could not see it and why five test files referenced the function without one asserting this. Its job is to trigger a re-login before the write, not to decide whether the write may be sent; the blocking was inherited from `_request`'s error contract rather than designed.
+
+  Reproduced on hardware, on a healthy router carrying traffic: witnesses `['5g_rsrp', 'APN_config1', '5g_sinr']` with `imei` populated alongside returned `expired` on a session seconds old, while `['network_type', 'signalbar', 'imei']` returned `live` against the same session at the same moment.
+
+- **A blank flag is not read as a denial until the device has proved the key exists.** This API echoes a name it does not implement as an empty string, so a device without `loginfo` and a device whose session has gone answer identically. The flag is treated as authoritative only after that device has answered `ok` once, at a moment the session provably worked; until then a blank is `unanswered` and the older classifier decides, recording a verdict and blocking nothing. The proof is held per firmware and discarded when `wa_inner_version` changes, for the same reason `cr_version` is.
+
+  No key list, no model heuristic and no companion key enters this decision. Which names a device populates is the judgement that has been wrong three times, and a mechanism that needs it is the mechanism being replaced.
+
+- **`note_write_refusal` carried the identical defect and is fixed with it.** It ran the same witness selection after a refusal and raised `ZTEAuthError` on an `expired` verdict, so a witness pool the device answers empty turned a genuine command refusal into "the session is gone". Only a direct denial from the router raises now; a witness verdict is recorded and returned.
+
+- **A reboot is confirmed by the router going away, not by its answer.** Measured on an MC7010 on 2026-09-14: one `REBOOT_DEVICE` returned `{"result":"failure"}` on a session seconds old and did nothing, and an identically built request minutes later returned `{"result":"success"}` and rebooted the device — `system_uptime` fell from 96036 to 84. The response has disagreed with what the device did in both directions, so it is no longer trusted alone. The write is sent, the router is polled twice a second for five seconds, and the reboot is reported when it stops answering.
+
+  A connection error on the write itself still propagates. Absence is only evidence once the command was answered: a router that was never reachable is not a router that rebooted, and reporting it as one is the silent success `[3.3.2-rc5]` refused to introduce.
+
+  A refused reboot is retried once, because reboot is the only write that is idempotent in effect — a second one against a router already rebooting changes nothing.
+
+### Changed
+
+- **SMS send is the only write blocked when the session cannot be confirmed**, and only on a device that has proved it implements the flag. Every other command is either verified after the fact — the two switches read back, SMS delete re-lists, a reboot is confirmed by absence — or harmless to repeat. A send has neither property: reporting it as unverified invites the user to send again, and this API gives no way to tell whether the first one went out. The error says the command was never issued.
+
+- **`last_session_check` records every outcome, not only the successful one.** It was assigned after the request returned, with the literal verdict `"live"`, so every other outcome raised before reaching the recorder — which is why the field was `null` in exactly the downloads that would have explained the fault. The record now names its source and carries the verdict whatever it is. The raw flag value never publishes: `loginfo` matches the diagnostics deny pattern, and only the comparison result is reported.
+
+- **`scripts/hardware_check.py` ends the session instead of corrupting the cookie.** `_kill_session` replaced the `stok` with a bogus value, on the stated reasoning that doing so is indistinguishable from an eviction "as far as every request is concerned". That held while the only evidence read was ordinary parameter values, which blank either way, and is false now: with a bogus `stok` the router still answers `loginfo: ok`, because this client's address genuinely does hold a session and only the credential presented is wrong. The simulation produced a state the device cannot be in, and the pre-write check correctly reported the session healthy. It now logs out.
+
+- **`scripts/diag_check.py` reports an unreachable router instead of ending on a traceback.** The reference device has been observed to stop answering mid-run, with an empty error message; the script then exited with no banner and an exit code indistinguishable from a failed assertion. Reaching the router is a precondition, not a check, and losing it now returns exit code 2.
+
+### Added
+
+- **An indirect-raise sweep, shipped as a test** (`tests/test_indirect_raise_sweep.py`). It enumerates every read through `_request` and asserts each is covered by one of the four protections that exist — `classify=False`, `authenticated=False`, `_retry=False` inside a `try`, or a `try` — and fails on a new one that is none of them. A write's own `POST` is excluded: a failed write is supposed to reach its caller. The sweep flags the previous `_ensure_session` implementation.
+
+  A second assertion in the same file: the check must not manufacture its own classifiability. `_is_classifiable` answers yes whenever an unauthenticated key is present, and the old check appended one deliberately — satisfying the guard by construction while defeating its intent.
+
+- **Tests that pin the property the mechanism was missing.** That the check never raises, across four answer shapes and a failed read; that a failed re-login still lets the write proceed; that a confirmed flag makes exactly one request and skips the witness path; and that the flag read is never classified — a device without the key answers `{"loginfo": ""}`, which `_request` scores as an expiry, re-logs in and replays, and the caller would then log in again: two or more logins per write against `MAX_LOGIN_COUNT` and a 300-second lockout.
+
+- **Tests for the learned-support rule**: that a blank flag is `unanswered` until the device has answered `ok`; that it becomes a denial afterwards; that the proof does not survive a firmware change; and that the read asks for one key with no witnesses travelling alongside it.
+
+- **A witness test that drives `_populated_keys` through a real poll sequence.** Sixteen tests set it directly and none derived it, so the replace-versus-accumulate behaviour never executed under test. Measured on hardware: 60 keys after the core poll, 39 after the extended poll, and none of the 60 core names surviving. The test asserts the behaviour as it stands, so the fix — which is not in this release — has to account for it rather than pass by accident.
+
+### Corrected before release — claims this entry made earlier the same day
+
+- **`loginfo` alone was not enough, and the hardware check found it, not the tests.** The first implementation treated any non-`ok` answer as a denial. The dead-session rung of `scripts/hardware_check.py` then failed: the flag reported the session healthy and the write was refused. Two faults sat behind that one failure — the script's simulation was no longer faithful (above), and the rule had no way to tell a dead session from a device that does not implement the key. 1,695 unit tests passed throughout, because the mocks returned what the author believed the device would return. `[3.3.2-rc5]` recorded the same lesson: mocks cannot falsify a belief about the device.
+
+- **Reading the device's witnesses alongside the flag was tried and withdrawn.** It resolved the ambiguity in one round trip, and it put the key selection this mechanism exists to remove back into the deciding path. On a device that answers neither the flag nor its witnesses — the MC888 Pro's shape — every write would have taken a login it did not need and `SEND_SMS` would have been blocked outright. Replaced by the learned-support rule, which needs no key list at all.
+
+- **An earlier draft of this entry said one key and one comparison replace the witness machinery.** They do not. The witness classifier remains, as the fallback for any device that has not proved it implements the flag, and it records verdicts without blocking anything.
+
+### Notes
+
+- **`loginfo` on the MC888 Pro is answered but unproven.** It is present and populated in all sixteen reporter downloads from `[3.3.8]` to `[3.3.24]`, always a two-character token, never blank. The diagnostics sanitiser redacts the value by name, so the literal has not been seen on that device, and no download exists of that device with a dead session — a download is only produced when the integration is working. Two notes in this project describe the field as static there, which is consistent with `ok` on every working session but would also describe a field that never changes. The learned-support rule covers the gap without needing the answer.
+
+- **Recovery from a session taken by another client is not solved here.** Measured on an MC7010: a browser login took the session, the check detected it within a second, logged in again and confirmed, and the write was still refused. The likely cause is the browser re-taking the session between the re-login and the write — contention no pre-write check can remove. `[3.3.2-rc5]` recorded the same observation without a mechanism. Detection works; a write cannot be made reliable while another client is actively holding the router's page open.
+
+- **The best-effort carve-out in the dead-session sweep grew from five to six**, for `read_session_flag`. It answers `unanswered` rather than raising, because a pre-write check that cannot run must not decide anything.
 
 ## [3.3.24] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking
 
