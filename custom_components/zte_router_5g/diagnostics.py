@@ -913,25 +913,25 @@ def _gate_discovery_value(
     return value[:_VALUE_CAP], "published"
 
 
-# Metadata fields of a discovery result that are published verbatim. These are
-# produced by this integration rather than read from the router, with one
-# exception noted below, so an allow-list here is about sanitisation and not
-# about hiding detail from the reader.
+# Metadata fields of a discovery result that are published verbatim. This
+# integration produces them rather than reading them from the router, with one
+# exception noted below, so the allow-list is about sanitisation and not about
+# hiding detail.
 #
-# It is an allow-list rather than a passthrough because a future field could
-# carry a router value, and deny-by-default is the direction an omission should
-# fail in. The cost of that choice is that adding a field to `run_discovery` is
-# a two-file change, and the second file has been forgotten twice:
-# `session_alive_after` was caught before release, `canary` was not and shipped
-# in v3.3.9-dev5 recorded by the API and absent from every download. Branch
-# coverage cannot see it — this is data, and the loop runs either way.
+# An allow-list rather than a passthrough because a future field could carry a
+# router value, and an omission should fail closed. The cost is that adding a
+# field to `run_discovery` is a two-file change, and the second file has been
+# forgotten twice. `session_alive_after` was caught before release. `canary` was
+# not: it shipped in v3.3.9-dev5 recorded by the API and absent from every
+# download. Branch coverage cannot see that, because this is data and the loop
+# runs either way.
 #
-# `test_every_discovery_field_is_classified` closes that by asserting the two
-# sets below partition an actual `run_discovery` result, so a new field fails
-# the suite until it is classified deliberately.
+# `test_every_discovery_field_is_classified` asserts the two sets below
+# partition an actual `run_discovery` result, so a new field fails the suite
+# until it is classified.
 #
-# `probed_no_answer` and `mined_names` are router-derived *names*, never
-# values; the values themselves are the gated section.
+# `probed_no_answer` and `mined_names` are router-derived names, never values.
+# The values are the gated section.
 DISCOVERY_METADATA_PUBLISHED = frozenset(
     {
         "canaries",

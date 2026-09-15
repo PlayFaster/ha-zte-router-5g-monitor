@@ -1390,3 +1390,44 @@ async def test_a_read_outside_a_cycle_adds_rather_than_discards(
         await api._batch_get(["5g_rx0_rsrp"])
 
     assert set(api._populated_keys) == {"wan_connect_status", "5g_rx0_rsrp"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("answer", "expected"),
+    [
+        (TimeoutError("slow"), "TimeoutError"),
+        ("not a mapping", "not a mapping"),
+        ({"something_else": "1"}, "key absent"),
+    ],
+)
+async def test_an_unanswered_flag_read_records_why(answer, expected) -> None:
+    """`unanswered` alone cannot be told apart from a timeout or a bad shape.
+
+    The verdict is the same in all three cases, so a download that carries only
+    the verdict cannot say whether the router refused, timed out, or answered
+    something this code could not read.
+    """
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+
+    async def reply(*_args, **_kwargs):
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    with patch.object(api, "_request", side_effect=reply):
+        assert await api.read_session_flag() == SESSION_UNANSWERED
+
+    assert api.session_flag_report()["unanswered_because"] == expected
+
+
+@pytest.mark.asyncio
+async def test_an_answered_flag_read_clears_the_reason() -> None:
+    """A stale reason would outlive the failure it describes."""
+    api = ZTERouterAPI(MagicMock(), "192.168.0.1", "admin", "password")
+    api._session_flag_unanswered_because = "TimeoutError"
+
+    with patch.object(api, "_request", new=AsyncMock(return_value={"loginfo": "ok"})):
+        assert await api.read_session_flag() == SESSION_CONFIRMED
+
+    assert api.session_flag_report()["unanswered_because"] is None

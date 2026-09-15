@@ -37,28 +37,20 @@ class _HasEnabledDefault(Protocol):
 
 # Model to the entities whose default this model overrides.
 #
-# Matched as a **substring** of the model the router reports, longest key
-# first, so a specific entry can override a general one without restructuring
-# the lookup. Family matching is deliberate: the `network_` vocabulary and the
-# `zsidn` session cookie are firmware-family behaviours rather than variant
-# ones, and which entities a build populates follows the family rather than
-# the variant.
+# Matched as a substring of the model the router reports, longest key first, so
+# a specific entry can override a general one. Family matching is deliberate:
+# the `network_` vocabulary and the `zsidn` session cookie are firmware-family
+# behaviours rather than variant ones, and which entities a build populates
+# follows the family.
 #
-# **No higher-stakes decision is made this way any more, and one used to be.**
-# `_ad_hash_func` selected the write token's digest on `MC888` or `MC889`
-# appearing anywhere in the version string; since v3.3.25-dev10 it reads the
-# function the device's own script names and falls back to that substring only
-# when the script cannot be resolved. An earlier revision of this comment cited
-# that selection as precedent and named `api._hash`, which has never branched
-# on anything — it is unconditionally SHA-256, for the login password.
-#
-# The precedent is therefore withdrawn rather than updated. What justifies
-# substring matching here is that an entity default is advisory and a user can
-# override it, not that something riskier is decided the same way.
+# Substring matching is safe here because an entity default is advisory and a
+# user can override it. Nothing riskier is decided this way: since v3.3.25-dev10
+# `_ad_hash_func` takes the write token's digest from the device's own script,
+# and falls back to the model string only when that cannot be resolved.
 #
 # Seeded from measurement only. Every entry below is a reading from the
-# 2026-09-02 diagnostics download attached to issue #56, not an inference
-# about what a model probably supports.
+# 2026-09-02 diagnostics download attached to issue #56, not an inference about
+# what a model probably supports.
 MODEL_OVERLAY: Final[dict[str, dict[str, bool]]] = {
     # ZTE MC888 Pro, firmware `CR_xxxxMC888PROV1.0.1B04`.
     #

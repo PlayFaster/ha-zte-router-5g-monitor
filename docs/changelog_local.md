@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25-dev12\] - 2026-09-15 - Comments and Docstrings Rewritten for Readability; the Write-Path Documents Catch Up](#3325-dev12---2026-09-15---comments-and-docstrings-rewritten-for-readability-the-write-path-documents-catch-up)
   - [\[3.3.25-dev11\] - 2026-09-15 - Five Values the Profile Had Learned and Nothing Read](#3325-dev11---2026-09-15---five-values-the-profile-had-learned-and-nothing-read)
   - [\[3.3.25-dev10\] - 2026-09-15 - The Router's Own Web Interface Supplies the Write Contract](#3325-dev10---2026-09-15---the-routers-own-web-interface-supplies-the-write-contract)
   - [\[3.3.25-dev9\] - 2026-09-15 - Discovery Reads What the Router References; Writes and Polls Take Turns](#3325-dev9---2026-09-15---discovery-reads-what-the-router-references-writes-and-polls-take-turns)
@@ -289,6 +290,62 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+
+---
+
+## [3.3.25-dev12] - 2026-09-15 - Comments and Docstrings Rewritten for Readability; the Write-Path Documents Catch Up
+
+### Summary
+
+No behaviour changes except one. `docs/project_complexity.md` flags six modules above 25% comment density, sixty contiguous comment blocks over eight lines, and three routines whose comments outnumber their code. The prose behind those flags was written in a conversational register: long subordinated sentences, em-dash asides, bold emphasis used often enough to emphasise nothing, and paragraphs narrating a debugging history where the rule and the measurement would do.
+
+Twelve blocks are rewritten. **Prose across the integration goes from 5,757 lines to 5,726**, and the line count is not the point. What changed is that no sentence now carries three clauses and an aside.
+
+**The reduction is small because the prose is fact-dense, not padded.** These blocks hold measurements, key names, firmware versions, changelog references and test names. Cutting words alone moves the `ZTERouterAPI.__init__` field notes from 107 lines to 102. An earlier proposal reached 57% on the same blocks by deleting facts: a measurement method, the counts behind `_UNAUTHENTICATED_KEYS`, the `canary` precedent, and in one case by converting a value the source explicitly calls plausible into one it claims was observed.
+
+### Changed
+
+- **Twelve comment blocks and docstrings rewritten.** `ZTERouterAPI.__init__` field notes, `SESSION_AGE_LEARN_MIN_SAMPLES`, `_CORE_PARAMS`/`_EXTENDED_PARAMS`, `_UNAUTHENTICATED_KEYS`, `DISCOVERY_METADATA_PUBLISHED`, `MODEL_OVERLAY`, `_async_update_data`, `note_write_refusal`, `_require_confirmed_session`, `_ensure_session`, `mine_candidate_names` and `set_apn_mode`.
+
+  Every fact is kept. Bold emphasis is gone from all twelve. Em-dash asides are their own sentences. `DISCOVERY_METADATA_PUBLISHED` came out the same length and reads differently throughout.
+
+- **A mechanical check, not a promise.** Each block's factual tokens — numbers, dates, backticked symbols, ALL_CAPS constants, file and test names, version and issue references — were extracted before the rewrite and diffed against it by script. A token present before and absent after is restored, not justified.
+
+  It earned its place on the first run by catching `last_activity` dropped from the `SESSION_AGE_LEARN_MIN_SAMPLES` rewrite. It also produced two false positives, both fixed in the checker rather than waved through: a token split across a re-wrapped line read as lost, and the double-backtick RST style in ``AD`` let the single-backtick pattern span two of them and treat a paragraph as one token. A check that is learned to be ignored is worse than none.
+
+### Fixed
+
+- **Five comments were describing something other than the code beneath them.** In `const.py`, four unrelated blocks had stacked with no code between them and all landed on `BATCH_URL_MAX_CHARS`: two of them belonged to `DISCOVERY_CANDIDATES` and `DISCOVERY_CHUNK_SIZE`, which were defined a hundred lines further down carrying no comment at all. In `ZTERouterAPI.__init__`, a comment describing probed `cmd` names sat on `self.is_multi`, whose field had been removed, and `session_check_stats`' note sat on `session_started`.
+
+  Nothing was deleted. Each block moved to what it describes. This also accounts for the two longest "contiguous comment blocks" the complexity report flags — 30 lines and 24 — neither of which was one block.
+
+- **A session-flag read that could not answer now records why.** `read_session_flag` caught everything and returned `SESSION_UNANSWERED` with the reason discarded, so a download reported `unanswered` with no way to tell a timeout from a refused read from an answer this code could not parse. It now records `TimeoutError`, `not a mapping` or `key absent`, published as `session_flag.unanswered_because` and cleared by a read that does answer.
+
+  Found by auditing the 26 `# noqa` and 7 `# pragma: no cover` suppressions. All 33 are justified: every broad catch sits on a path with a written must-not-fail contract, and 21 of the 24 `BLE001` sites record the error. Of the three that discard it, two return a boolean that is itself the answer. This was the third, and it sits on the mechanism phase 2.5 was built around.
+
+### Documentation
+
+Fourteen updates, each verified against the code rather than from memory.
+
+- **`docs/zte_how_to_access.md`, the `AD` token section.** The formula read `AD = H(H(firmware_version) + RD)`, omitting `cr_version`, while the same section stated the correct two-operand form twenty lines later. The digest table presented the model string as the selector; it has been the fallback since `[3.3.25-dev10]`, and the measurement showing a firmware flag cannot choose the digest is now recorded there. `ad_suffix`, the `ACCESSIBLE_ID_SUPPORT` gate and the exempt commands are documented, because a write may now carry no token at all. A stale `api.py:693` reference is removed.
+
+- **The `RD` paragraph was wrong and the conclusion it supported no longer exists.** It stated `RD` is a static per-device seed on the 2026-07-29 measurement, and concluded that `_request` can replay a write payload verbatim without the embedded `AD` going stale. The 2026-09-13 measurement contradicts the premise: two consecutive reads agree and a three-second pause changes nothing, but a write changes it, and a browser capture of three deletes in one session carries three different values. No recovery path re-sends a write in any case.
+
+- **The field-name difference is documented where it was found.** `APN_PROC_EX` gains the MC7010 and MC888 Pro spellings and the note that this integration sent the wrong ones until `[3.3.25-dev10]`. A new subsection records the measurement across both devices' scripts: 74 write commands against 170, **15 of the 67 they share carrying different field names**, all fifteen named.
+
+- **The login split is no longer model-string only.** `LOGIN` vs `LOGIN_MULTI_USER` records the profile's `carries_username`, and why only its negative direction is consumed.
+
+- **`docs/DEVELOPMENT.md`.** §2 listed every module except the two added this cycle; `device_profile.py` and `web_sources.py` are added. §6, the procedure for supporting a model nobody here owns, now starts at the download's `device_profile` section and says not to hand-write an alias map for a write command. §8's claim that `get_ad()` branches by model for the hash algorithm is corrected. §5 gains the pitfall behind it: a firmware flag must never choose the digest.
+
+- **`AGENTS.md`.** The `msg_id` example said the integration sends `msg_id=3`; it has sent the terminated form since `[3.3.22-dev2]`. The rule it teaches is unchanged and the example now names the two real causes of issue #56. The `api.py` easy-to-break list gains `ad_suffix`, `profile_field` and the digest, all three of which are silent when broken.
+
+### Notes
+
+- **`ZTERouterAPI.__init__` is still 102 comment lines over 57 field declarations, and short sentences will not fix that shape.** What would is moving the long rationales into the docstrings of the methods that own the behaviour — `login`, `read_session_flag`, `_record_delete` — leaving a line per field. Not done here, because re-grouping comments away from their fields is what left `self.is_multi` carrying a description of a deleted field until `[3.3.25-dev12]` moved it back.
+
+- **The wider population is untouched.** 45 prose units of 19 lines or more exist across the integration and twelve are rewritten. The rest were not flagged, but the register is the same in them.
+
+- 1,768 tests at 100% line and branch coverage.
 
 ---
 

@@ -59,25 +59,24 @@ WRITE_LOCK_WAIT_SECONDS: float = 3.0
 
 # The preemptive session reset, in its learned form.
 #
-# `SESSION_IDLE_RESET_SECONDS` above is compared against `last_activity`, which
-# is time since the last authenticated request — an idle clock. The boundary it
-# guards is not idle-based: a session polled every ten seconds ended at the same
-# point as one left untouched. Idle time between polls is roughly the scan
-# interval, configurable from 30 to 3600 seconds, so at any interval of 150s or
-# less the preempt never fires at all and every poll past the boundary pays a
-# failed request, a login and a retry.
+# `SESSION_IDLE_RESET_SECONDS` above is compared against `last_activity`: time
+# since the last authenticated request, an idle clock. The boundary it guards is
+# not idle-based. A session polled every ten seconds ended at the same point as
+# one left untouched. Idle time between polls is roughly the scan interval,
+# configurable from 30 to 3600 seconds, so at 150s or less the preempt never
+# fires and every poll past the boundary pays a failed request, a login and a
+# retry.
 #
-# Keying on session *age* fires correctly at every interval, because it measures
-# the clock that actually runs out. But an age threshold carrying a number from
-# one device would fire on every device, which is worse than an idle one. So the
-# threshold is learned from expiries this device actually had, and until enough
-# have been seen the idle reset above is what runs — unchanged behaviour, and
-# the `[3.3.0-rc2]` decision not to rely on reactive detection alone stands.
+# Session age measures the clock that actually runs out, so it fires at every
+# interval. A threshold carrying one device's number would misfire on every
+# other, so it is learned from this device's own expiries. Until enough samples
+# exist the idle reset runs, and the `[3.3.0-rc2]` decision not to rely on
+# reactive detection alone stands.
 #
-# There is no lifetime to hardcode. Four runs on the reference MC7010 inside one
+# There is no lifetime to hardcode. Four runs on the reference MC7010 in one
 # hour ended at 15s, 85s and 110-120s, and one could not complete. `[3.3.0-rc2]`
 # separately measured "at or below 200s". A device holding sessions for 300s and
-# one expiring at 20s are both plausible and neither is served by a constant.
+# one expiring at 20s are both plausible, and no constant serves both.
 SESSION_AGE_LEARN_MIN_SAMPLES = 3
 # Act on the shortest of the recent samples rather than the shortest ever: a
 # session can end for reasons other than time, and this router grants the
@@ -221,36 +220,15 @@ SMS_SEGMENTS_MAX = 5
 SMS_MAX_CHARS_GSM7 = 765
 SMS_MAX_CHARS_UNICODE = 335
 
-# Candidate `cmd` names harvested from `Kajkac/ZTE-MC-Home-assistant-repo`,
-# which covers the MC801A, MC888 and MC889, minus everything this integration
-# already requests and everything outside its scope (Wi-Fi, guest networks,
-# DHCP, DNS, IPv6, battery, firmware upgrade state).
-#
-# Probed once per setup so a diagnostics download can show which of them a
-# device populates. **Never joins the poll**: `docs/zte_how_to_access.md`
-# records a probe carrying names outside the firmware's dictionary making a
-# whole chunk time out and fall back to empty defaults, taking a genuinely
-# populated key down with it. Chunked and individually tolerant for the same
-# reason.
-#
-# Every name here is classified in `diagnostics.py` — see
-# `DISCOVERY_VALUE_SAFE`. An unclassified candidate is not eligible for this
-# list, because its value would be published.
-# Names per discovery request. Small deliberately: a chunk carrying a name
-# outside the firmware's dictionary can time out entirely, and a smaller chunk
-# loses less when it does.
 # Characters a single batch request may reach before it is split. The router
 # bounds a GET by URL length rather than by name count, and the ceiling
 # measured on an MC7010 is roughly 2,048 — but that is one device's, and a
 # firmware with a lower one truncates the response rather than erroring, which
 # presents as missing fields. The margin is deliberate.
 #
-# The list grows with every model supported, not with every feature added: a
-# device that spells a concept differently needs both spellings requested.
 # Named for what it is rather than as a "budget": `check_test_depth.py`
 # reserves that suffix for accumulation gates — strike counters a test has to
-# reach by polling repeatedly — and this is a size threshold decided within a
-# single call.
+# reach by polling repeatedly — and this is a size threshold decided in one call.
 BATCH_URL_MAX_CHARS = 1600
 
 # How long `verify_deleted` keeps re-listing before it calls a message
@@ -328,6 +306,9 @@ CANARY_FALLBACK_EVERY = 8
 # between the canary being introduced and the refusal being handled.
 DISCOVERY_RELOGIN_LIMIT = 3
 
+# Names per discovery request. Small deliberately: a chunk carrying a name
+# outside the firmware's dictionary can time out entirely, and a smaller chunk
+# loses less when it does.
 DISCOVERY_CHUNK_SIZE = 16
 
 # Mined names are unvalidated by definition, so their chunks are smaller: a
@@ -381,6 +362,21 @@ JS_BUNDLES: tuple[str, ...] = (
     "js/language.js",
 )
 
+# Candidate `cmd` names harvested from `Kajkac/ZTE-MC-Home-assistant-repo`,
+# which covers the MC801A, MC888 and MC889, minus everything this integration
+# already requests and everything outside its scope (Wi-Fi, guest networks,
+# DHCP, DNS, IPv6, battery, firmware upgrade state). The list grows with every
+# model supported, not with every feature added: a device that spells a concept
+# differently needs both spellings requested.
+#
+# Probed once per setup so a diagnostics download can show which of them a
+# device populates. **Never joins the poll**: `docs/zte_how_to_access.md`
+# records a probe carrying names outside the firmware's dictionary making a
+# whole chunk time out and fall back to empty defaults, taking a genuinely
+# populated key down with it. Chunked and individually tolerant for that reason.
+#
+# Every name here is classified in `diagnostics.py` — see `DISCOVERY_VALUE_SAFE`.
+# An unclassified candidate is not eligible, because its value would publish.
 DISCOVERY_CANDIDATES: list[str] = [
     "Lte_ca_status",
     "Z5g_dlEarfcn",

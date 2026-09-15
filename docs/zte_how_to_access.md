@@ -69,7 +69,9 @@ The token is looked for in four places before that conclusion is drawn (`_extrac
 
 The no-username rule matches `Kajkac/ZTE-MC-Home-assistant-repo`, which branches on the username alone. `LOGIN_MULTI_USER` carries a user field that a password-only configuration has nothing to fill, so the router rejects it on that ground regardless of model — observed as `{"result":"failure"}` on an MC888 Pro in issue #56.
 
-This is the first of two places where model detection changes the protocol. It is string-matching on the firmware version, which is fragile by nature — a model outside the known set that expects the single-user form will fail login with no distinguishing error.
+String-matching on the firmware version is fragile by nature: a model outside the known set that expects the single-user form fails login with no distinguishing error. Since `[3.3.25-dev11]` the device's own login form narrows it. `device_profile.py` reads whether that form carries a `username` field, and a form that carries none selects `LOGIN`.
+
+**Only that direction is consumed.** A form with no `username` is evidence for `LOGIN` — it is what the MC888 Pro builds. A form that carries one is not evidence for `LOGIN_MULTI_USER`: the MC7010 carries a username and uses `LOGIN`, so reading the flag symmetrically would move that device onto a form it does not accept.
 
 ### The post-login initialization GET
 
@@ -156,30 +158,33 @@ Preempting is also _cheaper_ than reacting, which is the opposite of the intuiti
 
 ## 🔑 The `AD` token — required for every write
 
-Read commands need only the `stok` cookie. **Every write additionally needs an `AD` parameter**, computed per request (`get_ad`, `api.py:693`).
+Read commands need only the `stok` cookie. **Most writes additionally need an `AD` parameter**, computed per request (`get_ad`, `api.py`).
 
-> **`get_ad()` assures the session before deriving the token.** It is the one function every write passes through, which is why the check lives there rather than in each setter — see [The fourth signature](#the-fourth-signature--and-why-it-is-not-in-the-table). Anything that bypasses `get_ad()` also bypasses the only dead-session protection the write path has.
+> **`ad_suffix()` is the one place a write decides whether it carries a token, and `get_ad()` assures the session before deriving one.** Every write passes through `ad_suffix`, which is why the check lives there rather than in each setter — see [The fourth signature](#the-fourth-signature--and-why-it-is-not-in-the-table). Anything that bypasses it also bypasses the only dead-session protection the write path has. `test_every_write_payload_takes_its_token_from_ad_suffix` asserts that no writer does.
 
 ```text
-AD = H( H(firmware_version) + RD )
+AD = H( H(wa_inner_version + cr_version) + RD )
 ```
 
-where `RD` comes from `GET goform_get_cmd_process?cmd=RD` and `H` is:
+`RD` comes from `GET goform_get_cmd_process?cmd=RD`. A device that does not answer `cr_version` appends an empty string, which is why the single-operand form was indistinguishable from the correct one on the MC7010 for so long.
 
-| Model family                         | `H`     | Case              |
-| :----------------------------------- | :------ | :---------------- |
-| Firmware contains `MC888` or `MC889` | SHA-256 | **uppercase** hex |
-| Everything else                      | MD5     | lowercase hex     |
+`H` is MD5 with lowercase hex, or SHA-256 with uppercase hex. **Which one is read from the device's own script, not from the model string.** Its `js/service.js` names the function in the token expression, and `device_profile.py` resolves that name to a digest. The model string — SHA-256 where the firmware contains `MC888` or `MC889`, MD5 otherwise — is the fallback for a firmware whose script cannot be parsed or whose digest function this project has never seen an accepted token from.
 
-This is the second model-dependent branch in the protocol. MD5 here is a vendor protocol requirement, not a security choice (`# noqa: S324`).
+**A firmware flag must never choose the digest, and this is measured.** `js/config/config.js` is effectively identical between the MC7010 and the MC888 Pro on every flag that could plausibly select one: both carry `PASSWORD_ENCODE:!0`, `WEB_ATTR_IF_SUPPORT_SHA256:2`, `ACCESSIBLE_ID_SUPPORT:!0`, `MAX_LOGIN_COUNT:5`, and both declare `DEVICE:"cpe/MF253V"`. One implements MD5 and the other SHA-256. Only the function the script names distinguishes them.
+
+MD5 here is a vendor protocol requirement, not a security choice (`# noqa: S324`).
+
+**Some commands carry no token at all.** The client exempts `LOGIN` and `SET_WEB_LANGUAGE`, read from the same expression. A device whose `ACCESSIBLE_ID_SUPPORT` flag is off carries none on any command; no such device has been seen, and the flag is read rather than assumed. `ad_suffix` decides both.
 
 **A write sent without `AD`, or with a stale one, does not error.** The router answers `{"result":"failure"}` with HTTP 200 and does nothing. This was confirmed on MC7010 firmware `V1.0.0B03` (2026-07-27) using `LOGOUT`: without `AD` the call returned failure and the `stok` remained live; with `AD` it returned success and the `stok` was genuinely invalidated. Assume the same of any `goformId` — a silent no-op is the default failure mode of this API.
 
 **Client-side enforcement**: `api.py:_require_success()` is called on the result of every write command and raises `ZTEConnectionError` on an explicit non-success `result`. Before it existed, a refused write was reported to the user as a successful action — a user watched an SMS action succeed with no message sent. It raises only on an explicit non-success value; a response carrying no `result` key is left alone, because not every `goformId` returns one.
 
-**`RD` is a static per-device seed, so `AD` is _not_ single-use.** Measured on MC7010 firmware `V1.0.0B03` (2026-07-29): `cmd=RD` returned the identical value across logins and across a deliberately invalidated session. Since `AD = H(H(version + cr_version) + RD)` and both inputs are fixed for a given device, **the token is constant per router** — which is why `_request` can replay a write payload verbatim after a re-login without the embedded `AD` going stale. An earlier revision of this document claimed the opposite ("fetched fresh for every write, so `AD` is single-use"); that was an assumption, and the measurement contradicts it. Do not build a retry or caching decision on the single-use reading.
+**`RD` is not static, and no retry decision may assume it is.** Measured on MC7010 firmware `V1.0.0B03` (2026-07-29), `cmd=RD` returned the identical value across logins and across a deliberately invalidated session, and an earlier revision of this document concluded from that the token is constant per router. Measured again on 2026-09-13, it is not: two consecutive reads return the same value and a three-second pause changes nothing, but **a write changes it**, and a browser capture of three deletes in one session carries three different `RD` values. What triggers the rotation is not established from five samples.
 
-**Both inputs are required, and an absent one must raise rather than hash to a token.** `AD = H(H(version) + RD)`, so a missing `wa_inner_version` **or** a missing `RD` yields a well-formed but wrong token. Sent, it draws `{"result":"failure"}` — which reads to the user as the router refusing a command it never had a chance to accept. `get_ad` raises `ZTEConnectionError` on either, naming the real cause.
+Nothing depends on the answer, because **no recovery path re-sends a write.** `replayable` excludes every write and the one retry loop in a write path re-_reads_; `test_no_recovery_path_ever_re_sends_a_write` asserts it. A resent `SEND_SMS` delivers the message twice and the response cannot say whether it did.
+
+**Both inputs are required, and an absent one must raise rather than hash to a token.** A missing `wa_inner_version` **or** a missing `RD` yields a well-formed but wrong token. Sent, it draws `{"result":"failure"}` — which reads to the user as the router refusing a command it never had a chance to accept. `get_ad` raises `ZTEConnectionError` on either, naming the real cause.
 
 ---
 
@@ -537,6 +542,8 @@ Two things follow. The form is all-or-nothing like `DATA_LIMIT_SETTING` — `apn
 
 Only the complete form is verified to _apply_ — the mode changed and `wan_apn` followed it. The bare `auto` form is only verified to be _accepted_, which on this API is a weaker claim, so it is kept solely as a fallback for when the poll has not yet supplied `apn_index`.
 
+**The field names differ between devices, and this command is where it was found.** The MC7010 builds `pdp_type`, `pdp_select`, `wan_dial` and `wan_apn`; the MC888 Pro builds `apn_pdp_type`, `apn_pdp_select`, `apn_wan_dial` and `apn_wan_apn`. This integration sent the MC7010's spellings until `[3.3.25-dev10]`, so the APN setter could never have been accepted by the Pro whatever the token — the same fault `DATA_LIMIT_SETTING` had, in the command beside it. `api.profile_field()` now resolves each name from the device's own builder, exact match first and a single suffix match second.
+
 ### `apn_index` is not authoritative, and `wan_apn` is
 
 Observed live on the reference MC7010 (2026-07-31): `apn_mode=auto`, `apn_index=5` (`open.internet.public`), while traffic was running over `3FWA.ie` — profile **6**.
@@ -595,6 +602,14 @@ A native **`ALL_DELETE_SMS`** does exist. It takes `which_cgi`, which both clien
 Two cautions if it is adopted. `native_inbox` names the **device inbox only** — `js/sms/sim_messages.js` contains no delete-all call, and drafts carry `tag: "3"` rather than sitting in the inbox, so a bulk call may leave both behind where the current loop removes them. And its success handler polls `sms_cmd_status_info` exactly as `DELETE_SMS` does, so it inherits the same completion ambiguity.
 
 ---
+
+### Field names are per firmware, not per protocol
+
+Parsed from both devices' `js/service.js` on 2026-09-15: the MC7010 builds 74 write commands and the MC888 Pro 170, and **15 of the 67 they share carry different field names** — `APN_PROC`, `APN_PROC_EX`, `DATA_LIMIT_SETTING`, `DISABLE_PIN`, `ENABLE_PIN`, `ENTER_PIN`, `ENTER_PUK`, `IF_UPGRADE`, `LOGIN`, `QUICK_SETUP`, `QUICK_SETUP_EX`, `SET_CONNECTION_MODE`, `SET_DEVICE_LED`, `SET_PRIVACY_NOTICE` and `SET_WIFI_SLEEP_INFO`.
+
+Every observed difference is a prefix on the same tail: `flux_`, `apn_`, `dial_`. That is why `profile_field` matches by suffix when no exact name is found, and resolves to the canonical name when two candidates share a tail rather than choosing one.
+
+This is the measurement that settles whether hand-written alias maps could have covered the problem. There is one such map in the integration, `DATA_VOLUME_FIELDS`, added by hand after issue #56.
 
 ## 🗂️ The full `goformId` inventory
 

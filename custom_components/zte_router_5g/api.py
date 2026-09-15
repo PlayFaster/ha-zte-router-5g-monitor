@@ -69,24 +69,22 @@ SMS_STORE_ALL = "2"
 WRITE_FAILURE_HISTORY = 5
 
 
-# The batch poll is split in two because the router's GET is bounded by a URL
-# length of roughly 2,048 characters, not by a number of names. A single list
-# had grown to within ~160 characters of that ceiling, where the next addition
-# would have truncated the response — which presents as missing fields and is
+# The batch poll is split in two. The router bounds a GET by URL length,
+# roughly 2,048 characters, not by a number of names, and a single list had
+# grown to within ~160 characters of that ceiling. The next addition would have
+# truncated the response, which presents as missing fields and is
 # indistinguishable from firmware key changes.
 #
 # The split is by criticality, not alphabetically:
 #
-#   _CORE_PARAMS      mandatory. Everything feeding an enabled-by-default
-#                     entity, the contract keys, and device identity. Its
-#                     failure is a whole-integration failure.
-#   _EXTENDED_PARAMS  optional. Diagnostics, disabled-by-default entities,
-#                     router settings and the thermal keys. Fetched under its
-#                     own strike budget, so a failure here degrades those
-#                     entities alone and leaves Signal and Data serving real
-#                     values.
+#   _CORE_PARAMS      mandatory: enabled-by-default entities, the contract
+#                     keys, device identity. Its failure fails the integration.
+#   _EXTENDED_PARAMS  optional: diagnostics, disabled-by-default entities,
+#                     router settings, thermal keys. Fetched under its own
+#                     strike budget, so a failure here degrades those entities
+#                     alone and leaves Signal and Data serving real values.
 #
-# Keep each comfortably under budget — `test_batch_poll_urls_stay_within_the
+# Keep each comfortably under budget. `test_batch_poll_urls_stay_within_the
 # _router_budget` covers both.
 _CORE_PARAMS: list[str] = [
     # --- Contract keys (coordinator drift check) ---
@@ -541,24 +539,23 @@ _CONTRACT_KEYS = frozenset(
 _SESSION_SENTINELS: tuple[str, ...] = _CONTRACT_CONCEPTS["connection_state"]
 
 
-# Keys this router answers **without a session**. Measured against an MC7010 on
+# Keys this router answers without a session. Measured against an MC7010 on
 # firmware V1.0.0B03 (2026-07-31) by replaying an invalidated stok: of the 80
-# core keys, exactly these three still carried values, and of the 36 extended
-# keys, exactly these two.
+# core keys exactly these three still carried values, and of the 36 extended
+# keys exactly these two.
 #
-# This list is load-bearing, and getting it wrong is not a small error. The
-# expiry rule used to be "every value in the response is empty", which is a
-# property of *what was asked for* rather than of the session. Adding `imei`,
-# `model_name` and `wa_inner_version` to the core batch made that rule
-# permanently false: the core poll could no longer return an all-empty
-# response, so an expired session was scored a clean success and never renewed.
-# Every enabled entity published `unknown` while the health sensor stayed
-# green — the fault reported after a router reboot. `_EXTENDED_PARAMS` was
-# defeated the same way by its two `opms_` keys.
+# The list is load-bearing. The expiry rule used to be "every value in the
+# response is empty", which describes what was asked for rather than the
+# session. Adding `imei`, `model_name` and `wa_inner_version` to the core batch
+# made that rule permanently false: the core poll could no longer return an
+# all-empty response, so an expired session scored a clean success and was never
+# renewed. Every enabled entity published `unknown` while the health sensor
+# stayed green, which is the fault reported after a router reboot.
+# `_EXTENDED_PARAMS` was defeated the same way by its two `opms_` keys.
 #
-# Anything added here must be verified on hardware, never assumed from a name.
-# `test_session_detection` asserts each batch still contains keys of *both*
-# classes, because a batch of only one kind makes the test below undecidable.
+# Verify anything added here on hardware, never from a name.
+# `test_session_detection` asserts each batch still holds keys of both classes,
+# because a batch of only one kind makes the test below undecidable.
 _UNAUTHENTICATED_KEYS = frozenset(
     {
         "imei",
@@ -597,27 +594,25 @@ _SESSION_CHECK_KEYS: tuple[str, ...] = (
 )
 
 # The firmware's own session flag, and the only direct answer this API gives to
-# "am I logged in". Everything above infers session state from ordinary
-# readings — signal, APN, connection status — which vary by model, by firmware,
-# and by whether the router is connected; the witness selection, the populated
-# key filter and the four-way classifier all exist to compensate for that
-# choice of input. The same false positive has been corrected three times:
-# `[3.3.16]` after `wan_connect_status` proved permanently blank on an MC888
-# Pro, `[3.3.21-dev]` after `ppp_status` and `model_name` failed the same way,
-# and 2026-09-14 when the reference MC7010 refused its own deletes on a session
-# seconds old.
+# "am I logged in". Everything above infers session state from ordinary readings
+# — signal, APN, connection status — which vary by model, by firmware and by
+# whether the router is connected; the witness selection, the populated key
+# filter and the four-way classifier all exist to compensate. The same false
+# positive has been corrected three times: `[3.3.16]` (`wan_connect_status`
+# permanently blank on an MC888 Pro), `[3.3.21-dev]` (`ppp_status` and
+# `model_name`), and 2026-09-14 (the MC7010 refusing its own deletes on a
+# session seconds old).
 #
 # Measured on the MC7010, 2026-09-14: `ok` with a valid session cookie, `""`
 # with no cookie, and `""` with a forged `stok`. The device's own
-# `js/service.js` decides the same way — it issues `cmd=loginfo` and sets
-# `isLoggedIn` on `case "ok"`.
+# `js/service.js` decides the same way — `cmd=loginfo`, `isLoggedIn` on
+# `case "ok"`.
 #
-# Read with `classify=False`, always. A device that does not implement this key
-# answers `{"loginfo": ""}`, which is a non-empty payload with every value
-# blank; `_request` scores that `undecidable`, then `is_status_expired`, and
-# re-logs in and replays before returning. The caller would then log in again:
-# two or more logins per write against `MAX_LOGIN_COUNT` and a 300s lockout, on
-# hardware nobody can test.
+# Read with `classify=False`, always. A device without this key answers
+# `{"loginfo": ""}` — a non-empty payload with every value blank — which
+# `_request` scores `undecidable`, then `is_status_expired`, re-logging in and
+# replaying before returning. The caller would then log in again: two or more
+# logins per write against the lockout, on hardware nobody can test.
 SESSION_FLAG_KEY = "loginfo"
 SESSION_FLAG_OK = "ok"
 
@@ -948,7 +943,6 @@ class ZTERouterAPI:
         password: str,
     ) -> None:
         """Initialize the API."""
-        # Clean host/IP input: strip protocol prefix and trailing slashes
         clean_ip = ip
         if "://" in clean_ip:
             clean_ip = clean_ip.split("://", 1)[1]
@@ -961,116 +955,112 @@ class ZTERouterAPI:
         self.protocol = "http"
         self.referer = f"http://{self.ip}/"
         self.timeout = aiohttp.ClientTimeout(total=15)
-        # Two fields, one piece of state. `session_active` is whether the
-        # router has authenticated us; `stok` is the cookie it issued, which
-        # some firmware does not issue at all (see `_LoginAttempt`). Never
-        # assign either directly: `login()` establishes the pair and
-        # `_clear_session()` drops it, so no site can move one without the
-        # other. A session marked active with no cookie sends no `Cookie`
-        # header, which the router answers by echoing the authenticated keys
-        # back empty — indistinguishable from an expired session, and
-        # published as `unknown` on every entity.
+        # One piece of state in two fields. `session_active` says the router has
+        # authenticated us. `stok` is the cookie it issued; some firmware issues
+        # none (see `_LoginAttempt`). Never assign either directly: `login()`
+        # sets both and `_clear_session()` drops both.
+        #
+        # Active with no cookie sends no `Cookie` header. The router then echoes
+        # the authenticated keys back empty, which reads as an expired session,
+        # and every entity publishes `unknown`.
         self.cookies: dict[str, str] = {}
         self.session_active = False
-        # Whether the most recent LOGOUT was acknowledged by the router. Only
-        # a confirmed logout makes a subsequent read an unauthenticated one.
+        # Whether the router acknowledged the most recent LOGOUT. Only a
+        # confirmed logout makes a later read an unauthenticated one.
         self.logout_acknowledged = False
         # Keys this device answers without a session, measured rather than
         # assumed. Empty until a measurement passes validation; the module
         # constant is used until then.
         self.unauthenticated_keys: frozenset[str] = frozenset()
-        # Why the measured key set is or is not in force. An empty set says
-        # nothing about whether the measurement was skipped, refused or never
-        # reached, and a download carrying only the empty set left that
-        # ambiguous.
+        # Why the measured key set is or is not in force. An empty set alone
+        # cannot say whether the measurement was skipped, refused or never
+        # reached, and a download carrying only that was ambiguous.
         self.measurement_note = "not attempted: setup did not reach it"
         # Whether background setup ran to completion, for the same reason.
         self.setup_completed = False
         # Write commands recovered from the router's own JavaScript. Recorded
-        # for the diagnostics download, and subtracted from the read
-        # candidates — `zte_how_to_access.md` notes these cannot be discovered
-        # by probing, because an unknown `goformId` fails exactly as a refused
-        # one does.
+        # for the diagnostics download, and subtracted from the read candidates.
+        # Probing cannot find them: an unknown `goformId` fails exactly as a
+        # refused one does, per `zte_how_to_access.md`.
         self.goform_ids: list[str] = []
-        # Which candidate `cmd` names this device answers. Populated once per
-        # setup and published in the diagnostics download; never read by
-        # runtime logic.
+        # Which login form this device takes: `LOGIN`, or `LOGIN_MULTI_USER`
+        # with a username. Set by `login`, from the profile where it names one
+        # and from the model string otherwise.
         self.is_multi = True
         self.last_activity = datetime.fromtimestamp(0, UTC)
 
         # Evidence for the diagnostics download. `coordinator.data` is `None`
         # until the first successful poll, so an integration that has never
-        # succeeded produces an empty `data` block — which is exactly when the
-        # download is asked for. These two carry what was rejected and what the
-        # login saw, and both are sanitized on the way out.
+        # succeeded produces an empty `data` block. That is when the download is
+        # usually asked for. These two carry what was rejected and what the
+        # login saw. Both are sanitized on the way out.
         self.last_rejection: dict[str, Any] | None = None
-        # The most recent `DELETE_SMS` attempt. `_require_success` cannot tell
-        # a refused delete from an honoured one on this API: the router
-        # answers `{"result":"success"}` for a message id it does not hold,
-        # measured on the reference MC7010 on 2026-09-05. What was asked for,
-        # what was answered, and which ids survived is the only evidence a
-        # download can carry — see `_record_delete`.
+        # The most recent `DELETE_SMS` attempt. `_require_success` cannot tell a
+        # refused delete from an honoured one here: the router answers
+        # `{"result":"success"}` for a message id it does not hold, measured on
+        # the reference MC7010 on 2026-09-05. What was asked for, what was
+        # answered and which ids survived is the only evidence a download can
+        # carry. See `_record_delete`.
         self.last_delete: dict[str, Any] | None = None
-        # `(wa_inner_version, cr_version)`. The second half of the write
-        # token's first operand, read once and held against the version it
-        # belongs to. See `get_cr_version`.
+        # `(wa_inner_version, cr_version)`. The second half of the write token's
+        # first operand, read once and held against the version it belongs to.
+        # See `get_cr_version`.
         self._cr_version_cache: tuple[str, str] | None = None
-        # The firmware this device was last seen to answer `loginfo: ok` on,
-        # or None. Learned rather than assumed: nothing else establishes that a
-        # device implements the key, because this API echoes a name it does not
-        # implement as an empty string. Held per firmware for the same reason
-        # `_cr_version_cache` is — an upgrade may withdraw a key, and a stale
-        # belief here would make a blank answer look like a dead session.
+        # The firmware this device was last seen to answer `loginfo: ok` on, or
+        # None. Nothing else establishes that the device implements the key,
+        # because this API echoes an unimplemented name as an empty string. Held
+        # per firmware, like `_cr_version_cache`: an upgrade may withdraw a key,
+        # and a stale belief would make a blank answer look like a dead session.
         self._session_flag_seen_for: str | None = None
         # The other half of the tri-state: the firmware on which a blank answer
-        # was proved to mean the key is absent, established by reading it again
+        # was proved to mean the key is absent. Established by reading it again
         # after a login that succeeded. Nothing else proves a negative here, and
-        # a negative recorded on weaker evidence — a login that failed, say —
-        # would put the device behind a permanent wrong belief.
+        # one recorded on weaker evidence, such as a failed login, would leave
+        # the device behind a permanent wrong belief.
         self._session_flag_absent_for: str | None = None
-        # Keys this device was observed to populate while authenticated,
-        # from the most recent successful poll. Empty until one completes.
-        # See `session_witnesses`.
+        # Why the last session-flag read could not answer, or None. The verdict
+        # alone says `unanswered`, which a download cannot tell apart from a
+        # timeout, a refusal or a malformed response. This is the mechanism
+        # phase 2.5 was built around, so the reason is worth a field.
+        self._session_flag_unanswered_because: str | None = None
+        # Keys this device was observed to populate while authenticated, from
+        # the most recent successful poll. Empty until one completes. See
+        # `session_witnesses`.
         self._populated_keys: frozenset[str] = frozenset()
-        # What the last pre-write session check asked and concluded,
-        # published in the download so a blocked write is visible. Written
-        # through a property so the history below cannot be bypassed by a
-        # future assignment site.
+        # What the last pre-write session check asked and concluded, published
+        # in the download so a blocked write is visible. Written through a
+        # property so a future assignment site cannot bypass the history below.
         self._last_session_check: dict[str, Any] | None = None
-        # The most recent check that did *not* confirm the session, kept for
-        # the life of this object and never overwritten by a later confirmation.
+        # The most recent check that did not confirm the session. Kept for the
+        # life of this object, never overwritten by a later confirmation.
         # `last_session_check` is replaced by every check, including the ones a
-        # diagnostics download makes while collecting itself — so reading it
-        # after a failure describes the collection, not the failure. That is
-        # not hypothetical: on 2026-09-14 it produced a wrong conclusion about
-        # the fault phase 2.5 exists to fix, because several successful writes
-        # had run in between.
+        # diagnostics download makes while collecting itself, so reading it
+        # after a failure describes the collection rather than the failure. On
+        # 2026-09-14 that produced a wrong conclusion about the fault phase 2.5
+        # exists to fix, because several successful writes had run in between.
         self.last_non_confirmed_session_check: dict[str, Any] | None = None
-        # The most recent rejection, kept for the life of this object and
-        # never cleared. `last_rejection` is cleared by any live verdict, so
-        # that a stale rejection cannot be mistaken for a current fault — a
-        # property worth keeping. But building a diagnostics download reads
-        # the router, and those reads produce live verdicts, so the field
-        # designed to explain a rejection was wiped by the act of collecting
-        # it. Three attempts to capture the MC7010 fault of 2026-09-14 this
-        # way returned `null` for exactly that reason.
-        #
-        # This companion is explicitly historical: it says a rejection
-        # happened at some point, not that one is happening now. The download
-        # publishes both and labels them as such.
+        # The most recent rejection. Kept for the life of this object and never
+        # cleared. `last_rejection` is cleared by any live verdict, so a stale
+        # rejection cannot be mistaken for a current fault. But building a
+        # diagnostics download reads the router, and those reads produce live
+        # verdicts, so the field that explains a rejection was wiped by the act
+        # of collecting it: three attempts to capture the MC7010 fault of
+        # 2026-09-14 returned `null` for that reason. This companion is
+        # historical. It says a rejection happened, not that one is happening
+        # now, and the download publishes both, labelled.
         self.last_rejection_seen: dict[str, Any] | None = None
-        # How many times the pre-write check has returned a non-confirmed
-        # verdict, and how many of those were followed by a login that then
-        # confirmed. See item 102: the check is an optimisation, and this is
-        # the evidence for whether it earns the round trip it costs.
         # When the current session was established, and how long previous ones
-        # lasted. The age clock is its own field and is set only by `login`:
+        # lasted. The age clock is its own field and is set only by `login`.
         # `last_activity` is refreshed by every authenticated request, so
         # reusing it would silently keep idle semantics. See
         # `SESSION_AGE_LEARN_MIN_SAMPLES` for why the threshold is learned.
         self.session_started: datetime | None = None
         self.session_lifetimes: list[float] = []
         self._age_checks = 0
+        # How often the pre-write check returned a non-confirmed verdict, and
+        # how many of those a login then confirmed. The check is an
+        # optimisation; this is the evidence for whether it earns its round
+        # trip. See item 102.
         self.session_check_stats: dict[str, int] = {
             "checks": 0,
             "not_confirmed": 0,
@@ -1453,30 +1443,29 @@ class ZTERouterAPI:
     async def note_write_refusal(self, cmd: str, timeout_sec: int | None = None) -> str:
         """Decide, after a refusal, whether the session was the cause.
 
-        The pre-write check answers "is this session alive" by prediction; this
-        answers it by evidence, once the router has already spoken. A refusal
-        with a provably live session is a real refusal and keeps its own error.
-        A refusal with a provably dead session raises `ZTEAuthError`, which
-        names the session as the cause rather than reporting that the device
-        declined a command it never saw.
+        The pre-write check predicts whether the session is alive. This decides
+        it from evidence, after the router has spoken. A refusal on a provably
+        live session is a real refusal and keeps its own error. A refusal on a
+        provably dead session raises `ZTEAuthError`, which names the session as
+        the cause rather than saying the device declined a command it never saw.
 
-        That exception does **not** start a reauthentication flow, and earlier
-        wording here and in the `[3.3.22-dev1]` changelog entry said it did.
+        That exception does not start a reauthentication flow.
         `ConfigEntryAuthFailed` is raised only by the coordinator, on the poll
-        path; an exception from a button press surfaces on the action and
-        nothing else. The next poll is what asks the user to sign in again.
+        path. An exception from a button press surfaces on the action alone. The
+        next poll is what asks the user to sign in again. Earlier wording here
+        and in the `[3.3.22-dev1]` changelog entry said otherwise.
 
-        **It never replays the write.** Renewing the session and resending was
-        tried on hardware and did not work, and for `SEND_SMS` a replay can
-        deliver the message twice with no way to tell that it did.
+        It never replays the write. Renewing the session and resending was tried
+        on hardware and did not work, and for `SEND_SMS` a replay can deliver
+        the message twice with no way to tell that it did.
 
         Costs one short read, and only on the failure path.
 
-        **Asks `loginfo` first.** This carried the same defect as the pre-write
-        check — it ran the same witness selection, and a pool the device
-        answers empty turned a genuine command refusal into "the session is
-        gone". Only a direct denial from the router raises now; a witness
-        verdict is recorded and returned, never raised.
+        It asks `loginfo` first. This carried the same defect as the pre-write
+        check: it ran the same witness selection, and a pool the device answers
+        empty turned a genuine command refusal into "the session is gone". Only
+        a direct denial from the router raises now. A witness verdict is
+        recorded and returned, never raised.
         """
         flag = await self.read_session_flag(timeout_sec=timeout_sec)
         # `unproven` is decided here the way `unanswered` is — by falling
@@ -1543,29 +1532,28 @@ class ZTERouterAPI:
     def _require_confirmed_session(self, cmd: str) -> None:
         """Refuse a write that must not be issued twice, on a doubtful session.
 
-        The only write this guards is `SEND_SMS`, and the reason is specific to
-        it. Every other command is either verified after the fact — the two
-        switches read back, SMS delete re-lists, a reboot is confirmed by the
-        router ceasing to answer — or harmless to repeat, so sending it on an
+        The only write this guards is `SEND_SMS`. Every other command is either
+        verified after the fact or harmless to repeat, so sending one on an
         unconfirmed session costs at most a misleading error the next poll
-        corrects. A send has neither property: reporting it as unverified
-        invites the user to send again, and this API gives no way to tell
-        whether the first one went out.
+        corrects. The two switches read back, SMS delete re-lists, and a reboot
+        is confirmed by the router ceasing to answer. A send has neither
+        property: reporting it as unverified invites the user to send again, and
+        this API gives no way to tell whether the first one went out.
 
-        `_ensure_session` has already run, via `get_ad`, and has already tried
-        a re-login. Reaching a non-confirmed verdict here means that login did
-        not produce a working session.
+        `_ensure_session` has already run, via `get_ad`, and has already tried a
+        re-login. A non-confirmed verdict here means that login did not produce
+        a working session.
 
-        **It asks what the device can do, not what a field is labelled.** The
-        test used to be that `last_session_check` carried the flag's source
-        with any verdict but `confirmed`, and a device without the key was
-        spared only because the path it takes happens to record a different
-        source string — a literal in another method, with nothing asserting the
-        connection. Once an unproven flag records under the flag's own source,
-        that form would have blocked every send on every device that does not
-        implement `loginfo`, which is issue #56's shape in a new place.
+        It asks what the device can do, not what a field is labelled. The test
+        used to be that `last_session_check` carried the flag's source with any
+        verdict but `confirmed`. A device without the key was spared only
+        because its path records a different source string, a literal in another
+        method with nothing asserting the connection. Once an unproven flag
+        records under the flag's own source, that form would have blocked every
+        send on every device without `loginfo`. That is issue #56's shape in a
+        new place.
 
-        So: block only where the device is known to implement the key and the
+        So it blocks only where the device is known to implement the key and the
         router has actually denied the session. A device that does not answer
         `loginfo` is never blocked, and its witness verdict is not consulted.
         """
@@ -1900,6 +1888,7 @@ class ZTERouterAPI:
             "confirmed_on_firmware": self._session_flag_seen_for or None,
             "absent_on_firmware": self._session_flag_absent_for or None,
             "checks": dict(self.session_check_stats),
+            "unanswered_because": self._session_flag_unanswered_because,
         }
 
     def _session_flag_names(self) -> tuple[str, str]:
@@ -1937,9 +1926,14 @@ class ZTERouterAPI:
         never classified.
 
         A transport failure answers `SESSION_UNANSWERED` rather than raising.
-        This is an optimisation on the write path — it turns a refusal into a
-        re-login before a command is spent — and an optimisation that cannot
-        run must not decide anything.
+        This is an optimisation on the write path. It turns a refusal into a
+        re-login before a command is spent, and an optimisation that cannot run
+        must not decide anything.
+
+        Why it could not answer is kept in `_session_flag_unanswered_because`
+        and published. `unanswered` alone cannot be told apart from a timeout,
+        a refusal or a malformed response, and this is the mechanism phase 2.5
+        was built around.
         """
         flag_key, flag_ok = self._session_flag_names()
         try:
@@ -1952,10 +1946,15 @@ class ZTERouterAPI:
                 _retry=False,
                 timeout_sec=timeout_sec,
             )
-        except Exception:  # noqa: BLE001 - an unusable answer is not a verdict
+        except Exception as err:  # noqa: BLE001 - an unusable answer is not a verdict
+            self._session_flag_unanswered_because = type(err).__name__
             return SESSION_UNANSWERED
         if not isinstance(data, dict) or flag_key not in data:
+            self._session_flag_unanswered_because = (
+                "not a mapping" if not isinstance(data, dict) else "key absent"
+            )
             return SESSION_UNANSWERED
+        self._session_flag_unanswered_because = None
 
         if str(data[flag_key]).strip() == flag_ok:
             # Proof the device implements the key, taken at a moment we know
@@ -1988,22 +1987,21 @@ class ZTERouterAPI:
     async def _ensure_session(self, timeout_sec: int | None = None) -> None:
         """Confirm the session before a write derives its ``AD`` token.
 
-        Necessary because of how the two halves of this API fail differently.
-        A *read* signals a dead session by echoing every requested key back
-        empty, which `_request` detects and recovers from. A *write* answers
-        ``{"result":"failure"}`` — indistinguishable from a command the router
-        declined on its merits — so nothing recovers it, and a control failed on
-        every attempt until some read happened to re-login. That is the fault
-        `[3.3.2-rc5]` fixed: turning the LED on failed repeatedly after the
-        router's web page had taken the session, until Refresh Now ran the
-        batch poll.
+        The two halves of this API fail differently. A *read* signals a dead
+        session by echoing every requested key back empty, which `_request`
+        detects and recovers from. A *write* answers ``{"result":"failure"}``,
+        which is what the router also sends for a command it declined on its
+        merits. Nothing recovers that, and a control failed on every attempt
+        until some read happened to re-login. `[3.3.2-rc5]` fixed that fault:
+        turning the LED on failed repeatedly after the router's web page had
+        taken the session, until Refresh Now ran the batch poll.
 
-        **This never raises, and that is the point.** Its job is to trigger a
-        re-login before the write, not to decide whether the write may be sent.
-        The blocking was never designed — it was inherited from `_request`'s
-        error contract — and it is how the same false positive reached users
-        three times. A write that is unsafe to repeat is blocked by its own
-        caller reading `last_session_check`; see `send_sms`.
+        This never raises. Its job is to trigger a re-login before the write,
+        not to decide whether the write may be sent. The blocking was never
+        designed. It was inherited from `_request`'s error contract, and it is
+        how the same false positive reached users three times. A write that is
+        unsafe to repeat is blocked by its own caller reading
+        `last_session_check`; see `send_sms`.
 
         The sequence:
 
@@ -3104,37 +3102,34 @@ class ZTERouterAPI:
     ) -> tuple[set[str], list[str]]:
         """Read the router's own web UI for `cmd` names it uses.
 
-        The `goform` API cannot be enumerated: one `cmd` parameter takes a list
-        of names and answers those, so a name nobody asks for is invisible
-        forever. The router's admin UI is a client of this same API, and its
-        JavaScript is the only reliable source for names nobody has written
-        down — the 2026-07-29 mining pass recorded in
-        `.notes/local_only/router_probe/js_mined_keys.json` recovered 175, of
-        which 117 this integration has never requested.
+        The `goform` API cannot be enumerated. One `cmd` parameter takes a list
+        of names and answers those, so a name nobody asks for is invisible. The
+        router's admin UI is a client of the same API, and its JavaScript is the
+        only reliable source for names nobody has written down. The 2026-07-29
+        mining pass in `.notes/local_only/router_probe/js_mined_keys.json`
+        recovered 175, of which 117 this integration has never requested.
 
         Several bundles, not one. `docs/zte_how_to_access.md` names
         `js/service.js` alongside `statusBar.js`, `home.js` and the RequireJS
         modules, and that pass crawled all of them to reach 175.
 
-        Returns the names and a list of human-readable notes. Every failure is
-        a note rather than an exception: this runs while a diagnostics download
-        is being generated, and a download that reports what went wrong is
-        useful where one that fails to generate is not.
+        Returns the names and a list of human-readable notes. Every failure is a
+        note rather than an exception, because this runs while a diagnostics
+        download is being generated. A download that reports what went wrong is
+        useful; one that fails to generate is not.
 
-        **Reads the crawl's sources rather than fetching its own.** Until
-        v3.3.25-dev9 this asked `_discover_bundles` which files to read, and
-        that matched `<script src=>` against `index.html` and nothing else — so
-        on a page that loads everything through a module loader, and names only
-        `data-main`, it found nothing at all. Both devices this project can see
-        answer exactly that: the hardware check printed `index: no scripts
-        named; using the static list` on every run, which means mining has been
-        reading twelve hardcoded files since it was written.
+        It reads the crawl's sources rather than fetching its own. Until
+        v3.3.25-dev9 it asked `_discover_bundles`, which matched
+        `<script src=>` against `index.html` alone. On a page that loads
+        everything through a module loader and names only `data-main`, that
+        found nothing. Both readable devices are such a page: the hardware check
+        printed `index: no scripts named; using the static list` on every run,
+        so mining read twelve hardcoded files from the day it was written.
 
         `web_sources.crawl` follows what the device actually references and
-        reaches forty-five files on the same hardware. The sources are passed in
-        where the caller already has them — a diagnostics download crawls for
-        its own section, and crawling again here would fetch every file twice in
-        one file.
+        reaches forty-five files on the same hardware. Callers that already hold
+        the sources pass them in. A diagnostics download crawls for its own
+        section, and crawling again here would fetch every file twice.
         """
         names: set[str] = set()
         goform_ids: set[str] = set()
@@ -3855,25 +3850,23 @@ class ZTERouterAPI:
         """Record what this device answered, across a poll rather than a batch.
 
         **This set is what `session_witnesses` draws on**, and it used to be
-        replaced by every call. The coordinator polls core and then extended, so
-        the extended batch wiped the core one: measured on hardware 2026-09-14
+        replaced by every call. The coordinator polls core then extended, so the
+        extended batch wiped the core one: measured on hardware 2026-09-14
         against an authenticated session, 60 keys populated after the core poll,
-        39 after the extended poll, and not one of the 60 surviving. The witness
-        pool was a third of its intended size and drawn from different name
-        families than the design assumes.
+        39 after the extended, and not one of the 60 surviving. The witness pool
+        was a third of its intended size and drawn from different name families.
 
         **The caller says which read begins a cycle.** Only the core poll does,
         and it says so rather than being recognised by the list it passes:
         identity against `_CORE_PARAMS` would hold today and break silently the
-        first time somebody passed a copy of it. Every other read adds what it
-        saw — the canary pool is not part of a cycle and must not discard one.
+        first time somebody passed a copy. Every other read adds what it saw —
+        the canary pool is not part of a cycle and must not discard one.
 
         **Bounded to a cycle rather than accumulated.** A key populated at core
         time and blank by the time a write happens would otherwise stay a
-        witness, and a witness that reads blank scores as an expiry. That
-        verdict is recorded and never raised — dev1 made this check advisory and
-        dev7 made it incapable of raising — so the cost is a misleading line in
-        a download rather than a blocked write. One cycle keeps even that narrow.
+        witness, and a witness that reads blank scores as an expiry — advisory
+        only, so the cost is a misleading line in a download rather than a
+        blocked write. One cycle keeps even that narrow.
         """
         seen = frozenset(
             key for key, value in merged.items() if value not in ("", None)
@@ -4951,19 +4944,17 @@ class ZTERouterAPI:
           both directions, and verified to actually apply
         - ``apn_mode=auto`` alone — **accepted**
 
-        So this method sent a payload the router refused **for the manual
-        direction in every release** — the `APN Selection Mode` select could
-        never switch to manual. Switching to *auto* did work, which is why the
-        entity never looked completely dead. Choosing an **APN Profile** also
-        worked throughout, because `set_apn()` already sends the complete form,
-        and that form carries `apn_mode=manual` — so picking a profile flipped
-        the mode as a side effect and masked this.
+        Until this was fixed, the manual direction sent a payload the router
+        refused, in every release: the `APN Selection Mode` select could never
+        switch to manual. Switching to auto did work, so the entity never looked
+        dead. Choosing an APN Profile also worked, because `set_apn()` already
+        sends the complete form and that form carries `apn_mode=manual`. Picking
+        a profile flipped the mode as a side effect and masked the fault.
 
-        The complete form is used for both directions whenever the profile
-        index is known: it is the only one verified to actually *apply* (the
-        mode changed and `wan_apn` followed). The bare form is kept as the
-        fallback for `auto` alone, where it is accepted and where no profile
-        index is needed to make sense of the request.
+        The complete form is used for both directions whenever the profile index
+        is known. It is the only one verified to apply: the mode changed and
+        `wan_apn` followed. The bare form is kept as the fallback for `auto`
+        alone, where it is accepted and where no profile index is needed.
         """
         resolved = self._resolve_apn_profile(current or {})
 
