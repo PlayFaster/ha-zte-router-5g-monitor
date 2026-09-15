@@ -1902,6 +1902,33 @@ class ZTERouterAPI:
             "checks": dict(self.session_check_stats),
         }
 
+    def _session_flag_names(self) -> tuple[str, str]:
+        """The reading this firmware treats as "the session is still mine".
+
+        Item 28. Both readable devices decide it identically — `"ok" ==
+        loginfo` — so on each of them this resolves to the constants it
+        replaces. The value is the firmware that names something else, where
+        the constant reads an absent key, the answer is a blank, and the
+        learned-support rule then correctly declines to apply the mechanism at
+        all. That is a safe failure and a silent one: the check would simply
+        never work on that device, and nothing would say why.
+
+        Both halves come from the same expression or neither does. A key
+        learned without its accepted value would be read and compared against
+        the wrong literal, which is worse than not reading it.
+
+        **The raw value still never reaches a download.** It is not stored —
+        only the comparison result is — so the redaction of `loginfo` by name
+        in `diagnostics.py` is a second line rather than the only one.
+        """
+        learned = self.profile.get("session_flag", {})
+        key, ok_value = learned.get("key"), learned.get("ok_value")
+        if key and ok_value:
+            self._decide("session_flag", "learned")
+            return key, ok_value
+        self._decide("session_flag", "fallback_not_learned")
+        return SESSION_FLAG_KEY, SESSION_FLAG_OK
+
     async def read_session_flag(self, timeout_sec: int | None = None) -> str:
         """Ask the router directly whether this session is logged in.
 
@@ -1914,11 +1941,12 @@ class ZTERouterAPI:
         re-login before a command is spent — and an optimisation that cannot
         run must not decide anything.
         """
+        flag_key, flag_ok = self._session_flag_names()
         try:
             data = await self._request(
                 "GET",
                 "goform/goform_get_cmd_process",
-                params={"isTest": "false", "cmd": SESSION_FLAG_KEY},
+                params={"isTest": "false", "cmd": flag_key},
                 authenticated=True,
                 classify=False,
                 _retry=False,
@@ -1926,10 +1954,10 @@ class ZTERouterAPI:
             )
         except Exception:  # noqa: BLE001 - an unusable answer is not a verdict
             return SESSION_UNANSWERED
-        if not isinstance(data, dict) or SESSION_FLAG_KEY not in data:
+        if not isinstance(data, dict) or flag_key not in data:
             return SESSION_UNANSWERED
 
-        if str(data[SESSION_FLAG_KEY]).strip() == SESSION_FLAG_OK:
+        if str(data[flag_key]).strip() == flag_ok:
             # Proof the device implements the key, taken at a moment we know
             # the session worked. Nothing else establishes that, and without it
             # a blank answer is meaningless.
@@ -2637,6 +2665,19 @@ class ZTERouterAPI:
         self.is_multi = True
         if version and any(m in version for m in ["MC801", "MC7010"]):
             self.is_multi = False
+        # The device's own login builder, where it was read. **Only the
+        # negative direction is consumed, and deliberately.** A form that
+        # carries no `username` field is positive evidence for the single-user
+        # `LOGIN` command — it is what the MC888 Pro of issue #56 builds. A
+        # form that does carry one is not evidence for `LOGIN_MULTI_USER`: the
+        # reference MC7010 carries a username and still uses `LOGIN`, so
+        # reading the flag symmetrically would move that device onto a form it
+        # does not accept.
+        if self.profile.get("login", {}).get("carries_username") is False:
+            self._decide("login_form", "learned_no_username_field")
+            self.is_multi = False
+        else:
+            self._decide("login_form", "fallback_model_string")
 
         # No username means the multi-user form has no user field to carry, and
         # the router rejects it on that ground alone — which is what produced
@@ -4080,9 +4121,16 @@ class ZTERouterAPI:
         # The terminator is appended rather than assumed, because `delete_all`
         # joins its ids here and a caller may pass either form.
         sent_ids = msg_id if msg_id.endswith(";") else f"{msg_id};"
+        # Spelled as this firmware spells it, like every other write. Both
+        # readable devices name it `msg_id`, so this resolves to the literal
+        # it replaces on each of them — which was equally true of
+        # `APN_PROC_EX` until the parser read the MC888 Pro's script and found
+        # `apn_pdp_type`. These two commands are the ones issue #56 is about,
+        # and they were the last two still asking a constant.
+        ids_field = self.profile_field("DELETE_SMS", "msg_id")
         payload = (
             f"isTest=false&goformId=DELETE_SMS"
-            f"&msg_id={urllib.parse.quote(sent_ids, safe='')}"
+            f"&{ids_field}={urllib.parse.quote(sent_ids, safe='')}"
             f"&notCallback=true{ad}"
         )
         headers = self.write_headers()
@@ -4258,10 +4306,18 @@ class ZTERouterAPI:
         # relying on aiohttp's dict-form encoding.
         escaped_number = urllib.parse.quote_plus(number)
 
+        # As above. Five fields, all named identically by both readable
+        # devices' builders, all resolved rather than assumed.
+        field = {
+            name: self.profile_field("SEND_SMS", name)
+            for name in ("Number", "MessageBody", "encode_type", "ID", "sms_time")
+        }
         payload = (
-            f"isTest=false&goformId=SEND_SMS&notCallback=true&Number={escaped_number}"
-            f"&MessageBody={hex_msg}&encode_type={encode_type}"
-            f"&ID=-1&sms_time={sms_time}{ad}"
+            f"isTest=false&goformId=SEND_SMS&notCallback=true"
+            f"&{field['Number']}={escaped_number}"
+            f"&{field['MessageBody']}={hex_msg}"
+            f"&{field['encode_type']}={encode_type}"
+            f"&{field['ID']}=-1&{field['sms_time']}={sms_time}{ad}"
         )
         headers = self.write_headers()
         res = await self._request(
@@ -4629,6 +4685,18 @@ class ZTERouterAPI:
         drift: a login carrying an `AD` built with the wrong digest would be
         refused exactly like a wrong password, with no way to tell them apart.
         """
+        # A shape this derivation does not implement withdraws the digest
+        # rather than applying it to the wrong number of rounds. `get_ad`
+        # hashes twice; a firmware the parser reported as doing anything else
+        # would be derived wrongly and produce a well-formed token the router
+        # refuses without saying why — the failure this whole phase exists to
+        # remove. Falling back to the model string is not better on such a
+        # device, but it is the behaviour that shipped, and the download names
+        # the disagreement.
+        rounds = self.profile.get("token", {}).get("rounds")
+        if rounds is not None and rounds != 2:
+            self._decide("ad_digest", "fallback_round_count_unsupported")
+            return self._model_hash_func(version)
         learned = self._profile_digest()
         if learned is not None:
             self._decide("ad_digest", "learned")
@@ -4637,6 +4705,18 @@ class ZTERouterAPI:
             "ad_digest",
             "fallback_unresolved" if self.profile else "fallback_not_learned",
         )
+        return self._model_hash_func(version)
+
+    @staticmethod
+    def _model_hash_func(version: str) -> Callable[[str], str]:
+        """The digest the model string implies — the fallback, and only that.
+
+        Split out so every route to it is visible as a route to it. It is
+        wrong in principle and right on both devices this project can read:
+        `config.js` is comparable between them on every flag that could
+        plausibly select a digest, so nothing but the function their scripts
+        name distinguishes MD5 from SHA-256.
+        """
         is_new_gen = any(m in version for m in ["MC888", "MC889"])
         return (
             (lambda s: hashlib.sha256(s.encode()).hexdigest().upper())
@@ -4741,8 +4821,31 @@ class ZTERouterAPI:
         return cr_version
 
     async def get_rd(self, timeout_sec: int | None = None) -> str:
-        """Get the RD parameter for AD generation."""
+        """Get the RD parameter for AD generation.
+
+        The name comes from the same expression the digest does — the device's
+        own client reads it as `({nv:"RD"}).RD` — so where the profile learned
+        it, it leads the hand-written aliases rather than replacing them. Both
+        readable devices name it `RD`, which is the first alias already.
+        """
         spellings = _TOKEN_READS["RD"]
+        token = self.profile.get("token", {})
+        # De-duplicated: the expression names the salt twice — once as the
+        # value asked for and once as the key read back — and both devices
+        # spell them the same, so a device naming something new must not be
+        # asked for it twice in one `cmd` list.
+        learned = tuple(
+            dict.fromkeys(
+                name
+                for name in (token.get("salt_key"), token.get("salt_read"))
+                if name and name not in spellings
+            )
+        )
+        if learned:
+            self._decide("salt_name", "learned")
+            spellings = (*learned, *spellings)
+        else:
+            self._decide("salt_name", "fallback")
         path = (
             "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd="
             + ",".join(spellings)
@@ -4983,7 +5086,16 @@ class ZTERouterAPI:
             # second. A device that answered neither alias may still name
             # the field in its own builder, which is the case a hand-written
             # map could never cover.
-            name = answered or self.profile_field("DATA_LIMIT_SETTING", field)
+            #
+            # The live answer short-circuits the profile, so it has to record
+            # its own decision: principle 3 is that the download says which
+            # path was taken, and a field resolved this way would otherwise
+            # be the one case that says nothing at all.
+            if answered:
+                self._decide(f"field:DATA_LIMIT_SETTING.{field}", "answered_by_device")
+                name = answered
+            else:
+                name = self.profile_field("DATA_LIMIT_SETTING", field)
             if field in changes:
                 payload_fields[name] = str(changes[field])
                 continue

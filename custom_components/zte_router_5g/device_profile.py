@@ -213,6 +213,13 @@ def parse_token(sources: dict[str, str]) -> dict[str, Any]:
             token["found_in"] = path
             token["digest_function"] = first.group(1)
             token["operands"] = [first.group(2), first.group(3)]
+            # **The shape this parser recognises, not a count it measured.**
+            # It looks for one call over the operands and one over the result
+            # and the salt; a firmware doing three would not be reported as
+            # three, it would fail to match the second round and yield no
+            # token site at all. The field exists so `get_ad` can refuse a
+            # shape it does not implement rather than assume every profile
+            # describes the one it does.
             token["rounds"] = 2
             token["second_round_function"] = second.group(1)
             token["salt_read"] = salt.group(1)

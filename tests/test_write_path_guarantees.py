@@ -312,3 +312,49 @@ async def test_a_read_back_after_a_write_does_not_deadlock() -> None:
         )
 
     assert result["result"] == "success"
+
+
+# ---------------------------------------------------------------------------
+# Item 35 — every write asks one place whether it carries a token
+# ---------------------------------------------------------------------------
+
+
+def test_every_write_payload_takes_its_token_from_ad_suffix() -> None:
+    """Asserted over the source, because the fault is a method that opts out.
+
+    `ad_suffix` is the single place that reads the firmware's gate flag and
+    its exempt list. A writer that calls `get_ad` directly bypasses both and
+    sends a token to a device that wants none, or sends one on a command its
+    own client exempts — and it does so silently, because a router that
+    ignores an unwanted `AD` accepts the write anyway.
+
+    Enumerating the methods here would only pin the ones that exist today.
+    Finding them by the payload they build is what covers the ninth write
+    command somebody adds later.
+    """
+    import ast
+    import pathlib
+
+    source = pathlib.Path("custom_components/zte_router_5g/api.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+
+    offenders: list[str] = []
+    writers: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.AsyncFunctionDef):
+            continue
+        body = ast.get_source_segment(source, node) or ""
+        if "goformId=" not in body:
+            continue
+        writers.append(node.name)
+        if "self.ad_suffix(" not in body:
+            offenders.append(f"{node.name}: builds a payload without ad_suffix")
+        if "self.get_ad(" in body:
+            offenders.append(f"{node.name}: calls get_ad directly")
+
+    assert not offenders, "\n".join(offenders)
+    # A guard against the sweep silently finding nothing — a rename of
+    # `goformId` in the payload builders would make this test vacuous.
+    assert len(writers) >= 8, f"only {len(writers)} write payloads found: {writers}"

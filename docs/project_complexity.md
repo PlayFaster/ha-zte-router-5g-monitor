@@ -1,6 +1,6 @@
 # Project Complexity & Health: ha-zte-router-5g-monitor
 
-**Last Measured:** 2026-09-15T04:57:19.936781+00:00 · **Release:** `3.3.25` · **Dev Version:** `3.3.25-dev10`
+**Last Measured:** 2026-09-15T12:31:05.041115+00:00 · **Release:** `3.3.25` · **Dev Version:** `3.3.25-dev10`
 
 ## 1. Executive Summary
 
@@ -14,20 +14,20 @@
 | **Mean Routine Length** | **15.7 code lines** | Target $\le 15$ code lines ideal |
 | **Largest Routine Length** | **124 code lines** | `async_get_config_entry_diagnostics` in `diagnostics.py` (Target $\le 40$ ideal, $> 80$ warn, $> 150$ fail) |
 | **Routines > 80 Code Lines** | **3** | Candidate for functional decomposition |
-| **Largest Module** | **2,438 code lines** | `api.py` (Warn $> 1,500$ code lines module bloat) |
+| **Largest Module** | **2,442 code lines** | `api.py` (Warn $> 1,500$ code lines module bloat) |
 | **Modules > 1,500 Code Lines** | **2** | Candidate for module decomposition |
 | **Code Suppressions (`# noqa`)** | **26** | Zero preferred; review regularly |
 | **Type Suppressions (`# type: ignore`)** | **0** | Mypy strict compliance |
-| **Source Python SLOC** | **9,969** | Across 21 files in custom_components/ (code statements) |
-| **Docstring Volume** | **3,026 lines** | Interface and contract documentation |
-| **Comment Density** | **26.8%** | 2,672 inline comment lines (Advisory: > 25% inspect for procedural narration) |
+| **Source Python SLOC** | **9,973** | Across 21 files in custom_components/ (code statements) |
+| **Docstring Volume** | **3,038 lines** | Interface and contract documentation |
+| **Comment Density** | **27.0%** | 2,688 inline comment lines (Advisory: > 25% inspect for procedural narration) |
 | **Platform Declarations SLOC** | **3,003 lines** | Across 6 platform files |
-| **Core Engine / Driver SLOC** | **6,966 lines** | Across 15 coordinator/API/helper files |
+| **Core Engine / Driver SLOC** | **6,970 lines** | Across 15 coordinator/API/helper files |
 | **Static Entities** | **121 entities** | Scale indicator (`all_sensors.md`) |
 | **Platform SLOC / Entity** | **24.8 lines/entity** | Target 20 – 45 lines/entity declarative efficiency |
-| **Test-to-Source Ratio** | **1.59×** | 15,851 test lines ($\ge 1.5×$ recommended) |
-| **Pytest Coverage** | **100%** | 1744 tests executed |
-| **Pytest Duration** | **161.44s** | Full test suite wall-clock execution time |
+| **Test-to-Source Ratio** | **1.59×** | 15,873 test lines ($\ge 1.5×$ recommended) |
+| **Pytest Coverage** | **100%** | 1745 tests executed |
+| **Pytest Duration** | **264.73s** | Full test suite wall-clock execution time |
 
 ## 2. High Complexity Routines ($\ge 10$)
 
@@ -93,6 +93,7 @@
 | Location | Length | Advisory |
 | :-- | :-: | :-- |
 | `const.py:224` | 30 lines | Long procedural block; consider moving architecture notes to docs |
+| `entity_defaults.py:38` | 24 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:599` | 22 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:2164` | 21 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:60` | 21 lines | Long procedural block; consider moving architecture notes to docs |
@@ -112,7 +113,7 @@
 | `known_names.py:869` | 16 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:438` | 15 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:3871` | 15 lines | Long procedural block; consider moving architecture notes to docs |
-| `entity_defaults.py:52` | 15 lines | Long procedural block; consider moving architecture notes to docs |
+| `entity_defaults.py:63` | 15 lines | Long procedural block; consider moving architecture notes to docs |
 | `sensor.py:2169` | 15 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:1669` | 14 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:3518` | 14 lines | Long procedural block; consider moving architecture notes to docs |
@@ -128,7 +129,6 @@
 | `api.py:3503` | 13 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:31` | 13 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:100` | 13 lines | Long procedural block; consider moving architecture notes to docs |
-| `entity_defaults.py:38` | 13 lines | Long procedural block; consider moving architecture notes to docs |
 | `reset_entities.py:213` | 13 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:251` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:1049` | 12 lines | Long procedural block; consider moving architecture notes to docs |
@@ -165,6 +165,7 @@
 | `api.py:1062` | 9 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:1396` | 9 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:3752` | 9 lines | Long procedural block; consider moving architecture notes to docs |
+| `api.py:4982` | 9 lines | Long procedural block; consider moving architecture notes to docs |
 | `binary_sensor.py:155` | 9 lines | Long procedural block; consider moving architecture notes to docs |
 | `device_profile.py:53` | 9 lines | Long procedural block; consider moving architecture notes to docs |
 | `sensor.py:207` | 9 lines | Long procedural block; consider moving architecture notes to docs |

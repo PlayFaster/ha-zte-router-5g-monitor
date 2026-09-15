@@ -20,6 +20,7 @@ rather than the device that never needs it.
 """
 
 from collections.abc import Callable
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -669,3 +670,247 @@ def test_a_device_with_no_profile_sends_the_form_that_ships() -> None:
 
     assert api._login_password("secret", "LD1") == _expected_fallback("secret", "LD1")
     assert api.profile_decisions["login_password"] == "fallback_not_learned"
+
+
+# ---------------------------------------------------------------------------
+# v3.3.25-dev11 — the values the profile learned and nothing consumed
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("command", "canonical"),
+    [
+        ("DELETE_SMS", "msg_id"),
+        ("SEND_SMS", "Number"),
+        ("SEND_SMS", "MessageBody"),
+        ("SEND_SMS", "encode_type"),
+        ("SEND_SMS", "ID"),
+        ("SEND_SMS", "sms_time"),
+    ],
+)
+async def test_the_two_sms_commands_spell_their_fields_the_device_s_way(
+    command: str, canonical: str
+) -> None:
+    """The last two writers still asking a constant.
+
+    Issue #56 is an SMS delete failure, so these are the two commands the
+    reporter actually exercises. Both devices name these fields identically,
+    which was equally true of `APN_PROC_EX` until the parser read the Pro's
+    script.
+    """
+    prefixed = f"zz_{canonical}"
+    api = _api({"commands": {command: [prefixed]}})
+
+    assert api.profile_field(command, canonical) == prefixed
+    assert api.profile_decisions[f"field:{command}.{canonical}"] == "learned_suffix"
+
+
+@pytest.mark.asyncio
+async def test_a_delete_writes_the_spelling_the_script_names() -> None:
+    """End to end, on the payload rather than on the resolver."""
+    api = _api({"commands": {"DELETE_SMS": ["zz_msg_id"]}})
+    sent: list[str] = []
+
+    async def capture(_method, _path, **kwargs):
+        sent.append(str(kwargs.get("data")))
+        return {"result": "success"}
+
+    with (
+        patch.object(api, "ad_suffix", new=AsyncMock(return_value="&AD=t")),
+        patch.object(api, "_request", side_effect=capture),
+        patch.object(api, "get_sms_messages", new=AsyncMock(return_value=[])),
+    ):
+        await api.delete_sms("11")
+
+    assert "&zz_msg_id=11%3B" in sent[0]
+    assert "&msg_id=" not in sent[0], "the canonical name was sent as well"
+
+
+@pytest.mark.asyncio
+async def test_a_send_writes_the_spellings_the_script_names() -> None:
+    """All five fields at once, so a partial resolution cannot pass."""
+    api = _api(
+        {
+            "commands": {
+                "SEND_SMS": [
+                    "zz_Number",
+                    "zz_MessageBody",
+                    "zz_encode_type",
+                    "zz_ID",
+                    "zz_sms_time",
+                ]
+            }
+        }
+    )
+    sent: list[str] = []
+
+    async def capture(_method, _path, **kwargs):
+        sent.append(str(kwargs.get("data")))
+        return {"result": "success"}
+
+    with (
+        patch.object(api, "ad_suffix", new=AsyncMock(return_value="&AD=t")),
+        patch.object(api, "_request", side_effect=capture),
+        patch.object(api, "_send_counters", new=AsyncMock(return_value={})),
+        patch.object(api, "_classify_send", new=AsyncMock(return_value=None)),
+    ):
+        await api.send_sms("+353871234567", "hello")
+
+    for name in ("Number", "MessageBody", "encode_type", "ID", "sms_time"):
+        assert f"&zz_{name}=" in sent[0], name
+        assert f"&{name}=" not in sent[0], f"{name} was sent under both spellings"
+
+
+def test_the_session_flag_read_uses_the_key_the_device_nominates() -> None:
+    """Item 28, consumed rather than only published."""
+    api = _api(device_profile.parse_profile(MC7010, "v"))
+    assert api._session_flag_names() == ("loginfo", "ok")
+    assert api.profile_decisions["session_flag"] == "learned"
+
+    other = _api({"session_flag": {"key": "sess_ok", "ok_value": "yes"}})
+    assert other._session_flag_names() == ("sess_ok", "yes")
+
+
+@pytest.mark.parametrize(
+    "learned",
+    [{}, {"key": "sess_ok"}, {"ok_value": "yes"}],
+)
+def test_half_a_session_flag_is_not_used_at_all(learned: dict) -> None:
+    """Both halves come from the same expression, or neither is used.
+
+    A key learned without its accepted value would be read and compared
+    against the wrong literal, which is worse than not reading it.
+    """
+    from custom_components.zte_router_5g.api import SESSION_FLAG_KEY, SESSION_FLAG_OK
+
+    api = _api({"session_flag": learned})
+
+    assert api._session_flag_names() == (SESSION_FLAG_KEY, SESSION_FLAG_OK)
+    assert api.profile_decisions["session_flag"] == "fallback_not_learned"
+
+
+@pytest.mark.asyncio
+async def test_a_session_flag_read_asks_for_the_learned_key() -> None:
+    """On the wire, not only in the resolver."""
+    api = _api({"session_flag": {"key": "sess_ok", "ok_value": "yes"}})
+    asked: list[dict] = []
+
+    async def capture(_method, _path, **kwargs):
+        asked.append(dict(kwargs.get("params") or {}))
+        return {"sess_ok": "yes"}
+
+    from custom_components.zte_router_5g.api import SESSION_CONFIRMED
+
+    with patch.object(api, "_request", side_effect=capture):
+        assert await api.read_session_flag() == SESSION_CONFIRMED
+
+    assert asked[0]["cmd"] == "sess_ok"
+
+
+def test_a_round_count_this_derivation_cannot_build_withdraws_the_digest() -> None:
+    """A shape `get_ad` does not implement must not be applied anyway.
+
+    `get_ad` hashes twice. A profile reporting anything else would otherwise
+    be derived with the learned digest over the wrong number of rounds, which
+    is a well-formed token the router refuses without saying why.
+    """
+    profile = device_profile.parse_profile(MC888, "xx_xxx_MC7010DV1.0.0B03")
+    profile["token"]["rounds"] = 3
+    api = _api(profile)
+
+    # The model string decides instead: MD5 on this version, not the script's
+    # SHA-256.
+    assert len(api._ad_hash_func("xx_xxx_MC7010DV1.0.0B03")("a")) == 32
+    assert api.profile_decisions["ad_digest"] == "fallback_round_count_unsupported"
+
+
+@pytest.mark.asyncio
+async def test_the_salt_is_read_under_the_name_the_expression_gives_it() -> None:
+    """Item 18's last operand. Both devices name it `RD`, the first alias."""
+    profile = device_profile.parse_profile(MC7010, "v")
+    profile["token"]["salt_key"] = "ZRD"
+    profile["token"]["salt_read"] = "ZRD"
+    api = _api(profile)
+    asked: list[str] = []
+
+    async def capture(_method, path, **_kwargs):
+        asked.append(path)
+        return {"ZRD": "SALT"}
+
+    with patch.object(api, "_request", side_effect=capture):
+        assert await api.get_rd() == "SALT"
+
+    assert "cmd=ZRD,RD,rd" in asked[0]
+    assert api.profile_decisions["salt_name"] == "learned"
+
+
+@pytest.mark.asyncio
+async def test_a_known_salt_name_adds_no_alias() -> None:
+    """`RD` is already the leading alias, so nothing is prepended."""
+    api = _api(device_profile.parse_profile(MC7010, "v"))
+    asked: list[str] = []
+
+    async def capture(_method, path, **_kwargs):
+        asked.append(path)
+        return {"RD": "SALT"}
+
+    with patch.object(api, "_request", side_effect=capture):
+        assert await api.get_rd() == "SALT"
+
+    assert "cmd=RD,rd" in asked[0]
+    assert api.profile_decisions["salt_name"] == "fallback"
+
+
+def test_a_form_with_no_username_field_takes_the_single_user_command() -> None:
+    """Item 25's other half, and only in the negative direction.
+
+    A form carrying no `username` is positive evidence for `LOGIN` — it is
+    what the MC888 Pro builds. A form that carries one is not evidence for
+    `LOGIN_MULTI_USER`: the reference MC7010 carries a username and still
+    uses `LOGIN`, so reading the flag symmetrically would move that device
+    onto a form it does not accept.
+    """
+    assert device_profile.parse_profile(MC888)["login"]["carries_username"] is False
+    assert device_profile.parse_profile(MC7010)["login"]["carries_username"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("carries_username", "expected_form", "decision"),
+    [
+        (False, "LOGIN", "learned_no_username_field"),
+        (True, "LOGIN_MULTI_USER", "fallback_model_string"),
+    ],
+)
+async def test_the_login_form_follows_the_device_s_own_builder(
+    carries_username: bool, expected_form: str, decision: str
+) -> None:
+    """Driven through `login`, so the branch is asserted where it acts.
+
+    The version string carries no known model, so the model heuristic leaves
+    `is_multi` true and the learned flag is the only thing that can move it.
+    """
+    api = _api({"login": {"carries_username": carries_username}})
+    api.username = "admin"
+    forms: list[str] = []
+
+    async def attempt(form, *_args, **_kwargs):
+        forms.append(form)
+        return SimpleNamespace(
+            established=True,
+            auth_error=None,
+            conn_error=None,
+            cookies={"stok": "s"},
+        )
+
+    with (
+        patch.object(api, "get_ld", new=AsyncMock(return_value="LD")),
+        patch.object(api, "get_version", new=AsyncMock(return_value="ZZ_UNKNOWN_V1")),
+        patch.object(api, "_login_ad", new=AsyncMock(return_value="AD")),
+        patch.object(api, "_attempt_login", side_effect=attempt),
+    ):
+        await api.login()
+
+    assert forms[0] == expected_form
+    assert api.profile_decisions["login_form"] == decision

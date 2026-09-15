@@ -41,9 +41,20 @@ class _HasEnabledDefault(Protocol):
 # first, so a specific entry can override a general one without restructuring
 # the lookup. Family matching is deliberate: the `network_` vocabulary and the
 # `zsidn` session cookie are firmware-family behaviours rather than variant
-# ones, and `api._hash` already selects SHA-256 on `MC888` or `MC889`
-# appearing anywhere in the version string — a higher-stakes decision than an
-# entity default.
+# ones, and which entities a build populates follows the family rather than
+# the variant.
+#
+# **No higher-stakes decision is made this way any more, and one used to be.**
+# `_ad_hash_func` selected the write token's digest on `MC888` or `MC889`
+# appearing anywhere in the version string; since v3.3.25-dev10 it reads the
+# function the device's own script names and falls back to that substring only
+# when the script cannot be resolved. An earlier revision of this comment cited
+# that selection as precedent and named `api._hash`, which has never branched
+# on anything — it is unconditionally SHA-256, for the login password.
+#
+# The precedent is therefore withdrawn rather than updated. What justifies
+# substring matching here is that an entity default is advisory and a user can
+# override it, not that something riskier is decided the same way.
 #
 # Seeded from measurement only. Every entry below is a reading from the
 # 2026-09-02 diagnostics download attached to issue #56, not an inference

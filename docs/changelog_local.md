@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25-dev11\] - 2026-09-15 - Five Values the Profile Had Learned and Nothing Read](#3325-dev11---2026-09-15---five-values-the-profile-had-learned-and-nothing-read)
   - [\[3.3.25-dev10\] - 2026-09-15 - The Router's Own Web Interface Supplies the Write Contract](#3325-dev10---2026-09-15---the-routers-own-web-interface-supplies-the-write-contract)
   - [\[3.3.25-dev9\] - 2026-09-15 - Discovery Reads What the Router References; Writes and Polls Take Turns](#3325-dev9---2026-09-15---discovery-reads-what-the-router-references-writes-and-polls-take-turns)
   - [\[3.3.25-dev8\] - 2026-09-15 - The Probe Is Removed and Its Only Irreplaceable Part Moves Into Diagnostics](#3325-dev8---2026-09-15---the-probe-is-removed-and-its-only-irreplaceable-part-moves-into-diagnostics)
@@ -288,6 +289,54 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+
+---
+
+## [3.3.25-dev11] - 2026-09-15 - Five Values the Profile Had Learned and Nothing Read
+
+### Summary
+
+A follow-up to `[3.3.25-dev10]`, found by a check rather than by a failure: every key the parser emits, is it read anywhere outside `device_profile.py` and `diagnostics.py`? Five were not. Each was parsed correctly, published in the download, and consumed by a constant sitting beside it.
+
+**The shape is predictable and worth naming.** The parser was written and validated against two real firmwares first, and the write path was wired to it command by command afterwards — so a learned value with no obvious consumer got as far as the download and stopped. It is also why the live checks did not catch any of them: the hardware check and the diagnostics check score what was *learned*, and learning was correct in all five cases.
+
+**None is a defect on either device this project can read.** All five resolve to the constant they replace on both the reference MC7010 and the MC888 Pro of issue #56. That was equally true of `APN_PROC_EX` until the parser read the Pro's script and found `apn_pdp_type`.
+
+### Fixed
+
+- **The two SMS commands ask the device how it spells its fields.** `DELETE_SMS` and `SEND_SMS` built `msg_id`, `Number`, `MessageBody`, `encode_type`, `ID` and `sms_time` as literals while the other five writers resolved theirs. Issue #56 is an SMS delete failure, so these are the two commands the reporter actually exercises, and they were the last two still asking a constant.
+
+- **The pre-write session check reads the flag the device nominates.** The profile learns `"ok" == loginfo` from the firmware's own client and the check read `SESSION_FLAG_KEY` and `SESSION_FLAG_OK`. On a firmware naming something else the constant reads an absent key, the answer is a blank, and the learned-support rule then correctly declines to apply the mechanism at all — a safe failure, and a silent one: the check would simply never work on that device and nothing would say why.
+
+  **Both halves come from the same expression or neither is used.** A key learned without its accepted value would be read and compared against the wrong literal, which is worse than not reading it. The raw value is still never stored, so the redaction of `loginfo` by name in `diagnostics.py` remains a second line rather than the only one.
+
+- **The salt is read under the name the token expression gives it.** `get_rd` asked `_TOKEN_READS["RD"]`, a hand-written alias tuple, while the profile had already read the name out of `({nv:"RD"}).RD` in the same expression the digest comes from. The learned name now leads those aliases rather than replacing them. It is de-duplicated, because the expression names the salt twice — once as the value asked for, once as the key read back — and a device naming something new must not be asked for it twice in one `cmd` list. **That defect was introduced writing this and caught by its own test.**
+
+- **A round count this derivation cannot build withdraws the digest.** `get_ad` hashes twice; a profile reporting anything else would otherwise have been derived with the learned digest over the wrong number of rounds, producing a well-formed token the router refuses without saying why. It now falls back to the model string and the download names the disagreement.
+
+  The parser's `rounds` field is documented for what it is: **the shape this parser recognises, not a count it measured.** It looks for one call over the operands and one over the result and the salt. A firmware doing three rounds would not be reported as three — it would fail to match the second round and yield no token site at all.
+
+- **A login form carrying no username takes the single-user command.** The profile reads that off the device's own builder; `login` decided it from `MC801` or `MC7010` appearing in the version string.
+
+  **Only the negative direction is consumed, and deliberately.** A form with no `username` field is positive evidence for `LOGIN` — it is what the MC888 Pro builds. A form that carries one is not evidence for `LOGIN_MULTI_USER`: the reference MC7010 carries a username and still uses `LOGIN`, so reading the flag symmetrically would move that device onto a form it does not accept.
+
+### Added
+
+- **Every write is asserted to take its token from `ad_suffix`** (item 35's "asserted, not assumed", which was assumed). The assertion is made over the source rather than over a list of methods: a writer is found by the payload it builds, so the ninth write command somebody adds is covered the moment it exists. `ad_suffix` is the single place that reads the firmware's gate flag and its exempt list, and a writer calling `get_ad` directly bypasses both — silently, because a router that ignores an unwanted `AD` accepts the write anyway.
+
+- **The model-string digest is its own function.** `_model_hash_func` is split out of `_ad_hash_func` so that every route to the fallback is visible as a route to the fallback. There are now three.
+
+### Changed
+
+- **A field resolved by what the device answered records that it was.** The live answer short-circuits the profile, so it was the one resolution path in the integration that recorded no decision at all — against principle 3, which is that the download says which path was taken.
+
+### Notes
+
+- **Two comments that documented behaviour that had moved.** `entity_defaults.py` cited `api._hash` as selecting SHA-256 on `MC888` or `MC889`; `_hash` has never branched on anything — it is unconditionally SHA-256, for the login password — and the model-string selection that did exist is now a fallback behind the device's own script. The precedent is withdrawn rather than updated: what justifies substring matching there is that an entity default is advisory and a user can override it.
+
+- **`select.py` now states its omission as precautionary, which is what item 103 required.** It read as evidence that every APN and bearer setter re-establishes the connection and that the router answers blank meanwhile. Neither half has been observed: the two writes issued on the reference MC7010 on 2026-09-14 were effectively no-ops — `apn_mode` auto to auto, and `net_select` `auto_select` to `4G_AND_5G`, which is Auto to Auto — so neither exercised a change that would take the connection down. Settling it needs a restricting bearer value or a real APN change.
+
+- 1,764 tests at 100% line and branch coverage.
 
 ---
 
