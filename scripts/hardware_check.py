@@ -849,6 +849,89 @@ async def _check_logout_then_probe(api: ZTERouterAPI, report: Report) -> None:
     await _resume_session(api, report, after="the sessionless-key measurement")
 
 
+async def check_learned_profile(api: ZTERouterAPI, report: Report) -> None:
+    """Learn this device's write contract from its own scripts and score it.
+
+    Item 44. Everything asserted here is something the reference MC7010 is
+    independently known to do — its writes are accepted with a lowercase MD5
+    token over `wa_inner_version + cr_version`, it exempts `LOGIN` and
+    `SET_WEB_LANGUAGE`, and its pre-write check reads `loginfo` — so a profile
+    that disagrees with any of it is wrong about a device whose behaviour is
+    not in question.
+
+    The digest is scored twice: that it resolved at all, and that it agrees
+    with the model-string heuristic it replaces. Both produce a well-formed
+    token and the router refuses either the same way, so a silent
+    disagreement here is exactly the fault that would reach a user as "the
+    router rejected the command".
+    """
+    print(_cyan("\n[1f] Learning the device profile from the router's own scripts"))
+    report.must_produce(
+        "[1f]",
+        [
+            "the profile is learned from the device's own scripts",
+            "the learned digest agrees with the model-string heuristic",
+            "the learned operands are the two this device is written against",
+            "the learned session flag is the one the pre-write check reads",
+        ],
+    )
+
+    started = time.monotonic()
+    profile = await api.learn_profile()
+    elapsed = time.monotonic() - started
+
+    token = profile.get("token", {})
+    digest = token.get("digest", {})
+    flag = profile.get("session_flag", {})
+    version = profile.get("firmware", "")
+
+    report.record(
+        bool(token.get("digest_function")) and not profile.get("unlearned"),
+        "the profile is learned from the device's own scripts",
+        f"{len(profile.get('sources_read', []))} files in {elapsed:.2f}s; "
+        f"unlearned: {profile.get('unlearned') or 'nothing'}",
+    )
+
+    heuristic = "sha256" if any(m in version for m in ("MC888", "MC889")) else "md5"
+    report.record(
+        digest.get("algorithm") == heuristic,
+        "the learned digest agrees with the model-string heuristic",
+        f"script says {digest.get('algorithm')} ({digest.get('resolved_via')}), "
+        f"model string says {heuristic}",
+    )
+    report.record(
+        token.get("operand_values") == {"rd0": "wa_inner_version", "rd1": "cr_version"},
+        "the learned operands are the two this device is written against",
+        str(token.get("operand_values")),
+    )
+    report.record(
+        flag.get("key") == "loginfo" and flag.get("ok_value") == "ok",
+        "the learned session flag is the one the pre-write check reads",
+        f"{flag.get('key')} == {flag.get('ok_value')!r}",
+    )
+
+    # Not scored. This device is the one whose commands already work, so a
+    # difference between what it answers and what its own builder names would
+    # be a finding about the parser rather than about the router — and it is
+    # the field a second device's run is read against.
+    commands = profile.get("commands", {})
+    print(
+        _dim(
+            f"      {len(commands)} write commands read; "
+            f"DATA_LIMIT_SETTING: {commands.get('DATA_LIMIT_SETTING')}"
+        )
+    )
+    report.captured["device_profile"] = {
+        "digest": digest,
+        "operands": token.get("operand_values"),
+        "exempt_commands": token.get("exempt_commands"),
+        "session_flag": flag,
+        "unlearned": profile.get("unlearned"),
+        "commands_read": len(commands),
+        "parse_seconds": round(elapsed, 3),
+    }
+
+
 async def check_js_mining_yield(api: ZTERouterAPI, report: Report) -> None:
     """Mine the router's own web UI and score the yield against the static list.
 
@@ -2179,6 +2262,9 @@ async def main() -> int:
         if not await _resume_session(api, report, after="the untaught-object check"):
             return 1
         await check_session_assumptions(api, session, report)
+        # Before the write round trips, so a token they send is one this
+        # check has already scored the derivation of.
+        await check_learned_profile(api, report)
         await check_write_round_trip(api, report, hostile=False, session=session)
         await check_write_round_trip(api, report, hostile=True, session=session)
         await check_data_volume_form(api, report)

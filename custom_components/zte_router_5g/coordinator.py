@@ -17,6 +17,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from . import device_profile
 from ._compat import device_by_identifier
 from .api import (
     SMS_STORE_ALL,
@@ -124,6 +125,7 @@ PLAUSIBILITY_TOLERANCE = 0.05
 # needs no maintenance, and leaving it there means no migration. The store is
 # advisory — where it is absent or unreadable the cold-start path still works.
 UPTIME_STORAGE_VERSION = 1
+PROFILE_STORAGE_VERSION = 1
 UPTIME_WRITE_INTERVAL = timedelta(minutes=20)
 UPTIME_SAVE_DELAY = 60
 
@@ -239,6 +241,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # guard-rejected poll defers it rather than skipping it.
         self._startup_reconciled = False
         self._store: Store[dict[str, Any]] | None = None
+        self._profile_store: Store[dict[str, Any]] | None = None
         self._stored_last_uptime: int | None = None
         self._stored_written_at: datetime | None = None
         self._last_counter_write: datetime | None = None
@@ -886,6 +889,85 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         observed = list(getattr(self.api, "session_lifetimes", []))
         if observed and observed != self.observations.session_lifetimes():
             await self.observations.async_save_session_lifetimes(observed)
+
+    async def async_load_profile(self) -> None:
+        """Read the cached device profile. Never raises, never fetches.
+
+        Principle 5: Home Assistant startup reads a profile from local storage
+        and parses nothing. A missing, corrupt or stale record resolves to "no
+        profile", which routes every profile-backed decision to the behaviour
+        that shipped before there was one.
+
+        The firmware the profile was read under is **not** checked here,
+        because nothing has polled yet and the version is not known. It is
+        checked once by `async_learn_profile`, which is the only thing that
+        can act on the answer.
+        """
+        self._profile_store = Store(
+            self.hass,
+            PROFILE_STORAGE_VERSION,
+            f"{DOMAIN}_{self.entry.entry_id}_profile",
+        )
+        try:
+            stored = await self._profile_store.async_load()
+        except Exception as err:  # noqa: BLE001 - no storage fault fails setup
+            _LOGGER.debug(
+                "%s: profile store unreadable, continuing without it: %s",
+                self.entry.title,
+                err,
+            )
+            return
+        if not isinstance(stored, dict):
+            return
+        if stored.get("profile_version") != device_profile.PROFILE_VERSION:
+            # A record written by a build whose profile had a different shape.
+            # Discarded rather than migrated: the device that produced it is
+            # still there and can simply be asked again.
+            return
+        self.api.profile = stored
+
+    async def async_learn_profile(self) -> None:
+        """Learn the profile once, in the background, if it is not current.
+
+        Runs after the first poll, so the firmware version it is keyed to is
+        the one the device is actually running. Re-learned only when that
+        version changes, for the reason `cr_version` is cached the same way: an
+        upgrade can change every answer in here, and a profile that outlives
+        its firmware is worse than none.
+
+        **Never fails a setup and never blocks a write.** Anything that goes
+        wrong leaves the profile as it was — absent, or the previous firmware's
+        — and every consumer falls back.
+        """
+        try:
+            # Inside the guard, not ahead of it. Reading the version is a
+            # request like any other, and a device that cannot answer it must
+            # leave the profile as it was rather than fail the task it is in.
+            version = await self.api.get_version() or ""
+            if version and self.api.profile.get("firmware") == version:
+                return
+            profile = await self.api.learn_profile()
+        except Exception as err:  # noqa: BLE001 - learning is never load-bearing
+            _LOGGER.debug(
+                "%s: could not learn the device profile: %s", self.entry.title, err
+            )
+            return
+        _LOGGER.info(
+            "%s: device profile learned from %d of its own files; %s",
+            self.entry.title,
+            len(profile.get("sources_read", [])),
+            "everything it was asked for"
+            if not profile.get("unlearned")
+            else "not learned: " + ", ".join(profile["unlearned"]),
+        )
+        if self._profile_store is None:  # pragma: no cover - set up before this
+            return
+        try:
+            await self._profile_store.async_save(profile)
+        except Exception as err:  # noqa: BLE001 - see above
+            _LOGGER.debug(
+                "%s: could not store the device profile: %s", self.entry.title, err
+            )
 
     async def async_load_stored_uptime(self) -> None:
         """Load the persisted counter and drift accumulators. Never raises.

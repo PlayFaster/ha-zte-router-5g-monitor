@@ -642,6 +642,13 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "`get_ad` selects on the firmware version, so the branch cannot be "
         "removed without dropping support for the older models."
     ),
+    ("device_profile.py", "noqa: S324"): (
+        "The same MD5 as `api.py`'s, reached from the other direction. This "
+        "one is selected because the device's own script names `hex_md5` in "
+        "its token expression, rather than because the model string looked "
+        "old — so the branch exists for exactly as long as a firmware that "
+        "asks for it exists, which is not something this project decides."
+    ),
     ("api.py", "pragma: no cover"): (
         "Two defensive guards. `login()` re-checks `attempt.stok` after both "
         "error branches have raised, which narrows the type for mypy and "

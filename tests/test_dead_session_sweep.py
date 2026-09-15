@@ -139,6 +139,15 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     "set_data_volume_settings": (_DATA_VOLUME_STATE,),
     "set_bearer_preference": ("Only_5G",),
     "try_set_protocol": (),
+    # Every write's last step before the payload is built. It either derives
+    # the token through `get_ad`, which raises on a dead session, or decides
+    # the command needs none — and that branch still asserts the session, so
+    # both paths fail a dead one.
+    "ad_suffix": ("DELETE_SMS",),
+    # Reads the router's own static assets. Best-effort by contract: a profile
+    # that cannot be learned leaves every consumer on the constant it used
+    # before, which is what the whole fallback discipline is for.
+    "learn_profile": (),
 }
 
 # Methods that are best-effort by contract and may legitimately return a
@@ -156,6 +165,9 @@ _BEST_EFFORT = {
     "get_version",
     "get_rd",
     "get_ad",
+    # See `_CALLS`: learning is never load-bearing, and a router that will not
+    # serve its own scripts must cost a fallback rather than a raised setup.
+    "learn_profile",
 }
 
 # Methods whose whole answer is whether they raised. `None` from one of these
@@ -550,6 +562,12 @@ def test_every_public_method_is_covered_by_the_sweep():
 def test_best_effort_carve_out_stays_small():
     """Every exemption is a method allowed to fail quietly — keep it deliberate.
 
+    Raised from six to seven in v3.3.25-dev10 for `learn_profile`, which reads
+    the router's own web assets to learn its write contract. It is allowed to
+    fail quietly because everything it supplies has a fallback to the constant
+    that shipped before it, and because a router that will not serve a script
+    must cost a widening rather than a working integration.
+
     Raised from five to six in v3.3.25-dev1 for `read_session_flag`, which asks
     the router whether the session is logged in before a write. It answers
     `unanswered` instead of raising because a pre-write check that cannot run
@@ -557,7 +575,7 @@ def test_best_effort_carve_out_stays_small():
     the one whose absence blocked every write on the reference MC7010.
     """
     assert set(_CALLS) >= _BEST_EFFORT
-    assert len(_BEST_EFFORT) <= 6, (
+    assert len(_BEST_EFFORT) <= 7, (
         "the best-effort list has grown; each entry is a method permitted to "
         "return a default on failure, so each needs a stated reason above"
     )

@@ -35,7 +35,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
-from . import web_sources
+from . import device_profile, web_sources
 from .const import DISCOVERY_VALUE_SAFE
 from .coordinator import ZTERouterDataUpdateCoordinator
 
@@ -759,6 +759,11 @@ async def async_get_config_entry_diagnostics(
         # file always, and the sources themselves only when something in this
         # download needs explaining. See `_sources_are_warranted`.
         "web_sources": web_source_report,
+        # What this device's own web interface says about its write path, and
+        # which of those answers the code actually used. Item 17: every value
+        # that could not be learned is named, because "not learned" is the
+        # field that says whether a refused write is the profile's fault.
+        "device_profile": _profile_section(coordinator, crawled_sources),
         # The most recent rejection, kept even after a live read cleared the
         # live field. Historical by construction: it says a rejection happened,
         # not that one is happening. Producing this file reads the router, and
@@ -1038,6 +1043,55 @@ def _sources_are_warranted(coordinator: Any) -> str | None:
     if failures:
         return f"{len(failures)} write failure(s) recorded"
     return None
+
+
+def _profile_section(coordinator: Any, sources: dict[str, str]) -> dict[str, Any]:
+    """The profile in force, what this download's own crawl reads, and the gap.
+
+    Three things, and the third is the one worth having. The profile in force
+    is what the running code consulted; the re-parse is what the device says
+    right now; a difference between them means the cache is describing a
+    firmware that is gone, which is a fault nothing else in this download would
+    show.
+
+    **The digest is compared against the constant it replaces.** On a device
+    where the learned digest and the model-string heuristic agree, a refused
+    write is not the token. On a device where they disagree, this field is the
+    first thing to read — and it is the only place the disagreement is
+    visible, because both produce a well-formed token and the router refuses
+    either one the same way.
+    """
+    api = coordinator.api
+    in_force = api.profile if isinstance(getattr(api, "profile", None), dict) else {}
+    section: dict[str, Any] = {
+        "in_force": _json_safe(in_force),
+        "decisions": dict(sorted(getattr(api, "profile_decisions", {}).items())),
+    }
+    if not sources:
+        # The crawl is what a re-parse reads. Without it there is nothing to
+        # compare, which is a different statement from "they agree".
+        section["reparsed"] = None
+        return section
+    firmware = in_force.get("firmware", "")
+    fresh = device_profile.parse_profile(sources, firmware)
+    section["reparsed"] = {
+        "unlearned": fresh.get("unlearned", []),
+        "token": _json_safe(fresh.get("token", {})),
+        "session_flag": _json_safe(fresh.get("session_flag", {})),
+        "commands_read": len(fresh.get("commands", {})),
+        "matches_in_force": fresh == in_force if in_force else None,
+    }
+    learned = fresh.get("token", {}).get("digest", {}).get("algorithm")
+    if learned:
+        # The heuristic this replaces, evaluated here rather than described,
+        # so the comparison is of two answers and not of an answer and a rule.
+        heuristic = (
+            "sha256" if any(m in firmware for m in ("MC888", "MC889")) else "md5"
+        )
+        section["digest_agrees_with_model_heuristic"] = learned == heuristic
+        section["digest_learned"] = learned
+        section["digest_from_model_string"] = heuristic
+    return section
 
 
 async def _async_web_sources(

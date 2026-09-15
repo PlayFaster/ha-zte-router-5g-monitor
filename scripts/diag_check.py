@@ -135,6 +135,20 @@ _VOLATILE = re.compile(
     # The consequences are asserted directly instead — the canary pool and
     # the probe counts below — so excluding these loses no coverage.
     r"|^/logout_acknowledged$|^/measurement_note$"
+    # The pre-write session check's lifetime tallies. How many times the check
+    # ran follows how many times the session lapsed, which follows how long
+    # the pass took — and the two passes no longer take the same time, because
+    # the first learns the device profile from the router's own scripts and
+    # the second finds it cached. Measured on the reference MC7010 on
+    # 2026-09-15 across four passes: two then three on three of them, two then
+    # two on the fourth — which is the point. It is not a count with a right
+    # answer.
+    #
+    # What those checks *concluded* is asserted directly below, which is the
+    # part a reader of a download needs: a check that could not re-establish
+    # the session is a finding, and a check that ran twice rather than three
+    # times is not.
+    r"|^/session_flag/checks/"
     r"|^/unauthenticated_keys/|^/discovery/sessionless_measurement$"
     r"|^/discovery/canary_pool/served_without_a_session$)"
 )
@@ -625,6 +639,67 @@ def check_discovery(result: dict[str, Any], report: Report) -> None:
         )
 
 
+def check_device_profile(result: dict[str, Any], report: Report) -> None:
+    """Assert the profile reached the file, and that it describes this device.
+
+    Item 45's first half. The section is what a reader consults when a write
+    is refused on hardware nobody here can reach, so it failing to publish is
+    the same class of fault as the discovery fields being dropped on the way
+    out — produced and then lost.
+    """
+    profile = result.get("device_profile") or {}
+    report.record(bool(profile), "[6] the device profile section is published")
+    if not profile:
+        return
+
+    in_force = profile.get("in_force") or {}
+    reparsed = profile.get("reparsed") or {}
+
+    # **Scored on the re-parse, not on the profile in force.** This script
+    # drives a cold coordinator whose background learn never runs, so there is
+    # nothing cached — and demanding one would make the section untestable in
+    # the only mode this check has. Every download crawls, so the re-parse is
+    # the part that is always there to judge.
+    report.record(
+        bool(reparsed.get("token", {}).get("digest_function")),
+        "[6] the published profile names a digest function",
+        str(reparsed.get("token", {}).get("digest")),
+    )
+    report.record(
+        reparsed.get("unlearned") == [],
+        "[6] nothing was left unlearned on this device",
+        str(reparsed.get("unlearned")),
+    )
+    report.record(
+        bool(reparsed.get("commands_read")),
+        "[6] the device's own write commands were read",
+        f"{reparsed.get('commands_read')} commands",
+    )
+    report.record(
+        bool(reparsed.get("session_flag", {}).get("key")),
+        "[6] the session flag the device trusts is named",
+        str(reparsed.get("session_flag")),
+    )
+    report.record(
+        bool(profile.get("decisions")),
+        "[6] the download records which path each decision took",
+        f"{len(profile.get('decisions') or {})} decisions",
+    )
+    report.record(
+        profile.get("digest_agrees_with_model_heuristic") is True,
+        "[6] the learned digest agrees with the constant it replaces",
+        f"{profile.get('digest_learned')} vs {profile.get('digest_from_model_string')}",
+    )
+    # Only where one exists. A cold coordinator has no cached profile, and
+    # "nothing to compare" is not a disagreement.
+    if in_force:
+        report.record(
+            reparsed.get("matches_in_force") is True,
+            "[6] a fresh parse agrees with the cached profile",
+            f"cached under {in_force.get('firmware')!r}",
+        )
+
+
 def check_sanitization(result: dict[str, Any], report: Report) -> None:
     """Assert no identifier reached the file unredacted."""
     leaks = [
@@ -726,6 +801,50 @@ def check_stability(
     # back blank, which follows the device's own live values, so it varies
     # legitimately between two passes a minute apart — measured at 198 and 190.
     # The counts below do not.
+    # Item 45's second half. A profile is read from firmware, which does not
+    # change between two runs a minute apart, so anything that differs here is
+    # the parser being non-deterministic rather than the device saying
+    # something new — and a parser whose answer depends on dictionary order
+    # would put a different field name on the wire on alternate restarts.
+    # Scored on the token and the session flag rather than on the whole
+    # section. A crawl that loses one file to a router declining it —
+    # measured here on 2026-09-15, one extra miss on the second pass taking
+    # mined names from 1,099 to 974 — legitimately changes which commands were
+    # read and what is listed as unlearned. It cannot change what the token
+    # expression says, because that lives in `js/service.js`, which either
+    # arrives or the profile has no digest at all.
+    for field in ("token", "session_flag"):
+        one_side = ((first.get("device_profile") or {}).get("reparsed") or {}).get(
+            field
+        )
+        two_side = ((second.get("device_profile") or {}).get("reparsed") or {}).get(
+            field
+        )
+        report.record(
+            one_side == two_side,
+            f"[4] the device profile's `{field}` is stable across two runs",
+        )
+
+    # The cached profile is read from local storage rather than from the
+    # router, so unlike everything above it cannot vary between two runs for
+    # any reason that is not a defect.
+    report.record(
+        (first.get("device_profile") or {}).get("in_force")
+        == (second.get("device_profile") or {}).get("in_force"),
+        "[4] the profile in force is stable across two runs",
+    )
+
+    # The conclusion behind the counts excluded above. A session check that
+    # ran and could not re-establish the session is a finding about this
+    # device; one that ran twice rather than three times is not.
+    for label, side in (("first", first), ("second", second)):
+        checks = (side.get("session_flag") or {}).get("checks") or {}
+        report.record(
+            checks.get("relogin_failed", 0) == 0,
+            f"[4] no session check failed to re-establish the session ({label} run)",
+            str(checks),
+        )
+
     one = _note_count(first.get("discovery", {}), "declined by the router")
     two = _note_count(second.get("discovery", {}), "declined by the router")
     report.record(
@@ -952,6 +1071,7 @@ async def main() -> int:
     check_shape(first, report)
     check_discovery(first, report)
     check_sanitization(first, report)
+    check_device_profile(first, report)
 
     if not args.once:
         # The pass logs out and back in, and the reference hardware refused a

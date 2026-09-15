@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25-dev10\] - 2026-09-15 - The Router's Own Web Interface Supplies the Write Contract](#3325-dev10---2026-09-15---the-routers-own-web-interface-supplies-the-write-contract)
   - [\[3.3.25-dev9\] - 2026-09-15 - Discovery Reads What the Router References; Writes and Polls Take Turns](#3325-dev9---2026-09-15---discovery-reads-what-the-router-references-writes-and-polls-take-turns)
   - [\[3.3.25-dev8\] - 2026-09-15 - The Probe Is Removed and Its Only Irreplaceable Part Moves Into Diagnostics](#3325-dev8---2026-09-15---the-probe-is-removed-and-its-only-irreplaceable-part-moves-into-diagnostics)
   - [\[3.3.25-dev7\] - 2026-09-14 - The First Write After a Restart No Longer Goes Out on a Dead Session](#3325-dev7---2026-09-14---the-first-write-after-a-restart-no-longer-goes-out-on-a-dead-session)
@@ -287,6 +288,64 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+
+---
+
+## [3.3.25-dev10] - 2026-09-15 - The Router's Own Web Interface Supplies the Write Contract
+
+### Summary
+
+Phase 4 part 2, the device profile. Every ZTE goform router serves the web interface that drives it, and that interface names the things this integration has been deciding from a model string: which digest builds the `AD` token, which two readings it hashes, which commands carry no token at all, how the login form encodes a password, and what each write command's payload fields are called on that firmware.
+
+**What made this necessary rather than merely tidy.** `js/config/config.js` is effectively identical between the reference MC7010 and the MC888 Pro of issue #56 on every flag that could plausibly select a digest — both carry `PASSWORD_ENCODE:!0`, `WEB_ATTR_IF_SUPPORT_SHA256:2`, `ACCESSIBLE_ID_SUPPORT:!0`, `MAX_LOGIN_COUNT:5`, and both declare `DEVICE:"cpe/MF253V"` — yet one implements MD5 and the other SHA-256. Nothing a device reports distinguishes them except the function its own script names. The model string did distinguish them, by accident, for exactly as long as the two models it knows about are the only ones anyone runs.
+
+**Measured on both devices' captured sources.** The parser learns every fact it asks for on each, with nothing left unlearned: **49 ms and 6.6 kB on the MC7010, 86 ms and 13.6 kB on the Pro**. It reads 74 write commands on the first and 170 on the second, and **15 of the 67 they share carry different field names**. That last number is the one that settles the approach: a hand-written alias map would have had to anticipate fifteen differences between the only two devices anyone here can read, and there is one such map in the integration today.
+
+### Added
+
+- **A device profile, learned from the router's own scripts** (`device_profile.py`). Parsed from unauthenticated static assets, so it works before the first login; cached in the integration's `Store` against the firmware it was read under, and re-learned only when a poll reports a different `wa_inner_version`. Home Assistant startup reads the cached record and parses nothing.
+
+  **The parser matches shapes, not literals.** A minifier renames every local identifier, so the two devices' token expressions share no symbol except the parts that cannot be renamed: `rd0`, `rd1`, `goformId`, `rd_params0`. Matching on those and reading the function name *out of* the match is what lets one parser read two firmwares that have no identifier in common.
+
+- **A digest name table, because resolution by definition is not enough.** `cookWithRequest` on the Pro forwards one hop to `SHA256` in `js/util.js`, which resolves. `hex_md5` on the MC7010 is defined in **no returned source** — it lives under `js/lib/`, which the crawl fetches and deliberately excludes — so a parser that read only definitions would have learned nothing from the one device this project can put a write on.
+
+  A name maps to a digest **only where a real device's accepted token proves what it computes**. An unrecognised name is *unresolved*, which is a state and not a guess: inventing an entry would put a well-formed wrong token on the wire, and a wrong token is refused with nothing said about why.
+
+- **One place decides whether a write carries a token.** `ad_suffix` reads the firmware's own gate flag and its own exempt list — `LOGIN` and `SET_WEB_LANGUAGE` on both devices — so two writers of the same command cannot disagree. A command needing no token still passes the pre-write session check; those are different questions.
+
+- **The download publishes the profile, what it decided, and the gap.** Three parts: the profile in force, a fresh parse of the same download's crawl, and whether they agree — a cached profile describing a firmware that is gone is a fault nothing else in the file would show. Beside them, the learned digest set against the model-string heuristic it replaces, which is **the only place a disagreement between the two is visible**: both produce a well-formed token and the router refuses either one identically.
+
+### Fixed
+
+- **The APN setter's payload has never been one the MC888 Pro could accept.** That device's own builder names `apn_pdp_type`, `apn_pdp_select`, `apn_wan_dial` and `apn_wan_apn` where the MC7010 names them without the prefix, and this integration sends the MC7010's spellings. `DATA_LIMIT_SETTING` was corrected by hand in `[3.3.21-dev1]` after the same fault was found there; this is the same fault in the command next to it, found by reading rather than by a user reporting it.
+
+  Field names now resolve in three steps: the spelling a poll answered, then the spelling the device's own script uses, then the canonical name. The live answer still leads, because it is evidence about the device's current state; the script is what covers a field no poll has populated, which is the case a hand-written map cannot reach.
+
+- **`SET_CONNECTION_MODE` differs the same way** — `dial_roam_setting_option` against `roam_setting_option`. This integration does not send that command, and it is recorded because it is the second independent instance of the pattern.
+
+### Changed
+
+- **The login password is encoded the way the device's form encodes it.** Three branches exist in the script, selected by `WEB_ATTR_IF_SUPPORT_SHA256`. Both readable devices answer `2`, and the learned form is **asserted to produce the same bytes** as the constant that ships — so on every device this project can reach, the change is invisible. The value is the device answering `1` or `0`, where today's login is refused with `result=3` and the user is told their password is wrong.
+
+  A login is the one request that must not be experimented with: `MAX_LOGIN_COUNT` is five on both known devices and the lockout is minutes long. Every gap in the profile — an absent flag, an unresolved digest, a value the script does not name — routes back to the form that ships.
+
+- **The integration's own login budget is bounded by what the device tolerates.** `DISCOVERY_RELOGIN_LIMIT` is now capped at `MAX_LOGIN_COUNT - 1`, so a discovery pass on a device answering 2 or 3 cannot lock the account, and one attempt is always left for the person typing into the web interface. The item behind this asked for a hardcoded 5 to be replaced; there was no hardcoded 5 to replace, and this is what the flag is actually worth.
+
+- **Falling back is per fact, never wholesale.** The plan asked for the profile to fall back to today's constants as a unit. That is the wrong granularity: a firmware that hides one answer still supplies the rest, and discarding a learned digest because a field list failed to parse would throw away the fact that matters most. Each consumer falls back on its own and records which path it took.
+
+### Notes
+
+- **The session flag is now the one the device nominates.** No firmware has an opinion about which readings a third-party client should watch, so the witness keys remain selected from what the device populates. What every firmware does name is the flag its *own* client trusts, and both devices decide identically: `"ok" == loginfo`, read on its own. That is what the pre-write check has read since `[3.3.25-dev1]`, and it is now read from the script rather than written here.
+
+- **Nothing here runs on a write path.** 49 ms and 86 ms are the parse alone; end to end on the live MC7010, fetching the seventeen files and parsing them took **1.10 s**. A write that waited for that would be a write this integration could delay, and a firmware whose scripts cannot be parsed would be a write it could block. Learning happens in the background task after the first poll, and a router that will not serve its own scripts costs a widening rather than a working integration.
+
+- **The parser fixtures are written to the shape, not copied from the firmware.** The identifiers that survive minification are real and are the whole reason one parser reads two devices; everything a minifier renames is arbitrary in the fixture exactly as it is on the device. Both were validated against the real captures before being written.
+
+- **The two live checks grew with it.** Hardware check **24 of 24** (from 20), including four assertions that the learned profile matches what the reference MC7010 is independently known to do. Diagnostics check **59 of 59** (from 47), covering publication, the learned-versus-constant digest comparison, and the profile's stability across two runs.
+
+- **One pre-existing assertion was narrowed, because this work made it unstable.** The structural diff compared the pre-write session check's lifetime tallies between two passes. Those counts follow how many times the session lapsed, which follows how long a pass took — and the two passes no longer take the same time, because the first learns the profile and the second finds it cached. Measured across four passes: two then three on three of them, two then two on the fourth. The counts are excluded and what the checks *concluded* is asserted directly instead, which is the part a reader needs.
+
+- 1,744 tests at 100% line and branch coverage.
 
 ---
 

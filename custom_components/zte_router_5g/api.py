@@ -1,6 +1,7 @@
 """ZTE Router 5G API client."""
 
 import asyncio
+import base64
 import contextlib
 import hashlib
 import logging
@@ -14,7 +15,7 @@ from typing import Any, NamedTuple, cast
 
 import aiohttp
 
-from . import web_sources
+from . import device_profile, web_sources
 from .const import (
     ABSENT_KEY_PROPORTION_LIMIT,
     APN_PROFILE_SLOTS,
@@ -1098,6 +1099,16 @@ class ZTERouterAPI:
         # the lock earns its place, the same way `session_check_stats` is for
         # the pre-write check.
         self.write_lock_timeouts = 0
+        # What this device's own web interface says about its write path,
+        # learned in the background and cached against the firmware it was
+        # read from. Empty until then, and empty is a supported state: every
+        # consumer below falls back to the behaviour that shipped before this,
+        # per fact rather than wholesale, because a firmware that hides one
+        # answer still supplies the rest.
+        self.profile: dict[str, Any] = {}
+        # Which path each profile-backed decision actually took, so a download
+        # says whether a value was learned or fallen back to. Principle 3.
+        self.profile_decisions: dict[str, str] = {}
         self.login_metadata: dict[str, Any] = {}
         self._session_was_fresh = False
         # The transport-level facts about the most recent response, kept so a
@@ -2621,8 +2632,7 @@ class ZTERouterAPI:
 
         if not self.password:
             raise ZTECredentialsError("No password provided")
-        pass_hash = self._hash(self.password).upper()
-        zte_pass = self._hash(pass_hash + ld).upper()
+        zte_pass = self._login_password(self.password, ld)
 
         self.is_multi = True
         if version and any(m in version for m in ["MC801", "MC7010"]):
@@ -3685,11 +3695,11 @@ class ZTERouterAPI:
             # leaves the session open — verified against MC7010 firmware
             # V1.0.0B03 on 2026-07-27: with AD it returns success and the stok
             # is genuinely invalidated; without it, the stok stays live.
-            ad = await self.get_ad()
+            ad = await self.ad_suffix("LOGOUT")
             resp = await self._request(
                 "POST",
                 "goform/goform_set_cmd_process",
-                data=f"isTest=false&goformId=LOGOUT&AD={ad}",
+                data=f"isTest=false&goformId=LOGOUT{ad}",
                 headers=headers,
                 _retry=False,
             )
@@ -4007,8 +4017,8 @@ class ZTERouterAPI:
         a refused reboot and an accepted one that did nothing are the same
         observable state and both are answered by watching.
         """
-        ad = await self.get_ad()
-        payload = f"isTest=false&goformId=REBOOT_DEVICE&AD={ad}"
+        ad = await self.ad_suffix("REBOOT_DEVICE")
+        payload = f"isTest=false&goformId=REBOOT_DEVICE{ad}"
         headers = self.write_headers()
         # A connection error here propagates, exactly as before. Absence is
         # only evidence once the command was answered: if the request never
@@ -4054,7 +4064,7 @@ class ZTERouterAPI:
         `listed_with` is the `mem_store` a caller used to choose these ids, and
         is recorded beside the attempt. It changes nothing about the request.
         """
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("DELETE_SMS")
         # The router's own page sends every id semicolon-*terminated*, not
         # semicolon-*separated*: a single delete goes out as `msg_id=16%3B`,
         # and a batch as `1%3B2%3B`. Three browser captures agree — two from
@@ -4073,7 +4083,7 @@ class ZTERouterAPI:
         payload = (
             f"isTest=false&goformId=DELETE_SMS"
             f"&msg_id={urllib.parse.quote(sent_ids, safe='')}"
-            f"&notCallback=true&AD={ad}"
+            f"&notCallback=true{ad}"
         )
         headers = self.write_headers()
         ids = [part for part in msg_id.split(";") if part]
@@ -4227,7 +4237,7 @@ class ZTERouterAPI:
         `_classify_send`.
         """
         before = await self._send_counters()
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("SEND_SMS")
         self._require_confirmed_session("SEND_SMS")
         # Convert message to hex utf-16-be. This stays UTF-16BE for both
         # encodings — `encode_type` tells the router which DCS to put on the
@@ -4251,7 +4261,7 @@ class ZTERouterAPI:
         payload = (
             f"isTest=false&goformId=SEND_SMS&notCallback=true&Number={escaped_number}"
             f"&MessageBody={hex_msg}&encode_type={encode_type}"
-            f"&ID=-1&sms_time={sms_time}&AD={ad}"
+            f"&ID=-1&sms_time={sms_time}{ad}"
         )
         headers = self.write_headers()
         res = await self._request(
@@ -4363,6 +4373,184 @@ class ZTERouterAPI:
             _LOGGER.debug("Failed to get SMS messages: %s", e)
             return []
 
+    def _decide(self, decision: str, path: str) -> None:
+        """Record which way a profile-backed decision went.
+
+        Written on every call rather than only on the learned path: "this
+        device fell back" and "this decision was never reached" are different
+        statements, and a download that spells them the same way is the kind
+        of instrument that made issue #56 take four days.
+        """
+        self.profile_decisions[decision] = path
+
+    def _profile_digest(self) -> Callable[[str], str] | None:
+        """The digest this device's own client builds its token with.
+
+        `None` whenever the profile did not resolve one — an unseen digest
+        implementation, or one defined in a library file the crawl does not
+        return. A guess here produces a well-formed wrong token, which the
+        router refuses without saying why, so there is no guess.
+        """
+        digest = self.profile.get("token", {}).get("digest", {})
+        return device_profile.digest_callable(
+            digest.get("algorithm", ""), digest.get("case", "")
+        )
+
+    def profile_field(self, goform_id: str, canonical: str) -> str:
+        """The name this firmware's own builder gives a payload field.
+
+        The router replaces a whole form and refuses a payload whose field
+        names it does not recognise, so a spelling that is right for one
+        firmware makes every write of that command fail on another. Two of the
+        eight commands this integration sends already differ between the only
+        two devices it can read: `APN_PROC_EX` carries `apn_pdp_type` on the
+        MC888 Pro against `pdp_type` on the MC7010, and `DATA_LIMIT_SETTING`
+        carries the `flux_` family.
+
+        Matching is exact first and by suffix second, and an ambiguous suffix
+        resolves to the canonical name. Every difference observed between the
+        two devices is a prefix added to the same tail — `apn_`, `flux_`,
+        `dial_` — so the suffix is the part that identifies the field, and
+        requiring a single match is what stops a firmware with two similar
+        names from having one chosen arbitrarily.
+        """
+        fields: list[str] = self.profile.get("commands", {}).get(goform_id) or []
+        if not fields:
+            self._decide(f"field:{goform_id}.{canonical}", "fallback_not_learned")
+            return canonical
+        if canonical in fields:
+            self._decide(f"field:{goform_id}.{canonical}", "learned_exact")
+            return canonical
+        matches = [name for name in fields if name.endswith("_" + canonical)]
+        if len(matches) == 1:
+            self._decide(f"field:{goform_id}.{canonical}", "learned_suffix")
+            return matches[0]
+        self._decide(
+            f"field:{goform_id}.{canonical}",
+            "fallback_ambiguous" if matches else "fallback_not_named",
+        )
+        return canonical
+
+    def _token_required(self, goform_id: str) -> bool:
+        """Whether this command carries an `AD` token on this device.
+
+        Two learned reasons it would not: the firmware's own gate flag is off,
+        or the command is one of those its client exempts. Both default to
+        "yes", which is what every release before this one did unconditionally.
+        """
+        token = self.profile.get("token", {})
+        gate = token.get("gate_flag")
+        if gate and self.profile.get("flags", {}).get(gate) is False:
+            self._decide(f"token:{goform_id}", "learned_not_required_gate_off")
+            return False
+        if goform_id in token.get("exempt_commands", ()):
+            self._decide(f"token:{goform_id}", "learned_exempt")
+            return False
+        self._decide(
+            f"token:{goform_id}",
+            "learned_required" if token.get("exempt_commands") else "fallback_required",
+        )
+        return True
+
+    async def ad_suffix(self, goform_id: str, timeout_sec: int | None = None) -> str:
+        """The `&AD=...` a write's payload ends with, or nothing.
+
+        The single place a command's token requirement is decided, so the
+        answer cannot differ between two writers of the same command. A
+        command that needs no token still passes the pre-write session check:
+        not needing a token is not the same as not needing a session.
+        """
+        if not self._token_required(goform_id):
+            await self._ensure_session(timeout_sec=timeout_sec)
+            return ""
+        return "&AD=" + await self.get_ad(timeout_sec=timeout_sec)
+
+    def _login_password(self, password: str, ld: str) -> str:
+        """Encode the password the way this firmware's own login form does.
+
+        Item 25. Three forms exist in the script, selected by
+        `WEB_ATTR_IF_SUPPORT_SHA256`, and both devices this project can read
+        answer `2` — the salted double hash this integration has always sent.
+        The value of learning it is the device that answers something else,
+        where the constant is simply wrong and the router's refusal is
+        indistinguishable from a bad password.
+
+        **The fallback is the form that ships today**, taken whenever the flag
+        is absent, the branch names a function this project cannot resolve, or
+        the profile was never learned. A login is the one request that must not
+        be experimented with: `MAX_LOGIN_COUNT` is five on both known devices
+        and the lockout is measured in minutes.
+        """
+        fallback = self._hash(self._hash(password).upper() + ld).upper()
+        flag = self.profile.get("flags", {}).get("WEB_ATTR_IF_SUPPORT_SHA256")
+        branches = self.profile.get("login", {}).get("password_branches") or {}
+        if flag is None or not branches:
+            self._decide("login_password", "fallback_not_learned")
+            return fallback
+        digest = device_profile.digest_callable(
+            *(
+                self.profile.get("login", {}).get("password_digest", {}).get(key, "")
+                for key in ("algorithm", "case")
+            )
+        )
+        if str(flag) == "2":
+            # The salted double hash. Asserted against the derivation above
+            # rather than replacing it blindly: on both known devices the
+            # learned digest is the same SHA-256 and the two agree, so this
+            # branch changes nothing and says so.
+            if digest is None:
+                self._decide("login_password", "fallback_digest_unresolved")
+                return fallback
+            self._decide("login_password", "learned_salted_double_hash")
+            return digest(digest(password) + ld)
+        if str(flag) == "1" and digest is not None:
+            self._decide("login_password", "learned_hashed_base64")
+            return digest(base64.b64encode(password.encode()).decode())
+        if str(flag) == "0":
+            self._decide("login_password", "learned_base64")
+            return base64.b64encode(password.encode()).decode()
+        self._decide("login_password", "fallback_unknown_flag")
+        return fallback
+
+    def login_budget(self) -> int:
+        """How many logins this integration will spend before giving up.
+
+        Bounded by the device's own `MAX_LOGIN_COUNT` where it names one,
+        because exceeding it is a lockout measured in minutes rather than a
+        refused request. One is held back from the device's figure: a user
+        typing their password into the web interface at the same moment must
+        not find the account locked by this integration having spent the last
+        attempt.
+        """
+        limit = self.profile.get("flags", {}).get("MAX_LOGIN_COUNT")
+        if not isinstance(limit, int) or limit < 2:
+            self._decide("login_budget", "fallback_not_learned")
+            return DISCOVERY_RELOGIN_LIMIT
+        self._decide("login_budget", "learned")
+        return min(DISCOVERY_RELOGIN_LIMIT, limit - 1)
+
+    async def learn_profile(
+        self, sources: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Read this device's own web interface and keep what it says.
+
+        Never called from a write path. Parsing the reference device's scripts
+        costs about 50 ms and the MC888 Pro's about 90; a write that waited for
+        that would be a write this integration could delay, and a firmware
+        whose scripts cannot be parsed would be a write it could block.
+
+        Learned from unauthenticated static assets, so it works before the
+        first login — verified 2026-09-14 on the MC7010, where every file the
+        crawl reads returned 200 with no cookie.
+        """
+        if sources is None:
+            crawled = await web_sources.crawl(self)
+            sources = crawled.get("sources", {})
+        version = await self.get_version() or ""
+        profile = device_profile.parse_profile(sources or {}, version)
+        self.profile = profile
+        return profile
+
     async def get_ad(self, timeout_sec: int | None = None) -> str:
         """Get the AD parameter for commands.
 
@@ -4393,8 +4581,24 @@ class ZTERouterAPI:
         # Devices that do not answer `cr_version`, the reference MC7010 among
         # them, append an empty string and derive exactly the token they
         # derived before.
-        cr_version = await self.get_cr_version(version, timeout_sec=timeout_sec)
-        a = hash_func(version + cr_version)
+        # The two readings the operands resolve to, as this firmware's own
+        # service layer maps them. Both devices name `wa_inner_version` and
+        # `cr_version`, which is what the readers below already fetch, so the
+        # learned answer confirms the shipped one rather than replacing it. A
+        # firmware naming anything else is read generically instead.
+        operands = self.profile.get("token", {}).get("operand_values") or {}
+        expected = ["wa_inner_version", "cr_version"]
+        if operands and [operands.get("rd0"), operands.get("rd1")] != expected:
+            self._decide("ad_operands", "learned_other")
+            names = [operands.get(key, "") for key in sorted(operands)]
+            first = await self._read_operands(
+                [name for name in names if name], timeout_sec=timeout_sec
+            )
+        else:
+            self._decide("ad_operands", "learned" if operands else "fallback")
+            cr_version = await self.get_cr_version(version, timeout_sec=timeout_sec)
+            first = version + cr_version
+        a = hash_func(first)
         rd = await self.get_rd(timeout_sec=timeout_sec)
         if not rd:
             # The other half of the check above, missed when it was added.
@@ -4409,14 +4613,30 @@ class ZTERouterAPI:
             )
         return hash_func(a + rd)
 
-    @staticmethod
-    def _ad_hash_func(version: str) -> Callable[[str], str]:
-        """Return the digest this firmware family uses for `AD`.
+    def _ad_hash_func(self, version: str) -> Callable[[str], str]:
+        """Return the digest this firmware uses for `AD`.
+
+        The profile answers this from the device's own script where it could
+        be resolved. Where it could not, the model string decides, which is
+        what every release before this one did unconditionally — and which is
+        wrong in principle: `config.js` is byte-for-byte comparable between the
+        MC7010 and the MC888 Pro on every flag that could plausibly select a
+        digest, including `WEB_ATTR_IF_SUPPORT_SHA256`, yet one implements MD5
+        and the other SHA-256. Only the function the script names distinguishes
+        them, and only the model string stands in for it when that is missing.
 
         Shared by `get_ad` and the login-time derivation so the two cannot
         drift: a login carrying an `AD` built with the wrong digest would be
         refused exactly like a wrong password, with no way to tell them apart.
         """
+        learned = self._profile_digest()
+        if learned is not None:
+            self._decide("ad_digest", "learned")
+            return learned
+        self._decide(
+            "ad_digest",
+            "fallback_unresolved" if self.profile else "fallback_not_learned",
+        )
         is_new_gen = any(m in version for m in ["MC888", "MC889"])
         return (
             (lambda s: hashlib.sha256(s.encode()).hexdigest().upper())
@@ -4454,6 +4674,29 @@ class ZTERouterAPI:
             return None
         hash_func = self._ad_hash_func(version)
         return hash_func(hash_func(version) + rd)
+
+    async def _read_operands(
+        self, names: list[str], timeout_sec: int | None = None
+    ) -> str:
+        """Concatenate the readings a firmware names as its token operands.
+
+        Only reached on a device whose service layer names something other
+        than the two readings every device seen so far names, which is why it
+        is separate from `get_cr_version` rather than replacing it: that path
+        is proven on two devices and carries the distinction between a value
+        that is absent and a read that failed. This one has neither property
+        and is not to be given them speculatively — it exists so that an
+        unseen firmware is read as it asks to be read rather than as the
+        MC7010 asks.
+        """
+        path = (
+            "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd="
+            + ",".join(names)
+        )
+        data = await self._request(
+            "GET", path, timeout_sec=timeout_sec, authenticated=False
+        )
+        return "".join(cast(str, data.get(name, "") or "") for name in names)
 
     async def get_cr_version(
         self, version: str | None = None, timeout_sec: int | None = None
@@ -4520,11 +4763,15 @@ class ZTERouterAPI:
 
     async def set_apn(self, index: int, pdp_type: str) -> dict[str, Any]:
         """Set the default APN profile index and PDP type."""
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("APN_PROC_EX")
+        # Spelled as this firmware spells it. The MC888 Pro of issue #56
+        # builds this command with `apn_pdp_type`, so the payload below was
+        # one the router would have refused on its field names alone.
+        pdp = self.profile_field("APN_PROC_EX", "pdp_type")
         payload = (
             f"isTest=false&goformId=APN_PROC_EX"
             f"&apn_mode=manual&apn_action=set_default&set_default_flag=1"
-            f"&pdp_type={pdp_type}&index={index}&AD={ad}"
+            f"&{pdp}={pdp_type}&index={index}{ad}"
         )
         headers = self.write_headers()
         res = await self._request(
@@ -4629,13 +4876,14 @@ class ZTERouterAPI:
             body = f"apn_mode={mode}"
         else:
             index, pdp_type = resolved
+            pdp = self.profile_field("APN_PROC_EX", "pdp_type")
             body = (
                 f"apn_mode={mode}&apn_action=set_default&set_default_flag=1"
-                f"&pdp_type={pdp_type}&index={index}"
+                f"&{pdp}={pdp_type}&index={index}"
             )
 
-        ad = await self.get_ad()
-        payload = f"isTest=false&goformId=APN_PROC_EX&{body}&AD={ad}"
+        ad = await self.ad_suffix("APN_PROC_EX")
+        payload = f"isTest=false&goformId=APN_PROC_EX&{body}{ad}"
         headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
@@ -4645,10 +4893,9 @@ class ZTERouterAPI:
 
     async def set_odu_led_switch(self, status: str) -> dict[str, Any]:
         """Set the ODU LED switch status (1 = On, 0 = Off)."""
-        ad = await self.get_ad()
-        payload = (
-            f"isTest=false&goformId=ODU_LED_SWITCH_SET&ODU_led_switch={status}&AD={ad}"
-        )
+        ad = await self.ad_suffix("ODU_LED_SWITCH_SET")
+        field = self.profile_field("ODU_LED_SWITCH_SET", "ODU_led_switch")
+        payload = f"isTest=false&goformId=ODU_LED_SWITCH_SET&{field}={status}{ad}"
         headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
@@ -4732,7 +4979,11 @@ class ZTERouterAPI:
                 ),
                 None,
             )
-            name = answered or field
+            # Item 31: the canonical name is the last resort, not the
+            # second. A device that answered neither alias may still name
+            # the field in its own builder, which is the case a hand-written
+            # map could never cover.
+            name = answered or self.profile_field("DATA_LIMIT_SETTING", field)
             if field in changes:
                 payload_fields[name] = str(changes[field])
                 continue
@@ -4753,9 +5004,9 @@ class ZTERouterAPI:
         if unknown:  # pragma: no cover - guards a programming error, not input
             raise ValueError(f"Unknown data-volume field(s): {sorted(unknown)}")
 
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("DATA_LIMIT_SETTING")
         body = "&".join(f"{k}={v}" for k, v in payload_fields.items())
-        payload = f"isTest=false&goformId=DATA_LIMIT_SETTING&{body}&AD={ad}"
+        payload = f"isTest=false&goformId=DATA_LIMIT_SETTING&{body}{ad}"
         headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
@@ -4777,10 +5028,10 @@ class ZTERouterAPI:
 
     async def set_bearer_preference(self, preference: str) -> dict[str, Any]:
         """Set the network bearer preference (e.g. 4G_AND_5G, Only_5G, Only_LTE)."""
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("SET_BEARER_PREFERENCE")
+        field = self.profile_field("SET_BEARER_PREFERENCE", "BearerPreference")
         payload = (
-            f"isTest=false&goformId=SET_BEARER_PREFERENCE"
-            f"&BearerPreference={preference}&AD={ad}"
+            f"isTest=false&goformId=SET_BEARER_PREFERENCE&{field}={preference}{ad}"
         )
         headers = self.write_headers()
         res = await self._request(

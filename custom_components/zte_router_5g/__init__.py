@@ -27,6 +27,7 @@ from .const import (
     SMS_SEGMENTS_MAX,
 )
 from .coordinator import (
+    PROFILE_STORAGE_VERSION,
     REPAIR_NAMES,
     RETIRED_REPAIR_NAMES,
     UPTIME_STORAGE_VERSION,
@@ -545,6 +546,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # record leaves the counter-regression cross-check disabled and the
     # boot-instant check fully functional.
     await coordinator.async_load_stored_uptime()
+    # What this device's own web interface says about its write path, as
+    # it was last read. A local JSON read and nothing else: parsing and
+    # fetching belong to the background task below, per Section 1.
+    await coordinator.async_load_profile()
     await coordinator.observations.async_load()
     # What this device's sessions have been observed to last, so the pre-write
     # reset does not have to re-learn it after every restart. Absent or
@@ -588,6 +593,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await api.try_set_protocol(5)
             await api.login(5)
             await coordinator.async_refresh()
+            # After the first poll, so the firmware the profile is keyed
+            # to is the one the device is running. Skipped entirely when
+            # the cached profile already matches it.
+            await coordinator.async_learn_profile()
 
             # Discovery no longer runs here. Its only consumer is the
             # diagnostics download, so it runs when the user asks for one
@@ -678,6 +687,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     for version, suffix in (
         (HISTORY_STORAGE_VERSION, "history"),
         (OBSERVED_STORAGE_VERSION, "observed"),
+        (PROFILE_STORAGE_VERSION, "profile"),
     ):
         await Store(hass, version, f"{DOMAIN}_{entry.entry_id}_{suffix}").async_remove()
 
