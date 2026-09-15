@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
   - [\[3.3.25-dev12\] - 2026-09-15 - Comments and Docstrings Rewritten for Readability; the Write-Path Documents Catch Up](#3325-dev12---2026-09-15---comments-and-docstrings-rewritten-for-readability-the-write-path-documents-catch-up)
   - [\[3.3.25-dev11\] - 2026-09-15 - Five Values the Profile Had Learned and Nothing Read](#3325-dev11---2026-09-15---five-values-the-profile-had-learned-and-nothing-read)
   - [\[3.3.25-dev10\] - 2026-09-15 - The Router's Own Web Interface Supplies the Write Contract](#3325-dev10---2026-09-15---the-routers-own-web-interface-supplies-the-write-contract)
@@ -292,6 +293,34 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.3.25] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience
+
+### Summary
+
+- **Web-Client Driven Write Contracts**: Router write commands and security token derivations now dynamically parse configuration scripts served directly by the router's web interface, automatically adapting token formulas, password hashing, and model-specific parameter names across different firmware revisions.
+- **Dynamic Device Profile & Discovery**: Replaced static probing lists with dynamic client-side bundle discovery, reading only parameter names referenced by router firmware to expand mined diagnostics without unwanted probing requests.
+- **Adaptive Session Lifetime & Pre-Write Check**: Session renewal now learns device-specific session lifetimes from observed expirations while validating session state directly against firmware login flags before executing write operations.
+- **Write and Polling Concurrency**: Serialized background polling and interactive write commands to prevent session collisions on single-session router firmware.
+
+### Added
+
+- **Dynamic Device Profile Discovery**: Automatically parses the router's web interface scripts on startup to discover device-specific write tokens, digest algorithms, and parameter field names without relying solely on static model heuristics (`device_profile.py`).
+- **Dynamic Session Lifetime Learning**: Measures observed router session durations to calculate adaptive preemptive reset thresholds per device, replacing static timers across varied hardware variants (`SESSION_AGE_LEARN_MIN_SAMPLES`).
+- **Write Path Concurrency Lock**: Added an async lock between coordinator polling batches and write commands to prevent simultaneous requests from causing session evictions on single-session routers.
+- **Diagnostic Source Asset Manifest**: Diagnostic downloads now include an asset manifest and script capture metadata to verify client script parsing and token derivations (`web_sources`).
+
+### Fixed
+
+- **Cross-Model Parameter Field Alignment**: Resolved command rejections on models using prefixed APN parameter names (such as `apn_pdp_type` on MC888 Pro models) by resolving payload fields directly from device scripts.
+- **Post-Restart Dead Session Recovery**: Ensured the first write operation following a Home Assistant restart successfully authenticates and proceeds even when starting from an expired session state.
+- **Pre-Write Session Key Validation**: Replaced inference from connection status readings with direct firmware session status verification (`loginfo`), eliminating false expiration detections on models where connection keys remain unpopulated.
+- **Diagnostic Parameter Mining Traversal**: Corrected script bundle discovery to follow client module loader references, ensuring diagnostic parameter mining surveys all available firmware endpoints.
+
+### Changed
+
+- **Decommissioned SMS Delete Probe**: Removed the manual SMS deletion diagnostic probe service (`sms_delete_probe.py`) following complete resolution of write token formulas and parameter mapping.
+- **Request Architecture Refactoring**: Streamlined internal HTTP request dispatching into discrete lifecycle stages (`_perform`, `_preempt_stale_session`, `_build_headers`, `_send`, `_dispose`) while preserving all retry and error mapping contracts.
 
 ## [3.3.25-dev12] - 2026-09-15 - Comments and Docstrings Rewritten for Readability; the Write-Path Documents Catch Up
 
