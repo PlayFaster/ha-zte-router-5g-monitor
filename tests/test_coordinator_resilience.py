@@ -729,7 +729,7 @@ async def test_a_poll_started_during_a_discovery_pass_waits(coordinator) -> None
     probing = asyncio.Event()
     release = asyncio.Event()
 
-    async def _slow_discovery():
+    async def _slow_discovery(*_args, **_kwargs):
         order.append("discovery started")
         probing.set()
         await release.wait()

@@ -14,6 +14,7 @@ from typing import Any, NamedTuple, cast
 
 import aiohttp
 
+from . import web_sources
 from .const import (
     ABSENT_KEY_PROPORTION_LIMIT,
     APN_PROFILE_SLOTS,
@@ -26,7 +27,6 @@ from .const import (
     DISCOVERY_CHUNK_TIMEOUT,
     DISCOVERY_MAX_ROUNDS,
     DISCOVERY_RELOGIN_LIMIT,
-    JS_BUNDLES,
     MINED_CHUNK_SIZE,
     REBOOT_VERIFY_INTERVAL,
     REBOOT_VERIFY_SECONDS,
@@ -38,6 +38,7 @@ from .const import (
     SESSION_IDLE_RESET_SECONDS,
     SMS_DELETE_VERIFY_INTERVAL,
     SMS_DELETE_VERIFY_SECONDS,
+    WRITE_LOCK_WAIT_SECONDS,
 )
 from .helpers import is_gsm7
 from .known_names import EXPECTED_NAMES, KNOWN_NAMES, REFUSABLE_NAMES
@@ -1086,6 +1087,17 @@ class ZTERouterAPI:
         # later poll: a reporter presses the button and downloads diagnostics
         # afterwards, sometimes days afterwards.
         self.write_failures: list[dict[str, Any]] = []
+        # Writes and polls take turns over the one session this router grants.
+        # A poll holds it for the length of a batch; a write waits a bounded
+        # time and then goes ahead anyway. See `WRITE_LOCK_WAIT_SECONDS`.
+        self._write_lock = asyncio.Lock()
+        # How often a write gave up waiting. The collision this guards against
+        # is inferred rather than observed — what is measured is that this
+        # router grants the session to the newest login, not that a poll has
+        # been caught mid-flight — so the counter is the evidence for whether
+        # the lock earns its place, the same way `session_check_stats` is for
+        # the pre-write check.
+        self.write_lock_timeouts = 0
         self.login_metadata: dict[str, Any] = {}
         self._session_was_fresh = False
         # The transport-level facts about the most recent response, kept so a
@@ -2519,8 +2531,32 @@ class ZTERouterAPI:
         # Home Assistant prompts for re-authentication with nothing sent twice.
         replayable = call.retry and not self._is_write_request(call.method, call.path)
 
-        answer = await self._send(call)
-        return await self._dispose(call, answer, replayable=replayable)
+        if not self._is_write_request(call.method, call.path):
+            answer = await self._send(call)
+            return await self._dispose(call, answer, replayable=replayable)
+
+        # A write waits for a poll in flight, and gives up quickly. Nothing
+        # nested re-enters this: `login` posts through the client session
+        # directly rather than through `_request`, and a write's read-back
+        # goes through `get_params`, which does not take the lock.
+        try:
+            await asyncio.wait_for(
+                self._write_lock.acquire(), timeout=WRITE_LOCK_WAIT_SECONDS
+            )
+        except TimeoutError:
+            self.write_lock_timeouts += 1
+            _LOGGER.debug(
+                "A poll held the session for %.0fs; writing anyway",
+                WRITE_LOCK_WAIT_SECONDS,
+            )
+            answer = await self._send(call)
+            return await self._dispose(call, answer, replayable=replayable)
+
+        try:
+            answer = await self._send(call)
+            return await self._dispose(call, answer, replayable=replayable)
+        finally:
+            self._write_lock.release()
 
     async def try_set_protocol(self, timeout_sec: int = 5) -> None:
         """Identify if router is on http or https with a short timeout."""
@@ -3011,7 +3047,9 @@ class ZTERouterAPI:
         return self.unauthenticated_keys or _UNAUTHENTICATED_KEYS
 
     async def mine_candidate_names(
-        self, timeout_sec: int | None = None
+        self,
+        timeout_sec: int | None = None,
+        sources: dict[str, str] | None = None,
     ) -> tuple[set[str], list[str]]:
         """Read the router's own web UI for `cmd` names it uses.
 
@@ -3031,25 +3069,34 @@ class ZTERouterAPI:
         a note rather than an exception: this runs while a diagnostics download
         is being generated, and a download that reports what went wrong is
         useful where one that fails to generate is not.
+
+        **Reads the crawl's sources rather than fetching its own.** Until
+        v3.3.25-dev9 this asked `_discover_bundles` which files to read, and
+        that matched `<script src=>` against `index.html` and nothing else — so
+        on a page that loads everything through a module loader, and names only
+        `data-main`, it found nothing at all. Both devices this project can see
+        answer exactly that: the hardware check printed `index: no scripts
+        named; using the static list` on every run, which means mining has been
+        reading twelve hardcoded files since it was written.
+
+        `web_sources.crawl` follows what the device actually references and
+        reaches forty-five files on the same hardware. The sources are passed in
+        where the caller already has them — a diagnostics download crawls for
+        its own section, and crawling again here would fetch every file twice in
+        one file.
         """
         names: set[str] = set()
         goform_ids: set[str] = set()
         notes: list[str] = []
-        bundles = await self._discover_bundles(timeout_sec, notes)
-        for bundle in bundles:
-            try:
-                async with self.session.get(
-                    f"{self.referer}{bundle}",
-                    headers={"Referer": f"{self.referer}index.html"},
-                    timeout=aiohttp.ClientTimeout(total=timeout_sec or 10),
-                    ssl=False,
-                ) as r:
-                    if r.status != 200:
-                        notes.append(f"{bundle}: HTTP {r.status}")
-                        continue
-                    body = await r.text(errors="replace")
-            except Exception as err:  # noqa: BLE001 - a note, never a failure
-                notes.append(f"{bundle}: {type(err).__name__}: {err}")
+        if sources is None:
+            crawled = await web_sources.crawl(self)
+            sources = crawled.get("sources", {})
+            notes.append(
+                f"crawled {crawled.get('fetched', 0)} files, "
+                f"{crawled.get('returned', 0)} readable"
+            )
+        for bundle, body in sorted(sources.items()):
+            if not isinstance(body, str) or not body:
                 continue
 
             found = {
@@ -3171,46 +3218,6 @@ class ZTERouterAPI:
         except Exception:  # noqa: BLE001 - the answer is the point, not the error
             return False
         return True
-
-    async def _discover_bundles(
-        self, timeout_sec: int | None, notes: list[str]
-    ) -> list[str]:
-        """Read the router's index page for the scripts it actually loads.
-
-        The static list is a guess and is partly wrong: `js/statusBar.js`
-        answers HTTP 404 on both devices seen so far, and a firmware may ship
-        files nobody has named. Asking the page it serves is the only way to
-        know, and costs one request.
-
-        Falls back to the static list when the page cannot be read or names no
-        scripts — a note either way, never an exception.
-        """
-        try:
-            async with self.session.get(
-                self.referer,
-                headers={"Referer": self.referer},
-                timeout=aiohttp.ClientTimeout(total=timeout_sec or 10),
-                ssl=False,
-            ) as r:
-                body = await r.text(errors="replace")
-        except Exception as err:  # noqa: BLE001 - a note, never a failure
-            notes.append(f"index: {type(err).__name__}: {err}; using the static list")
-            return list(JS_BUNDLES)
-
-        found = [
-            m.group(1).lstrip("./")
-            for m in _HTML_SCRIPT_RE.finditer(body)
-            if m.group(1).endswith(".js")
-        ]
-        if not found:
-            notes.append("index: no scripts named; using the static list")
-            return list(JS_BUNDLES)
-
-        # Unioned rather than replaced: the page may load its scripts through a
-        # module loader, naming only the entry point.
-        merged = list(dict.fromkeys(found + list(JS_BUNDLES)))
-        notes.append(f"index: {len(found)} scripts named, {len(merged)} to read")
-        return merged
 
     async def probe_names(
         self,
@@ -3468,7 +3475,11 @@ class ZTERouterAPI:
             and k not in canaries
         }
 
-    async def run_discovery(self, timeout_sec: int | None = None) -> dict[str, Any]:
+    async def run_discovery(
+        self,
+        timeout_sec: int | None = None,
+        sources: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         """Mine, probe and report — the whole discovery pass, for diagnostics.
 
         Never raises. Every failure becomes a note in the returned mapping,
@@ -3536,7 +3547,9 @@ class ZTERouterAPI:
             # problem and a firmware that cannot be guarded.
             result["canary_pool"] = census
 
-            mined, notes = await self.mine_candidate_names(timeout_sec=timeout_sec)
+            mined, notes = await self.mine_candidate_names(
+                timeout_sec=timeout_sec, sources=sources
+            )
             result["notes"].extend(notes)
             result["mined_count"] = len(mined)
 
@@ -3738,7 +3751,11 @@ class ZTERouterAPI:
         return chunks
 
     async def _batch_get(
-        self, params: list[str], *, timeout_sec: int | None = None
+        self,
+        params: list[str],
+        *,
+        timeout_sec: int | None = None,
+        starts_cycle: bool = False,
     ) -> dict[str, Any]:
         """Read the given `cmd` names, in as many requests as the URL allows.
 
@@ -3780,10 +3797,37 @@ class ZTERouterAPI:
             if isinstance(data, dict):
                 merged.update(data)
         if merged:
-            self._populated_keys = frozenset(
-                key for key, value in merged.items() if value not in ("", None)
-            )
+            self._note_populated(merged, starts_cycle=starts_cycle)
         return merged
+
+    def _note_populated(self, merged: dict[str, Any], *, starts_cycle: bool) -> None:
+        """Record what this device answered, across a poll rather than a batch.
+
+        **This set is what `session_witnesses` draws on**, and it used to be
+        replaced by every call. The coordinator polls core and then extended, so
+        the extended batch wiped the core one: measured on hardware 2026-09-14
+        against an authenticated session, 60 keys populated after the core poll,
+        39 after the extended poll, and not one of the 60 surviving. The witness
+        pool was a third of its intended size and drawn from different name
+        families than the design assumes.
+
+        **The caller says which read begins a cycle.** Only the core poll does,
+        and it says so rather than being recognised by the list it passes:
+        identity against `_CORE_PARAMS` would hold today and break silently the
+        first time somebody passed a copy of it. Every other read adds what it
+        saw — the canary pool is not part of a cycle and must not discard one.
+
+        **Bounded to a cycle rather than accumulated.** A key populated at core
+        time and blank by the time a write happens would otherwise stay a
+        witness, and a witness that reads blank scores as an expiry. That
+        verdict is recorded and never raised — dev1 made this check advisory and
+        dev7 made it incapable of raising — so the cost is a misleading line in
+        a download rather than a blocked write. One cycle keeps even that narrow.
+        """
+        seen = frozenset(
+            key for key, value in merged.items() if value not in ("", None)
+        )
+        self._populated_keys = seen if starts_cycle else self._populated_keys | seen
 
     async def get_params(
         self, params: list[str], *, timeout_sec: int | None = None
@@ -3846,7 +3890,8 @@ class ZTERouterAPI:
         strike path — everything an enabled-by-default entity needs is in this
         request, as is the device identity latched into `entry.data`.
         """
-        return await self._batch_get(_CORE_PARAMS)
+        async with self._write_lock:
+            return await self._batch_get(_CORE_PARAMS, starts_cycle=True)
 
     async def get_extended_data(self) -> dict[str, Any]:
         """Fetch the optional diagnostic payload.
@@ -3860,7 +3905,8 @@ class ZTERouterAPI:
         fed from here unavailable. It must therefore stay free of anything an
         enabled-by-default entity needs.
         """
-        return await self._batch_get(_EXTENDED_PARAMS)
+        async with self._write_lock:
+            return await self._batch_get(_EXTENDED_PARAMS)
 
     async def get_sms_capacity(self, timeout_sec: int | None = None) -> dict[str, Any]:
         """Get SMS capacity information."""

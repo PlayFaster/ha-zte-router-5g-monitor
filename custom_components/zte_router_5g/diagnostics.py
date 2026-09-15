@@ -622,10 +622,15 @@ async def async_get_config_entry_diagnostics(
     # runtime consumer, so the work is done when the user asks for it and not
     # speculatively for everyone. `run_discovery` never raises — it returns
     # its failures as notes — and the guard is the second line of defence.
-    web_source_report = await _async_web_sources(coordinator, tokenizer, errors)
+    # The crawl runs once and both consumers read it: this section, and the
+    # discovery pass below, which mines the same files for `cmd` names.
+    crawled_sources: dict[str, str] = {}
+    web_source_report = await _async_web_sources(
+        coordinator, tokenizer, errors, crawled_sources
+    )
 
     discovery_raw = await _async_guarded(
-        "discovery", coordinator.async_run_discovery(), errors
+        "discovery", coordinator.async_run_discovery(crawled_sources), errors
     )
     discovery = (
         _guarded(
@@ -1036,7 +1041,10 @@ def _sources_are_warranted(coordinator: Any) -> str | None:
 
 
 async def _async_web_sources(
-    coordinator: Any, tokenizer: _Tokenizer, errors: list[str]
+    coordinator: Any,
+    tokenizer: _Tokenizer,
+    errors: list[str],
+    section_sources: dict[str, str],
 ) -> dict[str, Any] | None:
     """Crawl the files the router serves, and decide how much of it publishes.
 
@@ -1052,6 +1060,10 @@ async def _async_web_sources(
         return None
     sources = result.pop("sources", {})
     files = result.pop("files", {})
+    # Held for the discovery pass, which mines these same files for `cmd`
+    # names. Kept whether or not the sources themselves publish: the decision
+    # below is about what reaches the file, not about what this download knows.
+    section_sources.update(sources)
     reason = _sources_are_warranted(coordinator)
     section: dict[str, Any] = {
         **cast("dict[str, Any]", _sanitize_walk(result, tokenizer)),

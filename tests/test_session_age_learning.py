@@ -295,13 +295,20 @@ async def test_a_session_past_its_learned_age_is_replaced_before_the_request() -
         nonlocal cleared
         cleared = True
 
+    # The transport refuses, so the request fails after the preempt has already
+    # run — the preempt is what this asserts. It refuses at `session.request`
+    # rather than by being a bare mock: a `MagicMock` supplies `__aenter__`, so
+    # the request reached `r.headers.get(...)` and created a coroutine nobody
+    # awaited. That surfaced as a `RuntimeWarning` reported against whichever
+    # test happened to be running when the collector ran, which is why it
+    # looked like it belonged to another file.
+    api.session.request = MagicMock(side_effect=OSError("no transport"))
+
     with (
         patch.object(api, "_clear_session", side_effect=note_cleared),
         patch.object(api, "login", new=AsyncMock()),
         contextlib.suppress(Exception),
     ):
-        # The session object is a bare mock, so the transport fails after the
-        # preempt has already run. The preempt is what this asserts.
         await api._request("GET", "goform/goform_get_cmd_process")
 
     assert cleared, "a session past its learned age was not replaced"

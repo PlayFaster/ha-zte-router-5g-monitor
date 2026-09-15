@@ -1474,8 +1474,16 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._drift_strikes += 1
         return self._drift_strikes >= HEALTH_DRIFT_STRIKE_LIMIT
 
-    async def async_run_discovery(self) -> dict[str, Any]:
+    async def async_run_discovery(
+        self, sources: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """Run the discovery pass under the coordinator's update lock.
+
+        `sources` is the crawl a diagnostics download has already made. Passed
+        through rather than re-fetched: mining reads the files the router
+        serves, the download reads the same files for its own section, and
+        crawling twice costs forty-five requests on the reference device to
+        read bodies already in hand.
 
         The probe shares this coordinator's API client, and a chunk that times
         out clears the session. Running it beside a live poll could score that
@@ -1484,7 +1492,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         pressed Download Diagnostics. The lock makes the two take turns.
         """
         async with self._async_update_lock:
-            result = await self.api.run_discovery()
+            result = await self.api.run_discovery(sources=sources)
             # A pass issues several hundred requests in under a minute, and a
             # write attempted immediately afterwards was once refused with an
             # empty transport error on the reference MC7010 — once in two

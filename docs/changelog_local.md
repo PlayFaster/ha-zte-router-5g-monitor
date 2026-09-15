@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25-dev9\] - 2026-09-15 - Discovery Reads What the Router References; Writes and Polls Take Turns](#3325-dev9---2026-09-15---discovery-reads-what-the-router-references-writes-and-polls-take-turns)
   - [\[3.3.25-dev8\] - 2026-09-15 - The Probe Is Removed and Its Only Irreplaceable Part Moves Into Diagnostics](#3325-dev8---2026-09-15---the-probe-is-removed-and-its-only-irreplaceable-part-moves-into-diagnostics)
   - [\[3.3.25-dev7\] - 2026-09-14 - The First Write After a Restart No Longer Goes Out on a Dead Session](#3325-dev7---2026-09-14---the-first-write-after-a-restart-no-longer-goes-out-on-a-dead-session)
   - [\[3.3.25-dev6\] - 2026-09-14 - A Request Becomes a Value; `_request` Splits Into Six Routines](#3325-dev6---2026-09-14---a-request-becomes-a-value-_request-splits-into-six-routines)
@@ -286,6 +287,61 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+
+---
+
+## [3.3.25-dev9] - 2026-09-15 - Discovery Reads What the Router References; Writes and Polls Take Turns
+
+### Summary
+
+Phase 4 part 1: the work that needs no device profile. Two defects that had been shipping quietly, four guarantees that were true without anything asserting them, and one new behaviour on the write path.
+
+The larger of the two defects is that discovery has never read what it was written to read. `_discover_bundles` matched `<script src=>` against `index.html`, and both devices this project can see load everything through a module loader and name only `data-main` — so it found nothing, every run, and mining fell back to a hardcoded list of twelve files. The crawl that moved into diagnostics in `[3.3.25-dev8]` already follows what a device actually references, so this deletes the broken traversal rather than repairing it.
+
+### Fixed
+
+- **Mining reads the files the router references, not a static list.** Measured on the reference MC7010, before and after: **841 names from 12 bundles, then 1,108 from 19** — 985 of them names this integration has never requested, against 718 before.
+
+  The crawl runs once per download and both consumers read it: the `web_sources` section and the discovery pass. Crawling twice would have fetched forty-five files a second time to read bodies already in hand.
+
+  The static list stays as the crawl's seed. A device whose index and loader name nothing would otherwise start from zero, which is exactly what four downloads from the MC888 Pro of issue #56 reported.
+
+- **The witness pool spans a whole poll, not its second half.** `_batch_get` replaced `_populated_keys` on every call and the coordinator polls core then extended, so the extended batch wiped the core one — measured 2026-09-14 against a live session, 60 keys after the core poll, 39 after the extended, and not one of the 60 surviving. Witness selection was drawn from a third of the intended pool and from different name families.
+
+  The core poll now says it begins a cycle and everything else adds to what it saw. It says so rather than being recognised by the list it passes: identity against `_CORE_PARAMS` would have held today and broken silently the first time somebody passed a copy.
+
+  **Re-rated while being fixed.** When this was written the witness classifier could block a write. It cannot now — `[3.3.25-dev1]` made it advisory and `[3.3.25-dev7]` made it incapable of raising — so what this repairs is the accuracy of a verdict in a download, not a refused write.
+
+### Added
+
+- **A write and a poll take turns over the one session this router grants.** A poll holds the lock for the length of its batch; a write waits three seconds and then goes ahead regardless. **Failing to acquire is not an error** — the worst case is an unserialised write, which is what every release before this one did, and a lock that can refuse is another way to block writes on routers nobody can test.
+
+  Only the two poll entry points take the lock. A write's read-back goes through `get_params`, which deliberately does not, because a lock held across both would have the write waiting on itself; `login` posts through the client session rather than through `_request`, so recovery inside a write cannot re-enter either. Both are asserted.
+
+  **A counter records how often a write gave up waiting**, because the collision this guards against is inferred rather than observed: what is measured is that this router grants the session to the newest login, not that a poll has ever been caught mid-flight. The counter is the evidence for whether the lock earns its place.
+
+- **Fifteen assertions for the write path** (`tests/test_write_path_guarantees.py`), covering four properties that held when they were checked and that nothing pinned:
+
+  - every alias map writes the spelling the device answered, parametrised over the map so a new entry is covered without being remembered;
+  - `;` in an id list and `+` in a number each survive exactly one encoding pass;
+  - no recovery path re-sends a write;
+  - and the three new properties of the lock above.
+
+### Changed
+
+- **Item 29 is dropped, and the plan records why.** It proposed deriving the token again with the single-operand form and sending a new request when the two-operand token is refused. There is no second form left to fall back to: `get_ad` computes `hash(version + cr_version)`, and a device that does not answer `cr_version` appends an empty string — so on that class of device the derivation already *is* the single-operand form, bit for bit, and the retry would re-send a token identical to the one just refused. On a device that does answer it, the single-operand token is simply wrong.
+
+  It was written while the derivation was still suspect, and the standing evidence has since reproduced the reporter's accepted browser token arithmetically. Dropping it also removes a hazard it carried: for `SEND_SMS`, "send a new request" is a second send, and this API cannot say whether the first was delivered.
+
+### Notes
+
+- **A question about the reporter's firmware is answered from files already in hand.** Whether a newer Pro-chassis firmware encodes write payload fields — inferred by a user of another project on a different chassis — is answered no. His `js/service.js` builds every write as a plain object and hands it to jQuery as `data: e`, which serialises with one pass of `encodeURIComponent` per value; across all seventeen captured files there is not one hand-written `encodeURIComponent`, `escape(` or `$.param`. It corroborates the single-encoding property asserted above.
+
+- **A `RuntimeWarning` that had been running for many releases is gone.** A test drove `_request` against a bare `MagicMock` session so the transport would fail after the preempt it was asserting. But `MagicMock` supplies `__aenter__`, so the request reached `r.headers.get(...)` and created a coroutine nobody awaited; the collector then reported it against whichever test was running at the time, which is why it appeared to belong to a different file. The transport now refuses at `session.request`, and the preempt is asserted as before.
+
+- **The test proposed to catch the class of fault behind `[3.3.25-dev7]` was spiked and abandoned**, and the property is recorded as a convention in `testing_when_writing.md` instead. The rule — an attribute assigned once outside `__init__` and never cleared — yields 41 candidates, 30 of them seeded across more than 200 test sites, and catches `_boot_time` and the drift accumulators as readily as the session flag.
+
+- 1,663 tests at 100% line and branch coverage. Hardware check 20 of 20.
 
 ---
 

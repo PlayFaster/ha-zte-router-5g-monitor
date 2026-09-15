@@ -42,6 +42,20 @@ LIVE_OPTION_KEYS = frozenset({CONF_SCAN_INTERVAL, CONF_STOP_POLLING})
 # second line of defense on a router whose expired-session response is
 # indistinguishable from success at the HTTP layer.
 SESSION_IDLE_RESET_SECONDS = 150
+# How long a write waits for a poll to finish before going ahead regardless.
+#
+# **The duration belongs on the wait, not on how long the lock is held.** A
+# lock that can refuse is another way to block writes on routers nobody can
+# test, which is the failure this whole plan exists to prevent — so failing to
+# acquire is not an error and the write proceeds unserialised, which is the
+# behaviour every release before this one had.
+#
+# Three seconds because a core poll on the reference MC7010 completes in about
+# 30 ms and the extended poll in about the same; a wait this long is reached
+# only when the router has stopped answering, and in that case the write is
+# about to fail on its own merits.
+WRITE_LOCK_WAIT_SECONDS: float = 3.0
+
 
 # The preemptive session reset, in its learned form.
 #

@@ -963,17 +963,17 @@ async def test_witnesses_are_derived_through_a_real_poll_sequence(
 
     Sixteen tests set `_populated_keys` directly and none derived it, so the
     replace-versus-accumulate behaviour never executed under test. `_batch_get`
-    *replaces* the set on every call and the coordinator runs core then
-    extended, so the extended poll wipes every core key.
+    used to *replace* the set on every call, and the coordinator polls core then
+    extended, so the extended poll wiped every core key.
 
     Measured on an MC7010, 2026-09-14: 60 keys after the core poll, 39 after
     the extended poll, and none of the 60 core names surviving. Witness
-    selection is then forced onto extended-only names, which is how a
+    selection was then forced onto extended-only names, which is how a
     per-antenna 5G reading became a session witness.
 
-    This asserts the behaviour as it currently stands rather than the fix —
-    item 92 is phase 3 work — so that the change, when it comes, has to
-    account for this test rather than pass it by accident.
+    Fixed by item 92 in v3.3.25-dev9. The earlier version of this test asserted
+    the defect and failed the moment it was repaired, which is what brought the
+    change here rather than letting it pass unnoticed.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
 
@@ -985,18 +985,17 @@ async def test_witnesses_are_derived_through_a_real_poll_sequence(
         return dict.fromkeys(wanted, "value")
 
     with patch.object(api, "_request", side_effect=poll):
-        await api._batch_get(sorted(core_names))
+        await api._batch_get(sorted(core_names), starts_cycle=True)
         after_core = set(api._populated_keys)
         await api._batch_get(sorted(extended_names))
         after_extended = set(api._populated_keys)
 
     assert core_names <= after_core
-    assert not (core_names & after_extended), (
-        "core names survived the extended poll — item 92 has been fixed and "
-        "this test must be updated to assert the new behaviour"
-    )
-    # And the consequence: every witness now comes from the extended set.
-    assert set(api.session_witnesses()) <= extended_names
+    assert core_names <= after_extended, "the extended poll discarded the core keys"
+    assert extended_names <= after_extended
+    # The consequence, and the reason the item existed: witnesses are drawn
+    # from what the device answered across the poll, not from its second half.
+    assert set(api.session_witnesses()) & core_names
 
 
 @pytest.mark.asyncio
@@ -1340,3 +1339,54 @@ def test_a_token_read_that_answers_nothing_usable_yields_an_empty_string() -> No
     assert _first_spelling(None, ("RD", "rd")) == ""
     assert _first_spelling({"RD": ""}, ("RD", "rd")) == ""
     assert _first_spelling({"rd": "abc"}, ("RD", "rd")) == "abc"
+
+
+@pytest.mark.asyncio
+async def test_a_new_cycle_discards_the_previous_one(mock_aiohttp_client) -> None:
+    """The pool is a poll, not a running total.
+
+    A key populated at core time and blank by the time a write happens would
+    otherwise stay a witness for the life of the object, and a witness that
+    reads blank scores as an expiry. That verdict is recorded and never raised,
+    so the cost is a misleading line in a download — but it is why the set is
+    bounded to one cycle rather than accumulated.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    first = {"wan_connect_status": "1", "signalbar": "4"}
+    second = {"network_type": "LTE"}
+    answers = [first, second]
+
+    async def poll(*_args, **_kwargs):
+        return answers.pop(0)
+
+    with patch.object(api, "_request", side_effect=poll):
+        await api._batch_get(["wan_connect_status", "signalbar"], starts_cycle=True)
+        await api._batch_get(["network_type"], starts_cycle=True)
+
+    assert set(api._populated_keys) == {"network_type"}
+
+
+@pytest.mark.asyncio
+async def test_a_read_outside_a_cycle_adds_rather_than_discards(
+    mock_aiohttp_client,
+) -> None:
+    """The canary pool is not a poll and must not end one.
+
+    It reads both parameter lists for its own purposes. Treating that as the
+    start of a cycle would throw away the poll the coordinator had just
+    completed, which is the fault this item fixed, reintroduced from the other
+    direction.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    answers = [{"wan_connect_status": "1"}, {"5g_rx0_rsrp": "-90"}]
+
+    async def poll(*_args, **_kwargs):
+        return answers.pop(0)
+
+    with patch.object(api, "_request", side_effect=poll):
+        await api._batch_get(["wan_connect_status"], starts_cycle=True)
+        await api._batch_get(["5g_rx0_rsrp"])
+
+    assert set(api._populated_keys) == {"wan_connect_status", "5g_rx0_rsrp"}

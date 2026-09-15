@@ -688,33 +688,6 @@ async def test_mining_reads_cmd_names_from_the_bundles(mock_aiohttp_client):
 
 
 @pytest.mark.asyncio
-async def test_mining_records_a_bundle_that_is_missing(mock_aiohttp_client):
-    """Not every firmware serves every bundle; a 404 is a note, not a failure."""
-    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    mock_aiohttp_client.get.return_value = MockResponse(json_data=None, status=404)
-
-    names, notes = await api.mine_candidate_names()
-
-    assert names == set()
-    # The index page is read first and answers 404 too, so its note precedes
-    # the per-bundle ones.
-    assert any("HTTP 404" in note for note in notes)
-    assert any("static list" in note for note in notes)
-
-
-@pytest.mark.asyncio
-async def test_mining_records_a_transport_failure(mock_aiohttp_client):
-    """An unreachable bundle must not stop the ones that answer."""
-    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    mock_aiohttp_client.get.side_effect = OSError("no route")
-
-    names, notes = await api.mine_candidate_names()
-
-    assert names == set()
-    assert any("OSError" in note for note in notes)
-
-
-@pytest.mark.asyncio
 async def test_mining_drops_tokens_that_are_not_cmd_names(mock_aiohttp_client):
     """The 2026-07-29 artefact contains the literal `1`."""
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
@@ -1005,33 +978,6 @@ async def test_javascript_scaffolding_is_never_probed(mock_aiohttp_client):
     names, _notes = await api.mine_candidate_names()
 
     assert names == {"lte_snr"}
-
-
-@pytest.mark.asyncio
-async def test_the_bundle_list_comes_from_the_index_page(mock_aiohttp_client):
-    """The static list is a guess: `js/statusBar.js` 404s on both devices."""
-    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    index = '<script src="js/unexpected_bundle.js"></script>'
-    mock_aiohttp_client.get.return_value = MockResponse(json_data=None, text_body=index)
-
-    _names, notes = await api.mine_candidate_names()
-
-    assert any("scripts named" in note for note in notes)
-    requested = [call[0][0] for call in mock_aiohttp_client.get.call_args_list]
-    assert any("unexpected_bundle.js" in url for url in requested)
-
-
-@pytest.mark.asyncio
-async def test_an_unreadable_index_falls_back_to_the_static_list(
-    mock_aiohttp_client,
-):
-    """Losing the index must not lose the mining."""
-    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
-    mock_aiohttp_client.get.side_effect = OSError("no route")
-
-    _names, notes = await api.mine_candidate_names()
-
-    assert any("static list" in note for note in notes)
 
 
 # ---------------------------------------------------------------------------
@@ -2047,3 +1993,84 @@ async def test_a_pass_that_went_cleanly_reports_no_counters(mock_aiohttp_client)
     assert found == {"a_one": "value", "b_two": "value"}
     assert (unasked, refused) == ([], [])
     assert notes == [], f"a clean pass reported {notes}"
+
+
+@pytest.mark.asyncio
+async def test_mining_reads_a_file_the_static_list_does_not_name(mock_aiohttp_client):
+    """The reason item 37 existed: the static list is twelve files.
+
+    `_discover_bundles` matched `<script src=>` against `index.html` and
+    nothing else, so on a page that names only `data-main` it found nothing and
+    mining read the hardcoded list. Both devices this project can see answer
+    exactly that. The crawl follows what the device references and reaches
+    forty-five files on the same hardware, and a name in one of them is now
+    mined.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    names, _notes = await api.mine_candidate_names(
+        sources={"js/config/cpe/MF253V/config.js": "cmd='only_in_the_model_config'"}
+    )
+
+    assert "only_in_the_model_config" in names
+
+
+@pytest.mark.asyncio
+async def test_mining_does_not_fetch_when_it_is_handed_sources(mock_aiohttp_client):
+    """A diagnostics download crawls once, for its own section.
+
+    Crawling again here would fetch every file a second time in the same
+    download — forty-five requests on the reference device, to read bodies the
+    caller already had.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    names, _notes = await api.mine_candidate_names(sources={"js/x.js": "cmd='a_name'"})
+
+    assert names == {"a_name"}
+    assert not mock_aiohttp_client.get.called, "the crawl ran despite being handed one"
+
+
+@pytest.mark.asyncio
+async def test_mining_crawls_once_when_it_is_handed_nothing(mock_aiohttp_client):
+    """A caller without sources still gets them, and the note says so."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    with patch(
+        "custom_components.zte_router_5g.web_sources.crawl",
+        new=AsyncMock(
+            return_value={
+                "sources": {"js/service.js": "cmd='mined_name'"},
+                "fetched": 3,
+                "returned": 1,
+            }
+        ),
+    ) as crawl:
+        names, notes = await api.mine_candidate_names()
+
+    assert crawl.await_count == 1
+    assert "mined_name" in names
+    assert any("crawled 3 files" in note for note in notes)
+
+
+@pytest.mark.asyncio
+async def test_a_device_that_serves_nothing_mines_nothing_and_says_so(
+    mock_aiohttp_client,
+):
+    """A router that serves none of its own scripts is a finding, not a crash.
+
+    The static bundles are the crawl's seed, so they are attempted whatever the
+    index says; a device answering none of them leaves mining with nothing to
+    read, and that has to arrive as an empty result with a note rather than as
+    an exception inside a diagnostics download.
+    """
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+
+    with patch(
+        "custom_components.zte_router_5g.web_sources.crawl",
+        new=AsyncMock(return_value={"sources": {}, "fetched": 12, "returned": 0}),
+    ):
+        names, notes = await api.mine_candidate_names()
+
+    assert names == set()
+    assert any("0 readable" in note for note in notes)
