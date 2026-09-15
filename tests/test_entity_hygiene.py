@@ -642,6 +642,13 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "`get_ad` selects on the firmware version, so the branch cannot be "
         "removed without dropping support for the older models."
     ),
+    ("device_profile.py", "noqa: S324"): (
+        "The same MD5 as `api.py`'s, reached from the other direction. This "
+        "one is selected because the device's own script names `hex_md5` in "
+        "its token expression, rather than because the model string looked "
+        "old — so the branch exists for exactly as long as a firmware that "
+        "asks for it exists, which is not something this project decides."
+    ),
     ("api.py", "pragma: no cover"): (
         "Two defensive guards. `login()` re-checks `attempt.stok` after both "
         "error branches have raised, which narrows the type for mypy and "
@@ -692,26 +699,23 @@ ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
         "caller reading the transcript is the point. File-level because every "
         "print in the file is the same deliberate choice."
     ),
-    ("sms_delete_probe.py", "noqa: SLF001"): (
-        "Two sites, in a module that exists to be deleted. One takes the "
-        "coordinator's update lock so a routine poll cannot interleave with a "
-        "sequence whose whole value is that each step is attributable; the "
-        "other posts a `DELETE_SMS` built by hand, because the point of the "
-        "probe is to vary a form the API deliberately sends only one way. "
-        "Adding public surface for a temporary diagnostic would outlive it."
+    ("web_sources.py", "noqa: BLE001"): (
+        "A file the router declines to serve is a finding, not a failure. The "
+        "crawl records the miss and follows the next reference, because a "
+        "device that answers forty of forty-five files is exactly the evidence "
+        "the download exists to carry, and a raised exception would cost the "
+        "reporter the other forty."
     ),
-    ("sms_delete_probe.py", "noqa: S324"): (
-        "MD5 is one of the digests this router's own firmware uses to derive a "
-        "write token, and one candidate formula reproduces it. The choice is "
-        "the device's, not this code's, and the value is never used to "
-        "authenticate anything here — it is compared against what the router "
-        "accepts. It goes with the module."
-    ),
-    ("sms_delete_probe.py", "noqa: BLE001"): (
-        "Every probe records what happened and moves to the next one. A raised "
-        "exception is the finding, not an error to propagate: stopping at the "
-        "first refusal is exactly the behaviour that left four diagnostics "
-        "downloads with nothing in them."
+    ("diag_check.py", "noqa: BLE001"): (
+        "The top-level guard that reports an unreachable router instead of "
+        "ending on a traceback. It catches broadly on purpose: reaching the "
+        "device is a precondition of every check here, and the reference "
+        "MC7010 has been observed to stop answering mid-run with an empty "
+        "error message. Narrowing this to known transport types would let an "
+        "unexpected one end the script with no banner and an exit code "
+        "indistinguishable from a failed assertion, which is the reporting "
+        "fault the handler exists to remove. It re-raises nothing because it "
+        "returns a distinct exit code, 2, for could-not-run."
     ),
     ("diag_check.py", "noqa: S104"): (
         "`0.0.0.0` appears in a set of addresses the leak sweep treats as "

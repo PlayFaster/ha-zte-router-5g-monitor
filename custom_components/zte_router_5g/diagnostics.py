@@ -35,6 +35,7 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
+from . import device_profile, web_sources
 from .const import DISCOVERY_VALUE_SAFE
 from .coordinator import ZTERouterDataUpdateCoordinator
 
@@ -621,8 +622,15 @@ async def async_get_config_entry_diagnostics(
     # runtime consumer, so the work is done when the user asks for it and not
     # speculatively for everyone. `run_discovery` never raises — it returns
     # its failures as notes — and the guard is the second line of defence.
+    # The crawl runs once and both consumers read it: this section, and the
+    # discovery pass below, which mines the same files for `cmd` names.
+    crawled_sources: dict[str, str] = {}
+    web_source_report = await _async_web_sources(
+        coordinator, tokenizer, errors, crawled_sources
+    )
+
     discovery_raw = await _async_guarded(
-        "discovery", coordinator.async_run_discovery(), errors
+        "discovery", coordinator.async_run_discovery(crawled_sources), errors
     )
     discovery = (
         _guarded(
@@ -637,6 +645,18 @@ async def async_get_config_entry_diagnostics(
     # newest message. Guarded like discovery — a router that refuses the list
     # must not cost the reporter the whole file.
     check = getattr(coordinator.api, "last_session_check", None)
+    rejection_seen = getattr(coordinator.api, "last_rejection_seen", None)
+    check_seen = getattr(coordinator.api, "last_non_confirmed_session_check", None)
+    # Read once and type-checked, like every other optional field here: an api
+    # object that does not carry it, or carries something that is not a
+    # mapping, must cost the reporter a field rather than the whole file.
+    flag_report = _guarded(
+        "session_flag",
+        getattr(coordinator.api, "session_flag_report", lambda: None),
+        errors,
+    )
+    if not isinstance(flag_report, dict):
+        flag_report = None
     snapshot = await _async_guarded(
         "sms", coordinator.async_fetch_sms_snapshot(), errors
     )
@@ -727,6 +747,36 @@ async def async_get_config_entry_diagnostics(
         ),
         "last_session_check": _sanitize_walk(check, tokenizer)
         if isinstance(check, dict)
+        else None,
+        # Whether this device implements the firmware's own session flag, and
+        # what the pre-write check has done with it. The raw `loginfo` value is
+        # deliberately absent — it is denied by name and is not what is needed.
+        # `supported` is: a device that has never answered `ok` is one the
+        # check does not apply to, and that is unknown for every device but the
+        # reference hardware.
+        "session_flag": flag_report,
+        # The files the router serves to its own web interface: one record per
+        # file always, and the sources themselves only when something in this
+        # download needs explaining. See `_sources_are_warranted`.
+        "web_sources": web_source_report,
+        # What this device's own web interface says about its write path, and
+        # which of those answers the code actually used. Item 17: every value
+        # that could not be learned is named, because "not learned" is the
+        # field that says whether a refused write is the profile's fault.
+        "device_profile": _profile_section(coordinator, crawled_sources),
+        # The most recent rejection, kept even after a live read cleared the
+        # live field. Historical by construction: it says a rejection happened,
+        # not that one is happening. Producing this file reads the router, and
+        # those reads used to wipe the very record the file exists to carry.
+        "last_rejection_seen": _sanitize_walk(rejection_seen, tokenizer)
+        if isinstance(rejection_seen, dict)
+        else None,
+        # The most recent check that did not confirm the session, never
+        # overwritten by a later confirmation. The live field above is replaced
+        # by every check, including the ones producing this file makes, so it
+        # describes the collection rather than the failure being reported.
+        "last_non_confirmed_session_check": _sanitize_walk(check_seen, tokenizer)
+        if isinstance(check_seen, dict)
         else None,
         # Which candidate names this device answered. Values only for the
         # names classified safe in `const.DISCOVERY_VALUE_SAFE`; everything
@@ -863,25 +913,25 @@ def _gate_discovery_value(
     return value[:_VALUE_CAP], "published"
 
 
-# Metadata fields of a discovery result that are published verbatim. These are
-# produced by this integration rather than read from the router, with one
-# exception noted below, so an allow-list here is about sanitisation and not
-# about hiding detail from the reader.
+# Metadata fields of a discovery result that are published verbatim. This
+# integration produces them rather than reading them from the router, with one
+# exception noted below, so the allow-list is about sanitisation and not about
+# hiding detail.
 #
-# It is an allow-list rather than a passthrough because a future field could
-# carry a router value, and deny-by-default is the direction an omission should
-# fail in. The cost of that choice is that adding a field to `run_discovery` is
-# a two-file change, and the second file has been forgotten twice:
-# `session_alive_after` was caught before release, `canary` was not and shipped
-# in v3.3.9-dev5 recorded by the API and absent from every download. Branch
-# coverage cannot see it — this is data, and the loop runs either way.
+# An allow-list rather than a passthrough because a future field could carry a
+# router value, and an omission should fail closed. The cost is that adding a
+# field to `run_discovery` is a two-file change, and the second file has been
+# forgotten twice. `session_alive_after` was caught before release. `canary` was
+# not: it shipped in v3.3.9-dev5 recorded by the API and absent from every
+# download. Branch coverage cannot see that, because this is data and the loop
+# runs either way.
 #
-# `test_every_discovery_field_is_classified` closes that by asserting the two
-# sets below partition an actual `run_discovery` result, so a new field fails
-# the suite until it is classified deliberately.
+# `test_every_discovery_field_is_classified` asserts the two sets below
+# partition an actual `run_discovery` result, so a new field fails the suite
+# until it is classified.
 #
-# `probed_no_answer` and `mined_names` are router-derived *names*, never
-# values; the values themselves are the gated section.
+# `probed_no_answer` and `mined_names` are router-derived names, never values.
+# The values are the gated section.
 DISCOVERY_METADATA_PUBLISHED = frozenset(
     {
         "canaries",
@@ -952,6 +1002,171 @@ def _sanitize_discovery(discovery: Any, tokenizer: _Tokenizer) -> dict[str, Any]
     return out
 
 
+def _json_safe(value: Any) -> Any:
+    """Return `value` with anything unserializable replaced by its type name.
+
+    The crawl reports what an HTTP response said — a status, a length, a
+    digest — and those come from outside this module. A value that is not a
+    primitive cannot be written to the file, and the failure is not local: the
+    whole download raises at the final `json.dumps`, after every guard has
+    passed, and the reporter gets nothing at all.
+
+    `_guarded` cannot catch that, because it wraps the building of a section
+    and this happens after. So the section is made safe at the point it is
+    built, and an unexpected type costs its own field rather than the file.
+    """
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list | tuple):
+        return [_json_safe(item) for item in value]
+    if value is None or isinstance(value, str | bool | int | float):
+        return value
+    return f"<{type(value).__name__}>"
+
+
+def _sources_are_warranted(coordinator: Any) -> str | None:
+    """Why this download should carry the served sources, or None for the list.
+
+    **The manifest always, the sources only on cause.** Measured on the
+    reference MC7010 on 2026-09-14: the file list costs 5.4 kB and the sources
+    237 kB, against 49 kB for an entire ordinary download. Attaching a quarter
+    of a megabyte of firmware JavaScript to every report, for every user, to
+    answer a question almost none of them have, is the kind of cost that gets a
+    diagnostics file left unread.
+
+    The cause today is a write that failed: the sources say which spellings and
+    which token the device's own client uses, which is exactly what a refused
+    write needs explaining. Phase 4 adds the second — a profile that could not
+    be fully learned — and this is where it goes.
+    """
+    failures = getattr(coordinator.api, "write_failures", None)
+    if failures:
+        return f"{len(failures)} write failure(s) recorded"
+    return None
+
+
+def _profile_section(coordinator: Any, sources: dict[str, str]) -> dict[str, Any]:
+    """The profile in force, what this download's own crawl reads, and the gap.
+
+    Three things, and the third is the one worth having. The profile in force
+    is what the running code consulted; the re-parse is what the device says
+    right now; a difference between them means the cache is describing a
+    firmware that is gone, which is a fault nothing else in this download would
+    show.
+
+    **The digest is compared against the constant it replaces.** On a device
+    where the learned digest and the model-string heuristic agree, a refused
+    write is not the token. On a device where they disagree, this field is the
+    first thing to read — and it is the only place the disagreement is
+    visible, because both produce a well-formed token and the router refuses
+    either one the same way.
+    """
+    api = coordinator.api
+    in_force = api.profile if isinstance(getattr(api, "profile", None), dict) else {}
+    section: dict[str, Any] = {
+        "in_force": _json_safe(in_force),
+        "decisions": dict(sorted(getattr(api, "profile_decisions", {}).items())),
+    }
+    if not sources:
+        # The crawl is what a re-parse reads. Without it there is nothing to
+        # compare, which is a different statement from "they agree".
+        section["reparsed"] = None
+        return section
+    firmware = in_force.get("firmware", "")
+    fresh = device_profile.parse_profile(sources, firmware)
+    section["reparsed"] = {
+        "unlearned": fresh.get("unlearned", []),
+        "token": _json_safe(fresh.get("token", {})),
+        "session_flag": _json_safe(fresh.get("session_flag", {})),
+        "commands_read": len(fresh.get("commands", {})),
+        "matches_in_force": fresh == in_force if in_force else None,
+    }
+    learned = fresh.get("token", {}).get("digest", {}).get("algorithm")
+    if learned:
+        # The heuristic this replaces, evaluated here rather than described,
+        # so the comparison is of two answers and not of an answer and a rule.
+        heuristic = (
+            "sha256" if any(m in firmware for m in ("MC888", "MC889")) else "md5"
+        )
+        section["digest_agrees_with_model_heuristic"] = learned == heuristic
+        section["digest_learned"] = learned
+        section["digest_from_model_string"] = heuristic
+    return section
+
+
+async def _async_web_sources(
+    coordinator: Any,
+    tokenizer: _Tokenizer,
+    errors: list[str],
+    section_sources: dict[str, str],
+) -> dict[str, Any] | None:
+    """Crawl the files the router serves, and decide how much of it publishes.
+
+    Reads only. It follows the device's own references and fetches pages the
+    router serves to anybody who opens its address; it sends no command and
+    changes nothing. Guarded like every other section, because a router that
+    declines a script must cost the reporter a field rather than the file.
+    """
+    result = await _async_guarded(
+        "web_sources", web_sources.crawl(coordinator.api), errors
+    )
+    if not isinstance(result, dict):
+        return None
+    sources = result.pop("sources", {})
+    files = result.pop("files", {})
+    # Held for the discovery pass, which mines these same files for `cmd`
+    # names. Kept whether or not the sources themselves publish: the decision
+    # below is about what reaches the file, not about what this download knows.
+    section_sources.update(sources)
+    reason = _sources_are_warranted(coordinator)
+    section: dict[str, Any] = {
+        **cast("dict[str, Any]", _sanitize_walk(result, tokenizer)),
+        "files": _sanitize_walk(files, tokenizer),
+        "sources_included": bool(reason),
+        "sources_included_because": reason,
+        # Always, and independent of whether the sources themselves publish:
+        # it is a few dozen short literals, and it is the field that answers
+        # whether another device's firmware speaks a vocabulary this one does
+        # not. Reported, never acted on — see `web_sources.result_vocabulary`.
+        "result_vocabulary": web_sources.result_vocabulary(sources),
+    }
+    if reason:
+        section.update(_keep_sources(sources, tokenizer))
+    return cast("dict[str, Any]", _json_safe(section))
+
+
+def _keep_sources(sources: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
+    """Return the served sources, swept only where they carry a known value.
+
+    They are firmware, identical on every unit of a build, and carry no value
+    belonging to the person who produced the file. Sweeping them rewrites the
+    code itself: an address-shaped literal in the router's own JavaScript —
+    `"0.0.0.0"` in `js/service.js` on the reference device — becomes a token,
+    and the capture then differs from what the router sent. They exist to be
+    read as source, so they are exempted rather than swept.
+
+    **The exemption is checked, not assumed.** "Firmware on every device seen
+    so far" is one model: a build that embedded a serial, an address or a
+    subscriber identifier in a served script would put it into a file written
+    to be attached to a public issue. Any source carrying a value this download
+    has already tokenized is swept like anything else, and named.
+    """
+    known = tokenizer.known_values()
+    kept: dict[str, Any] = {}
+    swept: list[str] = []
+    for path, text in sources.items():
+        if isinstance(text, str) and any(value in text for value in known):
+            kept[path] = _sweep(text, tokenizer)
+            swept.append(path)
+        else:
+            kept[path] = deepcopy(text)
+    return {
+        "sources": kept,
+        "sources_are_unswept": not swept,
+        "sources_swept": sorted(swept),
+    }
+
+
 def _sanitize_probe(probe: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
     """Sweep the probe report, leaving the captured source untouched.
 
@@ -980,20 +1195,9 @@ def _sanitize_probe(probe: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, A
     # put it into a file written to be attached to a public issue. Any source
     # carrying a value this download has already tokenized is swept like
     # anything else, and named.
-    known = tokenizer.known_values()
-    kept: dict[str, Any] = {}
-    swept: list[str] = []
-    for path, text in sources.items():
-        if isinstance(text, str) and any(value in text for value in known):
-            kept[path] = _sweep(text, tokenizer)
-            swept.append(path)
-        else:
-            kept[path] = deepcopy(text)
     clean["source_capture"] = {
         "files": _sanitize_walk(files, tokenizer),
-        "sources": kept,
-        "sources_are_unswept": not swept,
-        "sources_swept": sorted(swept),
+        **_keep_sources(sources, tokenizer),
     }
     return clean
 

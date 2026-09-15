@@ -257,12 +257,24 @@ class ZTERouterSelect(
         especially easy to miss (IQS `action-exceptions`).
 
         Deliberately *not* confirmed by a targeted read-back, unlike the
-        switches. Every setter here re-establishes the connection, and the
-        router answers with blank values while it does — which this integration
-        reads as an expired session. Reading back would risk a needless
-        re-login and would report a slow-but-successful change as a failure.
-        The debounced refresh is the right instrument for a change that takes
-        seconds to settle.
+        switches. **The omission is precautionary, and the reasoning behind it
+        is untested.** The expectation is that these setters re-establish the
+        connection and that the router answers with blank values while it
+        does — which this integration reads as an expired session — so a
+        read-back would risk a needless re-login and would report a
+        slow-but-successful change as a failure.
+
+        Neither half has been observed. The two writes issued on the reference
+        MC7010 on 2026-09-14 were effectively no-ops — `apn_mode` auto to auto,
+        and `net_select` `auto_select` to `4G_AND_5G`, which is Auto to Auto —
+        so neither exercised a change that would take the connection down.
+        Settling it needs a restricting bearer value (`Only_LTE` or `Only_5G`)
+        or a real APN change, and neither has been run.
+
+        Until then the debounced refresh is the instrument, on the grounds that
+        it cannot report a false failure whatever the router does. If the
+        expectation turns out to be wrong, a read-back becomes available here
+        and this paragraph is what says so.
         """
         try:
             await self.entity_description.setter_fn(

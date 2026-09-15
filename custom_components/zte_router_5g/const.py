@@ -42,6 +42,59 @@ LIVE_OPTION_KEYS = frozenset({CONF_SCAN_INTERVAL, CONF_STOP_POLLING})
 # second line of defense on a router whose expired-session response is
 # indistinguishable from success at the HTTP layer.
 SESSION_IDLE_RESET_SECONDS = 150
+# How long a write waits for a poll to finish before going ahead regardless.
+#
+# **The duration belongs on the wait, not on how long the lock is held.** A
+# lock that can refuse is another way to block writes on routers nobody can
+# test, which is the failure this whole plan exists to prevent — so failing to
+# acquire is not an error and the write proceeds unserialised, which is the
+# behaviour every release before this one had.
+#
+# Three seconds because a core poll on the reference MC7010 completes in about
+# 30 ms and the extended poll in about the same; a wait this long is reached
+# only when the router has stopped answering, and in that case the write is
+# about to fail on its own merits.
+WRITE_LOCK_WAIT_SECONDS: float = 3.0
+
+
+# The preemptive session reset, in its learned form.
+#
+# `SESSION_IDLE_RESET_SECONDS` above is compared against `last_activity`: time
+# since the last authenticated request, an idle clock. The boundary it guards is
+# not idle-based. A session polled every ten seconds ended at the same point as
+# one left untouched. Idle time between polls is roughly the scan interval,
+# configurable from 30 to 3600 seconds, so at 150s or less the preempt never
+# fires and every poll past the boundary pays a failed request, a login and a
+# retry.
+#
+# Session age measures the clock that actually runs out, so it fires at every
+# interval. A threshold carrying one device's number would misfire on every
+# other, so it is learned from this device's own expiries. Until enough samples
+# exist the idle reset runs, and the `[3.3.0-rc2]` decision not to rely on
+# reactive detection alone stands.
+#
+# There is no lifetime to hardcode. Four runs on the reference MC7010 in one
+# hour ended at 15s, 85s and 110-120s, and one could not complete. `[3.3.0-rc2]`
+# separately measured "at or below 200s". A device holding sessions for 300s and
+# one expiring at 20s are both plausible, and no constant serves both.
+SESSION_AGE_LEARN_MIN_SAMPLES = 3
+# Act on the shortest of the recent samples rather than the shortest ever: a
+# session can end for reasons other than time, and this router grants the
+# session to the newest login, so one web-UI visit would otherwise set a
+# permanent floor.
+SESSION_AGE_LEARN_WINDOW = 10
+# Preempt at this fraction of the learned lifetime.
+SESSION_AGE_SAFETY = 0.8
+# Never preempt below this, whatever is learned. A pathological reading must not
+# turn into a login storm.
+SESSION_AGE_FLOOR_SECONDS = 30.0
+# One check in this many skips the preempt, so the session is allowed to reach
+# its real boundary occasionally. Without it an active preempt destroys every
+# session before it expires, no further expiry is ever observed, and the learned
+# value can never rise again — it would be locked to whatever was first seen,
+# including across a firmware change that lengthened the boundary. The cost is
+# one failed request per sample.
+SESSION_AGE_SAMPLE_EVERY = 10
 
 # Proportion of the *requested* authenticated keys that may be missing from a
 # response before the session classifier declines to rule on it.
@@ -167,36 +220,15 @@ SMS_SEGMENTS_MAX = 5
 SMS_MAX_CHARS_GSM7 = 765
 SMS_MAX_CHARS_UNICODE = 335
 
-# Candidate `cmd` names harvested from `Kajkac/ZTE-MC-Home-assistant-repo`,
-# which covers the MC801A, MC888 and MC889, minus everything this integration
-# already requests and everything outside its scope (Wi-Fi, guest networks,
-# DHCP, DNS, IPv6, battery, firmware upgrade state).
-#
-# Probed once per setup so a diagnostics download can show which of them a
-# device populates. **Never joins the poll**: `docs/zte_how_to_access.md`
-# records a probe carrying names outside the firmware's dictionary making a
-# whole chunk time out and fall back to empty defaults, taking a genuinely
-# populated key down with it. Chunked and individually tolerant for the same
-# reason.
-#
-# Every name here is classified in `diagnostics.py` — see
-# `DISCOVERY_VALUE_SAFE`. An unclassified candidate is not eligible for this
-# list, because its value would be published.
-# Names per discovery request. Small deliberately: a chunk carrying a name
-# outside the firmware's dictionary can time out entirely, and a smaller chunk
-# loses less when it does.
 # Characters a single batch request may reach before it is split. The router
 # bounds a GET by URL length rather than by name count, and the ceiling
 # measured on an MC7010 is roughly 2,048 — but that is one device's, and a
 # firmware with a lower one truncates the response rather than erroring, which
 # presents as missing fields. The margin is deliberate.
 #
-# The list grows with every model supported, not with every feature added: a
-# device that spells a concept differently needs both spellings requested.
 # Named for what it is rather than as a "budget": `check_test_depth.py`
 # reserves that suffix for accumulation gates — strike counters a test has to
-# reach by polling repeatedly — and this is a size threshold decided within a
-# single call.
+# reach by polling repeatedly — and this is a size threshold decided in one call.
 BATCH_URL_MAX_CHARS = 1600
 
 # How long `verify_deleted` keeps re-listing before it calls a message
@@ -221,6 +253,21 @@ BATCH_URL_MAX_CHARS = 1600
 # `check_test_depth.py` should not read it as one.
 SMS_DELETE_VERIFY_SECONDS = 15.0
 SMS_DELETE_VERIFY_INTERVAL = 1.0
+
+# How long to watch for the router to go away after an accepted reboot, and how
+# often to look.
+#
+# A reboot is the one write this API verifies by absence: the router answers
+# and then stops answering. Measured on an MC7010, 2026-09-14: `REBOOT_DEVICE`
+# returned `{"result":"success"}` in about 0.1 s and the device was unreachable
+# by the next observation, with probes one second apart — so the true interval
+# is under two seconds and was not measured more precisely than that. Five
+# seconds is margin over that observation, not a measurement of it.
+#
+# Twice a second rather than once: a single probe can miss, and the whole point
+# is that the absence is the evidence.
+REBOOT_VERIFY_SECONDS = 5.0
+REBOOT_VERIFY_INTERVAL = 0.5
 
 # How many canaries a probe carries. One key is a single point of failure in
 # both directions: a metric that legitimately empties reads as a lost session,
@@ -259,6 +306,9 @@ CANARY_FALLBACK_EVERY = 8
 # between the canary being introduced and the refusal being handled.
 DISCOVERY_RELOGIN_LIMIT = 3
 
+# Names per discovery request. Small deliberately: a chunk carrying a name
+# outside the firmware's dictionary can time out entirely, and a smaller chunk
+# loses less when it does.
 DISCOVERY_CHUNK_SIZE = 16
 
 # Mined names are unvalidated by definition, so their chunks are smaller: a
@@ -312,6 +362,21 @@ JS_BUNDLES: tuple[str, ...] = (
     "js/language.js",
 )
 
+# Candidate `cmd` names harvested from `Kajkac/ZTE-MC-Home-assistant-repo`,
+# which covers the MC801A, MC888 and MC889, minus everything this integration
+# already requests and everything outside its scope (Wi-Fi, guest networks,
+# DHCP, DNS, IPv6, battery, firmware upgrade state). The list grows with every
+# model supported, not with every feature added: a device that spells a concept
+# differently needs both spellings requested.
+#
+# Probed once per setup so a diagnostics download can show which of them a
+# device populates. **Never joins the poll**: `docs/zte_how_to_access.md`
+# records a probe carrying names outside the firmware's dictionary making a
+# whole chunk time out and fall back to empty defaults, taking a genuinely
+# populated key down with it. Chunked and individually tolerant for that reason.
+#
+# Every name here is classified in `diagnostics.py` — see `DISCOVERY_VALUE_SAFE`.
+# An unclassified candidate is not eligible, because its value would publish.
 DISCOVERY_CANDIDATES: list[str] = [
     "Lte_ca_status",
     "Z5g_dlEarfcn",

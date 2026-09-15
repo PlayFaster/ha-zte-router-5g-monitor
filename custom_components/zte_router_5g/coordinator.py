@@ -17,6 +17,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from . import device_profile
 from ._compat import device_by_identifier
 from .api import (
     SMS_STORE_ALL,
@@ -124,6 +125,7 @@ PLAUSIBILITY_TOLERANCE = 0.05
 # needs no maintenance, and leaving it there means no migration. The store is
 # advisory — where it is absent or unreadable the cold-start path still works.
 UPTIME_STORAGE_VERSION = 1
+PROFILE_STORAGE_VERSION = 1
 UPTIME_WRITE_INTERVAL = timedelta(minutes=20)
 UPTIME_SAVE_DELAY = 60
 
@@ -239,6 +241,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # guard-rejected poll defers it rather than skipping it.
         self._startup_reconciled = False
         self._store: Store[dict[str, Any]] | None = None
+        self._profile_store: Store[dict[str, Any]] | None = None
         self._stored_last_uptime: int | None = None
         self._stored_written_at: datetime | None = None
         self._last_counter_write: datetime | None = None
@@ -316,13 +319,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         stored_delete = entry.data.get("last_delete")
         if isinstance(stored_delete, dict):
             api.last_delete = dict(stored_delete)
-
-        # TEMPORARY - goes with `sms_delete_probe.py`. Restored for the same
-        # reason as the record above: the reporter runs the probe, restarts at
-        # some point, and downloads diagnostics afterwards.
-        stored_probe = entry.data.get("delete_probe")
-        if isinstance(stored_probe, dict):
-            api.delete_probe = dict(stored_probe)
 
         # `entry.data["last_uptime"]` is deliberately NOT read. It is written
         # only on a latch, so it is frozen at whatever small value the previous
@@ -539,29 +535,26 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from the API, serialized against a discovery pass.
 
-        The lock is the point. `async_run_discovery` has taken it since the
-        probe was added, with a comment saying the two "take turns" — but this
-        method never acquired it, so nothing was serialized and the guard did
-        nothing at all.
+        The lock is the point. `async_run_discovery` has taken it since the probe
+        was added, with a comment saying the two "take turns" — but this method
+        never acquired it, so nothing was serialized.
 
-        What that allowed: a scheduled poll running during a diagnostics
-        download shares this coordinator's `ZTERouterAPI`, and a poll that
-        judges the session expired re-logs in. The router permits one session,
-        so the new login invalidates the cookie the discovery pass is
-        replaying. Discovery probes run with `authenticated=False` precisely so
-        that a probe never silently re-authenticates and samples an
-        authenticated response, which means they cannot recover: they simply go
+        What that allowed: a scheduled poll during a diagnostics download shares
+        this coordinator's `ZTERouterAPI`, and a poll judging the session expired
+        re-logs in. The router permits one session, so the new login invalidates
+        the cookie the discovery pass is replaying. Probes run with
+        `authenticated=False` precisely so one never silently re-authenticates
+        and samples an authenticated response — so they cannot recover. They go
         blank, and their names are recorded as unanswered.
 
-        Measured directly. With a competing client logging in every 180
-        seconds, 2 of 12 passes came back having read 413 and 445 names without
-        a session against 16 in a healthy pass; with the competitor paused, 0
-        of 12. This closes the same window for the poll inside our own process.
+        Measured: with a competing client logging in every 180 seconds, 2 of 12
+        passes read 413 and 445 names without a session against 16 in a healthy
+        pass; with the competitor paused, 0 of 12.
 
-        A discovery pass can hold this for the length of its budget, so a poll
-        may wait. That is the correct trade: a delayed poll holds last known
-        values for one cycle, while an overlapping one corrupts a download the
-        user is waiting on and publishes absences that were never measured.
+        A discovery pass can hold this for its whole budget, so a poll may wait.
+        That is the right trade: a delayed poll holds last known values for one
+        cycle, while an overlapping one corrupts a download the user is waiting
+        on and publishes absences that were never measured.
         """
         async with self._async_update_lock:
             return await self._async_update_data_locked()
@@ -880,6 +873,98 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         device_id = self.imei or f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
         if self.observations.observe(data, device_id):
             await self.observations.async_save()
+        await self._persist_session_lifetimes()
+
+    async def _persist_session_lifetimes(self) -> None:
+        """Carry newly observed session lifetimes into the store.
+
+        Written on the poll path rather than at the moment a session ends,
+        because the api object has no store of its own and a login must not
+        wait on disk. Only a change is written; the list is short and bounded
+        by `SESSION_AGE_LEARN_WINDOW`.
+        """
+        observed = list(getattr(self.api, "session_lifetimes", []))
+        if observed and observed != self.observations.session_lifetimes():
+            await self.observations.async_save_session_lifetimes(observed)
+
+    async def async_load_profile(self) -> None:
+        """Read the cached device profile. Never raises, never fetches.
+
+        Principle 5: Home Assistant startup reads a profile from local storage
+        and parses nothing. A missing, corrupt or stale record resolves to "no
+        profile", which routes every profile-backed decision to the behaviour
+        that shipped before there was one.
+
+        The firmware the profile was read under is **not** checked here,
+        because nothing has polled yet and the version is not known. It is
+        checked once by `async_learn_profile`, which is the only thing that
+        can act on the answer.
+        """
+        self._profile_store = Store(
+            self.hass,
+            PROFILE_STORAGE_VERSION,
+            f"{DOMAIN}_{self.entry.entry_id}_profile",
+        )
+        try:
+            stored = await self._profile_store.async_load()
+        except Exception as err:  # noqa: BLE001 - no storage fault fails setup
+            _LOGGER.debug(
+                "%s: profile store unreadable, continuing without it: %s",
+                self.entry.title,
+                err,
+            )
+            return
+        if not isinstance(stored, dict):
+            return
+        if stored.get("profile_version") != device_profile.PROFILE_VERSION:
+            # A record written by a build whose profile had a different shape.
+            # Discarded rather than migrated: the device that produced it is
+            # still there and can simply be asked again.
+            return
+        self.api.profile = stored
+
+    async def async_learn_profile(self) -> None:
+        """Learn the profile once, in the background, if it is not current.
+
+        Runs after the first poll, so the firmware version it is keyed to is
+        the one the device is actually running. Re-learned only when that
+        version changes, for the reason `cr_version` is cached the same way: an
+        upgrade can change every answer in here, and a profile that outlives
+        its firmware is worse than none.
+
+        **Never fails a setup and never blocks a write.** Anything that goes
+        wrong leaves the profile as it was — absent, or the previous firmware's
+        — and every consumer falls back.
+        """
+        try:
+            # Inside the guard, not ahead of it. Reading the version is a
+            # request like any other, and a device that cannot answer it must
+            # leave the profile as it was rather than fail the task it is in.
+            version = await self.api.get_version() or ""
+            if version and self.api.profile.get("firmware") == version:
+                return
+            profile = await self.api.learn_profile()
+        except Exception as err:  # noqa: BLE001 - learning is never load-bearing
+            _LOGGER.debug(
+                "%s: could not learn the device profile: %s", self.entry.title, err
+            )
+            return
+        _LOGGER.info(
+            "%s: device profile learned from %d of its own files; %s",
+            self.entry.title,
+            len(profile.get("sources_read", [])),
+            "everything it was asked for"
+            if not profile.get("unlearned")
+            else "not learned: " + ", ".join(profile["unlearned"]),
+        )
+        if self._profile_store is None:  # pragma: no cover - set up before this
+            return
+        try:
+            await self._profile_store.async_save(profile)
+        except Exception as err:  # noqa: BLE001 - see above
+            _LOGGER.debug(
+                "%s: could not store the device profile: %s", self.entry.title, err
+            )
 
     async def async_load_stored_uptime(self) -> None:
         """Load the persisted counter and drift accumulators. Never raises.
@@ -1215,22 +1300,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         new_data["last_delete"] = record
         self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
-    def persist_delete_probe(self) -> None:
-        """Write the probe's report into the entry, so a restart keeps it.
-
-        TEMPORARY - goes with `sms_delete_probe.py`. Called before the run and
-        again at the end, so a report survives both a restart and a run that
-        does not finish. The record holds ids, timings and router replies; the
-        write token is redacted before it reaches the report and no message
-        content is read at all.
-        """
-        record = self.api.delete_probe
-        if record is None:
-            return
-        new_data = dict(self.entry.data)
-        new_data["delete_probe"] = record
-        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
-
     def _maybe_persist_counter(self, seconds: int, now: datetime) -> None:
         """Flush the counter and accumulators on a fixed interval.
 
@@ -1484,8 +1553,16 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         self._drift_strikes += 1
         return self._drift_strikes >= HEALTH_DRIFT_STRIKE_LIMIT
 
-    async def async_run_discovery(self) -> dict[str, Any]:
+    async def async_run_discovery(
+        self, sources: dict[str, str] | None = None
+    ) -> dict[str, Any]:
         """Run the discovery pass under the coordinator's update lock.
+
+        `sources` is the crawl a diagnostics download has already made. Passed
+        through rather than re-fetched: mining reads the files the router
+        serves, the download reads the same files for its own section, and
+        crawling twice costs forty-five requests on the reference device to
+        read bodies already in hand.
 
         The probe shares this coordinator's API client, and a chunk that times
         out clears the session. Running it beside a live poll could score that
@@ -1494,7 +1571,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         pressed Download Diagnostics. The lock makes the two take turns.
         """
         async with self._async_update_lock:
-            result = await self.api.run_discovery()
+            result = await self.api.run_discovery(sources=sources)
             # A pass issues several hundred requests in under a minute, and a
             # write attempted immediately afterwards was once refused with an
             # empty transport error on the reference MC7010 — once in two

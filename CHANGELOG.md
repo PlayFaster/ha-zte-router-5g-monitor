@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.3.25] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience
+
+### Summary
+
+- **Web-Client Driven Write Contracts**: Router write commands and security token derivations now dynamically parse configuration scripts served directly by the router's web interface, automatically adapting token formulas, password hashing, and model-specific parameter names across different firmware revisions.
+- **Dynamic Device Profile & Discovery**: Replaced static probing lists with dynamic client-side bundle discovery, reading only parameter names referenced by router firmware to expand mined diagnostics without unwanted probing requests.
+- **Adaptive Session Lifetime & Pre-Write Check**: Session renewal now learns device-specific session lifetimes from observed expirations while validating session state directly against firmware login flags before executing write operations.
+- **Write and Polling Concurrency**: Serialized background polling and interactive write commands to prevent session collisions on single-session router firmware.
+
+### Added
+
+- **Dynamic Device Profile Discovery**: Automatically parses the router's web interface scripts on startup to discover device-specific write tokens, digest algorithms, and parameter field names without relying solely on static model heuristics (`device_profile.py`).
+- **Dynamic Session Lifetime Learning**: Measures observed router session durations to calculate adaptive preemptive reset thresholds per device, replacing static timers across varied hardware variants (`SESSION_AGE_LEARN_MIN_SAMPLES`).
+- **Write Path Concurrency Lock**: Added an async lock between coordinator polling batches and write commands to prevent simultaneous requests from causing session evictions on single-session routers.
+- **Diagnostic Source Asset Manifest**: Diagnostic downloads now include an asset manifest and script capture metadata to verify client script parsing and token derivations (`web_sources`).
+
+### Fixed
+
+- **Cross-Model Parameter Field Alignment**: Resolved command rejections on models using prefixed APN parameter names (such as `apn_pdp_type` on MC888 Pro models) by resolving payload fields directly from device scripts.
+- **Post-Restart Dead Session Recovery**: Ensured the first write operation following a Home Assistant restart successfully authenticates and proceeds even when starting from an expired session state.
+- **Pre-Write Session Key Validation**: Replaced inference from connection status readings with direct firmware session status verification (`loginfo`), eliminating false expiration detections on models where connection keys remain unpopulated.
+- **Diagnostic Parameter Mining Traversal**: Corrected script bundle discovery to follow client module loader references, ensuring diagnostic parameter mining surveys all available firmware endpoints.
+
+### Changed
+
+- **Decommissioned SMS Delete Probe**: Removed the manual SMS deletion diagnostic probe service (`sms_delete_probe.py`) following complete resolution of write token formulas and parameter mapping.
+- **Request Architecture Refactoring**: Streamlined internal HTTP request dispatching into discrete lifecycle stages (`_perform`, `_preempt_stale_session`, `_build_headers`, `_send`, `_dispose`) while preserving all retry and error mapping contracts.
+
+---
+
 ## [3.3.24] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking
 
 ### Summary
@@ -759,6 +789,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
   - [\[3.3.24\] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking](#3324---2026-09-13---release-asynchronous-sms-deletion-verification-and-send-outcome-tracking)
   - [\[3.3.22\] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection](#3322---2026-09-12---release-browser-aligned-sms-deletion-payloads-and-dynamic-session-key-selection)
   - [\[3.3.21\] - Release - 2026-09-11 - MC888 Pro Write Token](#3321---release---2026-09-11---mc888-pro-write-token)

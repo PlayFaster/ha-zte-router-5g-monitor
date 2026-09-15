@@ -5,6 +5,19 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
+  - [\[3.3.25-dev12\] - 2026-09-15 - Comments and Docstrings Rewritten for Readability; the Write-Path Documents Catch Up](#3325-dev12---2026-09-15---comments-and-docstrings-rewritten-for-readability-the-write-path-documents-catch-up)
+  - [\[3.3.25-dev11\] - 2026-09-15 - Five Values the Profile Had Learned and Nothing Read](#3325-dev11---2026-09-15---five-values-the-profile-had-learned-and-nothing-read)
+  - [\[3.3.25-dev10\] - 2026-09-15 - The Router's Own Web Interface Supplies the Write Contract](#3325-dev10---2026-09-15---the-routers-own-web-interface-supplies-the-write-contract)
+  - [\[3.3.25-dev9\] - 2026-09-15 - Discovery Reads What the Router References; Writes and Polls Take Turns](#3325-dev9---2026-09-15---discovery-reads-what-the-router-references-writes-and-polls-take-turns)
+  - [\[3.3.25-dev8\] - 2026-09-15 - The Probe Is Removed and Its Only Irreplaceable Part Moves Into Diagnostics](#3325-dev8---2026-09-15---the-probe-is-removed-and-its-only-irreplaceable-part-moves-into-diagnostics)
+  - [\[3.3.25-dev7\] - 2026-09-14 - The First Write After a Restart No Longer Goes Out on a Dead Session](#3325-dev7---2026-09-14---the-first-write-after-a-restart-no-longer-goes-out-on-a-dead-session)
+  - [\[3.3.25-dev6\] - 2026-09-14 - A Request Becomes a Value; `_request` Splits Into Six Routines](#3325-dev6---2026-09-14---a-request-becomes-a-value-_request-splits-into-six-routines)
+  - [\[3.3.25-dev5\] - 2026-09-14 - Replayed Requests Keep the Caller's Classification Setting](#3325-dev5---2026-09-14---replayed-requests-keep-the-callers-classification-setting)
+  - [\[3.3.25-dev4\] - 2026-09-14 - Session Lifetime Learned Per Device; Diagnostics Keep the Evidence They Collect](#3325-dev4---2026-09-14---session-lifetime-learned-per-device-diagnostics-keep-the-evidence-they-collect)
+  - [\[3.3.25-dev3\] - 2026-09-14 - Learned Session Flag No Longer Discarded When the Firmware Cache Fills](#3325-dev3---2026-09-14---learned-session-flag-no-longer-discarded-when-the-firmware-cache-fills)
+  - [\[3.3.25-dev2\] - 2026-09-14 - A Blank Session Flag Is Not a Denial Until the Key Is Known to Exist](#3325-dev2---2026-09-14---a-blank-session-flag-is-not-a-denial-until-the-key-is-known-to-exist)
+  - [\[3.3.25-dev1\] - 2026-09-14 - The Pre-Write Session Check Asks the Router Instead of Guessing](#3325-dev1---2026-09-14---the-pre-write-session-check-asks-the-router-instead-of-guessing)
   - [\[3.3.24\] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking](#3324---2026-09-13---release-asynchronous-sms-deletion-verification-and-send-outcome-tracking)
   - [\[3.3.24-dev1\] - 2026-09-13 - A Completed Delete Stops Reporting as a Failure](#3324-dev1---2026-09-13---a-completed-delete-stops-reporting-as-a-failure)
   - [\[3.3.22\] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection](#3322---2026-09-12---release-browser-aligned-sms-deletion-payloads-and-dynamic-session-key-selection)
@@ -21,16 +34,16 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.20-dev2\] - 2026-09-11 - SMS Probe V7: Three Probe Actions, and the Full Source Capture](#3320-dev2---2026-09-11---sms-probe-v7-three-probe-actions-and-the-full-source-capture)
   - [\[3.3.20-dev1\] - 20206-09-11 - CI Bump Ruff](#3320-dev1---20206-09-11---ci-bump-ruff)
   - [\[3.3.19\] - 2026-09-10 - Release: SMS Probe v6 Web UI Client Inspection and Browser-Aligned Diagnostic Probing](#3319---2026-09-10---release-sms-probe-v6-web-ui-client-inspection-and-browser-aligned-diagnostic-probing)
-  - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-that-could-not-report-what-they-measured)
-  - [\[3.3.19-dev1\] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At](#3319-dev1---2026-09-10---sms-probe-v6-the-routers-own-web-client-is-read-rather-than-guessed-at)
+  - [\[3.3.19-dev2\] - 2026-09-10 - SMS Probe V6: Two Rungs Corrected to Record What They Measured](#3319-dev2---2026-09-10---sms-probe-v6-two-rungs-corrected-to-record-what-they-measured)
+  - [\[3.3.19-dev1\] - 2026-09-10 - SMS Probe V6: Parameter Names Read From the Router's Web Client](#3319-dev1---2026-09-10---sms-probe-v6-parameter-names-read-from-the-routers-web-client)
   - [\[3.3.18\] - 2026-09-10 - Release: SMS Probe v5 Diagnostic Write-Back Verification and Expanded Probe Token Space](#3318---2026-09-10---release-sms-probe-v5-diagnostic-write-back-verification-and-expanded-probe-token-space)
   - [\[3.3.18-dev1\] - 2026-09-10 - SMS Probe V5: Every Write Changes Something and Is Read Back](#3318-dev1---2026-09-10---sms-probe-v5-every-write-changes-something-and-is-read-back)
   - [\[3.3.17\] - 2026-09-10 - Release: Special SMS Probe v4, Multi-Axis Diagnostic Write Screening and Adaptive Session Probe](#3317---2026-09-10---release-special-sms-probe-v4-multi-axis-diagnostic-write-screening-and-adaptive-session-probe)
   - [\[3.3.17-dev7\] - 2026-09-10 - SMS Probe V4: The Carrier Is Found Before the Token Space Is Screened](#3317-dev7---2026-09-10---sms-probe-v4-the-carrier-is-found-before-the-token-space-is-screened)
-  - [\[3.3.17-dev6\] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept](#3317-dev6---2026-09-10---sms-probe-v4-the-axes-crossed-and-every-attempt-kept)
+  - [\[3.3.17-dev6\] - 2026-09-10 - SMS Probe V4: Screening Axes Combined; Every Attempt Recorded](#3317-dev6---2026-09-10---sms-probe-v4-screening-axes-combined-every-attempt-recorded)
   - [\[3.3.17-dev5\] - 2026-09-10 - SMS Probe V4: One Attempt Primitive; Transport Becomes an Axis and Is Adopted](#3317-dev5---2026-09-10---sms-probe-v4-one-attempt-primitive-transport-becomes-an-axis-and-is-adopted)
-  - [\[3.3.17-dev4\] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run](#3317-dev4---2026-09-10---sms-probe-v4-the-winning-login-is-adopted-for-the-rest-of-the-run)
-  - [\[3.3.17-dev3\] - 2026-09-09 - SMS Probe V4: The Five Rungs the Plan Named and the Build Missed](#3317-dev3---2026-09-09---sms-probe-v4-the-five-rungs-the-plan-named-and-the-build-missed)
+  - [\[3.3.17-dev4\] - 2026-09-10 - SMS Probe V4: The Successful Login Variant Is Adopted for the Rest of the Run](#3317-dev4---2026-09-10---sms-probe-v4-the-successful-login-variant-is-adopted-for-the-rest-of-the-run)
+  - [\[3.3.17-dev3\] - 2026-09-09 - SMS Probe V4: Five Missing Rungs Added](#3317-dev3---2026-09-09---sms-probe-v4-five-missing-rungs-added)
   - [\[3.3.17-dev1\] - 2026-09-09 - SMS Probe V4: Login Stage, Generated Token Space, Single-Use Token Measured](#3317-dev1---2026-09-09---sms-probe-v4-login-stage-generated-token-space-single-use-token-measured)
   - [\[3.3.16\] - 2026-09-08 - Release: Multi-Key Session Validation and SMS Probe V3 Token Formulas](#3316---2026-09-08---release-multi-key-session-validation-and-sms-probe-v3-token-formulas)
   - [\[3.3.16-dev3\] - 2026-09-08 - Probe Control Uses the Shipped Token Path; Candidates Take the Device's Digest](#3316-dev3---2026-09-08---probe-control-uses-the-shipped-token-path-candidates-take-the-devices-digest)
@@ -50,7 +63,7 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[3.3.12-dev2\] - 2026-09-06 - Diagnostics Check Re-Takes an Unfinished Pass; Shared CI tasks.json Sync](#3312-dev2---2026-09-06---diagnostics-check-re-takes-an-unfinished-pass-shared-ci-tasksjson-sync)
   - [\[3.3.12-dev1\] - 2026-09-06 - CI Bump PHACC, Update Shared CI tasks.json](#3312-dev1---2026-09-06---ci-bump-phacc-update-shared-ci-tasksjson)
   - [\[3.3.11\] - 2026-09-05 - Release: Timezone-Aware SMS Timestamps, Verified Multi-Bank SMS Deletion, and Diagnostics Data Usage Rates](#3311---2026-09-05---release-timezone-aware-sms-timestamps-verified-multi-bank-sms-deletion-and-diagnostics-data-usage-rates)
-  - [\[3.3.11-dev3\] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All](#3311-dev3---2026-09-05---sms-timestamps-carry-their-routers-offset-delete-all-means-all)
+  - [\[3.3.11-dev3\] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Covers Both SMS Banks](#3311-dev3---2026-09-05---sms-timestamps-carry-their-routers-offset-delete-all-covers-both-sms-banks)
   - [\[3.3.11-dev2\] - 2026-09-05 - Uptime in the Usage Section Corrected](#3311-dev2---2026-09-05---uptime-in-the-usage-section-corrected)
   - [\[3.3.11-dev1\] - 2026-09-05 - SMS Bank and Data Usage in the Diagnostics Download; Verified SMS Deletion](#3311-dev1---2026-09-05---sms-bank-and-data-usage-in-the-diagnostics-download-verified-sms-deletion)
   - [\[3.3.10\] - 2026-09-05 - Release: Reset Entities Action, Per-Model Defaults, Transition History, and MC888 Expansion](#3310---2026-09-05---release-reset-entities-action-per-model-defaults-transition-history-and-mc888-expansion)
@@ -281,6 +294,633 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.3.25] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience
+
+### Summary
+
+- **Web-Client Driven Write Contracts**: Router write commands and security token derivations now dynamically parse configuration scripts served directly by the router's web interface, automatically adapting token formulas, password hashing, and model-specific parameter names across different firmware revisions.
+- **Dynamic Device Profile & Discovery**: Replaced static probing lists with dynamic client-side bundle discovery, reading only parameter names referenced by router firmware to expand mined diagnostics without unwanted probing requests.
+- **Adaptive Session Lifetime & Pre-Write Check**: Session renewal now learns device-specific session lifetimes from observed expirations while validating session state directly against firmware login flags before executing write operations.
+- **Write and Polling Concurrency**: Serialized background polling and interactive write commands to prevent session collisions on single-session router firmware.
+
+### Added
+
+- **Dynamic Device Profile Discovery**: Automatically parses the router's web interface scripts on startup to discover device-specific write tokens, digest algorithms, and parameter field names without relying solely on static model heuristics (`device_profile.py`).
+- **Dynamic Session Lifetime Learning**: Measures observed router session durations to calculate adaptive preemptive reset thresholds per device, replacing static timers across varied hardware variants (`SESSION_AGE_LEARN_MIN_SAMPLES`).
+- **Write Path Concurrency Lock**: Added an async lock between coordinator polling batches and write commands to prevent simultaneous requests from causing session evictions on single-session routers.
+- **Diagnostic Source Asset Manifest**: Diagnostic downloads now include an asset manifest and script capture metadata to verify client script parsing and token derivations (`web_sources`).
+
+### Fixed
+
+- **Cross-Model Parameter Field Alignment**: Resolved command rejections on models using prefixed APN parameter names (such as `apn_pdp_type` on MC888 Pro models) by resolving payload fields directly from device scripts.
+- **Post-Restart Dead Session Recovery**: Ensured the first write operation following a Home Assistant restart successfully authenticates and proceeds even when starting from an expired session state.
+- **Pre-Write Session Key Validation**: Replaced inference from connection status readings with direct firmware session status verification (`loginfo`), eliminating false expiration detections on models where connection keys remain unpopulated.
+- **Diagnostic Parameter Mining Traversal**: Corrected script bundle discovery to follow client module loader references, ensuring diagnostic parameter mining surveys all available firmware endpoints.
+
+### Changed
+
+- **Decommissioned SMS Delete Probe**: Removed the manual SMS deletion diagnostic probe service (`sms_delete_probe.py`) following complete resolution of write token formulas and parameter mapping.
+- **Request Architecture Refactoring**: Streamlined internal HTTP request dispatching into discrete lifecycle stages (`_perform`, `_preempt_stale_session`, `_build_headers`, `_send`, `_dispose`) while preserving all retry and error mapping contracts.
+
+## [3.3.25-dev12] - 2026-09-15 - Comments and Docstrings Rewritten for Readability; the Write-Path Documents Catch Up
+
+### Summary
+
+No behaviour changes except one. `docs/project_complexity.md` flags six modules above 25% comment density, sixty contiguous comment blocks over eight lines, and three routines whose comments outnumber their code. The prose behind those flags was written in a conversational register: long subordinated sentences, em-dash asides, bold emphasis used often enough to emphasise nothing, and paragraphs narrating a debugging history where the rule and the measurement would do.
+
+Twelve blocks are rewritten. **Prose across the integration goes from 5,757 lines to 5,726**, and the line count is not the point. What changed is that no sentence now carries three clauses and an aside.
+
+**The reduction is small because the prose is fact-dense, not padded.** These blocks hold measurements, key names, firmware versions, changelog references and test names. Cutting words alone moves the `ZTERouterAPI.__init__` field notes from 107 lines to 102. An earlier proposal reached 57% on the same blocks by deleting facts: a measurement method, the counts behind `_UNAUTHENTICATED_KEYS`, the `canary` precedent, and in one case by converting a value the source explicitly calls plausible into one it claims was observed.
+
+### Changed
+
+- **Twelve comment blocks and docstrings rewritten.** `ZTERouterAPI.__init__` field notes, `SESSION_AGE_LEARN_MIN_SAMPLES`, `_CORE_PARAMS`/`_EXTENDED_PARAMS`, `_UNAUTHENTICATED_KEYS`, `DISCOVERY_METADATA_PUBLISHED`, `MODEL_OVERLAY`, `_async_update_data`, `note_write_refusal`, `_require_confirmed_session`, `_ensure_session`, `mine_candidate_names` and `set_apn_mode`.
+
+  Every fact is kept. Bold emphasis is gone from all twelve. Em-dash asides are their own sentences. `DISCOVERY_METADATA_PUBLISHED` came out the same length and reads differently throughout.
+
+- **A mechanical check, not a promise.** Each block's factual tokens — numbers, dates, backticked symbols, ALL_CAPS constants, file and test names, version and issue references — were extracted before the rewrite and diffed against it by script. A token present before and absent after is restored, not justified.
+
+  It earned its place on the first run by catching `last_activity` dropped from the `SESSION_AGE_LEARN_MIN_SAMPLES` rewrite. It also produced two false positives, both fixed in the checker rather than waved through: a token split across a re-wrapped line read as lost, and the double-backtick RST style in ``AD`` let the single-backtick pattern span two of them and treat a paragraph as one token. A check that is learned to be ignored is worse than none.
+
+### Fixed
+
+- **Five comments were describing something other than the code beneath them.** In `const.py`, four unrelated blocks had stacked with no code between them and all landed on `BATCH_URL_MAX_CHARS`: two of them belonged to `DISCOVERY_CANDIDATES` and `DISCOVERY_CHUNK_SIZE`, which were defined a hundred lines further down carrying no comment at all. In `ZTERouterAPI.__init__`, a comment describing probed `cmd` names sat on `self.is_multi`, whose field had been removed, and `session_check_stats`' note sat on `session_started`.
+
+  Nothing was deleted. Each block moved to what it describes. This also accounts for the two longest "contiguous comment blocks" the complexity report flags — 30 lines and 24 — neither of which was one block.
+
+- **A session-flag read that could not answer now records why.** `read_session_flag` caught everything and returned `SESSION_UNANSWERED` with the reason discarded, so a download reported `unanswered` with no way to tell a timeout from a refused read from an answer this code could not parse. It now records `TimeoutError`, `not a mapping` or `key absent`, published as `session_flag.unanswered_because` and cleared by a read that does answer.
+
+  Found by auditing the 26 `# noqa` and 7 `# pragma: no cover` suppressions. All 33 are justified: every broad catch sits on a path with a written must-not-fail contract, and 21 of the 24 `BLE001` sites record the error. Of the three that discard it, two return a boolean that is itself the answer. This was the third, and it sits on the mechanism phase 2.5 was built around.
+
+### Documentation
+
+Fourteen updates, each verified against the code rather than from memory.
+
+- **`docs/zte_how_to_access.md`, the `AD` token section.** The formula read `AD = H(H(firmware_version) + RD)`, omitting `cr_version`, while the same section stated the correct two-operand form twenty lines later. The digest table presented the model string as the selector; it has been the fallback since `[3.3.25-dev10]`, and the measurement showing a firmware flag cannot choose the digest is now recorded there. `ad_suffix`, the `ACCESSIBLE_ID_SUPPORT` gate and the exempt commands are documented, because a write may now carry no token at all. A stale `api.py:693` reference is removed.
+
+- **The `RD` paragraph was wrong and the conclusion it supported no longer exists.** It stated `RD` is a static per-device seed on the 2026-07-29 measurement, and concluded that `_request` can replay a write payload verbatim without the embedded `AD` going stale. The 2026-09-13 measurement contradicts the premise: two consecutive reads agree and a three-second pause changes nothing, but a write changes it, and a browser capture of three deletes in one session carries three different values. No recovery path re-sends a write in any case.
+
+- **The field-name difference is documented where it was found.** `APN_PROC_EX` gains the MC7010 and MC888 Pro spellings and the note that this integration sent the wrong ones until `[3.3.25-dev10]`. A new subsection records the measurement across both devices' scripts: 74 write commands against 170, **15 of the 67 they share carrying different field names**, all fifteen named.
+
+- **The login split is no longer model-string only.** `LOGIN` vs `LOGIN_MULTI_USER` records the profile's `carries_username`, and why only its negative direction is consumed.
+
+- **`docs/DEVELOPMENT.md`.** §2 listed every module except the two added this cycle; `device_profile.py` and `web_sources.py` are added. §6, the procedure for supporting a model nobody here owns, now starts at the download's `device_profile` section and says not to hand-write an alias map for a write command. §8's claim that `get_ad()` branches by model for the hash algorithm is corrected. §5 gains the pitfall behind it: a firmware flag must never choose the digest.
+
+- **`AGENTS.md`.** The `msg_id` example said the integration sends `msg_id=3`; it has sent the terminated form since `[3.3.22-dev2]`. The rule it teaches is unchanged and the example now names the two real causes of issue #56. The `api.py` easy-to-break list gains `ad_suffix`, `profile_field` and the digest, all three of which are silent when broken.
+
+### Notes
+
+- **`ZTERouterAPI.__init__` is still 102 comment lines over 57 field declarations, and short sentences will not fix that shape.** What would is moving the long rationales into the docstrings of the methods that own the behaviour — `login`, `read_session_flag`, `_record_delete` — leaving a line per field. Not done here, because re-grouping comments away from their fields is what left `self.is_multi` carrying a description of a deleted field until `[3.3.25-dev12]` moved it back.
+
+- **The wider population is untouched.** 45 prose units of 19 lines or more exist across the integration and twelve are rewritten. The rest were not flagged, but the register is the same in them.
+
+- 1,768 tests at 100% line and branch coverage.
+
+---
+
+## [3.3.25-dev11] - 2026-09-15 - Five Values the Profile Had Learned and Nothing Read
+
+### Summary
+
+A follow-up to `[3.3.25-dev10]`, found by a check rather than by a failure: every key the parser emits, is it read anywhere outside `device_profile.py` and `diagnostics.py`? Five were not. Each was parsed correctly, published in the download, and consumed by a constant sitting beside it.
+
+**The shape is predictable and worth naming.** The parser was written and validated against two real firmwares first, and the write path was wired to it command by command afterwards — so a learned value with no obvious consumer got as far as the download and stopped. It is also why the live checks did not catch any of them: the hardware check and the diagnostics check score what was *learned*, and learning was correct in all five cases.
+
+**None is a defect on either device this project can read.** All five resolve to the constant they replace on both the reference MC7010 and the MC888 Pro of issue #56. That was equally true of `APN_PROC_EX` until the parser read the Pro's script and found `apn_pdp_type`.
+
+### Fixed
+
+- **The two SMS commands ask the device how it spells its fields.** `DELETE_SMS` and `SEND_SMS` built `msg_id`, `Number`, `MessageBody`, `encode_type`, `ID` and `sms_time` as literals while the other five writers resolved theirs. Issue #56 is an SMS delete failure, so these are the two commands the reporter actually exercises, and they were the last two still asking a constant.
+
+- **The pre-write session check reads the flag the device nominates.** The profile learns `"ok" == loginfo` from the firmware's own client and the check read `SESSION_FLAG_KEY` and `SESSION_FLAG_OK`. On a firmware naming something else the constant reads an absent key, the answer is a blank, and the learned-support rule then correctly declines to apply the mechanism at all — a safe failure, and a silent one: the check would simply never work on that device and nothing would say why.
+
+  **Both halves come from the same expression or neither is used.** A key learned without its accepted value would be read and compared against the wrong literal, which is worse than not reading it. The raw value is still never stored, so the redaction of `loginfo` by name in `diagnostics.py` remains a second line rather than the only one.
+
+- **The salt is read under the name the token expression gives it.** `get_rd` asked `_TOKEN_READS["RD"]`, a hand-written alias tuple, while the profile had already read the name out of `({nv:"RD"}).RD` in the same expression the digest comes from. The learned name now leads those aliases rather than replacing them. It is de-duplicated, because the expression names the salt twice — once as the value asked for, once as the key read back — and a device naming something new must not be asked for it twice in one `cmd` list. **That defect was introduced writing this and caught by its own test.**
+
+- **A round count this derivation cannot build withdraws the digest.** `get_ad` hashes twice; a profile reporting anything else would otherwise have been derived with the learned digest over the wrong number of rounds, producing a well-formed token the router refuses without saying why. It now falls back to the model string and the download names the disagreement.
+
+  The parser's `rounds` field is documented for what it is: **the shape this parser recognises, not a count it measured.** It looks for one call over the operands and one over the result and the salt. A firmware doing three rounds would not be reported as three — it would fail to match the second round and yield no token site at all.
+
+- **A login form carrying no username takes the single-user command.** The profile reads that off the device's own builder; `login` decided it from `MC801` or `MC7010` appearing in the version string.
+
+  **Only the negative direction is consumed, and deliberately.** A form with no `username` field is positive evidence for `LOGIN` — it is what the MC888 Pro builds. A form that carries one is not evidence for `LOGIN_MULTI_USER`: the reference MC7010 carries a username and still uses `LOGIN`, so reading the flag symmetrically would move that device onto a form it does not accept.
+
+### Added
+
+- **Every write is asserted to take its token from `ad_suffix`** (item 35's "asserted, not assumed", which was assumed). The assertion is made over the source rather than over a list of methods: a writer is found by the payload it builds, so the ninth write command somebody adds is covered the moment it exists. `ad_suffix` is the single place that reads the firmware's gate flag and its exempt list, and a writer calling `get_ad` directly bypasses both — silently, because a router that ignores an unwanted `AD` accepts the write anyway.
+
+- **The model-string digest is its own function.** `_model_hash_func` is split out of `_ad_hash_func` so that every route to the fallback is visible as a route to the fallback. There are now three.
+
+### Changed
+
+- **A field resolved by what the device answered records that it was.** The live answer short-circuits the profile, so it was the one resolution path in the integration that recorded no decision at all — against principle 3, which is that the download says which path was taken.
+
+### Notes
+
+- **Two comments that documented behaviour that had moved.** `entity_defaults.py` cited `api._hash` as selecting SHA-256 on `MC888` or `MC889`; `_hash` has never branched on anything — it is unconditionally SHA-256, for the login password — and the model-string selection that did exist is now a fallback behind the device's own script. The precedent is withdrawn rather than updated: what justifies substring matching there is that an entity default is advisory and a user can override it.
+
+- **`select.py` now states its omission as precautionary, which is what item 103 required.** It read as evidence that every APN and bearer setter re-establishes the connection and that the router answers blank meanwhile. Neither half has been observed: the two writes issued on the reference MC7010 on 2026-09-14 were effectively no-ops — `apn_mode` auto to auto, and `net_select` `auto_select` to `4G_AND_5G`, which is Auto to Auto — so neither exercised a change that would take the connection down. Settling it needs a restricting bearer value or a real APN change.
+
+- 1,764 tests at 100% line and branch coverage.
+
+---
+
+## [3.3.25-dev10] - 2026-09-15 - The Router's Own Web Interface Supplies the Write Contract
+
+### Summary
+
+Phase 4 part 2, the device profile. Every ZTE goform router serves the web interface that drives it, and that interface names the things this integration has been deciding from a model string: which digest builds the `AD` token, which two readings it hashes, which commands carry no token at all, how the login form encodes a password, and what each write command's payload fields are called on that firmware.
+
+**What made this necessary rather than merely tidy.** `js/config/config.js` is effectively identical between the reference MC7010 and the MC888 Pro of issue #56 on every flag that could plausibly select a digest — both carry `PASSWORD_ENCODE:!0`, `WEB_ATTR_IF_SUPPORT_SHA256:2`, `ACCESSIBLE_ID_SUPPORT:!0`, `MAX_LOGIN_COUNT:5`, and both declare `DEVICE:"cpe/MF253V"` — yet one implements MD5 and the other SHA-256. Nothing a device reports distinguishes them except the function its own script names. The model string did distinguish them, by accident, for exactly as long as the two models it knows about are the only ones anyone runs.
+
+**Measured on both devices' captured sources.** The parser learns every fact it asks for on each, with nothing left unlearned: **49 ms and 6.6 kB on the MC7010, 86 ms and 13.6 kB on the Pro**. It reads 74 write commands on the first and 170 on the second, and **15 of the 67 they share carry different field names**. That last number is the one that settles the approach: a hand-written alias map would have had to anticipate fifteen differences between the only two devices anyone here can read, and there is one such map in the integration today.
+
+### Added
+
+- **A device profile, learned from the router's own scripts** (`device_profile.py`). Parsed from unauthenticated static assets, so it works before the first login; cached in the integration's `Store` against the firmware it was read under, and re-learned only when a poll reports a different `wa_inner_version`. Home Assistant startup reads the cached record and parses nothing.
+
+  **The parser matches shapes, not literals.** A minifier renames every local identifier, so the two devices' token expressions share no symbol except the parts that cannot be renamed: `rd0`, `rd1`, `goformId`, `rd_params0`. Matching on those and reading the function name *out of* the match is what lets one parser read two firmwares that have no identifier in common.
+
+- **A digest name table, because resolution by definition is not enough.** `cookWithRequest` on the Pro forwards one hop to `SHA256` in `js/util.js`, which resolves. `hex_md5` on the MC7010 is defined in **no returned source** — it lives under `js/lib/`, which the crawl fetches and deliberately excludes — so a parser that read only definitions would have learned nothing from the one device this project can put a write on.
+
+  A name maps to a digest **only where a real device's accepted token proves what it computes**. An unrecognised name is *unresolved*, which is a state and not a guess: inventing an entry would put a well-formed wrong token on the wire, and a wrong token is refused with nothing said about why.
+
+- **One place decides whether a write carries a token.** `ad_suffix` reads the firmware's own gate flag and its own exempt list — `LOGIN` and `SET_WEB_LANGUAGE` on both devices — so two writers of the same command cannot disagree. A command needing no token still passes the pre-write session check; those are different questions.
+
+- **The download publishes the profile, what it decided, and the gap.** Three parts: the profile in force, a fresh parse of the same download's crawl, and whether they agree — a cached profile describing a firmware that is gone is a fault nothing else in the file would show. Beside them, the learned digest set against the model-string heuristic it replaces, which is **the only place a disagreement between the two is visible**: both produce a well-formed token and the router refuses either one identically.
+
+### Fixed
+
+- **The APN setter's payload has never been one the MC888 Pro could accept.** That device's own builder names `apn_pdp_type`, `apn_pdp_select`, `apn_wan_dial` and `apn_wan_apn` where the MC7010 names them without the prefix, and this integration sends the MC7010's spellings. `DATA_LIMIT_SETTING` was corrected by hand in `[3.3.21-dev1]` after the same fault was found there; this is the same fault in the command next to it, found by reading rather than by a user reporting it.
+
+  Field names now resolve in three steps: the spelling a poll answered, then the spelling the device's own script uses, then the canonical name. The live answer still leads, because it is evidence about the device's current state; the script is what covers a field no poll has populated, which is the case a hand-written map cannot reach.
+
+- **`SET_CONNECTION_MODE` differs the same way** — `dial_roam_setting_option` against `roam_setting_option`. This integration does not send that command, and it is recorded because it is the second independent instance of the pattern.
+
+### Changed
+
+- **The login password is encoded the way the device's form encodes it.** Three branches exist in the script, selected by `WEB_ATTR_IF_SUPPORT_SHA256`. Both readable devices answer `2`, and the learned form is **asserted to produce the same bytes** as the constant that ships — so on every device this project can reach, the change is invisible. The value is the device answering `1` or `0`, where today's login is refused with `result=3` and the user is told their password is wrong.
+
+  A login is the one request that must not be experimented with: `MAX_LOGIN_COUNT` is five on both known devices and the lockout is minutes long. Every gap in the profile — an absent flag, an unresolved digest, a value the script does not name — routes back to the form that ships.
+
+- **The integration's own login budget is bounded by what the device tolerates.** `DISCOVERY_RELOGIN_LIMIT` is now capped at `MAX_LOGIN_COUNT - 1`, so a discovery pass on a device answering 2 or 3 cannot lock the account, and one attempt is always left for the person typing into the web interface. The item behind this asked for a hardcoded 5 to be replaced; there was no hardcoded 5 to replace, and this is what the flag is actually worth.
+
+- **Falling back is per fact, never wholesale.** The plan asked for the profile to fall back to today's constants as a unit. That is the wrong granularity: a firmware that hides one answer still supplies the rest, and discarding a learned digest because a field list failed to parse would throw away the fact that matters most. Each consumer falls back on its own and records which path it took.
+
+### Notes
+
+- **The session flag is now the one the device nominates.** No firmware has an opinion about which readings a third-party client should watch, so the witness keys remain selected from what the device populates. What every firmware does name is the flag its *own* client trusts, and both devices decide identically: `"ok" == loginfo`, read on its own. That is what the pre-write check has read since `[3.3.25-dev1]`, and it is now read from the script rather than written here.
+
+- **Nothing here runs on a write path.** 49 ms and 86 ms are the parse alone; end to end on the live MC7010, fetching the seventeen files and parsing them took **1.10 s**. A write that waited for that would be a write this integration could delay, and a firmware whose scripts cannot be parsed would be a write it could block. Learning happens in the background task after the first poll, and a router that will not serve its own scripts costs a widening rather than a working integration.
+
+- **The parser fixtures are written to the shape, not copied from the firmware.** The identifiers that survive minification are real and are the whole reason one parser reads two devices; everything a minifier renames is arbitrary in the fixture exactly as it is on the device. Both were validated against the real captures before being written.
+
+- **The two live checks grew with it.** Hardware check **24 of 24** (from 20), including four assertions that the learned profile matches what the reference MC7010 is independently known to do. Diagnostics check **59 of 59** (from 47), covering publication, the learned-versus-constant digest comparison, and the profile's stability across two runs.
+
+- **One pre-existing assertion was narrowed, because this work made it unstable.** The structural diff compared the pre-write session check's lifetime tallies between two passes. Those counts follow how many times the session lapsed, which follows how long a pass took — and the two passes no longer take the same time, because the first learns the profile and the second finds it cached. Measured across four passes: two then three on three of them, two then two on the fourth. The counts are excluded and what the checks *concluded* is asserted directly instead, which is the part a reader needs.
+
+- 1,744 tests at 100% line and branch coverage.
+
+---
+
+## [3.3.25-dev9] - 2026-09-15 - Discovery Reads What the Router References; Writes and Polls Take Turns
+
+### Summary
+
+Phase 4 part 1: the work that needs no device profile. Two defects that had been shipping quietly, four guarantees that were true without anything asserting them, and one new behaviour on the write path.
+
+The larger of the two defects is that discovery has never read what it was written to read. `_discover_bundles` matched `<script src=>` against `index.html`, and both devices this project can see load everything through a module loader and name only `data-main` — so it found nothing, every run, and mining fell back to a hardcoded list of twelve files. The crawl that moved into diagnostics in `[3.3.25-dev8]` already follows what a device actually references, so this deletes the broken traversal rather than repairing it.
+
+### Fixed
+
+- **Mining reads the files the router references, not a static list.** Measured on the reference MC7010, before and after: **841 names from 12 bundles, then 1,108 from 19** — 985 of them names this integration has never requested, against 718 before.
+
+  The crawl runs once per download and both consumers read it: the `web_sources` section and the discovery pass. Crawling twice would have fetched forty-five files a second time to read bodies already in hand.
+
+  The static list stays as the crawl's seed. A device whose index and loader name nothing would otherwise start from zero, which is exactly what four downloads from the MC888 Pro of issue #56 reported.
+
+- **The witness pool spans a whole poll, not its second half.** `_batch_get` replaced `_populated_keys` on every call and the coordinator polls core then extended, so the extended batch wiped the core one — measured 2026-09-14 against a live session, 60 keys after the core poll, 39 after the extended, and not one of the 60 surviving. Witness selection was drawn from a third of the intended pool and from different name families.
+
+  The core poll now says it begins a cycle and everything else adds to what it saw. It says so rather than being recognised by the list it passes: identity against `_CORE_PARAMS` would have held today and broken silently the first time somebody passed a copy.
+
+  **Re-rated while being fixed.** When this was written the witness classifier could block a write. It cannot now — `[3.3.25-dev1]` made it advisory and `[3.3.25-dev7]` made it incapable of raising — so what this repairs is the accuracy of a verdict in a download, not a refused write.
+
+### Added
+
+- **A write and a poll take turns over the one session this router grants.** A poll holds the lock for the length of its batch; a write waits three seconds and then goes ahead regardless. **Failing to acquire is not an error** — the worst case is an unserialised write, which is what every release before this one did, and a lock that can refuse is another way to block writes on routers nobody can test.
+
+  Only the two poll entry points take the lock. A write's read-back goes through `get_params`, which deliberately does not, because a lock held across both would have the write waiting on itself; `login` posts through the client session rather than through `_request`, so recovery inside a write cannot re-enter either. Both are asserted.
+
+  **A counter records how often a write gave up waiting**, because the collision this guards against is inferred rather than observed: what is measured is that this router grants the session to the newest login, not that a poll has ever been caught mid-flight. The counter is the evidence for whether the lock earns its place.
+
+- **Fifteen assertions for the write path** (`tests/test_write_path_guarantees.py`), covering four properties that held when they were checked and that nothing pinned:
+
+  - every alias map writes the spelling the device answered, parametrised over the map so a new entry is covered without being remembered;
+  - `;` in an id list and `+` in a number each survive exactly one encoding pass;
+  - no recovery path re-sends a write;
+  - and the three new properties of the lock above.
+
+### Changed
+
+- **Item 29 is dropped, and the plan records why.** It proposed deriving the token again with the single-operand form and sending a new request when the two-operand token is refused. There is no second form left to fall back to: `get_ad` computes `hash(version + cr_version)`, and a device that does not answer `cr_version` appends an empty string — so on that class of device the derivation already *is* the single-operand form, bit for bit, and the retry would re-send a token identical to the one just refused. On a device that does answer it, the single-operand token is simply wrong.
+
+  It was written while the derivation was still suspect, and the standing evidence has since reproduced the reporter's accepted browser token arithmetically. Dropping it also removes a hazard it carried: for `SEND_SMS`, "send a new request" is a second send, and this API cannot say whether the first was delivered.
+
+### Notes
+
+- **A question about the reporter's firmware is answered from files already in hand.** Whether a newer Pro-chassis firmware encodes write payload fields — inferred by a user of another project on a different chassis — is answered no. His `js/service.js` builds every write as a plain object and hands it to jQuery as `data: e`, which serialises with one pass of `encodeURIComponent` per value; across all seventeen captured files there is not one hand-written `encodeURIComponent`, `escape(` or `$.param`. It corroborates the single-encoding property asserted above.
+
+- **A `RuntimeWarning` that had been running for many releases is gone.** A test drove `_request` against a bare `MagicMock` session so the transport would fail after the preempt it was asserting. But `MagicMock` supplies `__aenter__`, so the request reached `r.headers.get(...)` and created a coroutine nobody awaited; the collector then reported it against whichever test was running at the time, which is why it appeared to belong to a different file. The transport now refuses at `session.request`, and the preempt is asserted as before.
+
+- **The test proposed to catch the class of fault behind `[3.3.25-dev7]` was spiked and abandoned**, and the property is recorded as a convention in `testing_when_writing.md` instead. The rule — an attribute assigned once outside `__init__` and never cleared — yields 41 candidates, 30 of them seeded across more than 200 test sites, and catches `_boot_time` and the drift accumulators as readily as the session flag.
+
+- 1,663 tests at 100% line and branch coverage. Hardware check 20 of 20.
+
+---
+
+## [3.3.25-dev8] - 2026-09-15 - The Probe Is Removed and Its Only Irreplaceable Part Moves Into Diagnostics
+
+### Summary
+
+The SMS delete probe was a service a person had to run, which deleted real messages, carried sixty-five rungs, and was visible in Developer Tools to anyone who scrolled far enough. It answered the questions that made the write path work, and it has now been asked all of them.
+
+The one capability worth keeping is the crawl of the files the router serves to its own web interface: it writes nothing, deletes nothing, and answers what no other instrument can — which command spellings a firmware uses, where it assigns `RD`, which digest it implements. That moves into the diagnostics download. The probe is deleted around it, and archived as text.
+
+This release also hardens the hardware check, which is the instrument the rest of this work is judged by, and settles three guards the audit flagged.
+
+### Added
+
+- **The diagnostics download reports the files the router serves.** One record per file — path, status, byte count and digest — on every download. The sources themselves only when something needs explaining, which today means a write has failed and tomorrow will also mean a device profile that could not be learned.
+
+  **The split is measured, not guessed.** On the reference MC7010: the manifest costs 5.4 kB and the sources 237 kB, against 49 kB for an entire ordinary download. Attaching a quarter of a megabyte of firmware JavaScript to every report, to answer a question almost nobody has, is how a diagnostics file gets left unread.
+
+- **What this firmware compares a write's `result` against, published and never acted on.** The vocabulary is read from the device's own scripts and reported by operator.
+
+  **It is deliberately not used to widen the accept set**, and the measurement is why. On the reference MC7010 the literals tested against `result` are `success`, `manual_success`, `manual_fail`, `fail` and the digits `0`, `1`, `3`, `4` and `5`. A rule that accepted every literal a device compares against `result` would accept `fail` — a refused write reported to the user as carried out, which is the fault this project exists to remove, installed on purpose. Minified script gives no dependable way to tell which branch a literal belongs to.
+
+  What it does answer is the question the reference hardware cannot: whether another device's firmware speaks a vocabulary this one does not. That arrives with the next download from such a device, and a widening can then be argued from its scripts.
+
+- **Nineteen assertions covering every response shape this router actually produces** (`tests/test_response_shapes.py`), enumerated on hardware rather than imagined. One shape the plan listed turned out not to exist and is asserted as such: a key absent from its own response does not occur, because this firmware echoes every name it is asked and answers an unimplemented one as an empty string.
+
+  1,671 tests at full line and branch coverage did not catch a fault that blocked every write on the reference device, because every one of them handed the classifier a payload somebody had imagined. That is what this file is for.
+
+### Changed
+
+- **The hardware check reports a check it could not run, instead of dropping it.** A restore assertion inside `contextlib.suppress(Exception)` *together with its report* does not fail when the restore breaks — it removes the check: the total falls by one, the run still says `PASSED`, and the router is left in the changed state.
+
+  **Four sites, where the plan recorded one.** Two of them were found while fixing it, and one was added by `[3.3.25-dev7]`, which copied the pattern from an existing site because nothing forbade it. Suppression is right for "cleanup must not mask the original error" and wrong for "cleanup must not report", and the two are now separated everywhere.
+
+- **Each section declares the checks it must produce, and a missing one fails the run.** By label, not by count: several sections record a different number of results depending on what the device was doing, so a fixed number either fails on a condition that is not a defect or is set so low it proves nothing.
+
+  It found a gap on its first run, in the rung `[3.3.25-dev7]` added: when the state under test is unreachable, that rung accounted for its precondition but not for the check it was skipping.
+
+- **A session taken by another client is told from a failed assertion.** This router grants the session to the newest login and drops the previous one silently, so a production Home Assistant polling every three minutes interrupts any step spanning that window — and the interruption used to arrive as an assertion failure against the device.
+
+  **It does not ask `loginfo`.** Measured 2026-09-14 with the machine quiet and nothing holding a session, that key still answered `ok`; what it is scoped to is not established, and a detector built on it would report confidently and wrongly. The evidence used instead is the one the logout check already relies on: the credential we hold is refused while a fresh login succeeds.
+
+- **A run interrupted mid-way reports `INCOMPLETE` and exits 2**, matching `diag_check.py`, where an unreachable router already means "could not run" rather than "failed". A run that never judged the device should not send a reader looking for a defect in the integration.
+
+- **`_require_contract` accepts any spelling of a concept it knows.** It tested one literal name, so an MC888 Pro reporting `ppp_status` where this device reports `wan_connect_status` was a connection error. This widens what the check accepts, deliberately: it sits behind the expiry detection rather than in front of it.
+
+- **The two names a write's token is derived from resolve across spellings**, as every other read in this integration already did. **The alias resolves the read and never the operand** — the token hashes the *value*, and a spelling that silently became the operand would produce a well-formed wrong token, which is a write refused with nothing to say why.
+
+- **Every re-login that follows a check which deliberately ends a session now retries.** This firmware refuses the first login for a few seconds after a `LOGOUT`, answering `{"result":"failure"}` — indistinguishable from a wrong password at the call site.
+
+- **The `RD` assertion is narrowed to what it measures.** It read the value twice in succession and recorded the comparison as stability "within a session", which is broader: a write does change `RD`, so a write landing between the two reads would fail a check that is not testing writes.
+
+### Fixed
+
+- **`keys_absent` says what it means, or says it cannot.** The set was computed against the payload's own keys whenever no explicit list was passed, and `k not in payload` for `k` drawn from `payload` is never true — so a field reading "the router omitted nothing" was reporting that nothing had been compared, on every device. It is now `None` where it cannot be computed: `[]` and `None` look alike in a download and mean opposite things.
+
+  Diagnostics only. The line runs after the verdict is decided and fills `last_rejection`; no classification reads it.
+
+### Removed
+
+- **`sms_delete_probe.py`, and everything that reached it** — the service registration, its schema and handler, the icon entry, the persisted `delete_probe` record and its restore, the API attribute, and the module's own tests.
+
+  It produced most of what is known about the reporter's device in issue #56: the token derivation and both its operands, that `DATA_LIMIT_SETTING` replaces the whole six-field form rather than the fields named, and which command spellings that firmware uses. The faults it was written to find are fixed.
+
+  **Archived at `docs/diag_tools/sms_delete_probe.txt`**, verbatim, with a header saying what it was and that it does not run as it stands. It is not easy to reconstruct and the question "how did the probe check this?" will outlive the file.
+
+### Notes
+
+- **The probe removal cut four attributes out of `ZTERouterAPI.__init__` instead of one.** `write_failures`, `session_started` and `session_lifetimes` went with `delete_probe`. Caught by mypy rather than by the suite, and the constructor was rebuilt from the committed text with only the intended line removed. A pattern-matched removal across a file this size needs its result diffed, not its script trusted — the same lesson as the `[3.3.25-dev6]` restructure, which is now the second time it has been recorded.
+
+- **Item 73 was closed without being built, and without touching the router.** It proposed taking `Referer` from the page an action belongs to. The device's web interface is a hash-routed single-page application — `js/router.js` reads and writes `window.location.hash`, uses no `pushState`, and loads each screen as a template into the existing document — so the document URL never leaves `index.html` and every request a browser makes already carries what this integration sends. The premise was false; verified from the captured sources.
+
+- **The sweep proposed to catch this class of test fault was spiked and abandoned.** The rule — an attribute assigned once outside `__init__` and never cleared — yields 41 candidates, 30 of them seeded across more than 200 test sites, and catches `_boot_time` and the drift accumulators as readily as the session flag. What distinguishes the attribute that caused the fault is semantic, and narrowing the rule needs a curated list, which is a list of the mistakes somebody already thought of. The property is recorded as a convention in `testing_when_writing.md` instead.
+
+- **The download is 54 kB where the probe made it 321 kB**, measured on the reference MC7010 before and after. Hardware check 20 of 20, diagnostics check 47 of 47, 1,646 tests at 100% line and branch coverage.
+
+---
+
+## [3.3.25-dev7] - 2026-09-14 - The First Write After a Restart No Longer Goes Out on a Dead Session
+
+### Summary
+
+After a restart, the first write on an expired session was refused and the integration did nothing to recover it. The session flag answered blank; the code could not tell that from "this device does not implement the key", so it declined to act, sent the write anyway, and reported the router as having rejected a command it never had a chance to accept. It then healed itself, because any later write made while the session was alive taught the flag.
+
+This release gives the flag a third state and buys the answer with one login.
+
+### Fixed
+
+- **An unproven session flag is resolved rather than ignored.** Support is now held per firmware as one of three states — unknown, supported, absent — where it was previously "seen `ok`" or "not seen". A blank answer on an unknown flag triggers exactly one login, and a second read decides: `ok` means the key exists and the session had died, still blank means the device does not implement it, and a login that *failed* concludes nothing at all and leaves the question open for the next write.
+
+  The last branch is not optional. Recording absence on the evidence of a login that did not happen would turn a momentary connectivity problem into a belief that persists for the life of the firmware. The negative is held per firmware for the same reason the positive already was.
+
+  Cost: one extra login the first time a write meets a dead session, and for a device without the key, one login once per firmware and none after.
+
+  **This is a regression from `[3.3.25-dev2]`.** The hardening added there stopped a login storm on devices that lack the key, and its cost was that the one case where recovery matters most — first write, dead session, nothing learned — was the case it declined to act on.
+
+- **The send block asks what the device can do, not what a field is labelled.** `_require_confirmed_session` blocked when `last_session_check` carried the flag's source with any verdict but `confirmed`. A device without the key was spared only because the path it takes happens to record a different source string — a literal in another method, with nothing asserting the connection. The change above records the unproven path under the flag's own source, so left alone that form would have blocked every SMS send on every device that does not implement `loginfo`, which is issue #56's shape in a new place. The block now requires that the device is known to implement the key and that the router actually denied the session.
+
+### Added
+
+- **A record of the last check that did not confirm, which a later confirmation cannot erase.** `last_session_check` is replaced by every check, and producing a diagnostics download reads the router — so read after the event it describes the collection rather than the failure. On 2026-09-14 that produced a wrong conclusion about this very fault, from a download taken after several successful writes. The companion field is never overwritten, carries the time it was recorded, and publishes as history in the same way `last_rejection_seen` does.
+
+- **The download says which of the three states the flag is in**, and the firmware each belief was decided on. `supported: false` alone could not be read: it was the answer both for a device that does not implement the key and for one no write had yet reached, which is the same conflation as the fault.
+
+- **A hardware-check rung that writes on a dead session with an object that has learned nothing** (section `[0]`). Two objects: one opens a session and ends it, and a second, which has never derived a token and so has never asked about the flag, is handed the dead credential and made to write with it. Section 3's dead-session rung cannot reach this state — the flag is learned at one site and cleared at none, so its own earlier sections teach it before the session is killed.
+
+- **Eight tests**, the first of them the state the fault needs: a first write, flag unknown, session dead, asserting that a login happens and the write proceeds. Then that a device which never answers `ok` logs in exactly once, that a failed login leaves the question open, that a send is not blocked on a device without the key and is blocked when a supported flag denies the session, and that the historical record survives a later confirmation.
+
+### Notes
+
+- **The test that would have caught this already existed, and one line of its setup disarmed it.** `test_an_unpolled_device_has_no_witness_and_is_not_blocked` constructs exactly the failing state and then seeds the flag as known before exercising it. Removing that line fails the test on the assertion that a login occurred. Both versions are now kept, because both states are real. It is the third time in two days that a test reported what its author expected rather than what the code does — see the notes to `[3.3.25-dev5]` and `[3.3.25-dev6]`.
+
+- **The new tests and the new rung were written against the unfixed code and run before the fix existed.** Four tests failed, and the rung failed on hardware with the reported error. A test that has never been observed to fail is not evidence, and that is what this fault demonstrated.
+
+- **Three measurements about `loginfo`, made while building the rung, that constrain what any instrument can do.**
+
+  Ending a session with `LOGOUT` teaches the flag on the way out: the command carries an `AD` token, the token is derived through `get_ad`, and `get_ad` runs the pre-write check. The first draft of the rung passed while reporting that its own precondition had failed.
+
+  What the flag is scoped to is not established. With a session taken by a second client, `loginfo` still answered `ok` while the victim's writes were refused; and with this machine quiet — the devcontainer stopped, no browser session open, nothing here holding a session — eighteen cookieless reads over seven minutes all answered `ok`. Three explanations were advanced and each was contradicted by the next set of readings, so none is recorded here. The rung prints a note and declines to score where the state is unreachable, since a device behaviour is not a defect in this integration.
+
+  Waiting for a session to expire is honest and too slow to be an instrument: the session was still alive after four minutes.
+
+- **The temporary write-path logging added on 2026-09-14 is removed.** It captured the dead session inside the refused write, which is what identified the fault, and it shipped nothing.
+
+---
+
+## [3.3.25-dev6] - 2026-09-14 - A Request Becomes a Value; `_request` Splits Into Six Routines
+
+### Summary
+
+`_request` was 146 lines at a McCabe complexity of 21, over the project's action point of 20, and it is the routine every read and every write passes through. It resisted decomposition for one reason: three sites re-issue the original request after a re-login, and while a request was nine loose parameters, no section could be lifted out without carrying that argument list with it.
+
+This release gives a request a name. No behaviour changes.
+
+### Changed
+
+- **A request is now a value.** `_Call` carries the method, path, params, body, caller headers, timeout, `authenticated`, `requested`, `classify` and the two recursion flags. `_request` keeps its signature byte-identical — every caller and every test sees what it always did — and its body is now the construction of a `_Call` and a delegation.
+
+  **Assembled headers are deliberately not on it.** `Referer` and the session `Cookie` are built per attempt from live state, because a replay follows a re-login and must carry the *new* cookie. Caching them would replay the dead one: an authentication failure presenting as a router fault, on the recovery path, where it is least visible.
+
+- **`_request` splits into six routines**, none above a complexity of 8 where the original was 21:
+
+  | Routine | Responsibility |
+  | :-- | :-- |
+  | `_request` | Build the call, delegate. The unchanged public signature |
+  | `_perform` | Preempt, log in if needed, send, dispose |
+  | `_preempt_stale_session` | The two clocks — learned session age, then the idle constant |
+  | `_build_headers` | Referer, caller headers, cookie. Per attempt, never cached |
+  | `_send` | One attempt: transport, HTML marker, JSON parse, exception mapping |
+  | `_dispose` | Login page, unparsable body, rejected session — replay or raise |
+
+  `api.py` reports a maximum complexity of 19 after this, in a routine belonging to the probe that is being removed.
+
+- **The three replay sites become one.** `_replay` unpacks the call and forwards it to `_replay_after_login`, which still goes through `_request` rather than `_perform` — deliberately, because a replay has always been observable as a second call to `_request` and 58 test files patch that method. Routing it past them would change what all of them see, silently, and coverage would not show it because the lines still run.
+
+  This is also the structural answer to `[3.3.25-dev5]`. A forwarding list that someone has to keep complete will eventually fall out of step; a call carries all of its fields or none of them.
+
+### Added
+
+- **Two tests, bringing the recovery-path contract to seven** (`tests/test_request_replay_contract.py`), all written against the previous code so that this release could be verified as a move:
+  - `last_activity` is stamped exactly once per logical request, including when a replay occurs — the property that forbids `_perform` from stamping after disposal returns;
+  - and the classification setting survives a replay, from `[3.3.25-dev5]`.
+
+### Notes
+
+- **Two faults were introduced during the split and caught before release, both worth recording.**
+
+  `_read_html_marker` was written as a coroutine and called without `await`, so HTML detection silently did nothing. Seven contract tests passed anyway — none of them covers that path — and it surfaced as a runtime warning rather than a failure.
+
+  The first draft of `_dispose` also dropped the `last_response_preview` assignment at two sites, changed the text of an error message, and lost three log lines. Five tests caught it. A restructure is only a move if the moved code is compared against the original line by line, and a diff against `HEAD` is what found these, not the suite.
+
+- **Verified against the reference MC7010, before and after.** The hardware check passes 19 of 19 and the diagnostics check 40 of 40, matching the baseline taken ahead of the change. Phase 1 and phase 2 were hardware-verified first precisely so that a failure here would be attributable to this release alone.
+
+---
+
+## [3.3.25-dev5] - 2026-09-14 - Replayed Requests Keep the Caller's Classification Setting
+
+### Summary
+
+`_replay_after_login` forwarded eight of the ten parameters `_request` takes and dropped `classify`, so a request replayed after a re-login was scored for session expiry even when its caller had explicitly declined that. Found by reading the replay while planning the `_request` restructure, not by any test. Fixed on its own, ahead of that restructure, so the two changes stay separable.
+
+### Fixed
+
+- **A replayed request keeps the classification setting its caller asked for.** `classify=False` means the caller does not want a session verdict drawn from the response. The replay reverted to the default, so the response could be scored as an expired session — a verdict the caller had declined.
+
+  `requested` was forwarded and `classify` was not, and `_session_rejected` reads the two together. That is what marks it an oversight rather than a decision.
+
+  **One caller was exposed.** `_probe_chunk` passes `classify=False` with retry enabled; every other `classify=False` site also sets `_retry=False` and so can never reach a replay. There, a chunk whose replay was classified could raise inside a broad `except`, be logged, and return `None` — the chunk dropped, and discovery reporting fewer names than the device answers. Silent, and presenting as a device that answers less than it does. Discovery probes more than 400 names in chunks, so this is also a candidate explanation for a mined-name yield that varies between runs on the same device.
+
+  The parameter is added to `_replay_after_login` and forwarded at all three sites that call it.
+
+### Added
+
+- **Six tests pinning the contract of the recovery path** (`tests/test_request_replay_contract.py`), written against the code as it stands because the `_request` restructure that follows must be a move and not a rewrite. Each pins a property that was previously emergent — true because of where the code sits rather than because anything asserted it:
+
+  - a router that always answers as though the session were dead is retried exactly once, with exactly one login and exactly two requests put;
+  - a `ZTEAuthError` raised inside the transport block propagates unwrapped, rather than being remapped into a transport failure by the broad clause below it;
+  - a genuine transport failure is still reported as one;
+  - the replay carries the cookie from the **new** session, which is what forbids a future call object from caching assembled headers;
+  - a write is never replayed, because a resent `SEND_SMS` can deliver the message twice with nothing in the response to say that it did;
+  - and the classification setting survives the replay, which is the defect above.
+
+### Notes
+
+- **Writing those tests exposed a fixture fault worth recording.** A bare `ZTERouterAPI` carries `last_activity` at the epoch, so the idle preempt fires before the first request and logs in. Three of the six tests were measuring that rather than the recovery path until `last_activity` was set. The behaviour is correct; the tests were not. It is the third time in two days that a test reported what its author expected rather than what the code does.
+
+- **Hardware baseline taken before this release**, against the reference MC7010: 19 of 19 checks pass, including the dead-session rung that `[3.3.25-dev2]` repaired. Phase 1 and phase 2 are hardware-verified as of this point, which is what makes the `_request` restructure attributable if it goes wrong.
+
+---
+
+## [3.3.25-dev4] - 2026-09-14 - Session Lifetime Learned Per Device; Diagnostics Keep the Evidence They Collect
+
+### Summary
+
+The instruments defeated themselves. A rejection was wiped by the file meant to carry it, the pre-write reset watched a clock the device does not use, and nothing recorded whether the check that runs before every write has ever been worth its round trip. This release is diagnostics and measurement only — no write path changes.
+
+### Fixed
+
+- **A rejection survives the reads that build a diagnostics download.** `_record_verdict` clears `last_rejection` on any live verdict, so a stale rejection cannot be presented as a current fault — a property worth keeping. But producing a download reads the router, those reads return live verdicts, and the field designed to explain a rejection was wiped by the act of collecting it. Three attempts to capture the MC7010 fault of 2026-09-14 returned `null` for exactly that reason.
+
+  A companion field now records the most recent rejection and is never cleared. Both publish, the second labelled as history: it says a rejection happened at some point, not that one is happening now.
+
+- **The preemptive session reset keys on session age, not idle time.** `SESSION_IDLE_RESET_SECONDS` is compared against `last_activity` — time since the last authenticated request. The boundary it guards is not idle-based: a session polled every ten seconds ended at the same point as one left untouched. And idle time between polls is roughly the scan interval, which is configurable from 30 to 3600 seconds, so at any interval at or below 150 seconds the reset never fired at all and every poll past the boundary paid a failed request, a login and a retry.
+
+  The age clock is its own field, set by `login` and by nothing else. Reusing `last_activity` would have kept idle semantics under an age-shaped name.
+
+### Changed
+
+- **The reset threshold is learned from this device's own expiries, and the constant remains the starting point.** There is no lifetime to hardcode: four runs on the reference MC7010 inside one hour ended at 15 s, 85 s and 110–120 s, and one could not complete; `[3.3.0-rc2]` separately measured "at or below 200 s". A device holding sessions for 300 s and one expiring at 20 s are both plausible and neither is served by a number written here.
+
+  Until three expiries agree, the idle reset runs unchanged — `[3.3.0-rc2]` declined relying on reactive detection alone, because it costs three round trips instead of two and removes the second line of defence behind the `[3.3.0-dev12]` blank-payload fault, and nothing here weakens that. After that, the threshold is the shortest of the last ten observed lifetimes less a fifth, never below thirty seconds.
+
+  Shortest rather than typical, because being early costs one login and being late costs three round trips. Recent rather than all-time, because a session can end for reasons other than time: this router grants the session to the newest login, so one visit to its web page would otherwise set a permanent floor. Anything below the floor is discarded rather than classified, because the router does not report why a session ended.
+
+- **One check in ten deliberately skips the preempt.** An active preempt destroys every session before it expires, so no further expiry is observed and the learned value can never rise — it would be locked to whatever was first seen, including across a firmware change that lengthened the boundary. The cost is one failed request per sample.
+
+- **The learned lifetimes persist across restarts**, in the existing observation store, keyed per device. Written on the poll path rather than at the moment a session ends, because a login must not wait on disk. An absent or unreadable record resolves to "nothing learned" and routes back to the idle constant; the store is advisory, never the anchor.
+
+### Added
+
+- **The download says whether this device implements the session flag at all.** `supported`, the firmware it was confirmed on, and the check's own counters. The raw `loginfo` value is deliberately absent — it is denied by name in the sanitiser and is not what anyone needs.
+
+  This settles the one question the reference hardware cannot answer. The MC888 Pro has never been observed with a dead session, because a download is only produced when the integration is working, and its downloads redact the value — so whether it implements the key is unknown, and that decides whether the pre-write check applies there at all. The field answers it from that device's next download, with no write and nothing asked of its owner.
+
+- **Counters for whether the pre-write check ever earns its round trip.** How many checks ran, how many were not confirmed, how many were confirmed by the login that followed, and how many were not. It costs a read before every write; whether that ever saves anything is a question about the device, and this is how it gets answered after a few weeks in the field rather than by argument. If it never fires, it can be removed on evidence.
+
+- **Sixteen tests for the learned reset** — that nothing is learned until enough expiries agree, that the limit is the shortest recent sample less a margin, that it never falls below the floor, that a short session is not learned from, that only the recent window is kept, that the clock is age and not idle, that one check in ten lets a session reach its real boundary, that nothing learned means the age check never fires, and the end-to-end preempt through `_request` with the idle clock deliberately fresh.
+
+- **Tests for the persisted record**, including that a corrupt entry reads as nothing learned, and that the poll path writes only when the list has changed.
+
+### Notes
+
+- **No write path changed in this release.** Detection, recovery and the block list are as `[3.3.25-dev3]` left them, and the limitation recorded there stands: a browser login took the session, the check detected it within a second, logged in again and confirmed, and the write was still refused. Contention no pre-write check can prevent. What phase 2 adds is that the next occurrence explains itself in a download.
+
+---
+
+## [3.3.25-dev3] - 2026-09-14 - Learned Session Flag No Longer Discarded When the Firmware Cache Fills
+
+### Summary
+
+`[3.3.25-dev2]` made the session flag authoritative only after the device had answered `ok` once. That proof was being discarded on the same write that established it, so the mechanism fired once per API object and never again. Found by attacking the rule deliberately, not by a test.
+
+### Fixed
+
+- **The proof that a device implements `loginfo` is no longer thrown away when the firmware cache fills.** `_session_flag_seen_for` records the firmware the flag was last seen to work on, and `_session_flag_supported` compares it against `_cr_version_cache`. But `_ensure_session` runs *ahead* of the token derivation that populates that cache, so the first `ok` on a fresh object is always recorded with no version beside it — an empty string. `get_ad` then filled the cache moments later, on the same write, and the empty string no longer matched, so every later check answered `unanswered` and fell back to the older classifier.
+
+  The version is now adopted the first time it becomes known. The window between recording the proof and learning the version is a single write, inside which the firmware cannot have changed.
+
+  Demonstrated before the fix: a fresh object answered `confirmed`, the cache was then set as `get_ad` sets it, and the next identical read answered `unanswered`.
+
+### Added
+
+- **A test that drives the exact sequence** — fresh object with no firmware cache, one `ok`, then the cache filling as the token path fills it, then a blank — and asserts the blank is read as a denial. The existing tests all either set the cache first or never set it, which is why none of them saw this.
+
+### Notes
+
+- **This was found by attacking the rule, and it is the second time in two days that the useful signal came from something other than the test suite.** `[3.3.25-dev2]` records the first: 1,695 passing tests against a belief the hardware disproved. A rule is not verified by tests written from the same assumption that produced it.
+
+---
+
+## [3.3.25-dev2] - 2026-09-14 - A Blank Session Flag Is Not a Denial Until the Key Is Known to Exist
+
+### Summary
+
+`[3.3.25-dev1]` treated any non-`ok` answer from `loginfo` as a denial. The hardware check's dead-session rung then failed, and two separate faults sat behind that one failure: the rule could not tell a dead session from a device that does not implement the key, and the check's own simulation had stopped modelling a real session loss. This release corrects both, and clears the remaining validation failures.
+
+### Fixed
+
+- **A blank `loginfo` is read as `unanswered`, not as a denial, until the device has proved the key exists.** This API echoes a name it does not implement as an empty string, so a device without `loginfo` and a device whose session has gone answer identically. Reading that as a denial would have put every write on such a device behind a login it does not need, and would have blocked `SEND_SMS` on it outright — issue #56's shape in a new place, on the hardware that reported it.
+
+  The flag becomes authoritative only after that device has answered `ok` once, at a moment the session provably worked. The proof is held per firmware and discarded when `wa_inner_version` changes, for the same reason `cr_version` is: an upgrade may withdraw a key, and a stale belief would turn a meaningless blank into a denial.
+
+- **`scripts/hardware_check.py` ends the session instead of corrupting the cookie.** `_kill_session` replaced the `stok` with a bogus value, on the stated reasoning that doing so is indistinguishable from an eviction "as far as every request is concerned". That held while the only evidence read was ordinary parameter values, which blank either way. It is false now: with a bogus `stok` the router still answers `loginfo: ok`, because the client's address genuinely does hold a session and only the credential presented is wrong. The simulation produced a state the device cannot be in, the pre-write check correctly reported the session healthy, and the write was then refused. It now logs out.
+
+- **`scripts/diag_check.py` reports an unreachable router instead of ending on a traceback.** The reference device stops answering intermittently under repeated requests, with an empty error message; the script exited with no banner and an exit code indistinguishable from a failed assertion, so a caller reading the transcript could not tell a device that went away from a check that found something. Reaching the router is a precondition, not a check, and losing it now returns exit code 2.
+
+- **A test asserted a measured duration as an exact value.** `test_api_delete_all_success` pinned `verify_elapsed_ms` and `after_ms` to `0`, which failed whenever the machine was busy enough for the first verification pass to take a millisecond. Both are now asserted as bounds; the behaviour under test — that the re-list came back clean on the first pass and the settle window was never used — is carried by `verify_settled` and the empty `remaining`.
+
+- **Two tests asserted nothing.** The classifiability check raised `AssertionError` directly rather than asserting, and the send-block parametrisation relied on the absence of an exception. Both now state their expectation.
+
+### Changed
+
+- **Reading the device's witnesses alongside the flag was implemented and withdrawn the same day.** It resolved the blank-versus-unsupported ambiguity in one round trip, and it put the key selection this mechanism exists to remove back into the deciding path. On a device answering neither the flag nor its witnesses — the MC888 Pro's shape, where `wan_connect_status` is blank at all times — every write would have taken a login it did not need and `SEND_SMS` would have been blocked outright. The flag read asks for one key and nothing else.
+
+- **The suppression allow-list gained the `diag_check.py` top-level guard**, with its reason: reaching the device is a precondition of every check in that script, and narrowing the handler to known transport types would let an unexpected one end the run with no banner — the reporting fault the handler exists to remove.
+
+### Added
+
+- **Four tests for the learned-support rule**: that a blank flag is `unanswered` until the device has answered `ok`; that it becomes a denial afterwards; that the proof does not survive a firmware change; and that the read asks for one key with no witnesses travelling alongside it.
+
+### Notes
+
+- **1,695 unit tests passed against the fault the hardware check found.** The mocks returned what the author believed the device would return, so they confirmed the belief rather than testing it. `[3.3.2-rc5]` recorded the same lesson in the same words: mocks cannot falsify a belief about the device.
+
+- **Detection is not recovery, and this release does not change that.** Measured on an MC7010 twice: a browser login took the session, the check detected it within a second, logged in again and confirmed, and the write was still refused. The likely cause is the browser re-taking the session between the re-login and the request — contention no pre-write check can prevent. `[3.3.2-rc5]` recorded the same observation without establishing a mechanism, and it is still not established.
+
+- **`loginfo` was measured against a real session takeover**, from a browser on a different machine, twice: it flipped from `ok` to blank within one second, alongside the authenticated readings. A forged `stok` is not a test of this and was wrongly cited as one in `[3.3.25-dev1]`.
+
+## [3.3.25-dev1] - 2026-09-14 - The Pre-Write Session Check Asks the Router Instead of Guessing
+
+### Summary
+
+The check that runs before every write inferred session state from ordinary readings — signal, APN, connection status — and refused the write when it read them as blank. Those readings vary by model, by firmware and by whether the router is connected, so the same false positive has now been corrected three times: `[3.3.16]` after `wan_connect_status` proved permanently blank on an MC888 Pro, `[3.3.21-dev]` after `ppp_status` and `model_name` failed the same way, and now, after the reference MC7010 refused its own SMS deletions on a session seconds old.
+
+This release asks the router's own session flag instead, and removes the refusal.
+
+### Fixed
+
+- **The pre-write check reads `loginfo`, the router's own session flag.** The device's `js/service.js` decides the same way — it issues `cmd=loginfo` and sets `isLoggedIn` on `case "ok"` — and the four `"ok"` literals in that file all compare against `loginfo`, none against `result`. Confirmed on an MC7010 on 2026-09-14 against a login from a browser on another machine: the flag flipped from `ok` to blank within one second of the session being taken, twice.
+
+- **The check can no longer fail a write.** `_ensure_session` contains no `raise` and never did — it raised through `_request`, one call away, which is why an AST sweep for `raise` sites could not see it and why five test files referenced the function without one asserting this. Its job is to trigger a re-login before the write, not to decide whether the write may be sent; the blocking was inherited from `_request`'s error contract rather than designed.
+
+  Reproduced on hardware, on a healthy router carrying traffic: witnesses `['5g_rsrp', 'APN_config1', '5g_sinr']` with `imei` populated alongside returned `expired` on a session seconds old, while `['network_type', 'signalbar', 'imei']` returned `live` against the same session at the same moment.
+
+- **A blank flag is not read as a denial until the device has proved the key exists.** This API echoes a name it does not implement as an empty string, so a device without `loginfo` and a device whose session has gone answer identically. The flag is treated as authoritative only after that device has answered `ok` once, at a moment the session provably worked; until then a blank is `unanswered` and the older classifier decides, recording a verdict and blocking nothing. The proof is held per firmware and discarded when `wa_inner_version` changes, for the same reason `cr_version` is.
+
+  No key list, no model heuristic and no companion key enters this decision. Which names a device populates is the judgement that has been wrong three times, and a mechanism that needs it is the mechanism being replaced.
+
+- **`note_write_refusal` carried the identical defect and is fixed with it.** It ran the same witness selection after a refusal and raised `ZTEAuthError` on an `expired` verdict, so a witness pool the device answers empty turned a genuine command refusal into "the session is gone". Only a direct denial from the router raises now; a witness verdict is recorded and returned.
+
+- **A reboot is confirmed by the router going away, not by its answer.** Measured on an MC7010 on 2026-09-14: one `REBOOT_DEVICE` returned `{"result":"failure"}` on a session seconds old and did nothing, and an identically built request minutes later returned `{"result":"success"}` and rebooted the device — `system_uptime` fell from 96036 to 84. The response has disagreed with what the device did in both directions, so it is no longer trusted alone. The write is sent, the router is polled twice a second for five seconds, and the reboot is reported when it stops answering.
+
+  A connection error on the write itself still propagates. Absence is only evidence once the command was answered: a router that was never reachable is not a router that rebooted, and reporting it as one is the silent success `[3.3.2-rc5]` refused to introduce.
+
+  A refused reboot is retried once, because reboot is the only write that is idempotent in effect — a second one against a router already rebooting changes nothing.
+
+### Changed
+
+- **SMS send is the only write blocked when the session cannot be confirmed**, and only on a device that has proved it implements the flag. Every other command is either verified after the fact — the two switches read back, SMS delete re-lists, a reboot is confirmed by absence — or harmless to repeat. A send has neither property: reporting it as unverified invites the user to send again, and this API gives no way to tell whether the first one went out. The error says the command was never issued.
+
+- **`last_session_check` records every outcome, not only the successful one.** It was assigned after the request returned, with the literal verdict `"live"`, so every other outcome raised before reaching the recorder — which is why the field was `null` in exactly the downloads that would have explained the fault. The record now names its source and carries the verdict whatever it is. The raw flag value never publishes: `loginfo` matches the diagnostics deny pattern, and only the comparison result is reported.
+
+- **`scripts/hardware_check.py` ends the session instead of corrupting the cookie.** `_kill_session` replaced the `stok` with a bogus value, on the stated reasoning that doing so is indistinguishable from an eviction "as far as every request is concerned". That held while the only evidence read was ordinary parameter values, which blank either way, and is false now: with a bogus `stok` the router still answers `loginfo: ok`, because this client's address genuinely does hold a session and only the credential presented is wrong. The simulation produced a state the device cannot be in, and the pre-write check correctly reported the session healthy. It now logs out.
+
+- **`scripts/diag_check.py` reports an unreachable router instead of ending on a traceback.** The reference device has been observed to stop answering mid-run, with an empty error message; the script then exited with no banner and an exit code indistinguishable from a failed assertion. Reaching the router is a precondition, not a check, and losing it now returns exit code 2.
+
+### Added
+
+- **An indirect-raise sweep, shipped as a test** (`tests/test_indirect_raise_sweep.py`). It enumerates every read through `_request` and asserts each is covered by one of the four protections that exist — `classify=False`, `authenticated=False`, `_retry=False` inside a `try`, or a `try` — and fails on a new one that is none of them. A write's own `POST` is excluded: a failed write is supposed to reach its caller. The sweep flags the previous `_ensure_session` implementation.
+
+  A second assertion in the same file: the check must not manufacture its own classifiability. `_is_classifiable` answers yes whenever an unauthenticated key is present, and the old check appended one deliberately — satisfying the guard by construction while defeating its intent.
+
+- **Tests that pin the property the mechanism was missing.** That the check never raises, across four answer shapes and a failed read; that a failed re-login still lets the write proceed; that a confirmed flag makes exactly one request and skips the witness path; and that the flag read is never classified — a device without the key answers `{"loginfo": ""}`, which `_request` scores as an expiry, re-logs in and replays, and the caller would then log in again: two or more logins per write against `MAX_LOGIN_COUNT` and a 300-second lockout.
+
+- **Tests for the learned-support rule**: that a blank flag is `unanswered` until the device has answered `ok`; that it becomes a denial afterwards; that the proof does not survive a firmware change; and that the read asks for one key with no witnesses travelling alongside it.
+
+- **A witness test that drives `_populated_keys` through a real poll sequence.** Sixteen tests set it directly and none derived it, so the replace-versus-accumulate behaviour never executed under test. Measured on hardware: 60 keys after the core poll, 39 after the extended poll, and none of the 60 core names surviving. The test asserts the behaviour as it stands, so the fix — which is not in this release — has to account for it rather than pass by accident.
+
+### Corrected before release — claims this entry made earlier the same day
+
+- **`loginfo` alone was not enough, and the hardware check found it, not the tests.** The first implementation treated any non-`ok` answer as a denial. The dead-session rung of `scripts/hardware_check.py` then failed: the flag reported the session healthy and the write was refused. Two faults sat behind that one failure — the script's simulation was no longer faithful (above), and the rule had no way to tell a dead session from a device that does not implement the key. 1,695 unit tests passed throughout, because the mocks returned what the author believed the device would return. `[3.3.2-rc5]` recorded the same lesson: mocks cannot falsify a belief about the device.
+
+- **Reading the device's witnesses alongside the flag was tried and withdrawn.** It resolved the ambiguity in one round trip, and it put the key selection this mechanism exists to remove back into the deciding path. On a device that answers neither the flag nor its witnesses — the MC888 Pro's shape — every write would have taken a login it did not need and `SEND_SMS` would have been blocked outright. Replaced by the learned-support rule, which needs no key list at all.
+
+- **An earlier draft of this entry said one key and one comparison replace the witness machinery.** They do not. The witness classifier remains, as the fallback for any device that has not proved it implements the flag, and it records verdicts without blocking anything.
+
+### Notes
+
+- **`loginfo` on the MC888 Pro is answered but unproven.** It is present and populated in all sixteen reporter downloads from `[3.3.8]` to `[3.3.24]`, always a two-character token, never blank. The diagnostics sanitiser redacts the value by name, so the literal has not been seen on that device, and no download exists of that device with a dead session — a download is only produced when the integration is working. Two notes in this project describe the field as static there, which is consistent with `ok` on every working session but would also describe a field that never changes. The learned-support rule covers the gap without needing the answer.
+
+- **Recovery from a session taken by another client is not solved here.** Measured on an MC7010: a browser login took the session, the check detected it within a second, logged in again and confirmed, and the write was still refused. The likely cause is the browser re-taking the session between the re-login and the write — contention no pre-write check can remove. `[3.3.2-rc5]` recorded the same observation without a mechanism. Detection works; a write cannot be made reliable while another client is actively holding the router's page open.
+
+- **The best-effort carve-out in the dead-session sweep grew from five to six**, for `read_session_flag`. It answers `unanswered` rather than raising, because a pre-write check that cannot run must not decide anything.
+
 ## [3.3.24] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking
 
 ### Summary
@@ -407,7 +1047,7 @@ Two further faults were found while re-reading the captures against the code. `_
 
 - **A device that has not polled has no session-check key.** The previous fallback returned the seeded names, and on the MC888 Pro those reduce to `wan_connect_status`, which is blank at all times there. A blank key scores as an expiry, so a write attempted between a restart and the first completed poll was blocked exactly as in `[3.3.21]`. Where there is no evidence, no check is made and the router's answer decides.
 
-- **The guard does not depend on whether a replayed token is stale.** It was proposed during this release that re-login-and-replay had been measured ineffective because the resent body carried a spent nonce. That was withdrawn here on the grounds that `scripts/hardware_check.py` asserts `RD` is stable within a session — which overstated the assertion: it covers two consecutive _reads_. (Corrected in `[3.3.24-dev1]`: a write does change `RD`, measured 2026-09-13, and a browser capture of three deletes in one session carries three values. The trigger is not established, so whether a replayed body carries a spent nonce is open.) The guard rests on the duplicate-delivery hazard, which holds either way.
+- **The guard does not depend on whether a replayed token is stale.** It was proposed during this release that re-login-and-replay had been measured ineffective because the resent body carried a spent nonce. That was withdrawn here on the grounds that `scripts/hardware_check.py` asserts `RD` is stable within a session — which overstated the assertion: it covers two consecutive *reads*. (Corrected in `[3.3.24-dev1]`: a write does change `RD`, measured 2026-09-13, and a browser capture of three deletes in one session carries three values. The trigger is not established, so whether a replayed body carries a spent nonce is open.) The guard rests on the duplicate-delivery hazard, which holds either way.
 
 ### Changed
 
@@ -720,7 +1360,7 @@ The run is also split. The write ladder consumes most of a fifteen-minute budget
 - **Caller-Supplied Form Read-Back Verification**: Fixed state toggle read-back comparisons when using caller-supplied custom forms in diagnostic tests, ensuring accurate write confirmation.
 - **Dynamic Command Parameter Extraction**: Parameters missing from default polling payloads are queried directly from the device rather than omitted during browser-aligned write tests.
 
-## [3.3.19-dev2] - 2026-09-10 - SMS Probe V6: Two Rungs That Could Not Report What They Measured
+## [3.3.19-dev2] - 2026-09-10 - SMS Probe V6: Two Rungs Corrected to Record What They Measured
 
 ### Summary
 
@@ -739,7 +1379,7 @@ The first MC7010 rehearsal of Probe v6 read the router's web client exactly as i
 - 1,586 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 - On the reference MC7010, `23c` sent the browser's exact delete form — `msg_id=130;` with `notCallback` — and the re-listing confirms that message gone.
 
-## [3.3.19-dev1] - 2026-09-10 - SMS Probe V6: The Router's Own Web Client Is Read Rather Than Guessed At
+## [3.3.19-dev1] - 2026-09-10 - SMS Probe V6: Parameter Names Read From the Router's Web Client
 
 ### Summary
 
@@ -876,7 +1516,7 @@ A live run of the previous entry on the reference MC7010 showed every screened a
 - 1,563 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 - Two tests added: that the carrier is settled before the first screened rule, and that a screened rule carries the header the carrier established. The second is the one that would have caught this.
 
-## [3.3.17-dev6] - 2026-09-10 - SMS Probe V4: The Axes Crossed, and Every Attempt Kept
+## [3.3.17-dev6] - 2026-09-10 - SMS Probe V4: Screening Axes Combined; Every Attempt Recorded
 
 ### Summary
 
@@ -884,7 +1524,7 @@ The last entry left three known limitations: the axes were only ever varied one 
 
 ### Added
 
-- **The axes are crossed, where a session can be established to cross them under.** Every rung until now varied one axis and held the others at their shipped value, so a fault needing a particular login _and_ a particular carrier — or a particular login and a particular derivation — would pass through all of them unseen. The new pass re-establishes each login that produced a session and runs the seven carriers and the six cited derivations under it. Bounded deliberately: the full product is twelve logins by seven carriers by a hundred and fifty rules and cannot run, while these reuse sessions already established rather than spending fresh login attempts against the lockout.
+- **The axes are crossed, where a session can be established to cross them under.** Every rung until now varied one axis and held the others at their shipped value, so a fault needing a particular login *and* a particular carrier — or a particular login and a particular derivation — would pass through all of them unseen. The new pass re-establishes each login that produced a session and runs the seven carriers and the six cited derivations under it. Bounded deliberately: the full product is twelve logins by seven carriers by a hundred and fifty rules and cannot run, while these reuse sessions already established rather than spending fresh login attempts against the lockout.
 
 - **`L10_get_query`, a login sent as a query string.** `nicjac/python-zte-mc801a` logs in by `GET` against this same endpoint. It is the only login form in either reference implementation this integration has never sent.
 
@@ -892,7 +1532,7 @@ The last entry left three known limitations: the axes were only ever varied one 
 
 ### Changed
 
-- **Every screened attempt is kept.** The pass recorded 150 attempts and put one in the download, collapsing the rest to the word `refused`. A token refused _differently_ from its neighbours — another `result` string, another status, a much slower answer — was invisible, on the part of the run most likely to hold the finding.
+- **Every screened attempt is kept.** The pass recorded 150 attempts and put one in the download, collapsing the rest to the word `refused`. A token refused *differently* from its neighbours — another `result` string, another status, a much slower answer — was invisible, on the part of the run most likely to hold the finding.
 
 - **Every attempt records what it carried**: method, whether it went as a query string, the command, the field names, `notCallback`, the header names, the cookie names, and the token's length and case. The token itself is never published; its length and case identify the digest, which is all a reader needs. Without this, a variant that silently failed to carry its override could not be told apart from one the router refused.
 
@@ -940,7 +1580,7 @@ Two audits of this release found the same defect in two places: a value discover
 
 - 1,553 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
-## [3.3.17-dev4] - 2026-09-10 - SMS Probe V4: The Winning Login Is Adopted for the Rest of the Run
+## [3.3.17-dev4] - 2026-09-10 - SMS Probe V4: The Successful Login Variant Is Adopted for the Rest of the Run
 
 ### Summary
 
@@ -962,7 +1602,7 @@ A second audit found the login stage recording which variant unlocked the device
 
 - 1,546 tests, 100% line and branch coverage on `api.py` and `sms_delete_probe.py`. Ruff, ruff format and mypy `--strict` clean.
 
-## [3.3.17-dev3] - 2026-09-09 - SMS Probe V4: The Five Rungs the Plan Named and the Build Missed
+## [3.3.17-dev3] - 2026-09-09 - SMS Probe V4: Five Missing Rungs Added
 
 ### Summary
 
@@ -1055,7 +1695,7 @@ The third MC888 Pro run wrote nothing in sixty probes, and established that the 
 
 ### Added
 
-- **Temporary SMS Delete Probe Formula Evaluation**: Added automated evaluation of twelve candidate security token derivation variants to `zte_router_5g.sms_delete_probe`, testing combinations of firmware version parameters and random nonces against harmless settings writes to isolate firmware-specific token requirements. _(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)_
+- **Temporary SMS Delete Probe Formula Evaluation**: Added automated evaluation of twelve candidate security token derivation variants to `zte_router_5g.sms_delete_probe`, testing combinations of firmware version parameters and random nonces against harmless settings writes to isolate firmware-specific token requirements. *(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)*
 - **Post-Login Key Inventory Probe**: Added diagnostic inventory capture (`1g_login_baseline`) recording populated key counts following login to assist with model-agnostic validation.
 - **Project Complexity & Health Scorecard**: Added `docs/project_complexity.md` documenting structural complexity metrics, unmasked cyclomatic complexity, routine lengths, module dimensions, and standards compliance.
 
@@ -1073,7 +1713,7 @@ The first hardware run of the v3 probe, against the reference MC7010, returned n
 
 ### Changed
 
-- **The alternate digest is one deliberate candidate rather than an accident.** `l_md5_wa_cr_lower` became `l_other_digest_wa_cr_lower`: it takes whichever digest this device does _not_ use. `RD` is 64 characters on the MC888 Pro, so "the firmware uses the other hash" is a thin hypothesis — worth one candidate and not worth twelve.
+- **The alternate digest is one deliberate candidate rather than an accident.** `l_md5_wa_cr_lower` became `l_other_digest_wa_cr_lower`: it takes whichever digest this device does *not* use. `RD` is 64 characters on the MC888 Pro, so "the firmware uses the other hash" is a thin hypothesis — worth one candidate and not worth twelve.
 
 ### Measured
 
@@ -1139,7 +1779,7 @@ The reporter's probe run established two stacked faults. The session check that 
 
 ### Added
 
-- **Temporary SMS Delete Probe Step Isolation**: Added five non-writing diagnostic steps to `zte_router_5g.sms_delete_probe` (individual session checks, firmware queries, RD reads, and token derivation) to determine precisely where router authentication fails. _(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)_
+- **Temporary SMS Delete Probe Step Isolation**: Added five non-writing diagnostic steps to `zte_router_5g.sms_delete_probe` (individual session checks, firmware queries, RD reads, and token derivation) to determine precisely where router authentication fails. *(Note: This temporary action is diagnostic scaffolding for issue troubleshooting and will be removed in the next release.)*
 - **Non-Destructive Token Probing**: Evaluates six distinct token generation strategies against harmless data volume settings, requiring three consecutive successes before attempting message deletion.
 - **Probe Execution Timeout**: Added a four-minute safety timeout on the full probe run, preserving all findings collected up to that point.
 
@@ -1184,7 +1824,7 @@ The reporter's probe run deleted nothing, and showed why: every rung that derive
 
 ### Added
 
-- **Temporary SMS Deletion Diagnostic Action**: Added `zte_router_5g.sms_delete_probe`, a temporary diagnostic service action that runs 13 isolated API deletion variants to characterize router deletion behavior while protecting message privacy. _(Note: This temporary action is added for issue troubleshooting and will be removed in the next release.)_
+- **Temporary SMS Deletion Diagnostic Action**: Added `zte_router_5g.sms_delete_probe`, a temporary diagnostic service action that runs 13 isolated API deletion variants to characterize router deletion behavior while protecting message privacy. *(Note: This temporary action is added for issue troubleshooting and will be removed in the next release.)*
 - **Detailed SMS Write Failure Tracking**: Failed SMS deletion attempts now record sanitized status codes, storage selectors, router response bodies, and timing in `sms.write_failures` within diagnostic downloads, preserved across Home Assistant restarts.
 - **Pre- and Post-Probe Message Counters**: Diagnostic probe reporting captures router message counters before and after probing to detect discrepancies between total counts and message listings.
 
@@ -1435,7 +2075,7 @@ The shared entity verification tool reported three faults against a healthy inst
 - **Deletion Verification Across All Routes**: All SMS deletion operations (`delete_all_sms`, single `delete_sms`, and the Delete All button) now verify that targeted message IDs were purged from the router, raising an error if messages survive.
 - **Date-Ordered `keep_last` Retention**: The `keep_last` option in `delete_all_sms` now retains the newest messages by date rather than ID across combined storage banks.
 
-## [3.3.11-dev3] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Means All
+## [3.3.11-dev3] - 2026-09-05 - SMS Timestamps Carry Their Router's Offset; Delete All Covers Both SMS Banks
 
 ### Summary
 
@@ -1869,7 +2509,7 @@ No fixed tolerance can separate that from a genuine missed reboot, because the d
 - **Per-installation drift measurement**: each pair of consecutive polls yields `1 − Δcounter / Δwall`, folded into two duration-weighted accumulators. The measurement makes no reference to the boot anchor, which is what keeps it honest — the anchor is what the rate is used to judge, so deriving one from the other would be circular. Intervals under 60 s are excluded, where the counter's whole-second resolution dominates, as are intervals with a negative advance, which are reboots rather than drift.
 - **Duration weighting, and a 30-day cap**: an interval spanning a long pause carries proportionally more evidence than one spanning ninety seconds, which falls out of two running sums with no buffer and no smoothing constant. On exceeding the cap both sums are scaled down together, preserving the ratio while letting newer evidence move it — so a firmware update that corrects the router's timer is followed rather than outvoted by history.
 - **The shortfall test** replaces the boot-instant comparison at startup: `expected = stored_counter + elapsed × (1 − rate)`, with a reboot declared when the live counter falls below that by more than `max(300 s, 2% of elapsed)`. The margin scales because the error it absorbs scales — rate-estimate error multiplied by the gap is 43 s over two hours and 3,000 s over a week. It is deliberately conservative: a real gap reboot produces a shortfall measured in hours, because the expected value still carries everything accumulated before the gap.
-- **A plausibility backstop on every poll**: the observed `counter / elapsed` ratio is compared against the ratio the measured rate predicts. The shortfall test runs only at startup and the running comparison only sees drops as they happen; neither watches for an anchor that has _become_ wrong, which is the failure mode this work exists to prevent. A reset counter against a long-standing anchor collapses the ratio toward zero and is caught on the next poll.
+- **A plausibility backstop on every poll**: the observed `counter / elapsed` ratio is compared against the ratio the measured rate predicts. The shortfall test runs only at startup and the running comparison only sees drops as they happen; neither watches for an anchor that has *become* wrong, which is the failure mode this work exists to prevent. A reset counter against a long-standing anchor collapses the ratio toward zero and is caught on the next poll.
 - **`PLAUSIBILITY_TOLERANCE` (5%)**: how far the observed `counter / elapsed` ratio may sit from the ratio the measured rate predicts. A noise budget, not a drift bound — estimation noise is roughly 0.1% per interval at the default poll rate — and independent of the device only because the anchor is drift-corrected.
 - **`MAX_DRIFT` (20%), used in exactly two places**: clamping the measured rate, and the cold-start check where nothing has been learned yet. It is not a drift estimate but an outer bound, set wide because a healthy anchor yields a ratio between 0.8 and 1.0 while a stale one yields nearly zero — an order of magnitude apart, so headroom costs nothing.
 - **The latched instant is corrected for the counter's drift**: `now - counter` is late by exactly the drift accumulated in that epoch, because the counter under-reports the wall time that has passed. A counter reading four days puts the instant four and a half hours late on this device. `boot_time` is now derived as `now - counter / (1 - rate)` once a rate is known, which makes a latch taken long after the event accurate — and, more importantly, keeps `PLAUSIBILITY_TOLERANCE` a noise budget rather than a second drift bound. Before a rate exists the uncorrected instant is used and self-corrects on the first poll after an hour of accumulation.
@@ -2112,7 +2752,7 @@ Updated README hardware compatibility and diagnostic download guidance, and stan
 
 ### Documentation
 
-- **`changelog_format.md` (v1.3.0)**: Added explicit _Lead with the visible outcome or feature impact, not the internal code detail_ guidance to §2, forbidding low-level code parameter names or abstract assertions alone without stating the user or system change.
+- **`changelog_format.md` (v1.3.0)**: Added explicit *Lead with the visible outcome or feature impact, not the internal code detail* guidance to §2, forbidding low-level code parameter names or abstract assertions alone without stating the user or system change.
 - **`changelog_upd_gen.md` (v1.4.2)**: Updated drafting instructions in Step 2 with outcome-first negative patterns.
 
 ## [3.3.9-dev5] - 2026-09-02 - Diagnostic Download Truncation Fixed; Fresh Login and Per-Chunk Canary Verification
@@ -2772,7 +3412,7 @@ A full message store no longer contributes to the Integration Health snapshot, a
 
 ### Fixed
 
-- **`auth_failed` translation shape**: `description` removed from `strings.json` and `translations/en.json`. `hassfest`'s issues schema (`script/hassfest/translations.py`) declares `vol.Exclusive("description", "fixable")` and `vol.Exclusive("fix_flow", "fixable")`, so an issue takes a `title` and then exactly one of the two. Both were supplied when the repair was added in `[3.3.4-dev7]`, producing _"two or more values in the same group of exclusion 'fixable'"_ against both files, locally and in CI. The prose moved to `fix_flow.step.confirm.description`, which is what the Fix dialog renders; a fixable issue's card carries only its title. No user-facing text was lost.
+- **`auth_failed` translation shape**: `description` removed from `strings.json` and `translations/en.json`. `hassfest`'s issues schema (`script/hassfest/translations.py`) declares `vol.Exclusive("description", "fixable")` and `vol.Exclusive("fix_flow", "fixable")`, so an issue takes a `title` and then exactly one of the two. Both were supplied when the repair was added in `[3.3.4-dev7]`, producing *"two or more values in the same group of exclusion 'fixable'"* against both files, locally and in CI. The prose moved to `fix_flow.step.confirm.description`, which is what the Fix dialog renders; a fixable issue's card carries only its title. No user-facing text was lost.
 
 - **Step-8 sweep 8a required the rejected shape**: `test_every_repair_key_has_a_title_and_a_description_everywhere` asserted a `title` **and** a `description` for every key in `REPAIR_NAMES`. A sweep demanding what `hassfest` forbids cannot pass alongside it, and this one passed while validation failed — the sweep was the check that should have found the defect first. Replaced by `test_every_repair_key_has_a_title_and_rendered_text_everywhere`, which asserts a `title`, then `has_description != has_fix_flow`, then a description on every `fix_flow` step, since a step without one renders an empty dialog.
 
@@ -2893,7 +3533,7 @@ No code. The user-facing and contributor documents that described the old three-
 - **`README.md` automation example** told the reader that `severity == 'warning'` "is the condition that also raises a Repair". That became false when drift left the panel. It now says the opposite, and why the attribute is the way to catch it.
 - **`README.md` entity table**: the SMS sub-device gained `SMS Storage Full`, 4 entities to 5.
 - **`docs/DEVELOPMENT.md`** still explained the wording of a repair title that no longer exists. The drift section now records that the repair was retired and why; the re-authentication section gains the `ConfirmRepairFlow` trap and the reason `auth_failed` is the one repair that does not auto-clear.
-- **`docs/value_min_max.md`**: the two bandwidth rows now name the second consequence of adding a `state_class`. The first draft of this edit replaced the existing reason instead of adding to it, which broke the cell — that table is the guard-band exemption list and its column asks _why the sensor is safe without a guard band_, which is answered by "it never reaches long-term statistics", not by anything about the unit selector. Both consequences are now stated, in that order.
+- **`docs/value_min_max.md`**: the two bandwidth rows now name the second consequence of adding a `state_class`. The first draft of this edit replaced the existing reason instead of adding to it, which broke the cell — that table is the guard-band exemption list and its column asks *why the sensor is safe without a guard band*, which is answered by "it never reaches long-term statistics", not by anything about the unit selector. Both consequences are now stated, in that order.
 
 ### Notes
 
@@ -2913,7 +3553,7 @@ Closes the last three cross-project chores on this project — **C-004**, **C-02
 
   The table started **empty**, as the chore requires — Huawei's entries describe Huawei's library and copying them would have meant nothing. Running the sweep found **14 `(file, directive)` pairs across 45 occurrences**, and each was given a written reason traced back to its site rather than to a guess. Every one already carried an inline justification; this makes the set unable to grow without someone writing another.
 
-  **Why ruff and mypy do not cover this**, which is worth restating: `RUF100` and `warn_unused_ignores` report a suppression that is _unnecessary_. They are silent on the dangerous case — one doing real work because the error is real. On `huawei_router_5g` both were clean while two calls to non-existent library methods sat behind `type: ignore`, so two controls had never worked.
+  **Why ruff and mypy do not cover this**, which is worth restating: `RUF100` and `warn_unused_ignores` report a suppression that is *unnecessary*. They are silent on the dangerous case — one doing real work because the error is real. On `huawei_router_5g` both were clean while two calls to non-existent library methods sat behind `type: ignore`, so two controls had never worked.
 
 - **The six health and repair contract sweeps** (chore **C-022** step 8), in `tests/test_health_contract.py`. They appear in no report: `Tests: Depth Check` cannot see them, and a project can pass every other check while having none. Written against sources this project has, not ported — `wifi_ssid_monitor` is the only one in the family with a `health.py` and a `CHECKS` tuple, so sweeping `CHECKS` is not portable.
 
@@ -2924,14 +3564,14 @@ Closes the last three cross-project chores on this project — **C-004**, **C-02
 
 ### Changed
 
-- **`test_every_repair_issue_has_translated_text` is retired**, superseded by 8a. It asserted only that each raised key was _present_ in the `issues` block — a key with a title and no description passes that and renders a card with an empty body. 8a checks title and description, in `strings.json` and in every `translations/*.json`. A note at the old site records what replaced it.
+- **`test_every_repair_issue_has_translated_text` is retired**, superseded by 8a. It asserted only that each raised key was *present* in the `issues` block — a key with a title and no description passes that and renders a card with an empty body. 8a checks title and description, in `strings.json` and in every `translations/*.json`. A note at the old site records what replaced it.
 - **`AGENTS.md`**: the sweep table gains a row for suppressions and its repair row now points at the step-8 sweeps.
 
 ### Notes
 
-- **8c was rewritten after a mutation exposed it.** The first version asserted that `__init__.py` _mentioned_ `REPAIR_NAMES` and `RETIRED_REPAIR_NAMES`; a mutation removing them from the removal loop still passed, because the import line matched. It now raises a card under every id the code knows about — current and retired, entry-scoped and bare — calls `async_remove_entry`, and asserts the registry empties. A source-reading assertion cannot be fooled the same way twice, but it could not have been trusted here.
+- **8c was rewritten after a mutation exposed it.** The first version asserted that `__init__.py` *mentioned* `REPAIR_NAMES` and `RETIRED_REPAIR_NAMES`; a mutation removing them from the removal loop still passed, because the import line matched. It now raises a card under every id the code knows about — current and retired, entry-scoped and bare — calls `async_remove_entry`, and asserts the registry empties. A source-reading assertion cannot be fooled the same way twice, but it could not have been trusted here.
 - **`masked_errors_check` (chore C-003) found nothing in any of the four classes**, and the report at `.notes/issues/masked_errors/masked_errors_20260826_0030.md` explains why that is evidence rather than absence of effort. The prompt allows a guard to narrow the audit only after it has been watched to fail; both narrowing guards were broken deliberately first. It ran **last** by design, after every source change had landed and with C-004 in place as the continuous guard that keeps its Class D result true.
-- **One accepted Class A exception is recorded, not fixed**: `switch.py:298` swallows a failed write read-back to debug, because a read that fails leaves the write _unverified_ rather than failed. The next poll surfaces the error normally, so nothing is masked beyond one cycle.
+- **One accepted Class A exception is recorded, not fixed**: `switch.py:298` swallows a failed write read-back to debug, because a read that fails leaves the write *unverified* rather than failed. The next poll surfaces the error normally, so nothing is masked beyond one cycle.
 
 ### Verification
 
@@ -2942,7 +3582,7 @@ Closes the last three cross-project chores on this project — **C-004**, **C-02
 
 Hardened write-entity tests to capture state at the exact moment of publishing (`async_write_ha_state`), and replaced synthetic mock patches in APN select tests with real router payload strings.
 
-Tests only; no shipped code changed. Closes chore **C-019** and the `x_project` issue _Tests that stub the publish_, and takes `Tests: Depth Check` from FAILED to **PASSED** — the third project in the family to reach it, after `wifi_ssid_monitor` and `huawei_router_5g`.
+Tests only; no shipped code changed. Closes chore **C-019** and the `x_project` issue *Tests that stub the publish*, and takes `Tests: Depth Check` from FAILED to **PASSED** — the third project in the family to reach it, after `wifi_ssid_monitor` and `huawei_router_5g`.
 
 ### Added
 
@@ -2958,7 +3598,7 @@ Tests only; no shipped code changed. Closes chore **C-019** and the `x_project` 
 ### Notes
 
 - **One seam is allow-listed, not fixed**, and the reason is written into the file: `_validate_credentials` is patched at 22 sites in `test_config_flow.py`, every one of them selecting which branch a flow takes — already-configured, reauth, each form error — where the branch is the subject of the test. The helper is now driven for real elsewhere, so this is not the case the check exists to catch.
-- **One assertion is deliberately weaker than it looks**, and says so at the site. `test_pause_polling_switch` runs against a `MagicMock` `hass`, so `async_update_entry` records the call without changing `entry.options` — and `is_on` reads those options, so it cannot move within that test whatever the code does. It asserts the publish count there, and the published _value_ is asserted against a real `hass` in `test_publish_moment.py`.
+- **One assertion is deliberately weaker than it looks**, and says so at the site. `test_pause_polling_switch` runs against a `MagicMock` `hass`, so `async_update_entry` records the call without changing `entry.options` — and `is_on` reads those options, so it cannot move within that test whatever the code does. It asserts the publish count there, and the published *value* is asserted against a real `hass` in `test_publish_moment.py`.
 
 ### Verification
 
@@ -2970,11 +3610,11 @@ Tests only; no shipped code changed. Closes chore **C-019** and the `x_project` 
 
 Added an HTTP transport mocking harness (`tests/transport.py` using `aioclient_mock`) to drive API resilience and error handling end-to-end through real HTTP request flows.
 
-Tests and test tooling only; no shipped code changed. Closes the re-opened chore **C-021** and adopts `x_project`'s _Fault injection in tests_ on this project. `Tests: Depth Check` reports **2 of 2 declared outcomes driven** in `REACH mode: coverage contexts`, and — unlike the reading that closed C-021 in error on 2026-08-24 — the outcomes are now genuinely produced by `api.py` running over a faked transport.
+Tests and test tooling only; no shipped code changed. Closes the re-opened chore **C-021** and adopts `x_project`'s *Fault injection in tests* on this project. `Tests: Depth Check` reports **2 of 2 declared outcomes driven** in `REACH mode: coverage contexts`, and — unlike the reading that closed C-021 in error on 2026-08-24 — the outcomes are now genuinely produced by `api.py` running over a faked transport.
 
 ### Added
 
-- **`tests/transport.py`** — the router faked at the HTTP layer over `aioclient_mock`, which `pytest-homeassistant-custom-component` already ships. No dependency added, and it is the seam Home Assistant's own suite uses. Before this the project had **zero** uses of it: every suite built on a `MagicMock` standing in for `ZTERouterAPI`, so anything the payload _derives_ was supplied by the fixture rather than computed.
+- **`tests/transport.py`** — the router faked at the HTTP layer over `aioclient_mock`, which `pytest-homeassistant-custom-component` already ships. No dependency added, and it is the seam Home Assistant's own suite uses. Before this the project had **zero** uses of it: every suite built on a `MagicMock` standing in for `ZTERouterAPI`, so anything the payload *derives* was supplied by the fixture rather than computed.
 - **`tests/test_transport_seam.py`** — 10 tests. Both declared outcomes (`conn_error`, `auth_failed`) driven end to end, plus the fault set: unreachable, timeout, credentials rejected, expired session, router still booting, missing router fields, and an HTML page served where JSON was expected.
 
 ### Notes on the fake, because three of them are not obvious
@@ -3004,7 +3644,7 @@ Worked as a single pass over the source so the tree is measured once rather than
 
 ### Changed
 
-- **The repair set is now the family's two keys** (`x_project` issue _Repair set alignment_, policy §2). `router_unreachable` becomes **`conn_error`**, keeping its text verbatim — the same condition under the canonical key. `firmware_contract_drift` and `sms_storage_full` leave the Repairs panel entirely. The rule they failed is _agency_: a schema change is not something a user can fix, and a full message store is an operational state to automate on. Both conditions are unchanged in substance — drift still publishes `severity: warning` and a `drift` finding on the Integration Health sensor, and storage still publishes a health finding.
+- **The repair set is now the family's two keys** (`x_project` issue *Repair set alignment*, policy §2). `router_unreachable` becomes **`conn_error`**, keeping its text verbatim — the same condition under the canonical key. `firmware_contract_drift` and `sms_storage_full` leave the Repairs panel entirely. The rule they failed is *agency*: a schema change is not something a user can fix, and a full message store is an operational state to automate on. Both conditions are unchanged in substance — drift still publishes `severity: warning` and a `drift` finding on the Integration Health sensor, and storage still publishes a health finding.
 - **`HEALTH_DRIFT_STRIKE_LIMIT = 3`** in `const.py`, applied at `coordinator.py:691` (chore **C-015**). `FETCH_STRIKE_LIMIT` was serving both fetch failures and missing router data. Both budgets are 3 today and the value did not move; what changed is that moving one no longer silently moves the other. Matches `huawei_router_5g`, `wifi_ssid_monitor` and `unifi_network_monitor`. The test patches the drift budget to 5 and asserts drift stays quiet at 4 — with one shared constant that assertion cannot pass, which is the only way to tell a real split from a renamed one.
 - **The two bandwidth sensors offer Home Assistant's unit selector** (chore **C-012**). `native_unit_of_measurement="MHz"` as a raw string renders correctly and is inert: with no `device_class` there is no conversion table, so no dropdown. Now `UnitOfFrequency.MEGAHERTZ` plus `SensorDeviceClass.FREQUENCY`. **Neither carries a `state_class`, and the test asserts that** — but for the guard-band exemption, not for the selector. See the correction in `[3.3.4-dev12]`: the belief that `state_class` suppresses the selector was checked against Home Assistant's source on 2026-08-26 and is false.
 - **The SMS sender's number no longer reaches the log** (chore **C-020**, §20). `coordinator.py` logged it at `INFO` on every new message. The number still reaches automations on the `zte_router_5g_sms_received` bus event, which is scoped to the entry; the log is not, and is copied into every diagnostics download and issue report. The line now carries the message id, which is enough to correlate a log entry with an event.
@@ -3238,7 +3878,7 @@ Group D, the last of the review sweep. Five small changes, none altering behavio
 
 ### Changed
 
-- **`api.py` — the swallow is now the explicit case, not the fallthrough.** `get_sms_capacity` and `get_rd` caught `Exception` and re-raised the two domain errors via an `isinstance` check inside the handler. Correct today, only because `ZTECredentialsError` subclasses `ZTEAuthError` — but the _default_ was to swallow, so any future domain exception outside that pair would silently have become `{}` or `""`. That is the masked-error class this project has already shipped once, where an expired session surfaced as "no SMS" rather than an error. `except (ZTEAuthError, ZTEConnectionError): raise` now comes first. Behavior is unchanged.
+- **`api.py` — the swallow is now the explicit case, not the fallthrough.** `get_sms_capacity` and `get_rd` caught `Exception` and re-raised the two domain errors via an `isinstance` check inside the handler. Correct today, only because `ZTECredentialsError` subclasses `ZTEAuthError` — but the *default* was to swallow, so any future domain exception outside that pair would silently have become `{}` or `""`. That is the masked-error class this project has already shipped once, where an expired session surfaced as "no SMS" rather than an error. `except (ZTEAuthError, ZTEConnectionError): raise` now comes first. Behavior is unchanged.
 
 - **`coordinator.py` — `async_force_refresh` clears its flag on the error path.** The one-shot flag is consumed at the top of `_async_update_data`, so if `async_request_refresh()` raised, no update ran, the flag survived, and the next **scheduled** poll fetched despite Pause Polling. Self-correcting after one cycle, but Section 13 asks that every path out clears it.
 
@@ -3256,7 +3896,7 @@ Group D, the last of the review sweep. Five small changes, none altering behavio
 
 The re-run over `helpers.py`, `diagnostics.py` and `sensor.py` after this sweep found **a gap in `[3.3.3-dev8]`'s own fix**, which is recorded rather than quietly absorbed:
 
-- **`test_total_sms_treats_an_empty_bank_as_zero_not_as_a_failure`** — `dev8` changed `_get_total_sms` so a bank reporting `""` counts as zero instead of blanking the sensor, and shipped **with no test for it**. The existing test covers a _missing_ key, which is a different case, so reverting the guard left the suite green. Mutation caught exactly what a coverage number could not: the line ran, and nothing checked what it did.
+- **`test_total_sms_treats_an_empty_bank_as_zero_not_as_a_failure`** — `dev8` changed `_get_total_sms` so a bank reporting `""` counts as zero instead of blanking the sensor, and shipped **with no test for it**. The existing test covers a *missing* key, which is a different case, so reverting the guard left the suite green. Mutation caught exactly what a coverage number could not: the line ran, and nothing checked what it did.
 - **`test_total_sms_counts_every_one_of_the_six_banks`** — every case populated a subset, so a mistyped key name simply contributed 0 and went unnoticed. Six distinct powers of two make the total name the missing bank.
 
 ### Notes
@@ -3279,11 +3919,11 @@ Group C, the write-path group. Four fixes, all about what the user is told after
 
   So the message went out and the user was told it had not. The obvious response is to send again, and `send_sms` reaches a third party and costs money. `dev_standards` Section 22 states the rule: unverified is not failed, and a write with real-world effect is never retried on an ambiguous outcome. The refresh now runs after the boundary through `_async_refresh_after_write()`, which logs a warning and leaves the values to the next poll.
 
-- **A partially completed multi-target send looked like a total failure.** Sending to three numbers and failing on the second left the first sent and the third unattempted, and the caller got one undifferentiated `send_sms_failed`. Retrying re-sent to whoever had already received it. The error now names them: _"Already sent to: 111. Retrying will send again to those recipients."_
+- **A partially completed multi-target send looked like a total failure.** Sending to three numbers and failing on the second left the first sent and the third unattempted, and the caller got one undifferentiated `send_sms_failed`. Retrying re-sent to whoever had already received it. The error now names them: *"Already sent to: 111. Retrying will send again to those recipients."*
 
   **The loop still stops at the first failure.** Continuing would send messages this call would not otherwise have sent, which is a behavior change on a charged path and not one to make while fixing an error message.
 
-- **An unreachable router was reported as _"Router rejected REBOOT_DEVICE"_.** `get_version` swallows its connection error and returns `None`; `get_ad` saw a falsy version and returned `""`; the write then went out carrying an empty token, and the router answered `{"result":"failure"}`. The user was told the device had refused a command it had never received. `get_ad` now raises `ZTEConnectionError` naming the real cause, which also satisfies the dead-session sweep's rule — do the thing, or raise, never report a success-shaped result having done nothing.
+- **An unreachable router was reported as *"Router rejected REBOOT_DEVICE"*.** `get_version` swallows its connection error and returns `None`; `get_ad` saw a falsy version and returned `""`; the write then went out carrying an empty token, and the router answered `{"result":"failure"}`. The user was told the device had refused a command it had never received. `get_ad` now raises `ZTEConnectionError` naming the real cause, which also satisfies the dead-session sweep's rule — do the thing, or raise, never report a success-shaped result having done nothing.
 
 - **`delete_all` with `keep_last` crashed on a record with no id.** `m["id"]` raised a bare `KeyError`, so the whole operation failed and nothing was deleted.
 
@@ -3321,7 +3961,7 @@ Group B. One fix, in the function that turns the router's hex into text.
 
 - **Any SMS containing an emoji decoded to broken text that could not be logged or recorded.** `_hex_decode` built its result with `chr()` per four hex digits. That is correct only inside the Basic Multilingual Plane; every emoji arrives as a UTF-16 **surrogate pair**, and taking each half separately yields two lone surrogates instead of one character.
 
-  The visible symptom is wrong text. The consequential one is that **a string holding lone surrogates cannot be encoded to UTF-8 at all** — so the recorder, a webhook or a file log handler raises `UnicodeEncodeError` on a message the user has no way to identify. The integration has always _sent_ emoji deliberately (`encode_type=UNICODE`, `SMS_MAX_CHARS_UNICODE`); it could not read one back.
+  The visible symptom is wrong text. The consequential one is that **a string holding lone surrogates cannot be encoded to UTF-8 at all** — so the recorder, a webhook or a file log handler raises `UnicodeEncodeError` on a message the user has no way to identify. The integration has always *sent* emoji deliberately (`encode_type=UNICODE`, `SMS_MAX_CHARS_UNICODE`); it could not read one back.
 
   It now decodes the whole string in one step, `bytes.fromhex(...).decode("utf-16-be")`.
 
@@ -3345,7 +3985,7 @@ Five tests in `tests/test_api.py`, with the fixture text encoded by `_utf16_hex(
 - Suite 857 passed (was 852). Line and branch coverage both 100%, 0 partials. `mypy --strict`, `ruff` and `ruff format` clean.
 - **Verified on hardware, 2026-08-07, both directions.**
 
-  **Inbound.** Four messages on an MC7010 (firmware V1.0.0B03), two containing emoji. Before the fix `get_sms_list` failed outright; after it, all four return correctly. The reported symptom was misleading: the action said _"Invalid JSON in response"_, which is Home Assistant's own serializer, not this integration and not the router. A raw-response probe found the router returning **valid JSON, valid UTF-8 and pure hex content** at every page size and in both memory stores — it was never at fault. `_hex_decode` produced lone surrogates, `get_sms_list` is a **response service**, and HA cannot serialize a payload containing them.
+  **Inbound.** Four messages on an MC7010 (firmware V1.0.0B03), two containing emoji. Before the fix `get_sms_list` failed outright; after it, all four return correctly. The reported symptom was misleading: the action said *"Invalid JSON in response"*, which is Home Assistant's own serializer, not this integration and not the router. A raw-response probe found the router returning **valid JSON, valid UTF-8 and pure hex content** at every page size and in both memory stores — it was never at fault. `_hex_decode` produced lone surrogates, `get_sms_list` is a **response service**, and HA cannot serialize a payload containing them.
 
   **Outbound.** An SMS containing an emoji was sent through `send_sms` and received correctly, so `encode_type` selection and the UTF-16BE hex body are confirmed against the device as well.
 
@@ -3404,7 +4044,7 @@ Twelve tests, targeting the survivors with real consequence. The `wifi_ssid_moni
 
 - **`cycle_bounds` at the exact reset instant.** `start > now` against `>=`: called precisely at midnight on the clear day, the `>=` form steps back a whole month and the projection reads about 30x low for one poll. Only an exact-boundary call separates them.
 - **`cycle_bounds` starts at midnight**, not at whatever time the poll happened to run.
-- **`project_cycle_usage` blend weight** is `elapsed / (elapsed + credibility_days)`. With a minus the denominator shrinks toward zero and then goes negative, so the prior's influence _grows_ as evidence accumulates and inverts past the credibility horizon — the opposite of what the blend is for. Asserted as a direction across two points; a single mid-cycle value cannot see it.
+- **`project_cycle_usage` blend weight** is `elapsed / (elapsed + credibility_days)`. With a minus the denominator shrinks toward zero and then goes negative, so the prior's influence *grows* as evidence accumulates and inverts past the credibility horizon — the opposite of what the blend is for. Asserted as a direction across two points; a single mid-cycle value cannot see it.
 - **`_clear_day` accepts 31.** The closed range against a half-open one. A reset day of 31 is both the most likely value to be configured and the most likely to be lost to an off-by-one, and it fails silently — the projection falls back to `cycle_source: calendar_assumed`, which looks like the router never reported a reset day.
 - **`_data_allowance_bytes` rejects a cap of 0 but keeps 1.** Zero means "no cap configured"; testing only a comfortably-large value cannot separate `<= 0` from `<= 1`.
 - **`_get_total_sms` treats a missing storage bank as zero.** Only reachable on hardware that omits a bank — every fixture populates all six, so the fallback had never run.
@@ -3553,19 +4193,19 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 - **Data usage tracking follows your router's Data Management settings.** If you enable **Data Management** in the router's web page, you can set a **Clear Date** matching your provider's billing day, a **Data Plan** cap, and a **limit reminder** percentage. Those three settings now appear in Home Assistant as **Reset Day**, **Allowance** and **Alert Threshold**. Data use automations can use your router plan numbers — the README has a worked example. Note the router counts in binary units, so a plan it calls "2TB" shows here as about 2199 GB: the same amount, counted the way Home Assistant counts. If you have not set Data Management on the router, the integration falls back to the calendar month.
   - Alongside these, a new **Projected Cycle Usage** sensor estimates how much data you will have used by the end of the cycle, based on your average daily consumption so far. It follows whichever cycle applies — the router's or the calendar month — and reads low on the first day before settling within 24 hours. Its attributes say how much of the figure rests on real usage rather than assumption: `confidence`, `basis`, `cycle_day`, `cycle_start` and `cycle_source`.
 
-- **Integration Health sensor**: a new problem binary sensor on the System device that turns on when the integration detects a problem — including the case where a fetch _succeeds_ but returns nothing usable (which can otherwise be a silent fail, unless you are watching the entities closely). Attributes carry the detail: `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, `last_good_update` and `consecutive_failures`.
+- **Integration Health sensor**: a new problem binary sensor on the System device that turns on when the integration detects a problem — including the case where a fetch *succeeds* but returns nothing usable (which can otherwise be a silent fail, unless you are watching the entities closely). Attributes carry the detail: `issues`, `severity`, `degraded_capabilities`, `drift`, `repairs`, `last_good_update` and `consecutive_failures`.
 
 - **Built-in explanations on entities**: most entities now carry an `about` attribute — a plain sentence saying what the value is. Click the entity, then **⋮ → Details**. Signal metrics also give typical ranges ("better than -80 excellent, -80 to -90 good…"). The note is never written to the history database, to avoid bloat.
 
 - **Router Unreachable repair**: after multiple consecutive failed fetches, a repair appears in the Repairs panel.
 
 - **Seven new entities**, all **disabled by default**: Carrier Aggregation Secondary Cells, WAN Operating Mode, WAN Fallback Mode, Router Timezone, APN Interface Version, Web Page Sleep and Web Page Auto-Wake.
-  - This is part of _completeness_. These are included because they are available, and may be of use to some, not necessarily because they contain critical info.
+  - This is part of *completeness*. These are included because they are available, and may be of use to some, not necessarily because they contain critical info.
 
 ### Changed
 
 - **Longer SMS messages**: `send_sms` now accepts the same message length the router's own web page does — up to **765** characters, where the integration previously capped you at 160. A message containing an emoji, curly quote or other special character uses a different encoding and is limited to **335**, again matching the router. The limit is chosen automatically per message, with nothing to configure, and going over it gives a clear error naming the limit that applied.
-  - **Obligatory Warning**: It is **_YOUR_** responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
+  - **Obligatory Warning**: It is ***YOUR*** responsibility to understand whether having your Router send SMS messages is going to incur an extra charge from your ISP.
     - Remember **longer** messages generally get **billed** as multiple SMS.
 
 - **Wider ZTE model support**: signal and data-usage sensors now recognize the alternative field names used by other `goform` routers, the login falls back to the other form when a model rejects the first, and the LTE/5G band name is worked out from the channel number when the router leaves it blank.
@@ -3581,7 +4221,7 @@ Wider router support, better data use tracking, SMS improvements, several fixes 
 - **APN Profile could show a profile that was not in use**: while APN Selection Mode is **Auto** the router uses the routers default APN — but the dropdown still displayed whichever profile was last chosen **manually**. It now shows the profile only when it genuinely matches the APN in use, and blank otherwise. The **Network APN** sensor remains the authoritative answer to which APN is in use.
 
 - **APN Selection Mode could not be set to Manual**: switching it to **Auto** worked, but switching back to **Manual** was silently rejected by the router.
-  - Both directions now work. Switching to **Manual** requires the router to be told _which_ stored profile to use, so if the APN currently in use is not one of your saved profiles, the integration asks you to choose one from **APN Profile** instead — which sets the mode and the profile together, in one step.
+  - Both directions now work. Switching to **Manual** requires the router to be told *which* stored profile to use, so if the APN currently in use is not one of your saved profiles, the integration asks you to choose one from **APN Profile** instead — which sets the mode and the profile together, in one step.
   - The integration can only **select** among profiles already stored on the router. Creating, editing or deleting an APN profile is done on the router's own web page; a new one appears in the **APN Profile** dropdown at the next poll, or immediately if you press **Refresh Now**.
 
 - **Settings & Actions did not check for login**: If the polling interval was long, Pause Polling was on or the web GUI was used, the integrations login to the router could get dropped.
@@ -3768,7 +4408,7 @@ No entity, key or translation key changed. **`Z5g_SINR`, `z5g_sinr`, `5g_sinr` a
 
 Session expiry detection overhaul and recovery verification. Rewrote session detection (`_classify_session`) to check authenticated vs unauthenticated key responses, preventing dead sessions from masquerading as successful empty polls, separated credentials rejections (`ZTECredentialsError`) from transient timeouts, and added instrumented recovery checks.
 
-The reported fault — many entities going `unknown` for up to a minute after a reboot or an APN change — was investigated on hardware and turned out to be neither transient nor a fetch failure. It was a _successful_ fetch of a dead session, and it had silently disabled two detectors.
+The reported fault — many entities going `unknown` for up to a minute after a reboot or an APN change — was investigated on hardware and turned out to be neither transient nor a fetch failure. It was a *successful* fetch of a dead session, and it had silently disabled two detectors.
 
 ### The fault, as measured
 
@@ -3796,7 +4436,7 @@ The same three keys had also disabled `_check_contract_drift`: `wa_inner_version
 
 `not_ready` is new and matters: a router that is answering but has nothing to report yet is booting, not expired. Re-logging in would not help, so it takes the reachability path instead of burning a login and heading toward a reauth prompt.
 
-The project owner's framing drove this. The device separates the two states cleanly — unauthenticated keys prove reachability, authenticated keys prove the session — and deciding from the _relationship_ between them removes the fragility that caused both recurrences. The old rule was a property of **what was requested**, not of the session, so it silently stopped being a valid test the moment the batch composition changed. Nothing could notice, because the rule had no stated precondition.
+The project owner's framing drove this. The device separates the two states cleanly — unauthenticated keys prove reachability, authenticated keys prove the session — and deciding from the *relationship* between them removes the fragility that caused both recurrences. The old rule was a property of **what was requested**, not of the session, so it silently stopped being a valid test the moment the batch composition changed. Nothing could notice, because the rule had no stated precondition.
 
 ### Changed — a rejected password is no longer confused with a lapsed session
 
@@ -3877,7 +4517,7 @@ All eleven write commands are now either exercised on hardware or locked against
 
 - **`tests/test_write_payload_shapes.py`** — a payload shape lock over all eleven writes. A **change detector, not a correctness check**: it cannot tell you a shape is right, it makes any change to one visible and deliberate. That is the gap left by commands no script may exercise unattended.
   - **Mutation-proved three ways**: dropping `encode_type` from `send_sms`, dropping a field from the six-field data-volume form, and changing `delete_all`'s `;` id separator each fail the suite.
-  - Asserts the **set**, not membership — every defect of this class has been a _missing_ field, which `in` cannot see.
+  - Asserts the **set**, not membership — every defect of this class has been a *missing* field, which `in` cannot see.
   - Cross-checked against the classification register, so a command cannot be classified but left unlocked.
 
 - **Four attended checks**, taking scripted coverage from 4 writes to 8: `send_sms`, `delete_sms` (newest message), `delete_all`, and `reboot`. Ordered send → delete one → delete all → reboot, since reboot ends the session.
@@ -3888,7 +4528,7 @@ All eleven write commands are now either exercised on hardware or locked against
 
 ### Changed
 
-- **Tier renamed `NEVER` → `NEVER_AUTOMATED`, and it is now empty.** The old name conflated _cannot be automated_ with _cannot be scripted at all_. With a person supplying the target and confirming, sending and deleting an SMS are ordinary tests. The tier stays defined so the decision point exists for a future command that genuinely warrants it. The project owner made this argument; it was right.
+- **Tier renamed `NEVER` → `NEVER_AUTOMATED`, and it is now empty.** The old name conflated *cannot be automated* with *cannot be scripted at all*. With a person supplying the target and confirming, sending and deleting an SMS are ordinary tests. The tier stays defined so the decision point exists for a future command that genuinely warrants it. The project owner made this argument; it was right.
 - **README**: network-mode values as a table with their web-UI names, and a new **How do I download diagnostics?** section modelled on the `unifi_network_monitor` one — including the note that a diagnostics file from a non-MC7010 model is valuable even when nothing is wrong, since cross-model support is inferred rather than tested.
 
 ### Fixed — a false dead-session detection I introduced this session
@@ -3897,7 +4537,7 @@ All eleven write commands are now either exercised on hardware or locked against
   - The rule was written when every read was a 75-key poll, where something is always populated. **The targeted reads added earlier this session broke that assumption**, and nothing asked whether the rule still held.
   - `get_params()` now always appends a **sentinel key** (`wan_connect_status`, a contract key populated whenever the session is alive), so an all-empty response still distinguishes "these fields are empty" from "this session is gone".
   - Verified on hardware both ways: the empty-counter read now succeeds, and a genuinely dead session still raises. Mutation-proved — removing the sentinel fails the suite.
-  - Latent elsewhere: the switch read-back would have hit this if a control's key were ever empty. Harmless there (a failed verify is treated as _unverified_), but it would have caused needless re-logins.
+  - Latent elsewhere: the switch read-back would have hit this if a control's key were ever empty. Harmless there (a failed verify is treated as *unverified*), but it would have caused needless re-logins.
 
 ### Fixed — a reasoning failure, recorded because it is the third of its kind
 
@@ -3936,13 +4576,13 @@ The rc7 fix introduced a hazard, caught before release by the project owner's de
 
 ### Fixed — the hardware script's own defects, both exposed by running it
 
-- **The restore did not survive the reconnect it had just caused.** It reported `restored — Request failed` while the router had in fact already gone back to auto. Restore now **reads the current value first** and only re-writes if the router still disagrees, then retries through the reconnect. On this API a write reported as failed may well have landed, so what the router says _now_ is the only trustworthy question.
+- **The restore did not survive the reconnect it had just caused.** It reported `restored — Request failed` while the router had in fact already gone back to auto. Restore now **reads the current value first** and only re-writes if the router still disagrees, then retries through the reconnect. On this API a write reported as failed may well have landed, so what the router says *now* is the only trustworthy question.
 - **One failing check aborted the whole run** — worst in the one place it must not, after a write had changed something and before its restore. Each attended check is now wrapped so a failure is recorded and the rest continue.
 
 ### Added — attended coverage completed
 
 - **`set_apn`** round-trips between two stored profiles, verifying against `wan_apn` rather than `apn_index`, and restores the selection mode afterwards because `set_apn` forces manual as a side effect. The `Default` profile is skipped as a target, since its empty APN makes verification meaningless. **Passed**: `3fwa.ie` → `3broadband.ie` → `3fwa.ie`, mode restored to auto.
-- **`set_data_limit_switch`** round-trips the cap, and **only from ON**. Starting from on, the risky direction is merely restoring what was there, and a crash leaves the cap off — harmless. Starting from off, the same round trip would switch enforcement _on_ and a crash could strand it, against a cap and usage figure only the owner can judge; that direction is refused rather than offered with a warning. **Passed**: on → off → on. This is the switch that had never worked in any release.
+- **`set_data_limit_switch`** round-trips the cap, and **only from ON**. Starting from on, the risky direction is merely restoring what was there, and a crash leaves the cap off — harmless. Starting from off, the same round trip would switch enforcement *on* and a crash could strand it, against a cap and usage figure only the owner can judge; that direction is refused rather than offered with a warning. **Passed**: on → off → on. This is the switch that had never worked in any release.
 - `reboot` remains classified ATTENDED and deliberately unscripted.
 
 ### Verified state after all exercises
@@ -3966,7 +4606,7 @@ Found by the attended tier on its **first real run**, one prompt in. A defect th
   - `apn_mode=auto` — **accepted**
   - complete five-field form — accepted, **both** directions
   - So `APN_PROC_EX` is all-or-nothing like `DATA_LIMIT_SETTING`, and **asymmetric**: `auto` needs no profile, `manual` is meaningless without one.
-  - Now a read-modify-write taking the poll data, deriving `index` and `pdp_type` from `APN_config{index}`. The complete form is used for **both** directions — it is the only one verified to actually _apply_ (mode changed, `wan_apn` followed). Bare `auto` is verified only as _accepted_, so it survives purely as the fallback when the poll has not yet supplied `apn_index`.
+  - Now a read-modify-write taking the poll data, deriving `index` and `pdp_type` from `APN_config{index}`. The complete form is used for **both** directions — it is the only one verified to actually *apply* (mode changed, `wan_apn` followed). Bare `auto` is verified only as *accepted*, so it survives purely as the fallback when the poll has not yet supplied `apn_index`.
   - Manual with no known profile now **raises locally** rather than sending a doomed payload, so the user sees "refresh and retry" instead of an opaque `result=failure`.
   - **Verified on hardware, both directions**: manual → auto → manual, with `wan_apn` tracking and the connection restored.
 
@@ -3997,7 +4637,7 @@ Follow-on from the control write-path work. The question that prompted it: the O
   - **SAFE (3)**: `set_odu_led_switch`, `set_data_volume_settings`, `logout`.
   - **ATTENDED (5)**: `set_apn_mode`, `set_apn`, `set_bearer_preference`, `set_data_limit_switch`, `reboot`.
   - **NEVER (3)**: `send_sms`, `delete_sms`, `delete_all` — cost, third parties, irreversible destruction.
-  - The bar for SAFE includes **either resting state being harmless**, because a crash can strand it mid-check. That single clause is what separates the data-volume _alert percentage_ (SAFE) from the data-limit _switch_ (ATTENDED): a stranded threshold warns at a slightly wrong point, a stranded cap stops the router passing traffic.
+  - The bar for SAFE includes **either resting state being harmless**, because a crash can strand it mid-check. That single clause is what separates the data-volume *alert percentage* (SAFE) from the data-limit *switch* (ATTENDED): a stranded threshold warns at a slightly wrong point, a stranded cap stops the router passing traffic.
 
 - **`tests/test_write_classification.py`** — 9 tests, no router required. Fails when a write is added with no entry, when a SAFE write is not actually exercised, when an entry goes stale, and when a write appears in two tiers.
   - **Mutation-proved both ways**: adding a `set_new_untested_thing` method to `api.py` fails the suite; removing a name from the exercised set fails it.
@@ -4007,7 +4647,7 @@ Follow-on from the control write-path work. The question that prompted it: the O
   - **The data-volume form**, exercised by nudging the alert percentage and restoring it. This covers `DATA_LIMIT_SETTING` — the all-or-nothing six-field form that was broken in every release — without touching the cap or the switch.
   - **Logout**, which replays the old token and confirms the router rejects it. Worth its own check because the failure is invisible: an ignored `LOGOUT` leaves the user locked out of their own web UI with nothing logged, and it cannot be verified through the web UI, since logging in there terminates any session regardless.
 
-- **An attended tier (`--attended`)** for the writes that re-establish the connection. Offers `set_apn_mode` and `set_bearer_preference` **one at a time**: each prints the current value, the target, the risk and the manual undo path _before_ asking for a typed `y`, then restores and verifies. A failed restore prints a red block naming the single setting that may still be wrong. It refuses to run without a terminal.
+- **An attended tier (`--attended`)** for the writes that re-establish the connection. Offers `set_apn_mode` and `set_bearer_preference` **one at a time**: each prints the current value, the target, the risk and the manual undo path *before* asking for a typed `y`, then restores and verifies. A failed restore prints a red block naming the single setting that may still be wrong. It refuses to run without a terminal.
   - `reboot` and `set_data_limit_switch` are classified ATTENDED but deliberately **unscripted** — reboot cannot be made quick or quiet, and turning on a data cap depends on the user's plan against current usage, which is a judgement rather than a check.
 
 ### Observed — an intermittent refusal, cause not established
@@ -4032,9 +4672,9 @@ Reported as erratic ODU LED toggling: the switch would move, revert, then correc
 
 ### Fixed
 
-- **Controls did not reach the state machine until the debounced poll ran.** `async_force_refresh()` goes through the coordinator's debouncer, cooldown **10 s**, so a write landing inside that window left the entity state unchanged for up to ten seconds — long enough for the frontend's optimistic toggle to revert first. Whether it happened depended on the timing of the _previous_ refresh, which is why it felt random.
+- **Controls did not reach the state machine until the debounced poll ran.** `async_force_refresh()` goes through the coordinator's debouncer, cooldown **10 s**, so a write landing inside that window left the entity state unchanged for up to ten seconds — long enough for the frontend's optimistic toggle to revert first. Whether it happened depended on the timing of the *previous* refresh, which is why it felt random.
   - Fixed with a **targeted read-back**: `api.get_params()` reads the key straight back and publishes it. Opt-in per description via `verify_after_write` + `state_key`, set on the two switches only.
-  - Three outcomes kept distinct: read agrees → publish; read disagrees twice (200 ms apart) → `switch_write_not_applied`; read **errors or omits the key** → _unverified_, left to the next poll. A failed confirmation is not a failed write.
+  - Three outcomes kept distinct: read agrees → publish; read disagrees twice (200 ms apart) → `switch_write_not_applied`; read **errors or omits the key** → *unverified*, left to the next poll. A failed confirmation is not a failed write.
   - The router was measured first and exonerated: it applies in **~128 ms**, correct on the first read-back, holding. The read-back costs ~16 ms median, ~38 ms with a full poll in flight.
 - **A write never noticed a session taken away.** Signing into the router's web page ends Home Assistant's session; the write then answers `{"result":"failure"}`, which matches neither the all-values-empty read rule nor the `is_auth_error` list. Every subsequent attempt failed until some read happened to re-login — the user hit exactly this, and Refresh Now cleared it.
   - Fixed by `_ensure_session()`, called from `get_ad()` — the choke point every write passes through, so `send_sms`, `reboot`, the selects and both switches all inherit it.
@@ -4044,7 +4684,7 @@ Reported as erratic ODU LED toggling: the switch would move, revert, then correc
 
 ### Changed
 
-- **`PARALLEL_UPDATES = 1`** on `switch`, `select`, `number`, `button`; `0` retained on `sensor` and `binary_sensor`. `0` means _unlimited_, which on a single-session router is how concurrent writes tear a session down. Confirmed not an IQS violation: the rule requires the constant to be set deliberately, and core does exactly this split (`liebherr` has `1`/`0` and `parallel-updates: done`).
+- **`PARALLEL_UPDATES = 1`** on `switch`, `select`, `number`, `button`; `0` retained on `sensor` and `binary_sensor`. `0` means *unlimited*, which on a single-session router is how concurrent writes tear a session down. Confirmed not an IQS violation: the rule requires the constant to be set deliberately, and core does exactly this split (`liebherr` has `1`/`0` and `parallel-updates: done`).
 - **Five writable keys promoted to `_CORE_PARAMS`** — `ODU_led_switch` and the four `data_volume_*` fields. A control showing a cached position invites a write built on a stale reading, and `DATA_LIMIT_SETTING` composes four of them into its form. Core 80 keys/1269 chars, extended 36/623; budget test unchanged at 1700.
 
 ### Added
@@ -4111,7 +4751,7 @@ A guard so the `TOTAL` / `TOTAL_INCREASING` confusion cannot recur
 ### Added
 
 - **`test_no_sensor_uses_the_total_state_class`** (`tests/test_entity_hygiene.py`). No sensor may use `SensorStateClass.TOTAL`. Backed by `ALLOWED_TOTAL_STATE_CLASS`, an **empty** frozenset in the same shape as `ALLOWED_RECORDED` — adding an entry is a reviewable act, typing `TOTAL` into a new description is not.
-  - **Why a blanket ban rather than "resetting counters must be `TOTAL_INCREASING`".** The narrower rule needs the test to know _which sensors reset_ — a list that drifts silently the moment someone adds one. The ban needs no such knowledge and cannot go stale. `TOTAL` is for a value that can legitimately fall without that being a reset (net import/export, a draining tank) and requires a `last_reset` attribute; nothing a 5G router reports fits. Current state: **16 `MEASUREMENT`, 6 `TOTAL_INCREASING`, 0 `TOTAL`**, so the ban cost nothing to adopt.
+  - **Why a blanket ban rather than "resetting counters must be `TOTAL_INCREASING`".** The narrower rule needs the test to know *which sensors reset* — a list that drifts silently the moment someone adds one. The ban needs no such knowledge and cannot go stale. `TOTAL` is for a value that can legitimately fall without that being a reset (net import/export, a draining tank) and requires a `last_reset` attribute; nothing a 5G router reports fits. Current state: **16 `MEASUREMENT`, 6 `TOTAL_INCREASING`, 0 `TOTAL`**, so the ban cost nothing to adopt.
   - Sweeps live entities rather than the static `SENSOR_TYPES` tuple, matching the other two sweeps in the file, and carries the same `checked >= 3` guard-the-guard.
   - **Mutation-verified**, not merely passing: flipping one description to `TOTAL` fails with the offending entity named (`sensor.zte_5g_data_monthly_sent_gb`). Restored; 14/14 pass, ruff clean. The four `mypy --strict` findings in that file are pre-existing and outside this addition.
   - Known gap, deliberately not covered: the ban does not stop a resetting counter being marked `MEASUREMENT`.
@@ -4137,7 +4777,7 @@ The §7 checklist ran against the beta. Every assumed API landed unchanged, so *
 
 ### Known — the test harness cannot run on 2026.8 yet
 
-`pytest-homeassistant-custom-component` 0.13.348 — the newest published, hard-pinned to `homeassistant==2026.7.4` — patches two symbols 2026.8 removed, so all 749 tests error at _setup_. There is **no newer release to move to**, and this is not beta-specific: the symbol is gone from the 2026.8 source tree entirely. It will likely resolve when PHACC publishes for 2026.8, or if the removal changes before final. **No workaround has been committed** — a local monkeypatch of the harness would outlive the problem. Full reasoning, and the shape of the workaround should it ever be needed, in the shared record.
+`pytest-homeassistant-custom-component` 0.13.348 — the newest published, hard-pinned to `homeassistant==2026.7.4` — patches two symbols 2026.8 removed, so all 749 tests error at *setup*. There is **no newer release to move to**, and this is not beta-specific: the symbol is gone from the 2026.8 source tree entirely. It will likely resolve when PHACC publishes for 2026.8, or if the removal changes before final. **No workaround has been committed** — a local monkeypatch of the harness would outlive the problem. Full reasoning, and the shape of the workaround should it ever be needed, in the shared record.
 
 **Other projects:** the same test pattern almost certainly exists in `unifi_network_monitor` and `huawei_router_5g`. Flagged in the shared record, not actioned here.
 
@@ -4197,7 +4837,7 @@ User-directed pass over which entities appear out of the box, and over six `abou
 
 ### Changed
 
-- **`MDM MCC` and `MDM MNC` are now disabled by default.** Both are static in normal use — they change only if the modem attaches to a different operator — so they were two permanently unchanging rows in every user's default entity list. `RMCC` and `RMNC`, which report the _registered_ network and do differ while roaming, were already disabled.
+- **`MDM MCC` and `MDM MNC` are now disabled by default.** Both are static in normal use — they change only if the modem attaches to a different operator — so they were two permanently unchanging rows in every user's default entity list. `RMCC` and `RMNC`, which report the *registered* network and do differ while roaming, were already disabled.
 - **`Data Volume Alert` is now enabled by default**, and keeps its lack of a `state_class` so it stays out of long-term statistics. It is the threshold the router's own alert fires on, and it pairs directly with the new `Allowance` sensor; hiding it while showing the cap made little sense. A configured percentage has no useful trend line, hence no statistics.
 
 ### Fixed — `about` notes
@@ -4229,7 +4869,7 @@ Prompted by a user challenge to a claim made in review, which turned out to be h
 ### Notes
 
 - Every field on the router's **Data Management** page is now polled. Three are still without an entity: `wan_auto_clear_flow_data_switch`, `data_volume_limit_unit`, and the "Data Used" calibration write.
-- **`FLOW_CALIBRATION_MANUAL` is that "Data Used" box** — an editable current-usage field, not a missing feature. It re-bases the counter to match an operator's billing figure, which means it _writes_ the counter and so carries the same statistics caveats as a reset, upward as well as down.
+- **`FLOW_CALIBRATION_MANUAL` is that "Data Used" box** — an editable current-usage field, not a missing feature. It re-bases the counter to match an operator's billing figure, which means it *writes* the counter and so carries the same statistics caveats as a reset, upward as well as down.
 - Named `Allowance` rather than `Data Allowance`: Home Assistant prefixes the sub-device name, so the latter yields "ZTE 5G Data Data Allowance". Same reasoning as `Reset Day`.
 
 ## [3.3.1-dev16] - 2026-07-29 - Technical Rationale Corrections for Declined Router Write Controls
@@ -4263,12 +4903,12 @@ Four changes to `Projected Cycle Usage` following a review of how it behaves in 
 
 ### Changed
 
-- **Removed the `state_class`, so it no longer reaches long-term statistics.** It was `measurement`, which generated LTS mean/min/max. That was wrong on reflection: this is an estimate of where the cycle ends up, useful _now_ rather than as a history, and the measurement it derives from — `Monthly Total` — is already recorded with a proper state class. Keeping both stored a derived view of a number already stored, and invited charts of what was once guessed rather than what happened. It still appears in normal recorder history; an integration can exclude its own attributes but not its own state.
+- **Removed the `state_class`, so it no longer reaches long-term statistics.** It was `measurement`, which generated LTS mean/min/max. That was wrong on reflection: this is an estimate of where the cycle ends up, useful *now* rather than as a history, and the measurement it derives from — `Monthly Total` — is already recorded with a proper state class. Keeping both stored a derived view of a number already stored, and invited charts of what was once guessed rather than what happened. It still appears in normal recorder history; an integration can exclude its own attributes but not its own state.
 
 ### Added
 
 - **A calendar-month fallback.** A router reporting no reset day previously produced a permanently `unknown` sensor with no explanation. It now assumes the 1st — right for anyone billed calendar-monthly, no worse than nothing for anyone else, and far better than a blank that never clears. The assumption is published as a new `cycle_source` attribute (`router` or `calendar_assumed`) so it is visible rather than buried in the arithmetic.
-- **README note on first-day behavior.** The projection reads _low_ on day one, not high: the denominator floor caps the rate at one day's usage rather than dividing by a fraction of a day. It settles within 24 hours and is accurate from day 2 of every cycle — including the first cycle after install, which is worth stating because "wait a few months for it to learn" would be wrong.
+- **README note on first-day behavior.** The projection reads *low* on day one, not high: the denominator floor caps the rate at one day's usage rather than dividing by a fraction of a day. It settles within 24 hours and is accurate from day 2 of every cycle — including the first cycle after install, which is worth stating because "wait a few months for it to learn" would be wrong.
 - **A `Projected Overage Alert` automation example**, gated on `cycle_day >= 3` so a single large download on the 1st cannot page the user about an overage that never happens. The template guards the attribute being absent (`or '0 of 0'`), since `.split` on a missing attribute throws when the sensor is unavailable. Both `confidence`-based alternatives are documented alongside it. YAML and Jinja verified by parsing them out of the README and rendering the condition at day 2, day 3 and with the attribute absent.
 
 ### Not done
@@ -4368,7 +5008,7 @@ Acts on `.notes/info/zte_element_discovery_report.md`, a two-step discovery run 
 
 ### Added
 
-- **Projected Cycle Usage** (`data_projection`) — an estimate of end-of-cycle data usage, and the answer to the question the monthly counters do not address: _am I on course to exceed my allowance?_ Enabled by default on the Data sub-device.
+- **Projected Cycle Usage** (`data_projection`) — an estimate of end-of-cycle data usage, and the answer to the question the monthly counters do not address: *am I on course to exceed my allowance?* Enabled by default on the Data sub-device.
   - **Cycle-relative, not calendar-relative.** The router's counters reset on its own billing day, which need not be the 1st. Projecting against a calendar month would be wrong for most users.
   - **Never shows `unknown`.** The naive form divides by elapsed time, so seconds into a cycle its error is unbounded — half a gigabyte one second in projects to over a million. The denominator is floored at one day, which bounds the result without inventing a cap. An `unknown` on day one reads as a broken sensor; the caveat belongs in the attributes, which carry `confidence`, `basis`, `cycle_day` and `cycle_start`.
   - **`state_class` is `MEASUREMENT`, not `TOTAL`.** A projection falls whenever a heavy first week is diluted by a quiet second one. Under `TOTAL`, long-term statistics would read every such fall as a counter reset — a corruption only a manual purge undoes.
@@ -4438,10 +5078,10 @@ Reconciled the `about` note suite against the running instance with `sensor_revi
 ### Added
 
 - **`about` support on three more platforms.** `select.py` had none at all — it now carries the `ZTEAboutEntity` mixin and `_unrecorded_attributes`; `binary_sensor.py` and `switch.py` gained an `about` field on their entity-description classes. The mixin already resolved `getattr(description, "about", None)`, so no change was needed there.
-- **Six notes on control entities**, chosen on one test — _does the name leave a consequential question unanswered?_
+- **Six notes on control entities**, chosen on one test — *does the name leave a consequential question unanswered?*
   - **SIP ALG Enabled** — an obscure acronym that silently breaks VoIP; one-way audio and calls dropping on a timer are the classic symptoms.
   - **UPnP Enabled** — the security trade-off is not in the name, and it is a no-op in bridge mode.
-  - **APN Profile** — the wrong profile means _no data_, not slow data.
+  - **APN Profile** — the wrong profile means *no data*, not slow data.
   - **APN Selection Mode** — auto versus manual is not self-evident, and it gates the profile above.
   - **Network Mode Selection** — locking to `Only_5G` can drop the connection where 5G coverage is marginal.
   - **Data Limit Switch** — at the limit the router **stops passing traffic** rather than warning, which is worth knowing before enabling it.
@@ -4507,7 +5147,7 @@ The systematic guard behind `[3.3.1-dev6]`. Both silent-failure bugs in this cla
 ### Added
 
 - **`tests/test_dead_session_sweep.py`** (116 tests). Drives every public API method against three fault modes and asserts one property throughout: **a method either does the thing or raises — it may never return a success-shaped result having done nothing.**
-  - **`_DyingSession`** — session dies after _N_ requests (`N` = 0…3, so it dies at each point in a method's internal sequence). Exercises the expiry detection in `_request`.
+  - **`_DyingSession`** — session dies after *N* requests (`N` = 0…3, so it dies at each point in a method's internal sequence). Exercises the expiry detection in `_request`.
   - **`_RefusingSession`** — live session, `{"result":"failure"}` on writes. Exercises `_require_success`.
   - **`_DriftingSession`** — a populated response missing the key the caller contracts for. Exercises `_require_contract`.
 - **Three drift guards**: `_CALLS` must name every public API method, `_WRITES` every write command, and `_BEST_EFFORT` is capped at five entries each needing a stated reason. **A new API method fails the suite the moment it exists** — which is the whole point of the file.
@@ -4515,7 +5155,7 @@ The systematic guard behind `[3.3.1-dev6]`. Both silent-failure bugs in this cla
 
 ### Notes
 
-- **The first two versions of this file were worth nothing, and mutation testing is what proved it.** With only `_DyingSession`, deleting `_require_success` from `send_sms` left the suite **green**, and so did deleting `_require_contract` from `get_sms_messages`. Both blind for the same reason: on a dead session `_request` raises _upstream_, so neither guard is ever reached. A single fault mode could not exercise the code it claimed to cover. `_RefusingSession` and `_DriftingSession` exist solely because those mutations came back green.
+- **The first two versions of this file were worth nothing, and mutation testing is what proved it.** With only `_DyingSession`, deleting `_require_success` from `send_sms` left the suite **green**, and so did deleting `_require_contract` from `get_sms_messages`. Both blind for the same reason: on a dead session `_request` raises *upstream*, so neither guard is ever reached. A single fault mode could not exercise the code it claimed to cover. `_RefusingSession` and `_DriftingSession` exist solely because those mutations came back green.
 - **Mutation matrix, all caught, all reverted**: `_require_success` removed from `send_sms`; from `set_bearer_preference`; `_require_contract` removed from `get_sms_messages`; and the `last_activity` gate reverted to reproduce the original field bug.
 - The double deliberately serves `LD` and `wa_inner_version` even while dead, because the real hardware does — and that is precisely why those calls could reset the activity clock. Modelling them as dying would be a fault the router cannot produce.
 
@@ -4562,7 +5202,7 @@ Completes the thermal sensor set following independent verification of the sourc
 
 Verified directly against `Kajkac/ZTE-MC-Home-assistant-repo`: its `const.py` names and gives °C units to exactly these five, and its live batch `cmd=` strings (`mc.py:560`, `mc.py:638-639`) request them. The rule is therefore "the thermal keys a sibling `goform` project polls with °C units", not a hand-picked subset. Note that `pm_sensor_pa2` and `pm_mdm` appear in local probe lists but are **not** Kajkac keys and are deliberately excluded.
 
-**Caveat, recorded deliberately:** no model is yet confirmed to populate _any_ of these. A live MC7010 probe returns `""` for all of them, and the sibling project is only evidence that it _asks_, not that a router answers. All five are disabled by default precisely for that reason — the cost on the primary target hardware is zero.
+**Caveat, recorded deliberately:** no model is yet confirmed to populate *any* of these. A live MC7010 probe returns `""` for all of them, and the sibling project is only evidence that it *asks*, not that a router answers. All five are disabled by default precisely for that reason — the cost on the primary target hardware is zero.
 
 ### Verified
 
@@ -4672,7 +5312,7 @@ Documentation expansion for compatibility and entity metadata. Added `docs/expec
 ### Added
 
 - **`about_attribute_list.md`**: Added a document to list all of the `about:` attributes.
-- **`expected_zte_compatibility.md`**: Added a document to detail what additional ZTE Routers _should_ be compatible.
+- **`expected_zte_compatibility.md`**: Added a document to detail what additional ZTE Routers *should* be compatible.
 
 ## [3.3.0-rc4] - 2026-07-28 - README Automation Glitch Guards, Collapsible Layout, and Float Rounding
 
@@ -4803,7 +5443,7 @@ Documentation only, closing the loose ends left by twelve dev entries in one day
 
 - **`DEVELOPMENT.md` §7 pointed at a file that no longer exists** — the custom-trigger analysis, which moved twice today: out of `.notes/issues/` to `.shared/issues/`, then into the new `x_project/` queue. Now `.shared/issues/x_project/custom_trigger_options.md`.
 
-- **`.notes/proj_structure.md` was stale within hours of being updated.** Its own `v1.1.1` entry was written this morning and recorded `test_binary_sensor_health.py` — a file renamed to `test_integration_health.py` later the same day — so the table listed something that does not exist. Also missing: **`_compat.py`**, a _source_ file absent since it landed; `docs/zte_how_to_access.md`; and `tests/test_compat.py`. All added, rename corrected, `v1.1.2` entry appended.
+- **`.notes/proj_structure.md` was stale within hours of being updated.** Its own `v1.1.1` entry was written this morning and recorded `test_binary_sensor_health.py` — a file renamed to `test_integration_health.py` later the same day — so the table listed something that does not exist. Also missing: **`_compat.py`**, a *source* file absent since it landed; `docs/zte_how_to_access.md`; and `tests/test_compat.py`. All added, rename corrected, `v1.1.2` entry appended.
 
 ### Changed
 
@@ -4827,9 +5467,9 @@ Session expiry detection and endpoint contract hardening. Replaced brittle named
 
 - **An expired session made SMS actions report "no messages" instead of failing.** The session-expiry detector in `_request` tested two **named** keys — `network_type` and `signalbar` — which only exist in the batch-poll response. An SMS response has neither, so `.get()` returned `None`, `None == ""` was `False`, and the detector could never fire on that endpoint. The dead-session body was returned intact, `.get("messages", [])` yielded `[]`, and the action reported an empty inbox.
 
-  **Why Refresh Now was a workaround, and why that proves the diagnosis:** Refresh Now runs the batch poll, whose keys the detector _did_ recognize — so it re-logged in and repaired the session, after which SMS worked. Detection existed on one endpoint and not the other; that asymmetry is exactly what was observed.
+  **Why Refresh Now was a workaround, and why that proves the diagnosis:** Refresh Now runs the batch poll, whose keys the detector *did* recognize — so it re-logged in and repaired the session, after which SMS worked. Detection existed on one endpoint and not the other; that asymmetry is exactly what was observed.
 
-  Two aggravating factors: `_request` then set `last_activity = now`, so the client **recorded a dead session as healthy** and pushed the 150s inactivity guard forward, masking it further. And the 150s guard only fires when >150s have passed since the last _successful_ request — this router permits **one session**, so opening its web UI kills the integration's session instantly, and acting within 150s of a poll leaves the guard quiet.
+  Two aggravating factors: `_request` then set `last_activity = now`, so the client **recorded a dead session as healthy** and pushed the 150s inactivity guard forward, masking it further. And the 150s guard only fires when >150s have passed since the last *successful* request — this router permits **one session**, so opening its web UI kills the integration's session instantly, and acting within 150s of a poll leaves the guard quiet.
 
 - **Detector generalized to the router's actual dead-session shape.** Captured by replaying an invalidated `stok` against an MC7010 on firmware `V1.0.0B03` (2026-07-27) — every dead-session response is **HTTP 200** with the requested keys **echoed back empty**:
 
@@ -4857,7 +5497,7 @@ Session expiry detection and endpoint contract hardening. Replaced brittle named
 ### Notes
 
 - **Mutation-proved, three ways** (§11 bar): reverting the detector to the named-key form → **red**; removing the contract assertion → **red**; reverting both, i.e. the exact pre-fix code → **red**. Each defense fails the suite independently, so neither is load-bearing alone.
-- **Live-verified against the router**: session deliberately killed from a second client with `last_activity` kept fresh — the precise reported condition — then `get_sms_messages()` logged _"Session expired in JSON response; renewing session"_ and returned both real messages.
+- **Live-verified against the router**: session deliberately killed from a second client with `last_activity` kept fresh — the precise reported condition — then `get_sms_messages()` logged *"Session expired in JSON response; renewing session"* and returned both real messages.
 - **You remembered this correctly: it was fixed on `huawei_router_5g`**, which wraps every action in `_execute_with_retry` (re-login, retry once). That could not be ported — Huawei's library **raises** `ResponseErrorLoginRequiredException`, so there is something to catch. ZTE's `goform` API returns `200` with a benign body, so the fix had to be **detection**, not retry.
 - **Not a cross-project item, checked rather than assumed.** `unifi_network_monitor` raises on a real `401`; `wifi_ssid_monitor` already flags a missing `accesspoints` key into its health checks (`payload_no_ap_list`) rather than swallowing it; `huawei_router_5g` uses a library that raises. ZTE's goform API is the only one in the family that answers an auth failure with `200 OK` and a plausible body. Deliberately **not** added to the `x_project` queue — it fails the entry criteria.
 
@@ -4951,7 +5591,7 @@ Accompanies `dev_standards` **1.13.0 / 1.14.0**, which introduce the `**Test:**`
 
 - **Replaced with `test_every_live_entity_has_an_icon_or_a_device_class`**, a runtime sweep over live entities checking each entity's own platform. Entity descriptions here live in a mix of tuples (`SENSOR_TYPES`, `BINARY_SENSORS`, `SWITCH_TYPES`, `SELECT_TYPES`) and module-level singletons (`POLLING_INTERVAL_DESCRIPTION`, `REBOOT_DESCRIPTION`, …), so any static enumeration drifts the moment one is added. Sweeping live entities is the only form that cannot.
 
-  **Mutation-verified across every platform:** deleting the `icons.json` entry for `binary_sensor`, `switch`, `select`, `number` and `sensor` each turns the test red. `button/system_reboot` is correctly _not_ caught — it carries `ButtonDeviceClass.RESTART` and so derives its icon from the device class, which is the standard's own exemption. Its `icons.json` entry is therefore redundant but harmless.
+  **Mutation-verified across every platform:** deleting the `icons.json` entry for `binary_sensor`, `switch`, `select`, `number` and `sensor` each turns the test red. `button/system_reboot` is correctly *not* caught — it carries `ButtonDeviceClass.RESTART` and so derives its icon from the device class, which is the standard's own exemption. Its `icons.json` entry is therefore redundant but harmless.
 
 - **The superseded static test was deleted**, not left alongside. A weak test kept for reassurance is exactly the failure mode being fixed.
 
@@ -5002,7 +5642,7 @@ Closes the gap flagged in `[3.3.0-dev5]`. **393 tests passing, 100% coverage, ru
 
 ### Added
 
-- **The health sensor now publishes a `drift` attribute** (`dev_standards` §19, normative attribute table added at Standard Version 1.11.0). That table makes `drift` conditional — omit it only where no drift check exists. This integration runs one, `_check_contract_drift`, and it already backed the `firmware_contract_drift` repair and wrote a line into `issues`; the finding simply had nowhere of its own to be read from. A template could see that _something_ was wrong, and could see the repair key, but could not distinguish "the firmware changed shape" from "an endpoint is down" without string-matching the `issues` prose.
+- **The health sensor now publishes a `drift` attribute** (`dev_standards` §19, normative attribute table added at Standard Version 1.11.0). That table makes `drift` conditional — omit it only where no drift check exists. This integration runs one, `_check_contract_drift`, and it already backed the `firmware_contract_drift` repair and wrote a line into `issues`; the finding simply had nowhere of its own to be read from. A template could see that *something* was wrong, and could see the repair key, but could not distinguish "the firmware changed shape" from "an endpoint is down" without string-matching the `issues` prose.
 
   `drift` is a list, empty when healthy, carrying the finding on the success path. On the **failure** path it is reported empty rather than held from the last cycle: no payload arrived, so no drift verdict is possible, which matches the existing `_active_repairs(False)` call beside it. Both defensive fallback snapshots carry the key too, so the attribute can never be absent — an attribute that vanishes under load is a contract violation exactly when a user is looking at it.
 
@@ -5094,17 +5734,17 @@ Follows a consolidated review of everything not marked DONE across both standard
 ### Added
 
 - **`router_unreachable` Repair Issue**: raised after **10 consecutive failed fetches**, with `IssueSeverity.ERROR`, and cleared by the next successful poll.
-  - **Why this was a gap.** Because of the Section 1 non-blocking-startup departure, `async_setup_entry` always returns `True` — so a router that has become permanently unreachable presents as _"integration loaded, every entity unavailable"_ with no prompt anywhere. The Integration Health sensor turns on, but only a user who knows to look at a diagnostic binary sensor would see it. Nothing told them to act.
-  - **Why 10 and not 3.** The 3-strike threshold governs entity _unavailability_ and is reached in a few minutes — a Repair there would fire on every router reboot, which is exactly the Repairs-panel noise Section 19 warns against. Ten consecutive failures is the point at which the condition has demonstrably stopped resolving itself, which is what makes it _serious, named and actionable_ under Section 19's second tier.
+  - **Why this was a gap.** Because of the Section 1 non-blocking-startup departure, `async_setup_entry` always returns `True` — so a router that has become permanently unreachable presents as *"integration loaded, every entity unavailable"* with no prompt anywhere. The Integration Health sensor turns on, but only a user who knows to look at a diagnostic binary sensor would see it. Nothing told them to act.
+  - **Why 10 and not 3.** The 3-strike threshold governs entity *unavailability* and is reached in a few minutes — a Repair there would fire on every router reboot, which is exactly the Repairs-panel noise Section 19 warns against. Ten consecutive failures is the point at which the condition has demonstrably stopped resolving itself, which is what makes it *serious, named and actionable* under Section 19's second tier.
   - **The text is deliberately cause-agnostic.** Ten failures does not mean "the IP changed" — it means the router is not answering. The Repair says so, then lists what to check in rough likelihood order: power-cycle the router; check whether its IP has changed (the configured host is named in the text so it can be compared directly, with a DHCP reservation suggested as the permanent fix); check whether the password changed; check the network path. **Reconfigure** is offered for the two cases where it is the answer, rather than presented as the answer.
 
 ### Changed
 
-- **`stale-devices` recorded as N/A rather than REJECT** (compliance matrix; `quality_scale.yaml` stays `exempt`, which is the only value HA's vocabulary provides). REJECT is a family-level _policy_ — "devices persist intentionally; user controls removal" — and it had been copied down verbatim. It does not describe this integration: the four sub-devices come from a fixed group list, the integration never enumerates clients behind the router, and replacing the router mints a new IMEI and therefore a new config entry whose removal takes its devices with it. **Nothing can become stale, so there is no removal policy to decline.** The comment now says that, and flags that it stops being true if Section 15 feature-group toggles are implemented — disabling a group would orphan its sub-device.
+- **`stale-devices` recorded as N/A rather than REJECT** (compliance matrix; `quality_scale.yaml` stays `exempt`, which is the only value HA's vocabulary provides). REJECT is a family-level *policy* — "devices persist intentionally; user controls removal" — and it had been copied down verbatim. It does not describe this integration: the four sub-devices come from a fixed group list, the integration never enumerates clients behind the router, and replacing the router mints a new IMEI and therefore a new config entry whose removal takes its devices with it. **Nothing can become stale, so there is no removal policy to decline.** The comment now says that, and flags that it stops being true if Section 15 feature-group toggles are implemented — disabling a group would orphan its sub-device.
 
 ### Records
 
-- **`dev_standards.md` §15 Feature-Group Toggles: N/A → PENDING.** The original N/A claimed _"no optional functional groups exist"_, which is false. **SMS is exactly the group §15 describes**: 4 entities and 4 actions, **two of the three polled endpoints exist solely to serve it**, and the README already tells users to disable the SMS sub-device by hand if they do not use it — which hides the entities without stopping the polling, the precise outcome §15 exists to replace. §15 is a **Guideline**, so this is an Observation rather than a Gap and no code is required; but the N/A asserted something untrue about the codebase. Recorded in Project Deviations with the reasoning.
+- **`dev_standards.md` §15 Feature-Group Toggles: N/A → PENDING.** The original N/A claimed *"no optional functional groups exist"*, which is false. **SMS is exactly the group §15 describes**: 4 entities and 4 actions, **two of the three polled endpoints exist solely to serve it**, and the README already tells users to disable the SMS sub-device by hand if they do not use it — which hides the entities without stopping the polling, the precise outcome §15 exists to replace. §15 is a **Guideline**, so this is an Observation rather than a Gap and no code is required; but the N/A asserted something untrue about the codebase. Recorded in Project Deviations with the reasoning.
 - **`manifest.json` `quality_scale` key observation withdrawn** from the IQS report (and removed from `[3.3.0-dev2]`). It was an unsourced assertion: no guidance in any input mentions the key, and none of the four sibling projects sets it either — so this integration was consistent with the family, not an outlier.
 
 ### Tests
@@ -5128,7 +5768,7 @@ Full `SCAN=Full` IQS pass (`iqs_next_steps`), run immediately after the `dev_sta
 - **User-Facing Exceptions Were Not Translatable** (IQS Gold `exception-translations` — was a **false DONE**): nine `HomeAssistantError` raises carried plain f-string messages with no `translation_domain` or `translation_key`, and `strings.json` had **no `exceptions` block at all**. Every one of them reached the user as untranslated English in a failed action dialog or button-press error. Seven were in `__init__.py` (the four SMS action handlers plus three coordinator target-resolution failures) and two in `button.py` (Reboot, Delete All SMS).
   - All nine now use `translation_domain=DOMAIN` + `translation_key`, with interpolated values moved to `translation_placeholders`.
   - A 9-key `exceptions` block was added to **both** `strings.json` and `translations/en.json`.
-  - The rule had been marked `done` since v1.4.3 on the strength of a `quality_scale.yaml` comment asserting _"No custom service exceptions required"_ — which was simply untrue, and is why it survived every prior pass. The comment has been replaced.
+  - The rule had been marked `done` since v1.4.3 on the strength of a `quality_scale.yaml` comment asserting *"No custom service exceptions required"* — which was simply untrue, and is why it survived every prior pass. The comment has been replaced.
 
 ### Changed
 
@@ -5181,7 +5821,7 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Fixed
 
-- **Refresh Now Did Nothing While Polling Was Paused** (§13): `ZTERefreshButton` called the bare `async_request_refresh()`, which `_async_update_data` short-circuits to cached data whenever `stop_polling` is on — so the button was silently swallowed in the one situation it exists for. All **nine** explicit user actions now route through `async_force_refresh()`: Refresh Now, Delete All SMS, the polling-interval slider, both router switch setters, pause-resume, the APN/network select, and the `delete_sms` / `delete_all_sms` services. Scheduled polls still respect the pause. _Verified live: paused, pressed Refresh Now, data updated; then waited two full poll intervals paused with no update._
+- **Refresh Now Did Nothing While Polling Was Paused** (§13): `ZTERefreshButton` called the bare `async_request_refresh()`, which `_async_update_data` short-circuits to cached data whenever `stop_polling` is on — so the button was silently swallowed in the one situation it exists for. All **nine** explicit user actions now route through `async_force_refresh()`: Refresh Now, Delete All SMS, the polling-interval slider, both router switch setters, pause-resume, the APN/network select, and the `delete_sms` / `delete_all_sms` services. Scheduled polls still respect the pause. *Verified live: paused, pressed Refresh Now, data updated; then waited two full poll intervals paused with no update.*
 - **Options Flow Changed Credentials Without Applying Them** (§9): `ZTEOptionsFlow` wrote a new host, username or password into `entry.options` and nothing reloaded, because no update listener was registered. The running `ZTERouterAPI` kept using the **old host and password until Home Assistant was restarted**. A listener now reloads on any non-live option change; `scan_interval` and `stop_polling` remain live-apply so the slider and pause switch do not tear down every entity.
 - **Diagnostics Leaked Personal and Third-Party Data** (§20): `coordinator.data` is the raw `goform` payload, and key-name redaction reached almost none of it. A real download contained the **body and sender number of the most recent SMS**, the serving `cell_id` / `enodeb_id` / `lte_pci`, `mdm_mcc` / `mdm_mnc` (which together locate the subscriber on a named carrier), `wan_apn`, and raw `APN_config*` profile strings. Replaced with a layered sanitizer:
   - **Blanked** — credentials, IMEI/IMSI/ICCID/MSISDN, and carrier identity.
@@ -5192,20 +5832,20 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
   - The coordinator payload is `deepcopy`'d first — diagnostics is a read path.
   - Diagnostics now also includes the health snapshot, endpoint failure counts and update interval.
 - **SMS Sender's Phone Number Was Written to the Recorder** (§14): The `msg_recent` sensor published the sender's number as a recorded attribute, storing third-party personal data in the user's database on every poll. `_unrecorded_attributes` now covers `id`, `number`, `date` and the eight SMS counters. `sntp_server1` / `sntp_dst_enable` remain recorded deliberately — static configuration, cheap, and worth seeing in history.
-- **`logout()` Was Silently Ignored by the Router**: The first implementation omitted the `AD` token that every other `goform` setter requires. The router answered `{"result":"failure"}` and **left the session open** — the method looked like it worked while changing nothing. Now sends `AD`. _Verified against MC7010 firmware V1.0.0B03: with the token the router returns `{"result":"success"}` and replaying the old `stok` returns the session-expired shape; without it the `stok` stays live._ `LOGIN_OUT` and `USER_LOGOUT` were probed and are not valid commands on this firmware.
+- **`logout()` Was Silently Ignored by the Router**: The first implementation omitted the `AD` token that every other `goform` setter requires. The router answered `{"result":"failure"}` and **left the session open** — the method looked like it worked while changing nothing. Now sends `AD`. *Verified against MC7010 firmware V1.0.0B03: with the token the router returns `{"result":"success"}` and replaying the old `stok` returns the session-expired shape; without it the `stok` stays live.* `LOGIN_OUT` and `USER_LOGOUT` were probed and are not valid commands on this firmware.
 - **Binary Sensors Claimed "Off" Before Any Data Arrived** (§18): `is_on` returned `False` when `coordinator.data` was absent, asserting "not on the best connection" about a router that had not yet been read. Both classes now return `None` (HA `unknown`) until data exists.
-- **Numeric Values Stored at Full Source Precision** (§6): `_safe_float` now rounds to 3 decimal places at parse time, so controller noise does not reach long-term statistics. This is distinct from `suggested_display_precision`, which governs what is _shown_ rather than what is _stored_.
+- **Numeric Values Stored at Full Source Precision** (§6): `_safe_float` now rounds to 3 decimal places at parse time, so controller noise does not reach long-term statistics. This is distinct from `suggested_display_precision`, which governs what is *shown* rather than what is *stored*.
 
 ### Changed
 
-- **SMS storage check ordering**: `_check_sms_storage` now runs **before** the health snapshot is written, so the storage repair state it reports is from the current cycle rather than one cycle stale. The existing `sms_storage_full` repair is _reflected_ in the health sensor's attributes rather than double-raised.
+- **SMS storage check ordering**: `_check_sms_storage` now runs **before** the health snapshot is written, so the storage repair state it reports is from the current cycle rather than one cycle stale. The existing `sms_storage_full` repair is *reflected* in the health sensor's attributes rather than double-raised.
 - **Auth-retry structure**: The mandatory and optional fetches were factored into `_fetch_all()`, preserving the existing "renew session and retry the whole set once" semantics exactly while adding per-endpoint containment for non-auth errors.
 - **Four `# noqa: BLE001` waivers** added where a standard requires a broad catch: the health computation must never crash the update it diagnoses (§19), endpoint containment must absorb an unexpected response (§8), and unload must never be blocked by an unreachable router (§10). Each carries a comment explaining why narrowing defeats the requirement.
 
 ### Tests
 
 - **297 → 381 tests**, coverage 99%.
-- **New `tests/test_integration_setup.py`** (§11): Integration-level tests driven through a **real** `hass` with `await hass.async_block_till_done()` — previously used **zero** times in the suite despite setup creating a background task. The old setup test asserted only that `async_create_background_task` was _called_, against a `MagicMock` hass, so the coroutine inside it was never driven. Also covers entities existing at cold-start failure, which is the evidence §1's departure from `test-before-setup` actually rests on.
+- **New `tests/test_integration_setup.py`** (§11): Integration-level tests driven through a **real** `hass` with `await hass.async_block_till_done()` — previously used **zero** times in the suite despite setup creating a background task. The old setup test asserted only that `async_create_background_task` was *called*, against a `MagicMock` hass, so the coroutine inside it was never driven. Also covers entities existing at cold-start failure, which is the evidence §1's departure from `test-before-setup` actually rests on.
 - **New `tests/test_coordinator_resilience.py`**: Force-refresh-vs-pause in both directions, per-endpoint strike budgets, and every §19 failure regime including the combination of a degraded endpoint during a total outage.
 - **New `tests/test_binary_sensor_health.py`**: Forces `last_update_success = False` — the exact condition the inherited `available` keys off — so removing the override fails a test rather than silently reintroducing the defect.
 - **New `tests/test_options_lifecycle.py`**: Asserts host and password changes reload while slider and pause do not, and exercises the real `logout()` rather than a double.
@@ -5214,9 +5854,9 @@ Brings the integration into full conformance with the PlayFaster `dev_standards.
 
 ### Documentation
 
-- **README — Example Automations reworked**: Every automation now carries inline `note:` annotations on its triggers, conditions and actions, matching the style used in `unifi_network_monitor` and `wifi_ssid_monitor`. The notes explain _why_ a value was chosen (why the APN failover waits five minutes, why SMS forwarding needs `mode: queued`, why the auto-reboot duration is deliberately long) rather than restating what the YAML already says. All examples gained an explicit `description:` and `mode:`.
+- **README — Example Automations reworked**: Every automation now carries inline `note:` annotations on its triggers, conditions and actions, matching the style used in `unifi_network_monitor` and `wifi_ssid_monitor`. The notes explain *why* a value was chosen (why the APN failover waits five minutes, why SMS forwarding needs `mode: queued`, why the auto-reboot duration is deliberately long) rather than restating what the YAML already says. All examples gained an explicit `description:` and `mode:`.
 - **README — five new automation examples**: **Auto-Reboot on a Prolonged Outage** (cross-checks Integration Health before acting, so it does not reboot on the strength of a stale held value), **Cell Tower Change Alert**, **Firmware Change Notification** (paired with the contract-drift detection added this release), **Dynamic Polling Interval**, and **Force a Fresh Reading Before Reporting** (demonstrates that explicit actions now fetch while paused). Polling examples were grouped under a new **Polling Control Automations** heading.
-- **README — cross-linking**: Use Cases, Features and the SMS section now link directly to the relevant worked example, following the pattern in `wifi_ssid_monitor`. Two new Use Cases added: _Unattended Recovery_ and _Knowing When the Integration Itself Is Wrong_. All 31 internal anchors verified to resolve.
+- **README — cross-linking**: Use Cases, Features and the SMS section now link directly to the relevant worked example, following the pattern in `wifi_ssid_monitor`. Two new Use Cases added: *Unattended Recovery* and *Knowing When the Integration Itself Is Wrong*. All 31 internal anchors verified to resolve.
 - **README — new content for this release's behavior**: Integration Health added to the entity table; new **Self-Diagnosis** and **Session Handling** subsections under Technical Architecture; per-endpoint resilience and forced-refresh documented alongside the 3-strike explanation; the "why can't I access the web UI" FAQ extended to cover session release on unload.
 - **`docs/DEVELOPMENT.md`**: Eight new success patterns and four new pitfalls, including the `goformId=LOGOUT` `AD`-token trap **and why the obvious verification cannot detect it** (the ZTE web UI always accepts a login and evicts the existing session, so it reports success whether logout worked or not). Recorded the §3 deviation and the config-entry migration constraint under Technical Debt.
 - **`AGENTS.md`**: Coordinator, API, `__init__`, platform and diagnostics descriptions brought current with the force-refresh, per-endpoint, health-snapshot, options-listener and sanitizer behavior.
@@ -6186,7 +6826,7 @@ Major architectural rewrite. Migrated to native async `aiohttp`, non-blocking ba
 #### New Features & Customization
 
 - **12 New Sensors**: Significant expansion of monitored metrics including **IMEI**, **Hardware Version**, **SIM IMSI**, **SIM ICCID** (System); **eNodeB ID**, **Network Mode**, **Bridge Mode** (Signal); **Upload/Download Speed**, and **Session Usage** (Data).
-- **Custom Entity Naming**: You can now set a custom prefix (e.g., _"My ZTE Router"_) for all devices and entities during setup or via the **Configure** menu.
+- **Custom Entity Naming**: You can now set a custom prefix (e.g., *"My ZTE Router"*) for all devices and entities during setup or via the **Configure** menu.
 - **Smarter Device Organization**: Entities are now automatically grouped into logical sub-devices (**System**, **Signal**, **Data**, and **SMS**) to reduce the overwhelm factor and make it easy to disable certain sections if desired.
 - **Data Integrity Guards**: New "Guard Bands" and safety checks ensure your sensors don't report impossible values or cause errors during initial connection.
 - **Reauthentication Support**: If your router password changes, Home Assistant will now notify you and provide a simple dialog to update your credentials without needing to re-install the integration.

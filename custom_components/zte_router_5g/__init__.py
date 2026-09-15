@@ -27,6 +27,7 @@ from .const import (
     SMS_SEGMENTS_MAX,
 )
 from .coordinator import (
+    PROFILE_STORAGE_VERSION,
     REPAIR_NAMES,
     RETIRED_REPAIR_NAMES,
     UPTIME_STORAGE_VERSION,
@@ -92,17 +93,6 @@ SERVICE_RESET_ENTITIES_SCHEMA = vol.Schema(
         ),
         vol.Optional("save_snapshot", default=False): bool,
         vol.Optional("restore_snapshot", default=False): bool,
-    }
-)
-
-# TEMPORARY — removed with `sms_delete_probe.py`. See that module's header.
-SERVICE_SMS_DELETE_PROBE_SCHEMA = vol.Schema(
-    {
-        vol.Optional("entry_id"): str,
-        vol.Required("confirm"): vol.All(bool, vol.Equal(True)),
-        vol.Optional("action", default="capture"): vol.In(
-            ("capture", "confirm", "full")
-        ),
     }
 )
 
@@ -452,15 +442,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             hass, _get_coordinator(hass, call.data), dict(call.data)
         )
 
-    # TEMPORARY — removed with `sms_delete_probe.py`.
-    async def _handle_sms_delete_probe(call: ServiceCall) -> dict[str, Any]:
-        from .sms_delete_probe import run_probe
-
-        return await run_probe(
-            _get_coordinator(hass, call.data),
-            call.data.get("action", "capture"),
-        )
-
     hass.services.async_register(
         DOMAIN,
         "send_sms",
@@ -480,15 +461,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         "delete_all_sms",
         _handle_delete_all_sms,
         schema=SERVICE_DELETE_ALL_SMS_SCHEMA,
-    )
-
-    # TEMPORARY — removed with `sms_delete_probe.py`.
-    hass.services.async_register(
-        DOMAIN,
-        "sms_delete_probe",
-        _handle_sms_delete_probe,
-        schema=SERVICE_SMS_DELETE_PROBE_SCHEMA,
-        supports_response=SupportsResponse.ONLY,
     )
 
     hass.services.async_register(
@@ -574,7 +546,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # record leaves the counter-regression cross-check disabled and the
     # boot-instant check fully functional.
     await coordinator.async_load_stored_uptime()
+    # What this device's own web interface says about its write path, as
+    # it was last read. A local JSON read and nothing else: parsing and
+    # fetching belong to the background task below, per Section 1.
+    await coordinator.async_load_profile()
     await coordinator.observations.async_load()
+    # What this device's sessions have been observed to last, so the pre-write
+    # reset does not have to re-learn it after every restart. Absent or
+    # unreadable resolves to "nothing learned", which routes back to the idle
+    # constant — the store is advisory, never the anchor.
+    coordinator.api.session_lifetimes = coordinator.observations.session_lifetimes()
 
     # Remember which non-live options this entry was set up with, so the update
     # listener can tell a connection change (reload) from a tuning change
@@ -612,6 +593,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await api.try_set_protocol(5)
             await api.login(5)
             await coordinator.async_refresh()
+            # After the first poll, so the firmware the profile is keyed
+            # to is the one the device is running. Skipped entirely when
+            # the cached profile already matches it.
+            await coordinator.async_learn_profile()
 
             # Discovery no longer runs here. Its only consumer is the
             # diagnostics download, so it runs when the user asks for one
@@ -702,6 +687,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     for version, suffix in (
         (HISTORY_STORAGE_VERSION, "history"),
         (OBSERVED_STORAGE_VERSION, "observed"),
+        (PROFILE_STORAGE_VERSION, "profile"),
     ):
         await Store(hass, version, f"{DOMAIN}_{entry.entry_id}_{suffix}").async_remove()
 

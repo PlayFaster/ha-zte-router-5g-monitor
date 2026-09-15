@@ -1,6 +1,7 @@
 """ZTE Router 5G API client."""
 
 import asyncio
+import base64
 import contextlib
 import hashlib
 import logging
@@ -14,6 +15,7 @@ from typing import Any, NamedTuple, cast
 
 import aiohttp
 
+from . import device_profile, web_sources
 from .const import (
     ABSENT_KEY_PROPORTION_LIMIT,
     APN_PROFILE_SLOTS,
@@ -26,11 +28,18 @@ from .const import (
     DISCOVERY_CHUNK_TIMEOUT,
     DISCOVERY_MAX_ROUNDS,
     DISCOVERY_RELOGIN_LIMIT,
-    JS_BUNDLES,
     MINED_CHUNK_SIZE,
+    REBOOT_VERIFY_INTERVAL,
+    REBOOT_VERIFY_SECONDS,
+    SESSION_AGE_FLOOR_SECONDS,
+    SESSION_AGE_LEARN_MIN_SAMPLES,
+    SESSION_AGE_LEARN_WINDOW,
+    SESSION_AGE_SAFETY,
+    SESSION_AGE_SAMPLE_EVERY,
     SESSION_IDLE_RESET_SECONDS,
     SMS_DELETE_VERIFY_INTERVAL,
     SMS_DELETE_VERIFY_SECONDS,
+    WRITE_LOCK_WAIT_SECONDS,
 )
 from .helpers import is_gsm7
 from .known_names import EXPECTED_NAMES, KNOWN_NAMES, REFUSABLE_NAMES
@@ -60,24 +69,22 @@ SMS_STORE_ALL = "2"
 WRITE_FAILURE_HISTORY = 5
 
 
-# The batch poll is split in two because the router's GET is bounded by a URL
-# length of roughly 2,048 characters, not by a number of names. A single list
-# had grown to within ~160 characters of that ceiling, where the next addition
-# would have truncated the response — which presents as missing fields and is
+# The batch poll is split in two. The router bounds a GET by URL length,
+# roughly 2,048 characters, not by a number of names, and a single list had
+# grown to within ~160 characters of that ceiling. The next addition would have
+# truncated the response, which presents as missing fields and is
 # indistinguishable from firmware key changes.
 #
 # The split is by criticality, not alphabetically:
 #
-#   _CORE_PARAMS      mandatory. Everything feeding an enabled-by-default
-#                     entity, the contract keys, and device identity. Its
-#                     failure is a whole-integration failure.
-#   _EXTENDED_PARAMS  optional. Diagnostics, disabled-by-default entities,
-#                     router settings and the thermal keys. Fetched under its
-#                     own strike budget, so a failure here degrades those
-#                     entities alone and leaves Signal and Data serving real
-#                     values.
+#   _CORE_PARAMS      mandatory: enabled-by-default entities, the contract
+#                     keys, device identity. Its failure fails the integration.
+#   _EXTENDED_PARAMS  optional: diagnostics, disabled-by-default entities,
+#                     router settings, thermal keys. Fetched under its own
+#                     strike budget, so a failure here degrades those entities
+#                     alone and leaves Signal and Data serving real values.
 #
-# Keep each comfortably under budget — `test_batch_poll_urls_stay_within_the
+# Keep each comfortably under budget. `test_batch_poll_urls_stay_within_the
 # _router_budget` covers both.
 _CORE_PARAMS: list[str] = [
     # --- Contract keys (coordinator drift check) ---
@@ -492,6 +499,22 @@ _BATCH_PATH_PREFIX = (
 #
 # `wan_connect_status` is blank on an MC888 Pro that reports `ppp_connected`
 # under `ppp_status` (issue #56), which is why a single name will not do.
+# Spellings of the two names a write's token is derived from. Every other read
+# in this integration already resolves a concept across spellings; these two
+# were the exception, and a device naming either differently could derive no
+# token at all rather than a wrong one.
+#
+# **The alias resolves the read, never the operand.** The token is
+# `hash(hash(rd0 + rd1) + RD)`, and what is hashed is the *value*. A spelling
+# that silently became the operand would produce a well-formed wrong token —
+# a write refused by the router with nothing to say why, which is the failure
+# this project spent four days on. First spelling that answers wins, and the
+# order is the observed one.
+_TOKEN_READS: dict[str, tuple[str, ...]] = {
+    "wa_inner_version": ("wa_inner_version", "wa_version", "inner_version"),
+    "RD": ("RD", "rd"),
+}
+
 _CONTRACT_CONCEPTS: dict[str, tuple[str, ...]] = {
     "network_type": ("network_type", "strBearer"),
     "signal_bars": ("signalbar",),
@@ -516,24 +539,23 @@ _CONTRACT_KEYS = frozenset(
 _SESSION_SENTINELS: tuple[str, ...] = _CONTRACT_CONCEPTS["connection_state"]
 
 
-# Keys this router answers **without a session**. Measured against an MC7010 on
+# Keys this router answers without a session. Measured against an MC7010 on
 # firmware V1.0.0B03 (2026-07-31) by replaying an invalidated stok: of the 80
-# core keys, exactly these three still carried values, and of the 36 extended
-# keys, exactly these two.
+# core keys exactly these three still carried values, and of the 36 extended
+# keys exactly these two.
 #
-# This list is load-bearing, and getting it wrong is not a small error. The
-# expiry rule used to be "every value in the response is empty", which is a
-# property of *what was asked for* rather than of the session. Adding `imei`,
-# `model_name` and `wa_inner_version` to the core batch made that rule
-# permanently false: the core poll could no longer return an all-empty
-# response, so an expired session was scored a clean success and never renewed.
-# Every enabled entity published `unknown` while the health sensor stayed
-# green — the fault reported after a router reboot. `_EXTENDED_PARAMS` was
-# defeated the same way by its two `opms_` keys.
+# The list is load-bearing. The expiry rule used to be "every value in the
+# response is empty", which describes what was asked for rather than the
+# session. Adding `imei`, `model_name` and `wa_inner_version` to the core batch
+# made that rule permanently false: the core poll could no longer return an
+# all-empty response, so an expired session scored a clean success and was never
+# renewed. Every enabled entity published `unknown` while the health sensor
+# stayed green, which is the fault reported after a router reboot.
+# `_EXTENDED_PARAMS` was defeated the same way by its two `opms_` keys.
 #
-# Anything added here must be verified on hardware, never assumed from a name.
-# `test_session_detection` asserts each batch still contains keys of *both*
-# classes, because a batch of only one kind makes the test below undecidable.
+# Verify anything added here on hardware, never from a name.
+# `test_session_detection` asserts each batch still holds keys of both classes,
+# because a batch of only one kind makes the test below undecidable.
 _UNAUTHENTICATED_KEYS = frozenset(
     {
         "imei",
@@ -570,6 +592,65 @@ _SESSION_CHECK_KEYS: tuple[str, ...] = (
     "ppp_status",
     "model_name",
 )
+
+# The firmware's own session flag, and the only direct answer this API gives to
+# "am I logged in". Everything above infers session state from ordinary readings
+# — signal, APN, connection status — which vary by model, by firmware and by
+# whether the router is connected; the witness selection, the populated key
+# filter and the four-way classifier all exist to compensate. The same false
+# positive has been corrected three times: `[3.3.16]` (`wan_connect_status`
+# permanently blank on an MC888 Pro), `[3.3.21-dev]` (`ppp_status` and
+# `model_name`), and 2026-09-14 (the MC7010 refusing its own deletes on a
+# session seconds old).
+#
+# Measured on the MC7010, 2026-09-14: `ok` with a valid session cookie, `""`
+# with no cookie, and `""` with a forged `stok`. The device's own
+# `js/service.js` decides the same way — `cmd=loginfo`, `isLoggedIn` on
+# `case "ok"`.
+#
+# Read with `classify=False`, always. A device without this key answers
+# `{"loginfo": ""}` — a non-empty payload with every value blank — which
+# `_request` scores `undecidable`, then `is_status_expired`, re-logging in and
+# replaying before returning. The caller would then log in again: two or more
+# logins per write against the lockout, on hardware nobody can test.
+SESSION_FLAG_KEY = "loginfo"
+SESSION_FLAG_OK = "ok"
+
+# How `last_session_check` names this source. Deliberately not the key itself:
+# `loginfo` matches `_DENY_NAME_RE` in `diagnostics.py`, which is applied
+# anywhere in a name, and the raw value must never publish in any case. Only
+# the comparison result is reported.
+SESSION_FLAG_SOURCE = "session_flag"
+
+# What a session-flag read established. Four answers, and the distinction
+# between the last two is the whole of phase 2.5: `unproven` means the question
+# has not been put under conditions that could answer it, `unanswered` means it
+# was and this device does not implement the key. Treating those alike sent the
+# first write after a restart out on a session already known to be dead.
+#
+# Neither of the two ever blocks a write. `unanswered` falls back to the
+# witness classifier, which may record a verdict; `unproven` buys the answer
+# with one login and then decides.
+SESSION_CONFIRMED = "confirmed"
+SESSION_DENIED = "denied"
+SESSION_UNANSWERED = "unanswered"
+SESSION_UNPROVEN = "unproven"
+
+
+def _first_spelling(data: Any, spellings: tuple[str, ...]) -> str:
+    """The first spelling this device actually answered, or an empty string.
+
+    This API echoes a name it does not implement as an empty string, so
+    "answered" means populated rather than present. Order is the caller's, and
+    the caller lists the observed spelling first.
+    """
+    if not isinstance(data, dict):
+        return ""
+    for name in spellings:
+        value = data.get(name)
+        if value not in (None, ""):
+            return str(value)
+    return ""
 
 
 class ZTEConnectionError(Exception):
@@ -793,6 +874,64 @@ def _reprobe_notes(
     return notes
 
 
+@dataclass(frozen=True, eq=False)
+class _Call:
+    """One HTTP request to the router, as a value.
+
+    Exists because of the replay. Three sites in `_perform` re-issue the
+    original request after a re-login, and while a request was nine loose
+    parameters, every one of those sites had to name all nine — which is why
+    `_request` grew to 146 lines at a McCabe score of 21 and could not be
+    decomposed: no section could be lifted out without carrying that argument
+    list with it.
+
+    It is also how `[3.3.25-dev5]` became possible. `classify` was dropped by
+    one of the forwarding sites and nothing noticed, because forwarding was a
+    list of names someone had to keep complete. A call carries all of its
+    fields or none of them.
+
+    **Assembled headers are deliberately absent.** `headers` here is what the
+    caller passed and nothing more. The `Referer` and the session `Cookie` are
+    built per attempt from live state, because a replay follows a re-login and
+    must carry the *new* cookie — caching them here would replay the dead one,
+    a silent authentication failure presenting as a router fault, on the
+    recovery path where it is least visible. `test_request_replay_contract`
+    pins it.
+
+    `eq=False` because the fields include dicts: an equality or hash that
+    reached them would fail, and nothing here needs either.
+    """
+
+    method: str
+    path: str
+    params: dict[str, Any] | None = None
+    data: Any = None
+    headers: dict[str, str] | None = None
+    timeout_sec: int | None = None
+    authenticated: bool = True
+    requested: list[str] | None = None
+    classify: bool = True
+    retry: bool = True
+    after_relogin: bool = False
+
+
+@dataclass
+class _Answer:
+    """What one attempt at a request came back with.
+
+    The fields are the locals the transport block used to leave behind for the
+    disposal below it, with the same defaults, so that a response arriving
+    after an early failure records the same status it always did.
+    """
+
+    status: int = 200
+    resp_json: Any = None
+    is_html_page: bool = False
+    body_preview: str = ""
+    content_type: str = ""
+    url_str: str = ""
+
+
 class ZTERouterAPI:
     """Async wrapper for the ZTE Router goform API using aiohttp."""
 
@@ -804,7 +943,6 @@ class ZTERouterAPI:
         password: str,
     ) -> None:
         """Initialize the API."""
-        # Clean host/IP input: strip protocol prefix and trailing slashes
         clean_ip = ip
         if "://" in clean_ip:
             clean_ip = clean_ip.split("://", 1)[1]
@@ -817,67 +955,118 @@ class ZTERouterAPI:
         self.protocol = "http"
         self.referer = f"http://{self.ip}/"
         self.timeout = aiohttp.ClientTimeout(total=15)
-        # Two fields, one piece of state. `session_active` is whether the
-        # router has authenticated us; `stok` is the cookie it issued, which
-        # some firmware does not issue at all (see `_LoginAttempt`). Never
-        # assign either directly: `login()` establishes the pair and
-        # `_clear_session()` drops it, so no site can move one without the
-        # other. A session marked active with no cookie sends no `Cookie`
-        # header, which the router answers by echoing the authenticated keys
-        # back empty — indistinguishable from an expired session, and
-        # published as `unknown` on every entity.
+        # One piece of state in two fields. `session_active` says the router has
+        # authenticated us. `stok` is the cookie it issued; some firmware issues
+        # none (see `_LoginAttempt`). Never assign either directly: `login()`
+        # sets both and `_clear_session()` drops both.
+        #
+        # Active with no cookie sends no `Cookie` header. The router then echoes
+        # the authenticated keys back empty, which reads as an expired session,
+        # and every entity publishes `unknown`.
         self.cookies: dict[str, str] = {}
         self.session_active = False
-        # Whether the most recent LOGOUT was acknowledged by the router. Only
-        # a confirmed logout makes a subsequent read an unauthenticated one.
+        # Whether the router acknowledged the most recent LOGOUT. Only a
+        # confirmed logout makes a later read an unauthenticated one.
         self.logout_acknowledged = False
         # Keys this device answers without a session, measured rather than
         # assumed. Empty until a measurement passes validation; the module
         # constant is used until then.
         self.unauthenticated_keys: frozenset[str] = frozenset()
-        # Why the measured key set is or is not in force. An empty set says
-        # nothing about whether the measurement was skipped, refused or never
-        # reached, and a download carrying only the empty set left that
-        # ambiguous.
+        # Why the measured key set is or is not in force. An empty set alone
+        # cannot say whether the measurement was skipped, refused or never
+        # reached, and a download carrying only that was ambiguous.
         self.measurement_note = "not attempted: setup did not reach it"
         # Whether background setup ran to completion, for the same reason.
         self.setup_completed = False
         # Write commands recovered from the router's own JavaScript. Recorded
-        # for the diagnostics download, and subtracted from the read
-        # candidates — `zte_how_to_access.md` notes these cannot be discovered
-        # by probing, because an unknown `goformId` fails exactly as a refused
-        # one does.
+        # for the diagnostics download, and subtracted from the read candidates.
+        # Probing cannot find them: an unknown `goformId` fails exactly as a
+        # refused one does, per `zte_how_to_access.md`.
         self.goform_ids: list[str] = []
-        # Which candidate `cmd` names this device answers. Populated once per
-        # setup and published in the diagnostics download; never read by
-        # runtime logic.
+        # Which login form this device takes: `LOGIN`, or `LOGIN_MULTI_USER`
+        # with a username. Set by `login`, from the profile where it names one
+        # and from the model string otherwise.
         self.is_multi = True
         self.last_activity = datetime.fromtimestamp(0, UTC)
 
         # Evidence for the diagnostics download. `coordinator.data` is `None`
         # until the first successful poll, so an integration that has never
-        # succeeded produces an empty `data` block — which is exactly when the
-        # download is asked for. These two carry what was rejected and what the
-        # login saw, and both are sanitized on the way out.
+        # succeeded produces an empty `data` block. That is when the download is
+        # usually asked for. These two carry what was rejected and what the
+        # login saw. Both are sanitized on the way out.
         self.last_rejection: dict[str, Any] | None = None
-        # The most recent `DELETE_SMS` attempt. `_require_success` cannot tell
-        # a refused delete from an honoured one on this API: the router
-        # answers `{"result":"success"}` for a message id it does not hold,
-        # measured on the reference MC7010 on 2026-09-05. What was asked for,
-        # what was answered, and which ids survived is the only evidence a
-        # download can carry — see `_record_delete`.
+        # The most recent `DELETE_SMS` attempt. `_require_success` cannot tell a
+        # refused delete from an honoured one here: the router answers
+        # `{"result":"success"}` for a message id it does not hold, measured on
+        # the reference MC7010 on 2026-09-05. What was asked for, what was
+        # answered and which ids survived is the only evidence a download can
+        # carry. See `_record_delete`.
         self.last_delete: dict[str, Any] | None = None
-        # `(wa_inner_version, cr_version)`. The second half of the write
-        # token's first operand, read once and held against the version it
-        # belongs to. See `get_cr_version`.
+        # `(wa_inner_version, cr_version)`. The second half of the write token's
+        # first operand, read once and held against the version it belongs to.
+        # See `get_cr_version`.
         self._cr_version_cache: tuple[str, str] | None = None
-        # Keys this device was observed to populate while authenticated,
-        # from the most recent successful poll. Empty until one completes.
-        # See `session_witnesses`.
+        # The firmware this device was last seen to answer `loginfo: ok` on, or
+        # None. Nothing else establishes that the device implements the key,
+        # because this API echoes an unimplemented name as an empty string. Held
+        # per firmware, like `_cr_version_cache`: an upgrade may withdraw a key,
+        # and a stale belief would make a blank answer look like a dead session.
+        self._session_flag_seen_for: str | None = None
+        # The other half of the tri-state: the firmware on which a blank answer
+        # was proved to mean the key is absent. Established by reading it again
+        # after a login that succeeded. Nothing else proves a negative here, and
+        # one recorded on weaker evidence, such as a failed login, would leave
+        # the device behind a permanent wrong belief.
+        self._session_flag_absent_for: str | None = None
+        # Why the last session-flag read could not answer, or None. The verdict
+        # alone says `unanswered`, which a download cannot tell apart from a
+        # timeout, a refusal or a malformed response. This is the mechanism
+        # phase 2.5 was built around, so the reason is worth a field.
+        self._session_flag_unanswered_because: str | None = None
+        # Keys this device was observed to populate while authenticated, from
+        # the most recent successful poll. Empty until one completes. See
+        # `session_witnesses`.
         self._populated_keys: frozenset[str] = frozenset()
-        # What the last pre-write session check asked and concluded,
-        # published in the download so a blocked write is visible.
-        self.last_session_check: dict[str, Any] | None = None
+        # What the last pre-write session check asked and concluded, published
+        # in the download so a blocked write is visible. Written through a
+        # property so a future assignment site cannot bypass the history below.
+        self._last_session_check: dict[str, Any] | None = None
+        # The most recent check that did not confirm the session. Kept for the
+        # life of this object, never overwritten by a later confirmation.
+        # `last_session_check` is replaced by every check, including the ones a
+        # diagnostics download makes while collecting itself, so reading it
+        # after a failure describes the collection rather than the failure. On
+        # 2026-09-14 that produced a wrong conclusion about the fault phase 2.5
+        # exists to fix, because several successful writes had run in between.
+        self.last_non_confirmed_session_check: dict[str, Any] | None = None
+        # The most recent rejection. Kept for the life of this object and never
+        # cleared. `last_rejection` is cleared by any live verdict, so a stale
+        # rejection cannot be mistaken for a current fault. But building a
+        # diagnostics download reads the router, and those reads produce live
+        # verdicts, so the field that explains a rejection was wiped by the act
+        # of collecting it: three attempts to capture the MC7010 fault of
+        # 2026-09-14 returned `null` for that reason. This companion is
+        # historical. It says a rejection happened, not that one is happening
+        # now, and the download publishes both, labelled.
+        self.last_rejection_seen: dict[str, Any] | None = None
+        # When the current session was established, and how long previous ones
+        # lasted. The age clock is its own field and is set only by `login`.
+        # `last_activity` is refreshed by every authenticated request, so
+        # reusing it would silently keep idle semantics. See
+        # `SESSION_AGE_LEARN_MIN_SAMPLES` for why the threshold is learned.
+        self.session_started: datetime | None = None
+        self.session_lifetimes: list[float] = []
+        self._age_checks = 0
+        # How often the pre-write check returned a non-confirmed verdict, and
+        # how many of those a login then confirmed. The check is an
+        # optimisation; this is the evidence for whether it earns its round
+        # trip. See item 102.
+        self.session_check_stats: dict[str, int] = {
+            "checks": 0,
+            "not_confirmed": 0,
+            "relogin_confirmed": 0,
+            "relogin_failed": 0,
+        }
         # The sent and draft totals either side of the most recent `SEND_SMS`.
         # Counts only. See `_classify_send`, and the MC888 Pro that stores
         # messages it does not transmit.
@@ -889,9 +1078,27 @@ class ZTERouterAPI:
         # later poll: a reporter presses the button and downloads diagnostics
         # afterwards, sometimes days afterwards.
         self.write_failures: list[dict[str, Any]] = []
-        # Set only by the temporary SMS delete probe. Absent from the
-        # download otherwise, and removed with that module.
-        self.delete_probe: dict[str, Any] | None = None
+        # Writes and polls take turns over the one session this router grants.
+        # A poll holds it for the length of a batch; a write waits a bounded
+        # time and then goes ahead anyway. See `WRITE_LOCK_WAIT_SECONDS`.
+        self._write_lock = asyncio.Lock()
+        # How often a write gave up waiting. The collision this guards against
+        # is inferred rather than observed — what is measured is that this
+        # router grants the session to the newest login, not that a poll has
+        # been caught mid-flight — so the counter is the evidence for whether
+        # the lock earns its place, the same way `session_check_stats` is for
+        # the pre-write check.
+        self.write_lock_timeouts = 0
+        # What this device's own web interface says about its write path,
+        # learned in the background and cached against the firmware it was
+        # read from. Empty until then, and empty is a supported state: every
+        # consumer below falls back to the behaviour that shipped before this,
+        # per fact rather than wholesale, because a firmware that hides one
+        # answer still supplies the rest.
+        self.profile: dict[str, Any] = {}
+        # Which path each profile-backed decision actually took, so a download
+        # says whether a value was learned or fallen back to. Principle 3.
+        self.profile_decisions: dict[str, str] = {}
         self.login_metadata: dict[str, Any] = {}
         self._session_was_fresh = False
         # The transport-level facts about the most recent response, kept so a
@@ -923,14 +1130,31 @@ class ZTERouterAPI:
             self.last_rejection = None
             return
 
-        asked = list(requested) if requested else list(payload)
+        # `keys_absent` is what the caller asked for and did not get back, and
+        # it can only be computed against a list of what was asked. Falling
+        # back to the payload's own keys made the set empty by construction on
+        # every device — `k not in payload` for k drawn from `payload` is never
+        # true — so a field that reads as "the router omitted nothing" was
+        # reporting that nothing had been compared.
+        #
+        # `None` where it cannot be computed, rather than `[]`. The two look
+        # alike in a download and mean opposite things: one says the router
+        # answered everything it was asked, the other says nobody knows.
+        #
+        # Diagnostics only. This runs after the verdict is decided and fills
+        # `last_rejection`; no classification reads it.
         self.last_rejection = {
             "verdict": verdict,
             "keys_populated": sorted(k for k, v in payload.items() if v != ""),
             "keys_empty": sorted(k for k, v in payload.items() if v == ""),
-            "keys_absent": sorted(k for k in asked if k not in payload),
+            "keys_absent": sorted(k for k in requested if k not in payload)
+            if requested
+            else None,
             "payload": dict(payload),
         }
+        # The historical copy. Never cleared, so a download can still explain a
+        # rejection that its own reads have since resolved.
+        self.last_rejection_seen = dict(self.last_rejection)
 
     def _record_delete(
         self,
@@ -1159,7 +1383,19 @@ class ZTERouterAPI:
         inbox — which is precisely how an expired session surfaced to users as
         "no SMS" rather than as an error (masked_errors_check Class A/B).
         """
-        if not isinstance(data, dict) or key not in data:
+        # Concepts, not names, and for the same reason every read already
+        # resolves one: `wan_connect_status` is blank on an MC888 Pro that
+        # reports the same thing under `ppp_status`, and a check keyed on one
+        # spelling calls that a connection error. A key that names no known
+        # concept keeps its literal test.
+        #
+        # This widens what the check accepts, and deliberately: it sits behind
+        # the expiry detection in `_request` rather than in front of it, so a
+        # spelling it now tolerates has already passed that.
+        spellings = next(
+            (names for names in _CONTRACT_CONCEPTS.values() if key in names), (key,)
+        )
+        if not isinstance(data, dict) or not any(name in data for name in spellings):
             raise ZTEConnectionError(
                 f"Response to {cmd} is missing '{key}' — the session is probably "
                 f"expired or the firmware changed its API. Got: "
@@ -1207,28 +1443,52 @@ class ZTERouterAPI:
     async def note_write_refusal(self, cmd: str, timeout_sec: int | None = None) -> str:
         """Decide, after a refusal, whether the session was the cause.
 
-        The pre-write check answers "is this session alive" by prediction; this
-        answers it by evidence, once the router has already spoken. A refusal
-        with a provably live session is a real refusal and keeps its own error.
-        A refusal with a provably dead session raises `ZTEAuthError`, which
-        names the session as the cause rather than reporting that the device
-        declined a command it never saw.
+        The pre-write check predicts whether the session is alive. This decides
+        it from evidence, after the router has spoken. A refusal on a provably
+        live session is a real refusal and keeps its own error. A refusal on a
+        provably dead session raises `ZTEAuthError`, which names the session as
+        the cause rather than saying the device declined a command it never saw.
 
-        That exception does **not** start a reauthentication flow, and earlier
-        wording here and in the `[3.3.22-dev1]` changelog entry said it did.
+        That exception does not start a reauthentication flow.
         `ConfigEntryAuthFailed` is raised only by the coordinator, on the poll
-        path; an exception from a button press surfaces on the action and
-        nothing else. The next poll is what asks the user to sign in again.
+        path. An exception from a button press surfaces on the action alone. The
+        next poll is what asks the user to sign in again. Earlier wording here
+        and in the `[3.3.22-dev1]` changelog entry said otherwise.
 
-        **It never replays the write.** Renewing the session and resending was
-        tried on hardware and did not work, and for `SEND_SMS` a replay can
-        deliver the message twice with no way to tell that it did.
+        It never replays the write. Renewing the session and resending was tried
+        on hardware and did not work, and for `SEND_SMS` a replay can deliver
+        the message twice with no way to tell that it did.
 
         Costs one short read, and only on the failure path.
+
+        It asks `loginfo` first. This carried the same defect as the pre-write
+        check: it ran the same witness selection, and a pool the device answers
+        empty turned a genuine command refusal into "the session is gone". Only
+        a direct denial from the router raises now. A witness verdict is
+        recorded and returned, never raised.
         """
+        flag = await self.read_session_flag(timeout_sec=timeout_sec)
+        # `unproven` is decided here the way `unanswered` is — by falling
+        # through to the witnesses. Resolving it would mean logging in, and a
+        # login on the failure path of a write that may already have been
+        # carried out buys an answer to the wrong question.
+        if flag in (SESSION_CONFIRMED, SESSION_DENIED):
+            self.last_session_check = {
+                "source": SESSION_FLAG_SOURCE,
+                "verdict": flag,
+                "after": cmd,
+            }
+            if flag == SESSION_DENIED:
+                raise ZTEAuthError(
+                    f"Session expired/unauthorized: the router refused {cmd} "
+                    f"and reported it is not logged in."
+                )
+            return flag
+
         witnesses = self.session_witnesses()
         if not witnesses:
             self.last_session_check = {
+                "source": "witnesses",
                 "witnesses": [],
                 "verdict": "undecidable after refusal",
                 "after": cmd,
@@ -1250,6 +1510,7 @@ class ZTERouterAPI:
             )
         except (ZTEAuthError, ZTEConnectionError):
             self.last_session_check = {
+                "source": "witnesses",
                 "witnesses": witnesses,
                 "verdict": "unreadable after refusal",
                 "after": cmd,
@@ -1257,16 +1518,57 @@ class ZTERouterAPI:
             return "undecidable"
         verdict = _classify_session(answer, request, self.unauthenticated_key_set())
         self.last_session_check = {
+            "source": "witnesses",
             "witnesses": witnesses,
             "verdict": verdict,
             "after": cmd,
         }
-        if verdict == "expired":
-            raise ZTEAuthError(
-                f"Session expired/unauthorized: the router refused {cmd} and a "
-                f"read taken immediately afterwards shows the session is gone."
-            )
+        # Deliberately not raised. The witness path is the fallback for a
+        # device that does not answer `loginfo`, and its `expired` verdict is
+        # the one this project has now seen be wrong on healthy sessions three
+        # times. The refusal keeps its own error and the verdict is recorded.
         return verdict
+
+    def _require_confirmed_session(self, cmd: str) -> None:
+        """Refuse a write that must not be issued twice, on a doubtful session.
+
+        The only write this guards is `SEND_SMS`. Every other command is either
+        verified after the fact or harmless to repeat, so sending one on an
+        unconfirmed session costs at most a misleading error the next poll
+        corrects. The two switches read back, SMS delete re-lists, and a reboot
+        is confirmed by the router ceasing to answer. A send has neither
+        property: reporting it as unverified invites the user to send again, and
+        this API gives no way to tell whether the first one went out.
+
+        `_ensure_session` has already run, via `get_ad`, and has already tried a
+        re-login. A non-confirmed verdict here means that login did not produce
+        a working session.
+
+        It asks what the device can do, not what a field is labelled. The test
+        used to be that `last_session_check` carried the flag's source with any
+        verdict but `confirmed`. A device without the key was spared only
+        because its path records a different source string, a literal in another
+        method with nothing asserting the connection. Once an unproven flag
+        records under the flag's own source, that form would have blocked every
+        send on every device without `loginfo`. That is issue #56's shape in a
+        new place.
+
+        So it blocks only where the device is known to implement the key and the
+        router has actually denied the session. A device that does not answer
+        `loginfo` is never blocked, and its witness verdict is not consulted.
+        """
+        if not self._session_flag_supported():
+            return
+        check = self.last_session_check or {}
+        if check.get("source") != SESSION_FLAG_SOURCE:
+            return
+        if check.get("verdict") != SESSION_DENIED:
+            return
+        raise ZTEAuthError(
+            f"{cmd} was not sent: the router reports it is not logged in, and "
+            f"signing in again did not change that. The command was never "
+            f"issued, so nothing was sent twice."
+        )
 
     @staticmethod
     def _is_refusal(data: Any) -> bool:
@@ -1418,76 +1720,397 @@ class ZTERouterAPI:
         companion = [k for k in unauthenticated if k not in witnesses][:1]
         return [*witnesses, *companion]
 
+    def _session_flag_supported(self) -> bool:
+        """Whether this device has answered `loginfo: ok` on this firmware.
+
+        Until it has, a blank answer is uninformative and must not be read as a
+        denial. See `read_session_flag`.
+
+        The firmware is taken from `_cr_version_cache`, which every write path
+        populates on its way to the token and which is already discarded when
+        the version changes. Reading `wa_inner_version` here instead would add
+        a request to a check whose whole justification is that it costs one.
+        The firmware rule itself is in `_belief_holds`.
+        """
+        return self._belief_holds("_session_flag_seen_for")
+
+    def _session_flag_absent(self) -> bool:
+        """Whether this device has been proved *not* to implement the key.
+
+        The mirror of `_session_flag_supported`, and held to the same firmware
+        rule for the same reason: an upgrade may add the key, and a negative
+        that outlived the firmware it was measured on would keep a device on
+        the witness fallback forever.
+
+        Proved only one way — a blank answer read again after a login that
+        succeeded. See `_ensure_session`.
+        """
+        return self._belief_holds("_session_flag_absent_for")
+
+    def _belief_holds(self, attr: str) -> bool:
+        """Whether what `attr` records still applies to the firmware running.
+
+        One rule, shared by the positive and the negative so the two cannot
+        drift: a belief recorded before the firmware was known adopts the
+        version as soon as one is, and a belief recorded against a version the
+        device has since moved off is discarded.
+
+        **The empty string means "learned, firmware not yet known".** The check
+        runs ahead of the token derivation that fills `_cr_version_cache`, so
+        the first answer on a fresh object is always recorded without a version
+        beside it. Comparing that against a version the cache acquires moments
+        later discarded the proof on the very same write, and the mechanism
+        then never fired again — found by attacking this rule rather than by
+        any test. The window between the two is a single write, inside which
+        the firmware cannot have changed.
+        """
+        recorded: str | None = getattr(self, attr)
+        if recorded is None:
+            return False
+        current = self._cr_version_cache[0] if self._cr_version_cache else None
+        if not recorded:
+            if current:
+                setattr(self, attr, current)
+            return True
+        if current is None:
+            return True
+        return recorded == current
+
+    def _note_session_replaced(self) -> None:
+        """Record how long the session being replaced lasted, if it expired.
+
+        Only expiries teach anything. A session replaced while it was still
+        working — a reconnect, a config reload, a login this integration chose
+        to make — says nothing about the device's boundary, and a session ended
+        by another client taking it says something about that client. Neither is
+        a lifetime.
+
+        The guard is the floor: anything shorter is discarded rather than
+        classified, because the router does not report why a session ended and
+        this project cannot tell the cases apart from the outside.
+        """
+        if self.session_started is None:
+            return
+        lasted = (datetime.now(UTC) - self.session_started).total_seconds()
+        if lasted < SESSION_AGE_FLOOR_SECONDS:
+            return
+        self.session_lifetimes.append(lasted)
+        del self.session_lifetimes[:-SESSION_AGE_LEARN_WINDOW]
+
+    def learned_session_age_limit(self) -> float | None:
+        """When to preemptively replace the session, or None if not yet known.
+
+        The shortest of the recent samples, less a safety margin, never below
+        the floor. Shortest rather than typical because being early costs one
+        login and being late costs a failed request, a login and a retry — the
+        asymmetry the `[3.3.0-rc2]` decision rests on. Recent rather than
+        all-time because a session can end for reasons other than time.
+
+        `None` until enough samples agree, and the idle reset runs meanwhile.
+        """
+        if len(self.session_lifetimes) < SESSION_AGE_LEARN_MIN_SAMPLES:
+            return None
+        return max(
+            SESSION_AGE_FLOOR_SECONDS,
+            min(self.session_lifetimes) * SESSION_AGE_SAFETY,
+        )
+
+    def _session_is_past_its_learned_age(self) -> bool:
+        """Whether the session should be replaced before this request.
+
+        Returns False on the sampling pass. An active preempt destroys every
+        session before it expires, so no further expiry is observed and the
+        learned value can never rise — it would be locked to whatever was first
+        seen, including across a firmware change that lengthened the boundary.
+        Letting one check in `SESSION_AGE_SAMPLE_EVERY` through costs a failed
+        request and keeps the learner fed.
+        """
+        limit = self.learned_session_age_limit()
+        if limit is None or self.session_started is None:
+            return False
+        self._age_checks += 1
+        if self._age_checks % SESSION_AGE_SAMPLE_EVERY == 0:
+            return False
+        age = (datetime.now(UTC) - self.session_started).total_seconds()
+        return age > limit
+
+    @property
+    def last_session_check(self) -> dict[str, Any] | None:
+        """What the most recent pre-write session check concluded."""
+        return self._last_session_check
+
+    @last_session_check.setter
+    def last_session_check(self, check: dict[str, Any] | None) -> None:
+        """Record the check, and keep a copy if it was not a confirmation.
+
+        A property rather than a helper every caller must remember to use:
+        there are eleven assignment sites today and the history is worth
+        exactly as much as its weakest one.
+        """
+        self._last_session_check = check
+        if check and check.get("verdict") != SESSION_CONFIRMED:
+            self.last_non_confirmed_session_check = {
+                **check,
+                "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            }
+
+    def session_flag_state(self) -> str:
+        """`supported`, `absent` or `unknown`, for this firmware.
+
+        Published because `supported: false` alone cannot be read: it is the
+        answer both for a device that does not implement the key and for one
+        no write has yet reached, and telling those apart is the whole of
+        phase 2.5. A download that says `unknown` is saying the mechanism has
+        not been exercised on this device, not that it does not apply.
+        """
+        if self._session_flag_supported():
+            return "supported"
+        if self._session_flag_absent():
+            return "absent"
+        return "unknown"
+
+    def session_flag_report(self) -> dict[str, Any]:
+        """What the session flag does on this device, for the download.
+
+        The raw `loginfo` value never publishes — it matches `_DENY_NAME_RE`
+        in `diagnostics.py`, and the value is not what anyone needs. What is
+        needed is whether this device implements the key at all, because that
+        decides whether the pre-write check applies to it.
+
+        Settles the one question the reference hardware cannot answer: the
+        MC888 Pro has never been observed with a dead session, so whether it
+        implements the flag is unknown. This field answers it from that
+        device's next download, with no write and nothing asked of its owner.
+        """
+        return {
+            "state": self.session_flag_state(),
+            "supported": self._session_flag_seen_for is not None,
+            "confirmed_on_firmware": self._session_flag_seen_for or None,
+            "absent_on_firmware": self._session_flag_absent_for or None,
+            "checks": dict(self.session_check_stats),
+            "unanswered_because": self._session_flag_unanswered_because,
+        }
+
+    def _session_flag_names(self) -> tuple[str, str]:
+        """The reading this firmware treats as "the session is still mine".
+
+        Item 28. Both readable devices decide it identically — `"ok" ==
+        loginfo` — so on each of them this resolves to the constants it
+        replaces. The value is the firmware that names something else, where
+        the constant reads an absent key, the answer is a blank, and the
+        learned-support rule then correctly declines to apply the mechanism at
+        all. That is a safe failure and a silent one: the check would simply
+        never work on that device, and nothing would say why.
+
+        Both halves come from the same expression or neither does. A key
+        learned without its accepted value would be read and compared against
+        the wrong literal, which is worse than not reading it.
+
+        **The raw value still never reaches a download.** It is not stored —
+        only the comparison result is — so the redaction of `loginfo` by name
+        in `diagnostics.py` is a second line rather than the only one.
+        """
+        learned = self.profile.get("session_flag", {})
+        key, ok_value = learned.get("key"), learned.get("ok_value")
+        if key and ok_value:
+            self._decide("session_flag", "learned")
+            return key, ok_value
+        self._decide("session_flag", "fallback_not_learned")
+        return SESSION_FLAG_KEY, SESSION_FLAG_OK
+
+    async def read_session_flag(self, timeout_sec: int | None = None) -> str:
+        """Ask the router directly whether this session is logged in.
+
+        Returns `SESSION_CONFIRMED`, `SESSION_DENIED` or `SESSION_UNANSWERED`.
+        See `SESSION_FLAG_KEY` for the measurement and for why this read is
+        never classified.
+
+        A transport failure answers `SESSION_UNANSWERED` rather than raising.
+        This is an optimisation on the write path. It turns a refusal into a
+        re-login before a command is spent, and an optimisation that cannot run
+        must not decide anything.
+
+        Why it could not answer is kept in `_session_flag_unanswered_because`
+        and published. `unanswered` alone cannot be told apart from a timeout,
+        a refusal or a malformed response, and this is the mechanism phase 2.5
+        was built around.
+        """
+        flag_key, flag_ok = self._session_flag_names()
+        try:
+            data = await self._request(
+                "GET",
+                "goform/goform_get_cmd_process",
+                params={"isTest": "false", "cmd": flag_key},
+                authenticated=True,
+                classify=False,
+                _retry=False,
+                timeout_sec=timeout_sec,
+            )
+        except Exception as err:  # noqa: BLE001 - an unusable answer is not a verdict
+            self._session_flag_unanswered_because = type(err).__name__
+            return SESSION_UNANSWERED
+        if not isinstance(data, dict) or flag_key not in data:
+            self._session_flag_unanswered_because = (
+                "not a mapping" if not isinstance(data, dict) else "key absent"
+            )
+            return SESSION_UNANSWERED
+        self._session_flag_unanswered_because = None
+
+        if str(data[flag_key]).strip() == flag_ok:
+            # Proof the device implements the key, taken at a moment we know
+            # the session worked. Nothing else establishes that, and without it
+            # a blank answer is meaningless.
+            self._session_flag_seen_for = (
+                self._cr_version_cache[0] if self._cr_version_cache else ""
+            )
+            return SESSION_CONFIRMED
+
+        if self._session_flag_supported():
+            return SESSION_DENIED
+
+        # Blank, and this device has never been seen to answer `ok`. This
+        # firmware echoes a name it does not implement as an empty string, so a
+        # device without the key and a device with a dead session are
+        # indistinguishable *from this read alone* — and treating that as a
+        # denial would put every write on such a device behind a login it does
+        # not need, and would block `SEND_SMS` on it outright. That is issue
+        # #56's shape in a new place.
+        #
+        # Deliberately *not* resolved by reading other keys alongside this one.
+        # Which keys a device populates is exactly the judgement that has been
+        # wrong three times; a mechanism that needs it is the mechanism being
+        # replaced. It is resolved by a login instead — see `_ensure_session`.
+        if self._session_flag_absent():
+            return SESSION_UNANSWERED
+        return SESSION_UNPROVEN
+
     async def _ensure_session(self, timeout_sec: int | None = None) -> None:
         """Confirm the session before a write derives its ``AD`` token.
 
-        Necessary because of how the two halves of this API fail differently.
-        A *read* signals a dead session by echoing every requested key back
-        empty, which `_request` detects and recovers from. A *write* answers
-        ``{"result":"failure"}`` — indistinguishable from a command the router
-        declined on its merits — so nothing recovers it, and a control failed on
-        every attempt until some read happened to re-login. That is the reported
-        fault: turning the LED on failed repeatedly after the router's web page
-        had taken the session, until Refresh Now ran the batch poll.
+        The two halves of this API fail differently. A *read* signals a dead
+        session by echoing every requested key back empty, which `_request`
+        detects and recovers from. A *write* answers ``{"result":"failure"}``,
+        which is what the router also sends for a command it declined on its
+        merits. Nothing recovers that, and a control failed on every attempt
+        until some read happened to re-login. `[3.3.2-rc5]` fixed that fault:
+        turning the LED on failed repeatedly after the router's web page had
+        taken the session, until Refresh Now ran the batch poll.
 
-        It must happen *before* the write, not after it fails. Recovering
-        afterwards was tried first and **verified not to work on hardware**: the
-        session was renewed and the write replayed, and the router refused it
-        again. Why is still not established, and the design rests on the
-        measurement rather than on an explanation.
+        This never raises. Its job is to trigger a re-login before the write,
+        not to decide whether the write may be sent. The blocking was never
+        designed. It was inherited from `_request`'s error contract, and it is
+        how the same false positive reached users three times. A write that is
+        unsafe to repeat is blocked by its own caller reading
+        `last_session_check`; see `send_sms`.
 
-        What is known about ``RD``, measured 2026-09-13: two consecutive reads
-        return the same value, a pause without a write does not change it, and a
-        write does. A browser capture of three deletes in one session carries
-        three different values. The trigger is not established from the samples
-        taken, so "the replayed token was spent" remains possible and unproven —
-        it has been offered and withdrawn twice in these notes, and is recorded
-        here as an open question rather than a third conclusion.
+        The sequence:
 
-        Retrying is also unattractive on its own terms: ``{"result":"failure"}``
-        is equally what the router returns for a command it declined on its
-        merits, so resending would deliver a `send_sms` twice.
+        1. Read `loginfo`. Confirmed, and the write proceeds.
+        2. Otherwise log in and read it again.
+        3. Still not confirmed, and the write proceeds anyway. Reaching here
+           means a login did not produce a working session, for reasons the
+           router does not report, and a write is the better way to find out
+           than a refusal we invented.
+        4. A device that does not answer `loginfo` falls back to the witness
+           classifier, which records a verdict and blocks nothing.
 
         Costs one short read (~16 ms) on a path where the write itself is
-        ~112 ms. `_request` does the recovery: a retrying read re-logs-in on its
-        own when the session has gone.
+        ~112 ms.
+        """
+        self.session_check_stats["checks"] += 1
+        flag = await self.read_session_flag(timeout_sec=timeout_sec)
+        if flag == SESSION_CONFIRMED:
+            self.last_session_check = {"source": SESSION_FLAG_SOURCE, "verdict": flag}
+            return
 
-        **Reads `_SESSION_CHECK_KEYS`, not one key.** It read
-        `wan_connect_status` alone until v3.3.16, which is blank at all times on
-        an MC888 Pro. A response of one blank value carries no unauthenticated
-        key, so `_classify_session` cannot rule and the caller falls back to
-        "every value is empty, so the session is gone" — permanently true on
-        that device. Every write was refused before it was sent, which is the
-        SMS deletion fault in issue #56. See that constant for why each key is
-        in the list.
+        if flag in (SESSION_DENIED, SESSION_UNPROVEN):
+            unproven = flag == SESSION_UNPROVEN
+            self.session_check_stats["not_confirmed"] += 1
+            try:
+                await self.login(timeout_sec=timeout_sec)
+            except (ZTEAuthError, ZTEConnectionError, ZTECredentialsError) as err:
+                # Nothing is concluded from a login that did not happen. On the
+                # unproven branch in particular, recording absence here would
+                # turn a momentary connectivity problem into a belief that
+                # persists for the life of the firmware.
+                self.session_check_stats["relogin_failed"] += 1
+                if unproven:
+                    await self._note_witness_verdict(timeout_sec=timeout_sec)
+                    return
+                self.last_session_check = {
+                    "source": SESSION_FLAG_SOURCE,
+                    "verdict": flag,
+                    "relogin": f"{type(err).__name__}: {err}",
+                }
+                return
+            flag = await self.read_session_flag(timeout_sec=timeout_sec)
+            if unproven and flag != SESSION_CONFIRMED:
+                # Asked on a session that provably works, and still blank: the
+                # device does not implement the key. Recorded against this
+                # firmware and never asked again on it, which is what keeps the
+                # one extra login from becoming one per write.
+                self._session_flag_absent_for = (
+                    self._cr_version_cache[0] if self._cr_version_cache else ""
+                )
+                self.session_check_stats["relogin_failed"] += 1
+                await self._note_witness_verdict(timeout_sec=timeout_sec)
+                return
+            if flag == SESSION_CONFIRMED:
+                # The check earned its round trip: a write was about to be sent
+                # on a session the router had already ended, and was not.
+                self.session_check_stats["relogin_confirmed"] += 1
+            else:
+                self.session_check_stats["relogin_failed"] += 1
+            self.last_session_check = {
+                "source": SESSION_FLAG_SOURCE,
+                "verdict": flag,
+                "relogin": "attempted",
+            }
+            return
 
-        `requested` is passed so the absent-key guard applies: a device that
-        answers none of these is a truncated read or firmware key-name drift,
-        and must not be scored as an expiry.
+        await self._note_witness_verdict(timeout_sec=timeout_sec)
 
-        **The keys are chosen per device, and the check is skipped when none
-        qualifies.** See `session_witnesses`. A device whose session cannot be
-        judged from a read is not a device whose writes should be blocked: the
-        write is sent, and the router's own answer decides. That is the only
-        part of this guard that moved — a refusal is still classified, but
-        afterwards, by `note_write_refusal`, and never replayed.
+    async def _note_witness_verdict(self, timeout_sec: int | None = None) -> None:
+        """Record what the witness classifier makes of the session.
+
+        The fallback for a device that does not answer `loginfo`. It records
+        and never raises: a wrong witness selection is exactly how this check
+        blocked valid writes, and nothing it concludes is trusted enough to
+        spend a command on.
         """
         witnesses = self.session_witnesses()
         if not witnesses:
             self.last_session_check = {
+                "source": "witnesses",
                 "witnesses": [],
                 "verdict": "no witness available; the write was not blocked",
             }
             return
         request = self._session_check_request(witnesses)
-        await self._request(
-            "GET",
-            "goform/goform_get_cmd_process?multi_data=1&isTest=false"
-            "&sms_received_flag_flag=0&cmd=" + ",".join(request),
-            timeout_sec=timeout_sec,
-            requested=request,
-        )
-        self.last_session_check = {"witnesses": witnesses, "verdict": "live"}
+        try:
+            answer = await self._request(
+                "GET",
+                "goform/goform_get_cmd_process?multi_data=1&isTest=false"
+                "&sms_received_flag_flag=0&cmd=" + ",".join(request),
+                timeout_sec=timeout_sec,
+                requested=request,
+                classify=False,
+                _retry=False,
+            )
+        except (ZTEAuthError, ZTEConnectionError):
+            self.last_session_check = {
+                "source": "witnesses",
+                "witnesses": witnesses,
+                "verdict": "unreadable; the write was not blocked",
+            }
+            return
+        self.last_session_check = {
+            "source": "witnesses",
+            "witnesses": witnesses,
+            "verdict": _classify_session(
+                answer, request, self.unauthenticated_key_set()
+            ),
+        }
 
     def _parse_date(self, date_str: str) -> str | None:
         """Decode a received message's timestamp, offset included.
@@ -1647,6 +2270,7 @@ class ZTERouterAPI:
         timeout_sec: int | None = None,
         authenticated: bool = True,
         requested: list[str] | None = None,
+        classify: bool = True,
     ) -> Any:
         """Renew the session and put the same request again, once.
 
@@ -1655,6 +2279,13 @@ class ZTERouterAPI:
         session were dead raises rather than looping. `_after_relogin` marks
         the replay so a fresh session producing an expired-looking response is
         read as the rule not fitting the device, not as an auth failure.
+
+        **`classify` is forwarded, and was not until v3.3.25-dev5.** It was the
+        one parameter of the ten that this method dropped, so a replayed call
+        reverted to the default and could be scored as an expired session — a
+        verdict the caller had explicitly declined. `requested` was forwarded
+        and `classify` was not, and `_session_rejected` reads the two together,
+        which is what marks it an oversight rather than a decision.
         """
         await self.login(timeout_sec=timeout_sec)
         return await self._request(
@@ -1666,6 +2297,7 @@ class ZTERouterAPI:
             timeout_sec=timeout_sec,
             authenticated=authenticated,
             requested=requested,
+            classify=classify,
             _retry=False,
             _after_relogin=True,
         )
@@ -1685,25 +2317,239 @@ class ZTERouterAPI:
         _retry: bool = True,
         _after_relogin: bool = False,
     ) -> Any:
-        """Centralized request helper that handles session creation and auto-renewal."""
-        tout = aiohttp.ClientTimeout(total=timeout_sec) if timeout_sec else self.timeout
+        """Centralized request helper that handles session creation and auto-renewal.
 
-        # Preempt an idle-expired session rather than discovering it on failure.
-        now = datetime.now(UTC)
-        if (
-            authenticated
-            and self.session_active
-            and (now - self.last_activity).total_seconds() > SESSION_IDLE_RESET_SECONDS
-        ):
+        The signature is unchanged and every caller and test still sees it. The
+        body is now a `_Call` and a delegation: see `_Call` for why a request
+        had to become a value before any of this could be split up.
+        """
+        return await self._perform(
+            _Call(
+                method=method,
+                path=path,
+                params=params,
+                data=data,
+                headers=headers,
+                timeout_sec=timeout_sec,
+                authenticated=authenticated,
+                requested=requested,
+                classify=classify,
+                retry=_retry,
+                after_relogin=_after_relogin,
+            )
+        )
+
+    def _preempt_stale_session(self, authenticated: bool) -> None:
+        """Replace a session that has probably already ended.
+
+        Two clocks, and only one of them is right. `SESSION_IDLE_RESET_SECONDS`
+        measures time since the last authenticated request, but the boundary it
+        guards is not extended by traffic, and idle time between polls is
+        roughly the scan interval — configurable from 30 to 3600 seconds — so at
+        any interval at or below the constant it never fires at all. Session
+        age measures the clock that actually runs out, and fires correctly at
+        every interval, but only once a threshold has been learned from this
+        device; see `SESSION_AGE_LEARN_MIN_SAMPLES`.
+
+        Until then the idle reset runs unchanged. `[3.3.0-rc2]` declined
+        dropping the proactive reset in favour of reactive detection — three
+        round trips instead of two, and the loss of the second line of defence
+        behind the `[3.3.0-dev12]` blank-payload fault — and nothing here
+        weakens it.
+        """
+        if not (authenticated and self.session_active):
+            return
+        if self._session_is_past_its_learned_age():
+            _LOGGER.debug(
+                "Session past its learned age of %.0fs; resetting session",
+                self.learned_session_age_limit() or 0.0,
+            )
+            self._clear_session()
+            return
+        idle = (datetime.now(UTC) - self.last_activity).total_seconds()
+        if idle > SESSION_IDLE_RESET_SECONDS:
             _LOGGER.debug("Session likely expired due to inactivity; resetting session")
             self._clear_session()
 
-        if authenticated and not self.session_active:
-            await self.login(timeout_sec=timeout_sec)
+    def _build_headers(self, call: _Call) -> dict[str, str]:
+        """Assemble the headers for one attempt, from live state.
+
+        Called per attempt and never cached on the call. A replay follows a
+        re-login and must carry the *new* cookie; headers built once and reused
+        would send the dead one, which is an authentication failure presenting
+        as a router fault, on the recovery path where it is least visible.
+        """
+        req_headers = {"Referer": f"{self.referer}index.html"}
+        if call.headers:
+            req_headers.update(call.headers)
+        # A session with no cookie is normal on firmware that binds the
+        # session to the client address; there is simply no header to send.
+        if call.authenticated and self.cookies:
+            req_headers["Cookie"] = _cookie_header(self.cookies)
+        return req_headers
+
+    async def _send(self, call: _Call) -> _Answer:
+        """Put one request and read what came back. No recovery, no verdicts.
+
+        The exception clauses keep their order. `ZTEAuthError` and
+        `ZTEConnectionError` are re-raised ahead of the broad clause because a
+        nested call's error must not be remapped into `Request failed:` — the
+        router blamed for a session problem, which is the class of mislabelling
+        this work exists to remove.
+        """
+        answer = _Answer()
+        tout = (
+            aiohttp.ClientTimeout(total=call.timeout_sec)
+            if call.timeout_sec
+            else self.timeout
+        )
+        try:
+            async with self.session.request(
+                call.method,
+                f"{self.referer}{call.path}",
+                params=call.params,
+                data=call.data,
+                headers=self._build_headers(call),
+                timeout=tout,
+                ssl=False,
+            ) as r:
+                answer.status = r.status
+                self.last_response_status = answer.status
+                self.last_response_header_names = sorted(r.headers)
+                self._session_was_fresh = False
+                answer.content_type = r.headers.get("Content-Type", "")
+                answer.url_str = str(r.url)
+                await self._read_html_marker(r, answer)
+                if not answer.is_html_page:
+                    with contextlib.suppress(
+                        ValueError, TypeError, aiohttp.ContentTypeError
+                    ):
+                        answer.resp_json = await r.json(content_type=None)
+        except (ZTEAuthError, ZTEConnectionError):
+            raise
+        except (TimeoutError, aiohttp.ClientError, RuntimeError, ValueError) as e:
+            # `RuntimeError` covers "Session is closed", which Home Assistant
+            # raises when its shared client session is torn down while a
+            # request is in flight — during a reload, or at shutdown.
+            if call.authenticated:
+                self._clear_session()
+            raise ZTEConnectionError(f"Request failed: {e}") from e
+        return answer
+
+    @staticmethod
+    async def _read_html_marker(r: Any, answer: _Answer) -> None:
+        """Decide whether the router answered with its login page.
+
+        Three signals for one question: a redirect whose URL names
+        `index.html`, an HTML content type, or a body that opens with a tag.
+        The body read has its own guard because a response that cannot be read
+        still has to be reported as something.
+        """
+        if "index.html" in answer.url_str:
+            answer.is_html_page = True
+            return
+        if "text/html" not in answer.content_type:
+            return
+        try:
+            text_body = await r.text()
+            if text_body.strip().startswith("<") or "index.html" in text_body:
+                answer.is_html_page = True
+                answer.body_preview = text_body[:300].strip().replace("\n", " ")
+        except (TimeoutError, aiohttp.ClientError):
+            answer.body_preview = "[Unable to read response body]"
+
+    async def _replay(self, call: _Call) -> Any:
+        """Renew the session and put the same request again, once.
+
+        Goes through `_replay_after_login`, which goes through `_request`
+        rather than `_perform`, deliberately: a replay has always been
+        observable as a second call to `_request`, and 58 test files patch that
+        method. Routing it past them would change what every one of those tests
+        sees, silently, and coverage would not show it because the lines still
+        run.
+
+        This method exists only to unpack the call. Every field it forwards was
+        previously named at three separate sites, and `[3.3.25-dev5]` is what
+        happens when one of those lists falls out of step.
+        """
+        return await self._replay_after_login(
+            call.method,
+            call.path,
+            params=call.params,
+            data=call.data,
+            headers=call.headers,
+            timeout_sec=call.timeout_sec,
+            authenticated=call.authenticated,
+            requested=call.requested,
+            classify=call.classify,
+        )
+
+    async def _dispose(self, call: _Call, answer: _Answer, *, replayable: bool) -> Any:
+        """Turn one answer into a result, a replay, or an error.
+
+        Three ways a response fails to be usable — the login page, a body that
+        is not JSON, and a payload the session classifier rejects — and each
+        either replays or raises. Nothing here retries a write: `replayable`
+        already excludes them.
+        """
+        if answer.is_html_page:
+            if call.authenticated and replayable:
+                _LOGGER.debug("Detected HTML redirect/response; renewing session")
+                return await self._replay(call)
+            self.last_response_preview = answer.body_preview
+            self._record_unparsable(answer.status, answer.body_preview)
+            _LOGGER.error(
+                "Unexpected HTML response from %s (Status: %s, Content-Type: %s): %s",
+                answer.url_str,
+                answer.status,
+                answer.content_type,
+                answer.body_preview,
+            )
+            raise ZTEConnectionError(
+                f"Received unexpected HTML response (Status: {answer.status})"
+            )
+
+        if answer.resp_json is None:
+            if call.authenticated and replayable:
+                _LOGGER.debug("JSON parse failed; renewing session")
+                return await self._replay(call)
+            self.last_response_preview = answer.body_preview
+            self._record_unparsable(answer.status, answer.body_preview)
+            raise ZTEConnectionError("Failed to parse JSON response from router")
+
+        if isinstance(answer.resp_json, dict) and self._session_rejected(
+            answer.resp_json,
+            call.requested,
+            classify=call.classify,
+            authenticated=call.authenticated,
+            retry=replayable,
+            after_relogin=call.after_relogin,
+        ):
+            return await self._replay(call)
+
+        # Only an authenticated call proves the session is still alive, so only
+        # one counts as activity. Unauthenticated endpoints (`LD`, `RD`'s
+        # sibling `wa_inner_version`) answer perfectly well with a dead
+        # session — letting them stamp this clock told the idle check that a
+        # long-idle session was fresh, so the stale `stok` was never cleared.
+        # Every write action calls `get_ad()` -> `get_version()` first, so an
+        # action taken after a pause was exactly the case that broke.
+        #
+        # Stamped here rather than in `_perform` so a replayed request stamps
+        # once, from the call that returns the result, exactly as it always has.
+        if call.authenticated:
+            self.last_activity = datetime.now(UTC)
+        return answer.resp_json
+
+    async def _perform(self, call: _Call) -> Any:
+        """Prepare the session, put the request, and dispose of the answer."""
+        self._preempt_stale_session(call.authenticated)
+        if call.authenticated and not self.session_active:
+            await self.login(timeout_sec=call.timeout_sec)
 
         # A read may be put again after a re-login; a write may not, and the
-        # distinction has to be made here rather than in each caller, because
-        # all three recovery paths below re-send whatever they were given.
+        # distinction is made here rather than in each caller because every
+        # recovery path below re-sends whatever it was given.
         #
         # The reason is the hazard, not the odds of success. A resent
         # `SEND_SMS` can deliver the message twice with nothing in the
@@ -1719,150 +2565,35 @@ class ZTERouterAPI:
         # see `_ensure_session`.
         #
         # A write that looks like an expiry therefore raises instead, and
-        # Home Assistant prompts for re-authentication with nothing sent
-        # twice.
-        replayable = _retry and not self._is_write_request(method, path)
+        # Home Assistant prompts for re-authentication with nothing sent twice.
+        replayable = call.retry and not self._is_write_request(call.method, call.path)
 
-        url = f"{self.referer}{path}"
-        req_headers = {"Referer": f"{self.referer}index.html"}
-        if headers:
-            req_headers.update(headers)
-        # A session with no cookie is normal on firmware that binds the
-        # session to the client address; there is simply no header to send.
-        if authenticated and self.cookies:
-            req_headers["Cookie"] = _cookie_header(self.cookies)
+        if not self._is_write_request(call.method, call.path):
+            answer = await self._send(call)
+            return await self._dispose(call, answer, replayable=replayable)
 
-        is_html_page = False
-        status = 200
-        content_type = ""
-        url_str = ""
-        body_preview = ""
-        resp_json = None
+        # A write waits for a poll in flight, and gives up quickly. Nothing
+        # nested re-enters this: `login` posts through the client session
+        # directly rather than through `_request`, and a write's read-back
+        # goes through `get_params`, which does not take the lock.
+        try:
+            await asyncio.wait_for(
+                self._write_lock.acquire(), timeout=WRITE_LOCK_WAIT_SECONDS
+            )
+        except TimeoutError:
+            self.write_lock_timeouts += 1
+            _LOGGER.debug(
+                "A poll held the session for %.0fs; writing anyway",
+                WRITE_LOCK_WAIT_SECONDS,
+            )
+            answer = await self._send(call)
+            return await self._dispose(call, answer, replayable=replayable)
 
         try:
-            async with self.session.request(
-                method,
-                url,
-                params=params,
-                data=data,
-                headers=req_headers,
-                timeout=tout,
-                ssl=False,
-            ) as r:
-                status = r.status
-                self.last_response_status = status
-                self.last_response_header_names = sorted(r.headers)
-                self._session_was_fresh = False
-                content_type = r.headers.get("Content-Type", "")
-                url_str = str(r.url)
-
-                # Check if redirect or HTML response indicates session expiration
-                if "index.html" in url_str:
-                    is_html_page = True
-                elif "text/html" in content_type:
-                    try:
-                        text_body = await r.text()
-                        stripped_body = text_body.strip()
-                        if stripped_body.startswith("<") or "index.html" in text_body:
-                            is_html_page = True
-                            body_preview = text_body[:300].strip().replace("\n", " ")
-                    except (TimeoutError, aiohttp.ClientError):
-                        body_preview = "[Unable to read response body]"
-
-                if not is_html_page:
-                    with contextlib.suppress(
-                        ValueError, TypeError, aiohttp.ContentTypeError
-                    ):
-                        resp_json = await r.json(content_type=None)
-        except (ZTEAuthError, ZTEConnectionError):
-            raise
-        except (TimeoutError, aiohttp.ClientError, RuntimeError, ValueError) as e:
-            # `RuntimeError` covers "Session is closed", which Home Assistant
-            # raises when its shared client session is torn down while a
-            # request is in flight — a diagnostics download taken during a
-            # reload hits exactly that. `ValueError` covers a body that will
-            # not decode. Neither is an `aiohttp.ClientError`, so both used to
-            # escape as themselves.
-            if authenticated:
-                self._clear_session()
-            raise ZTEConnectionError(f"Request failed: {e}") from e
-
-        # Validate parsed response and handle redirects/HTML
-        if is_html_page:
-            if authenticated and replayable:
-                _LOGGER.debug("Detected HTML redirect/response; renewing session")
-                return await self._replay_after_login(
-                    method,
-                    path,
-                    params=params,
-                    data=data,
-                    headers=headers,
-                    timeout_sec=timeout_sec,
-                    authenticated=authenticated,
-                    requested=requested,
-                )
-            self.last_response_preview = body_preview
-            self._record_unparsable(status, body_preview)
-            _LOGGER.error(
-                "Unexpected HTML response from %s (Status: %s, Content-Type: %s): %s",
-                url_str,
-                status,
-                content_type,
-                body_preview,
-            )
-            raise ZTEConnectionError(
-                f"Received unexpected HTML response (Status: {status})"
-            )
-
-        if resp_json is None:
-            if authenticated and replayable:
-                _LOGGER.debug("JSON parse failed; renewing session")
-                return await self._replay_after_login(
-                    method,
-                    path,
-                    params=params,
-                    data=data,
-                    headers=headers,
-                    timeout_sec=timeout_sec,
-                    authenticated=authenticated,
-                    requested=requested,
-                )
-            self.last_response_preview = body_preview
-            self._record_unparsable(status, body_preview)
-            raise ZTEConnectionError("Failed to parse JSON response from router")
-
-        # 3. Check JSON structure for session expiry/invalid indicators
-        if isinstance(resp_json, dict) and self._session_rejected(
-            resp_json,
-            requested,
-            classify=classify,
-            authenticated=authenticated,
-            retry=replayable,
-            after_relogin=_after_relogin,
-        ):
-            return await self._replay_after_login(
-                method,
-                path,
-                params=params,
-                data=data,
-                headers=headers,
-                timeout_sec=timeout_sec,
-                authenticated=authenticated,
-                requested=requested,
-            )
-
-        # Only an authenticated call proves the session is still alive, so only
-        # one counts as activity. Unauthenticated endpoints (`LD`, `RD`'s
-        # sibling `wa_inner_version`) answer perfectly well with a dead
-        # session — letting them stamp this clock told the idle check below
-        # that a long-idle session was fresh, so the stale `stok` was never
-        # cleared. Every write action calls `get_ad()` -> `get_version()`
-        # first, so an action taken after a pause was exactly the case that
-        # broke: the unauthenticated version fetch reset the clock immediately
-        # before the authenticated call that needed it.
-        if authenticated:
-            self.last_activity = datetime.now(UTC)
-        return resp_json
+            answer = await self._send(call)
+            return await self._dispose(call, answer, replayable=replayable)
+        finally:
+            self._write_lock.release()
 
     async def try_set_protocol(self, timeout_sec: int = 5) -> None:
         """Identify if router is on http or https with a short timeout."""
@@ -1884,12 +2615,19 @@ class ZTERouterAPI:
 
     async def get_version(self, timeout_sec: int | None = None) -> str | None:
         """Get the router firmware version."""
-        path = "goform/goform_get_cmd_process?isTest=false&cmd=wa_inner_version"
+        spellings = _TOKEN_READS["wa_inner_version"]
+        # Always a multi-key read: every concept here has more than one
+        # spelling, and a special case for a single one would be a branch no
+        # device can reach and no test can honestly exercise.
+        path = (
+            "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd="
+            + ",".join(spellings)
+        )
         try:
             data = await self._request(
                 "GET", path, timeout_sec=timeout_sec, authenticated=False
             )
-            return cast("str | None", data.get("wa_inner_version", ""))
+            return cast("str | None", _first_spelling(data, spellings))
         except (ZTEAuthError, ZTEConnectionError) as e:
             _LOGGER.debug("Failed to get version: %s", e)
             return None
@@ -1920,12 +2658,24 @@ class ZTERouterAPI:
 
         if not self.password:
             raise ZTECredentialsError("No password provided")
-        pass_hash = self._hash(self.password).upper()
-        zte_pass = self._hash(pass_hash + ld).upper()
+        zte_pass = self._login_password(self.password, ld)
 
         self.is_multi = True
         if version and any(m in version for m in ["MC801", "MC7010"]):
             self.is_multi = False
+        # The device's own login builder, where it was read. **Only the
+        # negative direction is consumed, and deliberately.** A form that
+        # carries no `username` field is positive evidence for the single-user
+        # `LOGIN` command — it is what the MC888 Pro of issue #56 builds. A
+        # form that does carry one is not evidence for `LOGIN_MULTI_USER`: the
+        # reference MC7010 carries a username and still uses `LOGIN`, so
+        # reading the flag symmetrically would move that device onto a form it
+        # does not accept.
+        if self.profile.get("login", {}).get("carries_username") is False:
+            self._decide("login_form", "learned_no_username_field")
+            self.is_multi = False
+        else:
+            self._decide("login_form", "fallback_model_string")
 
         # No username means the multi-user form has no user field to carry, and
         # the router rejects it on that ground alone — which is what produced
@@ -1992,6 +2742,8 @@ class ZTERouterAPI:
         # one refused on a session hours old.
         self._session_was_fresh = True
         self.last_activity = datetime.now(UTC)
+        self._note_session_replaced()
+        self.session_started = self.last_activity
         if not attempt.cookies:
             # Kept because a router answering a success `result` with no
             # cookie at all remains a supported outcome, but no device is now
@@ -2344,45 +3096,53 @@ class ZTERouterAPI:
         return self.unauthenticated_keys or _UNAUTHENTICATED_KEYS
 
     async def mine_candidate_names(
-        self, timeout_sec: int | None = None
+        self,
+        timeout_sec: int | None = None,
+        sources: dict[str, str] | None = None,
     ) -> tuple[set[str], list[str]]:
         """Read the router's own web UI for `cmd` names it uses.
 
-        The `goform` API cannot be enumerated: one `cmd` parameter takes a list
-        of names and answers those, so a name nobody asks for is invisible
-        forever. The router's admin UI is a client of this same API, and its
-        JavaScript is the only reliable source for names nobody has written
-        down — the 2026-07-29 mining pass recorded in
-        `.notes/local_only/router_probe/js_mined_keys.json` recovered 175, of
-        which 117 this integration has never requested.
+        The `goform` API cannot be enumerated. One `cmd` parameter takes a list
+        of names and answers those, so a name nobody asks for is invisible. The
+        router's admin UI is a client of the same API, and its JavaScript is the
+        only reliable source for names nobody has written down. The 2026-07-29
+        mining pass in `.notes/local_only/router_probe/js_mined_keys.json`
+        recovered 175, of which 117 this integration has never requested.
 
         Several bundles, not one. `docs/zte_how_to_access.md` names
         `js/service.js` alongside `statusBar.js`, `home.js` and the RequireJS
         modules, and that pass crawled all of them to reach 175.
 
-        Returns the names and a list of human-readable notes. Every failure is
-        a note rather than an exception: this runs while a diagnostics download
-        is being generated, and a download that reports what went wrong is
-        useful where one that fails to generate is not.
+        Returns the names and a list of human-readable notes. Every failure is a
+        note rather than an exception, because this runs while a diagnostics
+        download is being generated. A download that reports what went wrong is
+        useful; one that fails to generate is not.
+
+        It reads the crawl's sources rather than fetching its own. Until
+        v3.3.25-dev9 it asked `_discover_bundles`, which matched
+        `<script src=>` against `index.html` alone. On a page that loads
+        everything through a module loader and names only `data-main`, that
+        found nothing. Both readable devices are such a page: the hardware check
+        printed `index: no scripts named; using the static list` on every run,
+        so mining read twelve hardcoded files from the day it was written.
+
+        `web_sources.crawl` follows what the device actually references and
+        reaches forty-five files on the same hardware. Callers that already hold
+        the sources pass them in. A diagnostics download crawls for its own
+        section, and crawling again here would fetch every file twice.
         """
         names: set[str] = set()
         goform_ids: set[str] = set()
         notes: list[str] = []
-        bundles = await self._discover_bundles(timeout_sec, notes)
-        for bundle in bundles:
-            try:
-                async with self.session.get(
-                    f"{self.referer}{bundle}",
-                    headers={"Referer": f"{self.referer}index.html"},
-                    timeout=aiohttp.ClientTimeout(total=timeout_sec or 10),
-                    ssl=False,
-                ) as r:
-                    if r.status != 200:
-                        notes.append(f"{bundle}: HTTP {r.status}")
-                        continue
-                    body = await r.text(errors="replace")
-            except Exception as err:  # noqa: BLE001 - a note, never a failure
-                notes.append(f"{bundle}: {type(err).__name__}: {err}")
+        if sources is None:
+            crawled = await web_sources.crawl(self)
+            sources = crawled.get("sources", {})
+            notes.append(
+                f"crawled {crawled.get('fetched', 0)} files, "
+                f"{crawled.get('returned', 0)} readable"
+            )
+        for bundle, body in sorted(sources.items()):
+            if not isinstance(body, str) or not body:
                 continue
 
             found = {
@@ -2504,46 +3264,6 @@ class ZTERouterAPI:
         except Exception:  # noqa: BLE001 - the answer is the point, not the error
             return False
         return True
-
-    async def _discover_bundles(
-        self, timeout_sec: int | None, notes: list[str]
-    ) -> list[str]:
-        """Read the router's index page for the scripts it actually loads.
-
-        The static list is a guess and is partly wrong: `js/statusBar.js`
-        answers HTTP 404 on both devices seen so far, and a firmware may ship
-        files nobody has named. Asking the page it serves is the only way to
-        know, and costs one request.
-
-        Falls back to the static list when the page cannot be read or names no
-        scripts — a note either way, never an exception.
-        """
-        try:
-            async with self.session.get(
-                self.referer,
-                headers={"Referer": self.referer},
-                timeout=aiohttp.ClientTimeout(total=timeout_sec or 10),
-                ssl=False,
-            ) as r:
-                body = await r.text(errors="replace")
-        except Exception as err:  # noqa: BLE001 - a note, never a failure
-            notes.append(f"index: {type(err).__name__}: {err}; using the static list")
-            return list(JS_BUNDLES)
-
-        found = [
-            m.group(1).lstrip("./")
-            for m in _HTML_SCRIPT_RE.finditer(body)
-            if m.group(1).endswith(".js")
-        ]
-        if not found:
-            notes.append("index: no scripts named; using the static list")
-            return list(JS_BUNDLES)
-
-        # Unioned rather than replaced: the page may load its scripts through a
-        # module loader, naming only the entry point.
-        merged = list(dict.fromkeys(found + list(JS_BUNDLES)))
-        notes.append(f"index: {len(found)} scripts named, {len(merged)} to read")
-        return merged
 
     async def probe_names(
         self,
@@ -2801,7 +3521,11 @@ class ZTERouterAPI:
             and k not in canaries
         }
 
-    async def run_discovery(self, timeout_sec: int | None = None) -> dict[str, Any]:
+    async def run_discovery(
+        self,
+        timeout_sec: int | None = None,
+        sources: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         """Mine, probe and report — the whole discovery pass, for diagnostics.
 
         Never raises. Every failure becomes a note in the returned mapping,
@@ -2869,7 +3593,9 @@ class ZTERouterAPI:
             # problem and a firmware that cannot be guarded.
             result["canary_pool"] = census
 
-            mined, notes = await self.mine_candidate_names(timeout_sec=timeout_sec)
+            mined, notes = await self.mine_candidate_names(
+                timeout_sec=timeout_sec, sources=sources
+            )
             result["notes"].extend(notes)
             result["mined_count"] = len(mined)
 
@@ -3005,11 +3731,11 @@ class ZTERouterAPI:
             # leaves the session open — verified against MC7010 firmware
             # V1.0.0B03 on 2026-07-27: with AD it returns success and the stok
             # is genuinely invalidated; without it, the stok stays live.
-            ad = await self.get_ad()
+            ad = await self.ad_suffix("LOGOUT")
             resp = await self._request(
                 "POST",
                 "goform/goform_set_cmd_process",
-                data=f"isTest=false&goformId=LOGOUT&AD={ad}",
+                data=f"isTest=false&goformId=LOGOUT{ad}",
                 headers=headers,
                 _retry=False,
             )
@@ -3071,7 +3797,11 @@ class ZTERouterAPI:
         return chunks
 
     async def _batch_get(
-        self, params: list[str], *, timeout_sec: int | None = None
+        self,
+        params: list[str],
+        *,
+        timeout_sec: int | None = None,
+        starts_cycle: bool = False,
     ) -> dict[str, Any]:
         """Read the given `cmd` names, in as many requests as the URL allows.
 
@@ -3113,10 +3843,35 @@ class ZTERouterAPI:
             if isinstance(data, dict):
                 merged.update(data)
         if merged:
-            self._populated_keys = frozenset(
-                key for key, value in merged.items() if value not in ("", None)
-            )
+            self._note_populated(merged, starts_cycle=starts_cycle)
         return merged
+
+    def _note_populated(self, merged: dict[str, Any], *, starts_cycle: bool) -> None:
+        """Record what this device answered, across a poll rather than a batch.
+
+        **This set is what `session_witnesses` draws on**, and it used to be
+        replaced by every call. The coordinator polls core then extended, so the
+        extended batch wiped the core one: measured on hardware 2026-09-14
+        against an authenticated session, 60 keys populated after the core poll,
+        39 after the extended, and not one of the 60 surviving. The witness pool
+        was a third of its intended size and drawn from different name families.
+
+        **The caller says which read begins a cycle.** Only the core poll does,
+        and it says so rather than being recognised by the list it passes:
+        identity against `_CORE_PARAMS` would hold today and break silently the
+        first time somebody passed a copy. Every other read adds what it saw —
+        the canary pool is not part of a cycle and must not discard one.
+
+        **Bounded to a cycle rather than accumulated.** A key populated at core
+        time and blank by the time a write happens would otherwise stay a
+        witness, and a witness that reads blank scores as an expiry — advisory
+        only, so the cost is a misleading line in a download rather than a
+        blocked write. One cycle keeps even that narrow.
+        """
+        seen = frozenset(
+            key for key, value in merged.items() if value not in ("", None)
+        )
+        self._populated_keys = seen if starts_cycle else self._populated_keys | seen
 
     async def get_params(
         self, params: list[str], *, timeout_sec: int | None = None
@@ -3179,7 +3934,8 @@ class ZTERouterAPI:
         strike path — everything an enabled-by-default entity needs is in this
         request, as is the device identity latched into `entry.data`.
         """
-        return await self._batch_get(_CORE_PARAMS)
+        async with self._write_lock:
+            return await self._batch_get(_CORE_PARAMS, starts_cycle=True)
 
     async def get_extended_data(self) -> dict[str, Any]:
         """Fetch the optional diagnostic payload.
@@ -3193,7 +3949,8 @@ class ZTERouterAPI:
         fed from here unavailable. It must therefore stay free of anything an
         enabled-by-default entity needs.
         """
-        return await self._batch_get(_EXTENDED_PARAMS)
+        async with self._write_lock:
+            return await self._batch_get(_EXTENDED_PARAMS)
 
     async def get_sms_capacity(self, timeout_sec: int | None = None) -> dict[str, Any]:
         """Get SMS capacity information."""
@@ -3247,24 +4004,93 @@ class ZTERouterAPI:
         return msg_out
 
     async def reboot(self) -> int:
-        """Execute a device reboot.
+        """Reboot the router, and confirm it by the router going away.
 
-        A connection error still propagates, exactly as before. It is tempting
-        to swallow it on the theory that the router acknowledges and then
-        drops the link — but that is untested speculation, and it cannot be
-        told apart from a router that was simply unreachable. Swallowing it
-        would report "rebooted" for a router that never received the command,
-        reintroducing the silent-success failure this check exists to remove.
-        An intact ``{"result":"failure"}`` is a refusal and is raised.
+        **The response is not the verification; the disappearance is.**
+        Measured on an MC7010, 2026-09-14: one `REBOOT_DEVICE` answered
+        `{"result":"failure"}` on a session seconds old and did nothing, and an
+        identically built request minutes later answered
+        `{"result":"success"}` and rebooted the device — `system_uptime` fell
+        from 96036 to 84. The response alone has been observed to disagree with
+        what the device did, in both directions, so it is not trusted on its
+        own.
+
+        The write answers before the router becomes unreachable, so a dropped
+        request is not the expected case and is not treated as success on its
+        own either — it is checked the same way as any other outcome.
+
+        Reboot is also the one write that is safe to retry: it is idempotent in
+        effect, and a second reboot of a router already rebooting changes
+        nothing. That is why a refusal here is retried once rather than raised
+        immediately.
+
+        Returns 200 when the router stopped answering. Raises when it is still
+        answering after the check window, which means the command was accepted
+        or refused and the device did not restart either way.
         """
-        ad = await self.get_ad()
-        payload = f"isTest=false&goformId=REBOOT_DEVICE&AD={ad}"
-        headers = self.write_headers()
-        res = await self._request(
-            "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
+        result = await self._attempt_reboot()
+        if result is not None:
+            return result
+        # Refused, and reboot is the one command where an immediate retry is
+        # safe. See the observation above: the same request refused once and
+        # succeeded minutes later, for reasons not established.
+        result = await self._attempt_reboot()
+        if result is not None:
+            return result
+        raise ZTEConnectionError(
+            "The router accepted the reboot command but did not restart: it "
+            "was still answering after "
+            f"{REBOOT_VERIFY_SECONDS:.0f} seconds."
         )
-        await self._require_write_success(res, "REBOOT_DEVICE")
-        return 200
+
+    async def _attempt_reboot(self) -> int | None:
+        """Send one `REBOOT_DEVICE` and watch for the router to go away.
+
+        Returns 200 when it stops answering, or `None` when it does not — the
+        caller decides whether to retry. A refusal is not raised here, because
+        a refused reboot and an accepted one that did nothing are the same
+        observable state and both are answered by watching.
+        """
+        ad = await self.ad_suffix("REBOOT_DEVICE")
+        payload = f"isTest=false&goformId=REBOOT_DEVICE{ad}"
+        headers = self.write_headers()
+        # A connection error here propagates, exactly as before. Absence is
+        # only evidence once the command was answered: if the request never
+        # reached the router, a router that is not answering afterwards is a
+        # router that was never reachable, and reporting that as a reboot is
+        # the silent success `[3.3.2-rc5]` refused to introduce. Measured on an
+        # MC7010, 2026-09-14: the write answers in about 0.1 s and the device
+        # goes away after, so the answer is the normal case.
+        await self._request(
+            "POST",
+            "goform/goform_set_cmd_process",
+            data=payload,
+            headers=headers,
+            _retry=False,
+        )
+        return 200 if await self._router_stopped_answering() else None
+
+    async def _router_stopped_answering(self) -> bool:
+        """Whether the router stops responding within the reboot window."""
+        deadline = monotonic() + REBOOT_VERIFY_SECONDS
+        while monotonic() < deadline:
+            try:
+                await self._request(
+                    "GET",
+                    "goform/goform_get_cmd_process",
+                    params={"isTest": "false", "cmd": "modem_main_state"},
+                    authenticated=False,
+                    classify=False,
+                    _retry=False,
+                    timeout_sec=2,
+                )
+            except (ZTEConnectionError, aiohttp.ClientError, TimeoutError):
+                # Deliberately not a bare `Exception`. This decides that a
+                # reboot happened, and a fault in this integration must never
+                # be read as evidence about the device.
+                return True
+            await asyncio.sleep(REBOOT_VERIFY_INTERVAL)
+        return False
 
     async def delete_sms(self, msg_id: str, listed_with: str | None = None) -> int:
         """Delete SMS.
@@ -3272,7 +4098,7 @@ class ZTERouterAPI:
         `listed_with` is the `mem_store` a caller used to choose these ids, and
         is recorded beside the attempt. It changes nothing about the request.
         """
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("DELETE_SMS")
         # The router's own page sends every id semicolon-*terminated*, not
         # semicolon-*separated*: a single delete goes out as `msg_id=16%3B`,
         # and a batch as `1%3B2%3B`. Three browser captures agree — two from
@@ -3288,10 +4114,17 @@ class ZTERouterAPI:
         # The terminator is appended rather than assumed, because `delete_all`
         # joins its ids here and a caller may pass either form.
         sent_ids = msg_id if msg_id.endswith(";") else f"{msg_id};"
+        # Spelled as this firmware spells it, like every other write. Both
+        # readable devices name it `msg_id`, so this resolves to the literal
+        # it replaces on each of them — which was equally true of
+        # `APN_PROC_EX` until the parser read the MC888 Pro's script and found
+        # `apn_pdp_type`. These two commands are the ones issue #56 is about,
+        # and they were the last two still asking a constant.
+        ids_field = self.profile_field("DELETE_SMS", "msg_id")
         payload = (
             f"isTest=false&goformId=DELETE_SMS"
-            f"&msg_id={urllib.parse.quote(sent_ids, safe='')}"
-            f"&notCallback=true&AD={ad}"
+            f"&{ids_field}={urllib.parse.quote(sent_ids, safe='')}"
+            f"&notCallback=true{ad}"
         )
         headers = self.write_headers()
         ids = [part for part in msg_id.split(";") if part]
@@ -3445,7 +4278,8 @@ class ZTERouterAPI:
         `_classify_send`.
         """
         before = await self._send_counters()
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("SEND_SMS")
+        self._require_confirmed_session("SEND_SMS")
         # Convert message to hex utf-16-be. This stays UTF-16BE for both
         # encodings — `encode_type` tells the router which DCS to put on the
         # wire and how to count segments, it does not change the format of
@@ -3465,10 +4299,18 @@ class ZTERouterAPI:
         # relying on aiohttp's dict-form encoding.
         escaped_number = urllib.parse.quote_plus(number)
 
+        # As above. Five fields, all named identically by both readable
+        # devices' builders, all resolved rather than assumed.
+        field = {
+            name: self.profile_field("SEND_SMS", name)
+            for name in ("Number", "MessageBody", "encode_type", "ID", "sms_time")
+        }
         payload = (
-            f"isTest=false&goformId=SEND_SMS&notCallback=true&Number={escaped_number}"
-            f"&MessageBody={hex_msg}&encode_type={encode_type}"
-            f"&ID=-1&sms_time={sms_time}&AD={ad}"
+            f"isTest=false&goformId=SEND_SMS&notCallback=true"
+            f"&{field['Number']}={escaped_number}"
+            f"&{field['MessageBody']}={hex_msg}"
+            f"&{field['encode_type']}={encode_type}"
+            f"&{field['ID']}=-1&{field['sms_time']}={sms_time}{ad}"
         )
         headers = self.write_headers()
         res = await self._request(
@@ -3580,6 +4422,184 @@ class ZTERouterAPI:
             _LOGGER.debug("Failed to get SMS messages: %s", e)
             return []
 
+    def _decide(self, decision: str, path: str) -> None:
+        """Record which way a profile-backed decision went.
+
+        Written on every call rather than only on the learned path: "this
+        device fell back" and "this decision was never reached" are different
+        statements, and a download that spells them the same way is the kind
+        of instrument that made issue #56 take four days.
+        """
+        self.profile_decisions[decision] = path
+
+    def _profile_digest(self) -> Callable[[str], str] | None:
+        """The digest this device's own client builds its token with.
+
+        `None` whenever the profile did not resolve one — an unseen digest
+        implementation, or one defined in a library file the crawl does not
+        return. A guess here produces a well-formed wrong token, which the
+        router refuses without saying why, so there is no guess.
+        """
+        digest = self.profile.get("token", {}).get("digest", {})
+        return device_profile.digest_callable(
+            digest.get("algorithm", ""), digest.get("case", "")
+        )
+
+    def profile_field(self, goform_id: str, canonical: str) -> str:
+        """The name this firmware's own builder gives a payload field.
+
+        The router replaces a whole form and refuses a payload whose field
+        names it does not recognise, so a spelling that is right for one
+        firmware makes every write of that command fail on another. Two of the
+        eight commands this integration sends already differ between the only
+        two devices it can read: `APN_PROC_EX` carries `apn_pdp_type` on the
+        MC888 Pro against `pdp_type` on the MC7010, and `DATA_LIMIT_SETTING`
+        carries the `flux_` family.
+
+        Matching is exact first and by suffix second, and an ambiguous suffix
+        resolves to the canonical name. Every difference observed between the
+        two devices is a prefix added to the same tail — `apn_`, `flux_`,
+        `dial_` — so the suffix is the part that identifies the field, and
+        requiring a single match is what stops a firmware with two similar
+        names from having one chosen arbitrarily.
+        """
+        fields: list[str] = self.profile.get("commands", {}).get(goform_id) or []
+        if not fields:
+            self._decide(f"field:{goform_id}.{canonical}", "fallback_not_learned")
+            return canonical
+        if canonical in fields:
+            self._decide(f"field:{goform_id}.{canonical}", "learned_exact")
+            return canonical
+        matches = [name for name in fields if name.endswith("_" + canonical)]
+        if len(matches) == 1:
+            self._decide(f"field:{goform_id}.{canonical}", "learned_suffix")
+            return matches[0]
+        self._decide(
+            f"field:{goform_id}.{canonical}",
+            "fallback_ambiguous" if matches else "fallback_not_named",
+        )
+        return canonical
+
+    def _token_required(self, goform_id: str) -> bool:
+        """Whether this command carries an `AD` token on this device.
+
+        Two learned reasons it would not: the firmware's own gate flag is off,
+        or the command is one of those its client exempts. Both default to
+        "yes", which is what every release before this one did unconditionally.
+        """
+        token = self.profile.get("token", {})
+        gate = token.get("gate_flag")
+        if gate and self.profile.get("flags", {}).get(gate) is False:
+            self._decide(f"token:{goform_id}", "learned_not_required_gate_off")
+            return False
+        if goform_id in token.get("exempt_commands", ()):
+            self._decide(f"token:{goform_id}", "learned_exempt")
+            return False
+        self._decide(
+            f"token:{goform_id}",
+            "learned_required" if token.get("exempt_commands") else "fallback_required",
+        )
+        return True
+
+    async def ad_suffix(self, goform_id: str, timeout_sec: int | None = None) -> str:
+        """The `&AD=...` a write's payload ends with, or nothing.
+
+        The single place a command's token requirement is decided, so the
+        answer cannot differ between two writers of the same command. A
+        command that needs no token still passes the pre-write session check:
+        not needing a token is not the same as not needing a session.
+        """
+        if not self._token_required(goform_id):
+            await self._ensure_session(timeout_sec=timeout_sec)
+            return ""
+        return "&AD=" + await self.get_ad(timeout_sec=timeout_sec)
+
+    def _login_password(self, password: str, ld: str) -> str:
+        """Encode the password the way this firmware's own login form does.
+
+        Item 25. Three forms exist in the script, selected by
+        `WEB_ATTR_IF_SUPPORT_SHA256`, and both devices this project can read
+        answer `2` — the salted double hash this integration has always sent.
+        The value of learning it is the device that answers something else,
+        where the constant is simply wrong and the router's refusal is
+        indistinguishable from a bad password.
+
+        **The fallback is the form that ships today**, taken whenever the flag
+        is absent, the branch names a function this project cannot resolve, or
+        the profile was never learned. A login is the one request that must not
+        be experimented with: `MAX_LOGIN_COUNT` is five on both known devices
+        and the lockout is measured in minutes.
+        """
+        fallback = self._hash(self._hash(password).upper() + ld).upper()
+        flag = self.profile.get("flags", {}).get("WEB_ATTR_IF_SUPPORT_SHA256")
+        branches = self.profile.get("login", {}).get("password_branches") or {}
+        if flag is None or not branches:
+            self._decide("login_password", "fallback_not_learned")
+            return fallback
+        digest = device_profile.digest_callable(
+            *(
+                self.profile.get("login", {}).get("password_digest", {}).get(key, "")
+                for key in ("algorithm", "case")
+            )
+        )
+        if str(flag) == "2":
+            # The salted double hash. Asserted against the derivation above
+            # rather than replacing it blindly: on both known devices the
+            # learned digest is the same SHA-256 and the two agree, so this
+            # branch changes nothing and says so.
+            if digest is None:
+                self._decide("login_password", "fallback_digest_unresolved")
+                return fallback
+            self._decide("login_password", "learned_salted_double_hash")
+            return digest(digest(password) + ld)
+        if str(flag) == "1" and digest is not None:
+            self._decide("login_password", "learned_hashed_base64")
+            return digest(base64.b64encode(password.encode()).decode())
+        if str(flag) == "0":
+            self._decide("login_password", "learned_base64")
+            return base64.b64encode(password.encode()).decode()
+        self._decide("login_password", "fallback_unknown_flag")
+        return fallback
+
+    def login_budget(self) -> int:
+        """How many logins this integration will spend before giving up.
+
+        Bounded by the device's own `MAX_LOGIN_COUNT` where it names one,
+        because exceeding it is a lockout measured in minutes rather than a
+        refused request. One is held back from the device's figure: a user
+        typing their password into the web interface at the same moment must
+        not find the account locked by this integration having spent the last
+        attempt.
+        """
+        limit = self.profile.get("flags", {}).get("MAX_LOGIN_COUNT")
+        if not isinstance(limit, int) or limit < 2:
+            self._decide("login_budget", "fallback_not_learned")
+            return DISCOVERY_RELOGIN_LIMIT
+        self._decide("login_budget", "learned")
+        return min(DISCOVERY_RELOGIN_LIMIT, limit - 1)
+
+    async def learn_profile(
+        self, sources: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Read this device's own web interface and keep what it says.
+
+        Never called from a write path. Parsing the reference device's scripts
+        costs about 50 ms and the MC888 Pro's about 90; a write that waited for
+        that would be a write this integration could delay, and a firmware
+        whose scripts cannot be parsed would be a write it could block.
+
+        Learned from unauthenticated static assets, so it works before the
+        first login — verified 2026-09-14 on the MC7010, where every file the
+        crawl reads returned 200 with no cookie.
+        """
+        if sources is None:
+            crawled = await web_sources.crawl(self)
+            sources = crawled.get("sources", {})
+        version = await self.get_version() or ""
+        profile = device_profile.parse_profile(sources or {}, version)
+        self.profile = profile
+        return profile
+
     async def get_ad(self, timeout_sec: int | None = None) -> str:
         """Get the AD parameter for commands.
 
@@ -3610,8 +4630,24 @@ class ZTERouterAPI:
         # Devices that do not answer `cr_version`, the reference MC7010 among
         # them, append an empty string and derive exactly the token they
         # derived before.
-        cr_version = await self.get_cr_version(version, timeout_sec=timeout_sec)
-        a = hash_func(version + cr_version)
+        # The two readings the operands resolve to, as this firmware's own
+        # service layer maps them. Both devices name `wa_inner_version` and
+        # `cr_version`, which is what the readers below already fetch, so the
+        # learned answer confirms the shipped one rather than replacing it. A
+        # firmware naming anything else is read generically instead.
+        operands = self.profile.get("token", {}).get("operand_values") or {}
+        expected = ["wa_inner_version", "cr_version"]
+        if operands and [operands.get("rd0"), operands.get("rd1")] != expected:
+            self._decide("ad_operands", "learned_other")
+            names = [operands.get(key, "") for key in sorted(operands)]
+            first = await self._read_operands(
+                [name for name in names if name], timeout_sec=timeout_sec
+            )
+        else:
+            self._decide("ad_operands", "learned" if operands else "fallback")
+            cr_version = await self.get_cr_version(version, timeout_sec=timeout_sec)
+            first = version + cr_version
+        a = hash_func(first)
         rd = await self.get_rd(timeout_sec=timeout_sec)
         if not rd:
             # The other half of the check above, missed when it was added.
@@ -3626,13 +4662,53 @@ class ZTERouterAPI:
             )
         return hash_func(a + rd)
 
-    @staticmethod
-    def _ad_hash_func(version: str) -> Callable[[str], str]:
-        """Return the digest this firmware family uses for `AD`.
+    def _ad_hash_func(self, version: str) -> Callable[[str], str]:
+        """Return the digest this firmware uses for `AD`.
+
+        The profile answers this from the device's own script where it could
+        be resolved. Where it could not, the model string decides, which is
+        what every release before this one did unconditionally — and which is
+        wrong in principle: `config.js` is byte-for-byte comparable between the
+        MC7010 and the MC888 Pro on every flag that could plausibly select a
+        digest, including `WEB_ATTR_IF_SUPPORT_SHA256`, yet one implements MD5
+        and the other SHA-256. Only the function the script names distinguishes
+        them, and only the model string stands in for it when that is missing.
 
         Shared by `get_ad` and the login-time derivation so the two cannot
         drift: a login carrying an `AD` built with the wrong digest would be
         refused exactly like a wrong password, with no way to tell them apart.
+        """
+        # A shape this derivation does not implement withdraws the digest
+        # rather than applying it to the wrong number of rounds. `get_ad`
+        # hashes twice; a firmware the parser reported as doing anything else
+        # would be derived wrongly and produce a well-formed token the router
+        # refuses without saying why — the failure this whole phase exists to
+        # remove. Falling back to the model string is not better on such a
+        # device, but it is the behaviour that shipped, and the download names
+        # the disagreement.
+        rounds = self.profile.get("token", {}).get("rounds")
+        if rounds is not None and rounds != 2:
+            self._decide("ad_digest", "fallback_round_count_unsupported")
+            return self._model_hash_func(version)
+        learned = self._profile_digest()
+        if learned is not None:
+            self._decide("ad_digest", "learned")
+            return learned
+        self._decide(
+            "ad_digest",
+            "fallback_unresolved" if self.profile else "fallback_not_learned",
+        )
+        return self._model_hash_func(version)
+
+    @staticmethod
+    def _model_hash_func(version: str) -> Callable[[str], str]:
+        """The digest the model string implies — the fallback, and only that.
+
+        Split out so every route to it is visible as a route to it. It is
+        wrong in principle and right on both devices this project can read:
+        `config.js` is comparable between them on every flag that could
+        plausibly select a digest, so nothing but the function their scripts
+        name distinguishes MD5 from SHA-256.
         """
         is_new_gen = any(m in version for m in ["MC888", "MC889"])
         return (
@@ -3671,6 +4747,29 @@ class ZTERouterAPI:
             return None
         hash_func = self._ad_hash_func(version)
         return hash_func(hash_func(version) + rd)
+
+    async def _read_operands(
+        self, names: list[str], timeout_sec: int | None = None
+    ) -> str:
+        """Concatenate the readings a firmware names as its token operands.
+
+        Only reached on a device whose service layer names something other
+        than the two readings every device seen so far names, which is why it
+        is separate from `get_cr_version` rather than replacing it: that path
+        is proven on two devices and carries the distinction between a value
+        that is absent and a read that failed. This one has neither property
+        and is not to be given them speculatively — it exists so that an
+        unseen firmware is read as it asks to be read rather than as the
+        MC7010 asks.
+        """
+        path = (
+            "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd="
+            + ",".join(names)
+        )
+        data = await self._request(
+            "GET", path, timeout_sec=timeout_sec, authenticated=False
+        )
+        return "".join(cast(str, data.get(name, "") or "") for name in names)
 
     async def get_cr_version(
         self, version: str | None = None, timeout_sec: int | None = None
@@ -3715,11 +4814,38 @@ class ZTERouterAPI:
         return cr_version
 
     async def get_rd(self, timeout_sec: int | None = None) -> str:
-        """Get the RD parameter for AD generation."""
-        path = "goform/goform_get_cmd_process?isTest=false&cmd=RD"
+        """Get the RD parameter for AD generation.
+
+        The name comes from the same expression the digest does — the device's
+        own client reads it as `({nv:"RD"}).RD` — so where the profile learned
+        it, it leads the hand-written aliases rather than replacing them. Both
+        readable devices name it `RD`, which is the first alias already.
+        """
+        spellings = _TOKEN_READS["RD"]
+        token = self.profile.get("token", {})
+        # De-duplicated: the expression names the salt twice — once as the
+        # value asked for and once as the key read back — and both devices
+        # spell them the same, so a device naming something new must not be
+        # asked for it twice in one `cmd` list.
+        learned = tuple(
+            dict.fromkeys(
+                name
+                for name in (token.get("salt_key"), token.get("salt_read"))
+                if name and name not in spellings
+            )
+        )
+        if learned:
+            self._decide("salt_name", "learned")
+            spellings = (*learned, *spellings)
+        else:
+            self._decide("salt_name", "fallback")
+        path = (
+            "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd="
+            + ",".join(spellings)
+        )
         try:
             data = await self._request("GET", path, timeout_sec=timeout_sec)
-            return cast(str, data.get("RD", ""))
+            return _first_spelling(data, spellings)
         except (ZTEAuthError, ZTEConnectionError):
             # Named first so the swallow below is the explicit exception rather
             # than the fallthrough. Under the previous `except Exception` plus
@@ -3733,11 +4859,15 @@ class ZTERouterAPI:
 
     async def set_apn(self, index: int, pdp_type: str) -> dict[str, Any]:
         """Set the default APN profile index and PDP type."""
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("APN_PROC_EX")
+        # Spelled as this firmware spells it. The MC888 Pro of issue #56
+        # builds this command with `apn_pdp_type`, so the payload below was
+        # one the router would have refused on its field names alone.
+        pdp = self.profile_field("APN_PROC_EX", "pdp_type")
         payload = (
             f"isTest=false&goformId=APN_PROC_EX"
             f"&apn_mode=manual&apn_action=set_default&set_default_flag=1"
-            f"&pdp_type={pdp_type}&index={index}&AD={ad}"
+            f"&{pdp}={pdp_type}&index={index}{ad}"
         )
         headers = self.write_headers()
         res = await self._request(
@@ -3814,19 +4944,17 @@ class ZTERouterAPI:
           both directions, and verified to actually apply
         - ``apn_mode=auto`` alone — **accepted**
 
-        So this method sent a payload the router refused **for the manual
-        direction in every release** — the `APN Selection Mode` select could
-        never switch to manual. Switching to *auto* did work, which is why the
-        entity never looked completely dead. Choosing an **APN Profile** also
-        worked throughout, because `set_apn()` already sends the complete form,
-        and that form carries `apn_mode=manual` — so picking a profile flipped
-        the mode as a side effect and masked this.
+        Until this was fixed, the manual direction sent a payload the router
+        refused, in every release: the `APN Selection Mode` select could never
+        switch to manual. Switching to auto did work, so the entity never looked
+        dead. Choosing an APN Profile also worked, because `set_apn()` already
+        sends the complete form and that form carries `apn_mode=manual`. Picking
+        a profile flipped the mode as a side effect and masked the fault.
 
-        The complete form is used for both directions whenever the profile
-        index is known: it is the only one verified to actually *apply* (the
-        mode changed and `wan_apn` followed). The bare form is kept as the
-        fallback for `auto` alone, where it is accepted and where no profile
-        index is needed to make sense of the request.
+        The complete form is used for both directions whenever the profile index
+        is known. It is the only one verified to apply: the mode changed and
+        `wan_apn` followed. The bare form is kept as the fallback for `auto`
+        alone, where it is accepted and where no profile index is needed.
         """
         resolved = self._resolve_apn_profile(current or {})
 
@@ -3842,13 +4970,14 @@ class ZTERouterAPI:
             body = f"apn_mode={mode}"
         else:
             index, pdp_type = resolved
+            pdp = self.profile_field("APN_PROC_EX", "pdp_type")
             body = (
                 f"apn_mode={mode}&apn_action=set_default&set_default_flag=1"
-                f"&pdp_type={pdp_type}&index={index}"
+                f"&{pdp}={pdp_type}&index={index}"
             )
 
-        ad = await self.get_ad()
-        payload = f"isTest=false&goformId=APN_PROC_EX&{body}&AD={ad}"
+        ad = await self.ad_suffix("APN_PROC_EX")
+        payload = f"isTest=false&goformId=APN_PROC_EX&{body}{ad}"
         headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
@@ -3858,10 +4987,9 @@ class ZTERouterAPI:
 
     async def set_odu_led_switch(self, status: str) -> dict[str, Any]:
         """Set the ODU LED switch status (1 = On, 0 = Off)."""
-        ad = await self.get_ad()
-        payload = (
-            f"isTest=false&goformId=ODU_LED_SWITCH_SET&ODU_led_switch={status}&AD={ad}"
-        )
+        ad = await self.ad_suffix("ODU_LED_SWITCH_SET")
+        field = self.profile_field("ODU_LED_SWITCH_SET", "ODU_led_switch")
+        payload = f"isTest=false&goformId=ODU_LED_SWITCH_SET&{field}={status}{ad}"
         headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
@@ -3945,7 +5073,20 @@ class ZTERouterAPI:
                 ),
                 None,
             )
-            name = answered or field
+            # Item 31: the canonical name is the last resort, not the
+            # second. A device that answered neither alias may still name
+            # the field in its own builder, which is the case a hand-written
+            # map could never cover.
+            #
+            # The live answer short-circuits the profile, so it has to record
+            # its own decision: principle 3 is that the download says which
+            # path was taken, and a field resolved this way would otherwise
+            # be the one case that says nothing at all.
+            if answered:
+                self._decide(f"field:DATA_LIMIT_SETTING.{field}", "answered_by_device")
+                name = answered
+            else:
+                name = self.profile_field("DATA_LIMIT_SETTING", field)
             if field in changes:
                 payload_fields[name] = str(changes[field])
                 continue
@@ -3966,9 +5107,9 @@ class ZTERouterAPI:
         if unknown:  # pragma: no cover - guards a programming error, not input
             raise ValueError(f"Unknown data-volume field(s): {sorted(unknown)}")
 
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("DATA_LIMIT_SETTING")
         body = "&".join(f"{k}={v}" for k, v in payload_fields.items())
-        payload = f"isTest=false&goformId=DATA_LIMIT_SETTING&{body}&AD={ad}"
+        payload = f"isTest=false&goformId=DATA_LIMIT_SETTING&{body}{ad}"
         headers = self.write_headers()
         res = await self._request(
             "POST", "goform/goform_set_cmd_process", data=payload, headers=headers
@@ -3990,10 +5131,10 @@ class ZTERouterAPI:
 
     async def set_bearer_preference(self, preference: str) -> dict[str, Any]:
         """Set the network bearer preference (e.g. 4G_AND_5G, Only_5G, Only_LTE)."""
-        ad = await self.get_ad()
+        ad = await self.ad_suffix("SET_BEARER_PREFERENCE")
+        field = self.profile_field("SET_BEARER_PREFERENCE", "BearerPreference")
         payload = (
-            f"isTest=false&goformId=SET_BEARER_PREFERENCE"
-            f"&BearerPreference={preference}&AD={ad}"
+            f"isTest=false&goformId=SET_BEARER_PREFERENCE&{field}={preference}{ad}"
         )
         headers = self.write_headers()
         res = await self._request(

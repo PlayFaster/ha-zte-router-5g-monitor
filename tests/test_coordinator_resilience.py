@@ -729,7 +729,7 @@ async def test_a_poll_started_during_a_discovery_pass_waits(coordinator) -> None
     probing = asyncio.Event()
     release = asyncio.Event()
 
-    async def _slow_discovery():
+    async def _slow_discovery(*_args, **_kwargs):
         order.append("discovery started")
         probing.set()
         await release.wait()
@@ -765,3 +765,36 @@ async def test_a_poll_started_during_a_discovery_pass_waits(coordinator) -> None
         await poll_task
 
     assert order == ["discovery started", "discovery finished", "poll ran"]
+
+
+@pytest.mark.asyncio
+async def test_session_lifetimes_are_persisted_only_when_they_change(hass) -> None:
+    """Written on the poll path, because a login must not wait on disk.
+
+    The api object has no store of its own, and the moment a session ends is
+    inside a login. Carrying the list across on the next poll costs nothing and
+    keeps the write off that path.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    from custom_components.zte_router_5g.coordinator import (
+        ZTERouterDataUpdateCoordinator,
+    )
+
+    coordinator = MagicMock(spec=ZTERouterDataUpdateCoordinator)
+    coordinator.api = MagicMock()
+    coordinator.api.session_lifetimes = [120.0, 95.0]
+    coordinator.observations = MagicMock()
+    coordinator.observations.session_lifetimes = MagicMock(return_value=[120.0])
+    coordinator.observations.async_save_session_lifetimes = AsyncMock()
+
+    await ZTERouterDataUpdateCoordinator._persist_session_lifetimes(coordinator)
+    coordinator.observations.async_save_session_lifetimes.assert_awaited_once_with(
+        [120.0, 95.0]
+    )
+
+    # Unchanged: nothing is written.
+    coordinator.observations.session_lifetimes = MagicMock(return_value=[120.0, 95.0])
+    coordinator.observations.async_save_session_lifetimes.reset_mock()
+    await ZTERouterDataUpdateCoordinator._persist_session_lifetimes(coordinator)
+    coordinator.observations.async_save_session_lifetimes.assert_not_awaited()

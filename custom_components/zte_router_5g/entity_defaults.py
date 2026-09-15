@@ -37,17 +37,20 @@ class _HasEnabledDefault(Protocol):
 
 # Model to the entities whose default this model overrides.
 #
-# Matched as a **substring** of the model the router reports, longest key
-# first, so a specific entry can override a general one without restructuring
-# the lookup. Family matching is deliberate: the `network_` vocabulary and the
-# `zsidn` session cookie are firmware-family behaviours rather than variant
-# ones, and `api._hash` already selects SHA-256 on `MC888` or `MC889`
-# appearing anywhere in the version string — a higher-stakes decision than an
-# entity default.
+# Matched as a substring of the model the router reports, longest key first, so
+# a specific entry can override a general one. Family matching is deliberate:
+# the `network_` vocabulary and the `zsidn` session cookie are firmware-family
+# behaviours rather than variant ones, and which entities a build populates
+# follows the family.
+#
+# Substring matching is safe here because an entity default is advisory and a
+# user can override it. Nothing riskier is decided this way: since v3.3.25-dev10
+# `_ad_hash_func` takes the write token's digest from the device's own script,
+# and falls back to the model string only when that cannot be resolved.
 #
 # Seeded from measurement only. Every entry below is a reading from the
-# 2026-09-02 diagnostics download attached to issue #56, not an inference
-# about what a model probably supports.
+# 2026-09-02 diagnostics download attached to issue #56, not an inference about
+# what a model probably supports.
 MODEL_OVERLAY: Final[dict[str, dict[str, bool]]] = {
     # ZTE MC888 Pro, firmware `CR_xxxxMC888PROV1.0.1B04`.
     #

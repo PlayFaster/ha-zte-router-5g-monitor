@@ -424,3 +424,36 @@ async def test_one_unremovable_store_does_not_skip_the_other(
     await recorder.async_remove()
 
     recorder._observed_store.async_remove.assert_awaited_once()
+
+
+async def test_session_lifetimes_round_trip(hass, mock_config_entry) -> None:
+    """What this device's sessions lasted, kept across a restart.
+
+    Re-learning after every restart costs one expiry per restart — a failed
+    request, a login and a retry — for a value the device has already taught us.
+    """
+    recorder = ObservationRecorder(hass, mock_config_entry)
+    await recorder.async_load()
+
+    assert recorder.session_lifetimes() == []
+
+    await recorder.async_save_session_lifetimes([120.0, 95.5])
+
+    assert recorder.session_lifetimes() == [120.0, 95.5]
+
+
+async def test_an_unreadable_lifetime_record_is_nothing_learned(
+    hass, mock_config_entry
+) -> None:
+    """Advisory, like every other record here.
+
+    A corrupt entry must route the pre-write reset back to the idle constant it
+    has always used, not fail setup and not produce a threshold from nonsense.
+    """
+    recorder = ObservationRecorder(hass, mock_config_entry)
+    await recorder.async_load()
+    recorder._observed.setdefault(recorder.device_id, {})["session_lifetimes"] = (
+        "not a list"
+    )
+
+    assert recorder.session_lifetimes() == []

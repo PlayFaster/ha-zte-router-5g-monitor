@@ -229,6 +229,31 @@ class ObservationRecorder:
         saved = record.get("snapshot")
         return dict(saved) if isinstance(saved, dict) else {}
 
+    def session_lifetimes(self) -> list[float]:
+        """How long this device's sessions have lasted, most recent last.
+
+        Advisory like everything else here. An absent or unreadable record
+        resolves to "nothing learned", which routes the pre-write reset back to
+        the idle constant it has always used.
+        """
+        record = self._observed.get(self.device_id, {})
+        stored = record.get("session_lifetimes")
+        if not isinstance(stored, list):
+            return []
+        return [float(v) for v in stored if isinstance(v, (int, float))]
+
+    async def async_save_session_lifetimes(self, lifetimes: list[float]) -> None:
+        """Persist the observed session lifetimes for this device.
+
+        Held per device rather than per firmware: the value is re-learned from
+        live expiries anyway, and a stale entry only delays the correction by a
+        few sessions. See `SESSION_AGE_LEARN_MIN_SAMPLES`.
+        """
+        self._observed.setdefault(self.device_id, {})["session_lifetimes"] = [
+            float(v) for v in lifetimes
+        ]
+        await self.async_save()
+
     async def async_save_snapshot(self, enabled: dict[str, bool]) -> None:
         """Record the enabled state of every entity as this device's baseline."""
         self._observed.setdefault(self.device_id, {})["snapshot"] = dict(enabled)
