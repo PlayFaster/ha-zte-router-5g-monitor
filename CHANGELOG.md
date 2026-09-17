@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.4.0] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management
+
+### Summary
+
+This release adds verified support for the ZTE MC888 Pro (a big thanks to [@Kees48](https://github.com/Kees48) for supporting this), plus a mechanism that should make support for other untested router types more robust. It improves the information available via a Diagnostic Download so that support can be better provided. It adds a service to set/reset sensor entities to default, or what's available, or a saved preset. It now has long term tracking for key text sensors, such as Firmware, External (WAN) IP, APN and Cell ID. Also squashed some bugs around SMS messages and uptime timestamp calculation.
+
+- **ZTE MC888 Pro Compatibility**: Verified support for the ZTE MC888 Pro, confirmed on the device by its owner, resolving its cookieless authentication, custom session cookie (`zsidn`), SHA-256 write tokens, and prefixed parameter schemas.
+- **Dynamic Device Profile System**: Router web client scripts are analyzed in the background after the first poll and the result cached, discovering model-specific write tokens, hashing rules, and field naming directly from firmware without requiring hardcoded per-model logic.
+- **Interactive Re-Authentication & Repair Flow**: Added a guided Fix flow in the Repairs dashboard to update credentials without deleting the integration, alongside a dedicated SMS Storage Full binary sensor.
+- **SMS Platform Hardening**: SMS actions now feature timezone-aware timestamps, multi-bank (device and SIM) deletion with read-back verification, settle-window tracking, and draft detection.
+- **New Management & Diagnostic Entities**: Added a `reset_entities` service action, configuration transition history tracking, operator TR-069 provisioning detection, and diagnostic radio/SIM metrics.
+
+### Added
+
+- **ZTE MC888 Pro Hardware Support**: Added verified support for the MC888 Pro, and expected compatibility across the wider MC888/MC889/MC801 family, which remains unverified on live hardware. Supports alternate `network_` and `flux_` signal metrics, Wi-Fi client counters, and 5G band lock configurations.
+- **Dynamic Device Profile Discovery**: Parses the router's own web interface scripts to learn model-specific security tokens, digest algorithms, and parameter field names (`device_profile.py`). It runs once in the background after the first poll, is cached against the firmware it was read from, and is re-read only when that firmware changes.
+- **Interactive Re-Authentication Repair**: Adds a guided repair notification when router credentials change, allowing instant credential updates from the Home Assistant Repairs interface.
+- **Reset Entities Service Action (`zte_router_5g.reset_entities`)**: Added a service action supporting dry-run previews, restoring per-model default entity sets, enabling populated entities, and creating custom entity snapshots.
+- **Configuration Transition History & Counters**: Added sensors tracking firmware update history (`wa_inner_version`, enabled by default), WAN IP, APN, Cell ID, network provider, and WAN mode changes with rolling timestamp history.
+- **New Diagnostic Entities**: Added `binary_sensor.*_operator_provisioned` (TR-069 management lock), `binary_sensor.*_sms_storage_full`, `sensor.*_firmware_update_result`, per-antenna 5G signal sensors, and secondary carrier aggregation diagnostic metrics.
+- **Adaptive Session Lifetime Learning**: Measures observed router session lifespans to calculate adaptive preemptive refresh thresholds, replacing static timers across varying hardware variants (`SESSION_AGE_LEARN_MIN_SAMPLES`).
+- **Write Path Concurrency Lock**: Added an async lock between background polling and write operations to prevent session evictions on single-session router firmware.
+
+### Fixed
+
+- **MC888 Pro Authentication & Write Operations**: Resolved authentication and write command failures on models that authenticate without `stok` cookies, use custom cookie names (`zsidn`), require SHA-256 double-hashed write tokens (`wa_inner_version + cr_version`), or use prefixed APN fields (`apn_pdp_type`).
+- **Timezone-Aware SMS Timestamps**: Fixed SMS timestamps discarding router timezone offsets, ensuring accurate local timestamps and chronological ordering across daylight-saving changes.
+- **Multi-Bank SMS Deletion with Read-Back Verification**: SMS deletion operations now target both device and SIM storage banks (`mem_store="2"`), polling until storage settles (up to 15s) and verifying targeted messages are purged before reporting success.
+- **Draft SMS Delivery Misclassification**: Added counter comparisons (`sms_nv_send_total` vs `sms_nv_draftbox_total`) to prevent messages saved to drafts from being reported as successfully delivered.
+- **Stale Boot Time Across Restarts**: Reconciled startup uptime calculations with hardware counter drift to prevent `Device Uptime` from freezing on stale timestamps when the router reboots during Home Assistant downtime.
+- **Pre-Write Session Key Validation**: Validates session health directly against firmware login indicators (`loginfo`), eliminating false session-expiration alerts on models where connection status keys remain unpopulated.
+- **Post-Restart Dead Session Recovery**: Ensured write commands issued immediately after a Home Assistant restart successfully authenticate even when starting from an expired session.
+
+### Changed
+
+- **Per-Model Default Entity Overlays**: Integration startup now adapts default entity visibility to the detected router model. An MC888 Pro starts with RSSI and SINR enabled, since the unprefixed `network_` names are the only signal-quality figures that firmware reports, and with the five LTE and 5G sensors it leaves blank disabled; an MC7010, which has no Wi-Fi of its own, starts with the two Wi-Fi sensors disabled.
+- **Repairs Dashboard Alignment**: Non-actionable warnings (such as temporary network schema shifts) are now surfaced via `drift` attributes on the Integration Health sensor rather than creating persistent repair issues.
+- **Bandwidth Sensor Unit Conversion**: LTE Carrier Aggregation bandwidth sensors now support frequency unit switching (MHz/GHz/kHz) in the Home Assistant UI.
+- **SMS Sender Privacy**: Sender phone numbers are excluded from standard `INFO` logging, recording internal message indices instead.
+- **URL Batching & Request Architecture**: Polling requests exceeding character ceilings are automatically partitioned, and internal HTTP dispatching is modularized into discrete lifecycle stages while preserving all retry and error mapping contracts.
+
+---
+
 ## [3.3.25] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience
 
 ### Summary
@@ -15,7 +58,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
-- **Dynamic Device Profile Discovery**: Automatically parses the router's web interface scripts on startup to discover device-specific write tokens, digest algorithms, and parameter field names without relying solely on static model heuristics (`device_profile.py`).
+- **Dynamic Device Profile Discovery**: Parses the router's web interface scripts to discover device-specific write tokens, digest algorithms, and parameter field names without relying solely on static model heuristics (`device_profile.py`). It runs once in the background after the first poll and is cached against the firmware it was read from.
 - **Dynamic Session Lifetime Learning**: Measures observed router session durations to calculate adaptive preemptive reset thresholds per device, replacing static timers across varied hardware variants (`SESSION_AGE_LEARN_MIN_SAMPLES`).
 - **Write Path Concurrency Lock**: Added an async lock between coordinator polling batches and write commands to prevent simultaneous requests from causing session evictions on single-session routers.
 - **Diagnostic Source Asset Manifest**: Diagnostic downloads now include an asset manifest and script capture metadata to verify client script parsing and token derivations (`web_sources`).
@@ -789,6 +832,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.4.0\] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management](#340---2026-09-15---release-zte-mc888-pro-compatibility-dynamic-device-profiles-and-advanced-router-management)
   - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
   - [\[3.3.24\] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking](#3324---2026-09-13---release-asynchronous-sms-deletion-verification-and-send-outcome-tracking)
   - [\[3.3.22\] - 2026-09-12 - Release: Browser-Aligned SMS Deletion Payloads and Dynamic Session Key Selection](#3322---2026-09-12---release-browser-aligned-sms-deletion-payloads-and-dynamic-session-key-selection)

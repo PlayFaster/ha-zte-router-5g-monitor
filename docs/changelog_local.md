@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3/.4.0-dev1\]- 2026-09-16 Bump PHACC](#340-dev1--2026-09-16-bump-phacc)
   - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
   - [\[3.3.25-dev12\] - 2026-09-15 - Comments and Docstrings Rewritten for Readability; the Write-Path Documents Catch Up](#3325-dev12---2026-09-15---comments-and-docstrings-rewritten-for-readability-the-write-path-documents-catch-up)
   - [\[3.3.25-dev11\] - 2026-09-15 - Five Values the Profile Had Learned and Nothing Read](#3325-dev11---2026-09-15---five-values-the-profile-had-learned-and-nothing-read)
@@ -293,6 +294,12 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3/.4.0-dev1]- 2026-09-16 Bump PHACC
+
+### Bumps
+
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.364 to 0.13.365
 
 ## [3.3.25] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience
 
@@ -2048,7 +2055,7 @@ The shared entity verification tool reported three faults against a healthy inst
 
 ### Bumps
 
-- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.363 to 0.13.363
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.363 to 0.13.364
 
 ### Changed
 
