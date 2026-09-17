@@ -567,6 +567,30 @@ _UNAUTHENTICATED_KEYS = frozenset(
 )
 
 
+def _unauthenticated_with_aliases(measured: frozenset[str]) -> frozenset[str]:
+    """Widen a key set to the other spellings of the concepts in it.
+
+    A spelling of an unauthenticated concept is unauthenticated, whether or
+    not the device implements it. `get_version` reads all three spellings of
+    `wa_inner_version`; on the MC888 Pro of issue #56 the firmware implements
+    one and answers the other two as empty strings. `_classify_session` scored
+    those two as authenticated keys come back blank alongside a populated
+    unauthenticated one, which is its definition of `expired` — a verdict no
+    unauthenticated read can support. The download from that device recorded
+    it, and the field a fault report is read from is the only place it showed.
+
+    The measured set is widened rather than replaced. A spelling cannot be
+    measured on a device that does not implement it, so it can never enter the
+    set the hardware measurement builds.
+    """
+    return measured | frozenset(
+        spelling
+        for concept, spellings in _TOKEN_READS.items()
+        if concept in measured
+        for spelling in spellings
+    )
+
+
 # Read together by `_ensure_session`, because one key cannot separate a dead
 # session from a device that simply never populates that key.
 #
@@ -702,7 +726,8 @@ def _classify_session(
         The request carried no unauthenticated key, so the second and third
         cases cannot be told apart. The caller falls back to the older, weaker
         rule. This is the normal case for the SMS endpoints, whose responses
-        contain no unauthenticated keys at all.
+        contain no unauthenticated keys at all. A read of one concept's
+        alternate spellings lands here too, by `_unauthenticated_with_aliases`.
 
     Deciding from the *relationship* between the two classes is what makes this
     robust. The previous rule asked whether the whole response was blank, which
@@ -712,6 +737,7 @@ def _classify_session(
     if not payload:
         return "undecidable"
 
+    unauthenticated = _unauthenticated_with_aliases(unauthenticated)
     authenticated_values = [v for k, v in payload.items() if k not in unauthenticated]
     unauthenticated_values = [v for k, v in payload.items() if k in unauthenticated]
 

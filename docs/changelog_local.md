@@ -5,7 +5,8 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3/.4.0-dev1\]- 2026-09-16 Bump PHACC](#340-dev1--2026-09-16-bump-phacc)
+  - [\[3.4.0-dev2\] - 2026-09-17 - Pre-Release Fixes: Retired SMS Probe Field Removed, Session Verdict Corrected on Version Reads, Observation Store State Published and Round-Tripped](#340-dev2---2026-09-17---pre-release-fixes-retired-sms-probe-field-removed-session-verdict-corrected-on-version-reads-observation-store-state-published-and-round-tripped)
+  - [\[3.4.0-dev1\] - 2026-09-17 Bump PHACC, Update Docs](#340-dev1---2026-09-17-bump-phacc-update-docs)
   - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
   - [\[3.3.25-dev12\] - 2026-09-15 - Comments and Docstrings Rewritten for Readability; the Write-Path Documents Catch Up](#3325-dev12---2026-09-15---comments-and-docstrings-rewritten-for-readability-the-write-path-documents-catch-up)
   - [\[3.3.25-dev11\] - 2026-09-15 - Five Values the Profile Had Learned and Nothing Read](#3325-dev11---2026-09-15---five-values-the-profile-had-learned-and-nothing-read)
@@ -295,11 +296,121 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
-## [3/.4.0-dev1]- 2026-09-16 Bump PHACC
+## [3.4.0-dev2] - 2026-09-17 - Pre-Release Fixes: Retired SMS Probe Field Removed, Session Verdict Corrected on Version Reads, Observation Store State Published and Round-Tripped
+
+### Summary
+
+The verified items from `.notes/v340_before_release.md`, each found in the
+reporter's v3.3.25 diagnostics download of 2026-09-15 and none of them
+affecting that device's operation. Three faults and one gap: a published field
+production code could no longer fill, a session verdict drawn from a read that
+cannot support one, and two observation stores whose state appeared nowhere in
+a fault report and which no test or check exercises through real storage.
+
+### Fixed
+
+- **`sms.delete_probe` was published as `null` on every download.** The
+  attribute was removed from the API in `[3.3.25-dev8]` when the probe was
+  retired, and `diagnostics.py` read it through a `getattr` default, which
+  absorbed the removal silently. The field, its sanitizer and the four tests
+  that set the attribute on a mock are gone; the tests passed because a mock
+  accepts any attribute, so the suite stayed green against a field nothing
+  could fill.
+
+  `_entry_data_without_probe` stays. The probe persisted its report into the
+  config entry to survive a restart and nothing clears it, so an entry created
+  before `[3.3.25-dev8]` still carries one — 658 KB in the case this was
+  measured on. It now has a test of its own rather than being covered
+  incidentally by the field's.
+
+- **A session verdict drawn on a request that cannot carry one.** The MC888 Pro
+  download recorded `verdict: "expired"` against `get_version`'s read of the
+  three spellings of `wa_inner_version`. That firmware implements one and
+  answers the other two as empty strings, which `_classify_session` scored as
+  authenticated keys blank alongside a populated unauthenticated one — its
+  definition of an expired session. No unauthenticated read can support that
+  verdict.
+
+  A spelling of an unauthenticated concept is now unauthenticated, by
+  `_unauthenticated_with_aliases`, and such a read returns `undecidable`. The
+  widening is applied to the measured key set rather than replacing it: a
+  spelling cannot be measured on a device that does not implement it, so it
+  could never enter the set the hardware measurement builds. `RD` is read the
+  same multi-spelling way and is not unauthenticated, so `rd` stays an
+  authenticated key — asserted.
+
+  Advisory in effect. The session flag has been the authority since
+  `[3.3.25-dev1]` and that download shows 7 checks with 0 not confirmed, so no
+  write was blocked. The cost was a misleading `expired` in the field a fault
+  report is read from.
+
+### Added
+
+- **The observation stores now say what state they are in.** Nothing from the
+  recorder appeared in a diagnostics download. A devcontainer instance lost
+  roughly nine days of `wan_ipaddr` transitions in September 2026 and nothing
+  retained could say why: the load path logged at debug and that line had
+  rotated away before it was looked at, while the production store on the same
+  router kept an unbroken four-transition chain across the same period.
+
+  A new `observations` section publishes `recording_since`, the entry count and
+  the oldest and newest timestamp of each series, the change counts, and a
+  count of loads that raised. Dates and shape only, never a recorded value: the
+  tracked keys are addresses and identifiers. A reset store reads as recent
+  entries against a start date that should long predate them, and the fault
+  count says whether a read fault is why.
+
+  The count is persisted under a `_meta` key in the observed store and carried
+  across restarts, so a fault survives the restart it caused. No version bump:
+  every reader there addresses its record by device id, so a key that cannot be
+  one is invisible to all of them. The load fault itself is logged at warning
+  rather than debug — losing accumulated history is not a debug-level event.
+
+- **Three tests for what a loaded record does on the next poll.** None of the
+  29 tests in `test_observations.py` loaded a populated history and then
+  polled, so "history survives a restart" was unasserted. Added: a populated
+  load followed by an unchanged poll appends nothing; a changed poll chains its
+  `from` onto the stored value rather than re-seeding `null`; and a failed load
+  re-seeds every tracked key, which is the consequence
+  `test_an_unreadable_store_resolves_to_nothing_learned` stops short of.
+
+- **A real-`Store` round trip in `scripts/diag_check.py`, section `[7]`.** The
+  fixture in `test_observations.py` replaces both stores with a `MagicMock` and
+  says so — "nothing touches the disk" — and all 29 tests run against it. The
+  real `Store` was exercised by no test and no check, so the three tests above
+  are worth having and cannot detect this class of fault: they pin the
+  recorder's logic against a mock that always behaves.
+
+  The check writes a transition through the real `Store`, builds a second
+  recorder on the same entry, and asserts the entry, its timestamp and its
+  `from` value come back and that an unchanged poll then appends nothing. It
+  runs under its own entry id and removes both files afterwards: `Store` names
+  its file from that id, so sharing one would have the script overwrite the
+  history the user's entities are serving from.
+
+### Notes
+
+- **Seeing a real transition recorded on the devcontainer was considered and
+  dropped.** Production has demonstrated the poll path on this router over four
+  chained transitions between 2026-09-06 and 2026-09-14. Provoking one locally
+  means rebooting the router or changing the APN and changing it back, and
+  neither adds to what that chain already shows.
+
+- One test-only defect fixed on the way: the stored-history literal the new
+  tests read from is appended to by the recorder that loads it, so it is built
+  fresh per test rather than shared.
+
+- 1,776 tests at 100% line and branch coverage.
+
+## [3.4.0-dev1] - 2026-09-17 Bump PHACC, Update Docs
 
 ### Bumps
 
 - **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.364 to 0.13.365
+
+### Changed
+
+- **Docs**: Updated Readme and Changelog
 
 ## [3.3.25] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience
 

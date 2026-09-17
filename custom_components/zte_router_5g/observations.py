@@ -43,6 +43,11 @@ _LOGGER = logging.getLogger(__name__)
 HISTORY_STORAGE_VERSION: Final = 1
 OBSERVED_STORAGE_VERSION: Final = 1
 
+# Where the observed store keeps what belongs to the store rather than to a
+# device. Every reader here addresses its record by device id, so a key that
+# cannot be one is invisible to all of them and needs no version bump.
+META_KEY: Final = "_meta"
+
 # Transitions kept per tracked key, oldest discarded first.
 #
 # The cap is an event count rather than an age, so a slow-moving value keeps
@@ -152,6 +157,7 @@ class ObservationRecorder:
         self._history: dict[str, dict[str, list[dict[str, Any]]]] = {}
         self._observed: dict[str, dict[str, Any]] = {}
         self.device_id: str = f"entry_{entry.entry_id}"
+        self._load_faults: int = 0
 
     async def _load_one(
         self, store: Store[dict[str, Any]], label: str
@@ -160,11 +166,20 @@ class ObservationRecorder:
 
         Deliberately broad, matching the uptime store: no storage fault may
         fail entry setup, because everything here is advisory.
+
+        Counted and logged at warning, because the two are the only trace a
+        fault leaves. A devcontainer instance lost roughly nine days of
+        transitions in September 2026 and nothing retained could say why: this
+        logged at debug, and that line had rotated away before it was looked
+        at. The count is published in the diagnostics download, where a series
+        that restarts against a zero count and one against a non-zero count
+        mean different things.
         """
         try:
             stored = await store.async_load()
         except Exception as err:  # noqa: BLE001 - see docstring
-            _LOGGER.debug(
+            self._load_faults += 1
+            _LOGGER.warning(
                 "%s: %s store unreadable, continuing without it: %s",
                 self._entry.title,
                 label,
@@ -177,6 +192,13 @@ class ObservationRecorder:
         """Read both records into memory. Never raises."""
         self._history = await self._load_one(self._history_store, "history")
         self._observed = await self._load_one(self._observed_store, "observed")
+        # Carried across restarts, so a fault survives the restart it caused.
+        # A load that raised leaves the record empty and the count behind it
+        # lost, which is itself the signal: a series that has restarted while
+        # this reads zero was not lost to a read fault.
+        meta = self._observed.get(META_KEY)
+        if isinstance(meta, dict):
+            self._load_faults += int(meta.get("load_faults", 0))
 
     async def async_remove(self) -> None:
         """Delete both files. Called when the config entry is removed."""
@@ -217,6 +239,34 @@ class ObservationRecorder:
         return {
             "entities_known_populated": len(record.get("populated", [])),
             "recording_since": record.get("since"),
+        }
+
+    def report(self) -> dict[str, Any]:
+        """Describe both records, for the diagnostics download.
+
+        Shape and dates only, never a recorded value: the tracked keys are
+        addresses and identifiers, and the transitions themselves are already
+        sanitized where they are published as entity attributes.
+
+        `oldest` is what makes a lost series visible. A store that was reset
+        carries recent timestamps against a `recording_since` that should long
+        predate them, and `load_faults` says whether a read fault caused it.
+        """
+        record = self._observed.get(self.device_id, {})
+        series = self._history.get(self.device_id, {})
+        return {
+            "recording_since": record.get("since"),
+            "load_faults": self._load_faults,
+            "entities_known_populated": len(record.get("populated", [])),
+            "change_counts": dict(record.get("change_counts", {})),
+            "series": {
+                key: {
+                    "entries": len(entries),
+                    "oldest": entries[0].get("timestamp") if entries else None,
+                    "newest": entries[-1].get("timestamp") if entries else None,
+                }
+                for key, entries in series.items()
+            },
         }
 
     def snapshot(self) -> dict[str, bool]:
@@ -328,6 +378,7 @@ class ObservationRecorder:
 
     async def async_save(self) -> None:
         """Persist both records. Never raises."""
+        self._observed[META_KEY] = {"load_faults": self._load_faults}
         for store, payload, label in (
             (self._history_store, self._history, "history"),
             (self._observed_store, self._observed, "observed"),

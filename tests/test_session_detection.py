@@ -218,6 +218,35 @@ def test_a_response_of_only_unauthenticated_keys_is_undecidable() -> None:
     assert _classify_session({"imei": "864155042229309"}) == "undecidable"
 
 
+def test_the_spellings_of_an_unauthenticated_concept_cannot_convict() -> None:
+    """`get_version` reads three spellings of one unauthenticated key.
+
+    A firmware implementing one of them answers the other two empty, which
+    used to read as authenticated keys blank alongside a populated
+    unauthenticated one — the shape of an expired session. The MC888 Pro of
+    issue #56 recorded exactly that in its diagnostics download.
+    """
+    assert (
+        _classify_session(
+            {
+                "wa_inner_version": "xx_xxxxMC888PROMODV1.0.0B01",
+                "wa_version": "",
+                "inner_version": "",
+            },
+        )
+        == "undecidable"
+    )
+
+
+def test_widening_does_not_reach_a_concept_that_needs_a_session() -> None:
+    """Only the spellings of keys already in the set are added.
+
+    `RD` is read the same multi-spelling way and is not unauthenticated, so
+    `rd` must stay an authenticated key rather than arrive by association.
+    """
+    assert _classify_session({"rd": "", "model_name": "MC7010"}) == "expired"
+
+
 # ---------------------------------------------------------------------------
 # The behavior those classifications drive
 # ---------------------------------------------------------------------------

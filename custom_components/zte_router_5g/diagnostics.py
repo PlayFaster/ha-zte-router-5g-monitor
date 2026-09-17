@@ -256,10 +256,10 @@ def _sanitize_sms(block: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any
 def _entry_data_without_probe(entry: ConfigEntry) -> dict[str, Any]:
     """The stored entry data, less the probe report.
 
-    The report is persisted into the entry so it survives a restart, and it is
-    already published under `sms.delete_probe`. Carrying it twice doubled a
-    download to 658 KB once the probe began returning the router's own source,
-    and the two copies were sanitized by different paths, so they differed.
+    The probe was retired in `[3.3.25-dev8]` and its `sms.delete_probe` field
+    removed in `[3.4.0-dev2]`, but nothing clears what it persisted: an entry
+    created before that still carries a report, 658 KB in the case this was
+    measured on. This strip is what keeps it out of the download.
     """
     return {
         key: value
@@ -447,6 +447,17 @@ def _dict_items(value: Any) -> list[dict[str, Any]]:
     return [item for item in value if isinstance(item, dict)]
 
 
+def _dict_or_none(value: Any) -> dict[str, Any] | None:
+    """A mapping, or `None`. Never whatever a collaborator returned.
+
+    The download is serialized after every section has succeeded, so a value
+    that cannot be encoded fails the whole file past every guard. Anything
+    read off a collaborator passes through this first — including a stand-in
+    under test, whose default return is not serializable.
+    """
+    return value if isinstance(value, dict) else None
+
+
 def _sms_section(
     snapshot: dict[str, list[dict[str, Any]]] | None,
     data: dict[str, Any],
@@ -479,7 +490,6 @@ def _sms_section(
     # dict fails the whole file at the last moment.
     failures = coordinator.api.write_failures
     send_record = getattr(coordinator.api, "last_send", None)
-    probe = getattr(coordinator.api, "delete_probe", None)
     return {
         "fetched": isinstance(snapshot, dict),
         "message_count": len(listed),
@@ -532,11 +542,6 @@ def _sms_section(
             if isinstance(failures, list)
             else [],
             tokenizer,
-        ),
-        # The probe's findings, when the temporary diagnostic action has been
-        # run. Absent otherwise.
-        "delete_probe": (
-            _sanitize_probe(probe, tokenizer) if isinstance(probe, dict) else None
         ),
     }
 
@@ -755,6 +760,16 @@ async def async_get_config_entry_diagnostics(
         # check does not apply to, and that is unknown for every device but the
         # reference hardware.
         "session_flag": flag_report,
+        # The shape of the two observation stores, never their values. Both
+        # accumulate for months and nothing else in this file shows whether
+        # they survived: a devcontainer instance lost roughly nine days of
+        # transitions in September 2026 and the only trace was a debug line
+        # that had rotated away. `recording_since` against each series' oldest
+        # entry says whether a store was reset, and `load_faults` says whether
+        # a read fault is why.
+        "observations": _dict_or_none(
+            _guarded("observations", coordinator.observations.report, errors)
+        ),
         # The files the router serves to its own web interface: one record per
         # file always, and the sources themselves only when something in this
         # download needs explaining. See `_sources_are_warranted`.
@@ -1165,41 +1180,6 @@ def _keep_sources(sources: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, A
         "sources_are_unswept": not swept,
         "sources_swept": sorted(swept),
     }
-
-
-def _sanitize_probe(probe: dict[str, Any], tokenizer: _Tokenizer) -> dict[str, Any]:
-    """Sweep the probe report, leaving the captured source untouched.
-
-    `source_capture.sources` holds the scripts the router serves to anyone who
-    opens its address. They are firmware, identical on every unit of a build,
-    and carry no value belonging to the person who ran the probe. Sweeping them
-    rewrites the code itself: an address-shaped literal in the router's own
-    JavaScript — `"0.0.0.0"` in `js/service.js` on the reference device —
-    becomes a token, and the capture then differs from what the router sent.
-    The capture exists to be read as source, so it is exempted rather than
-    swept.
-
-    Everything else in the report is swept as before, including the file list,
-    whose paths and digests are ours rather than the device's.
-    """
-    capture = probe.get("source_capture")
-    sources = capture.get("sources") if isinstance(capture, dict) else None
-    if not isinstance(sources, dict):
-        return cast("dict[str, Any]", _sanitize_walk(probe, tokenizer))
-    without = {key: value for key, value in probe.items() if key != "source_capture"}
-    clean = cast("dict[str, Any]", _sanitize_walk(without, tokenizer))
-    files = capture.get("files", {}) if isinstance(capture, dict) else {}
-    # The exemption is checked, not assumed. These files are firmware on every
-    # device seen so far, but "so far" is one model: a build that embedded a
-    # serial, an address or a subscriber identifier in a served script would
-    # put it into a file written to be attached to a public issue. Any source
-    # carrying a value this download has already tokenized is swept like
-    # anything else, and named.
-    clean["source_capture"] = {
-        "files": _sanitize_walk(files, tokenizer),
-        **_keep_sources(sources, tokenizer),
-    }
-    return clean
 
 
 def _sanitize_walk(value: Any, tokenizer: _Tokenizer) -> Any:
