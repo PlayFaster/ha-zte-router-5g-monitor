@@ -23,7 +23,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >   - **SMS Management** — View the most recently received message content and send SMS messages directly in HA.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
 >
-> This project features live hardware verification on both the **ZTE MC7010** (5G Outdoor CPE) and the **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE), powered by a dynamic [Device Profile system](#-device-profile) that automatically discovers write tokens and parameter schemas across the broader ZTE `goform` family.
+> Reads and writes are verified on the **ZTE MC7010** (5G Outdoor CPE), and on the **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE). This is powered by a dynamic [Device Profile system](#-device-profile) that works to automatically discovers write tokens and parameter schemas across the broader ZTE `goform` family.
 
 ## 📋 Table of Contents
 
@@ -54,7 +54,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 - **Read and Writes Confirmed On**:
   - **ZTE MC7010** (5G Outdoor CPE) — **Live Hardware Verified** on firmware `V1.0.0B01` and `V1.0.0B03`.
-  - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Verified** on firmware `V1.0.1B03`.
+  - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Verified** on firmware `V1.0.1B03` / `V1.0.1B04`.
 
 - **Expected Compatible (ZTE `goform` API Family)**:
   - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
@@ -62,7 +62,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
     - **ZTE MC888 / MC888A / MC888 Ultra** (Indoor 5G Wi-Fi 6 CPE)
     - **ZTE MC889 / MC889A / MC889 Pro** (Outdoor 5G CPE)
     - **ZTE MF266 / MF286 / MF289** (LTE/4G Outdoor & Indoor CPEs)
-  - _(Note: While protocol support for these model families is built into the integration, they remain unverified on live hardware)._
+  - _(Note: The dynamic [Device Profile system](#-device-profile) should automatically discover write tokens and parameter schemas across the broader ZTE `goform` family. These remain unverified on live hardware)._
 
 - **Reading, Writing, and Support**
   - **Reading (Sensor Metrics)**: Supported broadly across the ZTE `goform` API family. The integration dynamically queries supported parameter names on startup, creating working entities even on previously unverified models.
@@ -191,12 +191,6 @@ Which of them your router fills in depends on its firmware. Enable the ones you 
 | `5G NSA Band Lock`, `5G SA Band Lock` | Which 5G bands the router may use, alongside the existing `LTE Band Lock Mask` |
 | `Roaming State`, `Network Mode Config` | Whether the SIM is roaming, and whether the router picks its network mode itself |
 | `RSSI`, `SINR` | Signal strength and signal-to-noise for whichever radio is serving, where the router reports them without naming the technology. On firmware that leaves `LTE RSSI` and `LTE SNR` blank (such as the MC888 Pro), these two carry those readings |
-| `WiFi Clients Connected`, `WiFi Enabled` | How many wireless devices are connected, and whether the radios are on. **Enabled by default** except on the MC7010, which has no WiFi of its own |
-| `Operator Provisioned` | (`binary_sensor.*_operator_provisioned`) Whether the router settings are locked or managed by TR-069 operator profiles |
-| `SMS Storage Full` | (`binary_sensor.*_sms_storage_full`) Alerts when message storage on the SIM card or internal device memory is full |
-| `Firmware Update State`, `Firmware Update Result` | Whether an update is running, and how the last one ended. Off by default because a working router has nothing to say here |
-| `SIM Lock State`, `SIM PIN Attempts Remaining`, `SIM PUK Attempts Remaining` | Whether the SIM is asking for its PIN, and how many tries are left. A locked SIM otherwise looks like a coverage fault |
-| `Firmware Version` & Config Transitions | `Firmware Version` (enabled by default) and WAN/APN sensors track rolling configuration update timestamps via `previous_version` and `last_changed` attributes |
 
 ---
 
@@ -334,12 +328,6 @@ condition:
 
 <br>
 
----
-
-</details>
-
-<br>
-
 ### 📋 Essential Router Management
 
 Reboot router hardware directly from Home Assistant and monitor data integrity with automated self-diagnostics.
@@ -352,7 +340,10 @@ Reboot router hardware directly from Home Assistant and monitor data integrity w
 
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
 - **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
-- **Router and SIM State**: **Operator Provisioned** reports whether the router refuses to hand over its remote-management (TR-069) settings, which is usual on an operator-supplied unit and explains why some settings cannot be changed locally. **Firmware Update Result** reports how the last update attempt ended. _Disabled by default_: **Modem State**, **Connection Failure Count**, and **SIM PIN Attempts Remaining** and **SIM PUK Attempts Remaining** — a locked SIM presents as no service, which otherwise reads as a coverage fault.
+- **Router and SIM State**: **Operator Provisioned** reports whether the router refuses to hand over its remote-management (TR-069) settings, which is usual on an operator-supplied unit and explains why some settings cannot be changed locally.
+- **Firmware Update State** and **Firmware Update Result** report whether an update is running and how the last one ended. Both off by default.
+- **WiFi Clients Connected** and **WiFi Enabled** report how many devices are on your WiFi and whether the radios are on. On by default, for routers with WiFi.
+- _Disabled by default_: **Modem State**, **Connection Failure Count**, **SIM Lock State**, and **SIM PIN Attempts Remaining** and **SIM PUK Attempts Remaining** — a locked SIM presents as no service, which otherwise reads as a coverage fault.
 
 | System Control | System Diagnostics |
 | :-: | :-: |
@@ -388,11 +379,45 @@ This integration features **dynamic polling**, the ability to pause polling comp
 
 <br>
 
+### 🕓 Change History
+
+Six values keep their own record of what they changed from and when: firmware, WAN IP, APN, cell ID, network provider and WAN mode.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+Home Assistant forgets a text value after ten days. These six keep their history, so you can still see a firmware change your operator made months ago.
+
+| Sensor | Counter | Counter default |
+| :-- | :-- | :-- |
+| `Firmware Version` | `Firmware Changes` | **Enabled** |
+| `WAN IP Address` | `WAN IP Changes` | Disabled |
+| `Network APN` | `APN Changes` | Disabled |
+| `Cell ID` | `Cell Changes` | Disabled |
+| `Network Provider` | `Provider Changes` | Disabled |
+| `WAN Operating Mode` | `WAN Mode Changes` | Disabled |
+
+Each sensor on the left carries **`history`**, **`previous_version`** and **`last_changed`** attributes. Click the entity → **⋮ menu → Details** to read them.
+
+The counters put the same changes on a graph, and they reach [long-term statistics](#-long-term-statistics-lts).
+
+See the [Firmware Change Notification](#-firmware-change-notification) and [Cell Tower Change Alert](#-cell-tower-change-alert) examples.
+
+---
+
+</details>
+
+<br>
+
 ### 💬 SMS Management Actions
 
 With SMS count and text sensors, plus monitoring and control via events and actions, you can **send, read and delete** Router SMS messages.
 
 - See [SMS Actions](#-sms-actions) and [SMS Examples](#-sms-examples)
+- **SMS Storage Full** warns when the router's message store is full, which stops new messages arriving. Enabled by default.
 
 ## 🔍 What You Get
 
@@ -446,7 +471,7 @@ This integration provides **121 entities** (depending on your firmware) organize
 
 ---
 
-> Change History: Six values that change rarely but matter — firmware version, WAN IP, APN, cell ID, network provider and WAN mode — keep their own record of what they changed from and when, on the sensor's `history` attribute. Home Assistant's own history forgets a text value after ten days, so this is what lets you see an operator's silent firmware update months later. **Firmware Changes** is a companion counter, enabled by default, that puts those changes on a long-term statistics graph; the other five counters are disabled by default.
+> Change History: Six values — firmware, WAN IP, APN, cell ID, network provider and WAN mode — keep their own record of what they changed from and when. See [Change History](#-change-history).
 
 ---
 
@@ -828,7 +853,7 @@ data:
 
 > The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
 >
-> All SMS deletions operate across both device memory and SIM card storage banks, and automatically poll to verify messages are fully purged from storage before confirming success.
+> Every SMS deletion is verified. The router answers `success` as soon as it accepts the command, so the integration re-checks the SMS boxes until the message is gone. Both device and SIM SMS stores are checked.
 
 | Parameter | Required | Default | Range | Description |
 | :-- | :-- | :-- | :-- | :-- |
@@ -1699,7 +1724,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE Signal: Morning SignStatusal Report"
+alias: "ZTE Signal: Morning Signal Status Report"
 description: "Forces a fresh data poll and sends a morning signal summary"
 mode: single
 triggers:
@@ -1712,7 +1737,6 @@ actions:
     note: |
       Refresh Now fetches immediately even if Pause Polling is on.
   - delay:
-      seconds: 15
       seconds: 15
     note: Allows coordinator fetch to finish before reading states.
   - action: notify.persistent_notification
@@ -1936,7 +1960,11 @@ The router permits only **one login session at a time**, and the most recent log
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-**It also recovers its session automatically.** Because only one session can exist, logging into the router's web UI ends the integration's — and the router signals this by answering normally (`HTTP 200`) with empty values rather than by returning an error. The integration detects that, logs back in and retries the request once, so an action you trigger straight after using the web UI still works. If a request genuinely cannot be completed it **raises an error** rather than returning empty data, so an automation can tell "nothing to report" apart from "could not ask".
+**It recovers its session automatically.** The router allows one session at a time, so logging into its web UI ends the integration's. The integration detects this, logs back in and retries once, so an action you trigger straight after using the web UI still works. A request that still fails **raises an error** rather than returning empty data, so an automation can tell "nothing to report" from "could not ask".
+
+**It renews before the session expires.** Session lifetime varies by model and firmware: tests show sessions lasting from 15 seconds to a few minutes. The integration learns your router's own lifetime and renews inside it.
+
+**A write and a poll take turns.** Both use the router's single session. A write waits up to three seconds for a poll to finish, then proceeds anyway.
 
 ---
 
