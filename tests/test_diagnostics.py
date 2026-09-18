@@ -1,5 +1,6 @@
 """Tests for diagnostics platform."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.zte_router_5g.diagnostics import (
@@ -205,6 +206,45 @@ async def test_the_sources_publish_only_when_a_write_has_failed(
     assert "1 write failure" in loud["web_sources"]["sources_included_because"]
     assert loud["web_sources"]["sources"]["js/service.js"]
     assert loud["web_sources"]["sources_are_unswept"] is True
+
+
+async def test_a_source_carrying_a_known_identifier_is_swept_and_named(
+    mock_coordinator, mock_config_entry
+):
+    """The exemption is checked against this download's own tokenized values.
+
+    Served scripts are firmware and carry nothing belonging to whoever asked
+    for the download, on both devices measured — which is two builds. A build
+    embedding a subscriber identifier would otherwise reach a file written to
+    be attached to a public issue.
+    """
+    mock_coordinator.data = {"imei": "864155042229309"}
+    mock_coordinator.api.write_failures = [{"cmd": "DELETE_SMS"}]
+    crawled = {
+        "files": {
+            "js/service.js": {"status": 200, "bytes": 4},
+            "js/leaky.js": {"status": 200, "bytes": 4},
+        },
+        "sources": {
+            "js/service.js": 'if(e.result=="success"){ok()}',
+            "js/leaky.js": 'var d="864155042229309";',
+        },
+        "fetched": 2,
+    }
+    mock_config_entry.runtime_data = mock_coordinator
+
+    with patch(
+        "custom_components.zte_router_5g.web_sources.crawl",
+        new=AsyncMock(return_value=dict(crawled)),
+    ):
+        result = await async_get_config_entry_diagnostics(None, mock_config_entry)
+
+    section = result["web_sources"]
+    assert section["sources_swept"] == ["js/leaky.js"]
+    assert section["sources_are_unswept"] is False
+    assert "864155042229309" not in json.dumps(result, default=str)
+    # The clean file is still published exactly as the router served it.
+    assert section["sources"]["js/service.js"] == 'if(e.result=="success"){ok()}'
 
 
 async def test_a_crawl_that_answers_nothing_costs_a_field_not_the_file(

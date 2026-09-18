@@ -16,14 +16,14 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >
 > **Is this the right integration for you?**
 >
-> - **If you have a ZTE 5G/LTE Router in the MC7010, MC801, MC888, MC889, MF266, MF286 or MF289 family** and want to monitor your 5G/LTE connection quality, data usage, and manage SMS messages directly from Home Assistant, then **yes**.
+> - **If you have a ZTE 5G/LTE Router in the MC7010, MC888 Pro, MC801, MC888, MC889, MF266, MF286 or MF289 family** and want to monitor your 5G/LTE connection quality, data usage, and manage SMS messages directly from Home Assistant, then **yes**.
 > - **This integration is for you if** you want:
 >   - **Advanced Signal Diagnostics** — SNR, RSRP, RSRQ and RSSI for LTE and 5G, as reported by your router, refreshed as often as every 30 seconds.
 >   - **Data Usage Monitoring** — Track data usage and projected usage per month or per bill, and set alerts for high use.
 >   - **SMS Management** — View the most recently received message content and send SMS messages directly in HA.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
 >
-> This project is optimized for the ZTE MC7010 5G Outdoor CPE and designed to work with MC801, MC888, MC889, MF266, MF286, MF289 routers as well.
+> Reads and writes are verified on the **ZTE MC7010** (5G Outdoor CPE), and on the **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE). This is powered by a dynamic [Device Profile system](#-device-profile) that works to automatically discovers write tokens and parameter schemas across the broader ZTE `goform` family.
 
 ## 📋 Table of Contents
 
@@ -52,28 +52,9 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 **📟 Router Hardware:**
 
-**Reading and writing are not the same question**, and the model list below
-answers only the second.
-
-- **Reading is expected to work broadly.** The integration does not carry a
-  list of what your router reports: it asks the device which parameter names it
-  answers and builds entities from those. A name your firmware does not
-  implement is simply absent, not an error, so a model nobody has tested still
-  produces a working set of sensors.
-- **Writing depends on your router's own token and form.** Changing something —
-  an APN, the ODU LED, a data limit, sending or deleting an SMS — is signed with
-  a token derived the way that firmware derives it, and sent as the form that
-  firmware expects. Both vary by model and by build. That is what the list below
-  records: the models where writes are **confirmed**, not the boundary of what
-  works.
-- **A control that appears to do nothing needs a diagnostics download.** This
-  router API answers `200 OK` with `{"result":"success"}` for writes it does not
-  carry out, so a silent refusal cannot be told from a completed change any
-  other way. See [How do I download diagnostics?](#-how-do-i-download-diagnostics).
-
-- **Writes Confirmed On**:
+- **Read and Writes Confirmed On**:
   - **ZTE MC7010** (5G Outdoor CPE) — **Live Hardware Verified** on firmware `V1.0.0B01` and `V1.0.0B03`.
-  - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Diagnostic Capture Verified** on firmware `V1.0.1B04`.
+  - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Verified** on firmware `V1.0.1B03` / `V1.0.1B04`.
 
 - **Expected Compatible (ZTE `goform` API Family)**:
   - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
@@ -81,37 +62,23 @@ answers only the second.
     - **ZTE MC888 / MC888A / MC888 Ultra** (Indoor 5G Wi-Fi 6 CPE)
     - **ZTE MC889 / MC889A / MC889 Pro** (Outdoor 5G CPE)
     - **ZTE MF266 / MF286 / MF289** (LTE/4G Outdoor & Indoor CPEs)
-  - _(Note: While protocol support for these model families is built into the integration, they remain unverified on live hardware)._
+  - _(Note: The dynamic [Device Profile system](#-device-profile) should automatically discover write tokens and parameter schemas across the broader ZTE `goform` family. These remain unverified on live hardware)._
+
+- **Reading, Writing, and Support**
+  - **Reading (Sensor Metrics)**: Supported broadly across the ZTE `goform` API family. The integration dynamically queries supported parameter names on startup, creating working entities even on previously unverified models.
+  - **Writing (Controls & SMS)**: Write token formats and form payloads vary by firmware. The integration dynamically resolves write protocols where possible (see [Device Profile](#-device-profile)).
+  - **Silent Refusals**: ZTE routers may return `200 OK` with `{"result":"success"}` for unperformed write operations. If you experience this, consider submitting a diagnostic download, see [How do I download diagnostics?](#-how-do-i-download-diagnostics).
 
 > [!TIP] **Help verify your router model**
 >
-> If you are using a model other than the MC7010 (or a different firmware version), sharing a **Diagnostic Download** is extremely valuable — even when everything is working. The download automatically mines and maps the parameter dictionary supported by your router's firmware.
+> A **Diagnostic Download** is the primary troubleshooting step for issues:
 >
-> ⏱️ **Note on duration**: The download interrogates your router and takes **up to a few minutes with no progress indicator in the browser** — please be patient and do not cancel it.
->
+> - **Model Verification**: Sharing a download helps map supported parameter dictionaries for new hardware models.
 > 🔒 **Privacy**: Passwords, credentials, subscriber identifiers (IMSI/ICCID), carrier names, and SMS messages are automatically redacted or pseudonymized before saving.
 >
-> 📖 See [How do I download diagnostics?](#-how-do-i-download-diagnostics) for the full step-by-step guide, and attach your file to a new [GitHub Issue](https://github.com/PlayFaster/ha-zte-router-5g-monitor/issues) with your router model and firmware version.
-
-<!-- markdownlint-disable-next-line MD028 -->
-
-> [!TIP] **Reporting a fault: the download first, always**
+> - **Duration**: Discovery may take a minute or two in the background without a progress indicator.
 >
-> A diagnostics download is the first step for any fault, reading or writing. It
-> carries what the router answered, what the integration made of it, and the
-> record of any write the device refused.
->
-> **For a write fault only**, there is a second step if the first does not
-> settle it: a browser capture, using the bookmarklet in
-> [`docs/diag_tools/`](docs/diag_tools/). It records the request your router's
-> own web page sends when the same change succeeds there, which is the one thing
-> no download can obtain. Two limits are worth knowing before you reach for it —
-> it compares against the router's web interface, so that interface has to
-> succeed at what Home Assistant could not, and it asks you to run a bookmarklet,
-> which not everyone can or should.
->
-> **It is the wrong tool for a reading fault.** Reads carry no token and no form,
-> so a download already holds everything a capture would add.
+> 📖 See [How do I download diagnostics?](#-how-do-i-download-diagnostics) for step-by-step instructions.
 
 - **Not Compatible (Incompatible Router Families)**:
   - ❌ **ZTE G5-Series Next-Gen Routers (G5TC, G5TS, G5C, G5 Max)** — These use ZTE's OpenWrt-based `/ubus/` JSON-RPC API instead of `goform`. Use **[`ha-zte-ng-router`](https://github.com/rosenrot00/ha-zte-ng-router)** instead.
@@ -223,10 +190,7 @@ Which of them your router fills in depends on its firmware. Enable the ones you 
 | `5G RSRP Antenna 1`, `5G RSRP Antenna 2` | The two 5G receivers separately. A steady gap between them points at placement or an obstruction rather than at the network |
 | `5G NSA Band Lock`, `5G SA Band Lock` | Which 5G bands the router may use, alongside the existing `LTE Band Lock Mask` |
 | `Roaming State`, `Network Mode Config` | Whether the SIM is roaming, and whether the router picks its network mode itself |
-| `RSSI`, `SINR` | Signal strength and signal-to-noise for whichever radio is serving, where the router reports them without naming the technology. On firmware that leaves `LTE RSSI` and `LTE SNR` blank, these two carry those readings — they are not duplicates of the LTE sensors, and enabling them is how you see quality on such a router |
-| `WiFi Clients Connected`, `WiFi Enabled` | How many wireless devices are connected, and whether the radios are on. **Enabled by default** except on the MC7010, which has no WiFi of its own |
-| `Firmware Update State`, `Firmware Update Result` | Whether an update is running, and how the last one ended. Off by default because a working router has nothing to say here |
-| `SIM Lock State`, `SIM PIN Attempts Remaining`, `SIM PUK Attempts Remaining` | Whether the SIM is asking for its PIN, and how many tries are left. A locked SIM otherwise looks like a coverage fault |
+| `RSSI`, `SINR` | Signal strength and signal-to-noise for whichever radio is serving, where the router reports them without naming the technology. On firmware that leaves `LTE RSSI` and `LTE SNR` blank (such as the MC888 Pro), these two carry those readings |
 
 ---
 
@@ -364,12 +328,6 @@ condition:
 
 <br>
 
----
-
-</details>
-
-<br>
-
 ### 📋 Essential Router Management
 
 Reboot router hardware directly from Home Assistant and monitor data integrity with automated self-diagnostics.
@@ -382,7 +340,10 @@ Reboot router hardware directly from Home Assistant and monitor data integrity w
 
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
 - **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
-- **Router and SIM State**: **Operator Provisioned** reports whether the router refuses to hand over its remote-management (TR-069) settings, which is usual on an operator-supplied unit and explains why some settings cannot be changed locally. **Firmware Update Result** reports how the last update attempt ended. _Disabled by default_: **Modem State**, **Connection Failure Count**, and **SIM PIN Attempts Remaining** and **SIM PUK Attempts Remaining** — a locked SIM presents as no service, which otherwise reads as a coverage fault.
+- **Router and SIM State**: **Operator Provisioned** reports whether the router refuses to hand over its remote-management (TR-069) settings, which is usual on an operator-supplied unit and explains why some settings cannot be changed locally.
+- **Firmware Update State** and **Firmware Update Result** report whether an update is running and how the last one ended. Both off by default.
+- **WiFi Clients Connected** and **WiFi Enabled** report how many devices are on your WiFi and whether the radios are on. On by default, for routers with WiFi.
+- _Disabled by default_: **Modem State**, **Connection Failure Count**, **SIM Lock State**, and **SIM PIN Attempts Remaining** and **SIM PUK Attempts Remaining** — a locked SIM presents as no service, which otherwise reads as a coverage fault.
 
 | System Control | System Diagnostics |
 | :-: | :-: |
@@ -418,11 +379,45 @@ This integration features **dynamic polling**, the ability to pause polling comp
 
 <br>
 
+### 🕓 Change History
+
+Six values keep their own record of what they changed from and when: firmware, WAN IP, APN, cell ID, network provider and WAN mode.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+Home Assistant forgets a text value after ten days. These six keep their history, so you can still see a firmware change your operator made months ago.
+
+| Sensor | Counter | Counter default |
+| :-- | :-- | :-- |
+| `Firmware Version` | `Firmware Changes` | **Enabled** |
+| `WAN IP Address` | `WAN IP Changes` | Disabled |
+| `Network APN` | `APN Changes` | Disabled |
+| `Cell ID` | `Cell Changes` | Disabled |
+| `Network Provider` | `Provider Changes` | Disabled |
+| `WAN Operating Mode` | `WAN Mode Changes` | Disabled |
+
+Each sensor on the left carries **`history`**, **`previous_version`** and **`last_changed`** attributes. Click the entity → **⋮ menu → Details** to read them.
+
+The counters put the same changes on a graph, and they reach [long-term statistics](#-long-term-statistics-lts).
+
+See the [Firmware Change Notification](#-firmware-change-notification) and [Cell Tower Change Alert](#-cell-tower-change-alert) examples.
+
+---
+
+</details>
+
+<br>
+
 ### 💬 SMS Management Actions
 
 With SMS count and text sensors, plus monitoring and control via events and actions, you can **send, read and delete** Router SMS messages.
 
 - See [SMS Actions](#-sms-actions) and [SMS Examples](#-sms-examples)
+- **SMS Storage Full** warns when the router's message store is full, which stops new messages arriving. Enabled by default.
 
 ## 🔍 What You Get
 
@@ -476,7 +471,7 @@ This integration provides **121 entities** (depending on your firmware) organize
 
 ---
 
-> Change History: Six values that change rarely but matter — firmware version, WAN IP, APN, cell ID, network provider and WAN mode — keep their own record of what they changed from and when, on the sensor's `history` attribute. Home Assistant's own history forgets a text value after ten days, so this is what lets you see an operator's silent firmware update months later. **Firmware Changes** is a companion counter, enabled by default, that puts those changes on a long-term statistics graph; the other five counters are disabled by default.
+> Change History: Six values — firmware, WAN IP, APN, cell ID, network provider and WAN mode — keep their own record of what they changed from and when. See [Change History](#-change-history).
 
 ---
 
@@ -857,6 +852,8 @@ data:
 </summary><br>
 
 > The **Delete All** button entity is a simple one-click UI control with no parameters. The `delete_all_sms` service action below is the programmable equivalent and accepts a `keep_last` parameter to preserve recent messages.
+>
+> Every SMS deletion is verified. The router answers `success` as soon as it accepts the command, so the integration re-checks the SMS boxes until the message is gone. Both device and SIM SMS stores are checked.
 
 | Parameter | Required | Default | Range | Description |
 | :-- | :-- | :-- | :-- | :-- |
@@ -1727,7 +1724,7 @@ actions:
 </summary><br>
 
 ```yaml
-alias: "ZTE Signal: Morning SignStatusal Report"
+alias: "ZTE Signal: Morning Signal Status Report"
 description: "Forces a fresh data poll and sends a morning signal summary"
 mode: single
 triggers:
@@ -1740,7 +1737,6 @@ actions:
     note: |
       Refresh Now fetches immediately even if Pause Polling is on.
   - delay:
-      seconds: 15
       seconds: 15
     note: Allows coordinator fetch to finish before reading states.
   - action: notify.persistent_notification
@@ -1936,12 +1932,13 @@ Two conditions raise a card in Home Assistant's **Repairs** panel, and both need
 
 | Condition | Detected State | Surface Reported | Actionable User Step |
 | :-- | :-- | :-- | :-- |
-| **Authentication Failed** | Router rejects stored credentials | **Repairs card** (`auth_failed`) & Integration Health (`error`) | Click **Fix** to re-enter username/password |
+| **Authentication Failed** | Router rejects stored credentials | **Repairs card** (`auth_failed`) & Integration Health (`error`) | Click **Fix** to open the re-authentication dialog and update credentials |
 | **Sustained Outage** | 10 consecutive failed polls | **Repairs card** (`conn_error`) & Integration Health (`error`) | Check power, network path, or configured IP address |
 | **Transient Glitch / Reboot** | 1–3 failed poll cycles | Integration Health (`error` during outage) | None (auto-clears on next successful poll) |
 | **Firmware Schema Change** | Unrecognized or missing API fields | Integration Health (`severity: warning`, `drift` attr) | Check for integration updates or report issue |
 
-- **Actionable Issues (Repairs)**: A Repair issue is raised only when a condition persists across multiple polls and requires user intervention to resolve (such as updating credentials or checking physical router power). Non-actionable anomalies (such as API drift) report on the Integration Health sensor attributes instead.
+- **Interactive Re-Authentication**: If your router password is changed or rejected, Home Assistant raises an interactive repair. Clicking **Fix** opens a re-authentication dialog directly, updating the stored credentials without having to remove or recreate the integration.
+- **Actionable Issues (Repairs)**: A Repair issue is raised only when a condition persists across multiple polls and requires user intervention to resolve. Non-actionable anomalies (such as API drift) report on the Integration Health sensor attributes instead.
 
 **A Repair also turns the Integration Health sensor on**, so an automation watching that sensor sees these two as well, without watching the panel. See [Self-Diagnosis](#-self-diagnosis).
 
@@ -1963,7 +1960,32 @@ The router permits only **one login session at a time**, and the most recent log
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-**It also recovers its session automatically.** Because only one session can exist, logging into the router's web UI ends the integration's — and the router signals this by answering normally (`HTTP 200`) with empty values rather than by returning an error. The integration detects that, logs back in and retries the request once, so an action you trigger straight after using the web UI still works. If a request genuinely cannot be completed it **raises an error** rather than returning empty data, so an automation can tell "nothing to report" apart from "could not ask".
+**It recovers its session automatically.** The router allows one session at a time, so logging into its web UI ends the integration's. The integration detects this, logs back in and retries once, so an action you trigger straight after using the web UI still works. A request that still fails **raises an error** rather than returning empty data, so an automation can tell "nothing to report" from "could not ask".
+
+**It renews before the session expires.** Session lifetime varies by model and firmware: tests show sessions lasting from 15 seconds to a few minutes. The integration learns your router's own lifetime and renews inside it.
+
+**A write and a poll take turns.** Both use the router's single session. A write waits up to three seconds for a poll to finish, then proceeds anyway.
+
+---
+
+</details>
+
+### 🧬 Device Profile
+
+Before writing anything, the integration reads the router's own web interface to learn how that firmware expects a write to be built.
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+- **What it learns**: the hash that signs a write, the two readings that feed it, which commands need no token at all, how the login form encodes a password, which reading the router treats as its own session flag, and what each command's fields are called on that firmware.
+- **Why it has to.** Two routers in the same family differ. The MC7010 signs with MD5 and the MC888 Pro with SHA-256, and nothing either device _reports_ tells them apart — only the function named in its own pages. Of the 67 write commands the two share, 15 spell their fields differently.
+- **When it runs**: once, in the background after the first poll, then cached. It is read again only when your router's firmware version changes, and never while a write is happening.
+- **What it touches**: pages the router serves to anyone who opens its address. It writes nothing and changes nothing.
+- **What happens when it cannot.** Each answer falls back on its own to what shipped before, so a router whose pages cannot be read is no worse off than it was.
+- **Where to see it**: the diagnostics download publishes the profile, including anything it could not learn.
 
 ---
 
@@ -2296,6 +2318,8 @@ This is a **personal project**. Support and updates are provided on a **"best-ef
 ## 🤝 Contributors & Acknowledgements
 
 - 🙏 **[@Kajkac](https://github.com/Kajkac)** ([`ZTE-MC-Home-assistant-repo`](https://github.com/Kajkac/ZTE-MC-Home-assistant-repo)): Special thanks for pioneering the early Home Assistant integration for ZTE MC-series routers, which provided the foundational basis for this project.
+
+- 🙏 **[@Kees48](https://github.com/Kees48)**: For helping to enable support for the ZTE MC888 Pro via many Diagnostic downloads and rounds of testing.
 
 - 🙏 **[@william-aqn](https://github.com/william-aqn)** ([`huawei_lte_extended`](https://github.com/william-aqn/huawei_lte_extended)): The approach to expanded SMS service functionality, bus events, and inbox management is based on this work.
 

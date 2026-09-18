@@ -253,6 +253,17 @@
       "type": "shell"
     },
     {
+      "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '.notes/**/*.md' '.shared/**/*.md' | xargs -0 -r markdownlint --config .validate/.markdownlint.json --fix > .reports/format_markdownlint_notes_shared.txt 2>&1; ec=$?; cat .reports/format_markdownlint_notes_shared.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Markdown Fix Notes & Shared: PASSED\\n' >> .reports/format_markdownlint_notes_shared.txt; echo -e \"\\033[1;32m✔  Markdown Fix Notes & Shared: PASSED\\033[0m\"; else printf '✖  Markdown Fix Notes & Shared: FAILED\\n' >> .reports/format_markdownlint_notes_shared.txt; echo -e \"\\033[1;31m✖  Markdown Fix Notes & Shared: FAILED (unfixable errors remain — edit manually)\\033[0m\"; fi; exit 0",
+      "label": "Markdown: Fix Notes & Shared",
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always",
+        "echo": false
+      },
+      "problemMatcher": [],
+      "type": "shell"
+    },
+    {
       "command": "mkdir -p .reports && codespell . | tee .reports/codespell.txt; echo \"\"; if [ ! -s \".reports/codespell.txt\" ]; then echo -e \"\\033[1;32m✔  Codespell: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  Codespell: FAILED\\033[0m\"; fi",
       "label": "Codespell: Check (View Only)",
       "presentation": {
@@ -288,28 +299,6 @@
     {
       "command": "mkdir -p .reports && git ls-files -z --cached --others --exclude-standard '*.json' '*.yaml' '*.yml' | xargs -0 -r prettier --config .validate/.prettierrc.json --write > .reports/format_prettier.txt 2>&1; ec=$?; cat .reports/format_prettier.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Prettier Format: PASSED\\n' >> .reports/format_prettier.txt; echo -e \"\\033[1;32m✔  Prettier Format: PASSED\\033[0m\"; else printf '✖  Prettier Format: FAILED\\n' >> .reports/format_prettier.txt; echo -e \"\\033[1;31m✖  Prettier Format: FAILED\\033[0m\"; fi; exit 0",
       "label": "Prettier: Format (Auto-Fix)",
-      "presentation": {
-        "panel": "dedicated",
-        "reveal": "always",
-        "echo": false
-      },
-      "problemMatcher": [],
-      "type": "shell"
-    },
-    {
-      "command": "mkdir -p .reports && prettier --config .validate/.prettierrc.json --ignore-path /dev/null --write \".notes/**/*.{json,yaml,yml}\" > .reports/format_prettier_notes.txt 2>&1; ec=$?; cat .reports/format_prettier_notes.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Prettier Fix Notes: PASSED\\n' >> .reports/format_prettier_notes.txt; echo -e \"\\033[1;32m✔  Prettier Fix Notes: PASSED\\033[0m\"; else printf '✖  Prettier Fix Notes: FAILED\\n' >> .reports/format_prettier_notes.txt; echo -e \"\\033[1;31m✖  Prettier Fix Notes: FAILED\\033[0m\"; fi; exit 0",
-      "label": "Prettier: Fix Notes",
-      "presentation": {
-        "panel": "dedicated",
-        "reveal": "always",
-        "echo": false
-      },
-      "problemMatcher": [],
-      "type": "shell"
-    },
-    {
-      "command": "mkdir -p .reports && prettier --config .validate/.prettierrc.json --ignore-path /dev/null --write \".shared/**/*.{json,yaml,yml}\" > .reports/format_prettier_shared.txt 2>&1; ec=$?; cat .reports/format_prettier_shared.txt; echo \"\"; if [ $ec -eq 0 ]; then printf '✔  Prettier Fix Shared: PASSED\\n' >> .reports/format_prettier_shared.txt; echo -e \"\\033[1;32m✔  Prettier Fix Shared: PASSED\\033[0m\"; else printf '✖  Prettier Fix Shared: FAILED\\n' >> .reports/format_prettier_shared.txt; echo -e \"\\033[1;31m✖  Prettier Fix Shared: FAILED\\033[0m\"; fi; exit 0",
-      "label": "Prettier: Fix Shared",
       "presentation": {
         "panel": "dedicated",
         "reveal": "always",
@@ -449,30 +438,8 @@
       "type": "shell"
     },
     {
-      "command": "[ \"${config:project.category}\" = \"theme\" ] && echo -e \"\\033[1;36m–  Skipped: integration only\\033[0m\" || { mkdir -p .reports && FORCE_COLOR=1 pre-commit run | tee >(sed -e 's/.*\\r//g' -e 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' -e 's/\\x1b\\][^\\x1b]*\\x1b\\\\//g' -e 's/\\x1b\\][^\\x07]*\\x07//g' -e 's/\\x1b(B//g' > .reports/precommit_staged.txt); echo \"\"; if ! grep -q \"Failed\" .reports/precommit_staged.txt 2>/dev/null; then echo -e \"\\033[1;32m✔  Pre-commit Staged: PASSED\\033[0m\"; else echo -e \"\\033[1;31m✖  Pre-commit Staged: FAILED\\033[0m\"; fi; exit 0; }",
-      "label": "Pre-commit: Fix + Check Staged",
-      "presentation": {
-        "panel": "dedicated",
-        "reveal": "always",
-        "echo": false
-      },
-      "problemMatcher": [],
-      "type": "shell"
-    },
-    {
       "command": "mkdir -p .reports && { G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}–${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (no issues)\"; else if [ \"$2\" = \"pytest_coverage.txt\" ] && [ \"${lbl%% *}\" = \"Pytest\" ] && [ \"${lbl#* }\" != \"Coverage*\" ] && [ \"$pat\" = \" passed\" ]; then result=$(grep -E \"=+ .*([0-9]+ failed|[0-9]+ error).* =+|^FAILURES =+|^ERRORS =+\" \"$f\" | tail -1); elif [ \"$2\" = \"pytest_coverage.txt\" ]; then result=$(grep -E \"FAIL Required|Coverage failure\" \"$f\" | tail -1); elif [ \"$2\" = \"json_validation.txt\" ] || [ \"$2\" = \"ha_manifest_validation.txt\" ]; then result=$(grep -iE \"error:\" \"$f\" | tail -1); elif [ \"$2\" = \"diag_check.txt\" ]; then result=$(grep -E \"Diagnostics check: FAILED|router stopped answering\" \"$f\" | tail -1); [ -z \"$result\" ] && ! grep -q \"Diagnostics check: PASSED\" \"$f\" && result=\"(incomplete report — no verdict banner)\"; fi; if [ -n \"$result\" ]; then echo -e \"  ${R}✖${N}  $lbl $result\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); if [ \"$2\" = \"pytest_coverage.txt\" ] && [ \"${lbl%% *}\" = \"Pytest\" ] && echo \"$result\" | grep -qE \"[0-9]+ warning\"; then echo -e \"  ${Y}✔${N}  $lbl $result\"; else echo -e \"  ${G}✔${N}  $lbl $result\"; fi; else result=${result:-$(tail -1 \"$f\")}; echo -e \"  ${R}✖${N}  $lbl $result\"; fi; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m       Validate All — Summary        \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Hassfest          \" hassfest.txt \"Invalid integrations: 0\"; chk \"IQS Static        \" iqs_static.txt \"IQS Static: PASSED\"; chk \"Sensor Manifest   \" sensor_manifest.txt \"Documentation is in sync\"; chk \"Pytest            \" pytest_coverage.txt \" passed\"; chk \"Pytest Coverage   \" pytest_coverage.txt \"% reached\"; chk \"Assertion Audit   \" test_assertions.txt \"Assertion Audit: PASSED\"; chk \"Test Depth        \" test_depth.txt \"Test Depth: PASSED\"; chk \"Mypy Strict       \" mypy_strict.txt \"Success:\"; chk \"Ruff Lint         \" ruff_lint.txt \"All checks passed\"; chk \"Ruff Format       \" ruff_format_status.txt \"already formatted\"; chk \"Complexity        \" mccabe_complexity.txt \"Complexity: PASSED\"; chk \"YAML Lint         \" yaml_lint.txt \"\"; chk \"Codespell         \" codespell.txt \"\"; chk \"Markdown Lint     \" markdown_lint.txt \"\"; chk \"Repo Links        \" repo_links.txt \"Repo Links: PASSED\"; chk \"HA Manifest       \" ha_manifest_validation.txt \"ok -- validation done\"; chk \"Manifest Version  \" manifest_version.txt \"PASSED\"; chk \"HACS Manifest     \" hacs_validation.txt \"ok -- validation done\"; chk \"JSON Schema       \" json_validation.txt \"ok -- validation done\"; chk \"Prettier          \" prettier_check.txt \"Prettier code style\"; chk \"Task Sync         \" task_sync.txt \"PASSED\"; chk \"Fault Drill       \" fault_drill_staleness.txt \"PASSED\"; chk \"Hardware Check    \" hardware_check.txt \"Hardware check: PASSED\"; chk \"Diag Check        \" diag_check.txt \"Diagnostics check: PASSED\"; chk \"Zizmor Audit     \" zizmor_audit.txt \"PASSED\"; chk \"HA Version       \" version_validation.txt \"PASSED\"; chk \"HA Check Config  \" ha_check_config.txt \"PASSED\"; chk \"Markdown Links   \" markdown_link_check.txt \"PASSED\"; echo \"\"; } 2>&1 | tee /dev/stderr | sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/summary_validate.txt",
       "label": "Show: Results Summary",
-      "presentation": {
-        "panel": "dedicated",
-        "reveal": "always",
-        "echo": false
-      },
-      "problemMatcher": [],
-      "type": "shell"
-    },
-    {
-      "command": "mkdir -p .reports && { G='\\033[1;32m'; R='\\033[1;31m'; Y='\\033[1;33m'; C='\\033[1;36m'; N='\\033[0m'; chk() { local lbl=\"$1\" f=\".reports/$2\" pat=\"$3\" result=\"\"; if [ ! -f \"$f\" ]; then echo -e \"  ${Y}?${N}  $lbl (not run)\"; elif grep -q \"Skipped\" \"$f\"; then echo -e \"  ${C}–${N}  $lbl (skipped)\"; elif [ -z \"$pat\" ] && [ ! -s \"$f\" ]; then echo -e \"  ${G}✔${N}  $lbl (clean / no changes)\"; elif [ -n \"$pat\" ] && grep -q \"$pat\" \"$f\"; then result=$(grep \"$pat\" \"$f\" | tail -1); echo -e \"  ${G}✔${N}  $lbl $result\"; elif [ -n \"$pat\" ]; then echo -e \"  ${R}✖${N}  $lbl (issues remain)\"; else result=$(tail -1 \"$f\"); echo -e \"  ${G}✔${N}  $lbl $result\"; fi; }; echo \"\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; echo -e \"\\033[1m          Fix All — Summary           \\033[0m\"; echo -e \"\\033[1m══════════════════════════════════════\\033[0m\"; chk \"Zizmor Fix        \" format_zizmor.txt \"PASSED\"; chk \"Ruff Format Fix   \" format_ruff.txt \"PASSED\"; chk \"Ruff Lint Fix     \" format_ruff_lint.txt \"PASSED\"; chk \"Markdown Lint Fix \" format_markdownlint.txt \"PASSED\"; chk \"Codespell Fix     \" format_codespell.txt \"PASSED\"; chk \"Prettier Format   \" format_prettier.txt \"PASSED\"; chk \"Pre-commit All    \" precommit_all.txt \"PASSED\"; echo \"\"; } 2>&1 | tee /dev/stderr | sed 's/\\x1b\\[[0-9;]*[a-zA-Z]//g' > .reports/summary_fix.txt",
-      "label": "Show: Fix Results Summary",
       "presentation": {
         "panel": "dedicated",
         "reveal": "always",
@@ -590,7 +557,7 @@
     },
     {
       "command": "echo \"Do not edit .vscode/tasks.json. It is overwritten by sync_shared_files.sh. Edit dev-workbench/workbench/tasks.json instead.\"",
-      "label": "!! SYNCED - Fix All is defined in dev-workbench",
+      "label": "!! SYNCED - Fix All Fast is defined in dev-workbench",
       "detail": "Adding a formatter here is lost on the next sync. Do not edit .vscode/tasks.json. It is overwritten by sync_shared_files.sh. Edit dev-workbench/workbench/tasks.json instead.",
       "presentation": {
         "panel": "dedicated",
@@ -714,28 +681,6 @@
       "detail": "Repair first, then check, then one summary. Composes from Fix All Fast's fixers, so one mypy runs rather than two."
     },
     {
-      "dependsOn": [
-        "Zizmor: Fix (Safe Auto-Fix)",
-        "Ruff: Format Fix (Auto-Repair)",
-        "Ruff: Check Fix (Auto-Repair Lint)",
-        "Markdown: Lint (Auto-Fix)",
-        "Codespell: Fix (Auto-Repair)",
-        "Prettier: Format (Auto-Fix)",
-        "Pre-commit: Fix + Check All",
-        "Show: Fix Results Summary"
-      ],
-      "dependsOrder": "sequence",
-      "label": "Fix All",
-      "presentation": {
-        "close": false,
-        "panel": "dedicated",
-        "reveal": "always",
-        "echo": false
-      },
-      "problemMatcher": [],
-      "detail": "Auto-repair pass. Do not edit .vscode/tasks.json. It is overwritten by sync_shared_files.sh. Edit dev-workbench/workbench/tasks.json instead."
-    },
-    {
       "command": "mkdir -p .reports && sh .workbench/sync_shared_files.sh | tee .reports/sync_shared_files.txt",
       "label": "Env: Sync Shared Files",
       "presentation": {
@@ -817,9 +762,6 @@
         "Env: Sync Shared Files",
         "Env: Check Task Sync Drift",
         "Env: Audit Version Drift",
-        "Sensor: Verify HA",
-        "Mock: Fault Drill",
-        "Pre-commit: Fix + Check All",
         "Env: Check HA Core Stub Staleness"
       ],
       "dependsOrder": "sequence",
@@ -854,6 +796,23 @@
       ],
       "dependsOrder": "sequence",
       "label": "Env: [Workflow] Absorb & Propagate Bumps",
+      "presentation": {
+        "clear": true,
+        "panel": "dedicated",
+        "reveal": "always",
+        "echo": false
+      }
+    },
+    {
+      "dependsOn": [
+        "Sensor: Verify HA",
+        "Mock: Fault Drill",
+        "Hardware: Attended Writes (INTERRUPTS CONNECTION)",
+        "Hardware: Check Diagnostics Recovery",
+        "Pre-commit: Fix + Check All"
+      ],
+      "dependsOrder": "sequence",
+      "label": "Periodic Checks",
       "presentation": {
         "clear": true,
         "panel": "dedicated",

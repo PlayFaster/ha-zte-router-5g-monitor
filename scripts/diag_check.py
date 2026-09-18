@@ -148,6 +148,18 @@ _VOLATILE = re.compile(
     # part a reader of a download needs: a check that could not re-establish
     # the session is a finding, and a check that ran twice rather than three
     # times is not.
+    # The observation record's own clocks. This script builds a fresh
+    # coordinator per pass and never calls `observations.async_load`, so each
+    # pass starts with an empty record, seeds every tracked series on its first
+    # poll, and stamps these three with that pass's poll time. Two passes a
+    # minute apart therefore differ in all of them, always, by construction.
+    #
+    # Only the clocks are excluded. Which series exist, how many entries each
+    # holds, the change counts and `load_faults` are all compared as before,
+    # and they are the part that would reveal a recorder writing differently
+    # between two passes.
+    r"|^/observations/recording_since$"
+    r"|^/observations/series/[^/]+/(oldest|newest)$"
     r"|^/session_flag/checks/"
     r"|^/unauthenticated_keys/|^/discovery/sessionless_measurement$"
     r"|^/discovery/canary_pool/served_without_a_session$)"
@@ -294,6 +306,26 @@ def _credentials() -> tuple[dict[str, Any], dict[str, Any], str, str]:
     raise SystemExit(f"no zte_router_5g entry in {CONFIG_ENTRIES}")
 
 
+# The entry id this script's own coordinator runs under, and the one its
+# storage round trip uses. Deliberately not the live entry's.
+#
+# Five stores and one issue id are named from the entry id: `_history`,
+# `_observed`, `_profile`, `_uptime`, and the repair issues. A coordinator
+# built on the live id shares all of them, and the observation recorder does
+# not merely read them. `_async_update_data` calls `observations.observe`
+# followed by `async_save`, this script never calls `async_load`, and a
+# recorder with an empty record treats every tracked value as a first reading.
+# Each pass therefore wrote one seeded entry per key over the accumulated
+# history: nine days of `wan_ipaddr` transitions were replaced this way on
+# 2026-09-15 by six entries, all `from: null`, all stamped the same second.
+#
+# `_StubEntry` already exists so that a run cannot disturb the entry serving
+# the user's entities. The entry id was the one thing still shared, which
+# defeated that for anything keyed on it.
+SCRIPT_ENTRY_ID = "diag_check"
+ROUND_TRIP_ENTRY_ID = "diag_check_round_trip"
+
+
 class _StubEntry:
     """The parts of a `ConfigEntry` the diagnostics path actually reads.
 
@@ -388,8 +420,10 @@ async def produce(label: str, sabotage_at: int = 0) -> dict[str, Any]:
     """
     from homeassistant.core import HomeAssistant
 
-    options, data, entry_id, title = _credentials()
-    entry = _StubEntry(options, data, entry_id, title)
+    options, data, _live_entry_id, title = _credentials()
+    # The live credentials and title, under this script's own entry id. See
+    # `SCRIPT_ENTRY_ID` for what sharing the live one wrote over.
+    entry = _StubEntry(options, data, SCRIPT_ENTRY_ID, title)
     hass = HomeAssistant("/config")
 
     async with aiohttp.ClientSession() as session:
@@ -698,6 +732,70 @@ def check_device_profile(result: dict[str, Any], report: Report) -> None:
             "[6] a fresh parse agrees with the cached profile",
             f"cached under {in_force.get('firmware')!r}",
         )
+
+
+async def check_history_round_trip(report: Report) -> None:
+    """Write a transition through the real `Store` and read it back.
+
+    Item 3c. Every test of `ObservationRecorder` runs against a fixture that
+    replaces both stores with a `MagicMock` — 29 of them, and the fixture says
+    so: "nothing touches the disk". They pin the recorder's logic and cannot
+    see a save that does not persist or a load that quietly returns nothing,
+    which is the class of fault a devcontainer instance showed in September
+    2026 when roughly nine days of transitions were lost.
+
+    Run against its own entry id, never the user's. The store file is named
+    from that id, so sharing one would have this script rewrite the history
+    the entities are serving from. Both files are removed when it finishes.
+    """
+    from homeassistant.core import HomeAssistant
+
+    from custom_components.zte_router_5g.observations import ObservationRecorder
+
+    hass = HomeAssistant("/config")
+    entry = _StubEntry({}, {}, ROUND_TRIP_ENTRY_ID, "round trip")
+    entry_as_config = cast("ConfigEntry[Any]", entry)
+    device = "round-trip-device"
+
+    recorder = ObservationRecorder(hass, entry_as_config)
+    try:
+        await recorder.async_load()
+        recorder.observe({"wan_ipaddr": "10.0.0.1"}, device)
+        recorder.observe({"wan_ipaddr": "10.0.0.2"}, device)
+        await recorder.async_save()
+
+        # A second recorder on the same entry, which is what a restart is.
+        reloaded = ObservationRecorder(hass, entry_as_config)
+        await reloaded.async_load()
+        reloaded.device_id = device
+        entries = reloaded.history("wan_ipaddr")
+
+        report.record(
+            len(entries) == 2,
+            "[7] a saved transition survives a reload",
+            f"{len(entries)} entries read back",
+        )
+        chained = bool(entries) and entries[-1].get("from") == "10.0.0.1"
+        report.record(
+            chained,
+            "[7] the reloaded entry keeps the value it came from",
+            f"from={entries[-1].get('from') if entries else None}",
+        )
+        stamped = bool(entries) and all(entry_.get("timestamp") for entry_ in entries)
+        report.record(stamped, "[7] every reloaded entry carries its timestamp")
+
+        # The property the mocked tests cannot reach: a poll agreeing with what
+        # was loaded must append nothing. A recorder that re-seeded on load
+        # would restart the series at every Home Assistant restart and still
+        # produce a well-formed file.
+        appended = reloaded.observe({"wan_ipaddr": "10.0.0.2"}, device)
+        report.record(
+            len(reloaded.history("wan_ipaddr")) == 2,
+            "[7] an unchanged poll after a reload appends nothing",
+            f"dirty={appended}, {len(reloaded.history('wan_ipaddr'))} entries",
+        )
+    finally:
+        await recorder.async_remove()
 
 
 def check_sanitization(result: dict[str, Any], report: Report) -> None:
@@ -1072,6 +1170,7 @@ async def main() -> int:
     check_discovery(first, report)
     check_sanitization(first, report)
     check_device_profile(first, report)
+    await check_history_round_trip(report)
 
     if not args.once:
         # The pass logs out and back in, and the reference hardware refused a

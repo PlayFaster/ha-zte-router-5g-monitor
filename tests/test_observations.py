@@ -17,6 +17,7 @@ import pytest
 
 from custom_components.zte_router_5g.observations import (
     HISTORY_CAP,
+    META_KEY,
     TRACKED,
     ObservationRecorder,
     entity_keys_with_values,
@@ -350,6 +351,178 @@ async def test_a_corrupt_snapshot_reads_as_absent(
     recorder.device_id = DEVICE
 
     assert recorder.snapshot() == {}
+
+
+# ---------------------------------------------------------------------------
+# What a loaded record does on the next poll
+# ---------------------------------------------------------------------------
+
+
+def _stored_history() -> dict[str, Any]:
+    """A history record as the store holds one, freshly built each time.
+
+    A function rather than a literal: the recorder appends into the record
+    it loaded, so a shared dict carries one test's transitions into the
+    next.
+    """
+    return {
+        DEVICE: {
+            "wan_ipaddr": [
+                {
+                    "timestamp": "2026-09-06T02:11:04+00:00",
+                    "from": None,
+                    "to": "10.52.24.68",
+                },
+                {
+                    "timestamp": "2026-09-09T04:22:51+00:00",
+                    "from": "10.52.24.68",
+                    "to": "10.48.27.76",
+                },
+            ]
+        }
+    }
+
+
+async def test_a_loaded_history_survives_a_poll_that_changes_nothing(
+    recorder: ObservationRecorder,
+) -> None:
+    """This is "history survives a restart", and it was unasserted.
+
+    A recorder that re-seeded on load would append a third entry here, with
+    `from: None`, and the series would restart at every Home Assistant
+    restart while still looking well-formed in the file.
+    """
+    recorder._history_store.async_load.return_value = _stored_history()
+    await recorder.async_load()
+
+    assert recorder.observe(_poll(wan_ipaddr="10.48.27.76"), DEVICE) is True
+
+    entries = recorder.history("wan_ipaddr")
+    assert len(entries) == 2
+    assert entries[-1]["to"] == "10.48.27.76"
+
+
+async def test_a_transition_after_a_load_chains_onto_the_stored_value(
+    recorder: ObservationRecorder,
+) -> None:
+    """The new entry's `from` is what the store held, not `None`.
+
+    An unbroken chain across a restart is the property the production store
+    demonstrated over four transitions between 2026-09-06 and 2026-09-14.
+    """
+    recorder._history_store.async_load.return_value = _stored_history()
+    await recorder.async_load()
+
+    recorder.observe(_poll(wan_ipaddr="10.52.32.15"), DEVICE)
+
+    entries = recorder.history("wan_ipaddr")
+    assert len(entries) == 3
+    assert entries[-1]["from"] == "10.48.27.76"
+    assert entries[-1]["to"] == "10.52.32.15"
+
+
+async def test_a_failed_load_re_seeds_every_tracked_key(
+    recorder: ObservationRecorder,
+) -> None:
+    """The consequence of a lost record, which stops at setup elsewhere.
+
+    `test_an_unreadable_store_resolves_to_nothing_learned` asserts the entry
+    survives and the history reads empty. This is what the next poll then
+    writes: a fresh series for every tracked key, with nothing to say a series
+    ever preceded it.
+    """
+    recorder._history_store.async_load.side_effect = OSError("disk gone")
+    await recorder.async_load()
+
+    recorder.observe(_poll(), DEVICE)
+
+    for key in TRACKED:
+        entries = recorder.history(key)
+        assert len(entries) == 1
+        assert entries[0]["from"] is None
+
+
+# ---------------------------------------------------------------------------
+# Saying so afterwards
+# ---------------------------------------------------------------------------
+
+
+async def test_a_read_fault_is_counted_and_carried_across_restarts(
+    recorder: ObservationRecorder,
+) -> None:
+    """A lost record and a record that could not be read look alike.
+
+    They mean opposite things, and the count is what separates them. It is
+    written back into the observed store so a fault survives the restart it
+    caused.
+    """
+    recorder._history_store.async_load.side_effect = OSError("disk gone")
+    await recorder.async_load()
+    recorder.observe(_poll(), DEVICE)
+    await recorder.async_save()
+
+    assert recorder.report()["load_faults"] == 1
+    saved = recorder._observed_store.async_save.await_args.args[0]
+    assert saved[META_KEY] == {"load_faults": 1}
+
+
+async def test_a_carried_count_is_added_to_this_run_s_faults(
+    recorder: ObservationRecorder,
+) -> None:
+    """Two faults across two runs read as two, not as one."""
+    recorder._observed_store.async_load.return_value = {META_KEY: {"load_faults": 1}}
+    recorder._history_store.async_load.side_effect = OSError("disk gone")
+
+    await recorder.async_load()
+
+    assert recorder.report()["load_faults"] == 2
+
+
+async def test_a_hand_edited_meta_record_reads_as_no_faults(
+    recorder: ObservationRecorder,
+) -> None:
+    """The store is a file on disk; a bad shape must not become a crash."""
+    recorder._observed_store.async_load.return_value = {META_KEY: "not a mapping"}
+
+    await recorder.async_load()
+
+    assert recorder.report()["load_faults"] == 0
+
+
+async def test_the_report_describes_each_series_without_its_values(
+    recorder: ObservationRecorder,
+) -> None:
+    """A reset store shows as recent entries against an older start date.
+
+    Values are excluded deliberately: the tracked keys are addresses and
+    identifiers, and this section is published in a file written to be
+    attached to a public issue.
+    """
+    recorder._history_store.async_load.return_value = _stored_history()
+    await recorder.async_load()
+    recorder.observe(_poll(wan_ipaddr="10.52.32.15"), DEVICE)
+
+    report = recorder.report()
+
+    assert report["series"]["wan_ipaddr"]["entries"] == 3
+    assert report["series"]["wan_ipaddr"]["oldest"] == "2026-09-06T02:11:04+00:00"
+    assert report["series"]["wan_ipaddr"]["newest"] > "2026-09-06T02:11:04+00:00"
+    assert report["change_counts"]["wan_ipaddr"] == 1
+    assert report["recording_since"] is not None
+    assert "10.52.32.15" not in str(report)
+
+
+async def test_a_series_with_no_entries_reports_no_dates(
+    recorder: ObservationRecorder,
+) -> None:
+    """An empty list is a series that exists and has recorded nothing."""
+    recorder._history_store.async_load.return_value = {DEVICE: {"wan_apn": []}}
+    await recorder.async_load()
+    recorder.device_id = DEVICE
+
+    series = recorder.report()["series"]["wan_apn"]
+
+    assert series == {"entries": 0, "oldest": None, "newest": None}
 
 
 # ---------------------------------------------------------------------------
