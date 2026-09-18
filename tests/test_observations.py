@@ -357,6 +357,7 @@ async def test_a_corrupt_snapshot_reads_as_absent(
 # What a loaded record does on the next poll
 # ---------------------------------------------------------------------------
 
+
 def _stored_history() -> dict[str, Any]:
     """A history record as the store holds one, freshly built each time.
 

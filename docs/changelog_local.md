@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.0-dev3\] - 2026-09-18 - Diagnostics Check Script Isolation: Live Observation Store Overwrite Fixed; Two-Run Stability Diff Clock Exclusion](#340-dev3---2026-09-18---diagnostics-check-script-isolation-live-observation-store-overwrite-fixed-two-run-stability-diff-clock-exclusion)
   - [\[3.4.0-dev2\] - 2026-09-17 - Pre-Release Fixes: Retired SMS Probe Field Removed, Session Verdict Corrected on Version Reads, Observation Store State Published and Round-Tripped](#340-dev2---2026-09-17---pre-release-fixes-retired-sms-probe-field-removed-session-verdict-corrected-on-version-reads-observation-store-state-published-and-round-tripped)
   - [\[3.4.0-dev1\] - 2026-09-17 Bump PHACC, Update Docs](#340-dev1---2026-09-17-bump-phacc-update-docs)
   - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
@@ -295,6 +296,34 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.0-dev3] - 2026-09-18 - Diagnostics Check Script Isolation: Live Observation Store Overwrite Fixed; Two-Run Stability Diff Clock Exclusion
+
+### Summary
+
+Two defects in `scripts/diag_check.py`, both introduced or exposed by the `observations` diagnostics section added in `[3.4.0-dev2]`. The first is the more serious and predates that section: the script has been overwriting the live observation stores on every run since the history feature shipped in `[3.3.10-dev8]`. It explains the nine-day transition loss that `[3.4.0-dev2]` recorded as unexplained.
+
+### Fixed
+
+- **`scripts/diag_check.py` was overwriting the live observation stores.** The script builds its own coordinator so that a run cannot disturb the entry serving the user's entities, and `_StubEntry` says so. It nonetheless built that coordinator on the *live* entry id, read from `core.config_entries`, and five stores are named from the entry id: `_history`, `_observed`, `_profile` and `_uptime`, along with the repair issue ids.
+
+  The recorder does not merely read its stores. `_async_update_data` calls `observations.observe` and then `async_save`, the script never calls `async_load`, and a recorder holding an empty record treats every tracked value as a first reading. Each pass therefore wrote one seeded entry per tracked key over whatever history had accumulated, and saved it to the live file.
+
+  That is the loss recorded in `[3.4.0-dev2]`: the devcontainer store held six entries, all `from: null`, all stamped the same second, with a seed value matching what the production store had recorded the day before. The entry created 2026-07-03 was never removed and `async_remove_entry` never ran; the script did it. Production kept its series because the script has never been run against that instance.
+
+  Fixed by `SCRIPT_ENTRY_ID`, so the script's coordinator owns its own store files and the live entry's are never opened. The credentials and the entry title are still read from the real entry, which is all the download needs from it.
+
+  `scripts/hardware_check.py` is unaffected. It reads `entry["options"]` only, builds no coordinator and no recorder, and touches no store.
+
+- **The two-run stability check failed on the `observations` section, four runs in a row.** `[4] no structural difference between the two runs` reported `/observations/recording_since` and the `oldest` and `newest` of three series as differences. The values are honest rather than unstable: the script never loads the stores, so each pass seeds every series on its first poll and stamps all three with that pass's poll time. Two passes a minute apart differ in every one of them, by construction.
+
+  The three clock paths are added to `_VOLATILE`, which already excludes `timestamp`, `_time` and `_date$` and did not reach these names. Verified against the compiled pattern: `recording_since`, `series/*/oldest` and `series/*/newest` are now excluded, while `load_faults`, each series' `entries` count, `change_counts` and `entities_known_populated` are still compared. Those are the fields that would reveal a recorder writing differently between two passes.
+
+### Notes
+
+- The `[3.4.0-dev2]` entry states that nothing retained could say why the devcontainer store was reset. That was true of the evidence available at the time — the Home Assistant log had rotated past the window — and it is superseded by the cause recorded above. The entry is left as it was written, because it was released.
+
+- The script now creates `zte_router_5g_diag_check_history`, `_observed`, `_profile` and `_uptime` under `/config/.storage`. They are the script's own and are not removed between runs. The storage round trip in section `[7]` keeps its separate `diag_check_round_trip` id and removes its files, because it constructs recorders directly rather than through a coordinator.
 
 ## [3.4.0-dev2] - 2026-09-17 - Pre-Release Fixes: Retired SMS Probe Field Removed, Session Verdict Corrected on Version Reads, Observation Store State Published and Round-Tripped
 
