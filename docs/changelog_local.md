@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.2-dev5\] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics](#342-dev5---2026-09-23---data-connection-turn-on-outage-window-window-waits-for-the-drop-data-connection-diagnostics)
   - [\[3.4.2-dev3\] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test\_guards.md](#342-dev3---2026-09-23---agentsmd-guard-test-table-trimmed-rationale-moved-to-docstest_guardsmd)
   - [\[3.4.2-dev2\] - 2026-09-23 - Breaking: Minimum Home Assistant Raised to 2025.2.0 for Python 3.13](#342-dev2---2026-09-23---breaking-minimum-home-assistant-raised-to-202520-for-python-313)
   - [\[3.4.1-dev1\] - 2026-09-23 - Ruff: HA Core isort Settings and ICN002 Adopted; Imports Re-Sorted Across All Files](#341-dev1---2026-09-23---ruff-ha-core-isort-settings-and-icn002-adopted-imports-re-sorted-across-all-files)
@@ -307,6 +308,40 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.2-dev5] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics
+
+### Summary
+
+Turning the data connection on also takes the router offline, and the expected-outage window could close before any outage began. Both were measured on the MC7010 on 2026-09-23 in two runs of three off/on cycles, one under `auto_dial` and one under `manual_dial`, with the router probed unauthenticated every 0.5 to 1 s. After `CONNECT_NETWORK` the router kept answering for 11 to 12 s, then stopped answering for 6 to 28 s. After `DISCONNECT_NETWORK` it stopped within 4 to 8 s, for 9 to 37 s. Every turn-on reconnected under both connection modes. The diagnostics download now records what each data command did and every reset of the router's uptime counter, which on both routers restarts at each data reconnect. The records are for issue #79, where a turn-on in bridge mode appeared not to restore the connection and the downloads could not show whether the command reached the router.
+
+### Changed
+
+- **Turning the data connection on opens an expected-outage window.** The new reason `data_connect` has a 60 s cap, `OUTAGE_CAP_DATA_CONNECT`, and its own message: "The router is reconnecting its data connection. Try again in about N seconds." The `[3.4.1-dev4]` refresh after turning on and its follow-up are removed. Both could land in the outage, and one did in testing: the follow-up failed with "Request failed" and the coordinator held stale values, which paused polling then kept.
+- **The window waits for the router to drop before waiting for it to return.** It closed on the first probe that answered, 5 s after opening, with no requirement that the router had gone away. The turn-on outage starts at 11 s, and one turn-off outage started at 8.2 s, so either window could close first. Kees48's two turn-off windows on the MC888 Pro closed after one check at 5 s. A window opened on a command now probes every `OUTAGE_PROBE_FAST`, 1 s, while the router still answers, and records the first silence as the drop. From then on it probes every 5 s as before and closes on the first successful closing poll. A router that has not dropped within `OUTAGE_HOLD`, 25 s, is taken to have had no outage, and the window closes through its closing poll as `no_outage`. The reboot window opens only after `reboot()` has seen the router drop, so it starts in the second phase.
+- **The Data Connection switch holds its position while its window is open.** A poll during the window returns the held data, which still carries the state from before the command. The switch recomputed its position from it and showed on for 15 to 20 s after turning off, in all three `manual_dial` cycles. It now ignores coordinator updates during a `data_connect` or `data_disconnect` window, except the closing poll, which is fresh.
+- **One follow-up refresh when a data window closes on `ppp_connecting`.** Connected came 26 to 40 s after the command, up to 15 s after the router answered again. The coordinator arms one forced refresh `DATA_CONNECT_FOLLOWUP_SECONDS` after the close, raised from 5 to 10 s, and cancels it on the next window or on shutdown.
+
+### Diagnostics
+
+- **`expected_outage` is replaced by `expected_outages`**: the last five windows, newest first, in memory. Each record adds the command, the router's reply reduced to its `result` field, the `ppp_status` read straight after the reply, the times the router dropped and answered again, the outage length, and `ppp_status`, `network_type`, `dial_mode` and `opms_wan_mode` from the poll before the window and from its closing poll. Issue #79's download would have shown whether ON reached the router, what the router replied, whether it dropped, and the state on its return.
+- **`observations.counter_resets`**: every reading of `realtime_time` / `flux_realtime_time` lower than the previous poll's, the last 20, persisted. Each holds the detection time, the reset time estimated as the detection time less the new counter, the counter either side, `ppp_status` and `network_type` at detection, and the reason of any window whose span covers the estimated reset, or `None`. The record does not decide whether a reset was a reboot or a reconnect, and the boot-time logic is unchanged. A reset with no window is one nothing in the integration caused, which is how issue #79's occasional disconnects would appear. The previous counter is held in memory, so a reset across a Home Assistant restart is not recorded. A reset is missed when the counter at the next poll is not lower than at the previous one, which takes two resets within one polling interval.
+
+### Not Changed
+
+- **Refresh Now returns HTTP 500 during a window when called through the REST API.** The button raises the outage message as `HomeAssistantError`, and Home Assistant's REST service handler reports any error other than `vol.Invalid` and `ServiceNotFound` as 500. The UI shows the message.
+- **Boot time follows each data reconnect.** The integration treats an uptime counter reset as a reboot by design, and on both routers the counter resets at every data reconnect. A reset under the 30 s `UPTIME_REBOOT_MARGIN` is latched through the plausibility check and logs "boot time moved ... without a counter drop", the reconciliation's own tripwire.
+
+### Documentation
+
+- README, Data Connection bullet and the outage error FAQ entry, and `about_attribute_list.md`: turning on also takes up to a minute, and the FAQ lists the new message.
+
+### Tests
+
+- Window: a command window probes every second and stays open while the router answers; the first silence records the drop and slows the probe; the return closes it with `back_at` and `outage_seconds`; no drop within the hold closes it as `no_outage`; a failed closing poll after the hold keeps it open; a reboot window starts with the drop recorded; five records kept; the reply reduced to `result`.
+- Follow-up: armed at 10 s only when a data window closes on `ppp_connecting`; not for a reboot; cancelled by a new window and by shutdown.
+- Switch: both directions open a window with the command, reply and immediate read; neither refreshes; the position is held during both data windows, set by the closing poll, and not held during a reboot window. The `[3.4.1-dev4]` tests of the turn-on refresh and follow-up are removed with the code they tested.
+- Diagnostics: `expected_outages` newest first and copied; an empty list without windows. Counter resets: recorded with the connection state; none on a first reading, a rise, or an absent counter; the covering window's reason by time, including after the window closed; `None` outside every window; capped at 20.
 
 ## [3.4.2-dev3] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test_guards.md
 

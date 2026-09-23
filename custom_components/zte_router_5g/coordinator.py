@@ -1,10 +1,12 @@
 """DataUpdateCoordinator for ZTE Router 5G."""
 
 import asyncio
+from collections import deque
 from collections.abc import Callable, Coroutine
 import contextlib
 from datetime import datetime, timedelta
 import logging
+from time import monotonic
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -30,11 +32,17 @@ from .api import (
 from .const import (
     CONF_SCAN_INTERVAL,
     CONF_STOP_POLLING,
+    DATA_CONNECT_FOLLOWUP_SECONDS,
     DISCOVERY_SETTLE_SECONDS,
     DOMAIN,
     FETCH_STRIKE_LIMIT,
     HEALTH_DRIFT_STRIKE_LIMIT,
     OUTAGE_CHECK_INTERVAL,
+    OUTAGE_HISTORY_CAP,
+    OUTAGE_HOLD,
+    OUTAGE_PROBE_FAST,
+    OUTAGE_REASON_REBOOT,
+    OUTAGE_REASONS_DATA,
     REPAIR_AUTH_FAILED,
     REPAIR_CONN_ERROR,
     SPARSE_PAYLOAD_FRACTION,
@@ -216,6 +224,30 @@ DRIFT_CONTRACT = (
 )
 
 
+# The keys a window record keeps from the poll before it opened and from its
+# closing poll: the connection state, the network, and the two modes that
+# change how the router connects.
+_OUTAGE_SNAPSHOT_KEYS = ("ppp_status", "network_type", "dial_mode", "opms_wan_mode")
+
+
+def _outage_snapshot(data: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The window record's view of one poll, or `None` without one."""
+    if not data:
+        return None
+    return {key: data.get(key) for key in _OUTAGE_SNAPSHOT_KEYS}
+
+
+def _outage_reply(reply: Any) -> dict[str, Any] | None:
+    """The router's reply to the command, reduced to its `result` field.
+
+    Every goform write answers `{"result": ...}`. Keeping only that field keeps
+    the record free of anything else a firmware might add.
+    """
+    if isinstance(reply, dict):
+        return {"result": reply.get("result")}
+    return None
+
+
 class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ZTE Router data with resilience and pausing."""
 
@@ -239,9 +271,16 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # `async_open_expected_outage`.
         self._outage_unsub: CALLBACK_TYPE | None = None
         self._outage_closing = False
-        # The most recent window, kept after it closes so a diagnostics
-        # download can explain a gap in polling.
-        self.last_expected_outage: dict[str, Any] | None = None
+        # Whether the open window is still waiting for the router to stop
+        # answering, and when it opened on the monotonic clock, for the hold.
+        self._outage_awaiting_drop = False
+        self._outage_opened_mono = 0.0
+        # The follow-up refresh after a data window closes on `ppp_connecting`.
+        self._outage_followup_unsub: CALLBACK_TYPE | None = None
+        # The most recent windows, oldest first, kept after they close so a
+        # diagnostics download can explain a gap in polling and show what the
+        # router did around each command.
+        self.expected_outages: deque[dict[str, Any]] = deque(maxlen=OUTAGE_HISTORY_CAP)
         self._was_available = True
         self._boot_time: datetime | None = None
         self._last_uptime: int | None = None
@@ -417,32 +456,84 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         outage = self.api.expected_outage
         return isinstance(outage, ExpectedOutage) and not outage.expired
 
-    def async_open_expected_outage(self, reason: str, cap_seconds: float) -> None:
+    @property
+    def last_expected_outage(self) -> dict[str, Any] | None:
+        """The most recent window's record, or `None` if none has opened."""
+        return self.expected_outages[-1] if self.expected_outages else None
+
+    @property
+    def outage_reason(self) -> str | None:
+        """The reason of the open window, or `None` when none is open."""
+        outage = self.api.expected_outage
+        if isinstance(outage, ExpectedOutage) and not outage.expired:
+            return outage.reason
+        return None
+
+    @property
+    def outage_closing(self) -> bool:
+        """Whether the poll now running is a window's closing poll."""
+        return self._outage_closing
+
+    def async_open_expected_outage(
+        self,
+        reason: str,
+        cap_seconds: float,
+        *,
+        command: str | None = None,
+        reply: Any = None,
+        ppp_status_after_reply: str | None = None,
+    ) -> None:
         """Open the window after the router accepted a command that takes it offline.
 
         One mechanism for every such command. While open, polls are skipped
         and every other router request is refused at once with a message naming
-        the reason. A check reads one key every `OUTAGE_CHECK_INTERVAL`; when
-        the router answers, a full poll runs, and the window closes only when
-        that poll succeeds. The cap closes it regardless, and failure counting
-        resumes, so a router that never returns is still reported.
+        the reason. The window closes only when a full poll succeeds, and the
+        cap closes it regardless, so a router that never returns is still
+        reported.
+
+        The check runs in two phases. A window opened on a command first waits
+        for the router to stop answering, probing every `OUTAGE_PROBE_FAST`
+        seconds. Measured on the MC7010, the router kept answering for up to
+        12 s after `CONNECT_NETWORK`, so a window that closed on the first
+        answer closed before the outage began. A router that has not dropped
+        within `OUTAGE_HOLD` seconds is taken to have had no outage. Once it
+        has dropped, a probe every `OUTAGE_CHECK_INTERVAL` seconds waits for
+        its return. The reboot window opens only after `ZTERouterAPI.reboot`
+        has seen the router drop, so it starts in the second phase.
         """
         outage = self.api.open_expected_outage(reason, cap_seconds)
-        self.last_expected_outage = {
-            "reason": reason,
-            "opened": outage.opened_at.isoformat(),
-            "cap_seconds": cap_seconds,
-            "checks": 0,
-            "closed": None,
-            "closed_by": None,
-        }
+        self._cancel_outage_followup()
+        self._outage_awaiting_drop = reason != OUTAGE_REASON_REBOOT
+        self._outage_opened_mono = monotonic()
+        opened = outage.opened_at.isoformat()
+        self.expected_outages.append(
+            {
+                "reason": reason,
+                "command": command,
+                "reply": _outage_reply(reply),
+                "ppp_status_after_reply": ppp_status_after_reply,
+                "opened": opened,
+                "cap_seconds": cap_seconds,
+                "checks": 0,
+                "down_at": None if self._outage_awaiting_drop else opened,
+                "back_at": None,
+                "outage_seconds": None,
+                "before": _outage_snapshot(self.data),
+                "after": None,
+                "closed": None,
+                "closed_by": None,
+            }
+        )
         self._schedule_outage_check()
 
     def _schedule_outage_check(self) -> None:
         """Arm the next check, replacing any already armed."""
         self._cancel_outage_check()
+        interval = (
+            OUTAGE_PROBE_FAST if self._outage_awaiting_drop else OUTAGE_CHECK_INTERVAL
+        )
         self._outage_unsub = async_call_later(
-            self.hass, OUTAGE_CHECK_INTERVAL, self._async_outage_check
+            self.hass, interval, self._async_outage_check
         )
 
     def _cancel_outage_check(self) -> None:
@@ -451,8 +542,14 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             self._outage_unsub()
             self._outage_unsub = None
 
+    def _cancel_outage_followup(self) -> None:
+        """Disarm the follow-up refresh, if armed."""
+        if self._outage_followup_unsub is not None:
+            self._outage_followup_unsub()
+            self._outage_followup_unsub = None
+
     async def _async_outage_check(self, _now: datetime | None = None) -> None:
-        """Check whether the router is back, and close the window if it is."""
+        """Check whether the router has dropped or is back, and close when done."""
         self._outage_unsub = None
         outage = self.api.expected_outage
         if not isinstance(outage, ExpectedOutage):
@@ -461,32 +558,86 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             self._close_expected_outage("cap")
             await self.async_request_refresh()
             return
-        if self.last_expected_outage is not None:
-            self.last_expected_outage["checks"] += 1
-        if await self.api.outage_probe():
-            before = self.last_update_success_time
-            self._outage_closing = True
-            try:
-                with self.api.outage_bypass():
-                    await self.async_refresh()
-            finally:
-                self._outage_closing = False
-            if self.last_update_success_time != before:
+        record = self.last_expected_outage
+        if record is not None:
+            record["checks"] += 1
+        answered = await self.api.outage_probe()
+        stamp = dt_util.utcnow().isoformat()
+
+        if self._outage_awaiting_drop:
+            if not answered:
+                self._outage_awaiting_drop = False
+                if record is not None:
+                    record["down_at"] = stamp
+            elif monotonic() - self._outage_opened_mono >= OUTAGE_HOLD:
+                if await self._async_closing_poll():
+                    self._close_expected_outage("no_outage")
+                    return
+            self._schedule_outage_check()
+            return
+
+        if answered:
+            if record is not None and record["back_at"] is None:
+                record["back_at"] = stamp
+            if await self._async_closing_poll():
                 self._close_expected_outage("answer")
                 return
         self._schedule_outage_check()
 
+    async def _async_closing_poll(self) -> bool:
+        """Run the window's closing poll, and return whether it succeeded."""
+        before = self.last_update_success_time
+        self._outage_closing = True
+        try:
+            with self.api.outage_bypass():
+                await self.async_refresh()
+        finally:
+            self._outage_closing = False
+        return self.last_update_success_time != before
+
     def _close_expected_outage(self, closed_by: str) -> None:
-        """Close the window and record how it ended."""
+        """Close the window, record how it ended, and settle a data reconnect."""
         self._cancel_outage_check()
+        outage = self.api.expected_outage
+        reason = outage.reason if isinstance(outage, ExpectedOutage) else None
         self.api.close_expected_outage()
-        if self.last_expected_outage is not None:
-            self.last_expected_outage["closed"] = dt_util.utcnow().isoformat()
-            self.last_expected_outage["closed_by"] = closed_by
+        self._outage_awaiting_drop = False
+        record = self.last_expected_outage
+        if record is None:
+            return
+        record["closed"] = dt_util.utcnow().isoformat()
+        record["closed_by"] = closed_by
+        if closed_by != "cap":
+            record["after"] = _outage_snapshot(self.data)
+        if record["down_at"] and record["back_at"]:
+            record["outage_seconds"] = round(
+                (
+                    datetime.fromisoformat(record["back_at"])
+                    - datetime.fromisoformat(record["down_at"])
+                ).total_seconds(),
+                1,
+            )
+        # Connected came up to 15 s after the router answered again, so a
+        # closing poll can read `ppp_connecting`. One more refresh settles it;
+        # under paused polling nothing else would.
+        if (
+            closed_by != "cap"
+            and reason in OUTAGE_REASONS_DATA
+            and (self.data or {}).get("ppp_status") == "ppp_connecting"
+        ):
+            self._outage_followup_unsub = async_call_later(
+                self.hass, DATA_CONNECT_FOLLOWUP_SECONDS, self._async_outage_followup
+            )
+
+    async def _async_outage_followup(self, _now: datetime | None = None) -> None:
+        """The one refresh after a data window closed on `ppp_connecting`."""
+        self._outage_followup_unsub = None
+        await self.async_force_refresh()
 
     async def async_shutdown(self) -> None:
-        """Disarm the outage check before the coordinator is torn down."""
+        """Disarm the outage timers before the coordinator is torn down."""
         self._cancel_outage_check()
+        self._cancel_outage_followup()
         await super().async_shutdown()
 
     async def async_force_refresh(self) -> None:
@@ -980,7 +1131,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         live reading would detach the history from the entities it describes.
         """
         device_id = self.imei or f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
-        if self.observations.observe(data, device_id):
+        if self.observations.observe(data, device_id, list(self.expected_outages)):
             await self.observations.async_save()
         await self._persist_session_lifetimes()
 

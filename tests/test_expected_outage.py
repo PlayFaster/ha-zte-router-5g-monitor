@@ -31,6 +31,8 @@ from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
     DOMAIN,
     OUTAGE_CAP_DATA_DISCONNECT,
+    OUTAGE_HOLD,
+    OUTAGE_REASON_DATA_CONNECT,
     OUTAGE_REASON_DATA_DISCONNECT,
     OUTAGE_REASON_REBOOT,
 )
@@ -487,3 +489,244 @@ async def test_a_window_opened_without_its_record_still_closes(
 
     assert coordinator.api.expected_outage is None
     assert coordinator.last_expected_outage is None
+
+
+# --------------------------------------------------------------------------
+# 3.4.1-dev5: two phases, history, follow-up
+# --------------------------------------------------------------------------
+#
+# Measured on the MC7010 on 2026-09-23: the router kept answering for 11 to
+# 12 s after `CONNECT_NETWORK` and 4 to 8 s after `DISCONNECT_NETWORK`, then
+# stopped. A window that closed on the first answer closed before the outage.
+
+_MONOTONIC = "custom_components.zte_router_5g.coordinator.monotonic"
+
+
+async def _data_window(hass, entry, reason=OUTAGE_REASON_DATA_CONNECT):
+    coordinator = await _ready(hass, entry)
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        coordinator.async_open_expected_outage(
+            reason,
+            60,
+            command="CONNECT_NETWORK",
+            reply={"result": "success", "extra": "dropped"},
+            ppp_status_after_reply="ppp_connecting",
+        )
+    return coordinator
+
+
+async def test_a_command_window_waits_for_the_drop_and_probes_fast(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """An answer before the drop is the router not yet gone, not back."""
+    coordinator = await _data_window(hass, entry)
+
+    with patch(_CALL_LATER, return_value=MagicMock()) as call_later:
+        await coordinator._async_outage_check()
+
+    coordinator.api.get_all_data.assert_not_awaited()
+    assert coordinator.api.expected_outage is not None
+    assert call_later.call_args[0][1] == 1.0
+
+
+async def test_the_first_silence_records_the_drop_and_slows_the_probe(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """From the drop on, the window waits for the return as before."""
+    coordinator = await _data_window(hass, entry)
+    coordinator.api.outage_probe.return_value = False
+
+    with patch(_CALL_LATER, return_value=MagicMock()) as call_later:
+        await coordinator._async_outage_check()
+
+    assert coordinator.last_expected_outage["down_at"] is not None
+    assert call_later.call_args[0][1] == 5.0
+
+    coordinator.api.outage_probe.return_value = True
+    await coordinator._async_outage_check()
+
+    record = coordinator.last_expected_outage
+    assert coordinator.api.expected_outage is None
+    assert record["closed_by"] == "answer"
+    assert record["back_at"] is not None
+    assert record["outage_seconds"] is not None
+    assert record["after"]["ppp_status"] == GOOD_DATA.get("ppp_status")
+
+
+async def test_no_drop_within_the_hold_closes_as_no_outage(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """A router that never went away is not held to the cap."""
+    coordinator = await _data_window(hass, entry)
+
+    with patch(_MONOTONIC, return_value=coordinator._outage_opened_mono + OUTAGE_HOLD):
+        await coordinator._async_outage_check()
+
+    record = coordinator.last_expected_outage
+    assert coordinator.api.expected_outage is None
+    assert record["closed_by"] == "no_outage"
+    assert record["down_at"] is None
+    assert record["outage_seconds"] is None
+
+
+async def test_a_failed_closing_poll_after_the_hold_keeps_the_window(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """The hold ends the wait for a drop, not the need for a good poll."""
+    coordinator = await _data_window(hass, entry)
+    coordinator.api.get_all_data.side_effect = ZTEConnectionError("not yet")
+
+    with (
+        patch(_MONOTONIC, return_value=coordinator._outage_opened_mono + OUTAGE_HOLD),
+        patch(_CALL_LATER, return_value=MagicMock()) as call_later,
+    ):
+        await coordinator._async_outage_check()
+
+    assert coordinator.api.expected_outage is not None
+    call_later.assert_called_once()
+
+
+async def test_a_reboot_window_starts_with_the_drop_recorded(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """`reboot()` returns only after the router went away."""
+    coordinator = await _ready(hass, entry)
+    with patch(_CALL_LATER, return_value=MagicMock()) as call_later:
+        coordinator.async_open_expected_outage(OUTAGE_REASON_REBOOT, 240)
+
+    record = coordinator.last_expected_outage
+    assert record["down_at"] == record["opened"]
+    assert call_later.call_args[0][1] == 5.0
+
+
+async def test_the_record_keeps_the_command_and_the_state_before(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """The reply is reduced to its `result`; nothing else a firmware adds."""
+    coordinator = await _data_window(hass, entry)
+
+    record = coordinator.last_expected_outage
+    assert record["command"] == "CONNECT_NETWORK"
+    assert record["reply"] == {"result": "success"}
+    assert record["ppp_status_after_reply"] == "ppp_connecting"
+    assert set(record["before"]) == {
+        "ppp_status",
+        "network_type",
+        "dial_mode",
+        "opms_wan_mode",
+    }
+
+
+async def test_a_reply_that_is_not_a_dict_is_recorded_as_none(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """A mocked or odd reply leaves no field."""
+    coordinator = await _ready(hass, entry)
+    coordinator.data = None
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        coordinator.async_open_expected_outage(OUTAGE_REASON_REBOOT, 60, reply="ok")
+
+    assert coordinator.last_expected_outage["reply"] is None
+    assert coordinator.last_expected_outage["before"] is None
+
+
+async def test_only_the_last_five_windows_are_kept(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """A bounded history, oldest dropped first."""
+    coordinator = await _ready(hass, entry)
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        for cap in range(7):
+            coordinator.async_open_expected_outage(OUTAGE_REASON_REBOOT, 60 + cap)
+
+    caps = [r["cap_seconds"] for r in coordinator.expected_outages]
+    assert caps == [62, 63, 64, 65, 66]
+
+
+async def test_a_data_window_closing_on_connecting_arms_one_follow_up(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """Connected came up to 15 s after the router answered again."""
+    coordinator = await _data_window(hass, entry)
+    coordinator.api.get_all_data.return_value = {
+        **GOOD_DATA,
+        "ppp_status": "ppp_connecting",
+    }
+    coordinator.api.outage_probe.return_value = False
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        await coordinator._async_outage_check()
+    coordinator.api.outage_probe.return_value = True
+    unsub = MagicMock()
+
+    with patch(_CALL_LATER, return_value=unsub) as call_later:
+        await coordinator._async_outage_check()
+
+    delay, callback = call_later.call_args[0][1:]
+    assert delay == 10.0
+    coordinator.async_force_refresh = AsyncMock()
+    await callback(None)
+    coordinator.async_force_refresh.assert_awaited_once()
+    assert coordinator._outage_followup_unsub is None
+
+
+async def test_no_follow_up_once_connected_or_for_a_reboot(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """A settled state, or a window that is not the switch's, needs none."""
+    coordinator = await _ready(hass, entry)
+    coordinator.api.get_all_data.return_value = {
+        **GOOD_DATA,
+        "ppp_status": "ppp_connecting",
+    }
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        coordinator.async_open_expected_outage(OUTAGE_REASON_REBOOT, 60)
+
+    with patch(_CALL_LATER, return_value=MagicMock()) as call_later:
+        await coordinator._async_outage_check()
+
+    call_later.assert_not_called()
+
+
+async def test_a_new_window_and_shutdown_cancel_the_follow_up(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """No follow-up outlives the next command or the coordinator."""
+    coordinator = await _ready(hass, entry)
+    first, second = MagicMock(), MagicMock()
+    coordinator._outage_followup_unsub = first
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        coordinator.async_open_expected_outage(OUTAGE_REASON_DATA_CONNECT, 60)
+    first.assert_called_once()
+
+    coordinator._outage_followup_unsub = second
+    await coordinator.async_shutdown()
+    second.assert_called_once()
+
+
+async def test_the_open_reason_and_the_closing_flag_are_exposed(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """The switch reads both to decide whether to hold its position."""
+    coordinator = await _ready(hass, entry)
+    assert coordinator.outage_reason is None
+    assert coordinator.outage_closing is False
+
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        coordinator.async_open_expected_outage(OUTAGE_REASON_DATA_CONNECT, 60)
+
+    assert coordinator.outage_reason == OUTAGE_REASON_DATA_CONNECT
+
+
+async def test_a_drop_without_a_record_still_moves_to_the_return_phase(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """The phase follows the router; the record only reports it."""
+    coordinator = await _data_window(hass, entry)
+    coordinator.expected_outages.clear()
+    coordinator.api.outage_probe.return_value = False
+
+    with patch(_CALL_LATER, return_value=MagicMock()) as call_later:
+        await coordinator._async_outage_check()
+
+    assert coordinator._outage_awaiting_drop is False
+    assert call_later.call_args[0][1] == 5.0

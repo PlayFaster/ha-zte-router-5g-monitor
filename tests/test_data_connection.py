@@ -28,8 +28,10 @@ from custom_components.zte_router_5g.button import (
     ZTERefreshButton,
 )
 from custom_components.zte_router_5g.const import (
+    OUTAGE_CAP_DATA_CONNECT,
     OUTAGE_CAP_DATA_DISCONNECT,
     OUTAGE_CAP_REBOOT,
+    OUTAGE_REASON_DATA_CONNECT,
     OUTAGE_REASON_DATA_DISCONNECT,
     OUTAGE_REASON_REBOOT,
 )
@@ -53,7 +55,6 @@ from homeassistant.core import ServiceCall
 from homeassistant.exceptions import HomeAssistantError
 
 _DATA_CONNECTION = next(d for d in SWITCH_TYPES if d.key == "data_connection")
-_CALL_LATER = "custom_components.zte_router_5g.switch.async_call_later"
 _REFUSED_REBOOT = ZTERouterExpectedUnavailableError(OUTAGE_REASON_REBOOT, 42)
 _REFUSED_DATA = ZTERouterExpectedUnavailableError(OUTAGE_REASON_DATA_DISCONNECT, 17)
 
@@ -67,7 +68,11 @@ def _switch(
 ) -> ZTEDataConnectionSwitch:
     """A Data Connection switch whose immediate read returns `status`."""
     mock_coordinator.api = MagicMock()
-    mock_coordinator.api.set_data_connection = AsyncMock()
+    mock_coordinator.api.set_data_connection = AsyncMock(
+        return_value={"result": "success"}
+    )
+    mock_coordinator.outage_reason = None
+    mock_coordinator.outage_closing = False
     if isinstance(status, Exception):
         mock_coordinator.api.get_params = AsyncMock(side_effect=status)
     else:
@@ -137,26 +142,39 @@ async def test_turning_off_confirms_and_opens_the_window(
     mock_coordinator.api.set_data_connection.assert_awaited_once_with(False)
     assert switch.published == [False]
     mock_coordinator.async_open_expected_outage.assert_called_once_with(
-        OUTAGE_REASON_DATA_DISCONNECT, OUTAGE_CAP_DATA_DISCONNECT
+        OUTAGE_REASON_DATA_DISCONNECT,
+        OUTAGE_CAP_DATA_DISCONNECT,
+        command="DISCONNECT_NETWORK",
+        reply={"result": "success"},
+        ppp_status_after_reply="ppp_disconnecting",
     )
     # The refresh would land in the silent period; the window replaces it.
     mock_coordinator.async_force_refresh.assert_not_awaited()
 
 
-async def test_turning_on_confirms_from_connecting_and_refreshes(
+async def test_turning_on_confirms_from_connecting_and_opens_the_window(
     mock_coordinator, mock_config_entry
 ) -> None:
-    """Reconnecting has no silent period, so no window opens."""
-    switch = _switch(mock_coordinator, mock_config_entry, "ppp_connecting")
-    switch.hass = MagicMock()
+    """Reconnecting also takes the router offline, 11 to 12 s after the command.
 
-    with patch(_CALL_LATER, return_value=MagicMock()):
-        await switch.async_turn_on()
+    Before 3.4.1-dev5 turning on opened no window and refreshed at once. The
+    MC7010 then stopped answering for 6 to 28 s, and a refresh or follow-up
+    landing in that gap failed and left stale values.
+    """
+    switch = _switch(mock_coordinator, mock_config_entry, "ppp_connecting")
+
+    await switch.async_turn_on()
 
     mock_coordinator.api.set_data_connection.assert_awaited_once_with(True)
     assert switch.published == [True]
-    mock_coordinator.async_force_refresh.assert_awaited_once()
-    mock_coordinator.async_open_expected_outage.assert_not_called()
+    mock_coordinator.async_open_expected_outage.assert_called_once_with(
+        OUTAGE_REASON_DATA_CONNECT,
+        OUTAGE_CAP_DATA_CONNECT,
+        command="CONNECT_NETWORK",
+        reply={"result": "success"},
+        ppp_status_after_reply="ppp_connecting",
+    )
+    mock_coordinator.async_force_refresh.assert_not_awaited()
 
 
 @pytest.mark.parametrize(
@@ -298,7 +316,14 @@ def test_connection_mode_status_shows_the_raw_value() -> None:
 
 @pytest.mark.parametrize(
     ("refusal", "key"),
-    [(_REFUSED_REBOOT, "router_restarting"), (_REFUSED_DATA, "router_disconnecting")],
+    [
+        (_REFUSED_REBOOT, "router_restarting"),
+        (_REFUSED_DATA, "router_disconnecting"),
+        (
+            ZTERouterExpectedUnavailableError(OUTAGE_REASON_DATA_CONNECT, 9),
+            "router_connecting",
+        ),
+    ],
 )
 def test_each_reason_has_its_own_message(refusal, key) -> None:
     """A whole translated sentence per reason, with the time left."""
@@ -493,103 +518,84 @@ async def _download(mock_coordinator, mock_config_entry) -> dict[str, Any]:
         return await async_get_config_entry_diagnostics(None, mock_config_entry)
 
 
-async def test_the_last_window_is_published(
+async def test_the_recent_windows_are_published_newest_first(
     mock_coordinator, mock_config_entry
 ) -> None:
-    """A download taken after a reboot can explain the polls it skipped."""
-    record = {
-        "reason": OUTAGE_REASON_REBOOT,
-        "opened": "2026-09-23T06:00:00+00:00",
-        "cap_seconds": OUTAGE_CAP_REBOOT,
-        "checks": 9,
-        "closed": "2026-09-23T06:01:10+00:00",
-        "closed_by": "answer",
-    }
-    mock_coordinator.last_expected_outage = record
+    """A download can say what each recent command did."""
+    older = {"reason": OUTAGE_REASON_DATA_DISCONNECT, "opened": "06:00"}
+    newer = {"reason": OUTAGE_REASON_DATA_CONNECT, "opened": "06:02"}
+    mock_coordinator.expected_outages = [older, newer]
 
     result = await _download(mock_coordinator, mock_config_entry)
 
-    assert result["expected_outage"] == record
-    assert result["expected_outage"] is not record
+    assert result["expected_outages"] == [newer, older]
+    assert result["expected_outages"][0] is not newer
 
 
-async def test_no_window_publishes_nothing(mock_coordinator, mock_config_entry) -> None:
-    """A stand-in value is not a window."""
-    mock_coordinator.last_expected_outage = None
+async def test_no_window_publishes_an_empty_list(
+    mock_coordinator, mock_config_entry
+) -> None:
+    """Nothing opened, nothing to show; a stand-in record is skipped."""
+    mock_coordinator.expected_outages = ["not a record"]
 
     result = await _download(mock_coordinator, mock_config_entry)
 
-    assert result["expected_outage"] is None
+    assert result["expected_outages"] == []
 
 
 # --------------------------------------------------------------------------
-# 3.4.1-dev4: after turning on
+# 3.4.1-dev5: the position during a data window
 # --------------------------------------------------------------------------
-
-
-async def test_the_refresh_after_turning_on_keeps_the_switch_on(
-    mock_coordinator, mock_config_entry
-) -> None:
-    """The refresh lands on `ppp_connecting`, measured at once after the command.
-
-    Before 3.4.1-dev4 that refresh read the value as off, and the switch sprang
-    back until the next poll.
-    """
-    switch = _switch(mock_coordinator, mock_config_entry, "ppp_connecting")
-    switch.hass = MagicMock()
-
-    async def refresh() -> None:
-        mock_coordinator.data = {"ppp_status": "ppp_connecting"}
-        switch._handle_coordinator_update()
-
-    mock_coordinator.async_force_refresh = AsyncMock(side_effect=refresh)
-
-    with patch(_CALL_LATER, return_value=MagicMock()):
-        await switch.async_turn_on()
-
-    assert switch.published == [True, True]
-
-
-async def test_a_follow_up_refresh_is_armed_when_neither_read_saw_a_connection(
-    mock_coordinator, mock_config_entry
-) -> None:
-    """A router still at `ppp_disconnected` gets one more refresh."""
-    switch = _switch(mock_coordinator, mock_config_entry, "ppp_disconnected")
-    switch.hass = MagicMock()
-    mock_coordinator.data = {"ppp_status": "ppp_disconnected"}
-    unsub = MagicMock()
-
-    with patch(_CALL_LATER, return_value=unsub) as call_later:
-        await switch.async_turn_on()
-
-    call_later.assert_called_once()
-    delay, callback = call_later.call_args[0][1:]
-    assert delay == 5.0
-
-    mock_coordinator.async_force_refresh.reset_mock()
-    await callback(None)
-    mock_coordinator.async_force_refresh.assert_awaited_once()
-
-    # Registered for cancellation with the entity, so no timer outlives it.
-    assert unsub in (switch._on_remove or [])
 
 
 @pytest.mark.parametrize(
-    ("immediate", "refreshed"),
-    [("ppp_connected", "ppp_connecting"), ("ppp_connecting", "ppp_connected")],
+    "reason", [OUTAGE_REASON_DATA_DISCONNECT, OUTAGE_REASON_DATA_CONNECT]
 )
-async def test_no_follow_up_once_either_read_saw_a_connection(
-    mock_coordinator, mock_config_entry, immediate, refreshed
+async def test_the_position_is_held_during_a_data_window(
+    mock_coordinator, mock_config_entry, reason
 ) -> None:
-    """A connected value on either read settles it."""
-    switch = _switch(mock_coordinator, mock_config_entry, immediate)
-    switch.hass = MagicMock()
-    mock_coordinator.data = {"ppp_status": refreshed}
+    """A skipped poll carries the old state and must not move the switch.
 
-    with patch(_CALL_LATER) as call_later:
-        await switch.async_turn_on()
+    Seen on the MC7010 on 2026-09-23 in three cycles of three: after turning
+    off, the switch showed on again for 15 to 20 s, until the window closed.
+    """
+    switch = _switch(mock_coordinator, mock_config_entry, "ppp_disconnecting")
+    switch._last_known = False
+    mock_coordinator.outage_reason = reason
+    mock_coordinator.data = {"ppp_status": "ppp_connected"}
 
-    call_later.assert_not_called()
+    switch._handle_coordinator_update()
+
+    assert switch.is_on is False
+
+
+async def test_the_closing_poll_sets_the_position(
+    mock_coordinator, mock_config_entry
+) -> None:
+    """The window is still open while its closing poll runs; that poll is fresh."""
+    switch = _switch(mock_coordinator, mock_config_entry, "ppp_connecting")
+    switch._last_known = False
+    mock_coordinator.outage_reason = OUTAGE_REASON_DATA_CONNECT
+    mock_coordinator.outage_closing = True
+    mock_coordinator.data = {"ppp_status": "ppp_connected"}
+
+    switch._handle_coordinator_update()
+
+    assert switch.is_on is True
+
+
+async def test_a_reboot_window_does_not_hold_the_position(
+    mock_coordinator, mock_config_entry
+) -> None:
+    """Only the switch's own windows hold it."""
+    switch = _switch(mock_coordinator, mock_config_entry, "ppp_connected")
+    switch._last_known = False
+    mock_coordinator.outage_reason = OUTAGE_REASON_REBOOT
+    mock_coordinator.data = {"ppp_status": "ppp_connected"}
+
+    switch._handle_coordinator_update()
+
+    assert switch.is_on is True
 
 
 # --------------------------------------------------------------------------

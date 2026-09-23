@@ -471,6 +471,9 @@
     "reset_two_baselines": {
       "message": "Choose one starting point: either reset_to_default or restore_snapshot, not both. They each set a different baseline, so together there is no single meaning."
     },
+    "router_connecting": {
+      "message": "The router is reconnecting its data connection. Try again in about {seconds} seconds."
+    },
     "router_disconnecting": {
       "message": "The router is disconnecting its data connection. Try again in about {seconds} seconds."
     },

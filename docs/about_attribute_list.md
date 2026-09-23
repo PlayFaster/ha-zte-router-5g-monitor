@@ -106,7 +106,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G RSRQ | Sensor | `z5g_rsrq` | Reference Signal Received Quality for 5G, in dB - quality rather than strength, reflecting interference and cell load. Typically: better than -10 is excellent, -10 to -15 good, -15 to -20 fair, below -20 poor. |
 | 5G RSSI | Sensor | `z5g_rssi` | Total received power across the 5G channel, in dBm, including noise and interference. Use 5G RSRP for a cleaner measure of your own cell's strength. |
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
-| Data Connection | Switch | `data_connection` | Turns the router's mobile data connection on or off, like the switch in the router's own web page. Home Assistant keeps reaching the router over your network while data is off. Turning it off can take up to a minute, and other controls are refused until it completes. |
+| Data Connection | Switch | `data_connection` | Turns the router's mobile data connection on or off, like the switch in the router's own web page. Home Assistant keeps reaching the router over your network while data is off. Turning it off or on can take up to a minute, and other controls are refused until it completes. |
 
 ## System (37)
 

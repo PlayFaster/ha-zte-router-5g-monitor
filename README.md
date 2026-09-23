@@ -629,7 +629,7 @@ Several settings are exposed as control entities so you can drive them from dash
 >
 > Switching APN can be an important and useful connectivity management tool. Bear in mind that your ISP may place restrictions on non-default APNs (reduced or no performance), so this is a proceed with caution and only if you know what you are doing area.
 
-- **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off takes up to a minute, and other controls show an error until it completes. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error). **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
+- **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off or on takes up to a minute, and other controls show an error until it completes. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error). **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): In Manual mode, switch the active APN profile.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:
@@ -2065,6 +2065,7 @@ You see one of these messages when you use a router control while the router is 
 
 - `The router is restarting. Try again in about N seconds.` You pressed **Reboot**. The router is unreachable for one to two minutes.
 - `The router is disconnecting its data connection. Try again in about N seconds.` You turned the **Data Connection** switch off. The router is unreachable for up to a minute.
+- `The router is reconnecting its data connection. Try again in about N seconds.` You turned the **Data Connection** switch on. The router keeps answering for a few seconds, then is unreachable for up to half a minute.
 
 Until the router answers again, its controls, the SMS actions and **Refresh Now** are unavailable. Sensors keep their last values. Nothing needs fixing: everything works again as soon as the router is back.
 

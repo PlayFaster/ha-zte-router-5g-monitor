@@ -14,16 +14,17 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import ZTERouterExpectedUnavailableError
 from .const import (
     CONF_STOP_POLLING,
-    DATA_CONNECT_FOLLOWUP_SECONDS,
     DOMAIN,
+    OUTAGE_CAP_DATA_CONNECT,
     OUTAGE_CAP_DATA_DISCONNECT,
+    OUTAGE_REASON_DATA_CONNECT,
     OUTAGE_REASON_DATA_DISCONNECT,
+    OUTAGE_REASONS_DATA,
     WRITE_VERIFY_RETRY_DELAY,
     WRITE_VERIFY_TIMEOUT,
 )
@@ -176,9 +177,9 @@ SWITCH_TYPES: tuple[ZTESwitchEntityDescription, ...] = (
         about=(
             "Turns the router's mobile data connection on or off, like the "
             "switch in the router's own web page. Home Assistant keeps reaching "
-            "the router over your network while data is off. Turning it off can "
-            "take up to a minute, and other controls are refused until it "
-            "completes."
+            "the router over your network while data is off. Turning it off or "
+            "on can take up to a minute, and other controls are refused until "
+            "it completes."
         ),
         translation_key="signal_data_connection",
         entity_category=EntityCategory.CONFIG,
@@ -246,6 +247,8 @@ class ZTERouterSwitch(
         # Last position the router actually reported. Held so a poll that omits
         # the key does not read as a confident "off" — see `_remember_position`.
         self._last_known = False
+        # The router's reply to the last write, for the outage window's record.
+        self._reply: Any = None
         self._remember_position()
 
     def _remember_position(self) -> None:
@@ -326,17 +329,21 @@ class ZTERouterSwitch(
         setter = self.entity_description.setter_fn
         if setter is None:
             return
-        await self._async_write(setter, state)
+        self._reply = await self._async_write(setter, state)
         await self._async_after_write(state)
 
     async def _async_write(
         self,
-        setter: Callable[[Any, bool, Any], Coroutine[Any, Any, None]],
+        setter: Callable[[Any, bool, Any], Coroutine[Any, Any, Any]],
         state: bool,
-    ) -> None:
-        """Send the new state, mapping a failure to an error the user sees."""
+    ) -> Any:
+        """Send the new state, mapping a failure to an error the user sees.
+
+        Returns the setter's result, the router's reply where the setter
+        passes it on.
+        """
         try:
-            await setter(self.coordinator.api, state, self.coordinator.data)
+            return await setter(self.coordinator.api, state, self.coordinator.data)
         except Exception as err:
             if isinstance(err, ZTERouterExpectedUnavailableError):
                 raise expected_outage_error(err) from err
@@ -415,20 +422,37 @@ class ZTERouterSwitch(
 class ZTEDataConnectionSwitch(ZTERouterSwitch):
     """The router's data connection, confirmed from its transitional state.
 
-    The router answers the command before the change completes, and a
-    disconnect then takes it offline. Measured on the MC7010 on 2026-09-23,
-    twice: `ppp_disconnecting` was readable for about a second after the
-    reply, then the router stopped answering for between 17 and 36 s.
-    Reconnecting reached `ppp_connected` within a second, with no silence.
+    The router answers the command before the change completes, and both
+    directions then take it offline. Measured on the MC7010 on 2026-09-23,
+    over six turn-ons and eight turn-offs under `auto_dial` and `manual_dial`:
+    after `DISCONNECT_NETWORK` the router stopped answering within 4 to 8 s,
+    for 9 to 37 s; after `CONNECT_NETWORK` it kept answering for 11 to 12 s,
+    then stopped for 6 to 28 s.
     """
 
+    def _remember_position(self) -> None:
+        """Hold the set position while a data window is open.
+
+        During the window a poll returns the held data, which still reports
+        the state from before the command. Recomputing from it showed the
+        switch in its old position for 15 to 20 s after turning off. The
+        window's closing poll is fresh, so it sets the position.
+        """
+        coordinator = self.coordinator
+        if getattr(
+            coordinator, "outage_reason", None
+        ) in OUTAGE_REASONS_DATA and not getattr(coordinator, "outage_closing", False):
+            return
+        super()._remember_position()
+
     async def _async_after_write(self, state: bool) -> None:
-        """Read the state once, at once, then open the outage window on turn-off.
+        """Read the state once, at once, then open the outage window.
 
         The read is taken before the window opens, so the gate does not refuse
         it. A read that fails, or reports neither the requested state nor its
         transitional form, leaves the write unconfirmed rather than failed: the
-        router accepted the command, and the next poll settles the position.
+        router accepted the command, and the window's closing poll settles the
+        position.
         """
         status = await self._read_status()
         confirming = _DATA_ON if state else {"ppp_disconnecting", "ppp_disconnected"}
@@ -441,26 +465,13 @@ class ZTEDataConnectionSwitch(ZTERouterSwitch):
                 self._entry.title,
                 status,
             )
-        if not state:
-            self.coordinator.async_open_expected_outage(
-                OUTAGE_REASON_DATA_DISCONNECT, OUTAGE_CAP_DATA_DISCONNECT
-            )
-            return
-        await self.coordinator.async_force_refresh()
-        refreshed = (self.coordinator.data or {}).get("ppp_status")
-        if status in _DATA_CONNECTED or refreshed in _DATA_CONNECTED:
-            return
-        # Neither read saw a finished connection. One more refresh settles it
-        # rather than leaving the switch to the next scheduled poll.
-        self.async_on_remove(
-            async_call_later(
-                self.hass, DATA_CONNECT_FOLLOWUP_SECONDS, self._async_followup
-            )
+        self.coordinator.async_open_expected_outage(
+            OUTAGE_REASON_DATA_CONNECT if state else OUTAGE_REASON_DATA_DISCONNECT,
+            OUTAGE_CAP_DATA_CONNECT if state else OUTAGE_CAP_DATA_DISCONNECT,
+            command="CONNECT_NETWORK" if state else "DISCONNECT_NETWORK",
+            reply=self._reply,
+            ppp_status_after_reply=status,
         )
-
-    async def _async_followup(self, _now: Any) -> None:
-        """The one refresh after turning on, when the first did not settle it."""
-        await self.coordinator.async_force_refresh()
 
     async def _read_status(self) -> str | None:
         """Read `ppp_status`, or `None` if the router did not answer it."""
