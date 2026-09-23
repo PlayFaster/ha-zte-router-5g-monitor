@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.1\] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking](#341---2026-09-23---release-data-connection-switch-outage-protection-windows-and-connection-state-tracking)
   - [\[3.4.1-dev4\] - 2026-09-23 - Outage Refusal on Every Write; Data Connection Switch State After Turn-On; README Outage Examples Fixed](#341-dev4---2026-09-23---outage-refusal-on-every-write-data-connection-switch-state-after-turn-on-readme-outage-examples-fixed)
   - [\[3.4.1-dev3\] - 2026-09-23 - README: Expected-Outage Error Messages Documented](#341-dev3---2026-09-23---readme-expected-outage-error-messages-documented)
   - [\[3.4.1-dev2\] - 2026-09-23 - Data Connection Switch; Connection-State Sensors; Expected-Outage Window for Reboot and Disconnect](#341-dev2---2026-09-23---data-connection-switch-connection-state-sensors-expected-outage-window-for-reboot-and-disconnect)
@@ -303,6 +304,34 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.1] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking
+
+### Summary
+
+- **Mobile Data Connection Control**: Added a new Data Connection switch allowing you to enable or disable the router's cellular connection directly from Home Assistant.
+- **Expected-Outage Protection**: Restarting the router or disconnecting cellular data now initiates a timed outage window, pausing polling and safely blocking conflicting commands with informative on-screen countdown messages.
+- **Connection Mode Tracking**: Added a dedicated Connection Mode Status diagnostic sensor and renamed the bridge sensor to Data Connection Status to accurately report connection states.
+- **Automation Reliability**: Updated example reboot and failover automations to trigger on verified connection state attributes, preventing unwanted triggers during manual data disconnects.
+
+### ⚠️ Action Required
+
+- **"Bridge Mode" sensor renamed to Data Connection Status**: The entity ID changes from `sensor.<name>_signal_ppp_status` to `sensor.<name>_signal_data_connection_status` (the old entity is left orphaned and can be deleted). Update any dashboards or automations referring to the old entity ID.
+
+### Added
+
+- **Data Connection Switch (`switch.<name>_signal_data_connection`)**: Enables or disables mobile data from Home Assistant, with rapid single-read confirmation to track connection state transitions (`ppp_connecting`, `ppp_connected`, `ppp_disconnecting`, `ppp_disconnected`).
+- **Connection Mode Status Sensor (`sensor.<name>_signal_connection_mode_status`)**: Diagnostic sensor reporting the configured connection dial mode (`auto_dial` or `manual_dial`).
+- **Expected-Outage Window**: Reboots and mobile data disconnections now establish a managed outage window (up to 60s for data disconnect, 240s for reboot) that suppresses polling errors, protects Integration Health from false degradation, and refuses interactive write actions with an estimated countdown.
+
+### Fixed
+
+- **Write Token Derivation during Expected Outages**: Fixed an issue where controls used during an active outage window failed with a token derivation error rather than displaying the descriptive outage refusal message.
+- **Data Connection Switch State Flapping**: Fixed switch briefly resetting to off during connection establishment by treating `ppp_connecting` as an active on state with scheduled follow-up verification.
+
+### Changed
+
+- **Reboot Outage Protection**: Triggering a router restart via the Reboot button now activates the expected-outage protection window, eliminating false Integration Health alerts and entity dropouts during normal reboot cycles.
 
 ## [3.4.1-dev4] - 2026-09-23 - Outage Refusal on Every Write; Data Connection Switch State After Turn-On; README Outage Examples Fixed
 

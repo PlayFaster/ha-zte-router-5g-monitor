@@ -4,6 +4,36 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.4.1] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking
+
+### Summary
+
+- **Mobile Data Connection Control**: Added a new Data Connection switch allowing you to enable or disable the router's cellular connection directly from Home Assistant.
+- **Expected-Outage Protection**: Restarting the router or disconnecting cellular data now initiates a timed outage window, pausing polling and safely blocking conflicting commands with informative on-screen countdown messages.
+- **Connection Mode Tracking**: Added a dedicated Connection Mode Status diagnostic sensor and renamed the bridge sensor to Data Connection Status to accurately report connection states.
+- **Automation Reliability**: Updated example reboot and failover automations to trigger on verified connection state attributes, preventing unwanted triggers during manual data disconnects.
+
+### ⚠️ Action Required
+
+- **"Bridge Mode" sensor renamed to Data Connection Status**: The entity ID changes from `sensor.<name>_signal_ppp_status` to `sensor.<name>_signal_data_connection_status` (the old entity is left orphaned and can be deleted). Update any dashboards or automations referring to the old entity ID.
+
+### Added
+
+- **Data Connection Switch (`switch.<name>_signal_data_connection`)**: Enables or disables mobile data from Home Assistant, with rapid single-read confirmation to track connection state transitions (`ppp_connecting`, `ppp_connected`, `ppp_disconnecting`, `ppp_disconnected`).
+- **Connection Mode Status Sensor (`sensor.<name>_signal_connection_mode_status`)**: Diagnostic sensor reporting the configured connection dial mode (`auto_dial` or `manual_dial`).
+- **Expected-Outage Window**: Reboots and mobile data disconnections now establish a managed outage window (up to 60s for data disconnect, 240s for reboot) that suppresses polling errors, protects Integration Health from false degradation, and refuses interactive write actions with an estimated countdown.
+
+### Fixed
+
+- **Write Token Derivation during Expected Outages**: Fixed an issue where controls used during an active outage window failed with a token derivation error rather than displaying the descriptive outage refusal message.
+- **Data Connection Switch State Flapping**: Fixed switch briefly resetting to off during connection establishment by treating `ppp_connecting` as an active on state with scheduled follow-up verification.
+
+### Changed
+
+- **Reboot Outage Protection**: Triggering a router restart via the Reboot button now activates the expected-outage protection window, eliminating false Integration Health alerts and entity dropouts during normal reboot cycles.
+
+---
+
 ## [3.4.0] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management
 
 ### Summary
@@ -832,6 +862,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.4.1\] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking](#341---2026-09-23---release-data-connection-switch-outage-protection-windows-and-connection-state-tracking)
   - [\[3.4.0\] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management](#340---2026-09-15---release-zte-mc888-pro-compatibility-dynamic-device-profiles-and-advanced-router-management)
   - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
   - [\[3.3.24\] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking](#3324---2026-09-13---release-asynchronous-sms-deletion-verification-and-send-outcome-tracking)
