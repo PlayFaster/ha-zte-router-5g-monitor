@@ -638,7 +638,8 @@ async def test_an_unreadable_lifetime_record_is_nothing_learned(
 # ---------------------------------------------------------------------------
 #
 # The uptime counter restarts on a reboot and, on the MC7010 and the MC888
-# Pro, on every data reconnect. The record does not decide which.
+# Pro, with the data session: on the MC7010 it reads 0 while data is off.
+# The record does not decide which.
 
 
 def _window(reason: str, opened: str, closed: str | None) -> dict[str, Any]:

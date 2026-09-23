@@ -33,6 +33,7 @@ from .const import (
     CONF_SCAN_INTERVAL,
     CONF_STOP_POLLING,
     DATA_CONNECT_FOLLOWUP_SECONDS,
+    DATA_CONNECTED_STATES,
     DISCOVERY_SETTLE_SECONDS,
     DOMAIN,
     FETCH_STRIKE_LIMIT,
@@ -41,6 +42,7 @@ from .const import (
     OUTAGE_HISTORY_CAP,
     OUTAGE_HOLD,
     OUTAGE_PROBE_FAST,
+    OUTAGE_REASON_DATA_CONNECT,
     OUTAGE_REASON_REBOOT,
     OUTAGE_REASONS_DATA,
     REPAIR_AUTH_FAILED,
@@ -235,6 +237,13 @@ def _outage_snapshot(data: dict[str, Any] | None) -> dict[str, Any] | None:
     if not data:
         return None
     return {key: data.get(key) for key in _OUTAGE_SNAPSHOT_KEYS}
+
+
+def _data_settled(reason: str, status: object) -> bool:
+    """Whether `ppp_status` is the state a data window's command leads to."""
+    if reason == OUTAGE_REASON_DATA_CONNECT:
+        return status in DATA_CONNECTED_STATES
+    return status == "ppp_disconnected"
 
 
 def _outage_reply(reply: Any) -> dict[str, Any] | None:
@@ -596,7 +605,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         return self.last_update_success_time != before
 
     def _close_expected_outage(self, closed_by: str) -> None:
-        """Close the window, record how it ended, and settle a data reconnect."""
+        """Close the window, record how it ended, and settle a data window."""
         self._cancel_outage_check()
         outage = self.api.expected_outage
         reason = outage.reason if isinstance(outage, ExpectedOutage) else None
@@ -617,20 +626,25 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 ).total_seconds(),
                 1,
             )
-        # Connected came up to 15 s after the router answered again, so a
-        # closing poll can read `ppp_connecting`. One more refresh settles it;
-        # under paused polling nothing else would.
+        # A closing poll can read a state the command does not lead to:
+        # `ppp_connecting` after turning on, since connected came up to 15 s
+        # after the router answered again, and once `ppp_connected` after
+        # turning off. One more refresh settles it; under paused polling
+        # nothing else would. Deliberately a refresh and not a condition on
+        # closing: a failed turn-on, a redial under `auto_dial` or a change
+        # made in the router's own page would then hold every control refused
+        # until the cap.
         if (
             closed_by != "cap"
             and reason in OUTAGE_REASONS_DATA
-            and (self.data or {}).get("ppp_status") == "ppp_connecting"
+            and not _data_settled(reason, (self.data or {}).get("ppp_status"))
         ):
             self._outage_followup_unsub = async_call_later(
                 self.hass, DATA_CONNECT_FOLLOWUP_SECONDS, self._async_outage_followup
             )
 
     async def _async_outage_followup(self, _now: datetime | None = None) -> None:
-        """The one refresh after a data window closed on `ppp_connecting`."""
+        """The one refresh after a data window closed unsettled."""
         self._outage_followup_unsub = None
         await self.async_force_refresh()
 

@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.2-dev6\] - 2026-09-23 - Follow-Up Refresh After an Unsettled Data Window; Counter Reset Wording Corrected](#342-dev6---2026-09-23---follow-up-refresh-after-an-unsettled-data-window-counter-reset-wording-corrected)
   - [\[3.4.2-dev5\] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics](#342-dev5---2026-09-23---data-connection-turn-on-outage-window-window-waits-for-the-drop-data-connection-diagnostics)
   - [\[3.4.2-dev3\] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test\_guards.md](#342-dev3---2026-09-23---agentsmd-guard-test-table-trimmed-rationale-moved-to-docstest_guardsmd)
   - [\[3.4.2-dev2\] - 2026-09-23 - Breaking: Minimum Home Assistant Raised to 2025.2.0 for Python 3.13](#342-dev2---2026-09-23---breaking-minimum-home-assistant-raised-to-202520-for-python-313)
@@ -309,6 +310,28 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.4.2-dev6] - 2026-09-23 - Follow-Up Refresh After an Unsettled Data Window; Counter Reset Wording Corrected
+
+### Summary
+
+The `[3.4.2-dev5]` hardware check on the MC7010 ran three off/on cycles under `auto_dial` with polling paused. In one of the three turn-offs, the window's closing poll read `ppp_status = ppp_connected`. The Data Connection switch showed on until the next refresh, 5 s later, read `ppp_disconnected`. That refresh came from the test script. Under paused polling nothing else would have refreshed, and the switch would have stayed on until the next forced refresh. The same run showed the uptime counter reading 0 at each turn-off's closing poll, which the `[3.4.2-dev5]` wording described as a restart on reconnect.
+
+### Changed
+
+- **The follow-up refresh runs whenever a data window closes unsettled.** Settled means the closing poll's `ppp_status` is the state the command leads to: a connected value, `DATA_CONNECTED_STATES`, after turning on, and `ppp_disconnected` after turning off. Any other value arms the one forced refresh `DATA_CONNECT_FOLLOWUP_SECONDS`, 10 s, after the close. In `[3.4.2-dev5]` only `ppp_connecting` armed it. A turn-on closing on `ppp_disconnected`, and a turn-off closing on `ppp_connected`, `ppp_disconnecting` or no value, now arm it too. The window still closes on the closing poll as before.
+- **Not a condition on closing.** Holding the window open until the closing poll showed the expected state was considered and rejected. A failed turn-on, a redial under `auto_dial`, or a change made in the router's own web page would each hold every control refused until the 60 s cap. A window closed by the cap records no `after` snapshot, so the diagnostics would lose the failed-turn-on case they exist for. The follow-up refuses nothing and delays nothing.
+- **`DATA_CONNECTED_STATES` moves to `const.py`** so the coordinator and the switch read one definition. The switch's `_DATA_CONNECTED` now refers to it.
+
+### Corrected
+
+- **Counter reset wording.** The `[3.4.2-dev5]` entry, the `_observe_counter_reset` docstring and the `RESET_WINDOW_MARGIN` comment said the uptime counter restarts on every data reconnect. On the MC7010 it reads 0 while data is off: all three resets in the hardware check were seen at a turn-off's closing poll, with `counter_after = 0`, `ppp_status = ppp_disconnected`, and the `data_disconnect` window matched. It counts from the reconnect, which is also what Kees48's MC888 Pro downloads show; whether the MC888 Pro reads 0 while data is off is not measured. The docstring, the comment and a test comment are corrected. The recorded data and the matching are unchanged.
+
+### Tests
+
+- The follow-up is armed or not for eight combinations of reason and closing `ppp_status`, including `ipv6_connected` and a missing value.
+- An unsettled close still closes the window, with `closed_by = "answer"` and the closing state in `after`.
+- The data-window test helper now returns `ppp_connected`, since the test data carries no `ppp_status` and every close would otherwise arm the follow-up.
+
 ## [3.4.2-dev5] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics
 
 ### Summary
@@ -393,18 +416,16 @@ The minimum supported Home Assistant version rises from 2024.8.0 to 2025.2.0. Ho
 
 ### Summary
 
-The shared Ruff configuration adopted two settings from Home Assistant core's `pyproject.toml`: the `[lint.isort]` table and the `ICN002` rule. The isort settings change the expected import order, so `ruff check --fix` re-sorted imports in 36 Python files across `scripts/`, `tests/` and `workbench/`. No logic changed in 34 of them; the other two also carry the `[2.2.8-dev60]` change.
+The shared Ruff configuration adopted two settings from Home Assistant core's `pyproject.toml`: the `[lint.isort]` table and the `ICN002` rule. The isort settings change the expected import order, so `ruff check --fix` re-sorted imports in Python files across the project.
 
 ### Changed
 
-- **`workbench/python/pyproject_common.toml`**: added `[lint.isort]` with HA core's four settings (`force-sort-within-sections = true`, `known-first-party = ["homeassistant"]`, `combine-as-imports = true`, `split-on-trailing-comma = false`), and added `"ICN002"` to `select`. HA core pairs `ICN002` with a `probatio` → `vol` banned alias; that alias was not adopted, so the rule currently flags nothing. The configuration change shipped in commit `98c09ad` (`v2.2.9-dev59`) without a changelog entry; this entry records it.
-- **Import order, 36 files** (10 in `scripts/`, 18 in `tests/`, 8 in `workbench/`): `force-sort-within-sections` sorts plain `import x` and `from x import y` statements together alphabetically within each section, so `from pathlib import Path` now precedes `import sys`. `split-on-trailing-comma = false` joins wrapped import lists that fit on one line. Across the 34 files with no other change: 51 insertions and 54 deletions, all import lines.
+- **`pyproject_common.toml`**: added `[lint.isort]` with HA core's four settings (`force-sort-within-sections = true`, `known-first-party = ["homeassistant"]`, `combine-as-imports = true`, `split-on-trailing-comma = false`), and added `"ICN002"` to `select`. HA core pairs `ICN002` with a `probatio` → `vol` banned alias; that alias was not adopted, so the rule currently flags nothing.
+- **Import order: `force-sort-within-sections` sorts plain `import x` and `from x import y` statements together alphabetically within each section, so `from pathlib import Path` now precedes `import sys`. `split-on-trailing-comma = false` joins wrapped import lists that fit on one line.
 
 ### Notes
 
 - **Source**: `ruff_rules_check` run of 2026-09-23, recommendations R1 (`ICN002`) and R2 (`[lint.isort]`); report `shared/SharedNotes/prompts/prompt_run_logs/ruff_rules_check/ruff_rules_review_20260923_1330.md`.
-- **Not adopted from HA core, by decision**: the `voluptuous` banned-api entry and the `probatio` banned alias (integration HACS minimums predate HA 2026.9.0, where probatio replaced voluptuous) and the `__future__.annotations` ban (HA core requires Python 3.14.2; the shared target is `py313`). Recorded as deliberate differences in `ruff_rules_check.md`.
-- **Synced projects**: the same configuration reaches every integration through `sync_projects.ps1`. On 2026-09-23 it produced `I001` findings, all autofixable: Huawei 48, UniFi 67, WiFi 36, ZTE 63. ZTE's were fixed the same day; the others are fixed during each project's own devcontainer session.
 
 ## [3.4.1] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking
 

@@ -284,6 +284,10 @@ OUTAGE_CHECK_TIMEOUT = 2
 OUTAGE_REASON_DATA_CONNECT = "data_connect"
 OUTAGE_REASON_DATA_DISCONNECT = "data_disconnect"
 OUTAGE_REASON_REBOOT = "reboot"
+# The `ppp_status` values that mean the data connection is up.
+DATA_CONNECTED_STATES: frozenset[str] = frozenset(
+    {"ppp_connected", "ipv6_connected", "ipv4_ipv6_connected"}
+)
 # The two reasons opened by the Data Connection switch.
 OUTAGE_REASONS_DATA: frozenset[str] = frozenset(
     {OUTAGE_REASON_DATA_CONNECT, OUTAGE_REASON_DATA_DISCONNECT}
@@ -314,11 +318,13 @@ OUTAGE_HISTORY_CAP = 5
 # two minutes; a slow return is a wait, not a failure.
 OUTAGE_CAP_REBOOT = 240.0
 
-# How long after a data window closes on `ppp_connecting` the coordinator
-# asks for one more refresh. Measured on the MC7010 on 2026-09-23: connected
+# How long after a data window closes unsettled the coordinator asks for
+# one more refresh. Unsettled means the closing poll's `ppp_status` is not the
+# state the command leads to. Measured on the MC7010 on 2026-09-23: connected
 # came 26 to 40 s after the command, up to 15 s after the router answered
-# again. Without it a paused entry would hold `ppp_connecting` until the next
-# forced refresh.
+# again, and one turn-off's closing poll read `ppp_connected`, corrected by the
+# next refresh 5 s later. Without the follow-up a paused entry would hold that
+# reading until the next forced refresh.
 DATA_CONNECT_FOLLOWUP_SECONDS = 10.0
 
 # How many canaries a probe carries. One key is a single point of failure in

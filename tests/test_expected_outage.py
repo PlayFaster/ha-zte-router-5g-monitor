@@ -504,6 +504,11 @@ _MONOTONIC = "custom_components.zte_router_5g.coordinator.monotonic"
 
 async def _data_window(hass, entry, reason=OUTAGE_REASON_DATA_CONNECT):
     coordinator = await _ready(hass, entry)
+    # Settled for a turn-on, so a close arms no follow-up unless a test says so.
+    coordinator.api.get_all_data.return_value = {
+        **GOOD_DATA,
+        "ppp_status": "ppp_connected",
+    }
     with patch(_CALL_LATER, return_value=MagicMock()):
         coordinator.async_open_expected_outage(
             reason,
@@ -550,7 +555,7 @@ async def test_the_first_silence_records_the_drop_and_slows_the_probe(
     assert record["closed_by"] == "answer"
     assert record["back_at"] is not None
     assert record["outage_seconds"] is not None
-    assert record["after"]["ppp_status"] == GOOD_DATA.get("ppp_status")
+    assert record["after"]["ppp_status"] == "ppp_connected"
 
 
 async def test_no_drop_within_the_hold_closes_as_no_outage(
@@ -730,3 +735,64 @@ async def test_a_drop_without_a_record_still_moves_to_the_return_phase(
 
     assert coordinator._outage_awaiting_drop is False
     assert call_later.call_args[0][1] == 5.0
+
+
+# --------------------------------------------------------------------------
+# 3.4.2-dev6: a follow-up whenever the closing poll is not settled
+# --------------------------------------------------------------------------
+#
+# Measured on the MC7010 on 2026-09-23: one turn-off's closing poll read
+# `ppp_connected`, and the next refresh, 5 s later, read `ppp_disconnected`.
+
+
+@pytest.mark.parametrize(
+    ("reason", "status", "armed"),
+    [
+        (OUTAGE_REASON_DATA_CONNECT, "ppp_connected", False),
+        (OUTAGE_REASON_DATA_CONNECT, "ipv6_connected", False),
+        (OUTAGE_REASON_DATA_CONNECT, "ppp_connecting", True),
+        (OUTAGE_REASON_DATA_CONNECT, "ppp_disconnected", True),
+        (OUTAGE_REASON_DATA_DISCONNECT, "ppp_disconnected", False),
+        (OUTAGE_REASON_DATA_DISCONNECT, "ppp_connected", True),
+        (OUTAGE_REASON_DATA_DISCONNECT, "ppp_disconnecting", True),
+        (OUTAGE_REASON_DATA_DISCONNECT, None, True),
+    ],
+)
+async def test_a_follow_up_is_armed_only_when_the_close_is_unsettled(
+    hass: HomeAssistant, entry: MockConfigEntry, reason, status, armed
+) -> None:
+    """Settled means the state the command leads to; anything else is re-read."""
+    coordinator = await _data_window(hass, entry, reason)
+    coordinator.api.get_all_data.return_value = {**GOOD_DATA, "ppp_status": status}
+    coordinator.api.outage_probe.return_value = False
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        await coordinator._async_outage_check()
+    coordinator.api.outage_probe.return_value = True
+
+    with patch(_CALL_LATER, return_value=MagicMock()) as call_later:
+        await coordinator._async_outage_check()
+
+    assert coordinator.api.expected_outage is None
+    assert call_later.called is armed
+
+
+async def test_an_unsettled_close_still_closes_the_window(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """The follow-up never holds controls refused: a failed turn-on closes too."""
+    coordinator = await _data_window(hass, entry)
+    coordinator.api.get_all_data.return_value = {
+        **GOOD_DATA,
+        "ppp_status": "ppp_disconnected",
+    }
+    coordinator.api.outage_probe.return_value = False
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        await coordinator._async_outage_check()
+    coordinator.api.outage_probe.return_value = True
+
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        await coordinator._async_outage_check()
+
+    assert coordinator.outage_reason is None
+    assert coordinator.last_expected_outage["closed_by"] == "answer"
+    assert coordinator.last_expected_outage["after"]["ppp_status"] == "ppp_disconnected"

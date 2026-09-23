@@ -19,6 +19,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .api import ZTERouterExpectedUnavailableError
 from .const import (
     CONF_STOP_POLLING,
+    DATA_CONNECTED_STATES,
     DOMAIN,
     OUTAGE_CAP_DATA_CONNECT,
     OUTAGE_CAP_DATA_DISCONNECT,
@@ -55,9 +56,7 @@ _ALIAS_LIMIT_SWITCH: Final = (
 # The `ppp_status` values the router's own web page treats as connected, from
 # `checkConnectedStatus` in the MC7010's `js/util.js`. Only `ppp_connected` has
 # been observed; the IPv6 forms are the GUI's, taken as given.
-_DATA_CONNECTED: Final = frozenset(
-    {"ppp_connected", "ipv6_connected", "ipv4_ipv6_connected"}
-)
+_DATA_CONNECTED: Final = DATA_CONNECTED_STATES
 # The switch shows the direction the router is heading, not only a finished
 # connection. `ppp_connecting` reads as on, as `ppp_disconnecting` already
 # reads as off. Counting only the connected values made the refresh that runs

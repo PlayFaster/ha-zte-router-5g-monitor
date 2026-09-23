@@ -80,9 +80,10 @@ TRACKED: Final[dict[str, tuple[str, ...]]] = {
 RESET_CAP: Final = 20
 
 # How far past a window's close a counter reset is still attributed to it.
-# The counter restarts when the data session starts, which on the MC7010 came
-# up to 15 s after the window's closing poll; the margin also absorbs the
-# counter's drift, 4.34% slow on the reference MC7010.
+# On the MC7010 the counter reads 0 while data is off, so a turn-off's reset
+# is seen at its own closing poll; a reset seen later, as the session restarts,
+# came up to 15 s after the window's closing poll. The margin covers that and
+# the counter's drift, 4.34% slow on the reference MC7010.
 RESET_WINDOW_MARGIN: Final = timedelta(seconds=60)
 
 # Uptime, for placing a transition against a restart. Read through the alias
@@ -374,8 +375,10 @@ class ObservationRecorder:
     ) -> bool:
         """Record a reading of the uptime counter lower than the last one.
 
-        The counter restarts on a reboot and, on both the MC7010 and the MC888
-        Pro, on every data reconnect. The record does not decide which: it
+        The counter restarts on a reboot and follows the data session. On the
+        MC7010 it reads 0 while data is off, measured on 2026-09-23 at three
+        turn-offs, and counts from the reconnect; the MC888 Pro's downloads
+        show it counting from the reconnect. The record does not decide which: it
         keeps the time, the counter either side, the connection state, and
         the reason of any expected-outage window the reset falls in. A reset
         with no window is one nothing in this integration caused, which is
