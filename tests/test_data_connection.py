@@ -53,6 +53,7 @@ from custom_components.zte_router_5g.switch import (
 )
 
 _DATA_CONNECTION = next(d for d in SWITCH_TYPES if d.key == "data_connection")
+_CALL_LATER = "custom_components.zte_router_5g.switch.async_call_later"
 _REFUSED_REBOOT = ZTERouterExpectedUnavailableError(OUTAGE_REASON_REBOOT, 42)
 _REFUSED_DATA = ZTERouterExpectedUnavailableError(OUTAGE_REASON_DATA_DISCONNECT, 17)
 
@@ -102,13 +103,19 @@ def test_the_data_connection_switch_is_built_by_its_own_class() -> None:
         ("ppp_connected", True),
         ("ipv6_connected", True),
         ("ipv4_ipv6_connected", True),
-        ("ppp_connecting", False),
+        ("ppp_connecting", True),
         ("ppp_disconnecting", False),
         ("ppp_disconnected", False),
     ],
 )
 def test_the_switch_reads_on_only_for_a_connected_value(status, expected) -> None:
-    """The three values the router's own page treats as connected."""
+    """Connected, or heading there.
+
+    `ppp_connecting` reads as on, as `ppp_disconnecting` reads as off. This test
+    asserted the opposite until 3.4.1-dev4, which encoded the fault it should
+    have caught: the refresh after turning on read `ppp_connecting` as off and
+    the switch sprang back until the next poll.
+    """
     assert _DATA_CONNECTION.value_fn({"ppp_status": status}) is expected
 
 
@@ -141,8 +148,10 @@ async def test_turning_on_confirms_from_connecting_and_refreshes(
 ) -> None:
     """Reconnecting has no silent period, so no window opens."""
     switch = _switch(mock_coordinator, mock_config_entry, "ppp_connecting")
+    switch.hass = MagicMock()
 
-    await switch.async_turn_on()
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        await switch.async_turn_on()
 
     mock_coordinator.api.set_data_connection.assert_awaited_once_with(True)
     assert switch.published == [True]
@@ -511,3 +520,186 @@ async def test_no_window_publishes_nothing(mock_coordinator, mock_config_entry) 
     result = await _download(mock_coordinator, mock_config_entry)
 
     assert result["expected_outage"] is None
+
+
+# --------------------------------------------------------------------------
+# 3.4.1-dev4: after turning on
+# --------------------------------------------------------------------------
+
+
+async def test_the_refresh_after_turning_on_keeps_the_switch_on(
+    mock_coordinator, mock_config_entry
+) -> None:
+    """The refresh lands on `ppp_connecting`, measured at once after the command.
+
+    Before 3.4.1-dev4 that refresh read the value as off, and the switch sprang
+    back until the next poll.
+    """
+    switch = _switch(mock_coordinator, mock_config_entry, "ppp_connecting")
+    switch.hass = MagicMock()
+
+    async def refresh() -> None:
+        mock_coordinator.data = {"ppp_status": "ppp_connecting"}
+        switch._handle_coordinator_update()
+
+    mock_coordinator.async_force_refresh = AsyncMock(side_effect=refresh)
+
+    with patch(_CALL_LATER, return_value=MagicMock()):
+        await switch.async_turn_on()
+
+    assert switch.published == [True, True]
+
+
+async def test_a_follow_up_refresh_is_armed_when_neither_read_saw_a_connection(
+    mock_coordinator, mock_config_entry
+) -> None:
+    """A router still at `ppp_disconnected` gets one more refresh."""
+    switch = _switch(mock_coordinator, mock_config_entry, "ppp_disconnected")
+    switch.hass = MagicMock()
+    mock_coordinator.data = {"ppp_status": "ppp_disconnected"}
+    unsub = MagicMock()
+
+    with patch(_CALL_LATER, return_value=unsub) as call_later:
+        await switch.async_turn_on()
+
+    call_later.assert_called_once()
+    delay, callback = call_later.call_args[0][1:]
+    assert delay == 5.0
+
+    mock_coordinator.async_force_refresh.reset_mock()
+    await callback(None)
+    mock_coordinator.async_force_refresh.assert_awaited_once()
+
+    # Registered for cancellation with the entity, so no timer outlives it.
+    assert unsub in (switch._on_remove or [])
+
+
+@pytest.mark.parametrize(
+    ("immediate", "refreshed"),
+    [("ppp_connected", "ppp_connecting"), ("ppp_connecting", "ppp_connected")],
+)
+async def test_no_follow_up_once_either_read_saw_a_connection(
+    mock_coordinator, mock_config_entry, immediate, refreshed
+) -> None:
+    """A connected value on either read settles it."""
+    switch = _switch(mock_coordinator, mock_config_entry, immediate)
+    switch.hass = MagicMock()
+    mock_coordinator.data = {"ppp_status": refreshed}
+
+    with patch(_CALL_LATER) as call_later:
+        await switch.async_turn_on()
+
+    call_later.assert_not_called()
+
+
+# --------------------------------------------------------------------------
+# 3.4.1-dev4: refusals through the real write path
+# --------------------------------------------------------------------------
+#
+# The 3.4.1-dev2 tests raised the refusal from a stub setter, so they proved
+# the message mapping and never a real write reaching it. Each case here opens
+# a window on a real client and drives the entity or service that a user
+# would, down to the point where the request would be sent.
+
+
+def _real_api() -> tuple[ZTERouterAPI, MagicMock]:
+    session = MagicMock()
+    api = ZTERouterAPI(session, "192.168.0.1", "admin", "password")
+    api.open_expected_outage(OUTAGE_REASON_DATA_DISCONNECT, 60)
+    return api, session
+
+
+async def test_a_real_switch_write_shows_the_outage_message(
+    mock_coordinator, mock_config_entry
+) -> None:
+    """The ODU LED press that showed "Cannot derive the AD token" before."""
+    api, session = _real_api()
+    mock_coordinator.api = api
+    description = next(d for d in SWITCH_TYPES if d.key == "odu_led_switch")
+    switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, description)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await switch.async_turn_on()
+
+    assert err.value.translation_key == "router_disconnecting"
+    session.post.assert_not_called()
+    session.get.assert_not_called()
+
+
+async def test_turning_data_back_on_too_early_shows_the_outage_message(
+    mock_coordinator, mock_config_entry
+) -> None:
+    """The window is still open; the router cannot take the command yet."""
+    api, session = _real_api()
+    mock_coordinator.api = api
+    mock_coordinator.async_open_expected_outage = MagicMock()
+    switch = ZTEDataConnectionSwitch(
+        mock_coordinator, mock_config_entry, _DATA_CONNECTION
+    )
+
+    with pytest.raises(HomeAssistantError) as err:
+        await switch.async_turn_on()
+
+    assert err.value.translation_key == "router_disconnecting"
+    session.post.assert_not_called()
+
+
+async def test_a_real_select_write_shows_the_outage_message(
+    mock_coordinator, mock_config_entry
+) -> None:
+    """The network mode select, through `set_bearer_preference`."""
+    from custom_components.zte_router_5g.select import SELECT_TYPES
+
+    api, session = _real_api()
+    mock_coordinator.api = api
+    mock_coordinator.data = {}
+    description = next(
+        d for d in SELECT_TYPES if d.translation_key == "signal_net_select_mode"
+    )
+    select = ZTERouterSelect(mock_coordinator, mock_config_entry, description)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await select.async_select_option("LTE_AND_5G")
+
+    assert err.value.translation_key == "router_disconnecting"
+    session.post.assert_not_called()
+
+
+async def test_a_real_reboot_shows_the_outage_message(
+    mock_coordinator, mock_config_entry
+) -> None:
+    """Nothing is sent, and no second window opens."""
+    api, session = _real_api()
+    mock_coordinator.api = api
+    mock_coordinator.async_open_expected_outage = MagicMock()
+    button = ZTERebootButton(mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION)
+
+    with pytest.raises(HomeAssistantError) as err:
+        await button.async_press()
+
+    assert err.value.translation_key == "router_disconnecting"
+    session.post.assert_not_called()
+    mock_coordinator.async_open_expected_outage.assert_not_called()
+
+
+async def test_a_real_sms_send_shows_the_outage_message(service_hass) -> None:
+    """The service path, through `send_sms`."""
+    from custom_components.zte_router_5g import async_send_sms
+
+    hass, coordinator = service_hass
+    api, session = _real_api()
+    coordinator.api = api
+
+    with pytest.raises(HomeAssistantError) as err:
+        await async_send_sms(hass, _call({"target": ["+1"], "message": "hi"}))
+
+    assert err.value.translation_key == "router_disconnecting"
+    session.post.assert_not_called()
+
+
+async def test_a_refusal_is_not_read_as_the_router_going_away() -> None:
+    """The reboot check must not report a restart the gate prevented."""
+    api, _session = _real_api()
+
+    with pytest.raises(ZTERouterExpectedUnavailableError):
+        await api._router_stopped_answering()

@@ -291,6 +291,16 @@ OUTAGE_CAP_DATA_DISCONNECT = 60.0
 # two minutes; a slow return is a wait, not a failure.
 OUTAGE_CAP_REBOOT = 240.0
 
+# How long after turning the data connection on the Data Connection switch
+# asks for one more refresh, when neither its immediate read nor the refresh
+# after it saw a connected value. Measured on the MC7010 on 2026-09-23, twice:
+# `ppp_connecting` at once and `ppp_connected` within a second. A router still
+# at `ppp_disconnected` on both reads would otherwise keep the switch off until
+# the next scheduled poll, 180 s by default. The coordinator's refresh
+# debouncer may hold this request until its cooldown ends, about 10 s after
+# the first refresh.
+DATA_CONNECT_FOLLOWUP_SECONDS = 5.0
+
 # How many canaries a probe carries. One key is a single point of failure in
 # both directions: a metric that legitimately empties reads as a lost session,
 # and a key that turns out to be served without one reports a healthy session

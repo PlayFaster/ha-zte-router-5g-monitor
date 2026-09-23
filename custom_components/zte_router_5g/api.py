@@ -4267,6 +4267,11 @@ class ZTERouterAPI:
                     _retry=False,
                     timeout_sec=2,
                 )
+            except ZTERouterExpectedUnavailableError:
+                # A refusal is a `ZTEConnectionError`, but it says the gate
+                # stopped the probe, not that the router went away. Read as
+                # absence, it would report a reboot that never happened.
+                raise
             except (ZTEConnectionError, aiohttp.ClientError, TimeoutError):
                 # Deliberately not a bare `Exception`. This decides that a
                 # reboot happened, and a fault in this integration must never
@@ -4691,7 +4696,16 @@ class ZTERouterAPI:
         answer cannot differ between two writers of the same command. A
         command that needs no token still passes the pre-write session check:
         not needing a token is not the same as not needing a session.
+
+        Refuses first during an expected outage. Every write passes through
+        here before sending, and the token derivation below reads the firmware
+        version through `get_version`, which catches connection errors and
+        returns nothing. A refusal raised inside that read was swallowed, and
+        the write failed with "Cannot derive the AD token" instead of saying
+        why. Found on the MC7010 on 2026-09-23 by toggling the ODU LED while
+        the data connection was going down.
         """
+        self.refuse_during_outage()
         if not self._token_required(goform_id):
             await self._ensure_session(timeout_sec=timeout_sec)
             return ""

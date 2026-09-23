@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.1-dev4\] - 2026-09-23 - Outage Refusal on Every Write; Data Connection Switch State After Turn-On; README Outage Examples Fixed](#341-dev4---2026-09-23---outage-refusal-on-every-write-data-connection-switch-state-after-turn-on-readme-outage-examples-fixed)
   - [\[3.4.1-dev3\] - 2026-09-23 - README: Expected-Outage Error Messages Documented](#341-dev3---2026-09-23---readme-expected-outage-error-messages-documented)
   - [\[3.4.1-dev2\] - 2026-09-23 - Data Connection Switch; Connection-State Sensors; Expected-Outage Window for Reboot and Disconnect](#341-dev2---2026-09-23---data-connection-switch-connection-state-sensors-expected-outage-window-for-reboot-and-disconnect)
   - [\[3.4.1-dev1\] - 2026-09-23 - CI Bump PHACC](#341-dev1---2026-09-23---ci-bump-phacc)
@@ -302,6 +303,29 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.1-dev4] - 2026-09-23 - Outage Refusal on Every Write; Data Connection Switch State After Turn-On; README Outage Examples Fixed
+
+### Summary
+
+Fixes two faults in the `[3.4.1-dev2]` Data Connection switch and expected-outage window, both found on the MC7010 through the UI. A control used during the window showed "Cannot derive the AD token" instead of the outage message, and the switch sprang back to off after turning data on. Also fixes two README example automations that waited for a value the router never reports.
+
+### Fixed
+
+- **Every write now shows the outage message during a window.** Toggling the ODU LED straight after turning data off showed "Could not change odu_led_switch on the router: Cannot derive the AD token: the router did not return its firmware version." Every write derives its token before sending, and the derivation reads the firmware version through `get_version`, which catches `ZTEConnectionError` and returns nothing; the pre-write session check does the same. `ZTERouterExpectedUnavailableError` subclasses `ZTEConnectionError`, so the refusal was swallowed there and the write failed on the missing token. `ad_suffix` now refuses first. All nine writers call it before sending and none wraps it in a handler that discards the error, so one line covers the switches, the selects, Reboot, and the SMS services. `logout` wraps it and discards the error, which is correct: unloading during a window skips the logout.
+- **The Data Connection switch no longer springs back to off after turning on.** After the command it reads `ppp_status` once and requests a refresh. The refresh runs at once, since Home Assistant only delays repeat refreshes, and it read `ppp_connecting`, which the switch counted as off. Both probe runs showed `ppp_connecting` at once and `ppp_connected` within a second. The switch now reads `ppp_connecting` as on, as it already read `ppp_disconnecting` as off, so it shows the direction the router is heading. A router stuck connecting shows the switch on; Data Connection Status shows the exact state.
+- **A follow-up refresh when neither read saw a connection.** If the immediate read and the refresh both miss a connected value, the switch arms one more refresh after `DATA_CONNECT_FOLLOWUP_SECONDS`, 5 s, cancelled with the entity. Without it a router still at `ppp_disconnected` on both reads would keep the switch off until the next poll, 180 s by default. The refresh debouncer may hold the request until its cooldown ends, about 10 s after the first refresh.
+- **The reboot check cannot read a refusal as a restart.** `_router_stopped_answering` counts a connection error as the router having gone away. It now re-raises `ZTERouterExpectedUnavailableError` first. No current flow reaches it, because the refusal now comes before the reboot command is sent; this stops a later change from turning a refused reboot into a reported success.
+
+### Documentation
+
+- **README, Auto-Reboot on a Prolonged Outage** and **APN Failover & Network Selection**: both triggered on WAN Connect Status becoming `disconnected`. The router reports `pdp_connected` and `no_connected`, and the MC888 Pro leaves WAN Connect Status blank, so neither automation could fire on either device. Both now trigger on Data Connection Status becoming `ppp_disconnected`, which both routers report. Both gain a condition that the Data Connection switch is on: with the correct value, turning data off on purpose would otherwise reboot the router, which reconnects under `auto_dial`, or fail over the APN. The reboot action's note no longer says entities go unavailable; during the outage window sensors keep their last values.
+
+### Tests
+
+- End to end, through the real write path: with a window open on a real client, the ODU LED switch, the Data Connection switch turned back on, the network mode select, the Reboot button and the `send_sms` service each show the outage message and send nothing. The `[3.4.1-dev2]` tests raised the refusal from a stub setter, which proved the message and never a real write reaching it. With the `ad_suffix` fix removed, the ODU LED test fails with `switch_set_failed`, the error seen on the router.
+- The refresh after turning on keeps the switch on; the follow-up is armed only when neither read saw a connection, calls a refresh, and is registered for cancellation with the entity.
+- The state test asserted `ppp_connecting` reads as off; it encoded the fault and now asserts the opposite.
 
 ## [3.4.1-dev3] - 2026-09-23 - README: Expected-Outage Error Messages Documented
 

@@ -1159,24 +1159,29 @@ actions:
 
 ```yaml
 alias: "ZTE APN: Switch Profile on Network Failure"
-description: "Switch to a backup APN profile if the primary WAN connection drops."
+description: "Switch to a backup APN profile if the primary data connection drops."
 mode: single
 triggers:
   - trigger: state
-    entity_id: sensor.zte_5g_signal_wan_connect_status
-    to: "disconnected"
+    entity_id: sensor.zte_5g_signal_data_connection_status
+    to: "ppp_disconnected"
     not_from:
       - "unknown"
       - "unavailable"
     for: "00:05:00"
     note: |
-      The 5 minute hold matters. The integration already holds
-      last-known values for three consecutive failed polls before
-      reporting anything, so a value that has stayed "disconnected"
-      for five minutes is a real outage rather than a blip. not_from
-      suppresses transitions coming directly out of unknown or
-      unavailable states.
+      The integration already holds last-known values for three consecutive
+      failed polls before reporting anything, so a value that has stayed
+      "ppp_disconnected" for five minutes is a real outage rather
+      than a blip. not_from suppresses transitions coming directly
+      out of unknown or unavailable states.
 conditions:
+  - condition: state
+    entity_id: switch.zte_5g_signal_data_connection
+    state: "on"
+    note: |
+      Only an outage you did not ask for. With the Data
+      Connection switch off, the disconnect is deliberate.
   - condition: state
     entity_id: select.zte_5g_signal_apn_profile
     state: "primary_apn"
@@ -1540,13 +1545,13 @@ actions:
 
 ```yaml
 alias: "ZTE Reboot: Auto-Reboot on Prolonged Outage"
-description: "Reboots the router after a sustained WAN outage"
+description: "Reboots the router after a sustained data outage"
 mode: single
 max_exceeded: silent
 triggers:
   - trigger: state
-    entity_id: sensor.zte_5g_signal_wan_connect_status
-    to: "disconnected"
+    entity_id: sensor.zte_5g_signal_data_connection_status
+    to: "ppp_disconnected"
     not_from:
       - "unknown"
       - "unavailable"
@@ -1559,6 +1564,13 @@ triggers:
       not_from suppresses transitions from unknown or unavailable.
 conditions:
   - condition: state
+    entity_id: switch.zte_5g_signal_data_connection
+    state: "on"
+    note: |
+      Only an outage you did not ask for. With the Data
+      Connection switch off, the disconnect is deliberate, and
+      a reboot would reconnect it.
+  - condition: state
     entity_id: binary_sensor.zte_5g_system_integration_health
     state: "off"
     note: |
@@ -1568,7 +1580,7 @@ actions:
   - action: button.press
     target:
       entity_id: button.zte_5g_system_reboot
-    note: The router drops off the network for a few minutes; entities go unavailable.
+    note: The router is offline for a minute or two; sensors keep their last values.
   - delay:
       minutes: 10
     note: |
@@ -1579,8 +1591,8 @@ actions:
     data:
       title: "ZTE Router Rebooted Automatically"
       message: |
-        The WAN was disconnected for 30 minutes, so the router was rebooted.
-        Status is now: {{ states('sensor.zte_5g_signal_wan_connect_status') }}
+        The data connection was down for 30 minutes, so the router was rebooted.
+        Status is now: {{ states('sensor.zte_5g_signal_data_connection_status') }}
 ```
 
 ---

@@ -17,11 +17,13 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import ZTERouterExpectedUnavailableError
 from .const import (
     CONF_STOP_POLLING,
+    DATA_CONNECT_FOLLOWUP_SECONDS,
     DOMAIN,
     OUTAGE_CAP_DATA_DISCONNECT,
     OUTAGE_REASON_DATA_DISCONNECT,
@@ -63,6 +65,14 @@ _ALIAS_LIMIT_SWITCH: Final = (
 _DATA_CONNECTED: Final = frozenset(
     {"ppp_connected", "ipv6_connected", "ipv4_ipv6_connected"}
 )
+# The switch shows the direction the router is heading, not only a finished
+# connection. `ppp_connecting` reads as on, as `ppp_disconnecting` already
+# reads as off. Counting only the connected values made the refresh that runs
+# straight after turning on read `ppp_connecting` as off, and the switch
+# sprang back until the next poll; found on the MC7010 on 2026-09-23. Data
+# Connection Status still shows the exact state, so a router stuck
+# connecting is visible there.
+_DATA_ON: Final = _DATA_CONNECTED | {"ppp_connecting"}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -181,9 +191,7 @@ SWITCH_TYPES: tuple[ZTESwitchEntityDescription, ...] = (
         translation_key="signal_data_connection",
         entity_category=EntityCategory.CONFIG,
         group="signal",
-        value_fn=lambda data: (
-            data.get("ppp_status") in _DATA_CONNECTED if data else False
-        ),
+        value_fn=lambda data: data.get("ppp_status") in _DATA_ON if data else False,
         setter_fn=lambda api, state, data: api.set_data_connection(state),
     ),
 )
@@ -431,11 +439,7 @@ class ZTEDataConnectionSwitch(ZTERouterSwitch):
         router accepted the command, and the next poll settles the position.
         """
         status = await self._read_status()
-        confirming = (
-            _DATA_CONNECTED | {"ppp_connecting"}
-            if state
-            else {"ppp_disconnecting", "ppp_disconnected"}
-        )
+        confirming = _DATA_ON if state else {"ppp_disconnecting", "ppp_disconnected"}
         if status in confirming:
             self._last_known = state
             self.async_write_ha_state()
@@ -445,12 +449,26 @@ class ZTEDataConnectionSwitch(ZTERouterSwitch):
                 self._entry.title,
                 status,
             )
-        if state:
-            await self.coordinator.async_force_refresh()
-        else:
+        if not state:
             self.coordinator.async_open_expected_outage(
                 OUTAGE_REASON_DATA_DISCONNECT, OUTAGE_CAP_DATA_DISCONNECT
             )
+            return
+        await self.coordinator.async_force_refresh()
+        refreshed = (self.coordinator.data or {}).get("ppp_status")
+        if status in _DATA_CONNECTED or refreshed in _DATA_CONNECTED:
+            return
+        # Neither read saw a finished connection. One more refresh settles it
+        # rather than leaving the switch to the next scheduled poll.
+        self.async_on_remove(
+            async_call_later(
+                self.hass, DATA_CONNECT_FOLLOWUP_SECONDS, self._async_followup
+            )
+        )
+
+    async def _async_followup(self, _now: Any) -> None:
+        """The one refresh after turning on, when the first did not settle it."""
+        await self.coordinator.async_force_refresh()
 
     async def _read_status(self) -> str | None:
         """Read `ppp_status`, or `None` if the router did not answer it."""
