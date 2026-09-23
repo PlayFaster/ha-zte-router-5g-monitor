@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.zte_router_5g.select import (
     ZTERouterSelect,
@@ -13,6 +12,7 @@ from custom_components.zte_router_5g.select import (
     _set_apn_profile_option,
     async_setup_entry,
 )
+from homeassistant.exceptions import HomeAssistantError
 
 from .conftest import assert_links_to_parent
 

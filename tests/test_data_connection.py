@@ -13,8 +13,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.core import ServiceCall
-from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.zte_router_5g.api import (
     ZTEConnectionError,
@@ -51,6 +49,8 @@ from custom_components.zte_router_5g.switch import (
     ZTERouterSwitch,
     ZTESwitchEntityDescription,
 )
+from homeassistant.core import ServiceCall
+from homeassistant.exceptions import HomeAssistantError
 
 _DATA_CONNECTION = next(d for d in SWITCH_TYPES if d.key == "data_connection")
 _CALL_LATER = "custom_components.zte_router_5g.switch.async_call_later"

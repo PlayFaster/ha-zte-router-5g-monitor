@@ -11,10 +11,6 @@ from contextlib import suppress
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.api import (
@@ -36,6 +32,10 @@ from custom_components.zte_router_5g.coordinator import (
     ENDPOINT_SMS_MESSAGES,
     ZTERouterDataUpdateCoordinator,
 )
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 GOOD_DATA = {
     "network_type": "ENDC",

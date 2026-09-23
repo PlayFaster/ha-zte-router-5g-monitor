@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.zte_router_5g.button import (
     DELETE_SMS_DESCRIPTION,
@@ -15,6 +14,7 @@ from custom_components.zte_router_5g.button import (
     async_setup_entry,
 )
 from custom_components.zte_router_5g.const import DOMAIN
+from homeassistant.exceptions import HomeAssistantError
 
 
 @pytest.mark.asyncio

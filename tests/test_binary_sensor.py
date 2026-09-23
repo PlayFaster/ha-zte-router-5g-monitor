@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock
 
 import pytest
-from homeassistant.const import EntityCategory
 
 from custom_components.zte_router_5g.binary_sensor import (
     BEST_CONN_DESCRIPTION,
@@ -14,6 +13,7 @@ from custom_components.zte_router_5g.binary_sensor import (
     async_setup_entry,
 )
 from custom_components.zte_router_5g.const import DOMAIN
+from homeassistant.const import EntityCategory
 
 from .conftest import assert_links_to_parent
 

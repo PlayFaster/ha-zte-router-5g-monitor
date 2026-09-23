@@ -16,11 +16,6 @@ from __future__ import annotations
 import contextlib
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import issue_registry as ir
-from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.const import (
@@ -35,6 +30,11 @@ from custom_components.zte_router_5g.coordinator import (
     DRIFT_CONTRACT,
     ZTERouterDataUpdateCoordinator,
 )
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from .transport import GOOD_PAYLOAD, HOST, RouterFake, real_api
 

@@ -19,9 +19,6 @@ Every test here therefore uses the real ``hass`` fixture and
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.const import (
@@ -29,6 +26,9 @@ from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
     DOMAIN,
 )
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 
 ROUTER_DATA = {
     "network_type": "ENDC",

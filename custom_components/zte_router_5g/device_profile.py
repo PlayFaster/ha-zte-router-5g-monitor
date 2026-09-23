@@ -28,9 +28,9 @@ identifier.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import hashlib
 import re
-from collections.abc import Callable
 from typing import Any
 
 # Bumped when the shape of a stored profile changes in a way that makes an

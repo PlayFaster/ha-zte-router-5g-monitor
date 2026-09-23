@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.exceptions import HomeAssistantError
 
 from custom_components.zte_router_5g.const import (
     CONF_STOP_POLLING,
@@ -19,6 +18,7 @@ from custom_components.zte_router_5g.switch import (
     ZTESwitchEntityDescription,
     async_setup_entry,
 )
+from homeassistant.exceptions import HomeAssistantError
 
 from .conftest import assert_links_to_parent
 

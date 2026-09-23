@@ -1,12 +1,11 @@
 """Additional tests to improve code coverage for ZTE Router 5G."""
 
-import logging
 from datetime import UTC, datetime
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
-from homeassistant.core import HomeAssistant
 
 from custom_components.zte_router_5g import async_setup_entry
 from custom_components.zte_router_5g.api import (
@@ -19,6 +18,7 @@ from custom_components.zte_router_5g.button import (
     ZTERebootButton,
 )
 from custom_components.zte_router_5g.const import DOMAIN
+from homeassistant.core import HomeAssistant
 
 from .conftest import MockResponse, assert_links_to_parent
 
@@ -448,9 +448,8 @@ async def test_button_reboot_exception(
     hass: HomeAssistant, mock_config_entry, mock_coordinator
 ):
     """Test reboot button exception raises HomeAssistantError."""
-    from homeassistant.exceptions import HomeAssistantError
-
     from custom_components.zte_router_5g.button import REBOOT_DESCRIPTION
+    from homeassistant.exceptions import HomeAssistantError
 
     mock_coordinator.api.reboot.side_effect = Exception("Reboot Fail")
     button = ZTERebootButton(mock_coordinator, mock_config_entry, REBOOT_DESCRIPTION)
@@ -466,9 +465,8 @@ async def test_button_delete_sms_exception(
     hass: HomeAssistant, mock_config_entry, mock_coordinator
 ):
     """Test delete SMS button exception raises HomeAssistantError."""
-    from homeassistant.exceptions import HomeAssistantError
-
     from custom_components.zte_router_5g.button import DELETE_SMS_DESCRIPTION
+    from homeassistant.exceptions import HomeAssistantError
 
     mock_coordinator.api.delete_all.side_effect = Exception("Delete Fail")
     button = ZTEDeleteAllSMSButton(

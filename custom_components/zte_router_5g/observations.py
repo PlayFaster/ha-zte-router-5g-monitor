@@ -25,8 +25,8 @@ UniFi genuinely monitors several devices behind one entry.
 from __future__ import annotations
 
 import contextlib
-import logging
 from datetime import UTC, datetime
+import logging
 from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.helpers.storage import Store

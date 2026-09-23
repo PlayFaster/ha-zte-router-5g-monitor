@@ -15,16 +15,9 @@ import contextlib
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.zte_router_5g.api import (
-    ZTECredentialsError,
-    ZTERouterAPI,
-)
+from custom_components.zte_router_5g.api import ZTECredentialsError, ZTERouterAPI
 from custom_components.zte_router_5g.const import (
     DOMAIN,
     FETCH_STRIKE_LIMIT,
@@ -39,6 +32,10 @@ from custom_components.zte_router_5g.repairs import (
     AuthFailedRepairFlow,
     async_create_fix_flow,
 )
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import issue_registry as ir
 
 GOOD_DATA = {
     "network_type": "ENDC",

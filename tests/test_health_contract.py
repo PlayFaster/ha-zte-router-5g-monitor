@@ -21,8 +21,6 @@ import re
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.api import ZTEConnectionError, ZTERouterAPI
@@ -36,6 +34,8 @@ from custom_components.zte_router_5g.coordinator import (
     RETIRED_REPAIR_NAMES,
     ZTERouterDataUpdateCoordinator,
 )
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 
 COMPONENT = pathlib.Path("custom_components/zte_router_5g")
 
@@ -216,9 +216,8 @@ async def test_every_repair_the_code_raises_is_registered_for_removal(
     passes with the loop emptied. Raising a card under every id the code knows
     about and asserting the registry empties cannot.
     """
-    from homeassistant.helpers import issue_registry as ir
-
     from custom_components.zte_router_5g import async_remove_entry
+    from homeassistant.helpers import issue_registry as ir
 
     entry.add_to_hass(hass)
 

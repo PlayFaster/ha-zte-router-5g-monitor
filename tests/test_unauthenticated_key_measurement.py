@@ -56,10 +56,7 @@ def test_contract_keys_agree() -> None:
     spelling — comparing the flattened sets alone would pass while the two
     disagreed about which spellings belong to which concept.
     """
-    from custom_components.zte_router_5g.api import (
-        _CONTRACT_CONCEPTS,
-        _CONTRACT_KEYS,
-    )
+    from custom_components.zte_router_5g.api import _CONTRACT_CONCEPTS, _CONTRACT_KEYS
     from custom_components.zte_router_5g.coordinator import CORE_CONCEPTS
 
     assert _CONTRACT_CONCEPTS == CORE_CONCEPTS

@@ -16,14 +16,12 @@ drift measurement and the eight decisions behind the constants are in
 `.shared/info/uptime_timestamp/uptime_drift_analyzed.md`.
 """
 
-import json
 from datetime import UTC, datetime, timedelta
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.api import ZTERouterAPI
@@ -35,6 +33,8 @@ from custom_components.zte_router_5g.coordinator import (
     UPTIME_WRITE_INTERVAL,
     ZTERouterDataUpdateCoordinator,
 )
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 
 NOW = datetime(2026, 9, 1, 12, 0, 0, tzinfo=UTC)
 POLL = timedelta(minutes=16)

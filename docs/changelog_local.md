@@ -5,6 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.2-dev3\] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test\_guards.md](#342-dev3---2026-09-23---agentsmd-guard-test-table-trimmed-rationale-moved-to-docstest_guardsmd)
+  - [\[3.4.2-dev2\] - 2026-09-23 - Breaking: Minimum Home Assistant Raised to 2025.2.0 for Python 3.13](#342-dev2---2026-09-23---breaking-minimum-home-assistant-raised-to-202520-for-python-313)
+  - [\[3.4.1-dev1\] - 2026-09-23 - Ruff: HA Core isort Settings and ICN002 Adopted; Imports Re-Sorted Across All Files](#341-dev1---2026-09-23---ruff-ha-core-isort-settings-and-icn002-adopted-imports-re-sorted-across-all-files)
   - [\[3.4.1\] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking](#341---2026-09-23---release-data-connection-switch-outage-protection-windows-and-connection-state-tracking)
   - [\[3.4.1-dev4\] - 2026-09-23 - Outage Refusal on Every Write; Data Connection Switch State After Turn-On; README Outage Examples Fixed](#341-dev4---2026-09-23---outage-refusal-on-every-write-data-connection-switch-state-after-turn-on-readme-outage-examples-fixed)
   - [\[3.4.1-dev3\] - 2026-09-23 - README: Expected-Outage Error Messages Documented](#341-dev3---2026-09-23---readme-expected-outage-error-messages-documented)
@@ -304,6 +307,69 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.2-dev3] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test_guards.md
+
+### Summary
+
+`AGENTS.md` aligned with the updated `agents_md_index.md` specification. The "Tests that will stop you" table is trimmed to one line per row, with each row's rationale moved verbatim to a new `docs/test_guards.md`. Junction paths are no longer written as markdown links, and the Home Assistant compatibility ledger pointer is added. No code or test changes.
+
+### Bumps
+
+- **Validate Bump**: Update `check-jsonschema` from 0.38.1 to 0.38.2
+
+### Changed
+
+- **Tests that will stop you**: 32 rows plus 5 new, each `Add or change this | This fails | Do this`; the section shrinks from 1,858 to 1,106 words. The heading drops "and why they exist", and the section ends with the instruction to add a new guard's row here and its rationale to `docs/test_guards.md`.
+- **Guard tests added to the table**: 20 tests that fail on an ordinary change (adding, changing or removing an entity, action, translation, repair issue, option or write) and were not listed. Their docstrings are recorded as rationale in `docs/test_guards.md`.
+- **Junction links**: 7 markdown links to `.shared/` and `.notes/` converted to inline code. `AGENTS.md` is committed to the public repository, where those junctions do not exist, so the links were broken for GitHub readers.
+- **Compatibility ledger pointer**: the mandatory block pointing to `docs/ha_compatibility.md` added after the entity inventory pointer.
+
+### Added
+
+- **`docs/test_guards.md`**: rationale for every guard test in the table, in two sections: the former rationale column copied verbatim, and the docstrings of the tests added to the table.
+
+### Notes
+
+- **Source**: `agents_md_align` run of 2026-09-23 (`shared/SharedNotes/prompts/prompt_run_logs/agents_md_align/agents_md_align_20260923_1638.md`).
+
+## [3.4.2-dev2] - 2026-09-23 - Breaking: Minimum Home Assistant Raised to 2025.2.0 for Python 3.13
+
+### Summary
+
+The minimum supported Home Assistant version rises from 2024.8.0 to 2025.2.0. Home Assistant 2025.2.0 is the first release that requires Python 3.13, so this change makes Python 3.13 the minimum runtime. No integration code changes.
+
+### Changed, breaking
+
+- **Minimum Home Assistant version**: `hacs.json` `homeassistant` raised from `2024.8.0` to `2025.2.0`. HACS treats this key as the minimum required Home Assistant version, so installations on earlier releases are not offered this version.
+- **README requirements**: minimum Home Assistant `2025.2`, minimum Python `3.13+`.
+
+### Documentation
+
+- **`docs/ha_compatibility.md`**: Minimum, Enforced-by and Python rows updated to 2025.2.0 and Python 3.13; the planned-floor milestone removed.
+
+### Notes
+
+- **Rationale**: the previous floor implied Python 3.12 (Home Assistant 2024.6 to 2025.1), which was verified by compilation only. Tests run on Python 3.14, Ruff targets `py313`, and `pyproject.toml` declares `requires-python >=3.13`. The new floor makes the declared, linted and packaged Python minimums agree.
+- **Impact**: Home Assistant public analytics (2026-09-23, 687,049 opted-in installations) place 4.6% of installations below 2025.2.0.
+- **Functional floor unchanged**: the features the code depends on predate 2025.2.0, and `_compat.py` is unaffected because its branches detect 2026.8 device-registry features. The cross-project rationale is in `ha_minimum_version_matrix.md` §6 and §7.5.
+
+## [3.4.1-dev1] - 2026-09-23 - Ruff: HA Core isort Settings and ICN002 Adopted; Imports Re-Sorted Across All Files
+
+### Summary
+
+The shared Ruff configuration adopted two settings from Home Assistant core's `pyproject.toml`: the `[lint.isort]` table and the `ICN002` rule. The isort settings change the expected import order, so `ruff check --fix` re-sorted imports in 36 Python files across `scripts/`, `tests/` and `workbench/`. No logic changed in 34 of them; the other two also carry the `[2.2.8-dev60]` change.
+
+### Changed
+
+- **`workbench/python/pyproject_common.toml`**: added `[lint.isort]` with HA core's four settings (`force-sort-within-sections = true`, `known-first-party = ["homeassistant"]`, `combine-as-imports = true`, `split-on-trailing-comma = false`), and added `"ICN002"` to `select`. HA core pairs `ICN002` with a `probatio` → `vol` banned alias; that alias was not adopted, so the rule currently flags nothing. The configuration change shipped in commit `98c09ad` (`v2.2.9-dev59`) without a changelog entry; this entry records it.
+- **Import order, 36 files** (10 in `scripts/`, 18 in `tests/`, 8 in `workbench/`): `force-sort-within-sections` sorts plain `import x` and `from x import y` statements together alphabetically within each section, so `from pathlib import Path` now precedes `import sys`. `split-on-trailing-comma = false` joins wrapped import lists that fit on one line. Across the 34 files with no other change: 51 insertions and 54 deletions, all import lines.
+
+### Notes
+
+- **Source**: `ruff_rules_check` run of 2026-09-23, recommendations R1 (`ICN002`) and R2 (`[lint.isort]`); report `shared/SharedNotes/prompts/prompt_run_logs/ruff_rules_check/ruff_rules_review_20260923_1330.md`.
+- **Not adopted from HA core, by decision**: the `voluptuous` banned-api entry and the `probatio` banned alias (integration HACS minimums predate HA 2026.9.0, where probatio replaced voluptuous) and the `__future__.annotations` ban (HA core requires Python 3.14.2; the shared target is `py313`). Recorded as deliberate differences in `ruff_rules_check.md`.
+- **Synced projects**: the same configuration reaches every integration through `sync_projects.ps1`. On 2026-09-23 it produced `I001` findings, all autofixable: Huawei 48, UniFi 67, WiFi 36, ZTE 63. ZTE's were fixed the same day; the others are fixed during each project's own devcontainer session.
 
 ## [3.4.1] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking
 

@@ -1,18 +1,21 @@
 """The ZTE Router 5G integration."""
 
-import logging
 from collections.abc import Mapping
+import logging
 from typing import Any, cast
 
 import aiohttp
 import voluptuous as vol
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
-from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import (
+    config_validation as cv,
+    device_registry as dr,
+    issue_registry as ir,
+)
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
@@ -40,10 +43,7 @@ from .coordinator import (
     ZTERouterDataUpdateCoordinator,
 )
 from .helpers import expected_outage_error, is_gsm7, sms_instant
-from .observations import (
-    HISTORY_STORAGE_VERSION,
-    OBSERVED_STORAGE_VERSION,
-)
+from .observations import HISTORY_STORAGE_VERSION, OBSERVED_STORAGE_VERSION
 from .reset_entities import async_reset_entities
 
 _LOGGER = logging.getLogger(__name__)

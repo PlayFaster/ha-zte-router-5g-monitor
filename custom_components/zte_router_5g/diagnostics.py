@@ -26,9 +26,9 @@ health state and failure counts.
 
 from __future__ import annotations
 
-import re
 from copy import deepcopy
 from datetime import datetime
+import re
 from typing import Any, cast
 
 from homeassistant.components.diagnostics import async_redact_data

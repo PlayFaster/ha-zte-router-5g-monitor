@@ -31,12 +31,12 @@ Live findings this encodes (MC7010 `V1.0.0B03`, 2026-07-29, see
 - A dead session answers with every value an empty string.
 """
 
+from datetime import UTC, datetime
 import inspect
 import re
-import urllib.parse
-from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, patch
+import urllib.parse
 
 import pytest
 

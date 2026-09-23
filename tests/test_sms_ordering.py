@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 from unittest.mock import AsyncMock
 
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_capture_events,
@@ -20,6 +19,7 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.zte_router_5g import _messages_beyond_the_newest
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.coordinator import ZTERouterDataUpdateCoordinator
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 
 
 def _msg(msg_id: str, date: str | None) -> dict[str, str]:

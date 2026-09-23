@@ -6,16 +6,13 @@ being recorded or a sensor starts storing twelve decimal places.
 """
 
 import ast
+from contextlib import asynccontextmanager
 import json
 import pathlib
 import re
-from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.components.sensor import SensorStateClass
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.api import (
@@ -26,6 +23,9 @@ from custom_components.zte_router_5g.api import (
 from custom_components.zte_router_5g.binary_sensor import ZTEIntegrationHealthSensor
 from custom_components.zte_router_5g.const import DOMAIN
 from custom_components.zte_router_5g.sensor import ZTERouterSensor, _safe_float
+from homeassistant.components.sensor import SensorStateClass
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 
 COMPONENT = pathlib.Path("custom_components/zte_router_5g")
 

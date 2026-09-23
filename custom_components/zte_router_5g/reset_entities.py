@@ -237,11 +237,7 @@ def _load_descriptions() -> None:
     if _DESCRIPTIONS:
         return
     from .binary_sensor import BINARY_SENSORS, OPERATOR_PROVISIONED_DESCRIPTION
-    from .button import (
-        DELETE_SMS_DESCRIPTION,
-        REBOOT_DESCRIPTION,
-        REFRESH_DESCRIPTION,
-    )
+    from .button import DELETE_SMS_DESCRIPTION, REBOOT_DESCRIPTION, REFRESH_DESCRIPTION
     from .number import POLLING_INTERVAL_DESCRIPTION
     from .select import SELECT_TYPES
     from .sensor import SENSOR_TYPES

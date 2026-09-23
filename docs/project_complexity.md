@@ -1,6 +1,6 @@
 # Project Complexity & Health: ha-zte-router-5g-monitor
 
-**Last Measured:** 2026-09-23T11:20:51.133777+00:00 · **Release:** `3.4.1` · **Dev Version:** `3.4.1-dev4`
+**Last Measured:** 2026-09-23T19:31:38.073121+00:00 · **Release:** `3.4.2` · **Dev Version:** `3.4.2-dev3`
 
 ## 1. Executive Summary
 
@@ -18,30 +18,30 @@
 | **Modules > 1,500 Code Lines** | **2** | Candidate for module decomposition |
 | **Code Suppressions (`# noqa`)** | **27** | Zero preferred; review regularly |
 | **Type Suppressions (`# type: ignore`)** | **0** | Mypy strict compliance |
-| **Source Python SLOC** | **10,344** | Across 21 files in custom_components/ (code statements) |
+| **Source Python SLOC** | **10,322** | Across 21 files in custom_components/ (code statements) |
 | **Docstring Volume** | **3,184 lines** | Interface and contract documentation |
 | **Comment Density** | **27.0%** | 2,792 inline comment lines (Advisory: > 25% inspect for procedural narration) |
-| **Platform Declarations SLOC** | **3,110 lines** | Across 6 platform files |
-| **Core Engine / Driver SLOC** | **7,234 lines** | Across 15 coordinator/API/helper files |
+| **Platform Declarations SLOC** | **3,094 lines** | Across 6 platform files |
+| **Core Engine / Driver SLOC** | **7,228 lines** | Across 15 coordinator/API/helper files |
 | **Static Entities** | **123 entities** | Scale indicator (`all_sensors.md`) |
-| **Platform SLOC / Entity** | **25.3 lines/entity** | Target 20 – 45 lines/entity declarative efficiency |
-| **Test-to-Source Ratio** | **1.64×** | 16,924 test lines ($\ge 1.5×$ recommended) |
+| **Platform SLOC / Entity** | **25.2 lines/entity** | Target 20 – 45 lines/entity declarative efficiency |
+| **Test-to-Source Ratio** | **1.64×** | 16,914 test lines ($\ge 1.5×$ recommended) |
 | **Pytest Coverage** | **100%** | 1863 tests executed |
-| **Pytest Duration** | **409.57s** | Full test suite wall-clock execution time |
+| **Pytest Duration** | **252.48s** | Full test suite wall-clock execution time |
 
 ## 2. High Complexity Routines ($\ge 10$)
 
 | Score | Routine Symbol | Location | Status |
 | :-: | :-- | :-- | :-- |
 | **16** | `crawl` | `web_sources.py:208` | `ELEVATED` |
-| **14** | `_async_update_data_locked` | `coordinator.py:653` | `ELEVATED` |
+| **14** | `_async_update_data_locked` | `coordinator.py:652` | `ELEVATED` |
 | **14** | `parse_token` | `device_profile.py:190` | `ELEVATED` |
 | **13** | `_resolve` | `web_sources.py:125` | `ELEVATED` |
 | **12** | `login` | `api.py:2735` | `ELEVATED` |
 | **11** | `probe_names` | `api.py:3363` | `ELEVATED` |
 | **10** | `_literal_keys` | `device_profile.py:347` | `ELEVATED` |
 | **10** | `parse_profile` | `device_profile.py:557` | `ELEVATED` |
-| **10** | `_get_current_apn_profile` | `select.py:75` | `ELEVATED` |
+| **10** | `_get_current_apn_profile` | `select.py:70` | `ELEVATED` |
 | **10** | `extra_state_attributes` | `sensor.py:2298` | `ELEVATED` |
 
 ## 3. Active Code Suppressions (`custom_components/`)
@@ -61,19 +61,19 @@
 | 4532 | `BLE001` | `api.py` |
 | 4915 | `S324` | `api.py` |
 | 5053 | `BLE001` | `api.py` |
-| 548 | `BLE001` | `coordinator.py` |
-| 1020 | `BLE001` | `coordinator.py` |
-| 1057 | `BLE001` | `coordinator.py` |
-| 1074 | `BLE001` | `coordinator.py` |
-| 1095 | `BLE001` | `coordinator.py` |
+| 547 | `BLE001` | `coordinator.py` |
+| 1019 | `BLE001` | `coordinator.py` |
+| 1056 | `BLE001` | `coordinator.py` |
+| 1073 | `BLE001` | `coordinator.py` |
+| 1094 | `BLE001` | `coordinator.py` |
 | 93 | `S324` | `device_profile.py` |
 | 571 | `BLE001` | `diagnostics.py` |
 | 586 | `BLE001` | `diagnostics.py` |
 | 133 | `BLE001, S112` | `observations.py` |
 | 180 | `BLE001` | `observations.py` |
 | 388 | `BLE001` | `observations.py` |
-| 401 | `BLE001` | `switch.py` |
-| 479 | `BLE001` | `switch.py` |
+| 393 | `BLE001` | `switch.py` |
+| 471 | `BLE001` | `switch.py` |
 | 121 | `BLE001` | `web_sources.py` |
 
 ## 4. Comment Quality & Density Audits
@@ -94,7 +94,7 @@
 | Location | Length | Advisory |
 | :-- | :-: | :-- |
 | `api.py:2280` | 21 lines | Long procedural block; consider moving architecture notes to docs |
-| `coordinator.py:889` | 21 lines | Long procedural block; consider moving architecture notes to docs |
+| `coordinator.py:888` | 21 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:604` | 20 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:630` | 20 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:60` | 20 lines | Long procedural block; consider moving architecture notes to docs |
@@ -107,7 +107,7 @@
 | `known_names.py:834` | 18 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:76` | 17 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:552` | 17 lines | Long procedural block; consider moving architecture notes to docs |
-| `coordinator.py:184` | 17 lines | Long procedural block; consider moving architecture notes to docs |
+| `coordinator.py:183` | 17 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:3502` | 16 lines | Long procedural block; consider moving architecture notes to docs |
 | `entity_defaults.py:38` | 16 lines | Long procedural block; consider moving architecture notes to docs |
 | `known_names.py:869` | 16 lines | Long procedural block; consider moving architecture notes to docs |
@@ -137,7 +137,7 @@
 | `const.py:17` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:45` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:257` | 12 lines | Long procedural block; consider moving architecture notes to docs |
-| `coordinator.py:79` | 12 lines | Long procedural block; consider moving architecture notes to docs |
+| `coordinator.py:78` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `sensor.py:1469` | 12 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:306` | 11 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:813` | 11 lines | Long procedural block; consider moving architecture notes to docs |
@@ -145,8 +145,8 @@
 | `const.py:186` | 11 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:207` | 11 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:466` | 11 lines | Long procedural block; consider moving architecture notes to docs |
-| `coordinator.py:55` | 11 lines | Long procedural block; consider moving architecture notes to docs |
-| `coordinator.py:167` | 11 lines | Long procedural block; consider moving architecture notes to docs |
+| `coordinator.py:54` | 11 lines | Long procedural block; consider moving architecture notes to docs |
+| `coordinator.py:166` | 11 lines | Long procedural block; consider moving architecture notes to docs |
 | `diagnostics.py:763` | 11 lines | Long procedural block; consider moving architecture notes to docs |
 | `observations.py:59` | 11 lines | Long procedural block; consider moving architecture notes to docs |
 | `__init__.py:383` | 10 lines | Long procedural block; consider moving architecture notes to docs |
@@ -154,7 +154,7 @@
 | `api.py:2620` | 10 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:3769` | 10 lines | Long procedural block; consider moving architecture notes to docs |
 | `const.py:153` | 10 lines | Long procedural block; consider moving architecture notes to docs |
-| `coordinator.py:108` | 10 lines | Long procedural block; consider moving architecture notes to docs |
+| `coordinator.py:107` | 10 lines | Long procedural block; consider moving architecture notes to docs |
 | `sensor.py:239` | 10 lines | Long procedural block; consider moving architecture notes to docs |
 | `sensor.py:287` | 10 lines | Long procedural block; consider moving architecture notes to docs |
 | `api.py:143` | 9 lines | Long procedural block; consider moving architecture notes to docs |

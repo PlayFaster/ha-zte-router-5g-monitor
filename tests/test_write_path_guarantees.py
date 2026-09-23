@@ -10,8 +10,8 @@ write sends, and what a failed write may not do.
 """
 
 import asyncio
-import urllib.parse
 from unittest.mock import AsyncMock, MagicMock, patch
+import urllib.parse
 
 import pytest
 

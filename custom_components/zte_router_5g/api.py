@@ -2,18 +2,18 @@
 
 import asyncio
 import base64
-import contextlib
-import hashlib
-import logging
-import re
-import urllib.parse
 from collections.abc import Callable, Iterator, Sequence
+import contextlib
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
+import hashlib
+import logging
 from math import ceil
+import re
 from time import monotonic
 from typing import Any, NamedTuple, cast
+import urllib.parse
 
 import aiohttp
 

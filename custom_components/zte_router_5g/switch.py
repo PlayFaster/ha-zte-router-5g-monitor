@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
+import logging
 from typing import Any, Final, cast
 
-from homeassistant.components.switch import (
-    SwitchEntity,
-    SwitchEntityDescription,
-)
+from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
@@ -32,12 +29,7 @@ from .const import (
 )
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .entity_defaults import default_enabled
-from .helpers import (
-    ZTEAboutEntity,
-    ZTEDeviceEntity,
-    expected_outage_error,
-    get_first,
-)
+from .helpers import ZTEAboutEntity, ZTEDeviceEntity, expected_outage_error, get_first
 
 _LOGGER = logging.getLogger(__name__)
 

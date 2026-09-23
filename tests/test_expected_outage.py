@@ -18,8 +18,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g import web_sources
@@ -37,6 +35,8 @@ from custom_components.zte_router_5g.const import (
     OUTAGE_REASON_REBOOT,
 )
 from custom_components.zte_router_5g.coordinator import ZTERouterDataUpdateCoordinator
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 
 from .conftest import MockResponse
 

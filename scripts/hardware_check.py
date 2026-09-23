@@ -74,12 +74,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+from datetime import UTC, datetime
 import json
 import os
 import pathlib
 import sys
 import time
-from datetime import UTC, datetime
 from typing import Any
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
