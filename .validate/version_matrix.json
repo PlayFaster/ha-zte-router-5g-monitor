@@ -2,7 +2,7 @@
   "tools": {
     "check-jsonschema": {
       "pins": ["dockerfile", "requirements_test"],
-      "version": "0.38.0"
+      "version": "0.38.1"
     },
     "codespell": {
       "pins": ["pre-commit", "dockerfile", "requirements_test"],

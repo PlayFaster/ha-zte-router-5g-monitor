@@ -600,7 +600,7 @@ Several settings are exposed as control entities so you can drive them from dash
 - **Pause Polling** (`switch.zte_5g_system_pause_polling`): Halt all polling when you need exclusive access to the router's web UI.
 - **Polling Interval** (`number.zte_5g_system_polling_interval`): Adjust the scan interval slider (30s to 1 hour, default `180` seconds).
 - **Refresh Now** (`button.zte_5g_system_refresh_now`): Trigger an immediate refresh (data fetch). **This works even while Pause Polling is on** — an explicit action always fetches, while scheduled polls stay paused.
-- **Reboot** (`button.zte_5g_system_reboot`): Reboot the router hardware directly from Home Assistant. The router is unreachable for a minute or two, and other controls show an error until it answers again.
+- **Reboot** (`button.zte_5g_system_reboot`): Reboot the router hardware directly from Home Assistant. The router is unreachable for a minute or two, and other controls show an error until it answers again. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error).
 - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`, _disabled by default_): Turn the physical status LEDs of the outdoor unit on or off.
 
 > [!NOTE]
@@ -629,7 +629,7 @@ Several settings are exposed as control entities so you can drive them from dash
 >
 > Switching APN can be an important and useful connectivity management tool. Bear in mind that your ISP may place restrictions on non-default APNs (reduced or no performance), so this is a proceed with caution and only if you know what you are doing area.
 
-- **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off takes up to a minute, and other controls show an error until it completes. **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
+- **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off takes up to a minute, and other controls show an error until it completes. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error). **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): In Manual mode, switch the active APN profile.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:
@@ -2036,6 +2036,25 @@ Before writing anything, the integration reads the router's own web interface to
   - The username and password are the same as you use to log in to the router via its web UI.
   - Username can be changed in the web UI, as well as password, so ensure you are using the current version of both.
 - Ensure the router is powered on and reachable from your Home Assistant instance.
+
+---
+
+</details>
+
+#### ⏳ **"The router is restarting" or "The router is disconnecting its data connection" Error**
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+You see one of these messages when you use a router control while the router is briefly offline:
+
+- `The router is restarting. Try again in about N seconds.` You pressed **Reboot**. The router is unreachable for one to two minutes.
+- `The router is disconnecting its data connection. Try again in about N seconds.` You turned the **Data Connection** switch off. The router is unreachable for up to a minute.
+
+Until the router answers again, its controls, the SMS actions and **Refresh Now** are unavailable. Sensors keep their last values. Nothing needs fixing: everything works again as soon as the router is back.
 
 ---
 

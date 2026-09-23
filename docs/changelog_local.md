@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.1-dev3\] - 2026-09-23 - README: Expected-Outage Error Messages Documented](#341-dev3---2026-09-23---readme-expected-outage-error-messages-documented)
   - [\[3.4.1-dev2\] - 2026-09-23 - Data Connection Switch; Connection-State Sensors; Expected-Outage Window for Reboot and Disconnect](#341-dev2---2026-09-23---data-connection-switch-connection-state-sensors-expected-outage-window-for-reboot-and-disconnect)
   - [\[3.4.1-dev1\] - 2026-09-23 - CI Bump PHACC](#341-dev1---2026-09-23---ci-bump-phacc)
   - [\[3.4.0\] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management](#340---2026-09-15---release-zte-mc888-pro-compatibility-dynamic-device-profiles-and-advanced-router-management)
@@ -301,6 +302,22 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.1-dev3] - 2026-09-23 - README: Expected-Outage Error Messages Documented
+
+### Summary
+
+Documents the two error messages the expected-outage window added in `[3.4.1-dev2]` shows, so a user who sees one can find what it means by searching for its text.
+
+### Bumps
+
+- **Validate Bump**: Update `check-jsonschema` from 0.38.0 to 0.38.1
+
+### Documentation
+
+- **README, FAQ & Troubleshooting → Connection & Authentication**: new entry, "The router is restarting" or "The router is disconnecting its data connection" Error, placed after "Failed to connect to router" Error. It quotes both messages as displayed, `The router is restarting. Try again in about N seconds.` and `The router is disconnecting its data connection. Try again in about N seconds.`, states the cause of each (Reboot pressed, or the Data Connection switch turned off) and how long the router is unreachable, and lists what is unavailable meanwhile: router controls, the SMS actions and Refresh Now. Sensors keep their last values and nothing needs fixing.
+- **README, Controls & Settings**: the Reboot and Data Connection bullets each link to that entry.
+- The durations quoted are the measured and capped figures: a data disconnect took 22 and 37 s in the two runs of 2026-09-23 against a 60 s cap; a reboot takes one to two minutes against a 240 s cap.
 
 ## [3.4.1-dev2] - 2026-09-23 - Data Connection Switch; Connection-State Sensors; Expected-Outage Window for Reboot and Disconnect
 
