@@ -93,11 +93,15 @@ try:
         _UNAUTHENTICATED_KEYS,
         ZTEAuthError,
         ZTERouterAPI,
+        ZTERouterExpectedUnavailableError,
     )
     from custom_components.zte_router_5g.const import (
         APN_PROFILE_SLOTS,
         DISCOVERY_CANDIDATES,
         DISCOVERY_SETTLE_SECONDS,
+        OUTAGE_CAP_DATA_DISCONNECT,
+        OUTAGE_CHECK_INTERVAL,
+        OUTAGE_REASON_DATA_DISCONNECT,
     )
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
     raise SystemExit(
@@ -1943,8 +1947,20 @@ async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
         return
 
     print(_dim(f"    waiting up to {REBOOT_TIMEOUT:.0f}s for the router to return…"))
-    deadline = time.monotonic() + REBOOT_TIMEOUT
+    started = time.monotonic()
+    deadline = started + REBOOT_TIMEOUT
     uptime_after: str | None = None
+
+    # The expected-outage window closes on a successful full poll, not on the
+    # first answer, because a booting router answers blank for a while. These
+    # two times are how long that gap is, which nothing had measured.
+    while time.monotonic() < deadline:
+        await asyncio.sleep(OUTAGE_CHECK_INTERVAL)
+        if await api.outage_probe():
+            break
+    first_answer = time.monotonic() - started
+    print(f"    first answer        : {first_answer:.0f}s")
+
     while time.monotonic() < deadline:
         await asyncio.sleep(REBOOT_POLL)
         try:
@@ -1963,6 +1979,7 @@ async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
             f"still unreachable after {REBOOT_TIMEOUT:.0f}s — check it by hand",
         )
         return
+    print(f"    first successful read: {time.monotonic() - started:.0f}s")
 
     try:
         went_back = int(uptime_after) < int(uptime_before)
@@ -1975,6 +1992,102 @@ async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
     )
 
     await _watch_recovery(api, baseline, report)
+
+
+async def _poll_status(api: ZTERouterAPI) -> str | None:
+    """Read `ppp_status`, or `None` if the router did not answer."""
+    try:
+        data = await api.get_params(["ppp_status"])
+    except Exception:  # noqa: BLE001 - absence is the expected state here
+        return None
+    value = data.get("ppp_status")
+    return value if isinstance(value, str) else None
+
+
+async def check_data_connection(api: ZTERouterAPI, report: Report) -> None:
+    """Turn the data connection off, watch the window, and turn it back on.
+
+    The router answers `DISCONNECT_NETWORK` before it completes and then stops
+    answering. Measured on the MC7010 on 2026-09-23, twice: silent from about
+    1 s until somewhere between 18 s and 37 s. This checks the three things
+    the integration relies on: the reply, the transitional state, and that the
+    gate refuses a request while the window is open. It records how long the
+    router stayed silent, at the check's own resolution.
+
+    Reconnects in a `finally`, so a failure part-way through cannot leave the
+    network offline.
+    """
+    print(_cyan("\n[H] Data connection off and on"))
+    print("    cost      : the internet connection drops for up to a minute")
+    print("    risk      : none if it reconnects; this check reconnects regardless")
+
+    if not _confirm("Turn the data connection off now?"):
+        print(_dim("    skipped"))
+        return
+
+    try:
+        reply = await api.set_data_connection(False)
+        report.record(
+            reply.get("result") == "success",
+            "data connection: disconnect accepted",
+            str(reply),
+        )
+        status = await _poll_status(api)
+        report.record(
+            status in ("ppp_disconnecting", "ppp_disconnected"),
+            "data connection: transitional state readable at once",
+            f"ppp_status={status}",
+        )
+
+        api.open_expected_outage(
+            OUTAGE_REASON_DATA_DISCONNECT, OUTAGE_CAP_DATA_DISCONNECT
+        )
+        try:
+            api.refuse_during_outage()
+            refused = False
+        except ZTERouterExpectedUnavailableError:
+            refused = True
+        report.record(refused, "data connection: gate refuses during the window")
+
+        started = time.monotonic()
+        answered = False
+        while time.monotonic() - started < OUTAGE_CAP_DATA_DISCONNECT:
+            await asyncio.sleep(OUTAGE_CHECK_INTERVAL)
+            if await api.outage_probe():
+                answered = True
+                break
+        silent = time.monotonic() - started
+        api.close_expected_outage()
+        report.record(
+            answered,
+            "data connection: router answered within the cap",
+            f"after {silent:.0f}s (checked every {OUTAGE_CHECK_INTERVAL:.0f}s)",
+        )
+        status = await _poll_status(api)
+        report.record(
+            status == "ppp_disconnected",
+            "data connection: disconnected when it answered",
+            f"ppp_status={status}",
+        )
+    finally:
+        api.close_expected_outage()
+        reply = await api.set_data_connection(True)
+        report.record(
+            reply.get("result") == "success",
+            "data connection: reconnect accepted",
+            str(reply),
+        )
+        status = None
+        for _ in range(10):
+            await asyncio.sleep(1)
+            status = await _poll_status(api)
+            if status == "ppp_connected":
+                break
+        report.record(
+            status == "ppp_connected",
+            "data connection: connected again",
+            f"ppp_status={status}",
+        )
 
 
 async def _guarded(report: Report, title: str, coro: Any) -> None:
@@ -2019,6 +2132,8 @@ async def check_attended_writes(api: ZTERouterAPI, report: Report) -> None:
     await _guarded(report, "APN profile", check_apn_profile(api, report))
 
     await _guarded(report, "Data limit switch", check_data_limit_switch(api, report))
+
+    await _guarded(report, "Data connection", check_data_connection(api, report))
 
     await _guarded(
         report,

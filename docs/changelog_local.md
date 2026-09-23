@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.1-dev2\] - 2026-09-23 - Data Connection Switch; Connection-State Sensors; Expected-Outage Window for Reboot and Disconnect](#341-dev2---2026-09-23---data-connection-switch-connection-state-sensors-expected-outage-window-for-reboot-and-disconnect)
   - [\[3.4.1-dev1\] - 2026-09-23 - CI Bump PHACC](#341-dev1---2026-09-23---ci-bump-phacc)
   - [\[3.4.0\] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management](#340---2026-09-15---release-zte-mc888-pro-compatibility-dynamic-device-profiles-and-advanced-router-management)
   - [\[3.4.0-dev5\] - 2026-09-18 - Update README](#340-dev5---2026-09-18---update-readme)
@@ -300,6 +301,42 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.1-dev2] - 2026-09-23 - Data Connection Switch; Connection-State Sensors; Expected-Outage Window for Reboot and Disconnect
+
+### Summary
+
+Adds a Data Connection switch that turns the router's mobile data on and off, renames the misnamed "Bridge Mode" sensor to Data Connection Status as a breaking change, and adds a Connection Mode Status sensor. Adds one expected-outage window, used by the new switch and by the existing Reboot button: while the router is known to be offline, polls are skipped and every other router request is refused at once with an on-screen error. Plan: `.notes/issues/data_connection/v341_dev2_plan.md`.
+
+### Added
+
+- **Data Connection switch** (`switch.<name>_signal_data_connection`), Signal device, configuration category, enabled by default. It sends `CONNECT_NETWORK` or `DISCONNECT_NETWORK` with `isTest=false`, `notCallback=true` and the `AD` token, which is the body the router's own web page sends. Both routers carry no other fields for either command: the MC7010's `js/service.js`, and the MC888 Pro's device profile. It reads on for the three values the router's page treats as connected, `ppp_connected`, `ipv6_connected` and `ipv4_ipv6_connected`, from `checkConnectedStatus` in the MC7010's `js/util.js`. Only `ppp_connected` has been observed.
+- **The switch confirms from one immediate read of `ppp_status`.** The generic read-back (`verify_after_write`) is not used: it reads twice, 0.2 s apart, would see `ppp_disconnecting`, and would raise `switch_write_not_applied` for a disconnect that is working. `ZTEDataConnectionSwitch` accepts `ppp_disconnecting` or `ppp_disconnected` as confirming off, and `ppp_connecting` or a connected value as confirming on. A read that fails or reports neither leaves the write unconfirmed rather than failed, and the next poll settles the position.
+- **Connection Mode Status sensor** (`connection_mode_status`), Signal device, diagnostic, enabled by default. It reads `dial_mode`, `auto_dial` or `manual_dial`, raw. `dial_mode` moved from the diagnostics discovery list into `_EXTENDED_PARAMS`; a polled key may not also be a discovery candidate. It answered blank without a session on the MC7010 on 2026-09-23, so it cannot make a dead session read as live.
+- **Expected-outage window.** One mechanism for every command that takes the router offline. It opens after the command is confirmed accepted: for the data switch, the `success` reply plus the immediate read; for Reboot, `reboot()` returning 200, which it does only once the router has stopped answering. While open, `_async_update_data` returns the held data without fetching, so post-processing, health, change history, the Last Updated timestamp and the failure count are all untouched. A check reads `opms_wan_mode` without a session, 2 s timeout, every 5 s; both routers answer that key without a login. When the check answers, a full poll runs under a bypass, and the window closes only when that poll succeeds. A failed closing poll counts no failure, because a booting router answers blank for a while. A cap closes the window regardless and normal failure counting resumes: 60 s for the data switch, 240 s for a reboot. The closing poll runs even while polling is paused.
+- **The gate.** `ZTERouterExpectedUnavailableError`, a subclass of `ZTEConnectionError`, is raised at the entry of `_request` and at the three calls that bypass it: `login`, `try_set_protocol`, and the web-source fetch, which records it as a missed file. A login is refused before the current session is cleared. The window's own check and closing poll pass through a `ContextVar` bypass, which follows only the task that set it, so a concurrent user action is still refused. A window past its cap is treated as closed, so a lost timer cannot refuse requests indefinitely.
+- **On-screen errors.** Every router action maps the refusal to `router_restarting` or `router_disconnecting`, with the seconds remaining: the router switches and selects, the Reboot, Refresh Now and Delete All buttons, and the four SMS services. Refresh Now is refused rather than skipped, because a skipped poll returns the held values and would appear to work. An SMS send refused after one message has gone reports the partial result instead. Home Assistant logs every exception raised from a UI action at ERROR; that applies only when someone uses a control during the window.
+- **Diagnostics.** `expected_outage` publishes the most recent window: reason, opened, cap, number of checks, closed, and whether the router's answer or the cap closed it. A refused data-connection write is recorded in `write_failures`; before this only the SMS delete path recorded failures.
+- **Hardware check.** Attended step `[H]` turns data off, confirms the reply, the transitional state and the gate's refusal, times the silence at the check's own resolution, and reconnects in a `finally`. The reboot step `[G]` now records the time to the router's first answer and to the first successful read, which is the gap the window's closing poll waits out. Neither was run for this build. `set_data_connection` is classified ATTENDED and offered under `--attended`.
+
+### Changed
+
+- **"Bridge Mode" sensor renamed to Data Connection Status.** Breaking: the key changes from `ppp_status` to `data_connection_status`, so the entity ID changes from `sensor.<name>_signal_ppp_status` to `sensor.<name>_signal_data_connection_status` and the old entity is left orphaned. The value never described bridge mode. Turning the data connection off in the router's page moves it from `ppp_connected` to `ppp_disconnected`, while WAN Operating Mode reports the bridge or router setting.
+- **Four `about` notes.** Data Connection Status: rewritten to list its values and name the switch it reflects. WAN Connect Status: lists `pdp_connected` and `no_connected`, and notes the MC888 Pro leaves it blank. WAN Operating Mode: `LTE_BRIDGE` is bridge mode and `PPP` is router mode; the Issue 56 reporter's 11 September comment and the value change in his downloads on 10 September pair them. WAN Fallback Mode: now states only what the data shows, a fixed value that stays the same when the active mode changes; its name is unchanged by decision.
+- **Reboot.** The button now opens the expected-outage window. Before this, a reboot at a short poll interval cost three or four failed polls, which flagged Integration Health and fired any automation watching it.
+
+### Notes
+
+- **Measurements, MC7010 in bridge mode, 2026-09-23, two runs.** Disconnect reply `success` in 169 ms and 191 ms; `ppp_disconnecting` readable at 0 s and 1 s; the router then stopped answering. It answered `ppp_disconnected` at 22 s in the first run and by 37 s in the second. Each failed read waits out the 15 s request timeout, so the end of the silence is known only to about 16 s; the window closes on the router's own answer and does not depend on it. Reconnect reply `success` in 73 ms and 115 ms, `ppp_connected` within 1 s, no silence. The disconnect held under `auto_dial`, and the session survived it. Recorded in `.notes/local_only/data_connection_probe_20260923_054432.json` and `..._060933.json`.
+- **Unverified:** whether the MC888 Pro, in router mode, goes silent on a disconnect (the window closes on its first check if not); how long a booted router answers blank before a poll succeeds (step `[G]` now measures it); reboot duration on the MC888 Pro; whether `dial_mode` needs a login there (the runtime measurement handles it if not); whether the IPv6 connected values occur.
+- The exception is `ZTERouterExpectedUnavailableError` rather than the plan's `ZTERouterExpectedUnavailable`, to satisfy ruff N818. The single translation key in the plan became two, `router_restarting` and `router_disconnecting`, so the whole sentence translates rather than a reason word inserted into it.
+
+### Tests
+
+- `tests/test_expected_outage.py`, 25 tests: the window record, the gate at each entry point, the bypass, the check, and the coordinator's window: skipped poll, open, close on answer, failed closing poll without a strike, silent router, cap, late check, paused polling, re-opening, shutdown.
+- `tests/test_data_connection.py`, 35 tests: the switch's state mapping, confirmation and window, the API method's failure recording, both sensors, every error mapping, and the diagnostics section.
+- Guard tests updated: payload shapes lock both commands; the dead-session sweep covers `set_data_connection` and `outage_probe`, and its best-effort list rises from seven to eight for `outage_probe`, whose whole answer is whether the router responds; the publish-moment test builds each switch with its own class.
+- 1,853 tests at 100% line and branch coverage. `Manifest: Verify Version` fails: `manifest.json` is 3.4.0 while the changelog is at 3.4.1, and the manifest is left for the release bump.
 
 ## [3.4.1-dev1] - 2026-09-23 - CI Bump PHACC
 

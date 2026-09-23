@@ -767,6 +767,13 @@ async def async_get_config_entry_diagnostics(
         # that had rotated away. `recording_since` against each series' oldest
         # entry says whether a store was reset, and `load_faults` says whether
         # a read fault is why.
+        # The most recent expected-outage window: why it opened, when, how many
+        # checks it took, and whether the router's answer or the cap closed
+        # it. Without this, a download taken after a reboot cannot explain the
+        # polls that were skipped. Dates and counts only.
+        "expected_outage": _dict_or_none(
+            deepcopy(getattr(coordinator, "last_expected_outage", None))
+        ),
         "observations": _dict_or_none(
             _guarded("observations", coordinator.observations.report, errors)
         ),

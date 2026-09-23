@@ -9,10 +9,11 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -22,6 +23,7 @@ from ._compat import device_by_identifier
 from .api import (
     SMS_STORE_ALL,
     SMS_STORE_SIM,
+    ExpectedOutage,
     ZTEAuthError,
     ZTECredentialsError,
     ZTERouterAPI,
@@ -33,6 +35,7 @@ from .const import (
     DOMAIN,
     FETCH_STRIKE_LIMIT,
     HEALTH_DRIFT_STRIKE_LIMIT,
+    OUTAGE_CHECK_INTERVAL,
     REPAIR_AUTH_FAILED,
     REPAIR_CONN_ERROR,
     SPARSE_PAYLOAD_FRACTION,
@@ -232,6 +235,14 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # the same API client and the same session.
         self._async_update_lock = asyncio.Lock()
         self.last_update_success_time: datetime | None = None
+        # The expected-outage window's timer, and whether the poll now running
+        # is the one that decides whether the window closes. See
+        # `async_open_expected_outage`.
+        self._outage_unsub: CALLBACK_TYPE | None = None
+        self._outage_closing = False
+        # The most recent window, kept after it closes so a diagnostics
+        # download can explain a gap in polling.
+        self.last_expected_outage: dict[str, Any] | None = None
         self._was_available = True
         self._boot_time: datetime | None = None
         self._last_uptime: int | None = None
@@ -398,6 +409,86 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 scan_interval,
             )
             self.update_interval = new_interval
+
+    # -- expected-outage window ------------------------------------------
+
+    @property
+    def outage_active(self) -> bool:
+        """Whether an expected-outage window is open and within its cap."""
+        outage = self.api.expected_outage
+        return isinstance(outage, ExpectedOutage) and not outage.expired
+
+    def async_open_expected_outage(self, reason: str, cap_seconds: float) -> None:
+        """Open the window after the router accepted a command that takes it offline.
+
+        One mechanism for every such command. While open, polls are skipped
+        and every other router request is refused at once with a message naming
+        the reason. A check reads one key every `OUTAGE_CHECK_INTERVAL`; when
+        the router answers, a full poll runs, and the window closes only when
+        that poll succeeds. The cap closes it regardless, and failure counting
+        resumes, so a router that never returns is still reported.
+        """
+        outage = self.api.open_expected_outage(reason, cap_seconds)
+        self.last_expected_outage = {
+            "reason": reason,
+            "opened": outage.opened_at.isoformat(),
+            "cap_seconds": cap_seconds,
+            "checks": 0,
+            "closed": None,
+            "closed_by": None,
+        }
+        self._schedule_outage_check()
+
+    def _schedule_outage_check(self) -> None:
+        """Arm the next check, replacing any already armed."""
+        self._cancel_outage_check()
+        self._outage_unsub = async_call_later(
+            self.hass, OUTAGE_CHECK_INTERVAL, self._async_outage_check
+        )
+
+    def _cancel_outage_check(self) -> None:
+        """Disarm the check timer, if armed."""
+        if self._outage_unsub is not None:
+            self._outage_unsub()
+            self._outage_unsub = None
+
+    async def _async_outage_check(self, _now: datetime | None = None) -> None:
+        """Check whether the router is back, and close the window if it is."""
+        self._outage_unsub = None
+        outage = self.api.expected_outage
+        if not isinstance(outage, ExpectedOutage):
+            return
+        if outage.expired:
+            self._close_expected_outage("cap")
+            await self.async_request_refresh()
+            return
+        if self.last_expected_outage is not None:
+            self.last_expected_outage["checks"] += 1
+        if await self.api.outage_probe():
+            before = self.last_update_success_time
+            self._outage_closing = True
+            try:
+                with self.api.outage_bypass():
+                    await self.async_refresh()
+            finally:
+                self._outage_closing = False
+            if self.last_update_success_time != before:
+                self._close_expected_outage("answer")
+                return
+        self._schedule_outage_check()
+
+    def _close_expected_outage(self, closed_by: str) -> None:
+        """Close the window and record how it ended."""
+        self._cancel_outage_check()
+        self.api.close_expected_outage()
+        if self.last_expected_outage is not None:
+            self.last_expected_outage["closed"] = dt_util.utcnow().isoformat()
+            self.last_expected_outage["closed_by"] = closed_by
+
+    async def async_shutdown(self) -> None:
+        """Disarm the outage check before the coordinator is torn down."""
+        self._cancel_outage_check()
+        await super().async_shutdown()
 
     async def async_force_refresh(self) -> None:
         """Force an immediate fetch, even while polling is paused.
@@ -570,9 +661,22 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
         # 1. If paused and NOT the first run, return cached data immediately —
         #    unless this cycle was explicitly forced by a user action.
-        if is_paused and not is_first_run and not forced:
+        # The closing poll of an expected-outage window runs even while paused:
+        # the window closes only on a real fetch, and a paused entry would
+        # otherwise hold it open until the cap.
+        if is_paused and not is_first_run and not forced and not self._outage_closing:
             _LOGGER.debug(
                 "%s: Polling is paused; returning cached data.", self.entry.title
+            )
+            return self.data
+
+        # 2. The router accepted a command that takes it offline. Returning
+        #    here skips everything a fetch drives: post-processing, health,
+        #    change history, the Last Updated timestamp and the failure count.
+        if self.outage_active and not self._outage_closing and not is_first_run:
+            _LOGGER.debug(
+                "%s: Router expected to be offline; skipping this poll.",
+                self.entry.title,
             )
             return self.data
 
@@ -672,7 +776,13 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         `FETCH_STRIKE_LIMIT` cycles rather than emptying every entity. `None`
         means there is nothing to hold or the strike budget is spent, and the
         caller decides how the cycle fails.
+
+        The closing poll of an expected-outage window is exempt. A router still
+        starting up answers blank and fails the poll; that is the window not
+        yet over, not a fault, so the window stays open and nothing is counted.
         """
+        if self._outage_closing:
+            return self.data
         self.consecutive_failures += 1
         self._record_health_failure(err)
         if self.data is None or self.consecutive_failures > FETCH_STRIKE_LIMIT:

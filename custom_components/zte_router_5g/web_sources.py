@@ -107,6 +107,9 @@ async def _fetch_text(api: Any, path: str) -> tuple[int | None, list[str], str]:
     """Fetch one page or script, returning status, header names and body."""
     url = f"{api.referer}{path.lstrip('/')}"
     try:
+        # Inside the `try`: a refusal during an expected outage is recorded as
+        # a missed file, like any other fetch that did not complete.
+        api.refuse_during_outage()
         async with api.session.get(
             url,
             headers={"Referer": f"{api.referer}index.html"},

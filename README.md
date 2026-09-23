@@ -421,7 +421,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **121 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **123 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -432,7 +432,7 @@ This integration provides **121 entities** (depending on your firmware) organize
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
 | ⚙️ **System** | 47 | 35 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 30, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
-| 📶 **Signal** | 54 | 50 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
+| 📶 **Signal** | 56 | 51 Sensors, 1 Binary Sensor, 3 Selects, 1 Switch | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, **Data Connection**, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
 | 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
 | 🛠️ **Actions** | 5 | — | Send, Delete, Bulk-Delete and List SMS, **Reset Entities** | — |
@@ -600,7 +600,7 @@ Several settings are exposed as control entities so you can drive them from dash
 - **Pause Polling** (`switch.zte_5g_system_pause_polling`): Halt all polling when you need exclusive access to the router's web UI.
 - **Polling Interval** (`number.zte_5g_system_polling_interval`): Adjust the scan interval slider (30s to 1 hour, default `180` seconds).
 - **Refresh Now** (`button.zte_5g_system_refresh_now`): Trigger an immediate refresh (data fetch). **This works even while Pause Polling is on** — an explicit action always fetches, while scheduled polls stay paused.
-- **Reboot** (`button.zte_5g_system_reboot`): Reboot the router hardware directly from Home Assistant.
+- **Reboot** (`button.zte_5g_system_reboot`): Reboot the router hardware directly from Home Assistant. The router is unreachable for a minute or two, and other controls show an error until it answers again.
 - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`, _disabled by default_): Turn the physical status LEDs of the outdoor unit on or off.
 
 > [!NOTE]
@@ -629,6 +629,7 @@ Several settings are exposed as control entities so you can drive them from dash
 >
 > Switching APN can be an important and useful connectivity management tool. Bear in mind that your ISP may place restrictions on non-default APNs (reduced or no performance), so this is a proceed with caution and only if you know what you are doing area.
 
+- **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off takes up to a minute, and other controls show an error until it completes. **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): In Manual mode, switch the active APN profile.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:

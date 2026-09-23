@@ -48,7 +48,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Recent Msg | Sensor | `msg_recent` | The most recently received message. Sender, date and storage index are in the attributes; the index is what the delete action needs to remove this specific message. |
 | Total Msg | Sensor | `msg_total` | Total messages held across every storage area - router memory and SIM, inbox, sent and drafts. The breakdown per area is in this sensor's attributes. Storage filling up stops new messages arriving. |
 
-## Signal (53)
+## Signal (55)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -64,6 +64,8 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | CA Secondary Cell SNR | Sensor | `ca_scell_snr` | Signal-to-noise ratio on the aggregated secondary carrier, in dB. Worth comparing against the primary: the secondary band often carries the cleaner signal, which the headline SNR does not show. |
 | Cell Changes | Sensor | `cell_changes` | How many times the router has been handed to a different 4G cell. Unlike the others this moves on its own as the network balances load, so the useful reading is the rate rather than the total - a step change in handovers per day is worth looking at. |
 | Cell ID | Sensor | `cell_id` | The identifier of the 4G cell currently serving the router. A change means you have been handed to a different cell, which often explains a sudden change in speed or signal. |
+| Connection Mode Status | Sensor | `connection_mode_status` | Whether the router connects by itself at start-up and after a dropped connection (auto_dial) or waits to be told (manual_dial). It can only be changed in the router's web page while data is off. |
+| Data Connection Status | Sensor | `data_connection_status` | The state of the router's data connection: ppp_connected, ppp_connecting, ppp_disconnecting or ppp_disconnected. This is what the Data Connection switch controls. |
 | eNodeB ID | Sensor | `enodeb_id` | The identifier of the 4G base station (eNodeB) serving you - the mast itself, rather than the individual sector, which is the Cell ID. A change here means you have moved to a different mast. |
 | LTE Band Lock Mask | Sensor | `lte_band_lock` | Hexadecimal bitmask of the 4G bands the modem is permitted to use. Bit 0 is band 1, so bit 2 is band 3 and bit 19 is band 20 - 0x60088080045 means bands 1, 3, 7, 20, 28, 32, 42 and 43. Use it to confirm which bands a band lock has left available; locking to one the router cannot see leaves it with no service. |
 | LTE Primary Band | Sensor | `lte_ca_pcell_band` | The primary 4G band carrying your connection. Lower-numbered bands generally travel further and penetrate buildings better; higher bands usually carry more capacity over shorter distances. |
@@ -87,7 +89,6 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G NSA Band Lock | Sensor | `nr5g_nsa_band_lock` | The 5G bands the router may use in non-standalone mode, where 5G runs alongside a 4G anchor. The counterpart to LTE Band Lock. |
 | 5G PCI | Sensor | `nr5g_pci` | Physical Cell Identity for the 5G cell, from 0 to 1007. A change means the router has been handed to a different 5G sector or mast. |
 | 5G SA Band Lock | Sensor | `nr5g_sa_band_lock` | The 5G bands the router may use in standalone mode, where 5G runs without a 4G anchor. |
-| Bridge Mode | Sensor | `ppp_status` | Whether the router is currently passing the connection straight through in bridge mode - connected means it is. This is the live session, not the configuration: WAN Operating Mode reports which mode the router is set to, bridge or gateway, while this reports whether that session is actually up. It can show disconnected while the radio signal is still strong, which points at an APN or account problem rather than coverage. |
 | Provider Changes | Sensor | `provider_changes` | How many times the registered network operator has changed. On a fixed installation this should be zero unless you have changed SIM or the SIM has roamed. |
 | Roaming MCC | Sensor | `rmcc` | Mobile Country Code of the network the router is registered to, as opposed to the modem's own view. It differs from the modem MCC while roaming. |
 | Roaming MNC | Sensor | `rmnc` | Mobile Network Code of the registered network. Compare with the modem MNC to tell whether the router is roaming. |
@@ -99,12 +100,13 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | LTE Active Band | Sensor | `wan_active_band` | The frequency band currently carrying your connection. Which band you land on is decided by the network, and it affects both range and speed. |
 | LTE Active Channel | Sensor | `wan_active_channel` | The specific radio channel number in use within the active band. Mainly of interest when comparing against neighboring cells or diagnosing interference. |
 | Network APN | Sensor | `wan_apn` | Access Point Name - the gateway the router is actually connected with. This is the authoritative answer: while APN Selection Mode is auto the router uses the network's own default, which may not be one of your stored profiles, so the APN Profile selector can differ from this or read unknown. A wrong APN is a common cause of a router that has good signal but no working data. |
-| WAN Connect Status | Sensor | `wan_connect_status` | Whether the router currently has a data connection to the mobile network. This covers the mobile side only - it can report connected while the wider internet is unreachable. |
+| WAN Connect Status | Sensor | `wan_connect_status` | Whether the router has a data connection to the network: pdp_connected or no_connected. It can report connected while the wider internet is unreachable. The MC888 Pro leaves it blank. |
 | Carrier Aggregation | Sensor | `wan_lte_ca` | Whether Carrier Aggregation is active - the modem combining two or more frequency bands at once for extra bandwidth. When active, the secondary band appears in the SCell sensors. |
 | 5G RSRP | Sensor | `z5g_rsrp` | Reference Signal Received Power for the 5G carrier, in dBm - the 5G equivalent of LTE RSRP, and the number to watch when siting the router for 5G. Typically: better than -80 is excellent, -80 to -90 good, -90 to -100 fair, below -100 poor. |
 | 5G RSRQ | Sensor | `z5g_rsrq` | Reference Signal Received Quality for 5G, in dB - quality rather than strength, reflecting interference and cell load. Typically: better than -10 is excellent, -10 to -15 good, -15 to -20 fair, below -20 poor. |
 | 5G RSSI | Sensor | `z5g_rssi` | Total received power across the 5G channel, in dBm, including noise and interference. Use 5G RSRP for a cleaner measure of your own cell's strength. |
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
+| Data Connection | Switch | `data_connection` | Turns the router's mobile data connection on or off, like the switch in the router's own web page. Home Assistant keeps reaching the router over your network while data is off. Turning it off can take up to a minute, and other controls are refused until it completes. |
 
 ## System (37)
 
@@ -124,8 +126,8 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | IMEI | Sensor | `imei` | International Mobile Equipment Identity - the modem's unique 15-digit hardware serial, used by networks to identify the device itself rather than the SIM. This integration also uses it as the stable identity for your router, so entity history survives an IP change. |
 | Modem State | Sensor | `modem_state` | What the modem itself reports about its own startup, separately from whether a connection is up. Useful when the router answers but nothing is passing traffic. |
 | Firmware Update Available | Sensor | `new_version_state` | Whether the router has found a firmware update. The value is the router's own, reported unchanged. |
-| WAN Fallback Mode | Sensor | `opms_wan_auto_mode` | The WAN operating mode the router falls back to automatically. A difference between this and the active mode is normal. |
-| WAN Operating Mode | Sensor | `opms_wan_mode` | Whether the router is passing traffic as a gateway of its own or bridging it straight through to equipment behind it. Changing this is deliberately not offered here: it alters the path this integration reaches the router over, so use the router's own web page where a mistake can still be undone. |
+| WAN Fallback Mode | Sensor | `opms_wan_auto_mode` | A fixed WAN setting reported by the router. It stays the same when the active mode changes, so a difference between the two is normal. |
+| WAN Operating Mode | Sensor | `opms_wan_mode` | Whether the router is working as a gateway or passing the connection to equipment behind it. LTE_BRIDGE is bridge mode; PPP is router mode. Changing it is not offered here, because it changes the path this integration uses to reach the router. |
 | 5G Modem Temperature | Sensor | `pm_modem_5g` | Temperature reported by the router's 5G modem section. Not reported by all models. |
 | 5G Radio Temperature | Sensor | `pm_sensor_5g` | Temperature reported by the router's 5G radio. Not reported by all models. |
 | Ambient Modem Temperature | Sensor | `pm_sensor_ambient` | Internal air temperature inside the modem, away from the radio itself. Read alongside the power amplifier temperature it indicates whether the unit as a whole is running hot or just the transmitter. Not reported by all models. |
@@ -152,21 +154,21 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 
 The following entities carry no `about` attribute (self-explanatory or intentionally unannotated):
 
-| Entity               | Platform      | Key                    | Group  |
-| :------------------- | :------------ | :--------------------- | :----- |
-| Delete All           | Button        | `delete_all`           | SMS    |
-| Unread Msg           | Sensor        | `sms_unread_num`       | SMS    |
-| Best Connection      | Binary sensor | `best_connection`      | Signal |
-| Integration Health   | Binary sensor | `integration_health`   | System |
+| Entity | Platform | Key | Group |
+| :-- | :-- | :-- | :-- |
+| Delete All | Button | `delete_all` | SMS |
+| Unread Msg | Sensor | `sms_unread_num` | SMS |
+| Best Connection | Binary sensor | `best_connection` | Signal |
+| Integration Health | Binary sensor | `integration_health` | System |
 | Operator Provisioned | Binary sensor | `operator_provisioned` | System |
-| Reboot               | Button        | `reboot`               | System |
-| Refresh Now          | Button        | `refresh`              | System |
-| Polling Interval     | Number        | `polling_interval`     | System |
-| Hardware Version     | Sensor        | `hardware_version`     | System |
-| LAN IP Address       | Sensor        | `lan_ipaddr`           | System |
-| Last Updated         | Sensor        | `last_updated`         | System |
-| Model Name           | Sensor        | `model_name`           | System |
-| Pause Polling        | Switch        | `pause_polling`        | System |
+| Reboot | Button | `reboot` | System |
+| Refresh Now | Button | `refresh` | System |
+| Polling Interval | Number | `polling_interval` | System |
+| Hardware Version | Sensor | `hardware_version` | System |
+| LAN IP Address | Sensor | `lan_ipaddr` | System |
+| Last Updated | Sensor | `last_updated` | System |
+| Model Name | Sensor | `model_name` | System |
+| Pause Polling | Switch | `pause_polling` | System |
 
 <!-- GENERATED:end -->
 

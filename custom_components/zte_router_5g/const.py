@@ -269,6 +269,28 @@ SMS_DELETE_VERIFY_INTERVAL = 1.0
 REBOOT_VERIFY_SECONDS = 5.0
 REBOOT_VERIFY_INTERVAL = 0.5
 
+# The expected-outage window: a command the router accepted has taken it
+# offline, so polls are skipped and other router requests are refused until it
+# answers again. One mechanism serves every such command; each passes a reason
+# and a cap.
+#
+# The check reads `opms_wan_mode`, which both the MC7010 and the MC888 Pro
+# answer without a session, so it works after a reboot has ended the session.
+# It is one key with a short timeout: while the router is silent it costs the
+# router nothing, and the first answer ends the checks.
+OUTAGE_CHECK_KEY = "opms_wan_mode"
+OUTAGE_CHECK_INTERVAL = 5.0
+OUTAGE_CHECK_TIMEOUT = 2
+OUTAGE_REASON_DATA_DISCONNECT = "data_disconnect"
+OUTAGE_REASON_REBOOT = "reboot"
+# Measured on the MC7010 on 2026-09-23, twice: the router went silent about
+# one second after accepting `DISCONNECT_NETWORK` and answered again by 22 s
+# and by 37 s. The cap is margin over the slower run.
+OUTAGE_CAP_DATA_DISCONNECT = 60.0
+# The hardware check's reboot budget. A reboot on the MC7010 takes well under
+# two minutes; a slow return is a wait, not a failure.
+OUTAGE_CAP_REBOOT = 240.0
+
 # How many canaries a probe carries. One key is a single point of failure in
 # both directions: a metric that legitimately empties reads as a lost session,
 # and a key that turns out to be served without one reports a healthy session
@@ -383,7 +405,6 @@ DISCOVERY_CANDIDATES: list[str] = [
     "ZCELLINFO_band",
     "bandwidth",
     "cr_version",
-    "dial_mode",
     "ecio",
     "ecio_1",
     "ecio_2",
@@ -449,7 +470,6 @@ DISCOVERY_VALUE_SAFE: frozenset[str] = frozenset(
         "Z5g_dlEarfcn",
         "ZCELLINFO_band",
         "bandwidth",
-        "dial_mode",
         "ecio",
         "ecio_1",
         "ecio_2",

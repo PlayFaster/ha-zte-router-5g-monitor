@@ -173,8 +173,11 @@
       "signal_nr5g_sa_band_lock": {
         "default": "mdi:lock-outline"
       },
-      "signal_ppp_status": {
+      "signal_data_connection_status": {
         "default": "mdi:connection"
+      },
+      "signal_connection_mode_status": {
+        "default": "mdi:autorenew"
       },
       "signal_provider_changes": {
         "default": "mdi:counter"
@@ -344,6 +347,12 @@
       },
       "data_limit_switch": {
         "default": "mdi:data-matrix-minus"
+      },
+      "signal_data_connection": {
+        "default": "mdi:access-point-network",
+        "state": {
+          "off": "mdi:access-point-network-off"
+        }
       }
     },
     "select": {

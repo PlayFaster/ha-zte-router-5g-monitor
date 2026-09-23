@@ -37,11 +37,20 @@ from custom_components.zte_router_5g.number import (
     ZTEPollingInterval,
 )
 from custom_components.zte_router_5g.switch import (
+    _ENTITY_CLASS,
     PAUSE_POLLING_DESCRIPTION,
     SWITCH_TYPES,
     ZTEPausePollingSwitch,
     ZTERouterSwitch,
 )
+
+# What the router reports straight after accepting each position. Most switches
+# read back `"1"` or `"0"`. The data connection is confirmed from its state
+# machine: `ppp_disconnecting` is what an immediate read shows after a
+# disconnect, measured on the MC7010 on 2026-09-23.
+_CONFIRMED_VALUE = {
+    "data_connection": {True: "ppp_connected", False: "ppp_disconnecting"},
+}
 
 
 @pytest.fixture
@@ -165,16 +174,16 @@ async def test_every_router_switch_publishes_its_confirmed_position(
     async def _record(_api, state, _data):
         written.append(state)
 
-    switch = ZTERouterSwitch(
-        coordinator, entry, replace(description, setter_fn=_record)
-    )
+    entity_class = _ENTITY_CLASS.get(description.key, ZTERouterSwitch)
+    switch = entity_class(coordinator, entry, replace(description, setter_fn=_record))
     switch.hass = hass
     switch.entity_id = f"switch.{description.key}"
     switch._last_known = not target
 
     # The router confirms the new position on read-back.
+    confirmed = _CONFIRMED_VALUE.get(description.key, {True: "1", False: "0"})
     coordinator.api.get_params = AsyncMock(
-        return_value={description.state_key: "1" if target else "0"}
+        return_value={description.state_key: confirmed[target]}
     )
 
     published: list[bool] = []
