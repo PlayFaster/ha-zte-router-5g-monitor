@@ -17,9 +17,10 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN
+from .api import ZTERouterExpectedUnavailableError
+from .const import DOMAIN, OUTAGE_CAP_REBOOT, OUTAGE_REASON_REBOOT
 from .coordinator import ZTERouterDataUpdateCoordinator
-from .helpers import ZTEAboutEntity, ZTEDeviceEntity
+from .helpers import ZTEAboutEntity, ZTEDeviceEntity, expected_outage_error
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -113,7 +114,16 @@ class ZTERefreshButton(ZTEButton):
     )
 
     async def async_press(self) -> None:
-        """Handle the button press."""
+        """Handle the button press.
+
+        Refused during an expected outage rather than skipped. A skipped poll
+        returns the held values, so the press would appear to work and fetch
+        nothing.
+        """
+        try:
+            self.coordinator.api.refuse_during_outage()
+        except ZTERouterExpectedUnavailableError as err:
+            raise expected_outage_error(err) from err
         await self.coordinator.async_force_refresh()
 
 
@@ -130,12 +140,19 @@ class ZTERebootButton(ZTEButton):
         try:
             await self.coordinator.api.reboot()
         except Exception as err:
+            if isinstance(err, ZTERouterExpectedUnavailableError):
+                raise expected_outage_error(err) from err
             _LOGGER.error("%s: Reboot failed: %s", self._entry.title, err)
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="reboot_failed",
                 translation_placeholders={"error": str(err)},
             ) from err
+        # `reboot()` returns only once the router has stopped answering, so
+        # the outage is confirmed rather than assumed.
+        self.coordinator.async_open_expected_outage(
+            OUTAGE_REASON_REBOOT, OUTAGE_CAP_REBOOT
+        )
 
 
 class ZTEDeleteAllSMSButton(ZTEButton):
@@ -148,6 +165,8 @@ class ZTEDeleteAllSMSButton(ZTEButton):
             self.coordinator.persist_last_delete()
             await self.coordinator.async_force_refresh()
         except Exception as err:
+            if isinstance(err, ZTERouterExpectedUnavailableError):
+                raise expected_outage_error(err) from err
             # The refused delete is the case worth keeping across a restart.
             self.coordinator.persist_last_delete()
             _LOGGER.error("%s: Delete SMS failed: %s", self._entry.title, err)

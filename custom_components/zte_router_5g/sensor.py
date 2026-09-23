@@ -830,9 +830,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="wan_connect_status",
         about=(
-            "Whether the router currently has a data connection to the mobile "
-            "network. This covers the mobile side only - it can report connected "
-            "while the wider internet is unreachable."
+            "Whether the router has a data connection to the network: "
+            "pdp_connected or no_connected. It can report connected while the "
+            "wider internet is unreachable. The MC888 Pro leaves it blank."
         ),
         translation_key="signal_wan_connect_status",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1712,20 +1712,32 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         value_fn=lambda data: get_first(data, _ALIAS_SA_BAND_LOCK) or None,
     ),
     ZTESensorEntityDescription(
-        key="ppp_status",
+        # Renamed from `ppp_status` ("Bridge Mode") in 3.4.1-dev2. The value
+        # never described bridge mode: it follows the router's data connection,
+        # the state the Data Connection switch controls.
+        key="data_connection_status",
         about=(
-            "Whether the router is currently passing the connection straight "
-            "through in bridge mode - connected means it is. This is the live "
-            "session, not the configuration: WAN Operating Mode reports which mode "
-            "the router is set to, bridge or gateway, while this reports whether "
-            "that session is actually up. It can show disconnected while the radio "
-            "signal is still strong, which points at an APN or account problem "
-            "rather than coverage."
+            "The state of the router's data connection: ppp_connected, "
+            "ppp_connecting, ppp_disconnecting or ppp_disconnected. This is what "
+            "the Data Connection switch controls."
         ),
-        translation_key="signal_ppp_status",
+        translation_key="signal_data_connection_status",
         entity_category=EntityCategory.DIAGNOSTIC,
         group="signal",
         value_fn=lambda data: data.get("ppp_status"),
+    ),
+    ZTESensorEntityDescription(
+        key="connection_mode_status",
+        about=(
+            "Whether the router connects by itself at start-up and after a "
+            "dropped connection (auto_dial) or waits to be told (manual_dial). "
+            "It can only be changed in the router's web page while data is off."
+        ),
+        translation_key="signal_connection_mode_status",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        group="signal",
+        source=ENDPOINT_EXTENDED,
+        value_fn=lambda data: _safe_str(data.get("dial_mode")),
     ),
     # --- Data Sub-device ---
     # Legacy GB Sensors (Disabled by default, preserved for history)
@@ -2084,11 +2096,10 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="opms_wan_mode",
         about=(
-            "Whether the router is passing traffic as a gateway of its own or "
-            "bridging it straight through to equipment behind it. Changing this "
-            "is deliberately not offered here: it alters the path this "
-            "integration reaches the router over, so use the router's own web "
-            "page where a mistake can still be undone."
+            "Whether the router is working as a gateway or passing the "
+            "connection to equipment behind it. LTE_BRIDGE is bridge mode; PPP "
+            "is router mode. Changing it is not offered here, because it changes "
+            "the path this integration uses to reach the router."
         ),
         translation_key="system_opms_wan_mode",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -2100,8 +2111,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="opms_wan_auto_mode",
         about=(
-            "The WAN operating mode the router falls back to automatically. A "
-            "difference between this and the active mode is normal."
+            "A fixed WAN setting reported by the router. It stays the same when "
+            "the active mode changes, so a difference between the two is normal."
         ),
         translation_key="system_opms_wan_auto_mode",
         entity_category=EntityCategory.DIAGNOSTIC,

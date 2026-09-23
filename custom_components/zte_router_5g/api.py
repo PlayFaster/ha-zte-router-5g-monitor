@@ -7,9 +7,11 @@ import hashlib
 import logging
 import re
 import urllib.parse
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
+from math import ceil
 from time import monotonic
 from typing import Any, NamedTuple, cast
 
@@ -29,6 +31,8 @@ from .const import (
     DISCOVERY_MAX_ROUNDS,
     DISCOVERY_RELOGIN_LIMIT,
     MINED_CHUNK_SIZE,
+    OUTAGE_CHECK_KEY,
+    OUTAGE_CHECK_TIMEOUT,
     REBOOT_VERIFY_INTERVAL,
     REBOOT_VERIFY_SECONDS,
     SESSION_AGE_FLOOR_SECONDS,
@@ -293,6 +297,12 @@ _EXTENDED_PARAMS: list[str] = [
     "opms_wan_mode",
     "opms_wan_auto_mode",
     "apn_interface_version",
+    # Whether the router reconnects by itself (`auto_dial`) or waits to be
+    # told (`manual_dial`). Probed only by the diagnostics discovery pass
+    # until the Connection Mode Status sensor needed it. Blank without
+    # a session on the MC7010, checked 2026-09-23, so it cannot make a dead
+    # session read as live.
+    "dial_mode",
     # --- Billing-cycle clock ---
     #
     # How long the monthly byte counters have been accumulating. No entity
@@ -685,6 +695,53 @@ class ZTEAuthError(Exception):
     """Raised when the session is not usable."""
 
 
+class ZTERouterExpectedUnavailableError(ZTEConnectionError):
+    """Raised in place of a request while the router is known to be offline.
+
+    A command the router accepted, a reboot or a data disconnect, takes it
+    offline for a known reason. A request sent in that window waits out the
+    full timeout and then fails, and a timed-out write is ambiguous: the
+    router may have received it. Refusing at once is fast and certain.
+
+    A subclass of `ZTEConnectionError`, so every caller that already handles
+    an unreachable router handles this unchanged.
+    """
+
+    def __init__(self, reason: str, seconds_remaining: int) -> None:
+        """Carry the reason and the time left, for the user-facing message."""
+        self.reason = reason
+        self.seconds_remaining = seconds_remaining
+        super().__init__(
+            f"Router expected to be unavailable ({reason}); "
+            f"about {seconds_remaining}s remaining"
+        )
+
+
+# Set while the expected-outage window's own check or closing poll runs, so
+# those requests pass the gate. A context variable rather than a flag on the
+# client: it follows the awaits of the task that set it and nothing else, so a
+# user action running concurrently is still refused.
+_OUTAGE_BYPASS: ContextVar[bool] = ContextVar("zte_outage_bypass", default=False)
+
+
+@dataclass(frozen=True)
+class ExpectedOutage:
+    """One expected-outage window: why it opened, when, and when it gives up."""
+
+    reason: str
+    opened_at: datetime
+    deadline: float
+
+    def seconds_remaining(self) -> int:
+        """Whole seconds until the cap, never negative."""
+        return max(0, ceil(self.deadline - monotonic()))
+
+    @property
+    def expired(self) -> bool:
+        """Whether the cap has passed."""
+        return monotonic() >= self.deadline
+
+
 class ZTECredentialsError(ZTEAuthError):
     """Raised only when the router rejects the password itself.
 
@@ -961,6 +1018,10 @@ class _Answer:
 class ZTERouterAPI:
     """Async wrapper for the ZTE Router goform API using aiohttp."""
 
+    # Declared on the class as well as set in `__init__`, so a test double built
+    # with `spec=ZTERouterAPI` carries it.
+    expected_outage: ExpectedOutage | None = None
+
     def __init__(
         self,
         session: aiohttp.ClientSession,
@@ -1108,6 +1169,9 @@ class ZTERouterAPI:
         # A poll holds it for the length of a batch; a write waits a bounded
         # time and then goes ahead anyway. See `WRITE_LOCK_WAIT_SECONDS`.
         self._write_lock = asyncio.Lock()
+        # The open expected-outage window, if any. Opened and closed by the
+        # coordinator, which owns the timer; read here, by the gate.
+        self.expected_outage: ExpectedOutage | None = None
         # How often a write gave up waiting. The collision this guards against
         # is inferred rather than observed — what is measured is that this
         # router grants the session to the newest login, not that a poll has
@@ -2569,6 +2633,7 @@ class ZTERouterAPI:
 
     async def _perform(self, call: _Call) -> Any:
         """Prepare the session, put the request, and dispose of the answer."""
+        self.refuse_during_outage()
         self._preempt_stale_session(call.authenticated)
         if call.authenticated and not self.session_active:
             await self.login(timeout_sec=call.timeout_sec)
@@ -2623,6 +2688,7 @@ class ZTERouterAPI:
 
     async def try_set_protocol(self, timeout_sec: int = 5) -> None:
         """Identify if router is on http or https with a short timeout."""
+        self.refuse_during_outage()
         protocols = ["http", "https"]
         tout = aiohttp.ClientTimeout(total=timeout_sec)
         for proto in protocols:
@@ -2673,6 +2739,9 @@ class ZTERouterAPI:
         result: `self.cookies` and `self.session_active` are set here together,
         which is what stops one from being moved without the other.
         """
+        # Refused before the session is cleared, so a login attempted during an
+        # expected outage leaves the existing session as it was.
+        self.refuse_during_outage()
         tout = timeout_sec or 15
         # Clearing the jar as well as the pair is what lets `_attempt_login`
         # trust a `stok` it finds there: anything present afterwards was set
@@ -4029,6 +4098,94 @@ class ZTERouterAPI:
             _LOGGER.debug("Failed to get last SMS content: %s", e)
         return msg_out
 
+    # -- expected-outage window ------------------------------------------
+
+    def open_expected_outage(self, reason: str, cap_seconds: float) -> ExpectedOutage:
+        """Record that the router is expected to be offline, and until when."""
+        self.expected_outage = ExpectedOutage(
+            reason=reason,
+            opened_at=datetime.now(UTC),
+            deadline=monotonic() + cap_seconds,
+        )
+        return self.expected_outage
+
+    def close_expected_outage(self) -> None:
+        """Clear the window. Router requests are accepted again."""
+        self.expected_outage = None
+
+    @contextlib.contextmanager
+    def outage_bypass(self) -> Iterator[None]:
+        """Let the requests made inside this block through the gate."""
+        token = _OUTAGE_BYPASS.set(True)
+        try:
+            yield
+        finally:
+            _OUTAGE_BYPASS.reset(token)
+
+    def refuse_during_outage(self) -> None:
+        """Raise if a request would be sent while the router is known offline.
+
+        A window past its cap is treated as closed. The coordinator's timer
+        closes it properly; this keeps a lost timer from refusing requests
+        indefinitely.
+        """
+        outage = self.expected_outage
+        if outage is None or outage.expired or _OUTAGE_BYPASS.get():
+            return
+        raise ZTERouterExpectedUnavailableError(
+            outage.reason, outage.seconds_remaining()
+        )
+
+    async def outage_probe(self) -> bool:
+        """Whether the router answers at all. One key, short timeout, no session.
+
+        Any answer counts. The closing poll that follows decides whether the
+        router is ready; this only decides whether it is worth asking.
+        """
+        path = f"goform/goform_get_cmd_process?isTest=false&cmd={OUTAGE_CHECK_KEY}"
+        with self.outage_bypass():
+            try:
+                answer = await self._request(
+                    "GET",
+                    path,
+                    timeout_sec=OUTAGE_CHECK_TIMEOUT,
+                    authenticated=False,
+                    classify=False,
+                )
+            except (ZTEConnectionError, ZTEAuthError):
+                return False
+        return isinstance(answer, dict)
+
+    async def set_data_connection(self, on: bool) -> dict[str, Any]:
+        """Turn the router's data connection on or off.
+
+        The body is what the router's own web page sends: the command, `isTest`
+        and `notCallback`, with no other fields on either device read so far.
+        The router answers before the change completes. Measured on the MC7010
+        on 2026-09-23, twice: `DISCONNECT_NETWORK` was answered in under
+        200 ms, and the router then stopped answering for between 17 and 36 s.
+        The caller opens the expected-outage window for that.
+        """
+        command = "CONNECT_NETWORK" if on else "DISCONNECT_NETWORK"
+        try:
+            ad = await self.ad_suffix(command)
+            payload = f"isTest=false&notCallback=true&goformId={command}{ad}"
+            res = await self._request(
+                "POST",
+                "goform/goform_set_cmd_process",
+                data=payload,
+                headers=self.write_headers(),
+            )
+            await self._require_write_success(res, command)
+        except ZTERouterExpectedUnavailableError:
+            # Refused before anything was sent, so there is no failed write
+            # to record.
+            raise
+        except Exception as err:
+            self.record_write_failure(command, err)
+            raise
+        return cast(dict[str, Any], res)
+
     async def reboot(self) -> int:
         """Reboot the router, and confirm it by the router going away.
 
@@ -4110,6 +4267,11 @@ class ZTERouterAPI:
                     _retry=False,
                     timeout_sec=2,
                 )
+            except ZTERouterExpectedUnavailableError:
+                # A refusal is a `ZTEConnectionError`, but it says the gate
+                # stopped the probe, not that the router went away. Read as
+                # absence, it would report a reboot that never happened.
+                raise
             except (ZTEConnectionError, aiohttp.ClientError, TimeoutError):
                 # Deliberately not a bare `Exception`. This decides that a
                 # reboot happened, and a fault in this integration must never
@@ -4534,7 +4696,16 @@ class ZTERouterAPI:
         answer cannot differ between two writers of the same command. A
         command that needs no token still passes the pre-write session check:
         not needing a token is not the same as not needing a session.
+
+        Refuses first during an expected outage. Every write passes through
+        here before sending, and the token derivation below reads the firmware
+        version through `get_version`, which catches connection errors and
+        returns nothing. A refusal raised inside that read was swallowed, and
+        the write failed with "Cannot derive the AD token" instead of saying
+        why. Found on the MC7010 on 2026-09-23 by toggling the ODU LED while
+        the data connection was going down.
         """
+        self.refuse_during_outage()
         if not self._token_required(goform_id):
             await self._ensure_session(timeout_sec=timeout_sec)
             return ""

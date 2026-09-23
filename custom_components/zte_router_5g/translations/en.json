@@ -191,8 +191,11 @@
       "signal_nr5g_sa_band_lock": {
         "name": "5G SA Band Lock"
       },
-      "signal_ppp_status": {
-        "name": "Bridge Mode"
+      "signal_data_connection_status": {
+        "name": "Data Connection Status"
+      },
+      "signal_connection_mode_status": {
+        "name": "Connection Mode Status"
       },
       "signal_provider_changes": {
         "name": "Provider Changes"
@@ -409,6 +412,9 @@
       },
       "data_limit_switch": {
         "name": "Data Limit Switch"
+      },
+      "signal_data_connection": {
+        "name": "Data Connection"
       }
     },
     "select": {
@@ -464,6 +470,12 @@
     },
     "reset_two_baselines": {
       "message": "Choose one starting point: either reset_to_default or restore_snapshot, not both. They each set a different baseline, so together there is no single meaning."
+    },
+    "router_disconnecting": {
+      "message": "The router is disconnecting its data connection. Try again in about {seconds} seconds."
+    },
+    "router_restarting": {
+      "message": "The router is restarting. Try again in about {seconds} seconds."
     },
     "select_set_failed": {
       "message": "Could not change {entity} on the router: {error}"

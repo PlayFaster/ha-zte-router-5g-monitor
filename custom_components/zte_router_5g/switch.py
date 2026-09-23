@@ -17,11 +17,16 @@ from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import ZTERouterExpectedUnavailableError
 from .const import (
     CONF_STOP_POLLING,
+    DATA_CONNECT_FOLLOWUP_SECONDS,
     DOMAIN,
+    OUTAGE_CAP_DATA_DISCONNECT,
+    OUTAGE_REASON_DATA_DISCONNECT,
     WRITE_VERIFY_RETRY_DELAY,
     WRITE_VERIFY_TIMEOUT,
 )
@@ -30,6 +35,7 @@ from .entity_defaults import default_enabled
 from .helpers import (
     ZTEAboutEntity,
     ZTEDeviceEntity,
+    expected_outage_error,
     get_first,
 )
 
@@ -51,6 +57,22 @@ _ALIAS_LIMIT_SWITCH: Final = (
     "data_volume_limit_switch",
     "flux_data_volume_limit_switch",
 )
+
+
+# The `ppp_status` values the router's own web page treats as connected, from
+# `checkConnectedStatus` in the MC7010's `js/util.js`. Only `ppp_connected` has
+# been observed; the IPv6 forms are the GUI's, taken as given.
+_DATA_CONNECTED: Final = frozenset(
+    {"ppp_connected", "ipv6_connected", "ipv4_ipv6_connected"}
+)
+# The switch shows the direction the router is heading, not only a finished
+# connection. `ppp_connecting` reads as on, as `ppp_disconnecting` already
+# reads as off. Counting only the connected values made the refresh that runs
+# straight after turning on read `ppp_connecting` as off, and the switch
+# sprang back until the next poll; found on the MC7010 on 2026-09-23. Data
+# Connection Status still shows the exact state, so a router stuck
+# connecting is visible there.
+_DATA_ON: Final = _DATA_CONNECTED | {"ppp_connecting"}
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -152,6 +174,26 @@ SWITCH_TYPES: tuple[ZTESwitchEntityDescription, ...] = (
             "1" if state else "0", data or {}
         ),
     ),
+    ZTESwitchEntityDescription(
+        key="data_connection",
+        state_key="ppp_status",
+        # Not verified by the generic read-back: an immediate read shows
+        # `ppp_disconnecting`, which that check would report as a refusal.
+        # `ZTEDataConnectionSwitch` confirms from the transitional states.
+        verify_after_write=False,
+        about=(
+            "Turns the router's mobile data connection on or off, like the "
+            "switch in the router's own web page. Home Assistant keeps reaching "
+            "the router over your network while data is off. Turning it off can "
+            "take up to a minute, and other controls are refused until it "
+            "completes."
+        ),
+        translation_key="signal_data_connection",
+        entity_category=EntityCategory.CONFIG,
+        group="signal",
+        value_fn=lambda data: data.get("ppp_status") in _DATA_ON if data else False,
+        setter_fn=lambda api, state, data: api.set_data_connection(state),
+    ),
 )
 
 
@@ -174,7 +216,9 @@ async def async_setup_entry(
 
     entities.extend(
         [
-            ZTERouterSwitch(coordinator, entry, description)
+            _ENTITY_CLASS.get(description.key, ZTERouterSwitch)(
+                coordinator, entry, description
+            )
             for description in SWITCH_TYPES
         ]
     )
@@ -287,13 +331,23 @@ class ZTERouterSwitch(
         back. This API answers `200 OK` for a refused write, which makes an
         unreported failure especially easy to miss (IQS `action-exceptions`).
         """
-        if self.entity_description.setter_fn is None:
+        setter = self.entity_description.setter_fn
+        if setter is None:
             return
+        await self._async_write(setter, state)
+        await self._async_after_write(state)
+
+    async def _async_write(
+        self,
+        setter: Callable[[Any, bool, Any], Coroutine[Any, Any, None]],
+        state: bool,
+    ) -> None:
+        """Send the new state, mapping a failure to an error the user sees."""
         try:
-            await self.entity_description.setter_fn(
-                self.coordinator.api, state, self.coordinator.data
-            )
+            await setter(self.coordinator.api, state, self.coordinator.data)
         except Exception as err:
+            if isinstance(err, ZTERouterExpectedUnavailableError):
+                raise expected_outage_error(err) from err
             _LOGGER.error(
                 "%s: Failed to set %s: %s",
                 self._entry.title,
@@ -309,6 +363,8 @@ class ZTERouterSwitch(
                 },
             ) from err
 
+    async def _async_after_write(self, state: bool) -> None:
+        """Confirm the write where configured, then refresh."""
         if self.entity_description.verify_after_write:
             await self._async_confirm(state)
         await self.coordinator.async_force_refresh()
@@ -362,6 +418,79 @@ class ZTERouterSwitch(
             translation_key="switch_write_not_applied",
             translation_placeholders={"entity": self.entity_description.key},
         )
+
+
+class ZTEDataConnectionSwitch(ZTERouterSwitch):
+    """The router's data connection, confirmed from its transitional state.
+
+    The router answers the command before the change completes, and a
+    disconnect then takes it offline. Measured on the MC7010 on 2026-09-23,
+    twice: `ppp_disconnecting` was readable for about a second after the
+    reply, then the router stopped answering for between 17 and 36 s.
+    Reconnecting reached `ppp_connected` within a second, with no silence.
+    """
+
+    async def _async_after_write(self, state: bool) -> None:
+        """Read the state once, at once, then open the outage window on turn-off.
+
+        The read is taken before the window opens, so the gate does not refuse
+        it. A read that fails, or reports neither the requested state nor its
+        transitional form, leaves the write unconfirmed rather than failed: the
+        router accepted the command, and the next poll settles the position.
+        """
+        status = await self._read_status()
+        confirming = _DATA_ON if state else {"ppp_disconnecting", "ppp_disconnected"}
+        if status in confirming:
+            self._last_known = state
+            self.async_write_ha_state()
+        else:
+            _LOGGER.debug(
+                "%s: Data connection change not yet confirmed (ppp_status=%s)",
+                self._entry.title,
+                status,
+            )
+        if not state:
+            self.coordinator.async_open_expected_outage(
+                OUTAGE_REASON_DATA_DISCONNECT, OUTAGE_CAP_DATA_DISCONNECT
+            )
+            return
+        await self.coordinator.async_force_refresh()
+        refreshed = (self.coordinator.data or {}).get("ppp_status")
+        if status in _DATA_CONNECTED or refreshed in _DATA_CONNECTED:
+            return
+        # Neither read saw a finished connection. One more refresh settles it
+        # rather than leaving the switch to the next scheduled poll.
+        self.async_on_remove(
+            async_call_later(
+                self.hass, DATA_CONNECT_FOLLOWUP_SECONDS, self._async_followup
+            )
+        )
+
+    async def _async_followup(self, _now: Any) -> None:
+        """The one refresh after turning on, when the first did not settle it."""
+        await self.coordinator.async_force_refresh()
+
+    async def _read_status(self) -> str | None:
+        """Read `ppp_status`, or `None` if the router did not answer it."""
+        try:
+            data = await self.coordinator.api.get_params(
+                ["ppp_status"], timeout_sec=WRITE_VERIFY_TIMEOUT
+            )
+        except Exception as err:  # noqa: BLE001 - unconfirmed, not failed
+            _LOGGER.debug(
+                "%s: Could not read the data connection state: %s",
+                self._entry.title,
+                err,
+            )
+            return None
+        value = data.get("ppp_status")
+        return value if isinstance(value, str) else None
+
+
+# Switches whose behavior after a write differs from the generic entity.
+_ENTITY_CLASS: Final[dict[str, type[ZTERouterSwitch]]] = {
+    "data_connection": ZTEDataConnectionSwitch,
+}
 
 
 class ZTEPausePollingSwitch(

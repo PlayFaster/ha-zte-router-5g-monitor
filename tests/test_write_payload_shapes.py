@@ -77,6 +77,21 @@ _WRITES: list[tuple[str, object, str, set[str]]] = [
         set(_FULL_DATA_VOLUME),
     ),
     (
+        # Hardware-verified 2026-09-23 on the MC7010: the router's own web
+        # page sends only `notCallback` beside the command, and the router
+        # accepted both directions with `{"result":"success"}`.
+        "set_data_connection off",
+        lambda api: api.set_data_connection(False),
+        "DISCONNECT_NETWORK",
+        {"notCallback"},
+    ),
+    (
+        "set_data_connection on",
+        lambda api: api.set_data_connection(True),
+        "CONNECT_NETWORK",
+        {"notCallback"},
+    ),
+    (
         "set_data_limit_switch",  # hardware-verified; delegates to the above
         lambda api: api.set_data_limit_switch("0", _FULL_DATA_VOLUME),
         "DATA_LIMIT_SETTING",

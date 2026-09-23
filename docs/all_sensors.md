@@ -6,13 +6,13 @@ A complete list of the static entities and service actions provided by the integ
 
 ## Summary
 
-| Sub-Device | Entity Count | Description            |
-| :--------- | :----------- | :--------------------- |
-| **Data**   | 15           | Data entities.         |
-| **SMS**    | 5            | SMS entities.          |
-| **Signal** | 54           | Signal entities.       |
-| **System** | 47           | System entities.       |
-| **Total**  | **121**      | Total static entities. |
+| Sub-Device | Entity Count | Description |
+| :-- | :-- | :-- |
+| **Data** | 15 | Data entities. |
+| **SMS** | 5 | SMS entities. |
+| **Signal** | 56 | Signal entities. |
+| **System** | 47 | System entities. |
+| **Total** | **123** | Total static entities. |
 
 ## Data Sub-Device (15 Entities)
 
@@ -44,7 +44,7 @@ A complete list of the static entities and service actions provided by the integ
 | Total Msg | `msg_total` | Sensor | - | - | LTS: `measurement` |
 | Unread Msg | `sms_unread_num` | Sensor | - | - | LTS: `measurement` |
 
-## Signal Sub-Device (54 Entities)
+## Signal Sub-Device (56 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -61,6 +61,8 @@ A complete list of the static entities and service actions provided by the integ
 | CA Secondary Cell SNR | `ca_scell_snr` | Sensor | dB | Diagnostic | **Disabled by default.** LTS: `measurement` |
 | Cell Changes | `cell_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | Cell ID | `cell_id` | Sensor | - | Diagnostic | - |
+| Connection Mode Status | `connection_mode_status` | Sensor | - | Diagnostic | - |
+| Data Connection Status | `data_connection_status` | Sensor | - | Diagnostic | - |
 | eNodeB ID | `enodeb_id` | Sensor | - | Diagnostic | - |
 | LTE Band Lock Mask | `lte_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
 | LTE Primary Band | `lte_ca_pcell_band` | Sensor | - | Diagnostic | - |
@@ -84,7 +86,6 @@ A complete list of the static entities and service actions provided by the integ
 | 5G NSA Band Lock | `nr5g_nsa_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
 | 5G PCI | `nr5g_pci` | Sensor | - | Diagnostic | - |
 | 5G SA Band Lock | `nr5g_sa_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
-| Bridge Mode | `ppp_status` | Sensor | - | Diagnostic | - |
 | Provider Changes | `provider_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | Roaming MCC | `rmcc` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Roaming MNC | `rmnc` | Sensor | - | Diagnostic | **Disabled by default.** |
@@ -102,6 +103,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G RSRQ | `z5g_rsrq` | Sensor | dB | - | LTS: `measurement` |
 | 5G RSSI | `z5g_rssi` | Sensor | dBm | - | LTS: `measurement` |
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
+| Data Connection | `data_connection` | Switch | - | Config | - |
 
 ## System Sub-Device (47 Entities)
 

@@ -85,6 +85,12 @@ ATTENDED: dict[str, str] = {
         "depends on the configured cap against current usage, which is a "
         "judgement, not a check."
     ),
+    "set_data_connection": (
+        "Turning data off drops the internet connection for everything behind "
+        "the router, and the router stops answering for up to half a minute. "
+        "Reconnecting is quick and reliable, but a script that fails between "
+        "the two leaves the network offline, so a person must be present."
+    ),
     "reboot": (
         "Minutes of downtime. Verification is only a retry loop until the "
         "device answers again, so the cost is time rather than risk — nothing "
@@ -128,6 +134,7 @@ OFFERED_WHEN_ATTENDED: frozenset[str] = frozenset(
         "set_apn",
         "set_bearer_preference",
         "set_data_limit_switch",
+        "set_data_connection",
         "reboot",
         "send_sms",
         "delete_sms",

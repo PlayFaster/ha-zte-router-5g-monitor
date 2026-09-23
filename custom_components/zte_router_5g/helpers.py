@@ -7,10 +7,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from homeassistant.const import CONF_HOST
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from ._compat import via_device_link
-from .const import DOMAIN
+from .const import DOMAIN, OUTAGE_REASON_REBOOT
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -20,6 +21,32 @@ if TYPE_CHECKING:
 # Known model strings to detect from the wa_inner_version firmware string.
 # e.g. 'xx_xxx_MC7010DV1.0.0B01' → 'MC7010'
 _KNOWN_MODELS = ["MC7010", "MC801", "MC888", "MC889"]
+
+
+class _OutageRefusal(Protocol):
+    """The two fields `api.ZTERouterExpectedUnavailableError` carries."""
+
+    reason: str
+    seconds_remaining: int
+
+
+def expected_outage_error(err: _OutageRefusal) -> HomeAssistantError:
+    """The on-screen error for an action refused during an expected outage.
+
+    One translation key per reason, so the whole sentence is translatable
+    rather than a reason word inserted into it. Typed by protocol because
+    `api` imports this module.
+    """
+    key = (
+        "router_restarting"
+        if err.reason == OUTAGE_REASON_REBOOT
+        else "router_disconnecting"
+    )
+    return HomeAssistantError(
+        translation_domain=DOMAIN,
+        translation_key=key,
+        translation_placeholders={"seconds": str(err.seconds_remaining)},
+    )
 
 
 def sms_instant(value: Any) -> datetime | None:

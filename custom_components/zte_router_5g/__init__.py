@@ -18,7 +18,13 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from .api import SMS_STORE_ALL, ZTEAuthError, ZTEConnectionError, ZTERouterAPI
+from .api import (
+    SMS_STORE_ALL,
+    ZTEAuthError,
+    ZTEConnectionError,
+    ZTERouterAPI,
+    ZTERouterExpectedUnavailableError,
+)
 from .const import (
     DOMAIN,
     LIVE_OPTION_KEYS,
@@ -33,7 +39,7 @@ from .coordinator import (
     UPTIME_STORAGE_VERSION,
     ZTERouterDataUpdateCoordinator,
 )
-from .helpers import is_gsm7, sms_instant
+from .helpers import expected_outage_error, is_gsm7, sms_instant
 from .observations import (
     HISTORY_STORAGE_VERSION,
     OBSERVED_STORAGE_VERSION,
@@ -233,6 +239,11 @@ async def async_send_sms(hass: HomeAssistant, call: ServiceCall) -> None:
             await coordinator.api.send_sms(num, message)
             sent.append(num)
     except Exception as err:
+        # A refusal before anything went out says only that the router is
+        # offline. Once a message has gone, the partial result below matters
+        # more, so it is reported instead.
+        if isinstance(err, ZTERouterExpectedUnavailableError) and not sent:
+            raise expected_outage_error(err) from err
         # Name what already went out. Stopping at the first failure is
         # deliberate — continuing would send messages this call would not
         # otherwise have sent — but a caller told only "failed" cannot tell a
@@ -261,6 +272,8 @@ async def async_delete_sms(hass: HomeAssistant, call: ServiceCall) -> None:
         # answers success for an id the router does not hold.
         await coordinator.api.verify_deleted([str(index)])
     except Exception as err:
+        if isinstance(err, ZTERouterExpectedUnavailableError):
+            raise expected_outage_error(err) from err
         # Persisted in both paths: a delete the router refused is the case a
         # diagnostics download is wanted for, and it is the one that raises.
         coordinator.persist_last_delete()
@@ -346,6 +359,8 @@ async def async_delete_all_sms(hass: HomeAssistant, call: ServiceCall) -> None:
                 coordinator.api.note_delete_parameter(keep_last)
                 await coordinator.api.verify_deleted(ids)
     except Exception as err:
+        if isinstance(err, ZTERouterExpectedUnavailableError):
+            raise expected_outage_error(err) from err
         coordinator.persist_last_delete()
         raise HomeAssistantError(
             translation_domain=DOMAIN,
@@ -396,6 +411,8 @@ async def async_get_sms_list(hass: HomeAssistant, call: ServiceCall) -> dict[str
             raw_msgs = nv_msgs + sim_msgs
             raw_msgs.sort(key=lambda x: x.get("date", ""), reverse=True)
     except Exception as err:
+        if isinstance(err, ZTERouterExpectedUnavailableError):
+            raise expected_outage_error(err) from err
         raise HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="get_sms_list_failed",

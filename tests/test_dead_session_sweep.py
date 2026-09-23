@@ -138,6 +138,10 @@ _CALLS: dict[str, tuple[Any, ...]] = {
     "set_data_limit_switch": ("1", _DATA_VOLUME_STATE),
     "set_data_volume_settings": (_DATA_VOLUME_STATE,),
     "set_bearer_preference": ("Only_5G",),
+    "set_data_connection": (False,),
+    # The expected-outage window's check. It answers whether the router
+    # responds at all, so a failure is `False` by contract, not a raise.
+    "outage_probe": (),
     "try_set_protocol": (),
     # Every write's last step before the payload is built. It either derives
     # the token through `get_ad`, which raises on a dead session, or decides
@@ -168,6 +172,8 @@ _BEST_EFFORT = {
     # See `_CALLS`: learning is never load-bearing, and a router that will not
     # serve its own scripts must cost a fallback rather than a raised setup.
     "learn_profile",
+    # See `_CALLS`: a router that does not answer is the answer.
+    "outage_probe",
 }
 
 # Methods whose whole answer is whether they raised. `None` from one of these
@@ -562,6 +568,10 @@ def test_every_public_method_is_covered_by_the_sweep():
 def test_best_effort_carve_out_stays_small():
     """Every exemption is a method allowed to fail quietly — keep it deliberate.
 
+    Raised from seven to eight in v3.4.1-dev2 for `outage_probe`, the
+    expected-outage window's check. Its whole answer is whether the router
+    responds, so a failed request is the answer `False`, not an error.
+
     Raised from six to seven in v3.3.25-dev10 for `learn_profile`, which reads
     the router's own web assets to learn its write contract. It is allowed to
     fail quietly because everything it supplies has a fallback to the constant
@@ -575,7 +585,7 @@ def test_best_effort_carve_out_stays_small():
     the one whose absence blocked every write on the reference MC7010.
     """
     assert set(_CALLS) >= _BEST_EFFORT
-    assert len(_BEST_EFFORT) <= 7, (
+    assert len(_BEST_EFFORT) <= 8, (
         "the best-effort list has grown; each entry is a method permitted to "
         "return a default on failure, so each needs a stated reason above"
     )

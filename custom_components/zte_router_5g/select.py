@@ -15,12 +15,14 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from .api import ZTERouterExpectedUnavailableError
 from .const import APN_PROFILE_SLOTS, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .entity_defaults import default_enabled
 from .helpers import (
     ZTEAboutEntity,
     ZTEDeviceEntity,
+    expected_outage_error,
     get_first,
 )
 
@@ -281,6 +283,8 @@ class ZTERouterSelect(
                 self.coordinator.api, option, self.coordinator.data
             )
         except Exception as err:
+            if isinstance(err, ZTERouterExpectedUnavailableError):
+                raise expected_outage_error(err) from err
             _LOGGER.error(
                 "%s: Failed to set %s to %s: %s",
                 self._entry.title,

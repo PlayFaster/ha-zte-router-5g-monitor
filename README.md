@@ -421,7 +421,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **121 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **123 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -432,7 +432,7 @@ This integration provides **121 entities** (depending on your firmware) organize
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
 | ⚙️ **System** | 47 | 35 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 30, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
-| 📶 **Signal** | 54 | 50 Sensors, 1 Binary Sensor, 3 Selects | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
+| 📶 **Signal** | 56 | 51 Sensors, 1 Binary Sensor, 3 Selects, 1 Switch | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, **Data Connection**, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
 | 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
 | 🛠️ **Actions** | 5 | — | Send, Delete, Bulk-Delete and List SMS, **Reset Entities** | — |
@@ -600,7 +600,7 @@ Several settings are exposed as control entities so you can drive them from dash
 - **Pause Polling** (`switch.zte_5g_system_pause_polling`): Halt all polling when you need exclusive access to the router's web UI.
 - **Polling Interval** (`number.zte_5g_system_polling_interval`): Adjust the scan interval slider (30s to 1 hour, default `180` seconds).
 - **Refresh Now** (`button.zte_5g_system_refresh_now`): Trigger an immediate refresh (data fetch). **This works even while Pause Polling is on** — an explicit action always fetches, while scheduled polls stay paused.
-- **Reboot** (`button.zte_5g_system_reboot`): Reboot the router hardware directly from Home Assistant.
+- **Reboot** (`button.zte_5g_system_reboot`): Reboot the router hardware directly from Home Assistant. The router is unreachable for a minute or two, and other controls show an error until it answers again. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error).
 - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`, _disabled by default_): Turn the physical status LEDs of the outdoor unit on or off.
 
 > [!NOTE]
@@ -629,6 +629,7 @@ Several settings are exposed as control entities so you can drive them from dash
 >
 > Switching APN can be an important and useful connectivity management tool. Bear in mind that your ISP may place restrictions on non-default APNs (reduced or no performance), so this is a proceed with caution and only if you know what you are doing area.
 
+- **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off takes up to a minute, and other controls show an error until it completes. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error). **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): In Manual mode, switch the active APN profile.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:
@@ -1158,24 +1159,29 @@ actions:
 
 ```yaml
 alias: "ZTE APN: Switch Profile on Network Failure"
-description: "Switch to a backup APN profile if the primary WAN connection drops."
+description: "Switch to a backup APN profile if the primary data connection drops."
 mode: single
 triggers:
   - trigger: state
-    entity_id: sensor.zte_5g_signal_wan_connect_status
-    to: "disconnected"
+    entity_id: sensor.zte_5g_signal_data_connection_status
+    to: "ppp_disconnected"
     not_from:
       - "unknown"
       - "unavailable"
     for: "00:05:00"
     note: |
-      The 5 minute hold matters. The integration already holds
-      last-known values for three consecutive failed polls before
-      reporting anything, so a value that has stayed "disconnected"
-      for five minutes is a real outage rather than a blip. not_from
-      suppresses transitions coming directly out of unknown or
-      unavailable states.
+      The integration already holds last-known values for three consecutive
+      failed polls before reporting anything, so a value that has stayed
+      "ppp_disconnected" for five minutes is a real outage rather
+      than a blip. not_from suppresses transitions coming directly
+      out of unknown or unavailable states.
 conditions:
+  - condition: state
+    entity_id: switch.zte_5g_signal_data_connection
+    state: "on"
+    note: |
+      Only an outage you did not ask for. With the Data
+      Connection switch off, the disconnect is deliberate.
   - condition: state
     entity_id: select.zte_5g_signal_apn_profile
     state: "primary_apn"
@@ -1539,13 +1545,13 @@ actions:
 
 ```yaml
 alias: "ZTE Reboot: Auto-Reboot on Prolonged Outage"
-description: "Reboots the router after a sustained WAN outage"
+description: "Reboots the router after a sustained data outage"
 mode: single
 max_exceeded: silent
 triggers:
   - trigger: state
-    entity_id: sensor.zte_5g_signal_wan_connect_status
-    to: "disconnected"
+    entity_id: sensor.zte_5g_signal_data_connection_status
+    to: "ppp_disconnected"
     not_from:
       - "unknown"
       - "unavailable"
@@ -1558,6 +1564,13 @@ triggers:
       not_from suppresses transitions from unknown or unavailable.
 conditions:
   - condition: state
+    entity_id: switch.zte_5g_signal_data_connection
+    state: "on"
+    note: |
+      Only an outage you did not ask for. With the Data
+      Connection switch off, the disconnect is deliberate, and
+      a reboot would reconnect it.
+  - condition: state
     entity_id: binary_sensor.zte_5g_system_integration_health
     state: "off"
     note: |
@@ -1567,7 +1580,7 @@ actions:
   - action: button.press
     target:
       entity_id: button.zte_5g_system_reboot
-    note: The router drops off the network for a few minutes; entities go unavailable.
+    note: The router is offline for a minute or two; sensors keep their last values.
   - delay:
       minutes: 10
     note: |
@@ -1578,8 +1591,8 @@ actions:
     data:
       title: "ZTE Router Rebooted Automatically"
       message: |
-        The WAN was disconnected for 30 minutes, so the router was rebooted.
-        Status is now: {{ states('sensor.zte_5g_signal_wan_connect_status') }}
+        The data connection was down for 30 minutes, so the router was rebooted.
+        Status is now: {{ states('sensor.zte_5g_signal_data_connection_status') }}
 ```
 
 ---
@@ -2035,6 +2048,25 @@ Before writing anything, the integration reads the router's own web interface to
   - The username and password are the same as you use to log in to the router via its web UI.
   - Username can be changed in the web UI, as well as password, so ensure you are using the current version of both.
 - Ensure the router is powered on and reachable from your Home Assistant instance.
+
+---
+
+</details>
+
+#### ⏳ **"The router is restarting" or "The router is disconnecting its data connection" Error**
+
+<details>
+
+<summary>
+&nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
+</summary><br>
+
+You see one of these messages when you use a router control while the router is briefly offline:
+
+- `The router is restarting. Try again in about N seconds.` You pressed **Reboot**. The router is unreachable for one to two minutes.
+- `The router is disconnecting its data connection. Try again in about N seconds.` You turned the **Data Connection** switch off. The router is unreachable for up to a minute.
+
+Until the router answers again, its controls, the SMS actions and **Refresh Now** are unavailable. Sensors keep their last values. Nothing needs fixing: everything works again as soon as the router is back.
 
 ---
 
