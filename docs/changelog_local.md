@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.01-dev1\] - 2026-09-23 - CI Bump PHACC](#3401-dev1---2026-09-23---ci-bump-phacc)
   - [\[3.4.0\] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management](#340---2026-09-15---release-zte-mc888-pro-compatibility-dynamic-device-profiles-and-advanced-router-management)
   - [\[3.4.0-dev5\] - 2026-09-18 - Update README](#340-dev5---2026-09-18---update-readme)
   - [\[3.4.0-dev4\] - 2026-09-18 - CI Bump ruff and zizmor](#340-dev4---2026-09-18---ci-bump-ruff-and-zizmor)
@@ -299,6 +300,12 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.01-dev1] - 2026-09-23 - CI Bump PHACC
+
+### Bumps
+
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.365 to 0.13.366
 
 ## [3.4.0] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management
 
