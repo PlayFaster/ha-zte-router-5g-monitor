@@ -1,6 +1,6 @@
 # Diagnostic tools
 
-Tools used to investigate faults that the integration cannot characterise from inside Home Assistant. They are not part of the integration, are never loaded by it, and nothing here runs unless a person deliberately runs it.
+Tools used to investigate faults that the integration cannot characterize from inside Home Assistant. They are not part of the integration, are never loaded by it, and nothing here runs unless a person deliberately runs it.
 
 ## `zte_write_capture_bookmarklet.txt`
 

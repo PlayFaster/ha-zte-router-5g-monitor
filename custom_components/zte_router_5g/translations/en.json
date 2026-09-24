@@ -367,6 +367,21 @@
       },
       "system_wifi_enabled": {
         "name": "WiFi Enabled"
+      },
+      "system_wan_netmask": {
+        "name": "WAN Netmask"
+      },
+      "system_total_connected_time": {
+        "name": "Total Connected Time"
+      },
+      "data_total_rx_bytes": {
+        "name": "Total Received"
+      },
+      "data_total_tx_bytes": {
+        "name": "Total Sent"
+      },
+      "data_total_data_bytes": {
+        "name": "Total Data"
       }
     },
     "button": {

@@ -75,6 +75,11 @@ MODEL_OVERLAY: Final[dict[str, dict[str, bool]]] = {
         "wan_connect_status": False,
         "rssi": True,
         "sinr": True,
+        # Device Uptime. The issue #79 3.4.2 download answered `system_uptime`
+        # and `flux_system_uptime` blank, so it follows the data session here,
+        # the same as Connection Uptime. Uptime Duration is off by default
+        # everywhere and needs no entry.
+        "device_uptime": False,
     },
     # ZTE MC7010, firmware `xx_xxx_MC7010DV1.0.0B03`.
     #

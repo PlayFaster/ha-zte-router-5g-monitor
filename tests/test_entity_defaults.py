@@ -108,6 +108,32 @@ def test_the_mc888_enables_what_only_it_reports(key: str) -> None:
     assert default_enabled(description, MC7010) is False
 
 
+@pytest.mark.parametrize("key", ["device_uptime", "realtime_time"])
+def test_the_mc888_starts_with_both_uptime_sensors_off(key: str) -> None:
+    """Without `system_uptime` both follow the data session there.
+
+    The issue #79 3.4.2 download answered `system_uptime` and
+    `flux_system_uptime` blank. Device Uptime is turned off by the overlay;
+    Uptime Duration, entity key `realtime_time`, is off everywhere.
+    """
+    description = _description(key)
+
+    assert default_enabled(description, MC888) is False
+    assert default_enabled(description, MC7010) is (
+        description.entity_registry_enabled_default
+    )
+
+
+@pytest.mark.parametrize("key", ["connection_uptime", "connection_duration"])
+def test_the_uptime_entry_leaves_the_connection_sensors_alone(key: str) -> None:
+    """The MC888 Pro keeps its connection sensors at their defaults."""
+    description = _description(key)
+
+    assert default_enabled(description, MC888) is (
+        description.entity_registry_enabled_default
+    )
+
+
 def test_the_enodeb_sensor_is_not_disabled_on_the_mc888() -> None:
     """It is derived there, not read, so it does populate.
 

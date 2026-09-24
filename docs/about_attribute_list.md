@@ -12,7 +12,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 >
 > **These notes are never written to your database.** They are declared as _unrecorded attributes_, so Home Assistant shows them live in the entity's details but the recorder ignores them entirely — they cost nothing to carry, however often the entity updates. See `dev_standards.md` Section 14.
 
-**80 of the 92 entities carry a note.** The other 12 deliberately do not — a note on everything trains you to ignore notes. They are listed in full at the end, so the omissions stay visible and deliberate rather than looking like gaps.
+**117 of the 130 entities carry a note.** The other 13 deliberately do not. They are listed in full at the end, so the omissions stay visible and deliberate rather than looking like gaps.
 
 ᴰ = **disabled by default.** Enable it from the entity's settings if you want it; it is hidden to keep the default entity list manageable.
 
@@ -20,7 +20,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 
 <!-- GENERATED:start -->
 
-## Data (15)
+## Data (18)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -38,6 +38,9 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Download Speed | Sensor | `realtime_rx_thrpt` | Current download rate at the instant of the last poll. Because it is sampled rather than averaged, it will not reflect a short burst that happened between polls. |
 | Session Sent | Sensor | `realtime_tx_bytes` | Data uploaded during the current session - since the router last restarted, not since the start of the month. It resets to zero on every reboot. |
 | Upload Speed | Sensor | `realtime_tx_thrpt` | Current upload rate. This is a snapshot taken at the moment the router was last polled, not an average - brief peaks between polls are not captured. |
+| Total Data | Sensor | `total_data_bytes` | Combined upload and download as a running total kept by the router, separate from the monthly counters. Home Assistant displays it in GB while storing the exact byte count. |
+| Total Received | Sensor | `total_rx_bytes` | Data downloaded through the router's mobile connection, as a running total kept by the router. It is separate from the monthly counters and does not reset on the billing day. Home Assistant displays it in GB while storing the exact byte count. |
+| Total Sent | Sensor | `total_tx_bytes` | Data uploaded through the router's mobile connection, as a running total kept by the router. It is separate from the monthly counters and does not reset on the billing day. Home Assistant displays it in GB while storing the exact byte count. |
 | Data Limit Switch | Switch | `data_limit_switch` | Turns on the router's own monthly data cap. When the limit is reached the router stops passing traffic - it does not merely warn - so leave this off unless you have set the limit deliberately. The alert percentage governs when it warns you on the way there. |
 
 ## SMS (3)
@@ -108,7 +111,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 | Data Connection | Switch | `data_connection` | Turns the router's mobile data connection on or off, like the switch in the router's own web page. Home Assistant keeps reaching the router over your network while data is off. Turning it off or on can take up to a minute, and other controls are refused until it completes. |
 
-## System (39)
+## System (41)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -123,7 +126,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Connection Failure Count | Sensor | `connection_failure_count` | How many times the router has failed to establish the mobile data connection since it last restarted. A rising count with the connection apparently up means it is dropping and recovering. |
 | Connection Uptime | Sensor | `connection_uptime` | The moment the router's current mobile data connection started, held steady like Device Uptime. It moves each time the data connection reconnects, and is empty while data is off. |
 | Firmware Update State | Sensor | `current_upgrade_state` | Whether a firmware update is running. The value is the router's own, reported unchanged. |
-| Device Uptime | Sensor | `device_uptime` | The moment the router last booted, held steady between reboots rather than recalculated each poll. It only moves when the router's own uptime counter drops, so a genuine restart is easy to trigger automations on. A router that does not report its own uptime shows its last data connection instead, the same as Connection Uptime. |
+| Device Uptime | Sensor | `device_uptime` | When the router last booted. Some models do not report their own uptime; on those, this shows when the current data connection started, the same as Connection Uptime. |
 | Firmware Changes | Sensor | `firmware_changes` | How many times the router's firmware version has changed since this integration started watching. The version sensor itself keeps no long-term history, so this is what makes an operator's silent update visible months later. The versions and dates are on the Firmware Version sensor's history attribute. |
 | IMEI | Sensor | `imei` | International Mobile Equipment Identity - the modem's unique 15-digit hardware serial, used by networks to identify the device itself rather than the SIM. This integration also uses it as the stable identity for your router, so entity history survives an IP change. |
 | Modem State | Sensor | `modem_state` | What the modem itself reports about its own startup, separately from whether a connection is up. Useful when the router answers but nothing is passing traffic. |
@@ -135,7 +138,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Ambient Modem Temperature | Sensor | `pm_sensor_ambient` | Internal air temperature inside the modem, away from the radio itself. Read alongside the power amplifier temperature it indicates whether the unit as a whole is running hot or just the transmitter. Not reported by all models. |
 | Modem Temperature | Sensor | `pm_sensor_mdm` | Temperature of the 4G/LTE cellular baseband module. Not reported by all models. |
 | Power Amplifier Temperature | Sensor | `pm_sensor_pa1` | Temperature of the RF power amplifier driving the transmit signal, typically the warmest component in the unit. Not reported by all models. |
-| Uptime Duration | Sensor | `realtime_time` | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp, which is usually the easier one to automate against. |
+| Uptime Duration | Sensor | `realtime_time` | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp. A router that does not report its own uptime shows how long its data connection has been up instead. |
 | SIM ICCID | Sensor | `sim_iccid` | Integrated Circuit Card ID - the SIM card's own serial number, printed on the card itself. Useful for identifying which SIM is in the router without opening it. |
 | SIM IMSI | Sensor | `sim_imsi` | International Mobile Subscriber Identity - the unique number identifying your SIM's subscription on the network, as distinct from the IMEI which identifies the hardware. |
 | SIM Lock State | Sensor | `sim_lock_state` | Whether the SIM is asking for its PIN. A SIM waiting on a PIN presents as no service, which otherwise reads as a coverage fault, and the attempt counters only say how many tries are left rather than whether one is being asked for. |
@@ -143,11 +146,13 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | SIM PUK Attempts Remaining | Sensor | `sim_puk_attempts` | PUK attempts left before the SIM is permanently blocked and has to be replaced by the operator. |
 | Time Server (SNTP) | Sensor | `sntp_server` | The time server the router synchronizes its clock from. An unreachable time server can make the timestamps on SMS messages and logs wrong, so it is worth checking if dates look implausible. |
 | Router Timezone | Sensor | `sntp_timezone` | The router's configured base timezone and Daylight Saving Time (DST) offset - for example '0-1' represents base offset UTC+0 with DST active. |
+| Total Connected Time | Sensor | `total_time` | The total time the router's mobile data connection has been up, added across connections. It does not count while data is off, so it is not the router's uptime. The router decides when this total starts again from zero, which on some models is at each reboot. |
 | Firmware Update Result | Sensor | `upgrade_result` | The outcome of the router's last firmware update attempt. Reads error where an update was tried and did not complete, which the update-state entities do not show. |
 | Firmware Version | Sensor | `wa_inner_version` | The router's firmware build string. Worth recording before a firmware update, so you can tell what changed if the router starts behaving differently afterwards. |
 | WAN IP Changes | Sensor | `wan_ip_changes` | How many times the router's public WAN address has changed. A rising count means your operator is reassigning it, which breaks anything that relied on it staying put. |
 | WAN IP Address | Sensor | `wan_ipaddr` | The address your ISP has given the router on the mobile network - what the internet sees. Often a shared carrier-grade NAT address, which is why inbound connections and port forwarding usually do not work on mobile broadband. |
 | WAN Mode Changes | Sensor | `wan_mode_changes` | How many times the router has switched between bridge and gateway operation. This changes what the router does to your whole network, and an operator can change it remotely. |
+| WAN Netmask | Sensor | `wan_netmask` | The subnet mask that goes with the router's mobile network address. Useful mainly when diagnosing a network problem. |
 | WiFi Clients Connected | Sensor | `wifi_clients` | How many devices are connected to the router's WiFi right now, across all its networks. Counts wireless clients only - anything on a network cable is not included. |
 | WiFi Enabled | Sensor | `wifi_enabled` | Whether the router's WiFi radios are switched on. Reported as the router states it, so this reflects the radios rather than the last command sent to them. |
 | ODU LED Switch | Switch | `odu_led_switch` | Turns the status light on the outdoor unit on or off. Cosmetic only - the connection is unaffected, so switching it off is safe if the unit is visible from a window or a bedroom. The router reports the light's real state, so this reflects the unit rather than the last command sent. |
@@ -184,6 +189,7 @@ Created: 2026-07-28 Last Updated: 2026-07-30
 
 ## Version Control
 
+- **v1.6.0** (2026-09-24) — Synchronized header coverage count to **117 of 130** entities (13 deliberate omissions). Updated `Uptime Duration` about note to prune editorial advice clause per `about_notes_review`.
 - **v1.5.0** (2026-08-01) — Regenerated from live via `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) after a Home Assistant restart, verified before the fetch by confirming `Signal Bars` published its post-edit text. Coverage unchanged at **86 of 92**; the six deliberate omissions are unchanged. Eight note texts refreshed, all of them this file lagging same-day code edits: `Signal Bars` and `5G SNR` no longer say SINR, since the integration reports what the router labels SNR and cannot verify what the modem computes; `LTE RSRP` no longer competes with SNR for "the single most useful number"; `Network APN` and `APN Profile` say `unknown` rather than "blank", which is what Home Assistant actually shows for an empty value; and three notes changed `neighbouring` to `neighboring` under the US-spelling rule. No note was found missing, and every entity declaring one publishes it — no delivery faults.
 - **v1.3.0** (2026-07-30) — Regenerated from live via `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) against all 92 entities with the 34 disabled ones temporarily enabled. Coverage 84 of 91 → **85 of 92**. Added `Allowance` and `Alert Threshold`; removed `Data Volume Alert`, which was **renamed in code** rather than dropped in delivery — the review confirmed separately that every entity declaring a note publishes one. Nineteen note texts updated after a rewrite pass that removed vendor-blaming and outdated display advice. The seven deliberate omissions are unchanged.
 - **v1.2.0** (2026-07-29) — Added an **Entities without a note** section covering all 14, so the omissions are visible and deliberate rather than reading as gaps. Flagged APN Profile and Network Mode Selection as the only two where a wrong choice has a real cost, for a later decision. Header reworded to state coverage as 68 of 82.

@@ -82,6 +82,9 @@ import sys
 import time
 from typing import Any
 
+# Installs probatio as `voluptuous` before the package imports it (C-036).
+import homeassistant  # noqa: F401
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 try:
@@ -104,6 +107,7 @@ try:
         OUTAGE_CHECK_INTERVAL,
         OUTAGE_REASON_DATA_DISCONNECT,
     )
+
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
     raise SystemExit(
         f"cannot import {err.name!r}.\n\n"
@@ -457,6 +461,15 @@ async def check_first_write_on_an_untaught_object(
     options: dict[str, str], report: Report
 ) -> None:
     """Write on a dead session with an object that has learned nothing.
+
+    **Since 3.4.3-dev2 the write succeeds because it logs in first.**
+    `ad_suffix()` logs in before every write except `LOGOUT`, so the dead
+    credential handed to the second object below is replaced before the write
+    is sent, whatever the flag reports. The rung now confirms that a write
+    handed a dead session is carried out; it no longer exercises the
+    `loginfo` check deciding to log in. On 2026-09-24 that check was measured
+    answering `ok` for several seconds after a takeover from another device,
+    which is why the login was made unconditional.
 
     **Two objects, and the division of labour between them is the whole
     method.** The session flag is learned at one site and cleared at none, so

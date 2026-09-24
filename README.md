@@ -23,7 +23,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >   - **SMS Management** — View the most recently received message content and send SMS messages directly in HA.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
 >
-> Reads and writes are verified on the **ZTE MC7010** (5G Outdoor CPE), and on the **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE). This is powered by a dynamic [Device Profile system](#-device-profile) that works to automatically discovers write tokens and parameter schemas across the broader ZTE `goform` family.
+> Reads and writes are verified on the **ZTE MC7010** (5G Outdoor CPE), and on the **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE). This is powered by a dynamic [Device Profile system](#-device-profile) that works to automatically discover write tokens and parameter schemas across the broader ZTE `goform` family.
 
 ## 📋 Table of Contents
 
@@ -55,6 +55,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Read and Writes Confirmed On**:
   - **ZTE MC7010** (5G Outdoor CPE) — **Live Hardware Verified** on firmware `V1.0.0B01` and `V1.0.0B03`.
   - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Verified** on firmware `V1.0.1B03` / `V1.0.1B04`.
+  - Confirmed in both bridge mode and router mode.
 
 - **Expected Compatible (ZTE `goform` API Family)**:
   - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
@@ -139,7 +140,7 @@ Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower detail
 
 ### 📶 Reading Your Signal Data
 
-This integration reports a lot of signal numbers. This section explains which ones matter, what to expect, and how to compare one setup (location, config) against another.
+This integration reports a lot of signal numbers. This section explains which ones are useful, what to expect, and how to compare one setup (location, config) against another.
 
 <details>
 
@@ -160,7 +161,7 @@ This integration reports a lot of signal numbers. This section explains which on
 
 **RSRP (Signal Strength) is raw received power.** It tells you whether the tower is reaching you, not how well the connection will perform.
 
-They move independently, and that is the point:
+They move independently, and provide different insight:
 
 - **Strong RSRP, poor SNR** — you are close to a busy tower. Plenty of signal, but lots of interference. Speeds disappoint despite "full bars".
 - **Weak RSRP, good SNR** — you are far out from the tower but the sector is quiet. Often perfectly usable, and sometimes faster than the first case.
@@ -261,7 +262,8 @@ Monitor monthly data consumption, active session totals, and upload/download spe
 </summary><br>
 
 - **Monthly Data Usage**: Track your monthly download, upload and total data usage. See the [Data Usage Alert](#-data-usage-alert) example.
-- **Session Usage**: Track your download and upload for this session/connection (i.e. since last router restart).
+- **Session Usage**: Track your download and upload for the current data connection. It starts again from zero each time the connection reconnects.
+- **Lifetime Totals** _(disabled by default)_: **Total Received**, **Total Sent** and **Total Data**, running totals kept by the router that do not reset on the billing day.
 - **Allowance & Threshold Info**: Visibility to the allowance limits and warning thresholds you set in the router web UI.
 
 - **Projected Cycle Usage** (`sensor.zte_5g_data_projected_cycle_usage`): An estimate of where you will finish the cycle at your current rate. See [Data Usage Projection](#-data-usage-projection) below.
@@ -339,6 +341,7 @@ Reboot router hardware directly from Home Assistant and monitor data integrity w
 </summary><br>
 
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
+- **Uptime and Connection Time**: **Device Uptime** is when the router last booted, and **Connection Uptime** is when its current mobile data connection started. Each has a matching duration sensor, disabled by default, if you prefer a running time to a timestamp. **Total Connected Time** adds up data-connection time across connections. Some routers do not report their own uptime; on those, Device Uptime follows the data connection, the same as Connection Uptime, so a reconnect moves it as a reboot would.
 - **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
 - **Router and SIM State**: **Operator Provisioned** reports whether the router refuses to hand over its remote-management (TR-069) settings, which is usual on an operator-supplied unit and explains why some settings cannot be changed locally.
 - **Firmware Update State** and **Firmware Update Result** report whether an update is running and how the last one ended. Both off by default.
@@ -431,9 +434,9 @@ This integration provides **125 entities** (depending on your firmware) organize
 
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
-| ⚙️ **System** | 49 | 37 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, Connection Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 31, including the five temperature sensors, Uptime Duration, Connection Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
+| ⚙️ **System** | 51 | 39 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, Connection Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 33, including the five temperature sensors, Uptime Duration, Connection Duration, Total Connected Time, WAN Netmask, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
 | 📶 **Signal** | 56 | 51 Sensors, 1 Binary Sensor, 3 Selects, 1 Switch | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, **Data Connection**, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
-| 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
+| 📈 **Data** | 18 | 17 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 7: Monthly Upload/Download/Total (Legacy GB sensors), Total Received, Total Sent, Total Data, Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
 | 🛠️ **Actions** | 5 | — | Send, Delete, Bulk-Delete and List SMS, **Reset Entities** | — |
 
@@ -463,7 +466,7 @@ This integration provides **125 entities** (depending on your firmware) organize
 
 ---
 
-> Defaults Match Your Model: Which entities start enabled depends on the router you have. An MC888 Pro reports its signal quality under names an MC7010 does not use, so **RSSI** and **SINR** are on there and off here; an MC7010 has no WiFi of its own, so the two WiFi sensors are off there and on everywhere else. A model nobody has measured gets the standard set. Nothing is hidden — everything is one click away in the Entities tab, and the **Reset Entities** action below moves them in bulk.
+> Defaults Match Your Model: Which entities start enabled depends on the router you have. An MC888 Pro reports its signal quality under names an MC7010 does not use, so **RSSI** and **SINR** are on for MC888 and and off for MC7010; an MC7010 has no WiFi of its own, so the two WiFi sensors are off there and on everywhere else. A model nobody has measured gets the standard set. Nothing is hidden — everything is one click away in the Entities tab, and the **Reset Entities** action below moves them in bulk.
 
 ---
 
@@ -1505,6 +1508,8 @@ actions:
 &nbsp; &nbsp; &nbsp; &nbsp; ➕ &nbsp; Click to Expand for Automation Detail:
 </summary><br>
 
+> Reboot detection needs a router that reports its own uptime, as the MC7010 does. On a router that does not, such as the MC888 Pro, Device Uptime shows when the current data connection started, so this automation also fires when the data connection reconnects.
+
 ```yaml
 alias: "ZTE Reboot: Router Reboot Alert"
 description: "Notifies when the router uptime timestamp changes, indicating a restart"
@@ -1976,11 +1981,13 @@ The router permits only **one login session at a time**, and the most recent log
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-**It recovers its session automatically.** The router allows one session at a time, so logging into its web UI ends the integration's. The integration detects this, logs back in and retries once, so an action you trigger straight after using the web UI still works. A request that still fails **raises an error** rather than returning empty data, so an automation can tell "nothing to report" from "could not ask".
+**It recovers its session automatically.** The router allows one session at a time, so logging into its web UI ends the integration's. For reading, the integration notices and logs back in. For settings, it logs in fresh just before every change, and if the router still refuses the change it tries once more. Sending an SMS is never repeated, since a second attempt could deliver the message twice. A request that still fails **raises an error** rather than returning empty data, so an automation can tell "nothing to report" from "could not ask".
 
 **It renews before the session expires.** Session lifetime varies by model and firmware: tests show sessions lasting from 15 seconds to a few minutes. The integration learns your router's own lifetime and renews inside it.
 
 **A write and a poll take turns.** Both use the router's single session. A write waits up to three seconds for a poll to finish, then proceeds anyway.
+
+**Logins take turns too.** Two logins at the same moment can have one refused, so the integration never starts a second before the first finishes.
 
 ---
 
@@ -2283,7 +2290,7 @@ Also note: an entity ID is reused unless a **different, still-existing** entity 
 </summary><br>
 
 - **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
-- **Non-Bridge-Mode Features**: The integration was developed on and has only been tested with the MC7010, an outdoor CPE without WiFi. It has only been tested in router bridge mode. This means the integration does not have:
+- **WiFi Monitoring & Client Tracking**:
   - **Client Tracking**: No tracking of connected clients.
   - **WiFi Monitoring**: There are no WiFi features.
 
@@ -2369,7 +2376,7 @@ This is a **personal project**. Support and updates are provided on a **"best-ef
 
 ## 🔀 Other Options
 
-This integration is specifically optimized as a high-performance, async-native monitor for ZTE 5G CPEs (primarily the **MC7010**, as well as the MC801, MC888, MC889, MF266, MF286 and MF289 family series).
+This integration is specifically optimized as a high-performance, async-native monitor for ZTE 5G CPEs (primarily the **MC7010** and **MC888 Pro**, as well as the MC801, MC888, MC889, MF266, MF286 and MF289 family series).
 
 If ZTE Router 5G Monitor does not work for your specific router model or deployment setup, several excellent alternative Home Assistant integrations exist depending on your hardware type:
 

@@ -5,6 +5,11 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.3-dev4\] - 2026-09-24 - Diagnostics Download Re-Fetches a Dropped Web File; Diagnostics Check Compares Name Lists as Sets and Refuses to Run While Home Assistant Polls](#343-dev4---2026-09-24---diagnostics-download-re-fetches-a-dropped-web-file-diagnostics-check-compares-name-lists-as-sets-and-refuses-to-run-while-home-assistant-polls)
+  - [\[3.4.3-dev3\] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date](#343-dev3---2026-09-24---stand-alone-scripts-load-probatio-first-session-and-router-behavior-documentation-brought-up-to-date)
+  - [\[3.4.3-dev2\] - 2026-09-24 - Login Before Every Write; Serialized Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed](#343-dev2---2026-09-24---login-before-every-write-serialized-logins-one-rebuilt-retry-on-a-refused-write-dev1-test-failures-fixed)
+  - [\[3.4.3-dev1\] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default](#343-dev1---2026-09-24---outage-hold-20-s-total-connected-time-total-byte-counters-and-wan-netmask-sensors-mc888-pro-device-uptime-off-by-default)
+  - [\[3.4.3-dev0\] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff](#343-dev0---2026-09-24---timestamp-and-duration-related-doc-updates-plus-ci-bump-ruff)
   - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
   - [\[3.4.2-dev8\] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live](#342-dev8---2026-09-24---uptime-latch-defects-from-342-dev7-fixed-durations-in-minutes-upgrade-paths-tested-and-checked-live)
   - [\[3.4.2-dev7\] - 2026-09-24 - Device Uptime from system\_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei](#342-dev7---2026-09-24---device-uptime-from-system_uptime-connection-uptime-sensors-uptime-latch-ported-from-huawei)
@@ -313,6 +318,148 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.4.3-dev4] - 2026-09-24 - Diagnostics Download Re-Fetches a Dropped Web File; Diagnostics Check Compares Name Lists as Sets and Refuses to Run While Home Assistant Polls
+
+### Fixed
+
+- **One dropped request changed the diagnostics download.** `web_sources.crawl` fetched each of the router's web files once and recorded a file that drew no answer as missing, which removed every name mined from it. On 2026-09-24 one such file left three names out of one pass. A file that draws no answer is now fetched once more after 1 s; a file that fails twice, or that the router refuses with a status, is still recorded missing.
+- **`scripts/diag_check.py` reported one difference as hundreds.** Name lists were compared by position, so three names absent from one pass shifted every later entry, and the check named four shifted positions and none of the three names. Lists of plain values are now compared as sets, and a difference names the members only in each pass.
+- **A pass whose crawl lost a web file is taken again,** by the same single retake that already repeats a pass with names left unasked. A second incomplete pass is compared and reported as before.
+- **The check refuses to start while the development Home Assistant is polling the router.** It reads `switch.*_pause_polling` from the local instance and stops with a named failure when polling is on. Two runs on 2026-09-24 failed at 61 of 63 for that reason. Where no instance or token is found it runs as before.
+
+### Tests
+
+- `test_web_sources.py`: a file that drew no answer is fetched once more; a file that never answers is fetched twice and recorded missing.
+- `test_diag_check_stability.py`: a name missing from one pass is reported as that name; the same names in another order are not a difference; a web file with no status marks the pass incomplete.
+- With the re-fetch and the set comparison disabled, four of the new tests fail; restored, all pass.
+
+### Validation
+
+`Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: 33 of 33 steps pass, including 1,959 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 64 of 64, its new precondition included. The first pass of that check left 81 names unasked with Home Assistant's polling paused, and the retake completed it, so an incomplete pass has a cause other than a competing client. That cause is not established.
+
+## [3.4.3-dev3] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date
+
+### Fixed
+
+- **`scripts/diag_check.py` and `scripts/hardware_check.py` loaded real voluptuous into the package** (C-036). Both import the package after putting the project root on `sys.path`, and the package's `__init__.py` imports `voluptuous` before any `homeassistant` import, so the process held real voluptuous where Home Assistant 2026.9 installs probatio. Each now imports `homeassistant` at the end of its top import block, which installs probatio first. Both scripts load in the devcontainer without the `install_as_voluptuous` warning. The same line is written to the Huawei and UniFi scripts, not yet run there.
+
+### Changed
+
+- **Explanatory text left stale by 3.4.3-dev2.** `api.reboot()` no longer calls itself the one write that is safe to retry; it keeps its own retry because it verifies by the router going away. `api.note_write_refusal()` separates resending the refused payload, which was measured failing, from the rebuilt retry. `api._ensure_session()` says it now runs after the fresh login. `scripts/hardware_check.py` rung [0] says its write succeeds because the write logs in first, not because the `loginfo` check decides to.
+- **`docs/DEVELOPMENT.md` §5.z** records that Home Assistant's own logins collide when they overlap, and that a takeover by another device is reported late by `loginfo`.
+- **The device behavior reference in the project notes** carries the 2026-09-24 measurements: logins close together and the result `3` on overlap (§2.1a); `device_uptime`, `total_time` and `ppp_connect_time`, the six-hour drift figures and what the MC888 Pro answers (§3.5); router mode against bridge mode (§3.6); writes after a takeover, rebuilt against replayed retries and the router's 10 s silences (§4.1a); and two hypotheses closed (§7).
+- `docs/expected_zte_compatibility.md` states that the MC7010 behaves the same in bridge and router mode.
+
+No behavior changes in the integration.
+
+### Tests
+
+- `ALLOWED_SUPPRESSIONS` in `tests/test_entity_hygiene.py` carries the two `noqa: F401` suppressions, with the C-036 reason; `test_every_suppression_is_on_the_reviewed_allow_list` failed without them.
+
+### Validation
+
+`Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: 33 of 33 steps pass, including 1,954 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 63 of 63. Both scripts run without the `install_as_voluptuous` warning. Two earlier runs failed the diagnostics check at 61 of 63, on differences between its two passes, because Pause Polling had been left off on the development instance after the 3.4.3-dev2 live check and its polls took the router's session mid-pass. With polling paused the check passed.
+
+## [3.4.3-dev2] - 2026-09-24 - Login Before Every Write; Serialized Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed
+
+### Fixed
+
+- **A write sent after another device took the session was refused.** Measured on the MC7010 with the LED written every 5 s and one phone login per run: 6 of 99 writes were refused, all straight after a phone login. The pre-write check read `loginfo` as `ok` before every refused write; in one run it caught the takeover about 10 s late. `ad_suffix()` now logs in before every write except `LOGOUT`, and `_ensure_session()` still reads `loginfo` afterwards for the `SEND_SMS` block. A failed pre-write login does not stop the write, which then reports its own outcome.
+- **Two logins at once from Home Assistant had one refused.** Found in the dev2 live check: a pre-write login and a poll's login 30 ms apart, the second answered with result `3`, and that poll held its last values. Reproduced by script: overlapping pairs had one login refused in each of three pairs; ten serialized pairs were all accepted. `login()` now holds `_login_lock`, and a caller that waited logs in again.
+- **dev1 left two tests failing,** reported as a pass. `Fix and Validate All` on dev1 printed `Pytest: 2 failed, 1942 passed` in `.reports/summary_fix_and_validate.txt`; the runner's own step list showed the step as PASS, and that list was read instead of the summary. `flux_total_rx_bytes`, `flux_total_tx_bytes` and `flux_total_time` left `EXPECTED_NAMES`, since a polled name is never probed; WAN Netmask gained an icon.
+
+### Added
+
+- **One rebuilt retry on an explicit refusal** (`_retry_once_on_refusal`), for the writes that set a complete state: `set_data_connection`, `set_apn`, `set_apn_mode`, `set_odu_led_switch`, `set_data_volume_settings`, `set_bearer_preference`. The write is built again, so it carries a fresh login and a fresh `AD`. Measured: replaying a refused payload with its old `AD` was accepted 7 times in 17; rebuilding it was accepted 20 times in 20, three of them after a phone takeover. Only `ZTEWriteRefusedError` triggers it, a new subclass of `ZTEConnectionError` raised by `_require_success`: a timeout, a transport error or an outage refusal is not retried. `send_sms`, `delete_sms`, `delete_all`, `reboot` and `logout` are not wrapped; `reboot()` keeps its own single retry, which now gets a fresh login per attempt.
+- **Retry counters** `write_retries` and `write_retries_succeeded` in `session_check_stats`, published in the diagnostics download under `session_flag.checks`.
+
+### Changed
+
+- The switch-level retry added by the prototype is removed; the decision sits in `api.py`, where the SMS exclusion is enforced once.
+- `tests/conftest.py` stubs `_login_before_write` for every test unless it requests `real_prewrite_login`. Tests that feed a fixed sequence of mocked replies predate the login and would otherwise lose a reply to it.
+- `docs/zte_how_to_access.md`, `docs/DEVELOPMENT.md` and `AGENTS.md` replace "no write is ever resent" and the `loginfo`-first recovery with the login before every write, serialized logins and the rebuilt retry.
+
+### Tests
+
+- `tests/test_write_retry.py`: a login precedes every write, not `LOGOUT`; a failed login does not stop the write; logins never overlap; the retried set is exactly the six setters; a refusal is a `ZTEConnectionError`; a refusal then a success is counted; a timeout and an outage refusal are not retried; a refused `send_sms` is sent once.
+- `test_a_refused_write_is_still_reported_not_retried` is rewritten as `test_a_refused_write_is_rebuilt_once_then_reported`: it encoded the old rule.
+- Each change disabled in turn: no pre-write login, no login lock, no retry, retry on any connection error. Each fails at least one new test; restored, all 1,954 pass.
+
+### Checked Live on the MC7010
+
+| Check | Result |
+| :-- | :-- |
+| 30 back-to-back LED writes | 30 of 30 |
+| 3-minute control run, no phone | 28 of 28 |
+| Network mode and APN mode written at their current values | Both accepted |
+| Data off and on through the switch | Both windows closed on the router's answer, 20.2 s and 22.2 s, target state reached |
+| Retry counters in the diagnostics download | Present, both 0 |
+| Two phone runs of 3 minutes, two phone logins each | 56 of 56 writes accepted; no retry, no refused login |
+
+The prototype runs before it: three phone runs, six takeovers, 89 writes, none refused. A third dev2 phone run was not done.
+
+### Not Resolved
+
+- **The router twice stopped answering for about 10 s during phone runs,** once in a prototype run and once in a dev2 run; both times the next request succeeded. The cause is not established. A third instance stopped the first dev2 validation run's diagnostics check before any check ran; the rerun passed 63 of 63.
+
+### Validation
+
+`Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: every step passed, including 1,954 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 63 of 63. The first run failed one lint rule, a missing test docstring, since fixed.
+
+- **The MC888 Pro is untested** with a login before every write. The next issue #79 download settles it.
+- `scripts/hardware_check.py` rung [0] still passes, now because the write logs in first rather than because the pre-write check detects the dead session. Its docstring describes the old mechanism.
+
+## [3.4.3-dev1] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default
+
+### Added
+
+- **Total Connected Time** (`total_time`, System, disabled by default): the router's connected time added across data connections, from `total_time` or `flux_total_time`. Duration in seconds, shown in minutes, `total_increasing`. No timestamp is derived from it. On the MC7010 it held still while data was off and counts from the last reboot.
+- **Total Received, Total Sent, Total Data** (`total_rx_bytes`, `total_tx_bytes`, `total_data_bytes`, Data, disabled by default): the router's lifetime byte counters from `total_rx_bytes` / `flux_total_rx_bytes` and `total_tx_bytes` / `flux_total_tx_bytes`, in bytes shown as GB, `total_increasing`. Total Data is published only when both counters are present.
+- **WAN Netmask** (`wan_netmask`, System, diagnostic, disabled by default).
+- The seven keys join `_EXTENDED_PARAMS`. The MC7010 answers the bare names; the MC888 Pro answered the `flux_` spellings and `wan_netmask` in the issue #79 3.4.2 download.
+
+### Changed
+
+- **`OUTAGE_HOLD` 25 s to 20 s.** The MC7010 went silent at most 12.4 s after a data command in every measured run; the MC888 Pro did not go silent at all, so its windows closed at the hold and its controls were refused for the whole 25 s. The 60 s caps are unchanged.
+- **Device Uptime disabled by default on the MC888 Pro,** through `MODEL_OVERLAY`. That model answers neither `system_uptime` nor `flux_system_uptime`, so Device Uptime follows the data session there. New installs only; `reset_entities` applies it to an existing install. Uptime Duration is disabled by default on every model and needed no entry. The fallback to the session counter is unchanged.
+- **About notes:** Device Uptime rewritten; Uptime Duration states what a router without its own uptime shows.
+- **README:** the Router Reboot Alert example states that reboot detection needs a router that reports its own uptime; entity counts updated. `docs/expected_zte_compatibility.md` records the MC888 Pro default, and `docs/DEVELOPMENT.md` the 20 s hold.
+
+### Tests
+
+- `test_the_hold_ends_at_twenty_seconds`; `test_the_mc888_starts_with_both_uptime_sensors_off`; `test_the_uptime_entry_leaves_the_connection_sensors_alone`; `test_reset_disables_the_uptime_sensors_on_an_mc888`; `test_the_lifetime_sensors_read_either_spelling`; `test_total_data_needs_both_counters`. With the changes disabled, the hold, overlay, reset and Total Data tests fail; with them restored all pass.
+
+### Checked Live on the MC7010
+
+| Check | Result |
+| :-- | :-- |
+| Five new entities register disabled after a restart | Pass |
+| Enabled, each matches a direct read of its key | Pass: Total Connected Time 36,016 s against 36,061 s read 45 s later; the byte counters within the traffic of those 45 s; Total Data equals the sum |
+| Device Uptime and Connection Uptime unchanged across the restart | Pass: 02:59:00 and 11:44:07 UTC |
+| Data off and on through the Data Connection switch | Pass: drops at 4.0 s and 11.1 s after the commands, inside the 20 s hold; each window closed on the router's answer with the target state |
+| Total Connected Time while data was off | Held at 605.58 min for the off period and resumed |
+| Diagnostics download | The new keys in polled data; byte counters untokenized, `wan_netmask` tokenized |
+
+### Defects Found in the Cycle
+
+- **The overlay entry for `realtime_time` repeated its description default** and failed `test_no_overlay_entry_repeats_the_description_default`. Removed before release.
+
+### Not Resolved
+
+- **One `DISCONNECT_NETWORK` was refused during the live check, cause not established.** The router answered `result='failure'` and the switch raised an error. A direct read had logged in to the router seconds before. The integration's post-refusal session check did not report the session gone: the error raised was `ZTEConnectionError`, not `ZTEAuthError`. The rerun four minutes later succeeded.
+- Byte totals of 100 TB or more have 15 digits, which the diagnostics identifier sweep tokenizes in a download. The sensor is unaffected; the MC888 Pro reads 26.7 TB.
+- Whether the MC888 Pro's `flux_total_time` and byte totals survive a reboot is not measured.
+
+## [3.4.3-dev0] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff
+
+### Bumps
+
+- **Validate Bump**: Update `ruff` from 0.16.7 to 0.16.8
+
+### Changed
+
+- **Documentation**: Updated `AGENTS.md` and `docs/DEVELOPMENT.md` with information on the behavior of time and duration data elements on the ZTE routers.
+
 ## [3.4.2] - 2026-09-24 - Release: Independent System & Connection Uptime Sensors, Data Outage Windows, and Duration Precision
 
 ### Summary
@@ -441,7 +588,7 @@ A mixin that ran the old ZTE latch twice was written first in this version and r
 - README: entity counts 123 → 125 and System 47 → 49, Connection Uptime and Connection Duration in the System row and the history table, and one note in the Auto-Reboot example: with Connection Mode Status at `manual_dial` the router does not reconnect data after a reboot.
 - `docs/all_sensors.md`, `docs/about_attribute_list.md`: the two new sensors and Device Uptime's amended `about` text.
 - `docs/expected_zte_compatibility.md`: which uptime key the MC7010 uses, and that the Data Connection switch takes it offline in both directions.
-- The device behaviour reference in the shared notes gains a section on data connection and uptime counters, with the measured outage timings for both dial modes, the reboot timings, the uptime keys, and what Kees48's MC888 Pro downloads show. Three hypotheses are recorded as closed.
+- The device behavior reference in the shared notes gains a section on data connection and uptime counters, with the measured outage timings for both dial modes, the reboot timings, the uptime keys, and what Kees48's MC888 Pro downloads show. Three hypotheses are recorded as closed.
 
 ### Tests
 
@@ -845,7 +992,7 @@ affecting that device's operation. Three faults and one gap: a published field p
 
 ### Summary
 
-No behavior changes except one. `docs/project_complexity.md` flags six modules above 25% comment density, sixty contiguous comment blocks over eight lines, and three routines whose comments outnumber their code. The prose behind those flags was written in a conversational register: long subordinated sentences, em-dash asides, bold emphasis used often enough to emphasise nothing, and paragraphs narrating a debugging history where the rule and the measurement would do.
+No behavior changes except one. `docs/project_complexity.md` flags six modules above 25% comment density, sixty contiguous comment blocks over eight lines, and three routines whose comments outnumber their code. The prose behind those flags was written in a conversational register: long subordinated sentences, em-dash asides, bold emphasis used often enough to emphasize nothing, and paragraphs narrating a debugging history where the rule and the measurement would do.
 
 Twelve blocks are rewritten. **Prose across the integration goes from 5,757 lines to 5,726**, and the line count is not the point. What changed is that no sentence now carries three clauses and an aside.
 
@@ -1027,7 +1174,7 @@ The larger of the two defects is that discovery has never read what it was writt
 
 ### Added
 
-- **A write and a poll take turns over the one session this router grants.** A poll holds the lock for the length of its batch; a write waits three seconds and then goes ahead regardless. **Failing to acquire is not an error** - the worst case is an unserialised write, which is what every release before this one did, and a lock that can refuse is another way to block writes on routers nobody can test.
+- **A write and a poll take turns over the one session this router grants.** A poll holds the lock for the length of its batch; a write waits three seconds and then goes ahead regardless. **Failing to acquire is not an error** - the worst case is an unserialized write, which is what every release before this one did, and a lock that can refuse is another way to block writes on routers nobody can test.
 
   Only the two poll entry points take the lock. A write's read-back goes through `get_params`, which deliberately does not, because a lock held across both would have the write waiting on itself; `login` posts through the client session rather than through `_request`, so recovery inside a write cannot re-enter either. Both are asserted.
 
@@ -1286,7 +1433,7 @@ The instruments defeated themselves. A rejection was wiped by the file meant to 
 
 - **The reset threshold is learned from this device's own expiries, and the constant remains the starting point.** There is no lifetime to hardcode: four runs on the reference MC7010 inside one hour ended at 15 s, 85 s and 110–120 s, and one could not complete; `[3.3.0-rc2]` separately measured "at or below 200 s". A device holding sessions for 300 s and one expiring at 20 s are both plausible and neither is served by a number written here.
 
-  Until three expiries agree, the idle reset runs unchanged - `[3.3.0-rc2]` declined relying on reactive detection alone, because it costs three round trips instead of two and removes the second line of defence behind the `[3.3.0-dev12]` blank-payload fault, and nothing here weakens that. After that, the threshold is the shortest of the last ten observed lifetimes less a fifth, never below thirty seconds.
+  Until three expiries agree, the idle reset runs unchanged - `[3.3.0-rc2]` declined relying on reactive detection alone, because it costs three round trips instead of two and removes the second line of defense behind the `[3.3.0-dev12]` blank-payload fault, and nothing here weakens that. After that, the threshold is the shortest of the last ten observed lifetimes less a fifth, never below thirty seconds.
 
   Shortest rather than typical, because being early costs one login and being late costs three round trips. Recent rather than all-time, because a session can end for reasons other than time: this router grants the session to the newest login, so one visit to its web page would otherwise set a permanent floor. Anything below the floor is discarded rather than classified, because the router does not report why a session ended.
 
@@ -1296,7 +1443,7 @@ The instruments defeated themselves. A rejection was wiped by the file meant to 
 
 ### Added
 
-- **The download says whether this device implements the session flag at all.** `supported`, the firmware it was confirmed on, and the check's own counters. The raw `loginfo` value is deliberately absent - it is denied by name in the sanitiser and is not what anyone needs.
+- **The download says whether this device implements the session flag at all.** `supported`, the firmware it was confirmed on, and the check's own counters. The raw `loginfo` value is deliberately absent - it is denied by name in the sanitizer and is not what anyone needs.
 
   This settles the one question the reference hardware cannot answer. The MC888 Pro has never been observed with a dead session, because a download is only produced when the integration is working, and its downloads redact the value - so whether it implements the key is unknown, and that decides whether the pre-write check applies there at all. The field answers it from that device's next download, with no write and nothing asked of its owner.
 
@@ -1420,7 +1567,7 @@ This release asks the router's own session flag instead, and removes the refusal
 
 - **Tests that pin the property the mechanism was missing.** That the check never raises, across four answer shapes and a failed read; that a failed re-login still lets the write proceed; that a confirmed flag makes exactly one request and skips the witness path; and that the flag read is never classified - a device without the key answers `{"loginfo": ""}`, which `_request` scores as an expiry, re-logs in and replays, and the caller would then log in again: two or more logins per write against `MAX_LOGIN_COUNT` and a 300-second lockout.
 
-- **Tests for the learned-support rule**: that a blank flag is `unanswered` until the device has answered `ok`; that it becomes a denial afterwards; that the proof does not survive a firmware change; and that the read asks for one key with no witnesses travelling alongside it.
+- **Tests for the learned-support rule**: that a blank flag is `unanswered` until the device has answered `ok`; that it becomes a denial afterwards; that the proof does not survive a firmware change; and that the read asks for one key with no witnesses traveling alongside it.
 
 - **A witness test that drives `_populated_keys` through a real poll sequence.** Sixteen tests set it directly and none derived it, so the replace-versus-accumulate behavior never executed under test. Measured on hardware: 60 keys after the core poll, 39 after the extended poll, and none of the 60 core names surviving. The test asserts the behavior as it stands, so the fix - which is not in this release - has to account for it rather than pass by accident.
 
@@ -1434,7 +1581,7 @@ This release asks the router's own session flag instead, and removes the refusal
 
 ### Notes
 
-- **`loginfo` on the MC888 Pro is answered but unproven.** It is present and populated in all sixteen reporter downloads from `[3.3.8]` to `[3.3.24]`, always a two-character token, never blank. The diagnostics sanitiser redacts the value by name, so the literal has not been seen on that device, and no download exists of that device with a dead session - a download is only produced when the integration is working. Two notes in this project describe the field as static there, which is consistent with `ok` on every working session but would also describe a field that never changes. The learned-support rule covers the gap without needing the answer.
+- **`loginfo` on the MC888 Pro is answered but unproven.** It is present and populated in all sixteen reporter downloads from `[3.3.8]` to `[3.3.24]`, always a two-character token, never blank. The diagnostics sanitizer redacts the value by name, so the literal has not been seen on that device, and no download exists of that device with a dead session - a download is only produced when the integration is working. Two notes in this project describe the field as static there, which is consistent with `ok` on every working session but would also describe a field that never changes. The learned-support rule covers the gap without needing the answer.
 
 - **Recovery from a session taken by another client is not solved here.** Measured on an MC7010: a browser login took the session, the check detected it within a second, logged in again and confirmed, and the write was still refused. The likely cause is the browser re-taking the session between the re-login and the write - contention no pre-write check can remove. `[3.3.2-rc5]` recorded the same observation without a mechanism. Detection works; a write cannot be made reliable while another client is actively holding the router's page open.
 
@@ -1853,8 +2000,8 @@ The run is also split. The write ladder consumes most of a fifteen-minute budget
 ### Known Issues
 
 - Rung `24c` raises `ZTEAuthError` on the reference device. It reads four version keys in one request, three of which are unanswered there, and the session classifier judges the result expired. The read itself succeeds and the payload is recorded in the rejection.
-- Captured JavaScript passes through the diagnostics sanitiser, which rewrites address-shaped literals: `"0.0.0.0"` in `js/service.js` is recorded as `"ip-7"` in one of the two copies.
-- The capture is serialised twice in a diagnostics download, at `/data/entry/data/delete_probe` and `/data/sms/delete_probe`.
+- Captured JavaScript passes through the diagnostics sanitizer, which rewrites address-shaped literals: `"0.0.0.0"` in `js/service.js` is recorded as `"ip-7"` in one of the two copies.
+- The capture is serialized twice in a diagnostics download, at `/data/entry/data/delete_probe` and `/data/sms/delete_probe`.
 
 ## [3.3.20-dev1] - 20206-09-11 - CI Bump Ruff
 

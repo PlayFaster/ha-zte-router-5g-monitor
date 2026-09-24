@@ -165,6 +165,9 @@ _ALIAS_5G_SINR: Final = ("Z5g_SINR", "Z5g_snr", "5g_sinr", "nr5g_sinr")
 _ALIAS_5G_PCI: Final = ("nr5g_pci", "Z5g_CELL_ID", "network_Z5g_PCI")
 _ALIAS_MONTHLY_TX: Final = ("monthly_tx_bytes", "flux_monthly_tx_bytes")
 _ALIAS_MONTHLY_RX: Final = ("monthly_rx_bytes", "flux_monthly_rx_bytes")
+_ALIAS_TOTAL_TX: Final = ("total_tx_bytes", "flux_total_tx_bytes")
+_ALIAS_TOTAL_RX: Final = ("total_rx_bytes", "flux_total_rx_bytes")
+_ALIAS_TOTAL_TIME: Final = ("total_time", "flux_total_time")
 
 # The `flux_` prefix is a parallel vocabulary across this API, not a quirk of
 # the monthly counters. The bare spelling leads because the reference MC7010
@@ -496,6 +499,15 @@ def _monthly_total_bytes(data: dict[str, Any]) -> int | None:
     return tx + rx
 
 
+def _total_data_bytes(data: dict[str, Any]) -> int | None:
+    """Sum the lifetime TX and RX counters; `None` unless both are present."""
+    tx = _safe_int(get_first(data, _ALIAS_TOTAL_TX))
+    rx = _safe_int(get_first(data, _ALIAS_TOTAL_RX))
+    if tx is None or rx is None:
+        return None
+    return tx + rx
+
+
 def _negative_dbm(value: Any) -> float | None:
     """Return a dBm reading as a negative number, whatever sign it arrived with.
 
@@ -595,6 +607,18 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         value_fn=lambda data: _safe_str(data.get("wan_ipaddr")),
     ),
     ZTESensorEntityDescription(
+        key="wan_netmask",
+        about=(
+            "The subnet mask that goes with the router's mobile network address. "
+            "Useful mainly when diagnosing a network problem."
+        ),
+        translation_key="system_wan_netmask",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        value_fn=lambda data: _safe_str(data.get("wan_netmask")),
+    ),
+    ZTESensorEntityDescription(
         key="lan_ipaddr",
         translation_key="system_lan_ipaddr",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -604,11 +628,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="device_uptime",
         about=(
-            "The moment the router last booted, held steady between reboots rather "
-            "than recalculated each poll. It only moves when the router's own uptime "
-            "counter drops, so a genuine restart is easy to trigger automations on. "
-            "A router that does not report its own uptime shows its last "
-            "data connection instead, the same as Connection Uptime."
+            "When the router last booted. Some models do not report their own "
+            "uptime; on those, this shows when the current data connection "
+            "started, the same as Connection Uptime."
         ),
         translation_key="system_device_uptime",
         device_class=SensorDeviceClass.TIMESTAMP,
@@ -619,8 +641,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="realtime_time",
         about=(
             "How long the router has been running since its last boot. The Device "
-            "Uptime sensor expresses the same fact as a timestamp, which is usually "
-            "the easier one to automate against."
+            "Uptime sensor expresses the same fact as a timestamp. A router that "
+            "does not report its own uptime shows how long its data connection has "
+            "been up instead."
         ),
         translation_key="system_uptime_duration",
         device_class=SensorDeviceClass.DURATION,
@@ -665,6 +688,25 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         # Set by the coordinator from the session counter, `None` while data
         # is off: the MC7010 reads `realtime_time` as blank or "0" then.
         value_fn=lambda data: _safe_int(data.get("connection_seconds")),
+    ),
+    ZTESensorEntityDescription(
+        key="total_time",
+        about=(
+            "The total time the router's mobile data connection has been up, added "
+            "across connections. It does not count while data is off, so it is not "
+            "the router's uptime. The router decides when this total starts again "
+            "from zero, which on some models is at each reboot."
+        ),
+        translation_key="system_total_connected_time",
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_unit_of_measurement=UnitOfTime.MINUTES,
+        suggested_display_precision=1,
+        entity_registry_enabled_default=False,
+        group="system",
+        min_limit=0,
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_TOTAL_TIME)),
     ),
     ZTESensorEntityDescription(
         key="last_updated",
@@ -1885,6 +1927,62 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         group="data",
         min_limit=0,
         value_fn=_monthly_total_bytes,
+    ),
+    ZTESensorEntityDescription(
+        key="total_rx_bytes",
+        about=(
+            "Data downloaded through the router's mobile connection, as a running "
+            "total kept by the router. It is separate from the monthly counters and "
+            "does not reset on the billing day. Home Assistant displays it in GB "
+            "while storing the exact byte count."
+        ),
+        translation_key="data_total_rx_bytes",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        suggested_display_precision=1,
+        entity_registry_enabled_default=False,
+        group="data",
+        min_limit=0,
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_TOTAL_RX)),
+    ),
+    ZTESensorEntityDescription(
+        key="total_tx_bytes",
+        about=(
+            "Data uploaded through the router's mobile connection, as a running "
+            "total kept by the router. It is separate from the monthly counters and "
+            "does not reset on the billing day. Home Assistant displays it in GB "
+            "while storing the exact byte count."
+        ),
+        translation_key="data_total_tx_bytes",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        suggested_display_precision=1,
+        entity_registry_enabled_default=False,
+        group="data",
+        min_limit=0,
+        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_TOTAL_TX)),
+    ),
+    ZTESensorEntityDescription(
+        key="total_data_bytes",
+        about=(
+            "Combined upload and download as a running total kept by the router, "
+            "separate from the monthly counters. Home Assistant displays it in GB "
+            "while storing the exact byte count."
+        ),
+        translation_key="data_total_data_bytes",
+        device_class=SensorDeviceClass.DATA_SIZE,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        native_unit_of_measurement=UnitOfInformation.BYTES,
+        suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
+        suggested_display_precision=1,
+        entity_registry_enabled_default=False,
+        group="data",
+        min_limit=0,
+        value_fn=_total_data_bytes,
     ),
     ZTESensorEntityDescription(
         key="realtime_tx_thrpt",

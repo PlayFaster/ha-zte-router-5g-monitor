@@ -324,11 +324,12 @@ OUTAGE_CAP_DATA_CONNECT = 60.0
 # short outage is not missed between probes: the shortest measured was 6.3 s.
 # A router that has not dropped within `OUTAGE_HOLD` seconds is taken to have
 # had no outage, and the window closes through its closing poll. The latest
-# drop measured came 12.4 s after the command; the MC888 Pro's timing is
-# unknown. The reboot window opens only after the drop has been seen, so it
-# skips this phase.
+# drop measured on the MC7010 came 12.4 s after the command, which 20 s covers
+# with margin; the MC888 Pro did not drop on either command in the issue #79
+# 3.4.2 download, so every window there closes at the hold. The reboot window
+# opens only after the drop has been seen, so it skips this phase.
 OUTAGE_PROBE_FAST = 1.0
-OUTAGE_HOLD = 25.0
+OUTAGE_HOLD = 20.0
 # How many windows the diagnostics download keeps, newest first.
 OUTAGE_HISTORY_CAP = 5
 # The hardware check's reboot budget. A reboot on the MC7010 takes well under

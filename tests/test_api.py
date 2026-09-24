@@ -15,6 +15,7 @@ from custom_components.zte_router_5g.api import (
     ZTEAuthError,
     ZTEConnectionError,
     ZTERouterAPI,
+    ZTEWriteRefusedError,
 )
 from custom_components.zte_router_5g.const import BATCH_URL_MAX_CHARS
 
@@ -1864,14 +1865,14 @@ async def test_a_dead_session_is_renewed_before_the_token_is_built(
 
 
 @pytest.mark.asyncio
-async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client):
-    """The hazard this design avoids.
+async def test_a_refused_write_is_rebuilt_once_then_reported(mock_aiohttp_client):
+    """A refused LED write is built and sent once more, then the refusal stands.
 
-    `{"result":"failure"}` is what the router returns for a command it declined
-    on its merits. Resending it would deliver a `send_sms` twice, with no way
-    to tell that it had. Since v3.3.22 a refusal is *classified* afterwards —
-    one read, to say whether the session was the cause — and that read must not
-    become a retry of the write.
+    Since 3.4.3-dev2 a write that sets a complete state is retried once on an
+    explicit refusal, rebuilt with a fresh token; see `_retry_once_on_refusal`.
+    Only once: a second refusal is reported. The post-refusal read still
+    classifies each refusal and does not itself become a resend. `send_sms`
+    is never retried; `tests/test_write_retry.py` asserts that.
     """
     api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
     api.cookies = {"stok": "live"}
@@ -1882,7 +1883,7 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
     # has no witness and skips the check entirely.
     api._populated_keys = frozenset({"wan_connect_status"})
 
-    mock_aiohttp_client.get.side_effect = [
+    one_attempt = [
         MockResponse(json_data={"loginfo": "ok"}),
         MockResponse(json_data={"wa_inner_version": "MC7010V1"}),
         MockResponse(json_data={"cr_version": ""}),
@@ -1891,14 +1892,22 @@ async def test_a_refused_write_is_still_reported_not_retried(mock_aiohttp_client
         # refusal stands as its own error rather than becoming an auth failure.
         MockResponse(json_data={"loginfo": "ok"}),
     ]
+    mock_aiohttp_client.get.side_effect = one_attempt + one_attempt
     mock_aiohttp_client.post.return_value = MockResponse(
         json_data={"result": "failure"}
     )
 
-    with pytest.raises(ZTEConnectionError):
+    # The first refusal may leave the session marked for renewal; the login
+    # that follows is not what this test measures, so it is stubbed.
+    with (
+        patch.object(api, "login", new=AsyncMock()),
+        pytest.raises(ZTEWriteRefusedError),
+    ):
         await api.set_odu_led_switch("1")
 
-    assert mock_aiohttp_client.post.call_count == 1, "a declined write was resent"
+    assert mock_aiohttp_client.post.call_count == 2, "sent once more, and only once"
+    assert api.session_check_stats["write_retries"] == 1
+    assert api.session_check_stats["write_retries_succeeded"] == 0
     assert api.last_session_check["verdict"] == "confirmed"
 
 

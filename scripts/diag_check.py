@@ -66,6 +66,9 @@ import re
 import sys
 from typing import TYPE_CHECKING, Any, cast
 
+# Installs probatio as `voluptuous` before the package imports it (C-036).
+import homeassistant  # noqa: F401
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 try:
@@ -79,6 +82,7 @@ try:
         DISCOVERY_METADATA_PUBLISHED,
         async_get_config_entry_diagnostics,
     )
+
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
     raise SystemExit(
         f"cannot import {err.name!r}.\n\n"
@@ -182,7 +186,7 @@ _TOKEN = re.compile(r"^(ip|cell|mac|phone)-\d+$")
 
 # Leaf paths of the free-text notes list. Kept beside `_VOLATILE`,
 # which excludes the same paths from the value comparison.
-_NOTE_PATH = re.compile(r"^/discovery/notes/\d+$")
+_NOTE_PATH = re.compile(r"^/discovery/notes(/\d+)?$")
 
 
 def _comparable(value: Any) -> Any:
@@ -380,6 +384,19 @@ def unasked_count(artefact: dict[str, Any]) -> int:
     return len(discovery.get("not_reprobed", []))
 
 
+def unanswered_files(artefact: dict[str, Any]) -> list[str]:
+    """Web files the router did not answer at all, after the one re-fetch.
+
+    A file the router refuses has a status and is a property of the device. A
+    file with no status drew no answer, which is a property of the moment, and
+    every name mined from it is missing from this pass.
+    """
+    files = artefact.get("web_sources", {}).get("files", {})
+    return sorted(
+        path for path, record in files.items() if record.get("status") is None
+    )
+
+
 async def produce_complete(label: str) -> dict[str, Any]:
     """One pass, re-taken once if it did not finish probing.
 
@@ -393,18 +410,19 @@ async def produce_complete(label: str) -> dict[str, Any]:
     """
     artefact = await produce(label)
     unasked = unasked_count(artefact)
-    if not unasked:
+    unanswered = unanswered_files(artefact)
+    if not unasked and not unanswered:
         return artefact
 
-    print(
-        _cyan(
-            f"           {unasked} names left unasked — the pass did not finish "
-            "probing; taking it again"
-        )
+    reason = (
+        f"{unasked} names left unasked"
+        if unasked
+        else f"web file {unanswered[0]} drew no answer"
     )
+    print(_cyan(f"           {reason} — the pass did not finish; taking it again"))
     await asyncio.sleep(5)
     retaken = await produce(f"{label} (retaken)")
-    if unasked_count(retaken):
+    if unasked_count(retaken) or unanswered_files(retaken):
         print(
             _cyan(
                 "           still incomplete. The comparison below is between "
@@ -818,6 +836,37 @@ def check_sanitization(result: dict[str, Any], report: Report) -> None:
     )
 
 
+def _stability_leaves(obj: Any, path: str = "") -> Any:
+    """Leaves for comparing two passes: a list of plain values counts as a set.
+
+    Name lists are compared by position otherwise, so one name missing from one
+    pass shifts every later entry and reports as hundreds of differences. As a
+    set, the same difference reports as the names that differ.
+    """
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            yield from _stability_leaves(value, f"{path}/{key}")
+    elif isinstance(obj, list) and all(
+        not isinstance(item, (dict, list)) for item in obj
+    ):
+        yield path, frozenset(str(_comparable(item)) for item in obj)
+    elif isinstance(obj, list):
+        for index, value in enumerate(obj):
+            yield from _stability_leaves(value, f"{path}/{index}")
+    else:
+        yield path, obj
+
+
+def _describe(path: str, one: Any, two: Any) -> str:
+    """One structural difference, as the members that differ where it is a set."""
+    if isinstance(one, frozenset) and isinstance(two, frozenset):
+        return (
+            f"{path}: only in first {sorted(one - two)[:3]}, "
+            f"only in second {sorted(two - one)[:3]}"
+        )
+    return f"{path}: {one!r} vs {two!r}"
+
+
 def check_stability(
     first: dict[str, Any], second: dict[str, Any], report: Report
 ) -> None:
@@ -828,8 +877,8 @@ def check_stability(
     reported the session alive. Structural equality between consecutive runs is
     the cheapest evidence that a pass is doing the same work every time.
     """
-    left = dict(_leaves(first))
-    right = dict(_leaves(second))
+    left = dict(_stability_leaves(first))
+    right = dict(_stability_leaves(second))
 
     # The notes are a free-text list compared by position, and a pass that
     # re-establishes a session emits notes a clean pass does not. That makes
@@ -868,7 +917,7 @@ def check_stability(
     report.record(
         not structural,
         "[4] no structural difference between the two runs",
-        "; ".join(f"{p}: {left[p]!r} vs {right[p]!r}" for p in structural[:4])
+        "; ".join(_describe(p, left[p], right[p]) for p in sorted(structural)[:4])
         if structural
         else "differences are radio and counter drift only",
     )
@@ -1080,6 +1129,57 @@ async def sabotage_check(gap: int) -> int:
     return 1 if report.failed else 0
 
 
+async def _polling_is_paused(report: Report) -> bool:
+    """Whether the development Home Assistant has stopped polling the router.
+
+    The router grants one session. A Home Assistant instance polling it takes
+    the session in the middle of a pass, and the two passes then differ for a
+    reason that is not in the download: on 2026-09-24 two runs failed this way
+    at 61 of 63 before polling was paused. Answers True when the instance
+    cannot be asked, so a machine without one still runs the check.
+    """
+    import aiohttp
+
+    token_file = (
+        pathlib.Path(__file__).resolve().parent.parent
+        / ".notes"
+        / "ha_restart"
+        / "token.txt"
+    )
+    if not token_file.exists():
+        print(_dim("  Home Assistant polling not checked: no token file"))
+        return True
+    headers = {"Authorization": f"Bearer {token_file.read_text().strip()}"}
+    try:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
+                "http://localhost:8123/api/states",
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as response,
+        ):
+            states = await response.json()
+    except Exception as err:  # noqa: BLE001 - an unreachable instance is not polling
+        print(_dim(f"  Home Assistant polling not checked: {type(err).__name__}"))
+        return True
+    switches = [
+        state["state"]
+        for state in states
+        if state.get("entity_id", "").startswith("switch.zte_")
+        and state["entity_id"].endswith("_pause_polling")
+    ]
+    paused = all(state == "on" for state in switches)
+    report.record(
+        paused,
+        "[0] the development Home Assistant is not polling the router",
+        "Pause Polling is on"
+        if paused
+        else "Pause Polling is off: turn it on, then run the check again",
+    )
+    return paused
+
+
 def _announce_expected_warnings() -> None:
     """Say in advance which log lines this run is expected to emit.
 
@@ -1163,6 +1263,14 @@ async def main() -> int:
         return await sabotage_check(args.gap)
 
     report = Report()
+    if not await _polling_is_paused(report):
+        print(
+            _red(
+                "\n✖  Diagnostics check: could not start — Home Assistant is "
+                "polling the router"
+            )
+        )
+        return 1
     _announce_expected_warnings()
     print(f"letting the router settle for {SETTLE_SECONDS}s before the first pass")
     await asyncio.sleep(SETTLE_SECONDS)

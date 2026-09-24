@@ -96,6 +96,53 @@ def test_sensor_monthly_total_sum(mock_coordinator, mock_config_entry):
     assert sensor.native_value is None
 
 
+@pytest.mark.parametrize(
+    ("key", "data", "expected"),
+    [
+        ("total_time", {"total_time": "36426"}, 36426),
+        ("total_time", {"total_time": "", "flux_total_time": "3582116"}, 3582116),
+        ("total_rx_bytes", {"total_rx_bytes": "2298214830130"}, 2298214830130),
+        (
+            "total_rx_bytes",
+            {"flux_total_rx_bytes": "26678508968234"},
+            26678508968234,
+        ),
+        ("total_tx_bytes", {"total_tx_bytes": "173536309043"}, 173536309043),
+        (
+            "total_tx_bytes",
+            {"flux_total_tx_bytes": "1252657508778"},
+            1252657508778,
+        ),
+        ("wan_netmask", {"wan_netmask": "255.255.255.248"}, "255.255.255.248"),
+        ("wan_netmask", {"wan_netmask": ""}, None),
+    ],
+)
+def test_the_lifetime_sensors_read_either_spelling(
+    mock_coordinator, mock_config_entry, key, data, expected
+):
+    """The MC7010 answers the bare names and the MC888 Pro the `flux_` ones."""
+    mock_coordinator.data = data
+    description = next(d for d in SENSOR_TYPES if d.key == key)
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+
+    assert sensor.native_value == expected
+
+
+def test_total_data_needs_both_counters(mock_coordinator, mock_config_entry):
+    """A missing side would publish a total that reads low."""
+    description = next(d for d in SENSOR_TYPES if d.key == "total_data_bytes")
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+
+    mock_coordinator.data = {
+        "total_rx_bytes": "2298214830130",
+        "flux_total_tx_bytes": "173536309043",
+    }
+    assert sensor.native_value == 2298214830130 + 173536309043
+
+    mock_coordinator.data = {"total_rx_bytes": "2298214830130", "total_tx_bytes": ""}
+    assert sensor.native_value is None
+
+
 def test_sensor_uptime_calculation(mock_coordinator, mock_config_entry):
     """Test the complex uptime to timestamp conversion."""
     # Mock 'now' to a fixed point
