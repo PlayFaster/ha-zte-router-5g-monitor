@@ -5,8 +5,9 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
   - [\[3.4.2-dev8\] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live](#342-dev8---2026-09-24---uptime-latch-defects-from-342-dev7-fixed-durations-in-minutes-upgrade-paths-tested-and-checked-live)
-  - [\[3.4.2-dev7\] - 2026-09-24 - Device Uptime from system_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei](#342-dev7---2026-09-24---device-uptime-from-system_uptime-connection-uptime-sensors-uptime-latch-ported-from-huawei)
+  - [\[3.4.2-dev7\] - 2026-09-24 - Device Uptime from system\_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei](#342-dev7---2026-09-24---device-uptime-from-system_uptime-connection-uptime-sensors-uptime-latch-ported-from-huawei)
   - [\[3.4.2-dev6\] - 2026-09-23 - Follow-Up Refresh After an Unsettled Data Window; Counter Reset Wording Corrected](#342-dev6---2026-09-23---follow-up-refresh-after-an-unsettled-data-window-counter-reset-wording-corrected)
   - [\[3.4.2-dev5\] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics](#342-dev5---2026-09-23---data-connection-turn-on-outage-window-window-waits-for-the-drop-data-connection-diagnostics)
   - [\[3.4.2-dev3\] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test\_guards.md](#342-dev3---2026-09-23---agentsmd-guard-test-table-trimmed-rationale-moved-to-docstest_guardsmd)
@@ -311,6 +312,33 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.2] - 2026-09-24 - Release: Independent System & Connection Uptime Sensors, Data Outage Windows, and Duration Precision
+
+### Summary
+
+- **Separated System Uptime and Connection Uptime**: System uptime now tracks the router's physical hardware boot time independently from cellular data reconnects, while two new sensors track the active cellular session.
+- **Turn-On Outage Protection**: Turning cellular data on now initiates an expected-outage protection window and automatically synchronizes switch state when the connection settles.
+- **Python & Home Assistant Requirements**: Raised the minimum supported Home Assistant version to 2025.2.0, aligning with Home Assistant's Python 3.13 minimum runtime requirement.
+
+### ⚠️ Action Required
+
+- **Minimum Home Assistant 2025.2.0**: The integration now requires Home Assistant 2025.2.0 or newer and Python 3.13+. Earlier versions will not be offered this update.
+
+### Added
+
+- **Connection Uptime Sensor (`sensor.<name>_system_connection_uptime`)**: Tracks the exact timestamp when the current cellular data connection started, clearing when cellular data is disconnected.
+- **Connection Duration Sensor (`sensor.<name>_system_connection_duration`)**: Displays duration of the active cellular data session in minutes (disabled by default).
+- **Turn-On Outage Protection Window**: Activating mobile data through the Data Connection switch now engages a managed outage window (up to 60s) to prevent transient communication errors while the router negotiates carrier connection.
+
+### Fixed
+
+- **System Uptime Resetting on Data Reconnects**: Separated system boot tracking (`system_uptime`) from data session uptime (`realtime_time`), preventing cellular drops or APN switches from resetting the router's physical uptime timestamp.
+- **Data Connection Switch State Synchronization**: Added an automatic follow-up refresh if the router closes an outage window in an intermediate or unsettled connection state, ensuring the switch accurately reflects mobile data status.
+
+### Changed
+
+- **Duration Sensor Display Units**: Changed suggested display units for Uptime Duration and Connection Duration to minutes with one decimal place (`min`), replacing hourly increments.
 
 ## [3.4.2-dev8] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live
 

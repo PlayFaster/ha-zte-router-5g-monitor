@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.4.2] - 2026-09-24 - Release: Independent System & Connection Uptime Sensors, Data Outage Windows, and Duration Precision
+
+### Summary
+
+- **Separated System Uptime and Connection Uptime**: System uptime now tracks the router's physical hardware boot time independently from cellular data reconnects, while two new sensors track the active cellular session.
+- **Turn-On Outage Protection**: Turning cellular data on now initiates an expected-outage protection window and automatically synchronizes switch state when the connection settles.
+- **Python & Home Assistant Requirements**: Raised the minimum supported Home Assistant version to 2025.2.0, aligning with Home Assistant's Python 3.13 minimum runtime requirement.
+
+### ⚠️ Action Required
+
+- **Minimum Home Assistant 2025.2.0**: The integration now requires Home Assistant 2025.2.0 or newer and Python 3.13+. Earlier versions will not be offered this update.
+
+### Added
+
+- **Connection Uptime Sensor (`sensor.<name>_system_connection_uptime`)**: Tracks the exact timestamp when the current cellular data connection started, clearing when cellular data is disconnected.
+- **Connection Duration Sensor (`sensor.<name>_system_connection_duration`)**: Displays duration of the active cellular data session in minutes (disabled by default).
+- **Turn-On Outage Protection Window**: Activating mobile data through the Data Connection switch now engages a managed outage window (up to 60s) to prevent transient communication errors while the router negotiates carrier connection.
+
+### Fixed
+
+- **System Uptime Resetting on Data Reconnects**: Separated system boot tracking (`system_uptime`) from data session uptime (`realtime_time`), preventing cellular drops or APN switches from resetting the router's physical uptime timestamp.
+- **Data Connection Switch State Synchronization**: Added an automatic follow-up refresh if the router closes an outage window in an intermediate or unsettled connection state, ensuring the switch accurately reflects mobile data status.
+
+### Changed
+
+- **Duration Sensor Display Units**: Changed suggested display units for Uptime Duration and Connection Duration to minutes with one decimal place (`min`), replacing hourly increments.
+
+---
+
 ## [3.4.1] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking
 
 ### Summary
@@ -862,6 +891,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
   - [\[3.4.1\] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking](#341---2026-09-23---release-data-connection-switch-outage-protection-windows-and-connection-state-tracking)
   - [\[3.4.0\] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management](#340---2026-09-15---release-zte-mc888-pro-compatibility-dynamic-device-profiles-and-advanced-router-management)
   - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
