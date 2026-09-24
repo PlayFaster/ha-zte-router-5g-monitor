@@ -1,18 +1,20 @@
 """DataUpdateCoordinator for ZTE Router 5G."""
 
 import asyncio
-import contextlib
-import logging
+from collections import deque
 from collections.abc import Callable, Coroutine
+import contextlib
+from dataclasses import dataclass
 from datetime import datetime, timedelta
+import logging
+from time import monotonic
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import device_registry as dr, issue_registry as ir
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -31,18 +33,28 @@ from .api import (
 from .const import (
     CONF_SCAN_INTERVAL,
     CONF_STOP_POLLING,
+    CONNECTION_UPTIME_KEYS,
+    DATA_CONNECT_FOLLOWUP_SECONDS,
+    DATA_CONNECTED_STATES,
+    DEVICE_UPTIME_KEYS,
     DISCOVERY_SETTLE_SECONDS,
     DOMAIN,
     FETCH_STRIKE_LIMIT,
     HEALTH_DRIFT_STRIKE_LIMIT,
     OUTAGE_CHECK_INTERVAL,
+    OUTAGE_HISTORY_CAP,
+    OUTAGE_HOLD,
+    OUTAGE_PROBE_FAST,
+    OUTAGE_REASON_DATA_CONNECT,
+    OUTAGE_REASON_REBOOT,
+    OUTAGE_REASONS_DATA,
     REPAIR_AUTH_FAILED,
     REPAIR_CONN_ERROR,
     SPARSE_PAYLOAD_FRACTION,
     SPARSE_PAYLOAD_MIN_HISTORY,
     UNREACHABLE_STRIKE_LIMIT,
 )
-from .helpers import get_router_model, sms_instant
+from .helpers import get_first, get_router_model, sms_instant
 from .observations import ObservationRecorder
 
 _LOGGER = logging.getLogger(__name__)
@@ -201,7 +213,7 @@ RETIRED_REPAIR_NAMES = (
 CORE_CONCEPTS: dict[str, tuple[str, ...]] = {
     "network_type": ("network_type", "strBearer"),
     "signal_bars": ("signalbar",),
-    "uptime": ("realtime_time", "flux_realtime_time"),
+    "uptime": ("system_uptime", "realtime_time", "flux_realtime_time"),
     "connection_state": ("wan_connect_status", "ppp_status"),
 }
 
@@ -215,6 +227,111 @@ DRIFT_CONTRACT = (
     "Router returned data but none of the expected fields were present — "
     "they were reported before and have stopped"
 )
+
+
+# The keys a window record keeps from the poll before it opened and from its
+# closing poll: the connection state, the network, and the two modes that
+# change how the router connects.
+_OUTAGE_SNAPSHOT_KEYS = ("ppp_status", "network_type", "dial_mode", "opms_wan_mode")
+
+
+def _outage_snapshot(data: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The window record's view of one poll, or `None` without one."""
+    if not data:
+        return None
+    return {key: data.get(key) for key in _OUTAGE_SNAPSHOT_KEYS}
+
+
+def _session_reading(raw: Any) -> bool:
+    """Whether a session counter reading is a live session.
+
+    Measured on the MC7010 on 2026-09-23: `realtime_time` reads blank or 0
+    while data is off. Read as a counter, 0 latches the connection start at
+    the moment data went off, and the climb from 0 after the reconnect is no
+    drop, so the anchor stays at the off time.
+    """
+    seconds = _counter_seconds(raw)
+    return seconds is not None and seconds > 0
+
+
+def _counter_seconds(raw: Any) -> int | None:
+    """A counter reading as whole seconds, or `None` if blank or unusable."""
+    with contextlib.suppress(ValueError, TypeError):
+        if raw not in (None, ""):
+            value = int(float(raw))
+            return value if value >= 0 else None
+    return None
+
+
+def _data_settled(reason: str, status: object) -> bool:
+    """Whether `ppp_status` is the state a data window's command leads to."""
+    if reason == OUTAGE_REASON_DATA_CONNECT:
+        return status in DATA_CONNECTED_STATES
+    return status == "ppp_disconnected"
+
+
+def _outage_reply(reply: Any) -> dict[str, Any] | None:
+    """The router's reply to the command, reduced to its `result` field.
+
+    Every goform write answers `{"result": ...}`. Keeping only that field keeps
+    the record free of anything else a firmware might add.
+    """
+    if isinstance(reply, dict):
+        return {"result": reply.get("result")}
+    return None
+
+
+# The counter key `entry.data` held before the counters moved to the store.
+# Dropped at the next latch; never read.
+LEGACY_COUNTER_KEYS = frozenset({"last_uptime"})
+
+
+@dataclass
+class _UptimeLatch:
+    """One counter, its anchor, and everything learned about its rate.
+
+    Ported from the Huawei project in 3.4.2-dev7, where three run. Two run
+    here and **nothing is shared between them**: `system_uptime` resets on a
+    reboot and `realtime_time` on every data reconnect, so a rate, a stored
+    counter or a reconciliation flag borrowed from one would be evidence
+    about a different question.
+
+    `pauses` is the property that decides which mechanism applies:
+
+    - `uptime` and `CurrentConnectTime` advance whenever they exist at all.
+      A dropped link ends the session and resets `CurrentConnectTime` rather
+      than freezing it, so within one session it tracks wall time exactly —
+      measured across a real reconnect, 9 s to 216 s over 207 s of wall. Both
+      can therefore be asked "did you continue across that gap at wall rate?"
+      and both carry the full mechanism.
+    - `TotalConnectTime` accumulates across reboots and **stops whenever the
+      session is down**. A real reconnect cost it exactly the 2.3 s the link
+      was out, and it has lost 3.8 hours to downtime since April
+      (`tests/fixtures/huawei_reconnect_trace.json`). Legitimate downtime
+      makes it under-run wall time with nothing wrong, so no rate-based
+      expectation can be asked of it. It carries the floor rule alone: it
+      moves backwards only on a statistics clear.
+    """
+
+    label: str
+    boot_key: str
+    counter_key: str
+    pauses: bool = False
+
+    boot_time: datetime | None = None
+    last_counter: int | None = None
+    last_poll_at: datetime | None = None
+    startup_reconciled: bool = False
+
+    stored_counter: int | None = None
+    stored_written_at: datetime | None = None
+    last_counter_write: datetime | None = None
+
+    drift_sum_wall: float = 0.0
+    drift_sum_counter: float = 0.0
+    drift_interval_count: int = 0
+    drift_rate_min: float | None = None
+    drift_rate_max: float | None = None
 
 
 class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
@@ -240,34 +357,56 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # `async_open_expected_outage`.
         self._outage_unsub: CALLBACK_TYPE | None = None
         self._outage_closing = False
-        # The most recent window, kept after it closes so a diagnostics
-        # download can explain a gap in polling.
-        self.last_expected_outage: dict[str, Any] | None = None
+        # Whether the open window is still waiting for the router to stop
+        # answering, and when it opened on the monotonic clock, for the hold.
+        self._outage_awaiting_drop = False
+        self._outage_opened_mono = 0.0
+        # The follow-up refresh after a data window closes on `ppp_connecting`.
+        self._outage_followup_unsub: CALLBACK_TYPE | None = None
+        # The most recent windows, oldest first, kept after they close so a
+        # diagnostics download can explain a gap in polling and show what the
+        # router did around each command.
+        self.expected_outages: deque[dict[str, Any]] = deque(maxlen=OUTAGE_HISTORY_CAP)
         self._was_available = True
-        self._boot_time: datetime | None = None
-        self._last_uptime: int | None = None
-
-        # Startup reconciliation state. Stays false until a poll yields a
-        # usable counter and the reconciliation completes, so a failed or
-        # guard-rejected poll defers it rather than skipping it.
-        self._startup_reconciled = False
-        self._store: Store[dict[str, Any]] | None = None
         self._profile_store: Store[dict[str, Any]] | None = None
-        self._stored_last_uptime: int | None = None
-        self._stored_written_at: datetime | None = None
-        self._last_counter_write: datetime | None = None
-        self._last_poll_at: datetime | None = None
 
-        # Drift accumulators. The router's counter does not advance at
-        # wall-clock rate, and the rate is a property of the hardware, so it is
-        # measured here rather than assumed. Duration-weighted sums rather than
-        # a window or a smoothing factor: a long interval carries more evidence
-        # than a short one, and that falls out of the arithmetic.
-        self._drift_sum_wall = 0.0
-        self._drift_sum_counter = 0.0
-        self._drift_rate_min: float | None = None
-        self._drift_rate_max: float | None = None
-        self._drift_interval_count = 0
+        # Reboot-detection latches - frozen timestamps for uptime-derived
+        # sensors. Each is recomputed exactly once per genuine counter reset
+        # and then held. The structure is the Huawei project's.
+        #
+        # **Nothing is shared between the two.** Their counters reset on
+        # different events, so a rate, a stored counter or a reconciliation
+        # flag borrowed from one is evidence about a different question.
+        self._system_latch = _UptimeLatch(
+            label="System boot time",
+            boot_key="boot_time",
+            counter_key="last_system_uptime",
+        )
+        self._conn_latch = _UptimeLatch(
+            label="Connection start time",
+            boot_key="connection_start",
+            counter_key="last_conn_uptime",
+        )
+        self._latches = (self._system_latch, self._conn_latch)
+
+        # Populated by `async_load_stored_uptime` during setup.
+        self._store: Store[dict[str, Any]] | None = None
+        # The key the system latch reads, chosen on the first poll that
+        # answers one of `DEVICE_UPTIME_KEYS`. See `_device_uptime_raw`.
+        self._uptime_source: str | None = None
+
+        # The anchors are restored from `entry.data`, where they have always
+        # lived. The counters come from the store, which is written on an
+        # interval rather than only at a latch.
+        for latch in self._latches:
+            with contextlib.suppress(Exception):
+                if v := entry.data.get(latch.boot_key):
+                    parsed = dt_util.parse_datetime(v)
+                    # Naive values raise on subtraction from an aware `now()`.
+                    # Treated as absent, which routes to an unconditional
+                    # latch.
+                    if parsed is not None and parsed.tzinfo is not None:
+                        latch.boot_time = parsed
         self._last_provisioning_read: datetime | None = None
         # None until the first successful read, so the sensor reports unknown
         # rather than a confident guess on a device that has never answered.
@@ -311,18 +450,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # Snapshot of the non-live options this entry was set up with; the
         # update listener diffs against it to decide reload vs live-apply.
         self.reload_signature: dict[str, Any] = {}
-        # The boot instant is physically constant between reboots, so a value
-        # written weeks ago is still correct and is restored as-is. A naive or
-        # unparsable value is treated as absent, which routes to an
-        # unconditional latch on the first poll rather than raising when it is
-        # subtracted from an aware datetime.
-        boot_time_str = entry.data.get("boot_time")
-        if boot_time_str:
-            with contextlib.suppress(Exception):
-                parsed = dt_util.parse_datetime(boot_time_str)
-                if parsed is not None and parsed.tzinfo is not None:
-                    self._boot_time = parsed
-
         # The record of the last delete attempt is restored onto the API
         # object, because it lives in memory there and a reporter's download is
         # routinely taken after a restart. Issue #56 turned on exactly that: the
@@ -418,32 +545,84 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         outage = self.api.expected_outage
         return isinstance(outage, ExpectedOutage) and not outage.expired
 
-    def async_open_expected_outage(self, reason: str, cap_seconds: float) -> None:
+    @property
+    def last_expected_outage(self) -> dict[str, Any] | None:
+        """The most recent window's record, or `None` if none has opened."""
+        return self.expected_outages[-1] if self.expected_outages else None
+
+    @property
+    def outage_reason(self) -> str | None:
+        """The reason of the open window, or `None` when none is open."""
+        outage = self.api.expected_outage
+        if isinstance(outage, ExpectedOutage) and not outage.expired:
+            return outage.reason
+        return None
+
+    @property
+    def outage_closing(self) -> bool:
+        """Whether the poll now running is a window's closing poll."""
+        return self._outage_closing
+
+    def async_open_expected_outage(
+        self,
+        reason: str,
+        cap_seconds: float,
+        *,
+        command: str | None = None,
+        reply: Any = None,
+        ppp_status_after_reply: str | None = None,
+    ) -> None:
         """Open the window after the router accepted a command that takes it offline.
 
         One mechanism for every such command. While open, polls are skipped
         and every other router request is refused at once with a message naming
-        the reason. A check reads one key every `OUTAGE_CHECK_INTERVAL`; when
-        the router answers, a full poll runs, and the window closes only when
-        that poll succeeds. The cap closes it regardless, and failure counting
-        resumes, so a router that never returns is still reported.
+        the reason. The window closes only when a full poll succeeds, and the
+        cap closes it regardless, so a router that never returns is still
+        reported.
+
+        The check runs in two phases. A window opened on a command first waits
+        for the router to stop answering, probing every `OUTAGE_PROBE_FAST`
+        seconds. Measured on the MC7010, the router kept answering for up to
+        12 s after `CONNECT_NETWORK`, so a window that closed on the first
+        answer closed before the outage began. A router that has not dropped
+        within `OUTAGE_HOLD` seconds is taken to have had no outage. Once it
+        has dropped, a probe every `OUTAGE_CHECK_INTERVAL` seconds waits for
+        its return. The reboot window opens only after `ZTERouterAPI.reboot`
+        has seen the router drop, so it starts in the second phase.
         """
         outage = self.api.open_expected_outage(reason, cap_seconds)
-        self.last_expected_outage = {
-            "reason": reason,
-            "opened": outage.opened_at.isoformat(),
-            "cap_seconds": cap_seconds,
-            "checks": 0,
-            "closed": None,
-            "closed_by": None,
-        }
+        self._cancel_outage_followup()
+        self._outage_awaiting_drop = reason != OUTAGE_REASON_REBOOT
+        self._outage_opened_mono = monotonic()
+        opened = outage.opened_at.isoformat()
+        self.expected_outages.append(
+            {
+                "reason": reason,
+                "command": command,
+                "reply": _outage_reply(reply),
+                "ppp_status_after_reply": ppp_status_after_reply,
+                "opened": opened,
+                "cap_seconds": cap_seconds,
+                "checks": 0,
+                "down_at": None if self._outage_awaiting_drop else opened,
+                "back_at": None,
+                "outage_seconds": None,
+                "before": _outage_snapshot(self.data),
+                "after": None,
+                "closed": None,
+                "closed_by": None,
+            }
+        )
         self._schedule_outage_check()
 
     def _schedule_outage_check(self) -> None:
         """Arm the next check, replacing any already armed."""
         self._cancel_outage_check()
+        interval = (
+            OUTAGE_PROBE_FAST if self._outage_awaiting_drop else OUTAGE_CHECK_INTERVAL
+        )
         self._outage_unsub = async_call_later(
-            self.hass, OUTAGE_CHECK_INTERVAL, self._async_outage_check
+            self.hass, interval, self._async_outage_check
         )
 
     def _cancel_outage_check(self) -> None:
@@ -452,8 +631,14 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             self._outage_unsub()
             self._outage_unsub = None
 
+    def _cancel_outage_followup(self) -> None:
+        """Disarm the follow-up refresh, if armed."""
+        if self._outage_followup_unsub is not None:
+            self._outage_followup_unsub()
+            self._outage_followup_unsub = None
+
     async def _async_outage_check(self, _now: datetime | None = None) -> None:
-        """Check whether the router is back, and close the window if it is."""
+        """Check whether the router has dropped or is back, and close when done."""
         self._outage_unsub = None
         outage = self.api.expected_outage
         if not isinstance(outage, ExpectedOutage):
@@ -462,32 +647,91 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             self._close_expected_outage("cap")
             await self.async_request_refresh()
             return
-        if self.last_expected_outage is not None:
-            self.last_expected_outage["checks"] += 1
-        if await self.api.outage_probe():
-            before = self.last_update_success_time
-            self._outage_closing = True
-            try:
-                with self.api.outage_bypass():
-                    await self.async_refresh()
-            finally:
-                self._outage_closing = False
-            if self.last_update_success_time != before:
+        record = self.last_expected_outage
+        if record is not None:
+            record["checks"] += 1
+        answered = await self.api.outage_probe()
+        stamp = dt_util.utcnow().isoformat()
+
+        if self._outage_awaiting_drop:
+            if not answered:
+                self._outage_awaiting_drop = False
+                if record is not None:
+                    record["down_at"] = stamp
+            elif monotonic() - self._outage_opened_mono >= OUTAGE_HOLD:
+                if await self._async_closing_poll():
+                    self._close_expected_outage("no_outage")
+                    return
+            self._schedule_outage_check()
+            return
+
+        if answered:
+            if record is not None and record["back_at"] is None:
+                record["back_at"] = stamp
+            if await self._async_closing_poll():
                 self._close_expected_outage("answer")
                 return
         self._schedule_outage_check()
 
+    async def _async_closing_poll(self) -> bool:
+        """Run the window's closing poll, and return whether it succeeded."""
+        before = self.last_update_success_time
+        self._outage_closing = True
+        try:
+            with self.api.outage_bypass():
+                await self.async_refresh()
+        finally:
+            self._outage_closing = False
+        return self.last_update_success_time != before
+
     def _close_expected_outage(self, closed_by: str) -> None:
-        """Close the window and record how it ended."""
+        """Close the window, record how it ended, and settle a data window."""
         self._cancel_outage_check()
+        outage = self.api.expected_outage
+        reason = outage.reason if isinstance(outage, ExpectedOutage) else None
         self.api.close_expected_outage()
-        if self.last_expected_outage is not None:
-            self.last_expected_outage["closed"] = dt_util.utcnow().isoformat()
-            self.last_expected_outage["closed_by"] = closed_by
+        self._outage_awaiting_drop = False
+        record = self.last_expected_outage
+        if record is None:
+            return
+        record["closed"] = dt_util.utcnow().isoformat()
+        record["closed_by"] = closed_by
+        if closed_by != "cap":
+            record["after"] = _outage_snapshot(self.data)
+        if record["down_at"] and record["back_at"]:
+            record["outage_seconds"] = round(
+                (
+                    datetime.fromisoformat(record["back_at"])
+                    - datetime.fromisoformat(record["down_at"])
+                ).total_seconds(),
+                1,
+            )
+        # A closing poll can read a state the command does not lead to:
+        # `ppp_connecting` after turning on, since connected came up to 15 s
+        # after the router answered again, and once `ppp_connected` after
+        # turning off. One more refresh settles it; under paused polling
+        # nothing else would. Deliberately a refresh and not a condition on
+        # closing: a failed turn-on, a redial under `auto_dial` or a change
+        # made in the router's own page would then hold every control refused
+        # until the cap.
+        if (
+            closed_by != "cap"
+            and reason in OUTAGE_REASONS_DATA
+            and not _data_settled(reason, (self.data or {}).get("ppp_status"))
+        ):
+            self._outage_followup_unsub = async_call_later(
+                self.hass, DATA_CONNECT_FOLLOWUP_SECONDS, self._async_outage_followup
+            )
+
+    async def _async_outage_followup(self, _now: datetime | None = None) -> None:
+        """The one refresh after a data window closed unsettled."""
+        self._outage_followup_unsub = None
+        await self.async_force_refresh()
 
     async def async_shutdown(self) -> None:
-        """Disarm the outage check before the coordinator is torn down."""
+        """Disarm the outage timers before the coordinator is torn down."""
         self._cancel_outage_check()
+        self._cancel_outage_followup()
         await super().async_shutdown()
 
     async def async_force_refresh(self) -> None:
@@ -833,25 +1077,25 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # instant is physically constant between reboots, so freezing it
         # eliminates the drift caused by recomputing now() - uptime
         # against two independently ticking clocks.
-        seconds: int | None = None
-        with contextlib.suppress(ValueError, TypeError):
-            # Aliased: a device that spells this `flux_realtime_time`
-            # would otherwise never latch a boot time, and the uptime
-            # sensor would sit at `unknown` forever. Mirrors
-            # `sensor._ALIAS_REALTIME_TIME`, which `sensor.py` cannot
-            # be imported from here — `test_uptime_alias_matches_the
-            # _sensor_tuple` fails if the two diverge.
-            raw_uptime = data.get("realtime_time") or data.get("flux_realtime_time")
-            if raw_uptime is not None:
-                seconds = int(float(raw_uptime))
-
-        if seconds is None or seconds < 0:
-            # Bad-reading guard: keep the latched value untouched and do
-            # not advance the reboot anchor on a missing/garbage reading.
-            data["boot_time"] = self._boot_time
-        else:
-            self._apply_uptime(seconds)
-            data["boot_time"] = self._boot_time
+        # Two counters, two reset events, two independent latches, routed as
+        # the Huawei project routes its three.
+        system_raw = self._device_uptime_raw(data)
+        conn_raw = get_first(data, CONNECTION_UPTIME_KEYS)
+        if not _session_reading(conn_raw):
+            conn_raw = None
+        self._apply_uptime_readings(
+            ((self._system_latch, system_raw), (self._conn_latch, conn_raw))
+        )
+        data["boot_time"] = self._system_latch.boot_time
+        data["uptime_seconds"] = _counter_seconds(system_raw)
+        # Empty while data is off: the counter is blank then, and the last
+        # session's start would read as a live one.
+        data["connection_start"] = (
+            self._conn_latch.boot_time if conn_raw is not None else None
+        )
+        # Connection Duration's value: `None` while data is off, when the
+        # counter reads blank or 0 (3.4.2-dev8).
+        data["connection_seconds"] = _counter_seconds(conn_raw)
 
         # Identify if hardware metadata has changed
         new_model = get_router_model(data)
@@ -887,84 +1131,766 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 )
 
     # ------------------------------------------------------------------
-    # Boot-time latch
+    # State views
     #
-    # The router's uptime counter is a valid reboot indicator but a poor clock:
-    # the MC7010 measured for this work runs about 4.34% slow. Detection is
-    # therefore a counter question, and the wall clock enters only to say how
-    # far the counter should have advanced across a gap Home Assistant did not
-    # observe.
-    #
-    # Four paths, in the order they are evaluated:
-    #
-    #   1. Guards         — a reading or a clock that cannot be trusted at all.
-    #   2. Counter drop   — conclusive, vetoed by nothing (`_apply_runtime_uptime`).
-    #   3. Shortfall test — did the counter continue across the gap as this
-    #                       device continues? (`_reconcile_startup_uptime`)
-    #   4. Plausibility   — is the anchor still credible against the counter?
-    #                       Runs on every poll (`_anchor_implausible`).
-    #
-    # Full design, the drift measurement behind it, and the eight decisions:
-    # `.shared/info/uptime_timestamp/uptime_drift_analyzed.md`.
+    # The two attribute names below predate the latch objects and are read
+    # by the test suite. They stay as views rather than as a second copy: the
+    # latch holds the state, and these say where to find it.
     # ------------------------------------------------------------------
 
     @property
-    def _drift_rate(self) -> float | None:
-        """The measured fraction of wall time this router's counter loses.
+    def _boot_time(self) -> datetime | None:
+        """The anchor for the router's uptime counter."""
+        return self._system_latch.boot_time
 
-        `None` until enough has accumulated to be worth trusting. The minimum
-        is checked **before** the division, which is also what stops a fresh
-        install dividing by a zero denominator.
+    @_boot_time.setter
+    def _boot_time(self, value: datetime | None) -> None:
+        self._system_latch.boot_time = value
+
+    @property
+    def _last_uptime(self) -> int | None:
+        """The last system counter reading this coordinator saw."""
+        return self._system_latch.last_counter
+
+    @_last_uptime.setter
+    def _last_uptime(self, value: int | None) -> None:
+        self._system_latch.last_counter = value
+
+    # ------------------------------------------------------------------
+    # Boot-time latches
+    #
+    # A counter is a good reset detector and a poor clock. Comparing a
+    # counter with its own previous value needs no clock at all and cannot
+    # drift; deriving a timestamp as `now - counter` inherits the divergence
+    # between the router's oscillator and the host's. The anchor is therefore
+    # latched once and held, and re-derived only when something says it must
+    # be.
+    #
+    # Four paths, in the order they are evaluated:
+    #
+    #   1. Guards         - a reading or a clock that cannot be trusted.
+    #   2. Counter drop   - conclusive, vetoed by nothing.
+    #   3. Startup        - did the counter continue across a gap Home
+    #                       Assistant did not observe?
+    #   4. Plausibility   - is the anchor still credible? Every poll.
+    #
+    # The design, the drift measurement behind the constants and the nine
+    # decisions are in
+    # `.shared/info/uptime_timestamp/uptime_drift_analyzed.md`.
+    # ------------------------------------------------------------------
+
+    def _apply_uptime_readings(self, readings: Any) -> None:
+        """Route each `(latch, raw)` reading, then write the anchors once.
+
+        The Huawei project's per-poll latch loop, verbatim apart from being a
+        method.
         """
-        if self._drift_sum_wall < DRIFT_MIN_ACCUMULATED:
+        entry_data_updates: dict[str, Any] = {}
+        for latch, raw in readings:
+            self._apply_uptime(latch, raw, entry_data_updates)
+        if entry_data_updates:
+            # The legacy counter keys are dropped here. They are no longer
+            # read - the counters come from the store, which is written on an
+            # interval rather than only at a latch - and leaving them invites
+            # a future reader to wire the frozen copy back in.
+            kept = {
+                key: value
+                for key, value in self.entry.data.items()
+                if key not in LEGACY_COUNTER_KEYS
+            }
+            self.hass.config_entries.async_update_entry(
+                self.entry, data={**kept, **entry_data_updates}
+            )
+
+    def _drift_rate(self, latch: _UptimeLatch) -> float | None:
+        """Return the fraction of wall time this counter loses, once trustworthy.
+
+        `None` until enough has accumulated. The minimum is checked **before**
+        the division, which is also what stops a fresh install dividing by a
+        zero denominator.
+        """
+        if latch.pauses or latch.drift_sum_wall < DRIFT_MIN_ACCUMULATED:
             return None
-        rate = 1.0 - (self._drift_sum_counter / self._drift_sum_wall)
+        rate = 1.0 - (latch.drift_sum_counter / latch.drift_sum_wall)
         # Clamped at both ends for opposite reasons. An unbounded high rate
-        # lowers the expected counter until a real shortfall stops registering,
-        # which suppresses detection; an unbounded low one raises it and
-        # produces false alarms.
+        # lowers the expected counter until a real shortfall stops
+        # registering, suppressing detection; an unbounded low one raises it
+        # and produces false alarms.
         return max(-MAX_DRIFT, min(MAX_DRIFT, rate))
 
-    def _record_drift_sample(self, seconds: int, now: datetime) -> None:
-        """Fold one poll-to-poll interval into the drift accumulators.
+    def _record_drift_sample(
+        self, latch: _UptimeLatch, seconds: int, now: datetime
+    ) -> None:
+        """Fold one poll-to-poll interval into this latch's accumulators.
 
-        Duration-weighted: an interval spanning a long pause carries
-        proportionally more evidence than one spanning ninety seconds, which is
-        what two running sums give for free. The measurement makes no reference
-        to the boot anchor, and that is deliberate — the anchor is what the rate
-        is used to judge.
+        Duration-weighted, so an interval spanning a long pause carries
+        proportionally more evidence than one spanning three minutes. The
+        measurement makes no reference to the anchor - the anchor is what the
+        rate is used to judge, and deriving one from the other would be
+        circular.
         """
-        if self._last_uptime is None or self._last_poll_at is None:
+        if latch.pauses or latch.last_counter is None or latch.last_poll_at is None:
             return
-        wall = (now - self._last_poll_at).total_seconds()
-        advance = seconds - self._last_uptime
+        wall = (now - latch.last_poll_at).total_seconds()
+        advance = seconds - latch.last_counter
         if wall < DRIFT_MIN_INTERVAL or advance <= 0:
-            # Too short for the counter's whole-second resolution, or a reboot.
-            # Neither says anything about the rate.
+            # Too short for the counter's whole-second resolution, or a
+            # reset. Neither says anything about the rate.
             return
 
-        self._drift_sum_wall += wall
-        self._drift_sum_counter += advance
+        latch.drift_sum_wall += wall
+        latch.drift_sum_counter += advance
         sample = 1.0 - (advance / wall)
-        self._drift_rate_min = (
+        latch.drift_rate_min = (
             sample
-            if self._drift_rate_min is None
-            else min(self._drift_rate_min, sample)
+            if latch.drift_rate_min is None
+            else min(latch.drift_rate_min, sample)
         )
-        self._drift_rate_max = (
+        latch.drift_rate_max = (
             sample
-            if self._drift_rate_max is None
-            else max(self._drift_rate_max, sample)
+            if latch.drift_rate_max is None
+            else max(latch.drift_rate_max, sample)
         )
-        self._drift_interval_count += 1
+        latch.drift_interval_count += 1
 
-        if self._drift_sum_wall > DRIFT_ACCUMULATOR_CAP:
-            # Scale both down together: the ratio survives, but newer evidence
-            # can move it. Without this a firmware fix to the router's timer
-            # would be outvoted by history indefinitely.
-            scale = DRIFT_ACCUMULATOR_CAP / self._drift_sum_wall
-            self._drift_sum_wall *= scale
-            self._drift_sum_counter *= scale
+        if latch.drift_sum_wall > DRIFT_ACCUMULATOR_CAP:
+            # Scale both down together: the ratio survives, but newer
+            # evidence can move it, so a firmware fix to the timer is
+            # followed rather than averaged away against history.
+            scale = DRIFT_ACCUMULATOR_CAP / latch.drift_sum_wall
+            latch.drift_sum_wall *= scale
+            latch.drift_sum_counter *= scale
+
+    def _derived_boot(
+        self, latch: _UptimeLatch, seconds: int, now: datetime
+    ) -> datetime:
+        """Return the instant this counter started, corrected for its drift.
+
+        `now - counter` is late by exactly the drift the counter has
+        accumulated. Dividing by `(1 - rate)` recovers the wall time the
+        counter represents. It matters twice: a latch taken long after the
+        event is accurate, and the plausibility check can use a tight
+        tolerance - without the correction a fresh anchor sits a full `rate`
+        from the ratio that check predicts, so any device drifting past the
+        tolerance would re-latch on every poll.
+
+        Falls back to the uncorrected instant before a rate is known, where
+        the error is bounded by the short accumulation that implies.
+        """
+        rate = self._drift_rate(latch)
+        elapsed = seconds if rate is None else seconds / (1.0 - rate)
+        return now - timedelta(seconds=elapsed)
+
+    def _apply_uptime(
+        self,
+        latch: _UptimeLatch,
+        raw: Any,
+        entry_data_updates: dict[str, Any],
+    ) -> None:
+        """Route one counter reading through its latch."""
+        seconds: int | None = None
+        with contextlib.suppress(ValueError, TypeError):
+            if raw is not None:
+                seconds = int(float(raw))
+
+        if seconds is None or seconds < 0:
+            # Bad-reading guard: missing, unparsable or negative changes
+            # nothing at all. Advancing the last-seen counter to a rejected
+            # reading would move the reset comparison to a value the router
+            # never reported.
+            return
+
+        now = dt_util.now()
+        if now.year < CLOCK_FLOOR_YEAR:
+            # The host has no battery-backed clock and NTP has not completed.
+            # Defer rather than latch an instant decades adrift.
+            _LOGGER.debug(
+                "%s: system clock reads %s; deferring %s reconciliation",
+                self.entry.title,
+                now.isoformat(),
+                latch.label,
+            )
+            return
+        if seconds > MAX_PLAUSIBLE_UPTIME:
+            _LOGGER.warning(
+                "%s: implausible %s counter %s s; keeping the stored anchor",
+                self.entry.title,
+                latch.label,
+                seconds,
+            )
+            return
+
+        self._record_drift_sample(latch, seconds, now)
+
+        if latch.startup_reconciled:
+            self._apply_runtime_uptime(latch, seconds, now, entry_data_updates)
+        else:
+            self._reconcile_startup_uptime(latch, seconds, now, entry_data_updates)
+
+        self._check_anchor_plausible(latch, seconds, now, entry_data_updates)
+
+        latch.last_counter = seconds
+        latch.last_poll_at = now
+        self._maybe_persist_counter(latch, seconds, now)
+
+    def _apply_runtime_uptime(
+        self,
+        latch: _UptimeLatch,
+        seconds: int,
+        now: datetime,
+        entry_data_updates: dict[str, Any],
+    ) -> None:
+        """Compare the counter against itself during an unbroken session.
+
+        Exact, and the reason the anchor is stable: no clock enters the
+        comparison, so no drift can reach the timestamp. A drop beyond the
+        margin is a reset, and nothing vetoes it.
+        """
+        if latch.last_counter is None:
+            return
+        if seconds < latch.last_counter - UPTIME_REBOOT_MARGIN:
+            self._latch_boot_time(
+                latch,
+                self._derived_boot(latch, seconds, now),
+                seconds,
+                now,
+                entry_data_updates,
+            )
+        elif seconds < latch.last_counter:
+            # Inside the margin, so not a reset. Logged rather than absorbed
+            # in silence: nothing has established that these counters never
+            # step backwards, and the margin would otherwise hide the
+            # evidence that they do.
+            _LOGGER.info(
+                "%s: %s counter stepped back %s s (%s to %s), within the %s s "
+                "margin and not treated as a reset",
+                self.entry.title,
+                latch.label,
+                latch.last_counter - seconds,
+                latch.last_counter,
+                seconds,
+                UPTIME_REBOOT_MARGIN,
+            )
+
+    def _reconcile_startup_uptime(
+        self,
+        latch: _UptimeLatch,
+        seconds: int,
+        now: datetime,
+        entry_data_updates: dict[str, Any],
+    ) -> None:
+        """Decide, on the first usable poll, whether a gap contained a reset.
+
+        This is the boundary the running comparison cannot see. The stored
+        counter is what makes it answerable, and the defect this mechanism
+        replaces was that the stored counter was written **only at a latch**:
+        one instance held 61 s against a live 213,412 s, frozen for nineteen
+        days, so the comparison could never fire again.
+        """
+        if latch.stored_counter is not None:
+            if latch.pauses or latch.stored_written_at is None:
+                self._floor_test(latch, seconds, now, entry_data_updates)
+            else:
+                self._shortfall_test(
+                    latch,
+                    seconds,
+                    now,
+                    latch.stored_counter,
+                    latch.stored_written_at,
+                    entry_data_updates,
+                )
+            self._finish_startup(latch)
+            return
+
+        # Nothing stored: a fresh install, or the first start after this
+        # upgrade. The only evidence is the anchor against the counter,
+        # judged with the wide universal bound.
+        if latch.boot_time is None or self._cold_start_implausible(latch, seconds, now):
+            self._log_reconciliation(latch, "cold start, re-latching", seconds, now)
+            self._latch_boot_time(
+                latch,
+                self._derived_boot(latch, seconds, now),
+                seconds,
+                now,
+                entry_data_updates,
+            )
+        else:
+            self._log_reconciliation(latch, "cold start, anchor retained", seconds, now)
+        self._finish_startup(latch)
+
+    def _floor_test(
+        self,
+        latch: _UptimeLatch,
+        seconds: int,
+        now: datetime,
+        entry_data_updates: dict[str, Any],
+    ) -> None:
+        """Ask whether a counter that may legitimately pause moved backwards.
+
+        The only question available for `TotalConnectTime`. It stops whenever
+        the session is down, so under-running wall time across a gap says
+        nothing - a week offline and a week disconnected look identical. It
+        moves backwards for exactly one reason, a statistics clear, and that
+        is what this detects.
+        """
+        stored = latch.stored_counter
+        if stored is not None and seconds < stored:
+            self._log_reconciliation(
+                latch,
+                f"counter reset during the gap (stored {stored} s)",
+                seconds,
+                now,
+            )
+            self._latch_boot_time(
+                latch,
+                self._derived_boot(latch, seconds, now),
+                seconds,
+                now,
+                entry_data_updates,
+            )
+        else:
+            self._log_reconciliation(
+                latch,
+                f"counter continued (stored {stored} s)",
+                seconds,
+                now,
+            )
+
+    def _shortfall_test(
+        self,
+        latch: _UptimeLatch,
+        seconds: int,
+        now: datetime,
+        stored_counter: int,
+        written_at: datetime,
+        entry_data_updates: dict[str, Any],
+    ) -> None:
+        """Ask whether the counter continued across the gap as this device does.
+
+        The stored pair is passed in rather than read from the latch: the
+        caller has already established both are present, and passing them
+        says so.
+        """
+        elapsed = (dt_util.as_utc(now) - written_at).total_seconds()
+        if elapsed < 0:
+            # The stored write is dated after now. Nothing useful can be said
+            # about the gap, so fall back to the anchor comparison.
+            _LOGGER.warning(
+                "%s: stored %s write is dated ahead of now; using the "
+                "cold-start comparison instead",
+                self.entry.title,
+                latch.label,
+            )
+            if latch.boot_time is None or self._cold_start_implausible(
+                latch, seconds, now
+            ):
+                self._latch_boot_time(
+                    latch,
+                    self._derived_boot(latch, seconds, now),
+                    seconds,
+                    now,
+                    entry_data_updates,
+                )
+            return
+
+        rate = self._drift_rate(latch) or 0.0
+        expected = stored_counter + elapsed * (1.0 - rate)
+        # The margin scales because the error it absorbs scales: the dominant
+        # term is rate-estimate error multiplied by the gap. The floor covers
+        # quantization and poll latency on short gaps.
+        margin = max(SHORTFALL_MARGIN_FLOOR, elapsed * SHORTFALL_MARGIN_RATE)
+
+        if seconds < expected - margin:
+            self._log_reconciliation(
+                latch,
+                f"reset during the gap (expected {expected:.0f} s, "
+                f"margin {margin:.0f} s)",
+                seconds,
+                now,
+            )
+            self._latch_boot_time(
+                latch,
+                self._derived_boot(latch, seconds, now),
+                seconds,
+                now,
+                entry_data_updates,
+            )
+        else:
+            self._log_reconciliation(
+                latch,
+                f"counter continued (expected {expected:.0f} s, margin {margin:.0f} s)",
+                seconds,
+                now,
+            )
+
+    def _cold_start_implausible(
+        self, latch: _UptimeLatch, seconds: int, now: datetime
+    ) -> bool:
+        """Judge the anchor with the universal bound, nothing having been learned.
+
+        Two-sided for a counter that tracks wall time. The low side catches
+        an anchor that is too early, which is the observed failure; the high
+        side catches one that is too late, and exists because no counter has
+        been measured running fast.
+
+        **One-sided for a counter that pauses.** Downtime makes the ratio
+        arbitrarily small with nothing wrong, so only the high side means
+        anything: a counter cannot have run for longer than the anchor says
+        has elapsed.
+        """
+        if latch.boot_time is None:
+            return True
+        elapsed = (
+            dt_util.as_utc(now) - dt_util.as_utc(latch.boot_time)
+        ).total_seconds()
+        if elapsed <= 0:
+            return True
+        ratio = seconds / elapsed
+        if latch.pauses:
+            return ratio > (1.0 + MAX_DRIFT)
+        return ratio < (1.0 - MAX_DRIFT) or ratio > (1.0 + MAX_DRIFT)
+
+    def _check_anchor_plausible(
+        self,
+        latch: _UptimeLatch,
+        seconds: int,
+        now: datetime,
+        entry_data_updates: dict[str, Any],
+    ) -> None:
+        """Backstop: is the anchor still credible against the counter?
+
+        The startup tests run once and the runtime comparison only sees drops
+        as they happen. Neither watches for an anchor that has *become*
+        wrong, and retaining a stale anchor indefinitely is the failure this
+        design exists to prevent.
+
+        Compared against the counter's own measured rate rather than a
+        universal constant, so no guess decides whether an unseen device
+        works. A pausing counter has no rate and is not checked here at all:
+        its ratio falls legitimately with every outage.
+        """
+        rate = self._drift_rate(latch)
+        if rate is None or latch.boot_time is None:
+            return
+        elapsed = (
+            dt_util.as_utc(now) - dt_util.as_utc(latch.boot_time)
+        ).total_seconds()
+        if elapsed <= 0:
+            return
+        if abs(seconds / elapsed - (1.0 - rate)) <= PLAUSIBILITY_TOLERANCE:
+            return
+
+        candidate = self._derived_boot(latch, seconds, now)
+        if candidate <= latch.boot_time:
+            # A reset moves the start instant forward: the anchor can only be
+            # ahead of the true start by drift accumulated within the epoch
+            # that produced it, and a few percent of an interval cannot
+            # exceed the interval. A backward move is therefore not a reset.
+            _LOGGER.warning(
+                "%s: %s anchor implausible against the counter but the "
+                "candidate instant is earlier (%s vs %s); not treating as a reset",
+                self.entry.title,
+                latch.label,
+                candidate.isoformat(),
+                latch.boot_time.isoformat(),
+            )
+            return
+
+        self._log_reconciliation(
+            latch, "anchor implausible against the counter", seconds, now
+        )
+        self._latch_boot_time(latch, candidate, seconds, now, entry_data_updates)
+
+    def _finish_startup(self, latch: _UptimeLatch) -> None:
+        """Mark this latch's startup reconciliation complete."""
+        latch.startup_reconciled = True
+
+    def _log_reconciliation(
+        self, latch: _UptimeLatch, outcome: str, seconds: int, now: datetime
+    ) -> None:
+        """Record every input to a latch decision, and the decision.
+
+        The absence of this is a substantial part of why the equivalent fault
+        took five days of forensics on the sibling project rather than
+        showing on the first restart.
+        """
+        rate = self._drift_rate(latch)
+        _LOGGER.info(
+            "%s: %s reconciliation - %s (live %s s, stored counter %s, "
+            "written at %s, rate %s, stored anchor %s, derived anchor %s)",
+            self.entry.title,
+            latch.label,
+            outcome,
+            seconds,
+            latch.stored_counter,
+            latch.stored_written_at.isoformat() if latch.stored_written_at else None,
+            f"{rate * 100:.2f}%" if rate is not None else "not yet measured",
+            latch.boot_time.isoformat() if latch.boot_time is not None else None,
+            self._derived_boot(latch, seconds, now).replace(microsecond=0).isoformat(),
+        )
+
+    def _latch_boot_time(
+        self,
+        latch: _UptimeLatch,
+        boot_time: datetime,
+        seconds: int,
+        now: datetime,
+        entry_data_updates: dict[str, Any],
+    ) -> None:
+        """Re-anchor this latch and persist it immediately."""
+        previous = latch.boot_time
+        latch.boot_time = boot_time.replace(microsecond=0)
+        _LOGGER.info(
+            "%s: %s latched: %s",
+            self.entry.title,
+            latch.label,
+            latch.boot_time.isoformat(),
+        )
+        if previous is not None and latch.last_counter is not None:
+            dropped = seconds < latch.last_counter - UPTIME_REBOOT_MARGIN
+            if not dropped:
+                # The signature of this entire bug class. A timestamp that
+                # moves without the counter having dropped is either a
+                # genuine gap reset or a defect, and the two are worth
+                # telling apart from the log alone.
+                _LOGGER.warning(
+                    "%s: %s moved from %s to %s without a counter drop "
+                    "(live %s s, previous %s s)",
+                    self.entry.title,
+                    latch.label,
+                    previous.isoformat(),
+                    latch.boot_time.isoformat(),
+                    seconds,
+                    latch.last_counter,
+                )
+        entry_data_updates[latch.boot_key] = latch.boot_time.isoformat()
+        self._write_counter(latch, seconds, now)
+
+    def _maybe_persist_counter(
+        self, latch: _UptimeLatch, seconds: int, now: datetime
+    ) -> None:
+        """Flush the counter and accumulators on a fixed interval.
+
+        **This is the half of the fix that addresses the observed defect.**
+        The counter used to reach disk only when a latch happened, so the
+        stored value froze at whatever the counter read one poll after a
+        boot - 61 s on the instance this was written against - and the
+        restart comparison could never fire again. Writing on an interval
+        bounds how stale the stored value can be, for every stop condition
+        rather than only an orderly one.
+
+        A clean shutdown needs no hook: `async_delay_save` registers a
+        final-write listener that flushes a pending save when Home Assistant
+        stops.
+        """
+        if (
+            latch.last_counter_write is not None
+            and now - latch.last_counter_write < UPTIME_WRITE_INTERVAL
+        ):
+            return
+        self._write_counter(latch, seconds, now)
+
+    def _write_counter(self, latch: _UptimeLatch, seconds: int, now: datetime) -> None:
+        """Schedule a debounced write of every latch's counter and accumulators."""
+        latch.stored_counter = seconds
+        latch.stored_written_at = dt_util.as_utc(now)
+        latch.last_counter_write = now
+        if self._store is None:
+            return
+        record = self._store_record()
+        self._store.async_delay_save(lambda: record, UPTIME_SAVE_DELAY)
+
+    def _store_record(self) -> dict[str, Any]:
+        """Return the persisted form of both latches.
+
+        One record rather than three files: the three are written on the same
+        poll and read on the same setup, and a single debounced save is the
+        cadence the write interval already assumes. The fields inside each
+        block match the sibling projects, so one reader serves all of them.
+        """
+        record: dict[str, Any] = {}
+        for latch in self._latches:
+            block: dict[str, Any] = {
+                "last_uptime": latch.stored_counter,
+                "written_at": (
+                    latch.stored_written_at.isoformat()
+                    if latch.stored_written_at is not None
+                    else None
+                ),
+                "sum_wall": round(latch.drift_sum_wall, 3),
+                "sum_counter": round(latch.drift_sum_counter, 3),
+                "interval_count": latch.drift_interval_count,
+            }
+            if latch.drift_rate_min is not None:
+                block["rate_min"] = round(latch.drift_rate_min, 6)
+            if latch.drift_rate_max is not None:
+                block["rate_max"] = round(latch.drift_rate_max, 6)
+            record[latch.counter_key] = block
+        return record
+
+    async def async_load_stored_uptime(self) -> None:
+        """Load the persisted counters and accumulators. Never raises.
+
+        Awaited in `async_setup_entry` so the record is in memory before the
+        background initialization task runs the first poll. An absent,
+        corrupt or unreadable record resolves to "nothing learned", which
+        routes to the cold-start path - the store is a cross-check, never the
+        anchor.
+        """
+        self._store = Store(
+            self.hass,
+            UPTIME_STORAGE_VERSION,
+            f"{DOMAIN}_{self.entry.entry_id}_uptime",
+        )
+        stored: dict[str, Any] | None = None
+        try:
+            stored = await self._store.async_load()
+        except Exception as err:  # noqa: BLE001 - see below
+            # Deliberately broad. The contract is that **no** storage fault
+            # can fail entry setup: the store is a cross-check and the
+            # cold-start path works without it. Narrowing this to the
+            # exceptions seen so far would let an unanticipated one abort a
+            # setup with no need of the store at all.
+            _LOGGER.debug(
+                "%s: uptime store unreadable, continuing without it: %s",
+                self.entry.title,
+                err,
+            )
+            return
+        if not isinstance(stored, dict):
+            return
+        if "last_uptime" in stored:
+            # The flat record written before 3.4.2-dev7, when the single latch
+            # read `realtime_time`. That is now the connection latch's counter;
+            # the system latch starts with nothing learned.
+            self._restore_latch(self._conn_latch, stored)
+            self._drop_anchorless_counters()
+            return
+        for latch in self._latches:
+            block = stored.get(latch.counter_key)
+            if isinstance(block, dict):
+                self._restore_latch(latch, block)
+        self._drop_anchorless_counters()
+
+    def _drop_anchorless_counters(self) -> None:
+        """Cold-start any latch that has a stored counter but no anchor.
+
+        ZTE only. The pre-3.4.2-dev7 flat record gives the connection latch a
+        stored counter while `entry.data` has no `connection_start`. The
+        startup test then finds the counter continued and keeps an anchor that
+        does not exist, so Connection Uptime stays unknown until a reconnect.
+        Dropping the stored counter routes that latch to the cold start, which
+        latches `now - counter`; the drift it learned is kept.
+        """
+        for latch in self._latches:
+            if latch.boot_time is None and latch.stored_counter is not None:
+                latch.stored_counter = None
+                latch.stored_written_at = None
+
+    def _restore_latch(self, latch: _UptimeLatch, block: dict[str, Any]) -> None:
+        """Read one latch's block back, treating anything unusable as absent."""
+        with contextlib.suppress(ValueError, TypeError):
+            raw = block.get("last_uptime")
+            if raw is not None:
+                latch.stored_counter = int(raw)
+        with contextlib.suppress(ValueError, TypeError):
+            latch.drift_sum_wall = float(block.get("sum_wall", 0.0))
+            latch.drift_sum_counter = float(block.get("sum_counter", 0.0))
+            latch.drift_interval_count = int(block.get("interval_count", 0))
+        for key, attr in (
+            ("rate_min", "drift_rate_min"),
+            ("rate_max", "drift_rate_max"),
+        ):
+            with contextlib.suppress(ValueError, TypeError):
+                raw = block.get(key)
+                if raw is not None:
+                    setattr(latch, attr, float(raw))
+
+        # `written_at` carries the same naive-versus-aware hazard as the
+        # anchor: both are read back as strings and both are subtracted from
+        # `now()`. A value that will not parse, or parses naive, is treated
+        # as absent - which means the record cannot date the gap, and the
+        # floor comparison applies instead.
+        raw_written = block.get("written_at")
+        if raw_written:
+            with contextlib.suppress(Exception):
+                parsed = dt_util.parse_datetime(raw_written)
+                if parsed is not None and parsed.tzinfo is not None:
+                    latch.stored_written_at = dt_util.as_utc(parsed)
+
+    @property
+    def uptime_diagnostics(self) -> dict[str, Any]:
+        """Return the drift picture, for the health sensor and diagnostics.
+
+        Published because every constant in the latch was set from one device
+        over one week on a sibling project. Without this a field report
+        carries no rate, and the only route to one is a recorder extraction.
+
+        Reports the system counter alone. The connection counter keeps its
+        own accumulators, and neither is a property of the host clock, so
+        listing both here would invite exactly the comparison that is not
+        meaningful.
+        """
+        latch = self._system_latch
+        rate = self._drift_rate(latch)
+        return {
+            "drift_rate_pct": round(rate * 100, 3) if rate is not None else None,
+            "drift_rate_min_pct": (
+                round(latch.drift_rate_min * 100, 3)
+                if latch.drift_rate_min is not None
+                else None
+            ),
+            "drift_rate_max_pct": (
+                round(latch.drift_rate_max * 100, 3)
+                if latch.drift_rate_max is not None
+                else None
+            ),
+            "drift_intervals": latch.drift_interval_count,
+            "drift_measured_seconds": round(latch.drift_sum_wall),
+            "drift_deficit_seconds": round(
+                latch.drift_sum_wall - latch.drift_sum_counter
+            ),
+        }
+
+    @property
+    def uptime_state(self) -> dict[str, Any]:
+        """Return every latch's full state, for the diagnostics download.
+
+        Wider than `uptime_diagnostics`, which is the rate summary the health
+        sensor publishes. Carries no device data and nothing to redact:
+        counters, rates and timestamps.
+        """
+        return {
+            **self.uptime_diagnostics,
+            # The key the system latch reads. ZTE only: the Huawei device has
+            # one uptime key.
+            "source": self._uptime_source,
+            "latches": {
+                latch.counter_key: {
+                    "anchor": (
+                        latch.boot_time.isoformat()
+                        if latch.boot_time is not None
+                        else None
+                    ),
+                    "live_counter": latch.last_counter,
+                    "stored_counter": latch.stored_counter,
+                    "stored_written_at": (
+                        latch.stored_written_at.isoformat()
+                        if latch.stored_written_at is not None
+                        else None
+                    ),
+                    "startup_reconciled": latch.startup_reconciled,
+                    "pauses": latch.pauses,
+                    "drift_rate_pct": self._latch_rate_pct(latch),
+                }
+                for latch in self._latches
+            },
+        }
+
+    def _latch_rate_pct(self, latch: _UptimeLatch) -> float | None:
+        """Return one latch's measured rate as a percentage, or `None`."""
+        rate = self._drift_rate(latch)
+        return round(rate * 100, 3) if rate is not None else None
 
     async def _observe(self, data: dict[str, Any]) -> None:
         """Fold a successful poll into the transition and populated records.
@@ -981,7 +1907,7 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         live reading would detach the history from the entities it describes.
         """
         device_id = self.imei or f"host_{self.entry.options.get(CONF_HOST, 'unknown')}"
-        if self.observations.observe(data, device_id):
+        if self.observations.observe(data, device_id, list(self.expected_outages)):
             await self.observations.async_save()
         await self._persist_session_lifetimes()
 
@@ -1076,323 +2002,69 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 "%s: could not store the device profile: %s", self.entry.title, err
             )
 
-    async def async_load_stored_uptime(self) -> None:
-        """Load the persisted counter and drift accumulators. Never raises.
+    def _device_uptime_raw(self, data: dict[str, Any]) -> Any:
+        """The system counter's raw reading, from one key chosen per run.
 
-        Awaited in ``async_setup_entry`` so the record is in memory before the
-        background initialization task runs the first poll. An absent, corrupt
-        or unreadable record resolves to "nothing learned", which routes to the
-        cold-start path — the store is advisory, never the anchor.
+        `DEVICE_UPTIME_KEYS` is a preference order, not a per-poll fallback.
+        A booting router can answer `system_uptime` blank while `realtime_time`
+        answers, and switching keys between polls would read as a counter drop
+        and latch a reboot that did not happen. The first key that answers is
+        kept for the run; a blank reading of it is no reading. A session key
+        reading 0 is data off, not an answer.
+
+        The key is saved in `entry.data["uptime_source"]`. A run that chooses
+        a different key, or the first run with nothing saved, starts the
+        system latch afresh: an anchor or stored counter learned from another
+        counter is evidence about a different question. Kept, a session anchor
+        within `MAX_DRIFT` of the router's uptime passes the cold start, and
+        the plausibility check never moves an anchor earlier, so it would stay
+        until the next reboot. Found by the 3.4.2-dev8 review.
         """
-        self._store = Store(
-            self.hass,
-            UPTIME_STORAGE_VERSION,
-            f"{DOMAIN}_{self.entry.entry_id}_uptime",
-        )
-        stored: dict[str, Any] | None = None
-        try:
-            stored = await self._store.async_load()
-        except Exception as err:  # noqa: BLE001 - see below
-            # Deliberately broad. The contract is that **no** storage fault can
-            # fail entry setup: the store is a cross-check, and the cold-start
-            # path works without it. Narrowing this to the exceptions seen so
-            # far would let an unanticipated one abort a setup that has no need
-            # of the store at all.
-            _LOGGER.debug(
-                "%s: uptime store unreadable, continuing without it: %s",
-                self.entry.title,
-                err,
+        if self._uptime_source is None:
+            chosen = next(
+                (
+                    k
+                    for k in DEVICE_UPTIME_KEYS
+                    if data.get(k) not in (None, "")
+                    and (k not in CONNECTION_UPTIME_KEYS or _session_reading(data[k]))
+                ),
+                None,
             )
-            return
-        if not isinstance(stored, dict):
-            return
+            if chosen is None:
+                return None
+            self._uptime_source = chosen
+            if self.entry.data.get("uptime_source") != chosen:
+                self._reset_system_latch(chosen)
+        raw = data.get(self._uptime_source)
+        if raw in (None, ""):
+            return None
+        if self._uptime_source in CONNECTION_UPTIME_KEYS and not _session_reading(raw):
+            return None
+        return raw
 
-        with contextlib.suppress(ValueError, TypeError):
-            raw = stored.get("last_uptime")
-            if raw is not None:
-                self._stored_last_uptime = int(raw)
-        with contextlib.suppress(ValueError, TypeError):
-            self._drift_sum_wall = float(stored.get("sum_wall", 0.0))
-            self._drift_sum_counter = float(stored.get("sum_counter", 0.0))
-            self._drift_interval_count = int(stored.get("interval_count", 0))
-        for key, attr in (
-            ("rate_min", "_drift_rate_min"),
-            ("rate_max", "_drift_rate_max"),
-        ):
-            with contextlib.suppress(ValueError, TypeError):
-                raw = stored.get(key)
-                if raw is not None:
-                    setattr(self, attr, float(raw))
-
-        # `written_at` carries the same naive-versus-aware hazard as
-        # `boot_time`: both are read back as strings and both are subtracted
-        # from `now()`. A value that will not parse, or parses naive, is
-        # treated as absent, which means the record cannot date the gap and the
-        # cold-start path applies.
-        raw_written = stored.get("written_at")
-        if raw_written:
-            with contextlib.suppress(Exception):
-                parsed = dt_util.parse_datetime(raw_written)
-                if parsed is not None and parsed.tzinfo is not None:
-                    self._stored_written_at = dt_util.as_utc(parsed)
-
-    def _derived_boot(self, seconds: int, now: datetime) -> datetime:
-        """The instant the router actually booted, corrected for counter drift.
-
-        `now - counter` is wrong by the drift the counter has accumulated: on a
-        device losing 4.34%, a counter reading four days puts the instant four
-        and a half hours late. Dividing by `(1 - rate)` recovers the wall time
-        the counter represents.
-
-        This matters twice. It makes a latch taken long after the event
-        accurate, and it is what lets the plausibility check use a tight
-        tolerance — without it a fresh anchor sits a full `rate` away from the
-        ratio the check predicts, so any device drifting more than the
-        tolerance would re-latch on every poll.
-
-        Falls back to the uncorrected instant before a rate is known, where the
-        error is bounded by the short uptime that implies.
-        """
-        rate = self._drift_rate
-        elapsed = seconds if rate is None else seconds / (1.0 - rate)
-        return now - timedelta(seconds=elapsed)
-
-    def _apply_uptime(self, seconds: int) -> None:
-        """Route one usable counter reading through the latch."""
-        now = dt_util.now()
-
-        if now.year < CLOCK_FLOOR_YEAR:
-            # Clock floor guard: the host has no battery-backed clock and NTP
-            # has not completed. Defer rather than latch a boot instant that
-            # would be decades adrift.
-            _LOGGER.debug(
-                "%s: system clock reads %s; deferring uptime reconciliation",
-                self.entry.title,
-                now.isoformat(),
-            )
-            return
-        if seconds > MAX_PLAUSIBLE_UPTIME:
-            _LOGGER.warning(
-                "%s: implausible uptime %s s; keeping the stored boot time",
-                self.entry.title,
-                seconds,
-            )
-            return
-
-        self._record_drift_sample(seconds, now)
-
-        if self._startup_reconciled:
-            self._apply_runtime_uptime(seconds, now)
-        else:
-            self._reconcile_startup_uptime(seconds, now)
-
-        self._check_anchor_plausible(seconds, now)
-
-        self._last_uptime = seconds
-        self._last_poll_at = now
-        self._maybe_persist_counter(seconds, now)
-
-    def _apply_runtime_uptime(self, seconds: int, now: datetime) -> None:
-        """Compare the counter against itself during an unbroken session.
-
-        Exact, and the reason the latch is stable: the router's counter is
-        compared with its own previous value, so no clock enters the comparison
-        and no drift can reach the timestamp. A drop beyond the margin is a
-        reboot, and nothing vetoes it.
-        """
-        if (
-            self._last_uptime is not None
-            and seconds < self._last_uptime - UPTIME_REBOOT_MARGIN
-        ):
-            self._latch_boot_time(self._derived_boot(seconds, now), seconds, now)
-        elif self._last_uptime is not None and seconds < self._last_uptime:
-            # Inside the margin, so not a reboot. Logged rather than absorbed
-            # in silence: nothing has established that this counter never steps
-            # backward, and the margin would otherwise hide the evidence.
-            _LOGGER.info(
-                "%s: uptime counter stepped back %s s (%s to %s), within the "
-                "%s s margin and not treated as a reboot",
-                self.entry.title,
-                self._last_uptime - seconds,
-                self._last_uptime,
-                seconds,
-                UPTIME_REBOOT_MARGIN,
-            )
-
-    def _reconcile_startup_uptime(self, seconds: int, now: datetime) -> None:
-        """Decide, on the first usable poll, whether a gap contained a reboot."""
-        stored_counter = self._stored_last_uptime
-        written_at = self._stored_written_at
-        if stored_counter is not None and written_at is not None:
-            self._shortfall_test(seconds, now, stored_counter, written_at)
-            return
-
-        # Nothing learned and nothing stored: a fresh install, or the first
-        # start after this upgrade. The only available evidence is the anchor
-        # against the counter, judged with the wide universal bound.
-        if self._boot_time is None or self._cold_start_implausible(seconds, now):
-            self._log_reconciliation("cold start, re-latching", seconds, now)
-            self._latch_boot_time(self._derived_boot(seconds, now), seconds, now)
-        else:
-            self._log_reconciliation("cold start, anchor retained", seconds, now)
-        self._finish_startup()
-
-    def _shortfall_test(
-        self, seconds: int, now: datetime, stored_counter: int, written_at: datetime
-    ) -> None:
-        """Did the counter continue across the gap as this device continues?
-
-        The stored pair is passed in rather than read from state: the caller has
-        already established both are present, and passing them says so.
-        """
-        elapsed = (dt_util.as_utc(now) - written_at).total_seconds()
-        if elapsed < 0:
-            # The stored write is dated after now. Nothing useful can be said
-            # about the gap, so fall back to the anchor comparison.
-            _LOGGER.warning(
-                "%s: stored uptime write is dated ahead of now; using the "
-                "cold-start comparison instead",
-                self.entry.title,
-            )
-            if self._boot_time is None or self._cold_start_implausible(seconds, now):
-                self._latch_boot_time(self._derived_boot(seconds, now), seconds, now)
-            self._finish_startup()
-            return
-
-        rate = self._drift_rate if self._drift_rate is not None else 0.0
-        expected = stored_counter + elapsed * (1.0 - rate)
-        margin = max(SHORTFALL_MARGIN_FLOOR, elapsed * SHORTFALL_MARGIN_RATE)
-
-        if seconds < expected - margin:
-            self._log_reconciliation(
-                f"reboot during the gap (expected {expected:.0f} s, "
-                f"margin {margin:.0f} s)",
-                seconds,
-                now,
-            )
-            self._latch_boot_time(self._derived_boot(seconds, now), seconds, now)
-        else:
-            self._log_reconciliation(
-                f"counter continued (expected {expected:.0f} s, margin {margin:.0f} s)",
-                seconds,
-                now,
-            )
-        self._finish_startup()
-
-    def _cold_start_implausible(self, seconds: int, now: datetime) -> bool:
-        """Judge the anchor with the universal bound, nothing having been learned.
-
-        Two-sided. The low side catches an anchor that is too early, which is
-        the observed failure; the high side catches one that is too late, and
-        exists because no counter has been measured running *fast*.
-        """
-        if self._boot_time is None:  # pragma: no cover - callers short-circuit
-            return True
-        elapsed = (
-            dt_util.as_utc(now) - dt_util.as_utc(self._boot_time)
-        ).total_seconds()
-        if elapsed <= 0:
-            return True
-        ratio = seconds / elapsed
-        return ratio < (1.0 - MAX_DRIFT) or ratio > (1.0 + MAX_DRIFT)
-
-    def _check_anchor_plausible(self, seconds: int, now: datetime) -> None:
-        """Backstop: is the anchor still credible against the counter?
-
-        The shortfall test runs only at startup and the runtime comparison only
-        sees drops as they happen. Neither watches for an anchor that has
-        *become* wrong, and retaining a stale anchor indefinitely is the failure
-        this whole design exists to prevent.
-
-        Compared against the device's own measured rate rather than a universal
-        constant, so no guess decides whether a given router works.
-        """
-        rate = self._drift_rate
-        if rate is None or self._boot_time is None:
-            return
-        elapsed = (
-            dt_util.as_utc(now) - dt_util.as_utc(self._boot_time)
-        ).total_seconds()
-        if elapsed <= 0:
-            return
-        if abs(seconds / elapsed - (1.0 - rate)) <= PLAUSIBILITY_TOLERANCE:
-            return
-
-        candidate = self._derived_boot(seconds, now)
-        if candidate <= self._boot_time:
-            # A reboot moves the boot instant forward: the anchor can only be
-            # ahead of the true boot by drift accumulated within the epoch that
-            # produced it, and a few percent of an interval cannot exceed the
-            # interval. A backward move is therefore not a reboot.
-            _LOGGER.warning(
-                "%s: anchor implausible against the counter but the candidate "
-                "instant is earlier (%s vs %s); not treating as a reboot",
-                self.entry.title,
-                candidate.isoformat(),
-                self._boot_time.isoformat(),
-            )
-            return
-
-        self._log_reconciliation("anchor implausible against the counter", seconds, now)
-        self._latch_boot_time(candidate, seconds, now)
-
-    def _finish_startup(self) -> None:
-        """Mark startup reconciliation complete."""
-        self._startup_reconciled = True
-
-    def _log_reconciliation(self, outcome: str, seconds: int, now: datetime) -> None:
-        """Record every input to a latch decision, and the decision.
-
-        The absence of this is a substantial part of why the drift took five
-        days of forensics to find rather than showing on the first restart.
-        """
-        rate = self._drift_rate
+    def _reset_system_latch(self, chosen: str) -> None:
+        """Drop what the system latch holds and record the key it now reads."""
         _LOGGER.info(
-            "%s: uptime reconciliation — %s (live %s s, stored counter %s, "
-            "written at %s, rate %s, stored boot %s, derived boot %s)",
+            "%s: device uptime read from %s (previously %s); the system latch "
+            "starts afresh",
             self.entry.title,
-            outcome,
-            seconds,
-            self._stored_last_uptime,
-            self._stored_written_at.isoformat() if self._stored_written_at else None,
-            f"{rate * 100:.2f}%" if rate is not None else "not yet measured",
-            self._boot_time.isoformat() if self._boot_time is not None else None,
-            self._derived_boot(seconds, now).replace(microsecond=0).isoformat(),
+            chosen,
+            self.entry.data.get("uptime_source"),
+        )
+        self._system_latch = _UptimeLatch(
+            label=self._system_latch.label,
+            boot_key=self._system_latch.boot_key,
+            counter_key=self._system_latch.counter_key,
+        )
+        self._latches = (self._system_latch, self._conn_latch)
+        self.hass.config_entries.async_update_entry(
+            self.entry, data={**self.entry.data, "uptime_source": chosen}
         )
 
-    def _latch_boot_time(
-        self, boot_time: datetime, seconds: int, now: datetime
-    ) -> None:
-        """Re-anchor the boot instant and persist it immediately."""
-        previous = self._boot_time
-        self._boot_time = boot_time.replace(microsecond=0)
-        _LOGGER.info(
-            "%s: boot time latched: %s", self.entry.title, self._boot_time.isoformat()
-        )
-        if previous is not None and self._last_uptime is not None:
-            dropped = seconds < self._last_uptime - UPTIME_REBOOT_MARGIN
-            if not dropped:
-                # The signature of this entire bug class. A timestamp that moves
-                # without the counter having dropped is either a genuine gap
-                # reboot or a defect, and the two are worth telling apart from
-                # the log alone.
-                _LOGGER.warning(
-                    "%s: boot time moved from %s to %s without a counter drop "
-                    "(live %s s, previous %s s)",
-                    self.entry.title,
-                    previous.isoformat(),
-                    self._boot_time.isoformat(),
-                    seconds,
-                    self._last_uptime,
-                )
-        # The legacy `last_uptime` key is dropped here. It is never read, and
-        # leaving it invites a future reader to wire it back in.
-        new_data = {
-            key: value for key, value in self.entry.data.items() if key != "last_uptime"
-        }
-        new_data["boot_time"] = self._boot_time.isoformat()
-        self.hass.config_entries.async_update_entry(self.entry, data=new_data)
-        self._write_counter(seconds, now)
+    @property
+    def uptime_source(self) -> str | None:
+        """The key the system latch reads, or `None` before one answered."""
+        return self._uptime_source
 
     def persist_last_delete(self) -> None:
         """Write the API's delete record into the entry, so a restart keeps it.
@@ -1409,91 +2081,6 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         new_data = dict(self.entry.data)
         new_data["last_delete"] = record
         self.hass.config_entries.async_update_entry(self.entry, data=new_data)
-
-    def _maybe_persist_counter(self, seconds: int, now: datetime) -> None:
-        """Flush the counter and accumulators on a fixed interval.
-
-        Bounds how far behind the stored record can fall, for every stop
-        condition rather than only an orderly one. A clean shutdown is covered
-        without a hook: ``async_delay_save`` registers a final-write listener
-        that flushes any pending save when Home Assistant stops.
-        """
-        if (
-            self._last_counter_write is not None
-            and now - self._last_counter_write < UPTIME_WRITE_INTERVAL
-        ):
-            return
-        self._write_counter(seconds, now)
-
-    def _write_counter(self, seconds: int, now: datetime) -> None:
-        """Schedule a debounced write of the counter and accumulators."""
-        if self._store is None:  # pragma: no cover - store is loaded at setup
-            return
-        self._stored_last_uptime = seconds
-        self._stored_written_at = dt_util.as_utc(now)
-        self._last_counter_write = now
-        record: dict[str, Any] = {
-            "last_uptime": seconds,
-            "written_at": self._stored_written_at.isoformat(),
-            "sum_wall": round(self._drift_sum_wall, 3),
-            "sum_counter": round(self._drift_sum_counter, 3),
-            "interval_count": self._drift_interval_count,
-        }
-        if self._drift_rate_min is not None:
-            record["rate_min"] = round(self._drift_rate_min, 6)
-        if self._drift_rate_max is not None:
-            record["rate_max"] = round(self._drift_rate_max, 6)
-        self._store.async_delay_save(lambda: record, UPTIME_SAVE_DELAY)
-
-    @property
-    def uptime_state(self) -> dict[str, Any]:
-        """The latch's full state, for the diagnostics download.
-
-        Wider than `uptime_diagnostics`, which is the rate summary the health
-        sensor publishes. Carries no device data and nothing to redact:
-        counters, a rate and two timestamps.
-        """
-        return {
-            **self.uptime_diagnostics,
-            "boot_time": (
-                self._boot_time.isoformat() if self._boot_time is not None else None
-            ),
-            "stored_counter": self._stored_last_uptime,
-            "stored_written_at": (
-                self._stored_written_at.isoformat()
-                if self._stored_written_at is not None
-                else None
-            ),
-            "startup_reconciled": self._startup_reconciled,
-        }
-
-    @property
-    def uptime_diagnostics(self) -> dict[str, Any]:
-        """The drift picture, for the health sensor and the diagnostics download.
-
-        Published because every constant in the latch was set from one device
-        over one week. Without this, a field report carries no rate and the only
-        route to one is a recorder database extraction.
-        """
-        rate = self._drift_rate
-        return {
-            "drift_rate_pct": round(rate * 100, 3) if rate is not None else None,
-            "drift_rate_min_pct": (
-                round(self._drift_rate_min * 100, 3)
-                if self._drift_rate_min is not None
-                else None
-            ),
-            "drift_rate_max_pct": (
-                round(self._drift_rate_max * 100, 3)
-                if self._drift_rate_max is not None
-                else None
-            ),
-            "drift_intervals": self._drift_interval_count,
-            "drift_measured_seconds": round(self._drift_sum_wall),
-            "drift_deficit_seconds": round(
-                self._drift_sum_wall - self._drift_sum_counter
-            ),
-        }
 
     async def _read_provisioning(self, *, forced: bool) -> None:
         """Read whether the router declines its provisioning configuration.

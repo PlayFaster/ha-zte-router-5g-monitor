@@ -23,8 +23,6 @@ from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g.const import (
@@ -43,6 +41,8 @@ from custom_components.zte_router_5g.switch import (
     ZTEPausePollingSwitch,
     ZTERouterSwitch,
 )
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 
 # What the router reports straight after accepting each position. Most switches
 # read back `"1"` or `"0"`. The data connection is confirmed from its state

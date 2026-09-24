@@ -5,6 +5,14 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
+  - [\[3.4.2-dev8\] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live](#342-dev8---2026-09-24---uptime-latch-defects-from-342-dev7-fixed-durations-in-minutes-upgrade-paths-tested-and-checked-live)
+  - [\[3.4.2-dev7\] - 2026-09-24 - Device Uptime from system\_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei](#342-dev7---2026-09-24---device-uptime-from-system_uptime-connection-uptime-sensors-uptime-latch-ported-from-huawei)
+  - [\[3.4.2-dev6\] - 2026-09-23 - Follow-Up Refresh After an Unsettled Data Window; Counter Reset Wording Corrected](#342-dev6---2026-09-23---follow-up-refresh-after-an-unsettled-data-window-counter-reset-wording-corrected)
+  - [\[3.4.2-dev5\] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics](#342-dev5---2026-09-23---data-connection-turn-on-outage-window-window-waits-for-the-drop-data-connection-diagnostics)
+  - [\[3.4.2-dev3\] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test\_guards.md](#342-dev3---2026-09-23---agentsmd-guard-test-table-trimmed-rationale-moved-to-docstest_guardsmd)
+  - [\[3.4.2-dev2\] - 2026-09-23 - Breaking: Minimum Home Assistant Raised to 2025.2.0 for Python 3.13](#342-dev2---2026-09-23---breaking-minimum-home-assistant-raised-to-202520-for-python-313)
+  - [\[3.4.1-dev1\] - 2026-09-23 - Ruff: HA Core isort Settings and ICN002 Adopted; Imports Re-Sorted Across All Files](#341-dev1---2026-09-23---ruff-ha-core-isort-settings-and-icn002-adopted-imports-re-sorted-across-all-files)
   - [\[3.4.1\] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking](#341---2026-09-23---release-data-connection-switch-outage-protection-windows-and-connection-state-tracking)
   - [\[3.4.1-dev4\] - 2026-09-23 - Outage Refusal on Every Write; Data Connection Switch State After Turn-On; README Outage Examples Fixed](#341-dev4---2026-09-23---outage-refusal-on-every-write-data-connection-switch-state-after-turn-on-readme-outage-examples-fixed)
   - [\[3.4.1-dev3\] - 2026-09-23 - README: Expected-Outage Error Messages Documented](#341-dev3---2026-09-23---readme-expected-outage-error-messages-documented)
@@ -304,6 +312,261 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.2] - 2026-09-24 - Release: Independent System & Connection Uptime Sensors, Data Outage Windows, and Duration Precision
+
+### Summary
+
+- **Separated System Uptime and Connection Uptime**: System uptime now tracks the router's physical hardware boot time independently from cellular data reconnects, while two new sensors track the active cellular session.
+- **Turn-On Outage Protection**: Turning cellular data on now initiates an expected-outage protection window and automatically synchronizes switch state when the connection settles.
+- **Python & Home Assistant Requirements**: Raised the minimum supported Home Assistant version to 2025.2.0, aligning with Home Assistant's Python 3.13 minimum runtime requirement.
+
+### ⚠️ Action Required
+
+- **Minimum Home Assistant 2025.2.0**: The integration now requires Home Assistant 2025.2.0 or newer and Python 3.13+. Earlier versions will not be offered this update.
+
+### Added
+
+- **Connection Uptime Sensor (`sensor.<name>_system_connection_uptime`)**: Tracks the exact timestamp when the current cellular data connection started, clearing when cellular data is disconnected.
+- **Connection Duration Sensor (`sensor.<name>_system_connection_duration`)**: Displays duration of the active cellular data session in minutes (disabled by default).
+- **Turn-On Outage Protection Window**: Activating mobile data through the Data Connection switch now engages a managed outage window (up to 60s) to prevent transient communication errors while the router negotiates carrier connection.
+
+### Fixed
+
+- **System Uptime Resetting on Data Reconnects**: Separated system boot tracking (`system_uptime`) from data session uptime (`realtime_time`), preventing cellular drops or APN switches from resetting the router's physical uptime timestamp.
+- **Data Connection Switch State Synchronization**: Added an automatic follow-up refresh if the router closes an outage window in an intermediate or unsettled connection state, ensuring the switch accurately reflects mobile data status.
+
+### Changed
+
+- **Duration Sensor Display Units**: Changed suggested display units for Uptime Duration and Connection Duration to minutes with one decimal place (`min`), replacing hourly increments.
+
+## [3.4.2-dev8] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live
+
+### Summary
+
+`[3.4.2-dev7]` was released with a defect that left Connection Uptime `unknown` on every upgraded install, and it was reported complete on unit tests alone: nothing had run it against Home Assistant. This version fixes that defect and three more that an independent review of the dev7 and dev8 diff found, all in ZTE's code around the ported latch. It also changes the duration sensors' display to minutes. The fixes were then checked on the MC7010 in the devcontainer: two Home Assistant restarts, a data off and on cycle, a router reboot, and a diagnostics download. The latch methods ported from the Huawei project are unchanged; a line-by-line comparison was rerun after the fixes.
+
+### Fixed
+
+- **Connection Uptime stayed `unknown` after upgrading to dev7.** Dev7 restored the pre-dev7 flat store record, a `realtime_time` record, into the connection latch. That gave the latch a stored counter while `entry.data` had no `connection_start`, so it had no anchor. At the first poll the startup test found the counter continued and kept the anchor, which did not exist; the runtime test moves an anchor only on a counter drop, and the plausibility check skips a latch without one. Connection Uptime stayed `unknown` until the next data reconnect. `_drop_anchorless_counters` now runs after the store is loaded and clears the stored counter of any latch without an anchor, so that latch cold-starts and latches `now - counter`. The drift it learned is kept. This also repairs installs already on dev7.
+- **Device Uptime could keep a data-reconnect time after the upgrade.** The system latch inherited dev6's `boot_time`, which was the last reconnect. The cold start replaces an anchor only when the counter-to-elapsed ratio falls outside `MAX_DRIFT`, 0.8 to 1.2, and the plausibility check never moves an anchor earlier. A router up 10 days with data reconnected 1.5 days ago gives 1.18, so the reconnect time would have stayed as Device Uptime until the next reboot. The key the system latch reads is now saved in `entry.data["uptime_source"]`. A run that chooses a different key, or the first run with none saved, starts the system latch afresh. This also covers a run that fell back to `realtime_time` because `system_uptime` read blank on its first poll, which would otherwise have bound the next run to that anchor.
+- **A session counter reading 0 was taken as a live session.** The MC7010 reads `realtime_time` as blank or 0 while data is off. A 0 latched the connection start at the moment data went off and published it; the climb from 0 after the reconnect is not a drop, so the anchor stayed at the off time until the plausibility check had an hour of drift to judge it. A session reading of 0 is now no reading, for the connection latch, for the system latch when it reads a session key, and when choosing the system latch's key.
+- **Connection Duration read 0.0 while data was off**, where the dev7 changelog said it was empty. Seen live on 2026-09-24. The coordinator now publishes `connection_seconds`, `None` while the session counter reads blank or 0, and the sensor reads it.
+
+### Changed
+
+- **Uptime Duration and Connection Duration display in minutes with one decimal place.** They displayed in hours with one decimal place, so the shown value changed only every 6 minutes while the entity changed at every poll. The user found this; it had been diagnosed as polling faults first. The change reached the existing entities in the devcontainer without re-creating them. Neither sensor has a state class, and that is unchanged.
+
+### Checked Live on the MC7010
+
+| Check | Result |
+| :-- | :-- |
+| First restart on dev8 | `uptime_source` saved; the system latch started afresh and re-latched to the same boot, 2026-09-23 22:03:53 UTC; Connection Uptime held |
+| Second restart | Both latches logged "counter continued"; nothing re-latched; anchors unchanged |
+| Data off | Connection Uptime empty, Device Uptime unchanged. Connection Duration read 0.0, fixed above; rechecked after the fix on 2026-09-24 with polling paused: Connection Uptime and Connection Duration both `unknown` while off, 03:02:32 and 1.1 min after the reconnect, Device Uptime unchanged throughout |
+| Data on | Connection Uptime moved to the reconnect; Device Uptime unchanged |
+| Router reboot, attended step [G] | "Uptime reset" passed, 12,082 s to 76 s. Device Uptime moved to the reboot and Connection Uptime to the redial; no "moved without a counter drop" line |
+| Diagnostics download | `source` is `system_uptime`; both latch anchors match the sensors |
+| Duration display | Minutes, on the existing entities |
+
+### Step [G] Recovery Watch
+
+- **Failed with Home Assistant polling, passed with it paused.** The first run reported 42 authenticated keys lost for 240 s while a Home Assistant instance polled every 30 s and logged in twice inside the watch window; the router allows one session, so the script's session was taken. Rerun on 2026-09-24 with Pause Polling on in both Home Assistant instances: uptime reset 5,604 s to 76 s, and the recovery watch clean throughout. The failure was the competing session, not session detection. `docs/DEVELOPMENT.md` §5.z now says to run the attended steps with polling paused.
+
+### Tests
+
+- `tests/test_uptime_upgrade_paths.py`: each case runs on one entry, in order: a starting store, the first poll, a restart from what the first run wrote, and a second poll. The starting states are the dev6 flat record, a dev7 store with an anchorless connection latch, and a fresh install, each with and without `system_uptime`. Further cases cover data off at startup, a reconnect and a reboot after the upgrade, a dev6 anchor inside the `MAX_DRIFT` band, a key that changes between runs, a session counter of 0, and a blank or 0 reading of a chosen session key. With `_drop_anchorless_counters` disabled, the four upgrade cases fail; the review's cases failed before their fixes.
+- Updated: the suggested unit and precision test, the flat-record test and the full-record test, which now carry or expect an anchor, and the reboot-boundary test in `test_init.py`, which now sets the source as already chosen.
+
+### Added
+
+- **Seven names added to `KNOWN_NAMES`**, found answering on the MC7010 by a probe of 4,399 names derived from those it already answers: `ppp_connect_time`, `total_rx_bytes`, `total_tx_bytes`, `total_time`, `device_uptime`, `nr_ca_pcell_bandwidth` and `wan_netmask`. Discovery now asks every device for them. No sensor reads them. Method and findings: `.notes/info/zte_data_elements/variant_name_probe_20260924.md`. A later read showed `total_time` 81 s ahead of `realtime_time` after one data reconnect, which matches the previous session's length: it accumulates connected time across sessions, where the probe's single read had it equal to the session counter.
+- **Five `flux_` variants added to `EXPECTED_NAMES`**: `flux_total_rx_bytes`, `flux_total_tx_bytes`, `flux_total_time`, `flux_ppp_connect_time` and `flux_device_uptime`. No device has answered them; the MC888 Pro spells its session and monthly counters with `flux_`, and discovery now asks whether it spells these the same way. Kept in `EXPECTED_NAMES`, which holds names no device has been seen to answer, each marked with its source; the header comment now covers both sources.
+
+### Hardware Check
+
+- The diagnostics check treats `connection_seconds` as volatile, as it treats `connection_start`: a counter, so two passes seconds apart differ.
+
+### Process
+
+An independent review of the dev7 and dev8 diff was run against the dev7 changelog's claims. It found the three defects fixed above after the first, confirmed the dev8 fix, and confirmed the ported methods are unchanged.
+
+## [3.4.2-dev7] - 2026-09-24 - Device Uptime from system_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei
+
+### Summary
+
+Device Uptime and Uptime Duration read `realtime_time`, which is the data session's counter, not the router's uptime. On the MC7010 it reads blank or 0 while data is off and counts from each reconnect, so every data reconnect moved the reported boot time. Kees48's MC888 Pro downloads show the same: the boot time equalled the reconnect time. The router's uptime is `system_uptime`. Measured on the MC7010 on 2026-09-23, it read 1400 with data off and 1479 after data was turned on and 78 s of wall time had passed, while `realtime_time` went from blank to 71; a reboot resets it. Device Uptime and Uptime Duration now read `system_uptime`, and two new sensors, Connection Uptime and Connection Duration, report the data session. The uptime latch now runs twice, once per counter, and for that it takes the structure the Huawei project already uses for its three latches.
+
+### Changed
+
+- **Device Uptime and Uptime Duration read `system_uptime`.** The keys are tried in the order `system_uptime`, `flux_system_uptime`, `realtime_time`, `flux_realtime_time` (`DEVICE_UPTIME_KEYS`). The first that answers is kept for the run, and a blank reading of it is no reading. Falling back per poll would switch counters mid-run: a booting router can answer `system_uptime` blank while `realtime_time` answers, and the switch would read as a counter drop and a reboot that did not happen. A router that answers no system key uses the session counter, as before; on such a router Device Uptime equals Connection Uptime. Whether the MC888 Pro answers `system_uptime` is not known. The key chosen is published as `coordinator.uptime.source` in the diagnostics download.
+- **Uptime Duration's entity key stays `realtime_time`**, so its entity ID survives the change of source.
+- **On upgrade Device Uptime steps once**, from the last data reconnect to the router's boot, when the system latch cold-starts against `system_uptime`.
+
+### Added
+
+- **Connection Uptime** (`connection_uptime`, enabled): the moment the current data connection started, held by its own latch. Empty while data is off.
+- **Connection Duration** (`connection_duration`, disabled by default): the data session counter, `realtime_time` / `flux_realtime_time`. Empty while data is off.
+- **`system_uptime` and `flux_system_uptime` are requested in the batch poll.** `system_uptime` joins the `uptime` contract concept; it needs a session, measured blank without one. `flux_system_uptime` has not been seen answered on any device and is requested as a fallback only.
+- **`system_uptime` added to `KNOWN_NAMES`**, so discovery asks for it. It appears in neither router's web-page code, which is why weeks of discovery on the MC888 Pro never asked; the MC7010 answered it on 2026-09-14 and 2026-09-23.
+
+### Uptime Latch Ported from the Huawei Project
+
+The latch took months of iterations, and the Huawei project already runs it for three counters. ZTE's single latch is replaced by Huawei's structure, ported verbatim:
+
+- `_UptimeLatch` is a dataclass holding one latch's state. Two instances run: `_system_latch` (`boot_time`, store block `last_system_uptime`) and `_conn_latch` (`connection_start`, store block `last_conn_uptime`). Nothing is shared between them.
+- The coordinator's latch methods take the latch as a parameter. `_drift_rate`, `_record_drift_sample`, `_derived_boot`, `_apply_uptime`, `_apply_runtime_uptime`, `_reconcile_startup_uptime`, `_floor_test`, `_shortfall_test`, `_cold_start_implausible`, `_check_anchor_plausible`, `_finish_startup`, `_log_reconciliation`, `_latch_boot_time`, `_maybe_persist_counter`, `_write_counter`, `_restore_latch`, `uptime_diagnostics` and `_latch_rate_pct` are identical to Huawei's, compared line by line. `_store_record` and `uptime_diagnostics` differ in docstring wording only. `async_load_stored_uptime` adds the legacy-record step below. `uptime_state` adds `source`.
+- `_boot_time` and `_last_uptime` stay as property views onto the system latch, as Huawei keeps its six older names.
+- Huawei's per-poll loop is `_apply_uptime_readings`, verbatim apart from being a method. The anchors are written to `entry.data` once per poll, and the legacy `last_uptime` key is dropped there.
+
+What changes in ZTE's behavior with the port, all taken from Huawei:
+
+- A stored counter without a usable `written_at` now takes the floor test (did the counter go backwards?) rather than the cold-start comparison.
+- Log lines name the latch, "System boot time" or "Connection start time", and say "reset" where ZTE's said "reboot".
+- The store is one record with a block per latch. The flat record written before this version came from `realtime_time`, now the connection latch's counter, so it is restored into that latch; the system latch starts with nothing learned.
+- `coordinator.uptime` in the diagnostics download becomes Huawei's shape: the system latch's drift summary, `source`, and a `latches` block per latch.
+
+The algorithm and its constants are unchanged; every constant was already identical in the two projects. Huawei's `pauses` handling and floor test serve its `TotalConnectTime` counter; no ZTE latch pauses, and those paths are covered by tests that drive them directly rather than removed from the shared code.
+
+A mixin that ran the old ZTE latch twice was written first in this version and replaced before release, because it gave ZTE a third shape of the mechanism beside Huawei's.
+
+### Hardware Check
+
+- **[G] Reboot and recovery reads `system_uptime`**, in `DEVICE_UPTIME_KEYS` order, for "uptime reset". It read `realtime_time`, which is 0 before and blank after a reboot with data off, and failed on a router that had rebooted.
+- **The diagnostics check treats `connection_start` as volatile**, as it already treats `boot_time` through its `_time` suffix. Both are derived from a drifting counter, and two passes seconds apart differed by 3 s.
+- **[G] leaves the data-session keys out of its recovery baseline** (`DATA_SESSION_KEYS`): the `realtime_*` and `flux_realtime_*` counters, `wan_ipaddr` and `ipv6_wan_ipaddr`. Under manual dial a reboot leaves data off, and those keys stay blank; counted as lost, they failed the check.
+
+### Documentation
+
+- README: entity counts 123 → 125 and System 47 → 49, Connection Uptime and Connection Duration in the System row and the history table, and one note in the Auto-Reboot example: with Connection Mode Status at `manual_dial` the router does not reconnect data after a reboot.
+- `docs/all_sensors.md`, `docs/about_attribute_list.md`: the two new sensors and Device Uptime's amended `about` text.
+- `docs/expected_zte_compatibility.md`: which uptime key the MC7010 uses, and that the Data Connection switch takes it offline in both directions.
+- The device behaviour reference in the shared notes gains a section on data connection and uptime counters, with the measured outage timings for both dial modes, the reboot timings, the uptime keys, and what Kees48's MC888 Pro downloads show. Three hypotheses are recorded as closed.
+
+### Tests
+
+- The existing latch tests address the system latch's fields; their assertions are unchanged apart from the store record's and `uptime_state`'s new shapes.
+- Source selection: `system_uptime` preferred; the session counter used when no system key answers; a blank reading of the chosen key is no reading; nothing chosen while every key is blank.
+- Both latches: written in one record; the pre-dev7 flat record restored into the connection latch; each writes its own `entry.data` key and drops `last_uptime`; each names itself in the log; the connection start moves at a reconnect and is empty while data is off.
+- The four uptime sensors, `uptime_at_change` reading the system counter, and the download's `source` and connection block.
+- The floor test, a pausing latch's rate, one-sided plausibility and floor path, an anchorless latch, and unusable store blocks.
+
+## [3.4.2-dev6] - 2026-09-23 - Follow-Up Refresh After an Unsettled Data Window; Counter Reset Wording Corrected
+
+### Summary
+
+The `[3.4.2-dev5]` hardware check on the MC7010 ran three off/on cycles under `auto_dial` with polling paused. In one of the three turn-offs, the window's closing poll read `ppp_status = ppp_connected`. The Data Connection switch showed on until the next refresh, 5 s later, read `ppp_disconnected`. That refresh came from the test script. Under paused polling nothing else would have refreshed, and the switch would have stayed on until the next forced refresh. The same run showed the uptime counter reading 0 at each turn-off's closing poll, which the `[3.4.2-dev5]` wording described as a restart on reconnect.
+
+### Changed
+
+- **The follow-up refresh runs whenever a data window closes unsettled.** Settled means the closing poll's `ppp_status` is the state the command leads to: a connected value, `DATA_CONNECTED_STATES`, after turning on, and `ppp_disconnected` after turning off. Any other value arms the one forced refresh `DATA_CONNECT_FOLLOWUP_SECONDS`, 10 s, after the close. In `[3.4.2-dev5]` only `ppp_connecting` armed it. A turn-on closing on `ppp_disconnected`, and a turn-off closing on `ppp_connected`, `ppp_disconnecting` or no value, now arm it too. The window still closes on the closing poll as before.
+- **Not a condition on closing.** Holding the window open until the closing poll showed the expected state was considered and rejected. A failed turn-on, a redial under `auto_dial`, or a change made in the router's own web page would each hold every control refused until the 60 s cap. A window closed by the cap records no `after` snapshot, so the diagnostics would lose the failed-turn-on case they exist for. The follow-up refuses nothing and delays nothing.
+- **`DATA_CONNECTED_STATES` moves to `const.py`** so the coordinator and the switch read one definition. The switch's `_DATA_CONNECTED` now refers to it.
+
+### Corrected
+
+- **Counter reset wording.** The `[3.4.2-dev5]` entry, the `_observe_counter_reset` docstring and the `RESET_WINDOW_MARGIN` comment said the uptime counter restarts on every data reconnect. On the MC7010 it reads 0 while data is off: all three resets in the hardware check were seen at a turn-off's closing poll, with `counter_after = 0`, `ppp_status = ppp_disconnected`, and the `data_disconnect` window matched. It counts from the reconnect, which is also what Kees48's MC888 Pro downloads show; whether the MC888 Pro reads 0 while data is off is not measured. The docstring, the comment and a test comment are corrected. The recorded data and the matching are unchanged.
+
+### Tests
+
+- The follow-up is armed or not for eight combinations of reason and closing `ppp_status`, including `ipv6_connected` and a missing value.
+- An unsettled close still closes the window, with `closed_by = "answer"` and the closing state in `after`.
+- The data-window test helper now returns `ppp_connected`, since the test data carries no `ppp_status` and every close would otherwise arm the follow-up.
+
+## [3.4.2-dev5] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics
+
+### Summary
+
+Turning the data connection on also takes the router offline, and the expected-outage window could close before any outage began. Both were measured on the MC7010 on 2026-09-23 in two runs of three off/on cycles, one under `auto_dial` and one under `manual_dial`, with the router probed unauthenticated every 0.5 to 1 s. After `CONNECT_NETWORK` the router kept answering for 11 to 12 s, then stopped answering for 6 to 28 s. After `DISCONNECT_NETWORK` it stopped within 4 to 8 s, for 9 to 37 s. Every turn-on reconnected under both connection modes. The diagnostics download now records what each data command did and every reset of the router's uptime counter, which on both routers restarts at each data reconnect. The records are for issue #79, where a turn-on in bridge mode appeared not to restore the connection and the downloads could not show whether the command reached the router.
+
+### Changed
+
+- **Turning the data connection on opens an expected-outage window.** The new reason `data_connect` has a 60 s cap, `OUTAGE_CAP_DATA_CONNECT`, and its own message: "The router is reconnecting its data connection. Try again in about N seconds." The `[3.4.1-dev4]` refresh after turning on and its follow-up are removed. Both could land in the outage, and one did in testing: the follow-up failed with "Request failed" and the coordinator held stale values, which paused polling then kept.
+- **The window waits for the router to drop before waiting for it to return.** It closed on the first probe that answered, 5 s after opening, with no requirement that the router had gone away. The turn-on outage starts at 11 s, and one turn-off outage started at 8.2 s, so either window could close first. Kees48's two turn-off windows on the MC888 Pro closed after one check at 5 s. A window opened on a command now probes every `OUTAGE_PROBE_FAST`, 1 s, while the router still answers, and records the first silence as the drop. From then on it probes every 5 s as before and closes on the first successful closing poll. A router that has not dropped within `OUTAGE_HOLD`, 25 s, is taken to have had no outage, and the window closes through its closing poll as `no_outage`. The reboot window opens only after `reboot()` has seen the router drop, so it starts in the second phase.
+- **The Data Connection switch holds its position while its window is open.** A poll during the window returns the held data, which still carries the state from before the command. The switch recomputed its position from it and showed on for 15 to 20 s after turning off, in all three `manual_dial` cycles. It now ignores coordinator updates during a `data_connect` or `data_disconnect` window, except the closing poll, which is fresh.
+- **One follow-up refresh when a data window closes on `ppp_connecting`.** Connected came 26 to 40 s after the command, up to 15 s after the router answered again. The coordinator arms one forced refresh `DATA_CONNECT_FOLLOWUP_SECONDS` after the close, raised from 5 to 10 s, and cancels it on the next window or on shutdown.
+
+### Diagnostics
+
+- **`expected_outage` is replaced by `expected_outages`**: the last five windows, newest first, in memory. Each record adds the command, the router's reply reduced to its `result` field, the `ppp_status` read straight after the reply, the times the router dropped and answered again, the outage length, and `ppp_status`, `network_type`, `dial_mode` and `opms_wan_mode` from the poll before the window and from its closing poll. Issue #79's download would have shown whether ON reached the router, what the router replied, whether it dropped, and the state on its return.
+- **`observations.counter_resets`**: every reading of `realtime_time` / `flux_realtime_time` lower than the previous poll's, the last 20, persisted. Each holds the detection time, the reset time estimated as the detection time less the new counter, the counter either side, `ppp_status` and `network_type` at detection, and the reason of any window whose span covers the estimated reset, or `None`. The record does not decide whether a reset was a reboot or a reconnect, and the boot-time logic is unchanged. A reset with no window is one nothing in the integration caused, which is how issue #79's occasional disconnects would appear. The previous counter is held in memory, so a reset across a Home Assistant restart is not recorded. A reset is missed when the counter at the next poll is not lower than at the previous one, which takes two resets within one polling interval.
+
+### Not Changed
+
+- **Refresh Now returns HTTP 500 during a window when called through the REST API.** The button raises the outage message as `HomeAssistantError`, and Home Assistant's REST service handler reports any error other than `vol.Invalid` and `ServiceNotFound` as 500. The UI shows the message.
+- **Boot time follows each data reconnect.** The integration treats an uptime counter reset as a reboot by design, and on both routers the counter resets at every data reconnect. A reset under the 30 s `UPTIME_REBOOT_MARGIN` is latched through the plausibility check and logs "boot time moved ... without a counter drop", the reconciliation's own tripwire.
+
+### Documentation
+
+- README, Data Connection bullet and the outage error FAQ entry, and `about_attribute_list.md`: turning on also takes up to a minute, and the FAQ lists the new message.
+
+### Tests
+
+- Window: a command window probes every second and stays open while the router answers; the first silence records the drop and slows the probe; the return closes it with `back_at` and `outage_seconds`; no drop within the hold closes it as `no_outage`; a failed closing poll after the hold keeps it open; a reboot window starts with the drop recorded; five records kept; the reply reduced to `result`.
+- Follow-up: armed at 10 s only when a data window closes on `ppp_connecting`; not for a reboot; cancelled by a new window and by shutdown.
+- Switch: both directions open a window with the command, reply and immediate read; neither refreshes; the position is held during both data windows, set by the closing poll, and not held during a reboot window. The `[3.4.1-dev4]` tests of the turn-on refresh and follow-up are removed with the code they tested.
+- Diagnostics: `expected_outages` newest first and copied; an empty list without windows. Counter resets: recorded with the connection state; none on a first reading, a rise, or an absent counter; the covering window's reason by time, including after the window closed; `None` outside every window; capped at 20.
+
+## [3.4.2-dev3] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test_guards.md
+
+### Summary
+
+`AGENTS.md` aligned with the updated `agents_md_index.md` specification. The "Tests that will stop you" table is trimmed to one line per row, with each row's rationale moved verbatim to a new `docs/test_guards.md`. Junction paths are no longer written as markdown links, and the Home Assistant compatibility ledger pointer is added. No code or test changes.
+
+### Bumps
+
+- **Validate Bump**: Update `check-jsonschema` from 0.38.1 to 0.38.2
+
+### Changed
+
+- **Tests that will stop you**: 32 rows plus 5 new, each `Add or change this | This fails | Do this`; the section shrinks from 1,858 to 1,106 words. The heading drops "and why they exist", and the section ends with the instruction to add a new guard's row here and its rationale to `docs/test_guards.md`.
+- **Guard tests added to the table**: 20 tests that fail on an ordinary change (adding, changing or removing an entity, action, translation, repair issue, option or write) and were not listed. Their docstrings are recorded as rationale in `docs/test_guards.md`.
+- **Junction links**: 7 markdown links to `.shared/` and `.notes/` converted to inline code. `AGENTS.md` is committed to the public repository, where those junctions do not exist, so the links were broken for GitHub readers.
+- **Compatibility ledger pointer**: the mandatory block pointing to `docs/ha_compatibility.md` added after the entity inventory pointer.
+
+### Added
+
+- **`docs/test_guards.md`**: rationale for every guard test in the table, in two sections: the former rationale column copied verbatim, and the docstrings of the tests added to the table.
+
+### Notes
+
+- **Source**: `agents_md_align` run of 2026-09-23 (`shared/SharedNotes/prompts/prompt_run_logs/agents_md_align/agents_md_align_20260923_1638.md`).
+
+## [3.4.2-dev2] - 2026-09-23 - Breaking: Minimum Home Assistant Raised to 2025.2.0 for Python 3.13
+
+### Summary
+
+The minimum supported Home Assistant version rises from 2024.8.0 to 2025.2.0. Home Assistant 2025.2.0 is the first release that requires Python 3.13, so this change makes Python 3.13 the minimum runtime. No integration code changes.
+
+### Changed, breaking
+
+- **Minimum Home Assistant version**: `hacs.json` `homeassistant` raised from `2024.8.0` to `2025.2.0`. HACS treats this key as the minimum required Home Assistant version, so installations on earlier releases are not offered this version.
+- **README requirements**: minimum Home Assistant `2025.2`, minimum Python `3.13+`.
+
+### Documentation
+
+- **`docs/ha_compatibility.md`**: Minimum, Enforced-by and Python rows updated to 2025.2.0 and Python 3.13; the planned-floor milestone removed.
+
+### Notes
+
+- **Rationale**: the previous floor implied Python 3.12 (Home Assistant 2024.6 to 2025.1), which was verified by compilation only. Tests run on Python 3.14, Ruff targets `py313`, and `pyproject.toml` declares `requires-python >=3.13`. The new floor makes the declared, linted and packaged Python minimums agree.
+- **Impact**: Home Assistant public analytics (2026-09-23, 687,049 opted-in installations) place 4.6% of installations below 2025.2.0.
+- **Functional floor unchanged**: the features the code depends on predate 2025.2.0, and `_compat.py` is unaffected because its branches detect 2026.8 device-registry features. The cross-project rationale is in `ha_minimum_version_matrix.md` §6 and §7.5.
+
+## [3.4.1-dev1] - 2026-09-23 - Ruff: HA Core isort Settings and ICN002 Adopted; Imports Re-Sorted Across All Files
+
+### Summary
+
+The shared Ruff configuration adopted two settings from Home Assistant core's `pyproject.toml`: the `[lint.isort]` table and the `ICN002` rule. The isort settings change the expected import order, so `ruff check --fix` re-sorted imports in Python files across the project.
+
+### Changed
+
+- **`pyproject_common.toml`**: added `[lint.isort]` with HA core's four settings (`force-sort-within-sections = true`, `known-first-party = ["homeassistant"]`, `combine-as-imports = true`, `split-on-trailing-comma = false`), and added `"ICN002"` to `select`. HA core pairs `ICN002` with a `probatio` → `vol` banned alias; that alias was not adopted, so the rule currently flags nothing.
+- **Import order: `force-sort-within-sections` sorts plain `import x` and `from x import y` statements together alphabetically within each section, so `from pathlib import Path` now precedes `import sys`. `split-on-trailing-comma = false` joins wrapped import lists that fit on one line.
+
+### Notes
+
+- **Source**: `ruff_rules_check` run of 2026-09-23, recommendations R1 (`ICN002`) and R2 (`[lint.isort]`); report `shared/SharedNotes/prompts/prompt_run_logs/ruff_rules_check/ruff_rules_review_20260923_1330.md`.
 
 ## [3.4.1] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking
 

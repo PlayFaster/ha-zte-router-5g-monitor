@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
+import logging
 from typing import Any, Final
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
@@ -19,12 +19,7 @@ from .api import ZTERouterExpectedUnavailableError
 from .const import APN_PROFILE_SLOTS, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .entity_defaults import default_enabled
-from .helpers import (
-    ZTEAboutEntity,
-    ZTEDeviceEntity,
-    expected_outage_error,
-    get_first,
-)
+from .helpers import ZTEAboutEntity, ZTEDeviceEntity, expected_outage_error, get_first
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -95,8 +95,8 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 
 **🏠 Home Assistant Version:**
 
-- Minimum: Home Assistant **2024.8.0**
-- Minimum Python: **3.12+** (this is built into and handled by HA, but relevant for non-standard installs).
+- Minimum: Home Assistant **2025.2**
+- Minimum Python: **3.13+** (this is built into and handled by HA, but relevant for non-standard installs).
 
 ## 🎯 Use Cases
 
@@ -421,7 +421,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **123 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **125 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -431,7 +431,7 @@ This integration provides **123 entities** (depending on your firmware) organize
 
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
-| ⚙️ **System** | 47 | 35 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 30, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
+| ⚙️ **System** | 49 | 37 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, Connection Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 31, including the five temperature sensors, Uptime Duration, Connection Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
 | 📶 **Signal** | 56 | 51 Sensors, 1 Binary Sensor, 3 Selects, 1 Switch | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, **Data Connection**, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
 | 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
@@ -544,6 +544,7 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 | Upload / Download Speed | Instantaneous readings — history at poll intervals has limited analytical value |
 | Session Sent / Received | Resets on every reconnect — not meaningful for long-term trends |
 | Uptime Duration | Resets on reboot; predictable pattern adds no insight |
+| Connection Duration | Resets at each data reconnect; Connection Uptime shows the same as a timestamp |
 | Battery | Always 100% when plugged in |
 | Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
 | Projected Cycle Usage | An estimate of where the cycle ends up, useful now rather than as a history |
@@ -629,7 +630,7 @@ Several settings are exposed as control entities so you can drive them from dash
 >
 > Switching APN can be an important and useful connectivity management tool. Bear in mind that your ISP may place restrictions on non-default APNs (reduced or no performance), so this is a proceed with caution and only if you know what you are doing area.
 
-- **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off takes up to a minute, and other controls show an error until it completes. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error). **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
+- **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off or on takes up to a minute, and other controls show an error until it completes. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error). **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): In Manual mode, switch the active APN profile.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
 - **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:
@@ -1543,6 +1544,8 @@ actions:
 >
 > This reboots your router unattended. Keep the trigger duration generous and `mode: single`, or a flapping connection can put the router into a reboot loop that stops it recovering on its own.
 
+With **Connection Mode Status** at `manual_dial`, the router does not reconnect data after a reboot. Turn **Data Connection** back on, or set the router's connection mode to automatic.
+
 ```yaml
 alias: "ZTE Reboot: Auto-Reboot on Prolonged Outage"
 description: "Reboots the router after a sustained data outage"
@@ -2065,6 +2068,7 @@ You see one of these messages when you use a router control while the router is 
 
 - `The router is restarting. Try again in about N seconds.` You pressed **Reboot**. The router is unreachable for one to two minutes.
 - `The router is disconnecting its data connection. Try again in about N seconds.` You turned the **Data Connection** switch off. The router is unreachable for up to a minute.
+- `The router is reconnecting its data connection. Try again in about N seconds.` You turned the **Data Connection** switch on. The router keeps answering for a few seconds, then is unreachable for up to half a minute.
 
 Until the router answers again, its controls, the SMS actions and **Refresh Now** are unavailable. Sensors keep their last values. Nothing needs fixing: everything works again as soon as the router is back.
 

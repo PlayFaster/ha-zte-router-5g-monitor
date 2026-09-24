@@ -19,9 +19,7 @@ from custom_components.zte_router_5g.const import (
     SPARSE_PAYLOAD_FRACTION,
     SPARSE_PAYLOAD_MIN_HISTORY,
 )
-from custom_components.zte_router_5g.coordinator import (
-    ZTERouterDataUpdateCoordinator,
-)
+from custom_components.zte_router_5g.coordinator import ZTERouterDataUpdateCoordinator
 
 
 @pytest.fixture

@@ -57,13 +57,13 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+from datetime import UTC, datetime
+from itertools import combinations
 import json
 import os
 import pathlib
 import re
 import sys
-from datetime import UTC, datetime
-from itertools import combinations
 from typing import TYPE_CHECKING, Any, cast
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
@@ -118,6 +118,11 @@ _VOLATILE = re.compile(
     # alternatives above, which match the concept name in the path.
     r"|^/data_usage/(monthly|session|values)/"
     r"|^/data_usage/(monthly_rate_over_session_rate|uptime_seconds)$"
+    # The connection latch's anchor, derived like `boot_time` from a counter
+    # that drifts, so two passes seconds apart differ by seconds. 3.4.2-dev7.
+    r"|/connection_start$"
+    # The session counter as Connection Duration reads it, 3.4.2-dev8.
+    r"|/connection_seconds$"
     # This script's own bookkeeping, and the free-text notes, which are a
     # list compared by position: a pass emitting one extra note shifts every
     # entry after it and reports a dozen differences for one real one. The
@@ -748,9 +753,8 @@ async def check_history_round_trip(report: Report) -> None:
     from that id, so sharing one would have this script rewrite the history
     the entities are serving from. Both files are removed when it finishes.
     """
-    from homeassistant.core import HomeAssistant
-
     from custom_components.zte_router_5g.observations import ObservationRecorder
+    from homeassistant.core import HomeAssistant
 
     hass = HomeAssistant("/config")
     entry = _StubEntry({}, {}, ROUND_TRIP_ENTRY_ID, "round trip")

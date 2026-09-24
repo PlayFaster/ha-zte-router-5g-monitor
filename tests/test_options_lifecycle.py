@@ -7,8 +7,6 @@ test drives a real ``hass`` and blocks on the loop after the change.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
-from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.zte_router_5g import _async_options_updated
@@ -19,6 +17,8 @@ from custom_components.zte_router_5g.const import (
     DOMAIN,
     LIVE_OPTION_KEYS,
 )
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.core import HomeAssistant
 
 ROUTER_DATA = {
     "network_type": "ENDC",

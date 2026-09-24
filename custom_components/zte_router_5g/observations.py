@@ -25,8 +25,8 @@ UniFi genuinely monitors several devices behind one entry.
 from __future__ import annotations
 
 import contextlib
+from datetime import UTC, datetime, timedelta
 import logging
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Final
 
 from homeassistant.helpers.storage import Store
@@ -76,9 +76,32 @@ TRACKED: Final[dict[str, tuple[str, ...]]] = {
     "opms_wan_mode": ("opms_wan_mode",),
 }
 
+# Counter resets kept, oldest discarded first. See `_observe_counter_reset`.
+RESET_CAP: Final = 20
+
+# How far past a window's close a counter reset is still attributed to it.
+# On the MC7010 the counter reads 0 while data is off, so a turn-off's reset
+# is seen at its own closing poll; a reset seen later, as the session restarts,
+# came up to 15 s after the window's closing poll. The margin covers that and
+# the counter's drift, 4.34% slow on the reference MC7010.
+RESET_WINDOW_MARGIN: Final = timedelta(seconds=60)
+
 # Uptime, for placing a transition against a restart. Read through the alias
 # so the MC888 populates it.
 _UPTIME_KEYS: Final = ("realtime_time", "flux_realtime_time")
+
+
+def _device_uptime(data: dict[str, Any]) -> int | None:
+    """The router's uptime as the coordinator chose it, or `_uptime` before.
+
+    `uptime_seconds` is set from the device latch's source, `system_uptime`
+    where the router answers it. A payload without it, as in older tests and
+    a first poll before any key answered, falls back to the session counter.
+    """
+    value = data.get("uptime_seconds")
+    if isinstance(value, int):
+        return value
+    return _uptime(data)
 
 
 def _uptime(data: dict[str, Any]) -> int | None:
@@ -94,6 +117,27 @@ def _uptime(data: dict[str, Any]) -> int | None:
         return None
     with contextlib.suppress(ValueError, TypeError):
         return int(float(raw))
+    return None
+
+
+def _window_reason(
+    estimated: datetime, moment: datetime, windows: list[dict[str, Any]]
+) -> str | None:
+    """The reason of the newest window whose span covers the estimated reset.
+
+    A window spans its opening to its close plus `RESET_WINDOW_MARGIN`, and a
+    window still open spans to now. Matched by time because the reset is only
+    seen at the next poll, after the window may have closed.
+    """
+    for window in reversed(windows):
+        try:
+            opened = datetime.fromisoformat(window["opened"])
+            closed = window.get("closed")
+            until = datetime.fromisoformat(closed) if closed else moment
+        except (KeyError, TypeError, ValueError):
+            continue
+        if opened <= estimated <= until + RESET_WINDOW_MARGIN:
+            return window.get("reason")
     return None
 
 
@@ -158,6 +202,10 @@ class ObservationRecorder:
         self._observed: dict[str, dict[str, Any]] = {}
         self.device_id: str = f"entry_{entry.entry_id}"
         self._load_faults: int = 0
+        # The counter at the previous successful poll. In memory only, so a
+        # reset across a Home Assistant restart is not recorded; persisting
+        # it would write the store on every poll.
+        self._last_counter: int | None = None
 
     async def _load_one(
         self, store: Store[dict[str, Any]], label: str
@@ -246,7 +294,9 @@ class ObservationRecorder:
 
         Shape and dates only, never a recorded value: the tracked keys are
         addresses and identifiers, and the transitions themselves are already
-        sanitized where they are published as entity attributes.
+        sanitized where they are published as entity attributes. The counter
+        resets are the exception, published whole: they hold times, counter
+        values, and two status words, none of which identifies anything.
 
         `oldest` is what makes a lost series visible. A store that was reset
         carries recent timestamps against a `recording_since` that should long
@@ -259,6 +309,7 @@ class ObservationRecorder:
             "load_faults": self._load_faults,
             "entities_known_populated": len(record.get("populated", [])),
             "change_counts": dict(record.get("change_counts", {})),
+            "counter_resets": [dict(r) for r in record.get("counter_resets", [])],
             "series": {
                 key: {
                     "entries": len(entries),
@@ -311,16 +362,67 @@ class ObservationRecorder:
 
     # -- writing ---------------------------------------------------------
 
-    def observe(self, data: dict[str, Any], device_id: str) -> bool:
+    def observe(
+        self,
+        data: dict[str, Any],
+        device_id: str,
+        windows: list[dict[str, Any]] | None = None,
+    ) -> bool:
         """Fold one successful poll into both records.
+
+        `windows` are the coordinator's recent expected-outage records, used
+        to attribute a counter reset to the command that caused it.
 
         Returns whether anything changed, so a caller can skip the write on
         the overwhelming majority of polls where nothing did.
         """
         self.device_id = device_id
-        now = datetime.now(UTC).isoformat()
+        moment = datetime.now(UTC)
+        now = moment.isoformat()
         dirty = self._observe_transitions(data, now)
+        dirty = self._observe_counter_reset(data, moment, windows or []) or dirty
         return self._observe_populated(data, now) or dirty
+
+    def _observe_counter_reset(
+        self, data: dict[str, Any], moment: datetime, windows: list[dict[str, Any]]
+    ) -> bool:
+        """Record a reading of the uptime counter lower than the last one.
+
+        The counter restarts on a reboot and follows the data session. On the
+        MC7010 it reads 0 while data is off, measured on 2026-09-23 at three
+        turn-offs, and counts from the reconnect; the MC888 Pro's downloads
+        show it counting from the reconnect. The record does not decide which: it
+        keeps the time, the counter either side, the connection state, and
+        the reason of any expected-outage window the reset falls in. A reset
+        with no window is one nothing in this integration caused, which is
+        what an unprompted disconnect looks like.
+
+        Detected at the next poll, so the reset time is estimated as the
+        detection time less the new counter. A reset is missed when the
+        counter at the next poll is not lower than at the previous one, which
+        takes two resets within one polling interval.
+        """
+        counter = _uptime(data)
+        previous, self._last_counter = self._last_counter, counter
+        if counter is None or previous is None or counter >= previous:
+            return False
+        estimated = moment - timedelta(seconds=counter)
+        entries = self._observed.setdefault(self.device_id, {}).setdefault(
+            "counter_resets", []
+        )
+        entries.append(
+            {
+                "detected": moment.isoformat(),
+                "estimated_reset": estimated.replace(microsecond=0).isoformat(),
+                "counter_before": previous,
+                "counter_after": counter,
+                "ppp_status": data.get("ppp_status"),
+                "network_type": data.get("network_type"),
+                "window": _window_reason(estimated, moment, windows),
+            }
+        )
+        del entries[:-RESET_CAP]
+        return True
 
     def _observe_transitions(self, data: dict[str, Any], now: str) -> bool:
         """Append a transition for any tracked value that has changed."""
@@ -349,7 +451,7 @@ class ObservationRecorder:
                     "timestamp": now,
                     "from": previous,
                     "to": current,
-                    "uptime_at_change": _uptime(data),
+                    "uptime_at_change": _device_uptime(data),
                 }
             )
             del entries[:-HISTORY_CAP]

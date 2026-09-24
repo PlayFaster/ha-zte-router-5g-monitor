@@ -14,8 +14,8 @@ rather than dropping it.
 """
 
 import asyncio
-import json
 from datetime import UTC, datetime
+import json
 from time import monotonic
 from unittest.mock import AsyncMock, MagicMock, patch
 

@@ -56,10 +56,7 @@ def test_contract_keys_agree() -> None:
     spelling — comparing the flattened sets alone would pass while the two
     disagreed about which spellings belong to which concept.
     """
-    from custom_components.zte_router_5g.api import (
-        _CONTRACT_CONCEPTS,
-        _CONTRACT_KEYS,
-    )
+    from custom_components.zte_router_5g.api import _CONTRACT_CONCEPTS, _CONTRACT_KEYS
     from custom_components.zte_router_5g.coordinator import CORE_CONCEPTS
 
     assert _CONTRACT_CONCEPTS == CORE_CONCEPTS
@@ -274,19 +271,21 @@ def test_a_flux_spelling_never_stands_alone_as_a_concept() -> None:
 
 
 def test_uptime_alias_matches_the_sensor_tuple() -> None:
-    """`coordinator.py` mirrors `sensor._ALIAS_REALTIME_TIME` rather than importing it.
+    """The connection latch and the Connection Duration sensor read one tuple.
 
-    `sensor.py` imports the coordinator, so the dependency runs one way only.
-    This is what stops the uptime source and the sensor disagreeing about
-    which spellings carry the value.
+    Since 3.4.2-dev7 both come from `const`: the coordinator reads
+    `CONNECTION_UPTIME_KEYS`, and the sensor's `_ALIAS_REALTIME_TIME` must
+    carry the same spellings, or the latch and the sensor disagree about which
+    carry the value. The device latch reads the session keys last.
     """
-    import inspect
+    from custom_components.zte_router_5g import sensor
+    from custom_components.zte_router_5g.const import (
+        CONNECTION_UPTIME_KEYS,
+        DEVICE_UPTIME_KEYS,
+    )
 
-    from custom_components.zte_router_5g import coordinator, sensor
-
-    source = inspect.getsource(coordinator.ZTERouterDataUpdateCoordinator)
-    for key in sensor._ALIAS_REALTIME_TIME:
-        assert f'"{key}"' in source, f"uptime does not read {key}"
+    assert tuple(sensor._ALIAS_REALTIME_TIME) == CONNECTION_UPTIME_KEYS
+    assert DEVICE_UPTIME_KEYS[-len(CONNECTION_UPTIME_KEYS) :] == CONNECTION_UPTIME_KEYS
 
 
 def test_subscriber_aliases_are_redacted() -> None:
@@ -456,7 +455,13 @@ def test_every_flux_spelling_requested_is_aliased_somewhere() -> None:
     }
     for tup in ZTERouterAPI.DATA_VOLUME_FIELDS.values():
         consumed |= set(tup)
-    consumed |= {"flux_realtime_time"}  # read by the coordinator's uptime latch
+    # Read by the coordinator's two uptime latches.
+    from custom_components.zte_router_5g.const import (
+        CONNECTION_UPTIME_KEYS,
+        DEVICE_UPTIME_KEYS,
+    )
+
+    consumed |= set(DEVICE_UPTIME_KEYS) | set(CONNECTION_UPTIME_KEYS)
 
     # The diagnostics download resolves the usage vocabulary itself: those
     # concepts have no entity, so `sensor._ALIAS_*` does not cover them.

@@ -6,7 +6,6 @@ from datetime import timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.helpers.entity import EntityCategory
 
 from custom_components.zte_router_5g.const import CONF_SCAN_INTERVAL, DOMAIN
 from custom_components.zte_router_5g.number import (
@@ -15,6 +14,7 @@ from custom_components.zte_router_5g.number import (
     ZTEPollingInterval,
     async_setup_entry,
 )
+from homeassistant.helpers.entity import EntityCategory
 
 from .conftest import assert_is_root, assert_links_to_parent
 

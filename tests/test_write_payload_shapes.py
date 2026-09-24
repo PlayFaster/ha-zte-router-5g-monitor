@@ -22,8 +22,8 @@ commands that can be exercised, `scripts/hardware_check.py` answers it.
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, datetime
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest

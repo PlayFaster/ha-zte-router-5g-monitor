@@ -2,10 +2,11 @@
 
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from multidict import CIMultiDict
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 
 
 @pytest.fixture

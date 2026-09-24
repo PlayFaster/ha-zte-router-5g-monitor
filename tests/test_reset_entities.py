@@ -11,13 +11,13 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import entity_registry as er
 
 from custom_components.zte_router_5g.reset_entities import (
     _entity_key,
     async_reset_entities,
 )
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 
 UNIQUE = "imei_with_underscores"
 

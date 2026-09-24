@@ -16,8 +16,8 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import aiohttp
-import pytest
 from multidict import CIMultiDict
+import pytest
 
 from custom_components.zte_router_5g.api import (
     _CORE_PARAMS,

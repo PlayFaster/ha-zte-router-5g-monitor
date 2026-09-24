@@ -245,6 +245,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "detect_new_version",
         "deviceError",
         "device_info",
+        "device_uptime",  # MC7010 variant probe, 2026-09-24
         "dhcpEnabled",
         "dhcpEnd",
         "dhcpLease_hour",
@@ -523,6 +524,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "nr5g_pci",
         "nr5g_sa_band_lock",
         "nr_ca_pcell_band",
+        "nr_ca_pcell_bandwidth",  # MC7010 variant probe, 2026-09-24
         "nr_ca_pcell_freq",
         "nr_multi_ca_scell_info",
         "number",
@@ -550,6 +552,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "port_status",
         "ppp_auth_mode",
         "ppp_auth_mode_ui",
+        "ppp_connect_time",  # MC7010 variant probe, 2026-09-24
         "ppp_connected",
         "ppp_connecting",
         "ppp_dial_conn_fail_counter",
@@ -686,12 +689,18 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "success",
         "syn_done",
         "sysIdleTimeToSleep",
+        # Answered by the MC7010 on 2026-09-14 and 2026-09-23, with a session.
+        # Not in either router's web page code, so discovery never mined it.
+        "system_uptime",
         "systime_mode",
         "tcp_mss",
         "thermal_control_enable",
         "thermal_led_enable",
         "time",
         "top",
+        "total_tx_bytes",  # MC7010 variant probe, 2026-09-24
+        "total_time",  # MC7010 variant probe, 2026-09-24
+        "total_rx_bytes",  # MC7010 variant probe, 2026-09-24
         "tr069_CPEPortNo",
         "tr069_CertEnable",
         "tr069_ConnectionRequestPassword",
@@ -756,6 +765,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "wan_dial",
         "wan_ipaddr",
         "wan_lte_ca",
+        "wan_netmask",  # MC7010 variant probe, 2026-09-24
         "wcdma_band_lock",
         "web_keylog_enable",
         "web_keylog_level",
@@ -866,12 +876,16 @@ REFUSABLE_NAMES: Final[frozenset[str]] = frozenset(
 )
 
 
-# Names another project expects from ZTE hardware we do not own.
+# Names no device has been seen to answer, probed as candidates.
 #
-# Taken from `Kajkac/ZTE-MC-Home-assistant-repo`'s `SENSOR_NAMES` map on
+# Most were taken from `Kajkac/ZTE-MC-Home-assistant-repo`'s `SENSOR_NAMES` map on
 # 2026-09-02, which carries 219 names shared across its MC801, MC888, MC889
 # and G5 Ultra support. Of those, 168 already appear above and 30 are names
-# this integration polls directly, leaving the 21 here.
+# this integration polls directly, leaving 21. Five more, added 2026-09-24, are
+# `flux_` spellings of names the MC7010 answered in the variant probe
+# (`.notes/info/zte_data_elements/variant_name_probe_20260924.md`): the MC888
+# Pro spells its session and monthly counters with `flux_`, and these ask
+# whether it spells the new counters that way too. Each is marked below.
 #
 # Kept as a separate set because the evidence behind them is weaker than for
 # `KNOWN_NAMES`: nothing here has been seen answered by a device. Probing them
@@ -891,6 +905,11 @@ EXPECTED_NAMES: Final[frozenset[str]] = frozenset(
         "Nr_pci",
         "Nr_signal_strength",
         "Nr_snr",
+        "flux_device_uptime",  # flux_ variant, 2026-09-24
+        "flux_ppp_connect_time",  # flux_ variant, 2026-09-24
+        "flux_total_rx_bytes",  # flux_ variant, 2026-09-24
+        "flux_total_time",  # flux_ variant, 2026-09-24
+        "flux_total_tx_bytes",  # flux_ variant, 2026-09-24
         "ip_passthrough_enabled",
         "nr_rsrp",
         "nr_rsrq",

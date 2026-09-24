@@ -1,18 +1,10 @@
 """Tests for the ZTE Router sensor."""
 
-import pathlib
 from datetime import datetime, timedelta
+import pathlib
 from unittest.mock import MagicMock, patch
 
 import pytest
-from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
-from homeassistant.const import (
-    EntityCategory,
-    UnitOfDataRate,
-    UnitOfInformation,
-    UnitOfTime,
-)
-from homeassistant.util import dt as dt_util
 
 from custom_components.zte_router_5g.api import (
     _CONTRACT_CONCEPTS,
@@ -39,6 +31,14 @@ from custom_components.zte_router_5g.sensor import (
     async_setup_entry,
     get_first,
 )
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
+from homeassistant.const import (
+    EntityCategory,
+    UnitOfDataRate,
+    UnitOfInformation,
+    UnitOfTime,
+)
+from homeassistant.util import dt as dt_util
 
 from .conftest import assert_is_root, assert_links_to_parent
 
@@ -480,7 +480,8 @@ def test_sensor_extra_attributes_type_error_caught(mock_coordinator, mock_config
         ("realtime_tx_thrpt", UnitOfDataRate.MEGABITS_PER_SECOND, 2),
         ("realtime_rx_thrpt", UnitOfDataRate.MEGABITS_PER_SECOND, 2),
         # Duration (s -> h), precision 1
-        ("realtime_time", UnitOfTime.HOURS, 1),
+        ("realtime_time", UnitOfTime.MINUTES, 1),
+        ("connection_duration", UnitOfTime.MINUTES, 1),
     ],
 )
 def test_sensor_suggested_unit_and_precision(key, suggested_unit, precision):
@@ -1355,10 +1356,9 @@ def test_bandwidth_sensors_offer_the_unit_selector() -> None:
     history, so no guard band is needed. Adding one would silently end the
     exemption. See `docs/value_min_max.md`.
     """
+    from custom_components.zte_router_5g.sensor import SENSOR_TYPES
     from homeassistant.components.sensor import SensorDeviceClass
     from homeassistant.const import UnitOfFrequency
-
-    from custom_components.zte_router_5g.sensor import SENSOR_TYPES
 
     bandwidth = [d for d in SENSOR_TYPES if d.key.endswith("_bandwidth")]
     assert len(bandwidth) == 2, "expected the pcell and scell bandwidth sensors"

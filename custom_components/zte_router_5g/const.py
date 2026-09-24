@@ -281,25 +281,68 @@ REBOOT_VERIFY_INTERVAL = 0.5
 OUTAGE_CHECK_KEY = "opms_wan_mode"
 OUTAGE_CHECK_INTERVAL = 5.0
 OUTAGE_CHECK_TIMEOUT = 2
+OUTAGE_REASON_DATA_CONNECT = "data_connect"
 OUTAGE_REASON_DATA_DISCONNECT = "data_disconnect"
 OUTAGE_REASON_REBOOT = "reboot"
+# The router's uptime, in preference order. `system_uptime` is the device's
+# own uptime: measured on the MC7010 on 2026-09-23 it ran on across a data
+# reconnect and reset only on reboot. `realtime_time` counts the data session:
+# blank or 0 while data is off, restarting at each reconnect. It is the
+# fallback for a device that answers no system key. `flux_system_uptime` is
+# not observed on any device; it follows the `flux_` spelling the MC888 Pro
+# uses for its session counter. The device latch picks one key per run; see
+# `ZTERouterDataUpdateCoordinator._device_uptime_seconds`.
+DEVICE_UPTIME_KEYS: tuple[str, ...] = (
+    "system_uptime",
+    "flux_system_uptime",
+    "realtime_time",
+    "flux_realtime_time",
+)
+# The data session's counter, feeding Connection Uptime and Connection Duration.
+CONNECTION_UPTIME_KEYS: tuple[str, ...] = ("realtime_time", "flux_realtime_time")
+
+# The `ppp_status` values that mean the data connection is up.
+DATA_CONNECTED_STATES: frozenset[str] = frozenset(
+    {"ppp_connected", "ipv6_connected", "ipv4_ipv6_connected"}
+)
+# The two reasons opened by the Data Connection switch.
+OUTAGE_REASONS_DATA: frozenset[str] = frozenset(
+    {OUTAGE_REASON_DATA_CONNECT, OUTAGE_REASON_DATA_DISCONNECT}
+)
 # Measured on the MC7010 on 2026-09-23, twice: the router went silent about
 # one second after accepting `DISCONNECT_NETWORK` and answered again by 22 s
 # and by 37 s. The cap is margin over the slower run.
 OUTAGE_CAP_DATA_DISCONNECT = 60.0
+# Measured on the MC7010 on 2026-09-23, six turn-ons under `auto_dial` and
+# `manual_dial`: the router kept answering for 11 to 12 s after
+# `CONNECT_NETWORK`, then stopped answering for 6 to 28 s. The slowest ended
+# 40 s after the command.
+OUTAGE_CAP_DATA_CONNECT = 60.0
+
+# A window opened on a command, not on an observed drop, first waits for the
+# router to stop answering. It probes every `OUTAGE_PROBE_FAST` seconds, so a
+# short outage is not missed between probes: the shortest measured was 6.3 s.
+# A router that has not dropped within `OUTAGE_HOLD` seconds is taken to have
+# had no outage, and the window closes through its closing poll. The latest
+# drop measured came 12.4 s after the command; the MC888 Pro's timing is
+# unknown. The reboot window opens only after the drop has been seen, so it
+# skips this phase.
+OUTAGE_PROBE_FAST = 1.0
+OUTAGE_HOLD = 25.0
+# How many windows the diagnostics download keeps, newest first.
+OUTAGE_HISTORY_CAP = 5
 # The hardware check's reboot budget. A reboot on the MC7010 takes well under
 # two minutes; a slow return is a wait, not a failure.
 OUTAGE_CAP_REBOOT = 240.0
 
-# How long after turning the data connection on the Data Connection switch
-# asks for one more refresh, when neither its immediate read nor the refresh
-# after it saw a connected value. Measured on the MC7010 on 2026-09-23, twice:
-# `ppp_connecting` at once and `ppp_connected` within a second. A router still
-# at `ppp_disconnected` on both reads would otherwise keep the switch off until
-# the next scheduled poll, 180 s by default. The coordinator's refresh
-# debouncer may hold this request until its cooldown ends, about 10 s after
-# the first refresh.
-DATA_CONNECT_FOLLOWUP_SECONDS = 5.0
+# How long after a data window closes unsettled the coordinator asks for
+# one more refresh. Unsettled means the closing poll's `ppp_status` is not the
+# state the command leads to. Measured on the MC7010 on 2026-09-23: connected
+# came 26 to 40 s after the command, up to 15 s after the router answered
+# again, and one turn-off's closing poll read `ppp_connected`, corrected by the
+# next refresh 5 s later. Without the follow-up a paused entry would hold that
+# reading until the next forced refresh.
+DATA_CONNECT_FOLLOWUP_SECONDS = 10.0
 
 # How many canaries a probe carries. One key is a single point of failure in
 # both directions: a metric that legitimately empties reads as a lost session,

@@ -241,8 +241,7 @@ class RouterFake:
 
 def real_api(hass: Any) -> Any:
     """Build the real `ZTERouterAPI` over Home Assistant's mocked session."""
-    from homeassistant.helpers.aiohttp_client import async_get_clientsession
-
     from custom_components.zte_router_5g.api import ZTERouterAPI
+    from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
     return ZTERouterAPI(async_get_clientsession(hass), HOST, "admin", "password")

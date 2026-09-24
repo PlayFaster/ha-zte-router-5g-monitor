@@ -18,6 +18,7 @@ import pytest
 from custom_components.zte_router_5g.observations import (
     HISTORY_CAP,
     META_KEY,
+    RESET_CAP,
     TRACKED,
     ObservationRecorder,
     entity_keys_with_values,
@@ -630,3 +631,91 @@ async def test_an_unreadable_lifetime_record_is_nothing_learned(
     )
 
     assert recorder.session_lifetimes() == []
+
+
+# ---------------------------------------------------------------------------
+# Counter resets (3.4.1-dev5)
+# ---------------------------------------------------------------------------
+#
+# The uptime counter restarts on a reboot and, on the MC7010 and the MC888
+# Pro, with the data session: on the MC7010 it reads 0 while data is off.
+# The record does not decide which.
+
+
+def _window(reason: str, opened: str, closed: str | None) -> dict[str, Any]:
+    return {"reason": reason, "opened": opened, "closed": closed}
+
+
+def test_a_lower_counter_is_recorded_as_a_reset(recorder: ObservationRecorder) -> None:
+    """Time, counter either side, and the connection state at detection."""
+    recorder.observe(_poll(realtime_time="5000"), DEVICE)
+
+    changed = recorder.observe(
+        _poll(realtime_time="30", ppp_status="ppp_connected", network_type="ENDC"),
+        DEVICE,
+    )
+
+    assert changed is True
+    [reset] = recorder.report()["counter_resets"]
+    assert reset["counter_before"] == 5000
+    assert reset["counter_after"] == 30
+    assert reset["ppp_status"] == "ppp_connected"
+    assert reset["network_type"] == "ENDC"
+    assert reset["window"] is None
+    assert reset["estimated_reset"] < reset["detected"]
+
+
+def test_a_rising_or_missing_counter_records_nothing(
+    recorder: ObservationRecorder,
+) -> None:
+    """The first reading, a rise, and an absent counter are not resets."""
+    recorder.observe(_poll(realtime_time="100"), DEVICE)
+    recorder.observe(_poll(realtime_time="200"), DEVICE)
+    recorder.observe(_poll(realtime_time=""), DEVICE)
+    recorder.observe(_poll(realtime_time="5"), DEVICE)
+
+    assert recorder.report()["counter_resets"] == []
+
+
+def test_a_reset_inside_a_window_carries_its_reason(
+    recorder: ObservationRecorder,
+) -> None:
+    """Matched by time: the reset is seen at the next poll, after the close."""
+    recorder.observe(_poll(realtime_time="5000"), DEVICE)
+    windows = [
+        _window(
+            "data_disconnect", "2000-01-01T00:00:00+00:00", "2000-01-01T00:01:00+00:00"
+        ),
+        _window("data_connect", "2000-01-01T00:00:00+00:00", None),
+    ]
+
+    recorder.observe(_poll(realtime_time="10"), DEVICE, windows)
+
+    assert recorder.report()["counter_resets"][0]["window"] == "data_connect"
+
+
+def test_a_reset_outside_every_window_carries_none(
+    recorder: ObservationRecorder,
+) -> None:
+    """An old, closed window, and a malformed record, match nothing."""
+    recorder.observe(_poll(realtime_time="5000"), DEVICE)
+    windows = [
+        _window("reboot", "2000-01-01T00:00:00+00:00", "2000-01-01T00:04:00+00:00"),
+        {"reason": "reboot"},
+        _window("reboot", "not a time", None),
+    ]
+
+    recorder.observe(_poll(realtime_time="10"), DEVICE, windows)
+
+    assert recorder.report()["counter_resets"][0]["window"] is None
+
+
+def test_the_resets_are_capped(recorder: ObservationRecorder) -> None:
+    """Oldest dropped first."""
+    for n in range(RESET_CAP + 3):
+        recorder.observe(_poll(realtime_time="9000"), DEVICE)
+        recorder.observe(_poll(realtime_time=str(n)), DEVICE)
+
+    resets = recorder.report()["counter_resets"]
+    assert len(resets) == RESET_CAP
+    assert resets[0]["counter_after"] == 3

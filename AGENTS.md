@@ -2,13 +2,13 @@
 
 This file provides guidance to AI coding agents when working with code in this repository.
 
-> **Read the shared conventions first:** [`.shared/dev_std/agent_conventions.md`](.shared/dev_std/agent_conventions.md) — commands (tests, lint, mypy, validation), the Windows-host `docker exec` workflow, devcontainer access, HAB/MCP for interrogating the running HA instance, the post-modification SCOPE table, code conventions, and the markdown/Python rules. That file is the single source of truth for everything shared across the integration projects; this file covers only what is specific to **ha-zte-router-5g-monitor**.
+> **Read the shared conventions first:** `.shared/dev_std/agent_conventions.md` — commands (tests, lint, mypy, validation), the Windows-host `docker exec` workflow, devcontainer access, HAB/MCP for interrogating the running HA instance, the post-modification SCOPE table, code conventions, and the markdown/Python rules. That file is the single source of truth for everything shared across the integration projects; this file covers only what is specific to **ha-zte-router-5g-monitor**.
 >
 > **[!] Note:** If you edit files inside directory junctions (`.notes/` or `.shared/`), do not run container validation on them. Validate them on the Windows host from the `shared/` folder.
 
 ---
 
-> [!CAUTION] **Never run `git checkout`, `git restore`, `git reset`, `git stash` or `git clean`. Ask first, every time — no exceptions, whoever's changes you think they are.** Reading git (`status`, `diff`, `log`, `show`) is always fine. Full rule and the incident behind it: [`agent_conventions.md`](.shared/dev_std/agent_conventions.md).
+> [!CAUTION] **Never run `git checkout`, `git restore`, `git reset`, `git stash` or `git clean`. Ask first, every time — no exceptions, whoever's changes you think they are.** Reading git (`status`, `diff`, `log`, `show`) is always fine. Full rule and the incident behind it: `agent_conventions.md` (`.shared/dev_std/agent_conventions.md`).
 
 ## What This Integration Does
 
@@ -18,9 +18,13 @@ A Home Assistant custom integration (`zte_router_5g`) for ZTE 5G CPE routers (pr
 >
 > **Entity and service inventory lives in [`docs/all_sensors.md`](docs/all_sensors.md)** — it is authoritative and synchronized from code descriptions via `python .workbench/check_sensor_manifest.py --sync-docs` (and validated against live HA via `--verify-ha`). This file deliberately carries no entity counts or service descriptions.
 
+---
+
+> **Home Assistant version compatibility lives in [`docs/ha_compatibility.md`](docs/ha_compatibility.md)** — supported version floors and active core API deprecation statuses for this integration are tracked there per `agent_conventions.md` §4 (`.shared/dev_std/agent_conventions.md`).
+
 ## Commands
 
-Standard for all integration projects — see [shared conventions §2](.shared/dev_std/agent_conventions.md). Nothing about this project's commands differs.
+Standard for all integration projects — see shared conventions §2 (`.shared/dev_std/agent_conventions.md`). Nothing about this project's commands differs.
 
 ## Architecture
 
@@ -76,7 +80,7 @@ Data flows in one direction: **`api.py` → `coordinator.py` → platform entiti
   - **Two repair issues**, with ids scoped to the config entry (`{entry_id}_{name}`) and cleared on both unload and removal — `REPAIR_NAMES` in `coordinator.py` is the list, and `async_remove_entry` exists solely to stop a raised repair outliving the integration as permanent unfixable litter. `conn_error` (`UNREACHABLE_STRIKE_LIMIT` = **10** consecutive failures — deliberately far above the 3-strike unavailability threshold, so a router reboot never raises it; auto-clearing), and `auth_failed` (the router **rejected** the credentials — not a lapsed session, which is the integration's problem; `is_fixable=True`, `is_persistent=True`, and it does not auto-clear because a wrong password stays wrong). A Repair requires **persistence plus agency**: the condition must have stopped resolving itself _and_ there must be something the user can do. Adding a third needs that test applied, not just a `translation_key`. Set by `x_project/repair_set_alignment.md` §2, which is family-wide — do not add one here alone.
   - **`auth_failed` is fixable, so `repairs.py` must exist.** Home Assistant substitutes `ConfirmRepairFlow` for a fixable issue whose integration ships no `repairs` platform, and that flow's Fix button shows an empty confirm box and **deletes the card without touching the credentials**. `tests/test_repairs.py::test_the_fix_flow_is_ours_not_the_confirm_fallback` fails if the module is removed.
   - **`RETIRED_REPAIR_NAMES` is not dead code.** `firmware_contract_drift`, `sms_storage_full` and `router_unreachable` were retired or renamed on 2026-08-25. `ir.async_delete_issue` looks up by id, so a card still live under a retired id has no route out — `clear_legacy_repairs()` deletes them at every setup, which is what makes retiring one safe. Deleting an entry from that tuple strands any card still showing under it.
-  - Persists a stable `boot_time` into `entry.data` so the uptime timestamp doesn't jitter. The boot instant is latched once and only re-derived when the router's uptime counter drops by more than `UPTIME_REBOOT_MARGIN` (a genuine reboot); missing/garbage uptime readings leave the latched value untouched. `last_uptime` is persisted alongside `boot_time` as the reboot-detection anchor.
+  - Runs two uptime latches, ported verbatim from the Huawei project in 3.4.2-dev7: a `_UptimeLatch` dataclass per counter and coordinator methods that take the latch. `_system_latch` reads `system_uptime` and writes `entry.data["boot_time"]`; `_conn_latch` reads the data session's `realtime_time` / `flux_realtime_time` and writes `connection_start`. Each anchor is latched once and re-derived only on a counter drop beyond `UPTIME_REBOOT_MARGIN`, on the startup shortfall test, or on the plausibility backstop. Counters and drift are persisted in the uptime store, one block per latch, not in `entry.data`. **Keep the ported methods identical to Huawei's**; ZTE-specific code sits around them: `_device_uptime_raw` (one key per run, saved in `entry.data["uptime_source"]`), `_session_reading` (a session counter of 0 is no reading), the pre-dev7 flat-record restore, and `_drop_anchorless_counters`.
 
 - **`__init__.py`** — entry setup forwards platforms **immediately**, then runs login + first refresh in a background task (`async_create_background_task`) so HA startup isn't blocked. Also registers the SMS services at domain level. The coordinator is stored on `entry.runtime_data`, not `hass.data`. `async_unload_entry` calls `api.logout()` after unloading platforms.
   - **Options listener**: `_async_options_updated` diffs `entry.options` against `coordinator.reload_signature` (options minus `LIVE_OPTION_KEYS`). Anything outside the allow-list — host, username, password — schedules a reload; `scan_interval` and `stop_polling` live-apply. Reload is the default; adding a new option means deciding which side it falls on, and connection or entity-topology settings must always reload.
@@ -129,7 +133,7 @@ There is **no** `async_migrate_entry`, which is safe only because the first publ
 
 ## Key Patterns & Conventions
 
-Shared conventions (ruff/mypy strictness, `_LOGGER` prefixing, `PARALLEL_UPDATES`, `translation_key`, icons, exception tuple syntax, markdown emoji rules) are in [shared conventions §4–5](.shared/dev_std/agent_conventions.md). Nothing in this project deviates.
+Shared conventions (ruff/mypy strictness, `_LOGGER` prefixing, `PARALLEL_UPDATES`, `translation_key`, icons, exception tuple syntax, markdown emoji rules) are in shared conventions §4–5 (`.shared/dev_std/agent_conventions.md`). Nothing in this project deviates.
 
 ### `device_info` is inherited, never declared on an entity class
 
@@ -207,7 +211,7 @@ raise HomeAssistantError(
 
 Comments are plain multi-line block scalars, so a `": "` sequence in prose is parsed as a mapping and breaks the file. Write `X — because Y`, not `X: because Y`. Check with `grep -nE '^      .*: ' custom_components/zte_router_5g/quality_scale.yaml` before committing.
 
-## Tests that will stop you, and why they exist
+## Tests that will stop you
 
 This project has **more sweep tests than any other in the family** — a consequence of §2.1, §2.2, §2.5, §12 and §22 all landing here first. A sweep asserts that every member of a **set** is covered, so it fails when the set _grows_, not when a known member breaks. The failure therefore looks unrelated to whatever you just changed, and the reflex is to suppress it.
 
@@ -217,38 +221,45 @@ This project has **more sweep tests than any other in the family** — a consequ
 
 | Add or change this | This fails | Do this |
 | :-- | :-- | :-- |
-| An entity class of any kind | `test_every_live_entity_belongs_to_a_device`, `test_device_info_is_declared_once` | Inherit `helpers.ZTEDeviceEntity`. Never write your own `device_info` |
-| A binary sensor or switch | `test_every_boolean_entity_declares_the_keys_it_reads` | Declare `state_keys`. A boolean value function answers `False` for an empty payload, so it cannot say whether the router replied |
+| An entity class of any kind | `test_every_live_entity_belongs_to_a_device`, `test_device_info_is_declared_once` | Inherit `helpers.ZTEDeviceEntity`. Never write your own `device_info`. |
+| A binary sensor or switch | `test_every_boolean_entity_declares_the_keys_it_reads` | Declare `state_keys`. |
 | An entry in `MODEL_OVERLAY` | `test_every_overlay_key_names_a_real_entity`, `test_no_overlay_entry_repeats_the_description_default` | Name a real entity key, and only where the model differs from the shipped default |
-| A sensor with a unit or `state_class` | `test_every_numeric_sensor_has_a_guard_band` | Declare `min_limit` / `max_limit`, or add the key to the unguarded allow-list **with a reason**. Then update `docs/value_min_max.md` — §6 requires it to match the code in both directions. `test_unguarded_allowlist_has_no_dead_entries` fails if an exemption outlives its sensor. |
-| Any sensor at all | `test_no_sensor_uses_the_total_state_class` | Use `TOTAL_INCREASING`. `ALLOWED_TOTAL_STATE_CLASS` is deliberately **empty**, so adding an entry is a reviewable act rather than a typo. Plain `TOTAL` walks long-term statistics backwards on every billing rollover. |
-| Any entity | `test_every_live_entity_has_an_icon_or_a_device_class` | Add an `icons.json` entry **under that entity's own platform**, unless it carries a `device_class`. A live sweep, because descriptions live in a mix of tuples and module-level singletons. |
-| Any action | the action half of `test_entity_hygiene.py` | Add a `services` entry in the nested `{"service": "mdi:..."}` form. Checked in both directions — every action has an icon, every icon names a real action. |
-| An entity attribute | `test_no_entity_publishes_a_recorded_attribute` | Add the key to that class's `_unrecorded_attributes`. **Repeat `"about"` if the class declares its own set** — HA does not merge this across the class hierarchy, so a subclass assignment shadows the mixin's entirely. |
-| A raised exception, or a repair | `test_every_raised_exception_has_translated_text`; for repairs, the step-8 sweeps in `tests/test_health_contract.py` | Add the key to the `exceptions` / `issues` block in **both** `strings.json` and `translations/en.json`. **A repair takes a `title`, then _exactly one_ of `description` or `fix_flow`** — `hassfest`'s issues schema declares them `vol.Exclusive`, because a fixable issue renders its prose in the flow's step rather than on the card. Supplying both fails `hassfest` locally and in CI. |
-| A new API method | `test_every_public_method_is_covered_by_the_sweep` | Add it to `_CALLS` in `test_dead_session_sweep.py`. The property it must satisfy: **a method either does the thing or raises — it may never return a success-shaped result having done nothing.** |
-| A new write command | `test_every_write_command_is_in_the_refusal_sweep`, `test_every_write_is_classified`, `test_every_classification_carries_a_reason` | Add it to `scripts/write_classification.py` as `SAFE`, `ATTENDED` or `NEVER_AUTOMATED`, **with a written reason**. If you classify it `SAFE`, `test_every_safe_write_is_exercised_by_the_hardware_check` also requires `scripts/hardware_check.py` to actually send it. |
-| A write payload | `test_every_write_command_has_a_locked_shape` | The shape is pinned. `DATA_LIMIT_SETTING` is all-or-nothing: the router answers `{"result":"failure"}` for a payload missing any field. |
-| A key the poll requests | `test_at_least_one_chunk_per_batch_can_be_classified`, `test_a_verdict_is_only_drawn_where_it_could_mean_something` | The batch is split by URL length, and `_batch_get` draws a session verdict only on a chunk holding a sentinel or an unauthenticated key. A chunk of names a device does not support answers every one empty, which is the shape of an expired session — measured when the MC888 aliases pushed the core list into two requests and every poll returned nothing. Never give a chunk an unauthenticated key to make it look classifiable; that was tried and made the false verdict worse. |
-| A key in the batch poll | `test_every_batch_carries_both_classes`, `test_batch_poll_urls_stay_within_the_router_budget` | Every batch needs one authenticated and one unauthenticated key, or the dead-session rule cannot fire on it. And the URL is bounded at ~2048 characters — a **length** budget, not a name count. |
+| A sensor with a unit or `state_class` | `test_every_numeric_sensor_has_a_guard_band` | Declare `min_limit` / `max_limit`, or add the key to the unguarded allow-list **with a reason**. Then update `docs/value_min_max.md`. |
+| Any sensor at all | `test_no_sensor_uses_the_total_state_class` | Use `TOTAL_INCREASING`. |
+| Any entity | `test_every_live_entity_has_an_icon_or_a_device_class`, `test_refresh_button_has_an_icon` | Add an `icons.json` entry **under that entity's own platform**, unless it carries a `device_class`. |
+| Any action | `test_services_have_icons`, `test_registered_services_match_the_icon_entries` | Add a `services` entry in the nested `{"service": "mdi:..."}` form. |
+| An entity attribute | `test_no_entity_publishes_a_recorded_attribute`, `test_every_attribute_the_sensor_emits_is_unrecorded`, `test_health_detail_is_unrecorded` | Add the key to that class's `_unrecorded_attributes`. **Repeat `"about"` if the class declares its own set**. |
+| A raised exception, or a repair | `test_every_raised_exception_has_translated_text`; for repairs, the step-8 sweeps in `tests/test_health_contract.py` | Add the key to the `exceptions` / `issues` block in **both** `strings.json` and `translations/en.json`. |
+| A new API method | `test_every_public_method_is_covered_by_the_sweep` | Add it to `_CALLS` in `test_dead_session_sweep.py`. |
+| A new write command | `test_every_write_command_is_in_the_refusal_sweep`, `test_every_write_is_classified`, `test_every_classification_carries_a_reason` | Add it to `scripts/write_classification.py` as `SAFE`, `ATTENDED` or `NEVER_AUTOMATED`, **with a written reason**. |
+| A write payload | `test_every_write_command_has_a_locked_shape` | Keep the pinned payload shape; `DATA_LIMIT_SETTING` must carry every field. |
+| A key the poll requests | `test_at_least_one_chunk_per_batch_can_be_classified`, `test_a_verdict_is_only_drawn_where_it_could_mean_something` | Keep a sentinel or an unauthenticated key in every chunk, so a session verdict can be drawn. |
+| A key in the batch poll | `test_every_batch_carries_both_classes`, `test_batch_poll_urls_stay_within_the_router_budget` | Every batch needs one authenticated and one unauthenticated key, or the dead-session rule cannot fire on it. |
 | A sensor key alias | `test_every_aliased_key_is_requested_by_the_batch_poll` | Add the spelling to the cross-model block in `api.py`, or the alias names a key never requested. |
-| A thermal sensor | `test_thermal_sensor_set_matches_the_descriptions` | The five `pm_*` entities are a defined set, not a subset. Add the test and the description together. |
-| A sensor fed from the extended poll | `test_no_sensor_declares_a_source_its_data_does_not_come_from` | Only set `source=ENDPOINT_EXTENDED` if the keys really are in `_EXTENDED_PARAMS`. `Allowance` and `Alert Threshold` declared it while their keys sat in `_CORE_PARAMS`, so both went unavailable holding data the mandatory poll had just refreshed. The sweep resolves keys through lambdas, helper functions and alias tuples — its first version scanned description text only, found nothing for `data_allowance`, and passed with the defect deliberately restored. |
-| A sensor description | `test_every_sensor_carries_a_stable_unique_id` | Every description needs a `key` that yields a distinct `unique_id`. HA silently declines to register an entity without one: it still appears and still reports a value, while every user customization is discarded on restart. |
-| A config-flow field | `test_no_field_leaks_the_stored_secret`, `test_stored_secrets_are_never_pre_filled` | Never pre-fill a stored secret — not as a `default`, not as a `suggested_value`, and not into a non-secret field. A masked value still reaches the browser and the eye icon reveals it. Both schema builders are fed a sentinel secret that must appear nowhere in the rendered schema. |
-| Anything that orders SMS | `tests/test_sms_ordering.py` | Order on `helpers.sms_instant`, not on the ISO string, and treat a value it rejects as undated. Ids order nothing once both banks are in one list. |
-| A destructive write | `test_every_public_method_is_covered_by_the_sweep`, and the delete tests in `tests/test_sms_and_usage_diagnostics.py` | Verify the effect, do not trust the `result`. This API answers `success` for a `DELETE_SMS` naming an id it does not hold. |
-| A name added to the batch poll | `test_no_discovery_candidate_is_already_requested` | Remove it from `DISCOVERY_CANDIDATES` and `DISCOVERY_VALUE_SAFE`. Discovery exists for names the poll does **not** carry, so a name in both is probed for an answer already in hand. |
-| A derived figure in the download | `[4] no structural difference between the two runs` in `scripts/diag_check.py` | Anything computed from a counter or a clock differs between two passes twenty seconds apart. Add its path to `_VOLATILE` — but not the structural fields beside it, such as `spelling_used`, whose changing _is_ the fault that check looks for. |
-| A field returned by `run_discovery` | `test_every_discovery_field_is_classified` | Name it in `DISCOVERY_METADATA_PUBLISHED` or `DISCOVERY_METADATA_GATED`. `_sanitize_discovery` copies through an allow-list, so a field absent from both is produced and then dropped in silence — branch coverage cannot see it, because the list is data and the loop runs either way. `session_alive_after` was caught by memory; `canary` was not, and shipped in v3.3.9-dev5 recorded by the API and absent from every download. Assert it in `tests/test_diagnostics_artefact.py`, which tests the file rather than the return value, and confirm on hardware with `scripts/diag_check.py`. |
-| A name observed on any device | `known_names.py` | Add it there, not to one device's mined set. Every device is probed with the union: whether a device's web UI _mentions_ a name and whether it _answers_ it are independent facts, and the MC888 Pro answered 102 names absent from the MC7010's entire vocabulary. Names only, by observation, never by invention. |
-| An outcome for a probed name | `test_the_download_separates_silent_names_from_unasked_ones` | Three outcomes, three fields. `values` means answered, `probed_no_answer` means asked alone and silent, `not_reprobed` means the pass could not ask and claims nothing. Never merge two of them: a capped re-probe published about a hundred names a pass as established absences, and the MC888 key conclusions were drawn from exactly that. |
-| A key in the router payload | `test_no_identifier_survives_anywhere_in_the_output` | Diagnostics is asserted as a property over the whole rendered file, not per key — a leak is by definition somewhere the key list did not reach. Sanitize by **shape and position**, never by seeding real values, and keep the diagnostic substance. Over-redaction fails the companion test. |
-| A `DATA_LIMIT_SETTING` field | `test_every_data_volume_field_is_polled` | The form is all-or-nothing and is built read-modify-write from the last poll, so every field it carries must be in `_CORE_PARAMS`. A field the poll does not fetch cannot be echoed back, and the router answers `{"result":"failure"}` for a payload missing any of them. |
-| A switch fed from the extended poll | `test_no_switch_reads_from_a_degradable_endpoint` | Move the key to `_CORE_PARAMS`. §22: a stale diagnostic is cosmetic, a stale **control** position invites a write composed from a reading that is no longer true. |
-| A repair issue | `REPAIR_NAMES` in `coordinator.py`, and the step-8 sweeps in `tests/test_health_contract.py` | Add it there, or unload and removal will not clear it and it becomes permanent unfixable litter in the Repairs panel. Registry ids carry the entry id; `translation_key` stays bare. The set is fixed family-wide by `x_project/repair_set_alignment.md` §2, so a third one is a cross-project decision. **Never rename or retire a live `issue_id` without adding it to `RETIRED_REPAIR_NAMES`** — `ir.async_delete_issue` looks up by id, so the old id orphans a raised repair with no UI path out. |
-| A condition only ever exercised one way | `Pytest: Check Test Coverage` reports a partial branch (`123->126` in the `Missing` column) | **Write the test.** All eleven found here were missing tests; none was dead code, matching WiFi's 12 of 12. Delete a guard only where the type system or the immediate caller already prevents the case — never in code consuming held or stored state, where the "impossible" shape arrives exactly when something upstream has already failed. `# pragma: no cover` changes the denominator, so it raises the percentage without testing anything. |
-| A test that runs code without checking it | `Tests: Assertion Audit` | Assert the **observable outcome**. Where "this must not raise" is the real contract, assert what that implies — nothing cancelled, no task created, exactly one event on the bus. Adding a trivial assertion to clear the count is a defect, not a fix. Last resort: `tests/zero_assertion_allowlist.txt`, with a reason. |
+| A thermal sensor | `test_thermal_sensor_set_matches_the_descriptions` | Add the thermal description and its test together. |
+| A sensor fed from the extended poll | `test_no_sensor_declares_a_source_its_data_does_not_come_from` | Only set `source=ENDPOINT_EXTENDED` if the keys really are in `_EXTENDED_PARAMS`. |
+| A sensor description | `test_every_sensor_carries_a_stable_unique_id` | Every description needs a `key` that yields a distinct `unique_id`. |
+| A config-flow field | `test_no_field_leaks_the_stored_secret`, `test_stored_secrets_are_never_pre_filled` | Never pre-fill a stored secret — not as a `default`, not as a `suggested_value`, and not into a non-secret field. |
+| Anything that orders SMS | `tests/test_sms_ordering.py` | Order on `helpers.sms_instant`, not on the ISO string, and treat a value it rejects as undated. |
+| A destructive write | `test_every_public_method_is_covered_by_the_sweep`, and the delete tests in `tests/test_sms_and_usage_diagnostics.py` | Verify the effect, do not trust the `result`. |
+| A name added to the batch poll | `test_no_discovery_candidate_is_already_requested` | Remove it from `DISCOVERY_CANDIDATES` and `DISCOVERY_VALUE_SAFE`. |
+| A derived figure in the download | `[4] no structural difference between the two runs` in `scripts/diag_check.py` | Add a counter- or clock-derived path to `_VOLATILE`, not the structural fields beside it. |
+| A field returned by `run_discovery` | `test_every_discovery_field_is_classified` | Name it in `DISCOVERY_METADATA_PUBLISHED` or `DISCOVERY_METADATA_GATED`. |
+| A name observed on any device | `known_names.py` | Add it there, not to one device's mined set. |
+| An outcome for a probed name | `test_the_download_separates_silent_names_from_unasked_ones` | Report each probed name as `values`, `probed_no_answer` or `not_reprobed`. |
+| A key in the router payload | `test_no_identifier_survives_anywhere_in_the_output` | Sanitize by shape across the whole rendered output, not per key. |
+| A `DATA_LIMIT_SETTING` field | `test_every_data_volume_field_is_polled` | Add every field the form carries to `_CORE_PARAMS`. |
+| A switch fed from the extended poll | `test_no_switch_reads_from_a_degradable_endpoint` | Move the key to `_CORE_PARAMS`. |
+| A repair issue | `test_every_repair_issue_has_title_and_rendered_text`, `test_the_fixable_repair_is_the_one_with_a_fix_flow`, `test_no_orphan_issue_translations`, `test_every_repair_the_code_raises_is_registered_for_removal` | Add it to `REPAIR_NAMES`; unload and removal clear only listed repairs. |
+| A condition only ever exercised one way | `Pytest: Check Test Coverage` reports a partial branch (`123->126` in the `Missing` column) | **Write the test.** |
+| A test that runs code without checking it | `Tests: Assertion Audit` | Assert the **observable outcome**. |
+| A `translation_key` | `test_translation_keys_resolve_in_both_files` | Add the key under the entity's own platform in both `strings.json` and `translations/en.json`. |
+| A key added to the batch poll | `test_every_polled_key_is_read_by_something` | Read it from an entity, a health check or diagnostics, or leave it out of the poll. |
+| SMS handling, or a log line near it | `test_sms_sender_number_is_never_recorded`, `test_no_log_line_carries_the_sms_sender_number`, `test_a_new_sms_logs_nothing_that_identifies_the_sender` | Never record or log the sender's number; it is third-party personal data. |
+| A health check, finding or severity value | `test_every_published_severity_is_in_the_section_19_vocabulary`, `test_every_finding_is_classified_exactly_once`, `test_every_snapshot_the_coordinator_writes_carries_the_full_contract` | Use a §19 severity word, classify each finding as drift or capability exactly once, and write the full attribute contract. |
+| A `# type: ignore`, `# noqa` or `# pragma: no cover` | `test_every_suppression_is_on_the_reviewed_allow_list`, `test_every_allowed_suppression_states_a_reason`, `test_allowed_suppressions_has_no_dead_entries` | Add it to the reviewed allow-list with a reason, and remove the entry when the suppression goes. |
+
+When you add a guard test, add its row here and its rationale to [`docs/test_guards.md`](docs/test_guards.md).
 
 - **Mutation testing is scoped by `.validate/mutmut_modules.txt`** — currently `*/helpers.py`, `*/diagnostics.py`, `*/sensor.py`, chosen by measurement because their tests exercise real code. `api.py`, `coordinator.py`, `switch.py` and `select.py` are excluded: their tests mock the thing being mutated, so every mutation of a call into that mock survives and none is a findable defect. Run it with the **Tests: Mutation Check** task — not part of `Validate All`, because survivors need judging rather than counting. **Never delete `mutants/`**: it is the incremental cache _and_ the results store, and changing the module list does not require it.
 
@@ -262,7 +273,7 @@ This project has **more sweep tests than any other in the family** — a consequ
 
 ## Development Environment
 
-Standard for all integration projects — see [shared conventions §3](.shared/dev_std/agent_conventions.md). Nothing about this project's environment differs.
+Standard for all integration projects — see shared conventions §3 (`.shared/dev_std/agent_conventions.md`). Nothing about this project's environment differs.
 
 ## Known Open Issues
 
@@ -272,4 +283,4 @@ Standard for all integration projects — see [shared conventions §3](.shared/d
 uv run python scripts/check_queue_format.py --open ha-zte-router-5g-monitor
 ```
 
-**Which one a new item belongs in, and how to add, check and close it, is [`issue_tracking_workflow.md`](.shared/issues/issue_tracking_workflow.md)** — authoritative, with the summary at [shared conventions §8](.shared/dev_std/agent_conventions.md).
+**Which one a new item belongs in, and how to add, check and close it, is `issue_tracking_workflow.md` (`.shared/issues/issue_tracking_workflow.md`)** — authoritative, with the summary at shared conventions §8 (`.shared/dev_std/agent_conventions.md`).

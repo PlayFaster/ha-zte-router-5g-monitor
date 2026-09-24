@@ -11,7 +11,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from ._compat import via_device_link
-from .const import DOMAIN, OUTAGE_REASON_REBOOT
+from .const import DOMAIN, OUTAGE_REASON_DATA_CONNECT, OUTAGE_REASON_REBOOT
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -37,11 +37,10 @@ def expected_outage_error(err: _OutageRefusal) -> HomeAssistantError:
     rather than a reason word inserted into it. Typed by protocol because
     `api` imports this module.
     """
-    key = (
-        "router_restarting"
-        if err.reason == OUTAGE_REASON_REBOOT
-        else "router_disconnecting"
-    )
+    key = {
+        OUTAGE_REASON_REBOOT: "router_restarting",
+        OUTAGE_REASON_DATA_CONNECT: "router_connecting",
+    }.get(err.reason, "router_disconnecting")
     return HomeAssistantError(
         translation_domain=DOMAIN,
         translation_key=key,
