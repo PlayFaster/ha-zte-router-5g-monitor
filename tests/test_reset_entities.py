@@ -219,6 +219,21 @@ async def test_reset_follows_the_model_overlay_not_the_description(
     ]
 
 
+async def test_reset_disables_the_uptime_sensors_on_an_mc888(
+    hass, coordinator, registry
+) -> None:
+    """An existing MC888 Pro install reaches the new overlay entries by reset."""
+    coordinator.model = "MC888 Pro"
+    registry.entries.append(_entry("device_uptime"))
+    registry.entries.append(_entry("connection_uptime"))
+
+    result = await async_reset_entities(hass, coordinator, _call())
+
+    assert [row["entity_id"] for row in result["changes"]["to_disable"]] == [
+        "sensor.zte_5g_device_uptime"
+    ]
+
+
 async def test_an_entity_already_in_its_default_state_is_unchanged(
     hass, coordinator, registry
 ) -> None:

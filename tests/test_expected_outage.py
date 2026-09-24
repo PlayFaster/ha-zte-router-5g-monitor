@@ -574,6 +574,25 @@ async def test_no_drop_within_the_hold_closes_as_no_outage(
     assert record["outage_seconds"] is None
 
 
+async def test_the_hold_ends_at_twenty_seconds(
+    hass: HomeAssistant, entry: MockConfigEntry
+) -> None:
+    """20 s covers the MC7010's latest measured drop, 12.4 s after the command.
+
+    The MC888 Pro did not drop on either command in the issue #79 3.4.2
+    download, so its windows close here; a longer hold only refuses its
+    controls for longer.
+    """
+    coordinator = await _data_window(hass, entry)
+
+    with patch(_MONOTONIC, return_value=coordinator._outage_opened_mono + 20.0):
+        await coordinator._async_outage_check()
+
+    record = coordinator.last_expected_outage
+    assert coordinator.api.expected_outage is None
+    assert record["closed_by"] == "no_outage"
+
+
 async def test_a_failed_closing_poll_after_the_hold_keeps_the_window(
     hass: HomeAssistant, entry: MockConfigEntry
 ) -> None:

@@ -34,6 +34,9 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 | Data | `realtime_rx_thrpt` | `0` | — | B/s |
 | Data | `realtime_tx_bytes` | `0` | — | B |
 | Data | `realtime_tx_thrpt` | `0` | — | B/s |
+| Data | `total_data_bytes` | `0` | — | B |
+| Data | `total_rx_bytes` | `0` | — | B |
+| Data | `total_tx_bytes` | `0` | — | B |
 | SMS | `msg_total` | `0` | `1000` | — |
 | SMS | `sms_unread_num` | `0` | `1000` | — |
 | Signal | `5g_rsrp_antenna_1` | `-140` | `-40` | dBm |
@@ -65,6 +68,7 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 | System | `realtime_time` | `0` | — | s |
 | System | `sim_pin_attempts` | `0` | `10` | — |
 | System | `sim_puk_attempts` | `0` | `10` | — |
+| System | `total_time` | `0` | — | s |
 | System | `wifi_clients` | `0` | `256` | — |
 
 <!-- GENERATED:end -->

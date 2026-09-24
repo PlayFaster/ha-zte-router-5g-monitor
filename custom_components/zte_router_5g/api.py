@@ -318,6 +318,18 @@ _EXTENDED_PARAMS: list[str] = [
     # both verified `vetted` by discovery on 2026-09-05.
     "monthly_time",
     "flux_monthly_time",
+    # --- Lifetime counters ---
+    #
+    # Connected time and byte totals kept by the router, beside the monthly
+    # counters. Found on the MC7010 by the 2026-09-24 variant probe; the MC888
+    # Pro answers the `flux_` spellings, per the issue #79 3.4.2 download.
+    "total_time",
+    "flux_total_time",
+    "total_rx_bytes",
+    "flux_total_rx_bytes",
+    "total_tx_bytes",
+    "flux_total_tx_bytes",
+    "wan_netmask",
     # --- Router settings ---
     "upnpEnabled",
     "alg_sip_enable",
@@ -4708,6 +4720,15 @@ class ZTERouterAPI:
         the data connection was going down.
         """
         self.refuse_during_outage()
+        # PROTOTYPE 3.4.3: a fresh login before every write. `loginfo` was
+        # measured on 2026-09-24 answering `ok` for several seconds after a
+        # takeover from another device, and writes sent in that gap were
+        # refused. Not before LOGOUT, which would end the session it made.
+        if goform_id != "LOGOUT":
+            try:
+                await self.login(timeout_sec=timeout_sec)
+            except (ZTEAuthError, ZTEConnectionError, ZTECredentialsError) as err:
+                _LOGGER.debug("Pre-write login failed before %s: %s", goform_id, err)
         if not self._token_required(goform_id):
             await self._ensure_session(timeout_sec=timeout_sec)
             return ""

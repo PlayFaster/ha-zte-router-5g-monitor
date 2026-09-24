@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.3-dev1\] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default](#343-dev1---2026-09-24---outage-hold-20-s-total-connected-time-total-byte-counters-and-wan-netmask-sensors-mc888-pro-device-uptime-off-by-default)
   - [\[3.4.3-dev0\] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff](#343-dev0---2026-09-24---timestamp-and-duration-related-doc-updates-plus-ci-bump-ruff)
   - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
   - [\[3.4.2-dev8\] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live](#342-dev8---2026-09-24---uptime-latch-defects-from-342-dev7-fixed-durations-in-minutes-upgrade-paths-tested-and-checked-live)
@@ -313,6 +314,47 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.3-dev1] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default
+
+### Added
+
+- **Total Connected Time** (`total_time`, System, disabled by default): the router's connected time added across data connections, from `total_time` or `flux_total_time`. Duration in seconds, shown in minutes, `total_increasing`. No timestamp is derived from it. On the MC7010 it held still while data was off and counts from the last reboot.
+- **Total Received, Total Sent, Total Data** (`total_rx_bytes`, `total_tx_bytes`, `total_data_bytes`, Data, disabled by default): the router's lifetime byte counters from `total_rx_bytes` / `flux_total_rx_bytes` and `total_tx_bytes` / `flux_total_tx_bytes`, in bytes shown as GB, `total_increasing`. Total Data is published only when both counters are present.
+- **WAN Netmask** (`wan_netmask`, System, diagnostic, disabled by default).
+- The seven keys join `_EXTENDED_PARAMS`. The MC7010 answers the bare names; the MC888 Pro answered the `flux_` spellings and `wan_netmask` in the issue #79 3.4.2 download.
+
+### Changed
+
+- **`OUTAGE_HOLD` 25 s to 20 s.** The MC7010 went silent at most 12.4 s after a data command in every measured run; the MC888 Pro did not go silent at all, so its windows closed at the hold and its controls were refused for the whole 25 s. The 60 s caps are unchanged.
+- **Device Uptime disabled by default on the MC888 Pro,** through `MODEL_OVERLAY`. That model answers neither `system_uptime` nor `flux_system_uptime`, so Device Uptime follows the data session there. New installs only; `reset_entities` applies it to an existing install. Uptime Duration is disabled by default on every model and needed no entry. The fallback to the session counter is unchanged.
+- **About notes:** Device Uptime rewritten; Uptime Duration states what a router without its own uptime shows.
+- **README:** the Router Reboot Alert example states that reboot detection needs a router that reports its own uptime; entity counts updated. `docs/expected_zte_compatibility.md` records the MC888 Pro default, and `docs/DEVELOPMENT.md` the 20 s hold.
+
+### Tests
+
+- `test_the_hold_ends_at_twenty_seconds`; `test_the_mc888_starts_with_both_uptime_sensors_off`; `test_the_uptime_entry_leaves_the_connection_sensors_alone`; `test_reset_disables_the_uptime_sensors_on_an_mc888`; `test_the_lifetime_sensors_read_either_spelling`; `test_total_data_needs_both_counters`. With the changes disabled, the hold, overlay, reset and Total Data tests fail; with them restored all pass.
+
+### Checked Live on the MC7010
+
+| Check | Result |
+| :-- | :-- |
+| Five new entities register disabled after a restart | Pass |
+| Enabled, each matches a direct read of its key | Pass: Total Connected Time 36,016 s against 36,061 s read 45 s later; the byte counters within the traffic of those 45 s; Total Data equals the sum |
+| Device Uptime and Connection Uptime unchanged across the restart | Pass: 02:59:00 and 11:44:07 UTC |
+| Data off and on through the Data Connection switch | Pass: drops at 4.0 s and 11.1 s after the commands, inside the 20 s hold; each window closed on the router's answer with the target state |
+| Total Connected Time while data was off | Held at 605.58 min for the off period and resumed |
+| Diagnostics download | The new keys in polled data; byte counters untokenized, `wan_netmask` tokenized |
+
+### Defects Found in the Cycle
+
+- **The overlay entry for `realtime_time` repeated its description default** and failed `test_no_overlay_entry_repeats_the_description_default`. Removed before release.
+
+### Not Resolved
+
+- **One `DISCONNECT_NETWORK` was refused during the live check, cause not established.** The router answered `result='failure'` and the switch raised an error. A direct read had logged in to the router seconds before. The integration's post-refusal session check did not report the session gone: the error raised was `ZTEConnectionError`, not `ZTEAuthError`. The rerun four minutes later succeeded.
+- Byte totals of 100 TB or more have 15 digits, which the diagnostics identifier sweep tokenizes in a download. The sensor is unaffected; the MC888 Pro reads 26.7 TB.
+- Whether the MC888 Pro's `flux_total_time` and byte totals survive a reboot is not measured.
 
 ## [3.4.3-dev0] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff
 

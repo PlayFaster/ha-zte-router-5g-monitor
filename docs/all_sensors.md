@@ -8,13 +8,13 @@ A complete list of the static entities and service actions provided by the integ
 
 | Sub-Device | Entity Count | Description |
 | :-- | :-- | :-- |
-| **Data** | 15 | Data entities. |
+| **Data** | 18 | Data entities. |
 | **SMS** | 5 | SMS entities. |
 | **Signal** | 56 | Signal entities. |
-| **System** | 49 | System entities. |
-| **Total** | **125** | Total static entities. |
+| **System** | 51 | System entities. |
+| **Total** | **130** | Total static entities. |
 
-## Data Sub-Device (15 Entities)
+## Data Sub-Device (18 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -32,6 +32,9 @@ A complete list of the static entities and service actions provided by the integ
 | Download Speed | `realtime_rx_thrpt` | Sensor | B/s | - | - |
 | Session Sent | `realtime_tx_bytes` | Sensor | B | - | - |
 | Upload Speed | `realtime_tx_thrpt` | Sensor | B/s | - | - |
+| Total Data | `total_data_bytes` | Sensor | B | - | **Disabled by default.** LTS: `total_increasing` |
+| Total Received | `total_rx_bytes` | Sensor | B | - | **Disabled by default.** LTS: `total_increasing` |
+| Total Sent | `total_tx_bytes` | Sensor | B | - | **Disabled by default.** LTS: `total_increasing` |
 | Data Limit Switch | `data_limit_switch` | Switch | - | Config | **Disabled by default.** |
 
 ## SMS Sub-Device (5 Entities)
@@ -105,7 +108,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 | Data Connection | `data_connection` | Switch | - | Config | - |
 
-## System Sub-Device (49 Entities)
+## System Sub-Device (51 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -149,11 +152,13 @@ A complete list of the static entities and service actions provided by the integ
 | SIM PUK Attempts Remaining | `sim_puk_attempts` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Time Server (SNTP) | `sntp_server` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Router Timezone | `sntp_timezone` | Sensor | - | Diagnostic | **Disabled by default.** |
+| Total Connected Time | `total_time` | Sensor | s | - | **Disabled by default.** LTS: `total_increasing` |
 | Firmware Update Result | `upgrade_result` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Firmware Version | `wa_inner_version` | Sensor | - | Diagnostic | - |
 | WAN IP Changes | `wan_ip_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
 | WAN IP Address | `wan_ipaddr` | Sensor | - | Diagnostic | - |
 | WAN Mode Changes | `wan_mode_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
+| WAN Netmask | `wan_netmask` | Sensor | - | Diagnostic | **Disabled by default.** |
 | WiFi Clients Connected | `wifi_clients` | Sensor | - | Diagnostic | LTS: `measurement` |
 | WiFi Enabled | `wifi_enabled` | Sensor | - | Diagnostic | - |
 | ODU LED Switch | `odu_led_switch` | Switch | - | Config | **Disabled by default.** |
@@ -273,3 +278,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.4.0** (2026-07-30) — Live reconciliation via `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) against all 92 entities, with the 34 disabled ones temporarily enabled. Counts 82 → 92 across the session: five discovery-report diagnostics, two web-power binary sensors, `Reset Day`, `Projected Cycle Usage`, `Allowance` and `Alert Threshold`. Renamed the uptime row `Uptime` → **`Device Uptime`** to match `strings.json` and the live instance — the only inventory discrepancy the review found. Platform counts now match live and `README.md` exactly at 75 / 7 / 3 / 3 / 3 / 1.
 - **v3.4.2-dev7** (2026-09-23) — Added Connection Uptime and Connection Duration (System), which report the mobile data session. Device Uptime and Uptime Duration now read the router's `system_uptime` where it answers. System 47 → 49, total 123 → 125.
 - **v3.4.2-dev8** (2026-09-24) — Uptime Duration and Connection Duration display in minutes with one decimal place, from hours. No entity count change.
+- **v3.4.3-dev1** (2026-09-24) - Added Total Connected Time and WAN Netmask (System) and Total Received, Total Sent and Total Data (Data), all disabled by default. System 49 → 51, Data 15 → 18, total 125 → 130.
