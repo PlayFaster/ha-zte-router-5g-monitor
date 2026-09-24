@@ -55,6 +55,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Read and Writes Confirmed On**:
   - **ZTE MC7010** (5G Outdoor CPE) — **Live Hardware Verified** on firmware `V1.0.0B01` and `V1.0.0B03`.
   - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Verified** on firmware `V1.0.1B03` / `V1.0.1B04`.
+  - The MC7010 works the same in bridge mode and router mode. Switching mode restarts the router.
 
 - **Expected Compatible (ZTE `goform` API Family)**:
   - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
@@ -261,7 +262,8 @@ Monitor monthly data consumption, active session totals, and upload/download spe
 </summary><br>
 
 - **Monthly Data Usage**: Track your monthly download, upload and total data usage. See the [Data Usage Alert](#-data-usage-alert) example.
-- **Session Usage**: Track your download and upload for this session/connection (i.e. since last router restart).
+- **Session Usage**: Track your download and upload for the current data connection. It starts again from zero each time the connection reconnects.
+- **Lifetime Totals** _(disabled by default)_: **Total Received**, **Total Sent** and **Total Data**, running totals kept by the router that do not reset on the billing day.
 - **Allowance & Threshold Info**: Visibility to the allowance limits and warning thresholds you set in the router web UI.
 
 - **Projected Cycle Usage** (`sensor.zte_5g_data_projected_cycle_usage`): An estimate of where you will finish the cycle at your current rate. See [Data Usage Projection](#-data-usage-projection) below.
@@ -339,6 +341,7 @@ Reboot router hardware directly from Home Assistant and monitor data integrity w
 </summary><br>
 
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
+- **Uptime and Connection Time**: **Device Uptime** is when the router last booted, and **Connection Uptime** is when its current mobile data connection started. Each has a matching duration sensor, disabled by default, if you prefer a running time to a timestamp. **Total Connected Time** adds up data-connection time across connections. Some routers do not report their own uptime; on those, Device Uptime follows the data connection, the same as Connection Uptime, so a reconnect moves it as a reboot would.
 - **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
 - **Router and SIM State**: **Operator Provisioned** reports whether the router refuses to hand over its remote-management (TR-069) settings, which is usual on an operator-supplied unit and explains why some settings cannot be changed locally.
 - **Firmware Update State** and **Firmware Update Result** report whether an update is running and how the last one ended. Both off by default.
@@ -1978,11 +1981,13 @@ The router permits only **one login session at a time**, and the most recent log
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-**It recovers its session automatically.** The router allows one session at a time, so logging into its web UI ends the integration's. The integration detects this, logs back in and retries once, so an action you trigger straight after using the web UI still works. A request that still fails **raises an error** rather than returning empty data, so an automation can tell "nothing to report" from "could not ask".
+**It recovers its session automatically.** The router allows one session at a time, so logging into its web UI ends the integration's. For reading, the integration notices and logs back in. For settings, it logs in fresh just before every change, and if the router still refuses the change it tries once more. Sending an SMS is never repeated, since a second attempt could deliver the message twice. A request that still fails **raises an error** rather than returning empty data, so an automation can tell "nothing to report" from "could not ask".
 
 **It renews before the session expires.** Session lifetime varies by model and firmware: tests show sessions lasting from 15 seconds to a few minutes. The integration learns your router's own lifetime and renews inside it.
 
 **A write and a poll take turns.** Both use the router's single session. A write waits up to three seconds for a poll to finish, then proceeds anyway.
+
+**Logins take turns too.** Two logins at the same moment can have one refused, so the integration never starts a second before the first finishes.
 
 ---
 

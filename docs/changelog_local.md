@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.3-dev3\] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date](#343-dev3---2026-09-24---stand-alone-scripts-load-probatio-first-session-and-router-behavior-documentation-brought-up-to-date)
   - [\[3.4.3-dev2\] - 2026-09-24 - Login Before Every Write; Serialised Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed](#343-dev2---2026-09-24---login-before-every-write-serialised-logins-one-rebuilt-retry-on-a-refused-write-dev1-test-failures-fixed)
   - [\[3.4.3-dev1\] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default](#343-dev1---2026-09-24---outage-hold-20-s-total-connected-time-total-byte-counters-and-wan-netmask-sensors-mc888-pro-device-uptime-off-by-default)
   - [\[3.4.3-dev0\] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff](#343-dev0---2026-09-24---timestamp-and-duration-related-doc-updates-plus-ci-bump-ruff)
@@ -316,6 +317,29 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.4.3-dev3] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date
+
+### Fixed
+
+- **`scripts/diag_check.py` and `scripts/hardware_check.py` loaded real voluptuous into the package** (C-036). Both import the package after putting the project root on `sys.path`, and the package's `__init__.py` imports `voluptuous` before any `homeassistant` import, so the process held real voluptuous where Home Assistant 2026.9 installs probatio. Each now imports `homeassistant` at the end of its top import block, which installs probatio first. Both scripts load in the devcontainer without the `install_as_voluptuous` warning. The same line is written to the Huawei and UniFi scripts, not yet run there.
+
+### Changed
+
+- **Explanatory text left stale by 3.4.3-dev2.** `api.reboot()` no longer calls itself the one write that is safe to retry; it keeps its own retry because it verifies by the router going away. `api.note_write_refusal()` separates resending the refused payload, which was measured failing, from the rebuilt retry. `api._ensure_session()` says it now runs after the fresh login. `scripts/hardware_check.py` rung [0] says its write succeeds because the write logs in first, not because the `loginfo` check decides to.
+- **`docs/DEVELOPMENT.md` §5.z** records that Home Assistant's own logins collide when they overlap, and that a takeover by another device is reported late by `loginfo`.
+- **The device behaviour reference in the project notes** carries the 2026-09-24 measurements: logins close together and the result `3` on overlap (§2.1a); `device_uptime`, `total_time` and `ppp_connect_time`, the six-hour drift figures and what the MC888 Pro answers (§3.5); router mode against bridge mode (§3.6); writes after a takeover, rebuilt against replayed retries and the router's 10 s silences (§4.1a); and two hypotheses closed (§7).
+- `docs/expected_zte_compatibility.md` states that the MC7010 behaves the same in bridge and router mode.
+
+No behaviour changes in the integration.
+
+### Tests
+
+- `ALLOWED_SUPPRESSIONS` in `tests/test_entity_hygiene.py` carries the two `noqa: F401` suppressions, with the C-036 reason; `test_every_suppression_is_on_the_reviewed_allow_list` failed without them.
+
+### Validation
+
+`Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: 33 of 33 steps pass, including 1,954 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 63 of 63. Both scripts run without the `install_as_voluptuous` warning. Two earlier runs failed the diagnostics check at 61 of 63, on differences between its two passes, because Pause Polling had been left off on the development instance after the 3.4.3-dev2 live check and its polls took the router's session mid-pass. With polling paused the check passed.
+
 ## [3.4.3-dev2] - 2026-09-24 - Login Before Every Write; Serialised Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed
 
 ### Fixed
@@ -361,6 +385,7 @@ The prototype runs before it: three phone runs, six takeovers, 89 writes, none r
 ### Validation
 
 `Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: every step passed, including 1,954 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 63 of 63. The first run failed one lint rule, a missing test docstring, since fixed.
+
 - **The MC888 Pro is untested** with a login before every write. The next issue #79 download settles it.
 - `scripts/hardware_check.py` rung [0] still passes, now because the write logs in first rather than because the pre-write check detects the dead session. Its docstring describes the old mechanism.
 

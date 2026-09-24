@@ -66,6 +66,9 @@ import re
 import sys
 from typing import TYPE_CHECKING, Any, cast
 
+# Installs probatio as `voluptuous` before the package imports it (C-036).
+import homeassistant  # noqa: F401
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 try:
@@ -79,6 +82,7 @@ try:
         DISCOVERY_METADATA_PUBLISHED,
         async_get_config_entry_diagnostics,
     )
+
 except ModuleNotFoundError as err:  # pragma: no cover - operator ergonomics
     raise SystemExit(
         f"cannot import {err.name!r}.\n\n"

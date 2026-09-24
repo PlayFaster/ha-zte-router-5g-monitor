@@ -35,6 +35,16 @@ Two of the three polled endpoints exist solely for SMS, so a user who never send
 
 Needs a `CONF_ENABLE_SMS` option, guards on both `_fetch_optional` calls, and an exclusion in `_degraded_endpoints()` — without the last, Integration Health reports "degraded" for a capability the user deliberately switched off. `dev_standards` §15.
 
+### Encrypted SMS sending
+
+#### **Value ⭐⭐ · Effort Medium**
+
+Newer MC888 and MC889 firmware is reported by another ZTE project to accept `SEND_SMS` only with the phone number and message encrypted, by RSA key exchange and AES-GCM. An MC888 Pro reporting to this project answers a send with success and keeps the message as a draft, which may be the same cause.
+
+The first step is read-only: the device's own web scripts, which the device profile already reads, would show whether that firmware encrypts SMS. Code follows only if they do. **Detail is `.notes/info/other_zte_projects/recent_release_assessment_20260924.md`.**
+
+**Would be justified by:** a device's web scripts showing SMS encryption, or a diagnostics download from an MC888 or MC889 whose sends are stored as drafts.
+
 ### Reboot-on-degradation blueprint
 
 #### **Value ⭐⭐ · Effort Low**
@@ -114,6 +124,7 @@ Forward work only. Declined and Revisit items are recorded above and are not wor
 | Billing-cycle write controls     | Maybe | ⭐⭐⭐ | Low    |
 | SMS feature-group toggle         | Maybe | ⭐⭐⭐ | Medium |
 | Reboot-on-degradation blueprint  | Maybe | ⭐⭐   | Low    |
+| Encrypted SMS sending            | Maybe | ⭐⭐   | Medium |
 
 **Current state.** 121 entities across five sub-devices, 108 carrying `about` notes. 1420 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
@@ -138,6 +149,7 @@ Items that were on this roadmap and have since been built. Detail is in `CHANGEL
 
 ## Version Control
 
+- **v3.7.0** (2026-09-24) - Added **Encrypted SMS sending** to Maybe, from the assessment of recent releases of two other ZTE projects.
 - **v3.6.0** (2026-09-24) - Moved **Projection accuracy from cycle history** from Maybe to Declined. Its trigger, early-cycle volatility causing a bad automation decision, has not occurred, and the estimate settles within days on its own; a persistent cycle-history store and its failure handling are not justified by that.
 - **v3.5.0** (2026-09-05) — Moved **Long-term history for key text sensors** and **Entity defaults matched to the router model** to Done, at `[3.3.10-dev8]` and `[3.3.10-dev7]`. The history item built both mechanisms its entry left open rather than choosing between them. The defaults item departs from its entry twice, both recorded in the Done row: the overlay enables as well as disables, and the regenerate-and-compare test the v3.3.0 entry proposed was dropped as invalid — its inputs are untracked, it assumes a list that is derivable where the criterion is judgement, and it would have reproduced the one stale entry that actually occurred.
 - **v3.4.0** (2026-09-02) — **Cross-model verification moved to Done, and Custom triggers removed.** The verification item's blocker was a volunteer diagnostics download, and three arrived from an MC888 Pro through issue #56; both outcomes it named followed — the README compatibility claim became evidence-backed, and ten alias spellings shipped in `[3.3.9-dev11]`. Recorded with the MC889 gap stated, since no download exists for that model. **Blocked is now empty and its heading is removed**, per `roadmap_format.md` — an absent group means empty. **Custom triggers for `zte_router_5g_sms_received` is deleted rather than filed under a group.** It restated the blocker and the analysis pointer of the family-wide item at `.shared/issues/x_project/custom_trigger_options.md`, which carries a `zte_router_5g` cell and owns the work. Declined would have been untrue — nothing has been decided against — and the format has no group for an item another tracker owns, so the transfer is recorded here instead. **"Refresh Now" always re-logs in stays in Revisit.** Its trigger is a silent logged-out fault, which `roadmap_format.md` requires to be realistically achievable for Revisit rather than Declined; it has occurred twice, and every session fault found during 3.3.9 was a _false_ report of session loss, which re-logging in does not address.

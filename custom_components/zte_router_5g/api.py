@@ -1624,9 +1624,11 @@ class ZTERouterAPI:
         next poll is what asks the user to sign in again. Earlier wording here
         and in the `[3.3.22-dev1]` changelog entry said otherwise.
 
-        It never replays the write. Renewing the session and resending was tried
-        on hardware and did not work, and for `SEND_SMS` a replay can deliver
-        the message twice with no way to tell that it did.
+        It never resends the write itself. Resending the refused payload after a
+        re-login was accepted 7 times in 17 on an MC7010 on 2026-09-24, because
+        its `AD` was derived before the refusal. The one retry that exists,
+        `_retry_once_on_refusal`, builds the write again with a fresh token, and
+        never wraps `SEND_SMS`, whose resend could deliver the message twice.
 
         Costs one short read, and only on the failure path.
 
@@ -2155,6 +2157,12 @@ class ZTERouterAPI:
 
     async def _ensure_session(self, timeout_sec: int | None = None) -> None:
         """Confirm the session before a write derives its ``AD`` token.
+
+        Since 3.4.3-dev2 it runs straight after the fresh login `ad_suffix`
+        makes before every write, so it normally confirms a session seconds
+        old. It is kept because `send_sms` reads the verdict it records, and
+        because its counters show whether a login ever fails to produce a
+        session the router accepts.
 
         The two halves of this API fail differently. A *read* signals a dead
         session by echoing every requested key back empty, which `_request`
@@ -4291,10 +4299,12 @@ class ZTERouterAPI:
         request is not the expected case and is not treated as success on its
         own either — it is checked the same way as any other outcome.
 
-        Reboot is also the one write that is safe to retry: it is idempotent in
-        effect, and a second reboot of a router already rebooting changes
-        nothing. That is why a refusal here is retried once rather than raised
-        immediately.
+        A refusal here is retried once rather than raised immediately: reboot
+        is idempotent in effect, and a second reboot of a router already
+        rebooting changes nothing. It keeps its own retry rather than
+        `_retry_once_on_refusal`, because it verifies by watching the router go
+        away rather than by the reply. Each attempt is built afresh through
+        `ad_suffix`, so it carries a fresh login and a fresh `AD`.
 
         Returns 200 when the router stopped answering. Raises when it is still
         answering after the check window, which means the command was accepted
@@ -4303,9 +4313,10 @@ class ZTERouterAPI:
         result = await self._attempt_reboot()
         if result is not None:
             return result
-        # Refused, and reboot is the one command where an immediate retry is
-        # safe. See the observation above: the same request refused once and
-        # succeeded minutes later, for reasons not established.
+        # Refused. See the observation above: the same request refused once
+        # and succeeded minutes later, on a session seconds old. On 2026-09-24
+        # writes on a session taken by another device were measured refused in
+        # the same way, which is the likeliest cause.
         result = await self._attempt_reboot()
         if result is not None:
             return result

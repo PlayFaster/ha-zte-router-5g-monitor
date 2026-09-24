@@ -606,6 +606,22 @@ async def test_every_live_entity_has_an_icon_or_a_device_class(
 # reason for each finding, per the chore. Copying Huawei's entries would have
 # been meaningless: they describe that project's library.
 ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
+    ("diag_check.py", "noqa: F401"): (
+        "C-036. `import homeassistant` is made for its side effect: Home "
+        "Assistant installs probatio as `voluptuous` when it is first "
+        "imported, and the package's `__init__.py` imports `voluptuous` "
+        "before any `homeassistant` import. A stand-alone script that imports "
+        "the package without it binds real voluptuous. Nothing from the "
+        "module is used, so the import is unused by construction."
+    ),
+    ("hardware_check.py", "noqa: F401"): (
+        "C-036. `import homeassistant` is made for its side effect: Home "
+        "Assistant installs probatio as `voluptuous` when it is first "
+        "imported, and the package's `__init__.py` imports `voluptuous` "
+        "before any `homeassistant` import. A stand-alone script that imports "
+        "the package without it binds real voluptuous. Nothing from the "
+        "module is used, so the import is unused by construction."
+    ),
     ("observations.py", "noqa: BLE001, S112"): (
         "The populated set is built by evaluating every entity description's "
         "`value_fn` against the poll, purely to note which entities reported "
