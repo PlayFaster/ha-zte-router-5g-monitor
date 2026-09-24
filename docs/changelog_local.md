@@ -335,15 +335,15 @@ All changes to this project will be documented in this file. This is the detaile
 | :-- | :-- |
 | First restart on dev8 | `uptime_source` saved; the system latch started afresh and re-latched to the same boot, 2026-09-23 22:03:53 UTC; Connection Uptime held |
 | Second restart | Both latches logged "counter continued"; nothing re-latched; anchors unchanged |
-| Data off | Connection Uptime empty, Device Uptime unchanged. Connection Duration read 0.0, fixed above and not rechecked live |
+| Data off | Connection Uptime empty, Device Uptime unchanged. Connection Duration read 0.0, fixed above; rechecked after the fix on 2026-09-24 with polling paused: Connection Uptime and Connection Duration both `unknown` while off, 03:02:32 and 1.1 min after the reconnect, Device Uptime unchanged throughout |
 | Data on | Connection Uptime moved to the reconnect; Device Uptime unchanged |
 | Router reboot, attended step [G] | "Uptime reset" passed, 12,082 s to 76 s. Device Uptime moved to the reboot and Connection Uptime to the redial; no "moved without a counter drop" line |
 | Diagnostics download | `source` is `system_uptime`; both latch anchors match the sensors |
 | Duration display | Minutes, on the existing entities |
 
-### Not Resolved
+### Step [G] Recovery Watch
 
-- **Step [G]'s recovery watch failed,** reporting 42 authenticated keys lost for 240 s. Home Assistant was polling every 30 s during the reboot and logged in twice inside the watch window; the router allows one session, so the script's session was taken. The same step passed its recovery watch on 2026-09-23 with polling paused. It needs a rerun with Pause Polling on, which costs another reboot. Whether the script's client should have detected the lost session is not established.
+- **Failed with Home Assistant polling, passed with it paused.** The first run reported 42 authenticated keys lost for 240 s while a Home Assistant instance polled every 30 s and logged in twice inside the watch window; the router allows one session, so the script's session was taken. Rerun on 2026-09-24 with Pause Polling on in both Home Assistant instances: uptime reset 5,604 s to 76 s, and the recovery watch clean throughout. The failure was the competing session, not session detection. `docs/DEVELOPMENT.md` §5.z now says to run the attended steps with polling paused.
 
 ### Tests
 
@@ -352,7 +352,7 @@ All changes to this project will be documented in this file. This is the detaile
 
 ### Added
 
-- **Seven names added to `KNOWN_NAMES`**, found answering on the MC7010 by a probe of 4,399 names derived from those it already answers: `ppp_connect_time`, `total_rx_bytes`, `total_tx_bytes`, `total_time`, `device_uptime`, `nr_ca_pcell_bandwidth` and `wan_netmask`. Discovery now asks every device for them. No sensor reads them. Method and findings: `.notes/info/zte_data_elements/variant_name_probe_20260924.md`.
+- **Seven names added to `KNOWN_NAMES`**, found answering on the MC7010 by a probe of 4,399 names derived from those it already answers: `ppp_connect_time`, `total_rx_bytes`, `total_tx_bytes`, `total_time`, `device_uptime`, `nr_ca_pcell_bandwidth` and `wan_netmask`. Discovery now asks every device for them. No sensor reads them. Method and findings: `.notes/info/zte_data_elements/variant_name_probe_20260924.md`. A later read showed `total_time` 81 s ahead of `realtime_time` after one data reconnect, which matches the previous session's length: it accumulates connected time across sessions, where the probe's single read had it equal to the session counter.
 - **Five `flux_` variants added to `EXPECTED_NAMES`**: `flux_total_rx_bytes`, `flux_total_tx_bytes`, `flux_total_time`, `flux_ppp_connect_time` and `flux_device_uptime`. No device has answered them; the MC888 Pro spells its session and monthly counters with `flux_`, and discovery now asks whether it spells these the same way. Kept in `EXPECTED_NAMES`, which holds names no device has been seen to answer, each marked with its source; the header comment now covers both sources.
 
 ### Hardware Check
