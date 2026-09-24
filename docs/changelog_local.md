@@ -7,7 +7,7 @@ All changes to this project will be documented in this file. This is the detaile
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
   - [\[3.4.3-dev4\] - 2026-09-24 - Diagnostics Download Re-Fetches a Dropped Web File; Diagnostics Check Compares Name Lists as Sets and Refuses to Run While Home Assistant Polls](#343-dev4---2026-09-24---diagnostics-download-re-fetches-a-dropped-web-file-diagnostics-check-compares-name-lists-as-sets-and-refuses-to-run-while-home-assistant-polls)
   - [\[3.4.3-dev3\] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date](#343-dev3---2026-09-24---stand-alone-scripts-load-probatio-first-session-and-router-behavior-documentation-brought-up-to-date)
-  - [\[3.4.3-dev2\] - 2026-09-24 - Login Before Every Write; Serialised Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed](#343-dev2---2026-09-24---login-before-every-write-serialised-logins-one-rebuilt-retry-on-a-refused-write-dev1-test-failures-fixed)
+  - [\[3.4.3-dev2\] - 2026-09-24 - Login Before Every Write; Serialized Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed](#343-dev2---2026-09-24---login-before-every-write-serialized-logins-one-rebuilt-retry-on-a-refused-write-dev1-test-failures-fixed)
   - [\[3.4.3-dev1\] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default](#343-dev1---2026-09-24---outage-hold-20-s-total-connected-time-total-byte-counters-and-wan-netmask-sensors-mc888-pro-device-uptime-off-by-default)
   - [\[3.4.3-dev0\] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff](#343-dev0---2026-09-24---timestamp-and-duration-related-doc-updates-plus-ci-bump-ruff)
   - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
@@ -347,10 +347,10 @@ All changes to this project will be documented in this file. This is the detaile
 
 - **Explanatory text left stale by 3.4.3-dev2.** `api.reboot()` no longer calls itself the one write that is safe to retry; it keeps its own retry because it verifies by the router going away. `api.note_write_refusal()` separates resending the refused payload, which was measured failing, from the rebuilt retry. `api._ensure_session()` says it now runs after the fresh login. `scripts/hardware_check.py` rung [0] says its write succeeds because the write logs in first, not because the `loginfo` check decides to.
 - **`docs/DEVELOPMENT.md` §5.z** records that Home Assistant's own logins collide when they overlap, and that a takeover by another device is reported late by `loginfo`.
-- **The device behaviour reference in the project notes** carries the 2026-09-24 measurements: logins close together and the result `3` on overlap (§2.1a); `device_uptime`, `total_time` and `ppp_connect_time`, the six-hour drift figures and what the MC888 Pro answers (§3.5); router mode against bridge mode (§3.6); writes after a takeover, rebuilt against replayed retries and the router's 10 s silences (§4.1a); and two hypotheses closed (§7).
+- **The device behavior reference in the project notes** carries the 2026-09-24 measurements: logins close together and the result `3` on overlap (§2.1a); `device_uptime`, `total_time` and `ppp_connect_time`, the six-hour drift figures and what the MC888 Pro answers (§3.5); router mode against bridge mode (§3.6); writes after a takeover, rebuilt against replayed retries and the router's 10 s silences (§4.1a); and two hypotheses closed (§7).
 - `docs/expected_zte_compatibility.md` states that the MC7010 behaves the same in bridge and router mode.
 
-No behaviour changes in the integration.
+No behavior changes in the integration.
 
 ### Tests
 
@@ -360,12 +360,12 @@ No behaviour changes in the integration.
 
 `Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: 33 of 33 steps pass, including 1,954 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 63 of 63. Both scripts run without the `install_as_voluptuous` warning. Two earlier runs failed the diagnostics check at 61 of 63, on differences between its two passes, because Pause Polling had been left off on the development instance after the 3.4.3-dev2 live check and its polls took the router's session mid-pass. With polling paused the check passed.
 
-## [3.4.3-dev2] - 2026-09-24 - Login Before Every Write; Serialised Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed
+## [3.4.3-dev2] - 2026-09-24 - Login Before Every Write; Serialized Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed
 
 ### Fixed
 
 - **A write sent after another device took the session was refused.** Measured on the MC7010 with the LED written every 5 s and one phone login per run: 6 of 99 writes were refused, all straight after a phone login. The pre-write check read `loginfo` as `ok` before every refused write; in one run it caught the takeover about 10 s late. `ad_suffix()` now logs in before every write except `LOGOUT`, and `_ensure_session()` still reads `loginfo` afterwards for the `SEND_SMS` block. A failed pre-write login does not stop the write, which then reports its own outcome.
-- **Two logins at once from Home Assistant had one refused.** Found in the dev2 live check: a pre-write login and a poll's login 30 ms apart, the second answered with result `3`, and that poll held its last values. Reproduced by script: overlapping pairs had one login refused in each of three pairs; ten serialised pairs were all accepted. `login()` now holds `_login_lock`, and a caller that waited logs in again.
+- **Two logins at once from Home Assistant had one refused.** Found in the dev2 live check: a pre-write login and a poll's login 30 ms apart, the second answered with result `3`, and that poll held its last values. Reproduced by script: overlapping pairs had one login refused in each of three pairs; ten serialized pairs were all accepted. `login()` now holds `_login_lock`, and a caller that waited logs in again.
 - **dev1 left two tests failing,** reported as a pass. `Fix and Validate All` on dev1 printed `Pytest: 2 failed, 1942 passed` in `.reports/summary_fix_and_validate.txt`; the runner's own step list showed the step as PASS, and that list was read instead of the summary. `flux_total_rx_bytes`, `flux_total_tx_bytes` and `flux_total_time` left `EXPECTED_NAMES`, since a polled name is never probed; WAN Netmask gained an icon.
 
 ### Added
@@ -377,7 +377,7 @@ No behaviour changes in the integration.
 
 - The switch-level retry added by the prototype is removed; the decision sits in `api.py`, where the SMS exclusion is enforced once.
 - `tests/conftest.py` stubs `_login_before_write` for every test unless it requests `real_prewrite_login`. Tests that feed a fixed sequence of mocked replies predate the login and would otherwise lose a reply to it.
-- `docs/zte_how_to_access.md`, `docs/DEVELOPMENT.md` and `AGENTS.md` replace "no write is ever resent" and the `loginfo`-first recovery with the login before every write, serialised logins and the rebuilt retry.
+- `docs/zte_how_to_access.md`, `docs/DEVELOPMENT.md` and `AGENTS.md` replace "no write is ever resent" and the `loginfo`-first recovery with the login before every write, serialized logins and the rebuilt retry.
 
 ### Tests
 
@@ -1174,7 +1174,7 @@ The larger of the two defects is that discovery has never read what it was writt
 
 ### Added
 
-- **A write and a poll take turns over the one session this router grants.** A poll holds the lock for the length of its batch; a write waits three seconds and then goes ahead regardless. **Failing to acquire is not an error** - the worst case is an unserialised write, which is what every release before this one did, and a lock that can refuse is another way to block writes on routers nobody can test.
+- **A write and a poll take turns over the one session this router grants.** A poll holds the lock for the length of its batch; a write waits three seconds and then goes ahead regardless. **Failing to acquire is not an error** - the worst case is an unserialized write, which is what every release before this one did, and a lock that can refuse is another way to block writes on routers nobody can test.
 
   Only the two poll entry points take the lock. A write's read-back goes through `get_params`, which deliberately does not, because a lock held across both would have the write waiting on itself; `login` posts through the client session rather than through `_request`, so recovery inside a write cannot re-enter either. Both are asserted.
 
@@ -1433,7 +1433,7 @@ The instruments defeated themselves. A rejection was wiped by the file meant to 
 
 - **The reset threshold is learned from this device's own expiries, and the constant remains the starting point.** There is no lifetime to hardcode: four runs on the reference MC7010 inside one hour ended at 15 s, 85 s and 110–120 s, and one could not complete; `[3.3.0-rc2]` separately measured "at or below 200 s". A device holding sessions for 300 s and one expiring at 20 s are both plausible and neither is served by a number written here.
 
-  Until three expiries agree, the idle reset runs unchanged - `[3.3.0-rc2]` declined relying on reactive detection alone, because it costs three round trips instead of two and removes the second line of defence behind the `[3.3.0-dev12]` blank-payload fault, and nothing here weakens that. After that, the threshold is the shortest of the last ten observed lifetimes less a fifth, never below thirty seconds.
+  Until three expiries agree, the idle reset runs unchanged - `[3.3.0-rc2]` declined relying on reactive detection alone, because it costs three round trips instead of two and removes the second line of defense behind the `[3.3.0-dev12]` blank-payload fault, and nothing here weakens that. After that, the threshold is the shortest of the last ten observed lifetimes less a fifth, never below thirty seconds.
 
   Shortest rather than typical, because being early costs one login and being late costs three round trips. Recent rather than all-time, because a session can end for reasons other than time: this router grants the session to the newest login, so one visit to its web page would otherwise set a permanent floor. Anything below the floor is discarded rather than classified, because the router does not report why a session ended.
 

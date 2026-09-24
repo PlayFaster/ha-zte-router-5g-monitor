@@ -23,7 +23,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 >   - **SMS Management** — View the most recently received message content and send SMS messages directly in HA.
 >   - **Polling Control** — Pause polling and adjust the scan interval dynamically from the HA UI or via automation.
 >
-> Reads and writes are verified on the **ZTE MC7010** (5G Outdoor CPE), and on the **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE). This is powered by a dynamic [Device Profile system](#-device-profile) that works to automatically discovers write tokens and parameter schemas across the broader ZTE `goform` family.
+> Reads and writes are verified on the **ZTE MC7010** (5G Outdoor CPE), and on the **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE). This is powered by a dynamic [Device Profile system](#-device-profile) that works to automatically discover write tokens and parameter schemas across the broader ZTE `goform` family.
 
 ## 📋 Table of Contents
 
@@ -55,7 +55,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 - **Read and Writes Confirmed On**:
   - **ZTE MC7010** (5G Outdoor CPE) — **Live Hardware Verified** on firmware `V1.0.0B01` and `V1.0.0B03`.
   - **ZTE MC888 Pro** (Indoor 5G Wi-Fi 6 CPE) — **Verified** on firmware `V1.0.1B03` / `V1.0.1B04`.
-  - The MC7010 works the same in bridge mode and router mode. Switching mode restarts the router.
+  - Confirmed in both bridge mode and router mode.
 
 - **Expected Compatible (ZTE `goform` API Family)**:
   - Other ZTE 5G/4G CPE modems using the `goform` interface are expected to work, including:
@@ -140,7 +140,7 @@ Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower detail
 
 ### 📶 Reading Your Signal Data
 
-This integration reports a lot of signal numbers. This section explains which ones matter, what to expect, and how to compare one setup (location, config) against another.
+This integration reports a lot of signal numbers. This section explains which ones are useful, what to expect, and how to compare one setup (location, config) against another.
 
 <details>
 
@@ -161,7 +161,7 @@ This integration reports a lot of signal numbers. This section explains which on
 
 **RSRP (Signal Strength) is raw received power.** It tells you whether the tower is reaching you, not how well the connection will perform.
 
-They move independently, and that is the point:
+They move independently, and provide different insight:
 
 - **Strong RSRP, poor SNR** — you are close to a busy tower. Plenty of signal, but lots of interference. Speeds disappoint despite "full bars".
 - **Weak RSRP, good SNR** — you are far out from the tower but the sector is quiet. Often perfectly usable, and sometimes faster than the first case.
@@ -466,7 +466,7 @@ This integration provides **125 entities** (depending on your firmware) organize
 
 ---
 
-> Defaults Match Your Model: Which entities start enabled depends on the router you have. An MC888 Pro reports its signal quality under names an MC7010 does not use, so **RSSI** and **SINR** are on there and off here; an MC7010 has no WiFi of its own, so the two WiFi sensors are off there and on everywhere else. A model nobody has measured gets the standard set. Nothing is hidden — everything is one click away in the Entities tab, and the **Reset Entities** action below moves them in bulk.
+> Defaults Match Your Model: Which entities start enabled depends on the router you have. An MC888 Pro reports its signal quality under names an MC7010 does not use, so **RSSI** and **SINR** are on for MC888 and and off for MC7010; an MC7010 has no WiFi of its own, so the two WiFi sensors are off there and on everywhere else. A model nobody has measured gets the standard set. Nothing is hidden — everything is one click away in the Entities tab, and the **Reset Entities** action below moves them in bulk.
 
 ---
 
@@ -2290,7 +2290,7 @@ Also note: an entity ID is reused unless a **different, still-existing** entity 
 </summary><br>
 
 - **Firmware Dependencies**: API feature availability varies by ISP and firmware builds.
-- **Non-Bridge-Mode Features**: The integration was developed on and has only been tested with the MC7010, an outdoor CPE without WiFi. It has only been tested in router bridge mode. This means the integration does not have:
+- **WiFi Monitoring & Client Tracking**:
   - **Client Tracking**: No tracking of connected clients.
   - **WiFi Monitoring**: There are no WiFi features.
 
@@ -2376,7 +2376,7 @@ This is a **personal project**. Support and updates are provided on a **"best-ef
 
 ## 🔀 Other Options
 
-This integration is specifically optimized as a high-performance, async-native monitor for ZTE 5G CPEs (primarily the **MC7010**, as well as the MC801, MC888, MC889, MF266, MF286 and MF289 family series).
+This integration is specifically optimized as a high-performance, async-native monitor for ZTE 5G CPEs (primarily the **MC7010** and **MC888 Pro**, as well as the MC801, MC888, MC889, MF266, MF286 and MF289 family series).
 
 If ZTE Router 5G Monitor does not work for your specific router model or deployment setup, several excellent alternative Home Assistant integrations exist depending on your hardware type:
 

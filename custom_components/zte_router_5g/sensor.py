@@ -641,9 +641,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="realtime_time",
         about=(
             "How long the router has been running since its last boot. The Device "
-            "Uptime sensor expresses the same fact as a timestamp, which is usually "
-            "the easier one to automate against. A router that does not report its "
-            "own uptime shows how long its data connection has been up instead."
+            "Uptime sensor expresses the same fact as a timestamp. A router that "
+            "does not report its own uptime shows how long its data connection has "
+            "been up instead."
         ),
         translation_key="system_uptime_duration",
         device_class=SensorDeviceClass.DURATION,

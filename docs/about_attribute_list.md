@@ -12,7 +12,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 >
 > **These notes are never written to your database.** They are declared as _unrecorded attributes_, so Home Assistant shows them live in the entity's details but the recorder ignores them entirely — they cost nothing to carry, however often the entity updates. See `dev_standards.md` Section 14.
 
-**80 of the 92 entities carry a note.** The other 12 deliberately do not — a note on everything trains you to ignore notes. They are listed in full at the end, so the omissions stay visible and deliberate rather than looking like gaps.
+**117 of the 130 entities carry a note.** The other 13 deliberately do not. They are listed in full at the end, so the omissions stay visible and deliberate rather than looking like gaps.
 
 ᴰ = **disabled by default.** Enable it from the entity's settings if you want it; it is hidden to keep the default entity list manageable.
 
@@ -138,7 +138,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Ambient Modem Temperature | Sensor | `pm_sensor_ambient` | Internal air temperature inside the modem, away from the radio itself. Read alongside the power amplifier temperature it indicates whether the unit as a whole is running hot or just the transmitter. Not reported by all models. |
 | Modem Temperature | Sensor | `pm_sensor_mdm` | Temperature of the 4G/LTE cellular baseband module. Not reported by all models. |
 | Power Amplifier Temperature | Sensor | `pm_sensor_pa1` | Temperature of the RF power amplifier driving the transmit signal, typically the warmest component in the unit. Not reported by all models. |
-| Uptime Duration | Sensor | `realtime_time` | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp, which is usually the easier one to automate against. A router that does not report its own uptime shows how long its data connection has been up instead. |
+| Uptime Duration | Sensor | `realtime_time` | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp. A router that does not report its own uptime shows how long its data connection has been up instead. |
 | SIM ICCID | Sensor | `sim_iccid` | Integrated Circuit Card ID - the SIM card's own serial number, printed on the card itself. Useful for identifying which SIM is in the router without opening it. |
 | SIM IMSI | Sensor | `sim_imsi` | International Mobile Subscriber Identity - the unique number identifying your SIM's subscription on the network, as distinct from the IMEI which identifies the hardware. |
 | SIM Lock State | Sensor | `sim_lock_state` | Whether the SIM is asking for its PIN. A SIM waiting on a PIN presents as no service, which otherwise reads as a coverage fault, and the attempt counters only say how many tries are left rather than whether one is being asked for. |
@@ -189,6 +189,7 @@ Created: 2026-07-28 Last Updated: 2026-07-30
 
 ## Version Control
 
+- **v1.6.0** (2026-09-24) — Synchronized header coverage count to **117 of 130** entities (13 deliberate omissions). Updated `Uptime Duration` about note to prune editorial advice clause per `about_notes_review`.
 - **v1.5.0** (2026-08-01) — Regenerated from live via `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) after a Home Assistant restart, verified before the fetch by confirming `Signal Bars` published its post-edit text. Coverage unchanged at **86 of 92**; the six deliberate omissions are unchanged. Eight note texts refreshed, all of them this file lagging same-day code edits: `Signal Bars` and `5G SNR` no longer say SINR, since the integration reports what the router labels SNR and cannot verify what the modem computes; `LTE RSRP` no longer competes with SNR for "the single most useful number"; `Network APN` and `APN Profile` say `unknown` rather than "blank", which is what Home Assistant actually shows for an empty value; and three notes changed `neighbouring` to `neighboring` under the US-spelling rule. No note was found missing, and every entity declaring one publishes it — no delivery faults.
 - **v1.3.0** (2026-07-30) — Regenerated from live via `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) against all 92 entities with the 34 disabled ones temporarily enabled. Coverage 84 of 91 → **85 of 92**. Added `Allowance` and `Alert Threshold`; removed `Data Volume Alert`, which was **renamed in code** rather than dropped in delivery — the review confirmed separately that every entity declaring a note publishes one. Nineteen note texts updated after a rewrite pass that removed vendor-blaming and outdated display advice. The seven deliberate omissions are unchanged.
 - **v1.2.0** (2026-07-29) — Added an **Entities without a note** section covering all 14, so the omissions are visible and deliberate rather than reading as gaps. Flagged APN Profile and Network Mode Selection as the only two where a wrong choice has a real cost, for a later decision. Header reworded to state coverage as 68 of 82.

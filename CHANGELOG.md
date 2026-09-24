@@ -4,52 +4,93 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [3.4.2] - 2026-09-24 - Release: Independent System & Connection Uptime Sensors, Data Outage Windows, and Duration Precision
+## [3.4.3] - 2026-09-24 - Release: Data Connection Switch, Write Command Resilience, Expected Outage Awareness, Uptime and Connection Time Tracking, and Total Data Counters
 
 ### Summary
 
-- **Separated System Uptime and Connection Uptime**: System uptime now tracks the router's physical hardware boot time independently from cellular data reconnects, while two new sensors track the active cellular session.
-- **Turn-On Outage Protection**: Turning cellular data on now initiates an expected-outage protection window and automatically synchronizes switch state when the connection settles.
-- **Python & Home Assistant Requirements**: Raised the minimum supported Home Assistant version to 2025.2.0, aligning with Home Assistant's Python 3.13 minimum runtime requirement.
+- **Mobile Data Connection Control**: Added a Data Connection switch to enable or disable the router's cellular connection directly from Home Assistant.
+- **Write Command Resilience**: Automated fresh logins before write actions, serialized concurrent requests, and added single-retry rebuilding to prevent command refusals when multiple clients access the router.
+- **Expected-Outage Protection**: Restarting the router or toggling mobile data engages an automatic outage protection window, preventing transient error logs and false health degradation while giving interactive countdown feedback.
+- **Separated System & Connection Uptime**: On models that report hardware uptime (such as the MC7010), Device Uptime tracks boot time independently from cellular reconnects, accompanied by new Connection Uptime and Total Connected Time sensors.
+- **Long-Term Data & Network Sensors**: Added running total byte counters for cumulative downloaded, uploaded, and combined data kept by the router across billing cycles, alongside diagnostic WAN Netmask and Connection Mode status sensors.
+- **Home Assistant & Python Requirements**: Raised the minimum supported Home Assistant version to 2025.2.0 (Python 3.13+).
 
 ### ⚠️ Action Required
 
-- **Minimum Home Assistant 2025.2.0**: The integration now requires Home Assistant 2025.2.0 or newer and Python 3.13+. Earlier versions will not be offered this update.
+- **Minimum Home Assistant 2025.2.0**: The integration now requires Home Assistant 2025.2.0 or newer and Python 3.13+.
+- **"Bridge Mode" sensor renamed to Data Connection Status**: The entity ID changes from `sensor.<name>_signal_ppp_status` to `sensor.<name>_signal_data_connection_status` (the old entity is left orphaned and can be safely deleted). Update any dashboards or automations referring to the old entity ID.
 
 ### Added
 
-- **Connection Uptime Sensor (`sensor.<name>_system_connection_uptime`)**: Tracks the exact timestamp when the current cellular data connection started, clearing when cellular data is disconnected.
-- **Connection Duration Sensor (`sensor.<name>_system_connection_duration`)**: Displays duration of the active cellular data session in minutes (disabled by default).
+- **Data Connection Switch (`switch.<name>_signal_data_connection`)**: Enables or disables mobile cellular data from Home Assistant, with rapid single-read confirmation to track connection state transitions (`ppp_connecting`, `ppp_connected`, `ppp_disconnecting`, `ppp_disconnected`).
+- **Connection Mode Status Sensor (`sensor.<name>_signal_connection_mode_status`)**: Diagnostic sensor reporting the router's configured connection dial mode (`auto_dial` or `manual_dial`).
+- **Expected-Outage Protection Windows**: Managed outage windows (up to 20s–60s for data toggling, 240s for reboots) suppress polling errors, protect Integration Health, and refuse interactive commands with descriptive countdown timers.
+- **Automatic Write Rebuilding & Retry**: Stateful configuration actions (APN, data connection, LED switch, volume limits, network modes) automatically re-authenticate and rebuild the payload once if the router refuses the initial write.
+- **Connection Uptime Sensor (`sensor.<name>_system_connection_uptime`)**: Tracks the exact timestamp when the current cellular data connection started, clearing when mobile data is disconnected.
+- **Connection Duration Sensor (`sensor.<name>_system_connection_duration`)**: Displays active cellular data session duration in minutes (disabled by default).
+- **Total Connected Time Sensor (`sensor.<name>_system_total_time`)**: Tracks cumulative cellular connection duration across multiple connections without resetting on brief data disconnects, displayed in minutes (disabled by default; reset behavior depends on router model).
+- **Total Data Counters (`sensor.<name>_data_total_rx_bytes`, `sensor.<name>_data_total_tx_bytes`, `sensor.<name>_data_total_data_bytes`)**: Running total of bytes downloaded, uploaded, and combined traffic kept by the router separate from monthly counters, stored in bytes and displayed in GB (disabled by default).
+- **WAN Netmask Sensor (`sensor.<name>_system_wan_netmask`)**: Diagnostic subnet mask for the active mobile network interface (disabled by default).
+
+### Fixed
+
+- **System Uptime Resetting on Data Reconnects**: Separated physical hardware boot tracking (`Device Uptime`, reading `system_uptime`) from cellular session tracking (`realtime_time`) on models that support it, preventing APN switches or mobile network reconnects from resetting the boot timestamp (models without hardware uptime report session time as before).
+- **Write Command Refusal After Session Takeover**: Added an authenticated login before write commands and serialized concurrent logins, eliminating write refusals when other devices log in to the router's web interface or when polls coincide with commands.
+- **Data Connection Switch State Synchronization**: Added follow-up state verification if the router closes an outage window in an intermediate state, ensuring the switch accurately reflects active connection status.
+
+### Changed
+
+- **Reboot Outage Protection**: Triggering a router restart via the Reboot button now activates the expected-outage protection window, eliminating false Integration Health alerts and entity dropouts during normal reboot cycles.
+- **Duration Display Units**: Changed suggested display units for Uptime Duration and Connection Duration (both disabled by default) to minutes with one decimal place (`min`), replacing hourly increments.
+
+---
+
+## [3.4.2] - 2026-09-24 - Pre-Release: Independent System & Connection Uptime Sensors, Data Outage Windows, and Duration Precision
+
+### Summary
+
+- **Separated System & Connection Uptime**: On models that report hardware uptime (such as the MC7010), Device Uptime tracks boot time independently from cellular reconnects, accompanied by new Connection Uptime and Total Connected Time sensors.
+- **Turn-On Outage Protection**: Turning cellular data on now initiates an expected-outage protection window and automatically synchronizes switch state when the connection settles.
+- **Home Assistant & Python Requirements**: Raised the minimum supported Home Assistant version to 2025.2.0 (Python 3.13+).
+
+### ⚠️ Action Required
+
+- **Minimum Home Assistant 2025.2.0**: The integration now requires Home Assistant 2025.2.0 or newer and Python 3.13+.
+
+### Added
+
+- **Connection Uptime Sensor (`sensor.<name>_system_connection_uptime`)**: Tracks the exact timestamp when the current cellular data connection started, clearing when mobile data is disconnected.
+- **Connection Duration Sensor (`sensor.<name>_system_connection_duration`)**: Displays active cellular data session duration in minutes (disabled by default).
 - **Turn-On Outage Protection Window**: Activating mobile data through the Data Connection switch now engages a managed outage window (up to 60s) to prevent transient communication errors while the router negotiates carrier connection.
 
 ### Fixed
 
-- **System Uptime Resetting on Data Reconnects**: Separated system boot tracking (`system_uptime`) from data session uptime (`realtime_time`), preventing cellular drops or APN switches from resetting the router's physical uptime timestamp.
-- **Data Connection Switch State Synchronization**: Added an automatic follow-up refresh if the router closes an outage window in an intermediate or unsettled connection state, ensuring the switch accurately reflects mobile data status.
+- **System Uptime Resetting on Data Reconnects**: Separated physical hardware boot tracking (`Device Uptime`, reading `system_uptime`) from cellular session tracking (`realtime_time`) on models that support it, preventing APN switches or mobile network reconnects from resetting the boot timestamp (models without hardware uptime report session time as before).
+- **Data Connection Switch State Synchronization**: Added follow-up state verification if the router closes an outage window in an intermediate state, ensuring the switch accurately reflects active connection status.
 
 ### Changed
 
-- **Duration Sensor Display Units**: Changed suggested display units for Uptime Duration and Connection Duration to minutes with one decimal place (`min`), replacing hourly increments.
+- **Duration Display Units**: Changed suggested display units for Uptime Duration and Connection Duration (both disabled by default) to minutes with one decimal place (`min`), replacing hourly increments.
 
 ---
 
-## [3.4.1] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking
+## [3.4.1] - 2026-09-23 - Pre-Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking
 
 ### Summary
 
-- **Mobile Data Connection Control**: Added a new Data Connection switch allowing you to enable or disable the router's cellular connection directly from Home Assistant.
-- **Expected-Outage Protection**: Restarting the router or disconnecting cellular data now initiates a timed outage window, pausing polling and safely blocking conflicting commands with informative on-screen countdown messages.
+- **Mobile Data Connection Control**: Added a Data Connection switch to enable or disable the router's cellular connection directly from Home Assistant.
+- **Expected-Outage Protection**: Restarting the router or toggling mobile data engages an automatic outage protection window, preventing transient error logs and false health degradation while giving interactive countdown feedback.
 - **Connection Mode Tracking**: Added a dedicated Connection Mode Status diagnostic sensor and renamed the bridge sensor to Data Connection Status to accurately report connection states.
 - **Automation Reliability**: Updated example reboot and failover automations to trigger on verified connection state attributes, preventing unwanted triggers during manual data disconnects.
 
 ### ⚠️ Action Required
 
-- **"Bridge Mode" sensor renamed to Data Connection Status**: The entity ID changes from `sensor.<name>_signal_ppp_status` to `sensor.<name>_signal_data_connection_status` (the old entity is left orphaned and can be deleted). Update any dashboards or automations referring to the old entity ID.
+- **"Bridge Mode" sensor renamed to Data Connection Status**: The entity ID changes from `sensor.<name>_signal_ppp_status` to `sensor.<name>_signal_data_connection_status` (the old entity is left orphaned and can be safely deleted). Update any dashboards or automations referring to the old entity ID.
 
 ### Added
 
-- **Data Connection Switch (`switch.<name>_signal_data_connection`)**: Enables or disables mobile data from Home Assistant, with rapid single-read confirmation to track connection state transitions (`ppp_connecting`, `ppp_connected`, `ppp_disconnecting`, `ppp_disconnected`).
-- **Connection Mode Status Sensor (`sensor.<name>_signal_connection_mode_status`)**: Diagnostic sensor reporting the configured connection dial mode (`auto_dial` or `manual_dial`).
+- **Data Connection Switch (`switch.<name>_signal_data_connection`)**: Enables or disables mobile cellular data from Home Assistant, with rapid single-read confirmation to track connection state transitions (`ppp_connecting`, `ppp_connected`, `ppp_disconnecting`, `ppp_disconnected`).
+- **Connection Mode Status Sensor (`sensor.<name>_signal_connection_mode_status`)**: Diagnostic sensor reporting the router's configured connection dial mode (`auto_dial` or `manual_dial`).
 - **Expected-Outage Window**: Reboots and mobile data disconnections now establish a managed outage window (up to 60s for data disconnect, 240s for reboot) that suppresses polling errors, protects Integration Health from false degradation, and refuses interactive write actions with an estimated countdown.
 
 ### Fixed
@@ -272,7 +313,7 @@ This release adds verified support for the ZTE MC888 Pro (a big thanks to [@Kees
 
 ### Summary
 
-- **Multi-Key Pre-Write Session Validation**: Pre-write session assurance now verifies multiple connection keys (`wan_connect_status`, `ppp_status`, and `model_name`) rather than a single field, preventing false session-expiry errors and blocked write commands on router firmwares that leave individual status keys unpopulated.
+- **Multi-Key Pre-Write Session Validation**: Pre-write session assurance now verifies multiple connection keys (`wan_connect_status`, `ppp_status`, and `model_name`) rather than a single field, preventing false session-expiry errors and blocked write commands on router firmware versions that leave individual status keys unpopulated.
 - **Temporary SMS Deletion Diagnostic Probe V3**: Upgraded the temporary troubleshooting action (`zte_router_5g.sms_delete_probe`) to evaluate twelve candidate authentication token derivation formulas against non-destructive write commands, with device-specific hash selection and strict router success confirmation. This action is temporary diagnostic scaffolding for issue troubleshooting and will be removed in the next release.
 - **Project Complexity & Health Scorecard**: Added a public scorecard tracking architectural complexity metrics, module sizes, and code health standards.
 
@@ -292,7 +333,7 @@ This release adds verified support for the ZTE MC888 Pro (a big thanks to [@Kees
 
 ### Summary
 
-- **Temporary SMS Deletion Diagnostic Probe V2**: Updated the temporary diagnostic action (`zte_router_5g.sms_delete_probe`) to isolate which specific step of token derivation blocks write commands on problem firmwares. It tests six write-token variants against non-destructive data volume commands before spending messages, and adds a four-minute runtime cap. This action is temporary troubleshooting scaffolding for issue diagnostics and will be removed in the next release.
+- **Temporary SMS Deletion Diagnostic Probe V2**: Updated the temporary diagnostic action (`zte_router_5g.sms_delete_probe`) to isolate which specific step of token derivation blocks write commands on problem firmware versions. It tests six write-token variants against non-destructive data volume commands before spending messages, and adds a four-minute runtime cap. This action is temporary troubleshooting scaffolding for issue diagnostics and will be removed in the next release.
 
 ### Added
 
@@ -456,14 +497,14 @@ This release adds verified support for the ZTE MC888 Pro (a big thanks to [@Kees
 ### Summary
 
 - **Dynamic Session Cookie Compatibility**: The integration now retains and replays all session cookies set by the router (such as `zsidn` on the MC888 Pro) rather than requiring a literal `stok` cookie.
-- **Dynamic Unauthenticated Key Discovery**: The unauthenticated key set is now measured per device at startup, ensuring accurate session-expiry detection across varying router firmwares.
+- **Dynamic Unauthenticated Key Discovery**: The unauthenticated key set is now measured per device at startup, ensuring accurate session-expiry detection across varying router firmware versions.
 - **Data Limit Control Compatibility**: Added alternate parameter aliases (including `flux_` variants) to the data limit write form, restoring data limit settings functionality on newer router models.
 - **Sparse Payload Health Finding**: Integration Health now alerts when a router responds with a significantly reduced subset of its normal sensor data.
 
 ### Added
 
-- **Dynamic Cookie Name Support**: Router firmwares that issue session cookies under non-standard names (such as `zsidn` on the ZTE MC888 Pro) now have their cookies captured and replayed properly on all subsequent requests, resolving authentication failures.
-- **Per-Device Session Classification**: Session health monitoring now dynamically probes which keys the router answers without authentication during setup, preventing firmwares that report network status unauthenticated from causing session classification mismatches.
+- **Dynamic Cookie Name Support**: Router firmware versions that issue session cookies under non-standard names (such as `zsidn` on the ZTE MC888 Pro) now have their cookies captured and replayed properly on all subsequent requests, resolving authentication failures.
+- **Per-Device Session Classification**: Session health monitoring now dynamically probes which keys the router answers without authentication during setup, preventing firmware versions that report network status unauthenticated from causing session classification mismatches.
 - **Data Limit Settings Controls**: Added `flux_` parameter aliases to `DATA_LIMIT_SETTING` form writes, ensuring data limit configuration switches and thresholds are writable on routers using modern firmware schemas.
 - **Diagnostics Privacy**: Ensured alternate cell identifier key spellings (`Z5g_CELL_ID`) are pseudonymized in diagnostic downloads alongside primary keys.
 - **Sparse Payload Diagnostic Alert**: Integration Health now flags a diagnostic finding if a successful poll returns an unusually sparse payload compared to the device's recorded baseline.
@@ -891,8 +932,9 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
-  - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
-  - [\[3.4.1\] - 2026-09-23 - Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking](#341---2026-09-23---release-data-connection-switch-outage-protection-windows-and-connection-state-tracking)
+  - [\[3.4.3\] - 2026-09-24 - Release: Data Connection Switch, Write Command Resilience, Expected Outage Awareness, Uptime and Connection Time Tracking, and Total Data Counters](#343---2026-09-24---release-data-connection-switch-write-command-resilience-expected-outage-awareness-uptime-and-connection-time-tracking-and-total-data-counters)
+  - [\[3.4.2\] - 2026-09-24 - Pre-Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---pre-release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
+  - [\[3.4.1\] - 2026-09-23 - Pre-Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking](#341---2026-09-23---pre-release-data-connection-switch-outage-protection-windows-and-connection-state-tracking)
   - [\[3.4.0\] - 2026-09-15 - Release: ZTE MC888 Pro Compatibility, Dynamic Device Profiles, and Advanced Router Management](#340---2026-09-15---release-zte-mc888-pro-compatibility-dynamic-device-profiles-and-advanced-router-management)
   - [\[3.3.25\] - 2026-09-15 - Release: Web-Client Driven Write Contracts, Dynamic Profile Discovery, and Session State Resilience](#3325---2026-09-15---release-web-client-driven-write-contracts-dynamic-profile-discovery-and-session-state-resilience)
   - [\[3.3.24\] - 2026-09-13 - Release: Asynchronous SMS Deletion Verification and Send Outcome Tracking](#3324---2026-09-13---release-asynchronous-sms-deletion-verification-and-send-outcome-tracking)
