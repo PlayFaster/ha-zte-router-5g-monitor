@@ -17,6 +17,7 @@ Nothing here is specific to one model: every path is either seeded from the
 shared bundle list or discovered from the device's own files.
 """
 
+import asyncio
 import hashlib
 import re
 from typing import Any
@@ -101,6 +102,9 @@ _MAX_RETURN_BYTES = 400_000
 _MAX_CRAWL_FILES = 90
 
 _MAX_CRAWL_BYTES = 3_000_000
+
+# Pause before the one re-fetch of a file that drew no answer at all.
+_REFETCH_DELAY_SECONDS = 1.0
 
 
 async def _fetch_text(api: Any, path: str) -> tuple[int | None, list[str], str]:
@@ -229,6 +233,13 @@ async def crawl(api: Any) -> dict[str, Any]:
     async def take(path: str) -> str:
         nonlocal total
         status, _headers, body = await _fetch_text(api, path)
+        if status is None:
+            # No answer at all, as against a refusal. The MC7010 has been seen
+            # to drop a single request, and one dropped file removes every
+            # name mined from it, so the download differed from the next one.
+            # One more attempt; a file that fails twice is recorded missing.
+            await asyncio.sleep(_REFETCH_DELAY_SECONDS)
+            status, _headers, body = await _fetch_text(api, path)
         size = len(body)
         record: dict[str, Any] = {"status": status, "bytes": size}
         if status == 200:

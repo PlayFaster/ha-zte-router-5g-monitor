@@ -7,7 +7,7 @@ nothing about either.
 """
 
 from typing import Self
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from custom_components.zte_router_5g import web_sources
 from custom_components.zte_router_5g.web_sources import (
@@ -259,3 +259,50 @@ async def test_a_file_the_router_refuses_is_a_finding_not_a_failure() -> None:
     assert "js/main.js" in report["missing"]
     assert report["files"]["js/main.js"]["status"] == 404
     assert "js/main.js" not in report["sources"]
+
+
+async def test_a_file_that_drew_no_answer_is_fetched_once_more() -> None:
+    """One dropped request removed every name mined from that file.
+
+    Measured on the MC7010 on 2026-09-24: a diagnostics check failed because
+    one pass's crawl lost a single file to a request the router never answered.
+    """
+    api = _api()
+    real_get = api.session.get.side_effect
+    dropped: set[str] = set()
+
+    def get(url: str, **kwargs: object):
+        path = url.split("192.168.0.1/", 1)[-1]
+        if path == "js/service.js" and path not in dropped:
+            dropped.add(path)
+            raise TimeoutError
+        return real_get(url, **kwargs)
+
+    api.session.get = MagicMock(side_effect=get)
+    with patch("custom_components.zte_router_5g.web_sources._REFETCH_DELAY_SECONDS", 0):
+        report = await crawl(api)
+
+    assert "js/service.js" not in report["missing"]
+    assert report["files"]["js/service.js"]["status"] == 200
+
+
+async def test_a_file_that_never_answers_is_recorded_missing() -> None:
+    """The re-fetch is one attempt; a file that fails twice stays a finding."""
+    api = _api()
+    real_get = api.session.get.side_effect
+
+    def get(url: str, **kwargs: object):
+        if url.endswith("js/service.js"):
+            raise TimeoutError
+        return real_get(url, **kwargs)
+
+    api.session.get = MagicMock(side_effect=get)
+    with patch("custom_components.zte_router_5g.web_sources._REFETCH_DELAY_SECONDS", 0):
+        report = await crawl(api)
+
+    assert "js/service.js" in report["missing"]
+    assert report["files"]["js/service.js"]["status"] is None
+    calls = [
+        c for c in api.session.get.call_args_list if c.args[0].endswith("js/service.js")
+    ]
+    assert len(calls) == 2

@@ -21,7 +21,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.diag_check import Report, check_stability, unasked_count
+from scripts.diag_check import Report, check_stability, unanswered_files, unasked_count
 
 
 def _artefact(
@@ -244,3 +244,57 @@ def test_unasked_names_are_counted() -> None:
 def test_a_download_without_a_discovery_block_counts_as_complete() -> None:
     """`--once` against an older artefact must not crash the retry decision."""
     assert unasked_count({}) == 0
+
+
+# ---------------------------------------------------------------------------
+# One missing name is one difference
+# ---------------------------------------------------------------------------
+
+
+def test_a_name_missing_from_one_pass_is_reported_as_that_name() -> None:
+    """Compared by position, one missing name shifted every later entry.
+
+    On 2026-09-24 one unanswered web file removed three mined names from one
+    pass, and the check reported the shift at positions 375, 321, 901 and 531
+    instead of the three names.
+    """
+    first = _artefact([], {})
+    second = _artefact([], {})
+    first["discovery"]["probed_no_answer"] = ["a", "b", "c", "d"]
+    second["discovery"]["probed_no_answer"] = ["a", "c", "d"]
+
+    report = Report()
+    check_stability(first, second, report)
+
+    detail = next(d for _, label, d in report.checks if "structural" in label)
+    assert "only in first ['b']" in detail
+    assert "/probed_no_answer/" not in detail
+
+
+def test_the_same_names_in_another_order_are_not_a_difference() -> None:
+    """The order a pass records names in is incidental."""
+    first = _artefact([], {})
+    second = _artefact([], {})
+    first["discovery"]["probed_no_answer"] = ["a", "b"]
+    second["discovery"]["probed_no_answer"] = ["b", "a"]
+
+    report = Report()
+    check_stability(first, second, report)
+
+    assert _outcome(report, "no structural difference")
+
+
+def test_a_web_file_with_no_answer_marks_the_pass_incomplete() -> None:
+    """A refused file is a property of the device; an unanswered one is not."""
+    artefact = {
+        "web_sources": {
+            "files": {
+                "js/a.js": {"status": 200},
+                "js/b.js": {"status": 404},
+                "js/c.js": {"status": None},
+            }
+        }
+    }
+
+    assert unanswered_files(artefact) == ["js/c.js"]
+    assert unanswered_files({}) == []

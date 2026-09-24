@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.3-dev4\] - 2026-09-24 - Diagnostics Download Re-Fetches a Dropped Web File; Diagnostics Check Compares Name Lists as Sets and Refuses to Run While Home Assistant Polls](#343-dev4---2026-09-24---diagnostics-download-re-fetches-a-dropped-web-file-diagnostics-check-compares-name-lists-as-sets-and-refuses-to-run-while-home-assistant-polls)
   - [\[3.4.3-dev3\] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date](#343-dev3---2026-09-24---stand-alone-scripts-load-probatio-first-session-and-router-behavior-documentation-brought-up-to-date)
   - [\[3.4.3-dev2\] - 2026-09-24 - Login Before Every Write; Serialised Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed](#343-dev2---2026-09-24---login-before-every-write-serialised-logins-one-rebuilt-retry-on-a-refused-write-dev1-test-failures-fixed)
   - [\[3.4.3-dev1\] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default](#343-dev1---2026-09-24---outage-hold-20-s-total-connected-time-total-byte-counters-and-wan-netmask-sensors-mc888-pro-device-uptime-off-by-default)
@@ -316,6 +317,25 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.3-dev4] - 2026-09-24 - Diagnostics Download Re-Fetches a Dropped Web File; Diagnostics Check Compares Name Lists as Sets and Refuses to Run While Home Assistant Polls
+
+### Fixed
+
+- **One dropped request changed the diagnostics download.** `web_sources.crawl` fetched each of the router's web files once and recorded a file that drew no answer as missing, which removed every name mined from it. On 2026-09-24 one such file left three names out of one pass. A file that draws no answer is now fetched once more after 1 s; a file that fails twice, or that the router refuses with a status, is still recorded missing.
+- **`scripts/diag_check.py` reported one difference as hundreds.** Name lists were compared by position, so three names absent from one pass shifted every later entry, and the check named four shifted positions and none of the three names. Lists of plain values are now compared as sets, and a difference names the members only in each pass.
+- **A pass whose crawl lost a web file is taken again,** by the same single retake that already repeats a pass with names left unasked. A second incomplete pass is compared and reported as before.
+- **The check refuses to start while the development Home Assistant is polling the router.** It reads `switch.*_pause_polling` from the local instance and stops with a named failure when polling is on. Two runs on 2026-09-24 failed at 61 of 63 for that reason. Where no instance or token is found it runs as before.
+
+### Tests
+
+- `test_web_sources.py`: a file that drew no answer is fetched once more; a file that never answers is fetched twice and recorded missing.
+- `test_diag_check_stability.py`: a name missing from one pass is reported as that name; the same names in another order are not a difference; a web file with no status marks the pass incomplete.
+- With the re-fetch and the set comparison disabled, four of the new tests fail; restored, all pass.
+
+### Validation
+
+`Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: 33 of 33 steps pass, including 1,959 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 64 of 64, its new precondition included. The first pass of that check left 81 names unasked with Home Assistant's polling paused, and the retake completed it, so an incomplete pass has a cause other than a competing client. That cause is not established.
 
 ## [3.4.3-dev3] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date
 

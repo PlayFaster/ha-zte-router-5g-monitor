@@ -1,13 +1,13 @@
 # Project Complexity & Health: ha-zte-router-5g-monitor
 
-**Last Measured:** 2026-09-24T18:14:15.172376+00:00 · **Release:** `3.4.3` · **Dev Version:** `3.4.3-dev3`
+**Last Measured:** 2026-09-24T19:16:11.180115+00:00 · **Release:** `3.4.3` · **Dev Version:** `3.4.3-dev4`
 
 ## 1. Executive Summary
 
 | Metric | Value | Verdict / Evaluation |
 | :-- | :-: | :-- |
 | **PlayFaster Health Index** | **`75` / 100** | `WARNING` ($\ge 90$ Excellent · $\ge 80$ Good · $\ge 70$ Warning) |
-| **Max McCabe Complexity ($V(G)$)** | **16** | `PASS (<20)` in `crawl` ($< 20$ Pass · $20–23$ Warn · $\ge 24$ Fail) |
+| **Max McCabe Complexity ($V(G)$)** | **17** | `PASS (<20)` in `crawl` ($< 20$ Pass · $20–23$ Warn · $\ge 24$ Fail) |
 | **Mean Complexity per Routine** | **2.90** | Across 429 routines (Ideal $< 4.0$ per routine) |
 | **Danger Routines ($\ge 20$)** | **0** | Zero tolerance (refactor or decompose) |
 | **Elevated Routines ($10–19$)** | **11** | Monitor closely; candidate for cleanup |
@@ -18,25 +18,25 @@
 | **Modules > 1,500 Code Lines** | **2** | Candidate for module decomposition |
 | **Code Suppressions (`# noqa`)** | **27** | Zero preferred; review regularly |
 | **Type Suppressions (`# type: ignore`)** | **0** | Mypy strict compliance |
-| **Source Python SLOC** | **10,951** | Across 21 files in custom_components/ (code statements) |
+| **Source Python SLOC** | **10,956** | Across 21 files in custom_components/ (code statements) |
 | **Docstring Volume** | **3,398 lines** | Interface and contract documentation |
-| **Comment Density** | **26.6%** | 2,913 inline comment lines (Advisory: > 25% inspect for procedural narration) |
+| **Comment Density** | **26.6%** | 2,918 inline comment lines (Advisory: > 25% inspect for procedural narration) |
 | **Platform Declarations SLOC** | **3,219 lines** | Across 6 platform files |
-| **Core Engine / Driver SLOC** | **7,732 lines** | Across 15 coordinator/API/helper files |
+| **Core Engine / Driver SLOC** | **7,737 lines** | Across 15 coordinator/API/helper files |
 | **Static Entities** | **130 entities** | Scale indicator (`all_sensors.md`) |
 | **Platform SLOC / Entity** | **24.8 lines/entity** | Target 20 – 45 lines/entity declarative efficiency |
-| **Test-to-Source Ratio** | **1.64×** | 17,906 test lines ($\ge 1.5×$ recommended) |
-| **Pytest Coverage** | **100%** | 1954 tests executed |
-| **Pytest Duration** | **230.96s** | Full test suite wall-clock execution time |
+| **Test-to-Source Ratio** | **1.64×** | 17,967 test lines ($\ge 1.5×$ recommended) |
+| **Pytest Coverage** | **100%** | 1959 tests executed |
+| **Pytest Duration** | **612.62s** | Full test suite wall-clock execution time |
 
 ## 2. High Complexity Routines ($\ge 10$)
 
 | Score | Routine Symbol | Location | Status |
 | :-: | :-- | :-- | :-- |
-| **16** | `crawl` | `web_sources.py:208` | `ELEVATED` |
+| **17** | `crawl` | `web_sources.py:212` | `ELEVATED` |
 | **14** | `_async_update_data_locked` | `coordinator.py:897` | `ELEVATED` |
 | **14** | `parse_token` | `device_profile.py:190` | `ELEVATED` |
-| **13** | `_resolve` | `web_sources.py:125` | `ELEVATED` |
+| **13** | `_resolve` | `web_sources.py:129` | `ELEVATED` |
 | **12** | `_login_unlocked` | `api.py:2831` | `ELEVATED` |
 | **12** | `_async_outage_check` | `coordinator.py:640` | `ELEVATED` |
 | **11** | `probe_names` | `api.py:3459` | `ELEVATED` |
@@ -75,7 +75,7 @@
 | 490 | `BLE001` | `observations.py` |
 | 399 | `BLE001` | `switch.py` |
 | 481 | `BLE001` | `switch.py` |
-| 121 | `BLE001` | `web_sources.py` |
+| 125 | `BLE001` | `web_sources.py` |
 
 ## 4. Comment Quality & Density Audits
 
