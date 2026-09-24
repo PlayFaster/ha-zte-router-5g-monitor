@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.3-dev0\] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff](#343-dev0---2026-09-24---timestamp-and-duration-related-doc-updates-plus-ci-bump-ruff)
   - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
   - [\[3.4.2-dev8\] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live](#342-dev8---2026-09-24---uptime-latch-defects-from-342-dev7-fixed-durations-in-minutes-upgrade-paths-tested-and-checked-live)
   - [\[3.4.2-dev7\] - 2026-09-24 - Device Uptime from system\_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei](#342-dev7---2026-09-24---device-uptime-from-system_uptime-connection-uptime-sensors-uptime-latch-ported-from-huawei)
@@ -313,6 +314,16 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.4.3-dev0] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff
+
+### Bumps
+
+- **Validate Bump**: Update `ruff` from 0.16.7 to 0.16.8
+
+### Changed
+
+- **Documentation**: Updated `AGENTS.md` and `docs/DEVELOPMENT.md` with information on the behavior of time and duration data elements on the ZTE routers.
+
 ## [3.4.2] - 2026-09-24 - Release: Independent System & Connection Uptime Sensors, Data Outage Windows, and Duration Precision
 
 ### Summary
@@ -441,7 +452,7 @@ A mixin that ran the old ZTE latch twice was written first in this version and r
 - README: entity counts 123 → 125 and System 47 → 49, Connection Uptime and Connection Duration in the System row and the history table, and one note in the Auto-Reboot example: with Connection Mode Status at `manual_dial` the router does not reconnect data after a reboot.
 - `docs/all_sensors.md`, `docs/about_attribute_list.md`: the two new sensors and Device Uptime's amended `about` text.
 - `docs/expected_zte_compatibility.md`: which uptime key the MC7010 uses, and that the Data Connection switch takes it offline in both directions.
-- The device behaviour reference in the shared notes gains a section on data connection and uptime counters, with the measured outage timings for both dial modes, the reboot timings, the uptime keys, and what Kees48's MC888 Pro downloads show. Three hypotheses are recorded as closed.
+- The device behavior reference in the shared notes gains a section on data connection and uptime counters, with the measured outage timings for both dial modes, the reboot timings, the uptime keys, and what Kees48's MC888 Pro downloads show. Three hypotheses are recorded as closed.
 
 ### Tests
 
@@ -845,7 +856,7 @@ affecting that device's operation. Three faults and one gap: a published field p
 
 ### Summary
 
-No behavior changes except one. `docs/project_complexity.md` flags six modules above 25% comment density, sixty contiguous comment blocks over eight lines, and three routines whose comments outnumber their code. The prose behind those flags was written in a conversational register: long subordinated sentences, em-dash asides, bold emphasis used often enough to emphasise nothing, and paragraphs narrating a debugging history where the rule and the measurement would do.
+No behavior changes except one. `docs/project_complexity.md` flags six modules above 25% comment density, sixty contiguous comment blocks over eight lines, and three routines whose comments outnumber their code. The prose behind those flags was written in a conversational register: long subordinated sentences, em-dash asides, bold emphasis used often enough to emphasize nothing, and paragraphs narrating a debugging history where the rule and the measurement would do.
 
 Twelve blocks are rewritten. **Prose across the integration goes from 5,757 lines to 5,726**, and the line count is not the point. What changed is that no sentence now carries three clauses and an aside.
 
@@ -1296,7 +1307,7 @@ The instruments defeated themselves. A rejection was wiped by the file meant to 
 
 ### Added
 
-- **The download says whether this device implements the session flag at all.** `supported`, the firmware it was confirmed on, and the check's own counters. The raw `loginfo` value is deliberately absent - it is denied by name in the sanitiser and is not what anyone needs.
+- **The download says whether this device implements the session flag at all.** `supported`, the firmware it was confirmed on, and the check's own counters. The raw `loginfo` value is deliberately absent - it is denied by name in the sanitizer and is not what anyone needs.
 
   This settles the one question the reference hardware cannot answer. The MC888 Pro has never been observed with a dead session, because a download is only produced when the integration is working, and its downloads redact the value - so whether it implements the key is unknown, and that decides whether the pre-write check applies there at all. The field answers it from that device's next download, with no write and nothing asked of its owner.
 
@@ -1420,7 +1431,7 @@ This release asks the router's own session flag instead, and removes the refusal
 
 - **Tests that pin the property the mechanism was missing.** That the check never raises, across four answer shapes and a failed read; that a failed re-login still lets the write proceed; that a confirmed flag makes exactly one request and skips the witness path; and that the flag read is never classified - a device without the key answers `{"loginfo": ""}`, which `_request` scores as an expiry, re-logs in and replays, and the caller would then log in again: two or more logins per write against `MAX_LOGIN_COUNT` and a 300-second lockout.
 
-- **Tests for the learned-support rule**: that a blank flag is `unanswered` until the device has answered `ok`; that it becomes a denial afterwards; that the proof does not survive a firmware change; and that the read asks for one key with no witnesses travelling alongside it.
+- **Tests for the learned-support rule**: that a blank flag is `unanswered` until the device has answered `ok`; that it becomes a denial afterwards; that the proof does not survive a firmware change; and that the read asks for one key with no witnesses traveling alongside it.
 
 - **A witness test that drives `_populated_keys` through a real poll sequence.** Sixteen tests set it directly and none derived it, so the replace-versus-accumulate behavior never executed under test. Measured on hardware: 60 keys after the core poll, 39 after the extended poll, and none of the 60 core names surviving. The test asserts the behavior as it stands, so the fix - which is not in this release - has to account for it rather than pass by accident.
 
@@ -1434,7 +1445,7 @@ This release asks the router's own session flag instead, and removes the refusal
 
 ### Notes
 
-- **`loginfo` on the MC888 Pro is answered but unproven.** It is present and populated in all sixteen reporter downloads from `[3.3.8]` to `[3.3.24]`, always a two-character token, never blank. The diagnostics sanitiser redacts the value by name, so the literal has not been seen on that device, and no download exists of that device with a dead session - a download is only produced when the integration is working. Two notes in this project describe the field as static there, which is consistent with `ok` on every working session but would also describe a field that never changes. The learned-support rule covers the gap without needing the answer.
+- **`loginfo` on the MC888 Pro is answered but unproven.** It is present and populated in all sixteen reporter downloads from `[3.3.8]` to `[3.3.24]`, always a two-character token, never blank. The diagnostics sanitizer redacts the value by name, so the literal has not been seen on that device, and no download exists of that device with a dead session - a download is only produced when the integration is working. Two notes in this project describe the field as static there, which is consistent with `ok` on every working session but would also describe a field that never changes. The learned-support rule covers the gap without needing the answer.
 
 - **Recovery from a session taken by another client is not solved here.** Measured on an MC7010: a browser login took the session, the check detected it within a second, logged in again and confirmed, and the write was still refused. The likely cause is the browser re-taking the session between the re-login and the write - contention no pre-write check can remove. `[3.3.2-rc5]` recorded the same observation without a mechanism. Detection works; a write cannot be made reliable while another client is actively holding the router's page open.
 
@@ -1853,8 +1864,8 @@ The run is also split. The write ladder consumes most of a fifteen-minute budget
 ### Known Issues
 
 - Rung `24c` raises `ZTEAuthError` on the reference device. It reads four version keys in one request, three of which are unanswered there, and the session classifier judges the result expired. The read itself succeeds and the payload is recorded in the rejection.
-- Captured JavaScript passes through the diagnostics sanitiser, which rewrites address-shaped literals: `"0.0.0.0"` in `js/service.js` is recorded as `"ip-7"` in one of the two copies.
-- The capture is serialised twice in a diagnostics download, at `/data/entry/data/delete_probe` and `/data/sms/delete_probe`.
+- Captured JavaScript passes through the diagnostics sanitizer, which rewrites address-shaped literals: `"0.0.0.0"` in `js/service.js` is recorded as `"ip-7"` in one of the two copies.
+- The capture is serialized twice in a diagnostics download, at `/data/entry/data/delete_probe` and `/data/sms/delete_probe`.
 
 ## [3.3.20-dev1] - 20206-09-11 - CI Bump Ruff
 
