@@ -480,7 +480,8 @@ def test_sensor_extra_attributes_type_error_caught(mock_coordinator, mock_config
         ("realtime_tx_thrpt", UnitOfDataRate.MEGABITS_PER_SECOND, 2),
         ("realtime_rx_thrpt", UnitOfDataRate.MEGABITS_PER_SECOND, 2),
         # Duration (s -> h), precision 1
-        ("realtime_time", UnitOfTime.HOURS, 1),
+        ("realtime_time", UnitOfTime.MINUTES, 1),
+        ("connection_duration", UnitOfTime.MINUTES, 1),
     ],
 )
 def test_sensor_suggested_unit_and_precision(key, suggested_unit, precision):

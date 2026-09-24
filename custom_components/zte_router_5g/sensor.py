@@ -625,7 +625,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="system_uptime_duration",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        suggested_unit_of_measurement=UnitOfTime.HOURS,
+        suggested_unit_of_measurement=UnitOfTime.MINUTES,
         suggested_display_precision=1,
         entity_registry_enabled_default=False,
         group="system",
@@ -657,12 +657,14 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="system_connection_duration",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        suggested_unit_of_measurement=UnitOfTime.HOURS,
+        suggested_unit_of_measurement=UnitOfTime.MINUTES,
         suggested_display_precision=1,
         entity_registry_enabled_default=False,
         group="system",
         min_limit=0,
-        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_REALTIME_TIME)),
+        # Set by the coordinator from the session counter, `None` while data
+        # is off: the MC7010 reads `realtime_time` as blank or "0" then.
+        value_fn=lambda data: _safe_int(data.get("connection_seconds")),
     ),
     ZTESensorEntityDescription(
         key="last_updated",

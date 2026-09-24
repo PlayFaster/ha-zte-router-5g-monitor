@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.2-dev8\] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live](#342-dev8---2026-09-24---uptime-latch-defects-from-342-dev7-fixed-durations-in-minutes-upgrade-paths-tested-and-checked-live)
   - [\[3.4.2-dev7\] - 2026-09-24 - Device Uptime from system_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei](#342-dev7---2026-09-24---device-uptime-from-system_uptime-connection-uptime-sensors-uptime-latch-ported-from-huawei)
   - [\[3.4.2-dev6\] - 2026-09-23 - Follow-Up Refresh After an Unsettled Data Window; Counter Reset Wording Corrected](#342-dev6---2026-09-23---follow-up-refresh-after-an-unsettled-data-window-counter-reset-wording-corrected)
   - [\[3.4.2-dev5\] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics](#342-dev5---2026-09-23---data-connection-turn-on-outage-window-window-waits-for-the-drop-data-connection-diagnostics)
@@ -310,6 +311,56 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.2-dev8] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live
+
+### Summary
+
+`[3.4.2-dev7]` was released with a defect that left Connection Uptime `unknown` on every upgraded install, and it was reported complete on unit tests alone: nothing had run it against Home Assistant. This version fixes that defect and three more that an independent review of the dev7 and dev8 diff found, all in ZTE's code around the ported latch. It also changes the duration sensors' display to minutes. The fixes were then checked on the MC7010 in the devcontainer: two Home Assistant restarts, a data off and on cycle, a router reboot, and a diagnostics download. The latch methods ported from the Huawei project are unchanged; a line-by-line comparison was rerun after the fixes.
+
+### Fixed
+
+- **Connection Uptime stayed `unknown` after upgrading to dev7.** Dev7 restored the pre-dev7 flat store record, a `realtime_time` record, into the connection latch. That gave the latch a stored counter while `entry.data` had no `connection_start`, so it had no anchor. At the first poll the startup test found the counter continued and kept the anchor, which did not exist; the runtime test moves an anchor only on a counter drop, and the plausibility check skips a latch without one. Connection Uptime stayed `unknown` until the next data reconnect. `_drop_anchorless_counters` now runs after the store is loaded and clears the stored counter of any latch without an anchor, so that latch cold-starts and latches `now - counter`. The drift it learned is kept. This also repairs installs already on dev7.
+- **Device Uptime could keep a data-reconnect time after the upgrade.** The system latch inherited dev6's `boot_time`, which was the last reconnect. The cold start replaces an anchor only when the counter-to-elapsed ratio falls outside `MAX_DRIFT`, 0.8 to 1.2, and the plausibility check never moves an anchor earlier. A router up 10 days with data reconnected 1.5 days ago gives 1.18, so the reconnect time would have stayed as Device Uptime until the next reboot. The key the system latch reads is now saved in `entry.data["uptime_source"]`. A run that chooses a different key, or the first run with none saved, starts the system latch afresh. This also covers a run that fell back to `realtime_time` because `system_uptime` read blank on its first poll, which would otherwise have bound the next run to that anchor.
+- **A session counter reading 0 was taken as a live session.** The MC7010 reads `realtime_time` as blank or 0 while data is off. A 0 latched the connection start at the moment data went off and published it; the climb from 0 after the reconnect is not a drop, so the anchor stayed at the off time until the plausibility check had an hour of drift to judge it. A session reading of 0 is now no reading, for the connection latch, for the system latch when it reads a session key, and when choosing the system latch's key.
+- **Connection Duration read 0.0 while data was off**, where the dev7 changelog said it was empty. Seen live on 2026-09-24. The coordinator now publishes `connection_seconds`, `None` while the session counter reads blank or 0, and the sensor reads it.
+
+### Changed
+
+- **Uptime Duration and Connection Duration display in minutes with one decimal place.** They displayed in hours with one decimal place, so the shown value changed only every 6 minutes while the entity changed at every poll. The user found this; it had been diagnosed as polling faults first. The change reached the existing entities in the devcontainer without re-creating them. Neither sensor has a state class, and that is unchanged.
+
+### Checked Live on the MC7010
+
+| Check | Result |
+| :-- | :-- |
+| First restart on dev8 | `uptime_source` saved; the system latch started afresh and re-latched to the same boot, 2026-09-23 22:03:53 UTC; Connection Uptime held |
+| Second restart | Both latches logged "counter continued"; nothing re-latched; anchors unchanged |
+| Data off | Connection Uptime empty, Device Uptime unchanged. Connection Duration read 0.0, fixed above and not rechecked live |
+| Data on | Connection Uptime moved to the reconnect; Device Uptime unchanged |
+| Router reboot, attended step [G] | "Uptime reset" passed, 12,082 s to 76 s. Device Uptime moved to the reboot and Connection Uptime to the redial; no "moved without a counter drop" line |
+| Diagnostics download | `source` is `system_uptime`; both latch anchors match the sensors |
+| Duration display | Minutes, on the existing entities |
+
+### Not Resolved
+
+- **Step [G]'s recovery watch failed,** reporting 42 authenticated keys lost for 240 s. Home Assistant was polling every 30 s during the reboot and logged in twice inside the watch window; the router allows one session, so the script's session was taken. The same step passed its recovery watch on 2026-09-23 with polling paused. It needs a rerun with Pause Polling on, which costs another reboot. Whether the script's client should have detected the lost session is not established.
+
+### Tests
+
+- `tests/test_uptime_upgrade_paths.py`: each case runs on one entry, in order: a starting store, the first poll, a restart from what the first run wrote, and a second poll. The starting states are the dev6 flat record, a dev7 store with an anchorless connection latch, and a fresh install, each with and without `system_uptime`. Further cases cover data off at startup, a reconnect and a reboot after the upgrade, a dev6 anchor inside the `MAX_DRIFT` band, a key that changes between runs, a session counter of 0, and a blank or 0 reading of a chosen session key. With `_drop_anchorless_counters` disabled, the four upgrade cases fail; the review's cases failed before their fixes.
+- Updated: the suggested unit and precision test, the flat-record test and the full-record test, which now carry or expect an anchor, and the reboot-boundary test in `test_init.py`, which now sets the source as already chosen.
+
+### Added
+
+- **Seven names added to `KNOWN_NAMES`**, found answering on the MC7010 by a probe of 4,399 names derived from those it already answers: `ppp_connect_time`, `total_rx_bytes`, `total_tx_bytes`, `total_time`, `device_uptime`, `nr_ca_pcell_bandwidth` and `wan_netmask`. Discovery now asks every device for them. No sensor reads them. Method and findings: `.notes/info/zte_data_elements/variant_name_probe_20260924.md`.
+
+### Hardware Check
+
+- The diagnostics check treats `connection_seconds` as volatile, as it treats `connection_start`: a counter, so two passes seconds apart differ.
+
+### Process
+
+An independent review of the dev7 and dev8 diff was run against the dev7 changelog's claims. It found the three defects fixed above after the first, confirmed the dev8 fix, and confirmed the ported methods are unchanged.
 
 ## [3.4.2-dev7] - 2026-09-24 - Device Uptime from system_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei
 

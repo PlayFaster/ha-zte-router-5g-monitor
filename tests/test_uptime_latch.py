@@ -570,8 +570,12 @@ async def test_a_failing_store_load_never_reaches_setup(hass, failure):
 
 @pytest.mark.asyncio
 async def test_a_full_store_record_is_read_back(hass):
-    """Fields are additive, so an older block without them still loads."""
-    coordinator = _coordinator(hass, _entry())
+    """Fields are additive, so an older block without them still loads.
+
+    The entry carries an anchor: since 3.4.2-dev8 a stored counter without one
+    is dropped, which `test_uptime_upgrade_paths.py` covers.
+    """
+    coordinator = _coordinator(hass, _entry(boot_time="2026-09-01T00:00:00+00:00"))
     block = {
         "last_uptime": 43_359,
         "written_at": "2026-09-01T15:10:00+00:00",

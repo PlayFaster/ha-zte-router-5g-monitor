@@ -245,6 +245,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "detect_new_version",
         "deviceError",
         "device_info",
+        "device_uptime",  # MC7010 variant probe, 2026-09-24
         "dhcpEnabled",
         "dhcpEnd",
         "dhcpLease_hour",
@@ -523,6 +524,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "nr5g_pci",
         "nr5g_sa_band_lock",
         "nr_ca_pcell_band",
+        "nr_ca_pcell_bandwidth",  # MC7010 variant probe, 2026-09-24
         "nr_ca_pcell_freq",
         "nr_multi_ca_scell_info",
         "number",
@@ -550,6 +552,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "port_status",
         "ppp_auth_mode",
         "ppp_auth_mode_ui",
+        "ppp_connect_time",  # MC7010 variant probe, 2026-09-24
         "ppp_connected",
         "ppp_connecting",
         "ppp_dial_conn_fail_counter",
@@ -695,6 +698,9 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "thermal_led_enable",
         "time",
         "top",
+        "total_tx_bytes",  # MC7010 variant probe, 2026-09-24
+        "total_time",  # MC7010 variant probe, 2026-09-24
+        "total_rx_bytes",  # MC7010 variant probe, 2026-09-24
         "tr069_CPEPortNo",
         "tr069_CertEnable",
         "tr069_ConnectionRequestPassword",
@@ -759,6 +765,7 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "wan_dial",
         "wan_ipaddr",
         "wan_lte_ca",
+        "wan_netmask",  # MC7010 variant probe, 2026-09-24
         "wcdma_band_lock",
         "web_keylog_enable",
         "web_keylog_level",

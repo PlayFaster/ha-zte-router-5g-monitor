@@ -202,7 +202,7 @@ Sensors are stored in their canonical **native** unit (so long-term statistics a
 | `monthly_tx_bytes_raw`, `monthly_rx_bytes_raw`, `monthly_total_bytes_raw` | Bytes | GB | 1 |
 | `realtime_tx_bytes`, `realtime_rx_bytes` (session) | Bytes | GB | 2 |
 | `realtime_tx_thrpt`, `realtime_rx_thrpt` | B/s | Mbit/s | 2 |
-| `realtime_time` (Uptime Duration), `connection_duration` | s | h | 1 |
+| `realtime_time` (Uptime Duration), `connection_duration` | s | min | 1 |
 | `lte_ca_pcell_bandwidth`, `lte_ca_scell_bandwidth` | MHz | MHz (unchanged) | 0 |
 | `lte_rsrp`, `lte_rssi`, `z5g_rsrp`, `z5g_rssi`, `rssi`, `rscp` | dBm | dBm (unchanged) | 0 |
 
@@ -272,3 +272,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.3.1** (2026-07-29) — Added five thermal diagnostic sensors (Power Amplifier, Ambient Modem, Modem, 5G Modem, 5G Radio temperatures), all disabled by default because the MC7010 does not populate any of them. System count 21 to 26, total 76 to 81.
 - **v3.4.0** (2026-07-30) — Live reconciliation via `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) against all 92 entities, with the 34 disabled ones temporarily enabled. Counts 82 → 92 across the session: five discovery-report diagnostics, two web-power binary sensors, `Reset Day`, `Projected Cycle Usage`, `Allowance` and `Alert Threshold`. Renamed the uptime row `Uptime` → **`Device Uptime`** to match `strings.json` and the live instance — the only inventory discrepancy the review found. Platform counts now match live and `README.md` exactly at 75 / 7 / 3 / 3 / 3 / 1.
 - **v3.4.2-dev7** (2026-09-23) — Added Connection Uptime and Connection Duration (System), which report the mobile data session. Device Uptime and Uptime Duration now read the router's `system_uptime` where it answers. System 47 → 49, total 123 → 125.
+- **v3.4.2-dev8** (2026-09-24) — Uptime Duration and Connection Duration display in minutes with one decimal place, from hours. No entity count change.

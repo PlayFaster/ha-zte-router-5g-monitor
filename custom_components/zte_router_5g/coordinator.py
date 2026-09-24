@@ -242,6 +242,18 @@ def _outage_snapshot(data: dict[str, Any] | None) -> dict[str, Any] | None:
     return {key: data.get(key) for key in _OUTAGE_SNAPSHOT_KEYS}
 
 
+def _session_reading(raw: Any) -> bool:
+    """Whether a session counter reading is a live session.
+
+    Measured on the MC7010 on 2026-09-23: `realtime_time` reads blank or 0
+    while data is off. Read as a counter, 0 latches the connection start at
+    the moment data went off, and the climb from 0 after the reconnect is no
+    drop, so the anchor stays at the off time.
+    """
+    seconds = _counter_seconds(raw)
+    return seconds is not None and seconds > 0
+
+
 def _counter_seconds(raw: Any) -> int | None:
     """A counter reading as whole seconds, or `None` if blank or unusable."""
     with contextlib.suppress(ValueError, TypeError):
@@ -1069,6 +1081,8 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # the Huawei project routes its three.
         system_raw = self._device_uptime_raw(data)
         conn_raw = get_first(data, CONNECTION_UPTIME_KEYS)
+        if not _session_reading(conn_raw):
+            conn_raw = None
         self._apply_uptime_readings(
             ((self._system_latch, system_raw), (self._conn_latch, conn_raw))
         )
@@ -1077,10 +1091,11 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # Empty while data is off: the counter is blank then, and the last
         # session's start would read as a live one.
         data["connection_start"] = (
-            self._conn_latch.boot_time
-            if _counter_seconds(conn_raw) is not None
-            else None
+            self._conn_latch.boot_time if conn_raw is not None else None
         )
+        # Connection Duration's value: `None` while data is off, when the
+        # counter reads blank or 0 (3.4.2-dev8).
+        data["connection_seconds"] = _counter_seconds(conn_raw)
 
         # Identify if hardware metadata has changed
         new_model = get_router_model(data)
@@ -1749,11 +1764,28 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             # read `realtime_time`. That is now the connection latch's counter;
             # the system latch starts with nothing learned.
             self._restore_latch(self._conn_latch, stored)
+            self._drop_anchorless_counters()
             return
         for latch in self._latches:
             block = stored.get(latch.counter_key)
             if isinstance(block, dict):
                 self._restore_latch(latch, block)
+        self._drop_anchorless_counters()
+
+    def _drop_anchorless_counters(self) -> None:
+        """Cold-start any latch that has a stored counter but no anchor.
+
+        ZTE only. The pre-3.4.2-dev7 flat record gives the connection latch a
+        stored counter while `entry.data` has no `connection_start`. The
+        startup test then finds the counter continued and keeps an anchor that
+        does not exist, so Connection Uptime stays unknown until a reconnect.
+        Dropping the stored counter routes that latch to the cold start, which
+        latches `now - counter`; the drift it learned is kept.
+        """
+        for latch in self._latches:
+            if latch.boot_time is None and latch.stored_counter is not None:
+                latch.stored_counter = None
+                latch.stored_written_at = None
 
     def _restore_latch(self, latch: _UptimeLatch, block: dict[str, Any]) -> None:
         """Read one latch's block back, treating anything unusable as absent."""
@@ -1977,17 +2009,57 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         A booting router can answer `system_uptime` blank while `realtime_time`
         answers, and switching keys between polls would read as a counter drop
         and latch a reboot that did not happen. The first key that answers is
-        kept for the run; a blank reading of it is no reading.
+        kept for the run; a blank reading of it is no reading. A session key
+        reading 0 is data off, not an answer.
+
+        The key is saved in `entry.data["uptime_source"]`. A run that chooses
+        a different key, or the first run with nothing saved, starts the
+        system latch afresh: an anchor or stored counter learned from another
+        counter is evidence about a different question. Kept, a session anchor
+        within `MAX_DRIFT` of the router's uptime passes the cold start, and
+        the plausibility check never moves an anchor earlier, so it would stay
+        until the next reboot. Found by the 3.4.2-dev8 review.
         """
         if self._uptime_source is None:
-            self._uptime_source = next(
-                (k for k in DEVICE_UPTIME_KEYS if data.get(k) not in (None, "")),
+            chosen = next(
+                (
+                    k
+                    for k in DEVICE_UPTIME_KEYS
+                    if data.get(k) not in (None, "")
+                    and (k not in CONNECTION_UPTIME_KEYS or _session_reading(data[k]))
+                ),
                 None,
             )
-            if self._uptime_source is None:
+            if chosen is None:
                 return None
+            self._uptime_source = chosen
+            if self.entry.data.get("uptime_source") != chosen:
+                self._reset_system_latch(chosen)
         raw = data.get(self._uptime_source)
-        return None if raw in (None, "") else raw
+        if raw in (None, ""):
+            return None
+        if self._uptime_source in CONNECTION_UPTIME_KEYS and not _session_reading(raw):
+            return None
+        return raw
+
+    def _reset_system_latch(self, chosen: str) -> None:
+        """Drop what the system latch holds and record the key it now reads."""
+        _LOGGER.info(
+            "%s: device uptime read from %s (previously %s); the system latch "
+            "starts afresh",
+            self.entry.title,
+            chosen,
+            self.entry.data.get("uptime_source"),
+        )
+        self._system_latch = _UptimeLatch(
+            label=self._system_latch.label,
+            boot_key=self._system_latch.boot_key,
+            counter_key=self._system_latch.counter_key,
+        )
+        self._latches = (self._system_latch, self._conn_latch)
+        self.hass.config_entries.async_update_entry(
+            self.entry, data={**self.entry.data, "uptime_source": chosen}
+        )
 
     @property
     def uptime_source(self) -> str | None:

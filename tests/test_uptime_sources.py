@@ -157,7 +157,10 @@ async def test_the_flat_record_from_before_goes_to_the_connection_latch(hass):
         store_cls.return_value.async_load = AsyncMock(return_value=flat)
         await coordinator.async_load_stored_uptime()
 
-    assert coordinator._conn_latch.stored_counter == 3500
+    # The drift carries over. The counter does not: the entry has no
+    # `connection_start`, and a stored counter without an anchor would keep the
+    # latch from ever anchoring (3.4.2-dev8).
+    assert coordinator._conn_latch.stored_counter is None
     assert coordinator._conn_latch.drift_sum_wall == 5000.0
     assert coordinator._system_latch.stored_counter is None
 
@@ -244,7 +247,7 @@ def test_the_four_uptime_sensors_read_their_values() -> None:
         "boot_time": NOW - timedelta(seconds=1479),
         "uptime_seconds": 1479,
         "connection_start": start,
-        "realtime_time": "71",
+        "connection_seconds": 71,
     }
 
     assert _sensor("device_uptime").value_fn(data) == data["boot_time"]
@@ -254,8 +257,8 @@ def test_the_four_uptime_sensors_read_their_values() -> None:
 
 
 def test_the_connection_duration_is_empty_while_data_is_off() -> None:
-    """A blank session counter is no value, not zero."""
-    assert _sensor("connection_duration").value_fn({"realtime_time": ""}) is None
+    """The coordinator publishes no value while data is off, not zero."""
+    assert _sensor("connection_duration").value_fn({"connection_seconds": None}) is None
 
 
 def test_the_change_history_places_a_change_against_the_router_uptime() -> None:

@@ -121,6 +121,8 @@ _VOLATILE = re.compile(
     # The connection latch's anchor, derived like `boot_time` from a counter
     # that drifts, so two passes seconds apart differ by seconds. 3.4.2-dev7.
     r"|/connection_start$"
+    # The session counter as Connection Duration reads it, 3.4.2-dev8.
+    r"|/connection_seconds$"
     # This script's own bookkeeping, and the free-text notes, which are a
     # list compared by position: a pass emitting one extra note shifts every
     # entry after it and reports a dozen differences for one real one. The

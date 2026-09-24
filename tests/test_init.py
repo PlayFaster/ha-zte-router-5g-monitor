@@ -1047,6 +1047,9 @@ async def test_reboot_detection_boundary(
         # Both latches write the store on this poll; the mocked hass cannot
         # schedule two debounced saves on a real `Store`.
         coordinator._store = MagicMock()
+        # The source already chosen and saved, as on any run after the first;
+        # a first choice starts the system latch afresh (3.4.2-dev8).
+        coordinator._uptime_source = "realtime_time"
         original_boot = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         coordinator._boot_time = original_boot
         coordinator._last_uptime = 100
