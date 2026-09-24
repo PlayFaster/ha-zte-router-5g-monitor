@@ -606,7 +606,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         about=(
             "The moment the router last booted, held steady between reboots rather "
             "than recalculated each poll. It only moves when the router's own uptime "
-            "counter drops, so a genuine restart is easy to trigger automations on."
+            "counter drops, so a genuine restart is easy to trigger automations on. "
+            "A router that does not report its own uptime shows its last "
+            "data connection instead, the same as Connection Uptime."
         ),
         translation_key="system_device_uptime",
         device_class=SensorDeviceClass.TIMESTAMP,
@@ -621,6 +623,38 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
             "the easier one to automate against."
         ),
         translation_key="system_uptime_duration",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.SECONDS,
+        suggested_unit_of_measurement=UnitOfTime.HOURS,
+        suggested_display_precision=1,
+        entity_registry_enabled_default=False,
+        group="system",
+        min_limit=0,
+        # The key the device latch chose, set by the coordinator; see
+        # `DEVICE_UPTIME_KEYS`. The entity key stays `realtime_time` so the
+        # entity ID survives the change of source in 3.4.2-dev7.
+        value_fn=lambda data: _safe_int(data.get("uptime_seconds")),
+    ),
+    ZTESensorEntityDescription(
+        key="connection_uptime",
+        about=(
+            "The moment the router's current mobile data connection started, held "
+            "steady like Device Uptime. It moves each time the data connection "
+            "reconnects, and is empty while data is off."
+        ),
+        translation_key="system_connection_uptime",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        group="system",
+        value_fn=lambda data: data.get("connection_start"),
+    ),
+    ZTESensorEntityDescription(
+        key="connection_duration",
+        about=(
+            "How long the router's current mobile data connection has been up. "
+            "The Connection Uptime sensor expresses the same fact as a timestamp. "
+            "Empty while data is off."
+        ),
+        translation_key="system_connection_duration",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
         suggested_unit_of_measurement=UnitOfTime.HOURS,

@@ -91,6 +91,19 @@ RESET_WINDOW_MARGIN: Final = timedelta(seconds=60)
 _UPTIME_KEYS: Final = ("realtime_time", "flux_realtime_time")
 
 
+def _device_uptime(data: dict[str, Any]) -> int | None:
+    """The router's uptime as the coordinator chose it, or `_uptime` before.
+
+    `uptime_seconds` is set from the device latch's source, `system_uptime`
+    where the router answers it. A payload without it, as in older tests and
+    a first poll before any key answered, falls back to the session counter.
+    """
+    value = data.get("uptime_seconds")
+    if isinstance(value, int):
+        return value
+    return _uptime(data)
+
+
 def _uptime(data: dict[str, Any]) -> int | None:
     """Return the router's own uptime counter, or None.
 
@@ -438,7 +451,7 @@ class ObservationRecorder:
                     "timestamp": now,
                     "from": previous,
                     "to": current,
-                    "uptime_at_change": _uptime(data),
+                    "uptime_at_change": _device_uptime(data),
                 }
             )
             del entries[:-HISTORY_CAP]

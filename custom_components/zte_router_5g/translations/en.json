@@ -266,6 +266,12 @@
       "system_connection_failure_count": {
         "name": "Connection Failure Count"
       },
+      "system_connection_duration": {
+        "name": "Connection Duration"
+      },
+      "system_connection_uptime": {
+        "name": "Connection Uptime"
+      },
       "system_device_uptime": {
         "name": "Device Uptime"
       },

@@ -118,6 +118,9 @@ _VOLATILE = re.compile(
     # alternatives above, which match the concept name in the path.
     r"|^/data_usage/(monthly|session|values)/"
     r"|^/data_usage/(monthly_rate_over_session_rate|uptime_seconds)$"
+    # The connection latch's anchor, derived like `boot_time` from a counter
+    # that drifts, so two passes seconds apart differ by seconds. 3.4.2-dev7.
+    r"|/connection_start$"
     # This script's own bookkeeping, and the free-text notes, which are a
     # list compared by position: a pass emitting one extra note shifts every
     # entry after it and reports a dozen differences for one real one. The

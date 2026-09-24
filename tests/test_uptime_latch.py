@@ -83,7 +83,7 @@ def _poll(coordinator, seconds, now) -> None:
     with patch(
         "custom_components.zte_router_5g.coordinator.dt_util.now", return_value=now
     ):
-        coordinator._apply_uptime(int(seconds))
+        coordinator._apply_uptime_readings(((coordinator._system_latch, int(seconds)),))
 
 
 class Router:
@@ -138,69 +138,81 @@ async def test_the_measured_rate_converges_on_the_real_one(hass, rate):
 
     _run(coordinator, router, start=NOW, polls=40)
 
-    assert coordinator._drift_rate == pytest.approx(rate, abs=0.001)
-    assert coordinator._drift_interval_count == 39
+    assert coordinator._drift_rate(coordinator._system_latch) == pytest.approx(
+        rate, abs=0.001
+    )
+    assert coordinator._system_latch.drift_interval_count == 39
 
 
 @pytest.mark.asyncio
 async def test_the_rate_is_withheld_until_enough_has_accumulated(hass):
     """Below the minimum there is no estimate, and no division by zero."""
     coordinator = _coordinator(hass, _entry())
-    assert coordinator._drift_sum_wall == 0
-    assert coordinator._drift_rate is None, "a fresh install must not divide"
+    assert coordinator._system_latch.drift_sum_wall == 0
+    assert coordinator._drift_rate(coordinator._system_latch) is None, (
+        "a fresh install must not divide"
+    )
 
     router = Router(uptime=50_000)
     _run(coordinator, router, start=NOW, polls=3)
 
-    assert coordinator._drift_sum_wall < DRIFT_MIN_ACCUMULATED
-    assert coordinator._drift_rate is None
+    assert coordinator._system_latch.drift_sum_wall < DRIFT_MIN_ACCUMULATED
+    assert coordinator._drift_rate(coordinator._system_latch) is None
 
     _run(coordinator, router, start=NOW + POLL * 3, polls=6)
-    assert coordinator._drift_rate is not None
+    assert coordinator._drift_rate(coordinator._system_latch) is not None
 
 
 @pytest.mark.asyncio
 async def test_short_and_negative_intervals_are_excluded(hass):
     """Quantization dominates a short interval; a drop is a reboot, not drift."""
     coordinator = _coordinator(hass, _entry())
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
 
     _poll(coordinator, 10_000, NOW)
     _poll(coordinator, 10_030, NOW + timedelta(seconds=30))
-    assert coordinator._drift_interval_count == 0, "sub-60 s interval counted"
+    assert coordinator._system_latch.drift_interval_count == 0, (
+        "sub-60 s interval counted"
+    )
 
     _poll(coordinator, 20, NOW + timedelta(seconds=60))
-    assert coordinator._drift_interval_count == 0, "a reboot polluted the rate"
+    assert coordinator._system_latch.drift_interval_count == 0, (
+        "a reboot polluted the rate"
+    )
 
 
 @pytest.mark.asyncio
 async def test_a_runaway_sample_cannot_move_the_rate_past_the_clamp(hass):
     """An unbounded high rate would suppress detection; the clamp prevents it."""
     coordinator = _coordinator(hass, _entry())
-    coordinator._drift_sum_wall = 100_000.0
-    coordinator._drift_sum_counter = 1_000.0  # 99% "loss"
+    coordinator._system_latch.drift_sum_wall = 100_000.0
+    coordinator._system_latch.drift_sum_counter = 1_000.0  # 99% "loss"
 
-    assert coordinator._drift_rate == MAX_DRIFT
+    assert coordinator._drift_rate(coordinator._system_latch) == MAX_DRIFT
 
-    coordinator._drift_sum_counter = 200_000.0  # counter twice wall time
-    assert coordinator._drift_rate == -MAX_DRIFT
+    coordinator._system_latch.drift_sum_counter = 200_000.0  # counter twice wall time
+    assert coordinator._drift_rate(coordinator._system_latch) == -MAX_DRIFT
 
 
 @pytest.mark.asyncio
 async def test_the_cap_lets_the_estimate_follow_a_firmware_fix(hass):
     """A counter that stops drifting must not be outvoted by its own history."""
     coordinator = _coordinator(hass, _entry())
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
 
     drifting = Router(rate=ZTE_RATE, uptime=0)
     now = _run(coordinator, drifting, start=NOW, polls=200, interval=timedelta(hours=6))
-    assert coordinator._drift_rate == pytest.approx(ZTE_RATE, abs=0.002)
-    assert coordinator._drift_sum_wall <= DRIFT_ACCUMULATOR_CAP
+    assert coordinator._drift_rate(coordinator._system_latch) == pytest.approx(
+        ZTE_RATE, abs=0.002
+    )
+    assert coordinator._system_latch.drift_sum_wall <= DRIFT_ACCUMULATOR_CAP
 
     fixed = Router(rate=0.0, uptime=drifting.counter)
     _run(coordinator, fixed, start=now, polls=200, interval=timedelta(hours=6))
 
-    assert coordinator._drift_rate < ZTE_RATE / 2, "the cap did not let it move"
+    assert coordinator._drift_rate(coordinator._system_latch) < ZTE_RATE / 2, (
+        "the cap did not let it move"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -246,10 +258,10 @@ async def test_restarts_across_a_month_never_move_the_timestamp(hass):
 
     for _ in range(30):
         coordinator = _coordinator(hass, entry)
-        coordinator._stored_last_uptime = carried.get("counter")
-        coordinator._stored_written_at = carried.get("written_at")
-        coordinator._drift_sum_wall = carried.get("wall", 0.0)
-        coordinator._drift_sum_counter = carried.get("counter_sum", 0.0)
+        coordinator._system_latch.stored_counter = carried.get("counter")
+        coordinator._system_latch.stored_written_at = carried.get("written_at")
+        coordinator._system_latch.drift_sum_wall = carried.get("wall", 0.0)
+        coordinator._system_latch.drift_sum_counter = carried.get("counter_sum", 0.0)
 
         now = _run(coordinator, router, start=now, polls=20)
 
@@ -258,10 +270,10 @@ async def test_restarts_across_a_month_never_move_the_timestamp(hass):
         assert coordinator._boot_time == latched, "a restart moved the timestamp"
 
         carried = {
-            "counter": coordinator._stored_last_uptime,
-            "written_at": coordinator._stored_written_at,
-            "wall": coordinator._drift_sum_wall,
-            "counter_sum": coordinator._drift_sum_counter,
+            "counter": coordinator._system_latch.stored_counter,
+            "written_at": coordinator._system_latch.stored_written_at,
+            "wall": coordinator._system_latch.drift_sum_wall,
+            "counter_sum": coordinator._system_latch.drift_sum_counter,
         }
         now += timedelta(hours=8)
         router.advance(8 * 3600)
@@ -278,7 +290,7 @@ async def test_a_counter_drop_is_a_reboot_unconditionally(hass):
     router = Router(uptime=500_000)
     boot = NOW - timedelta(seconds=520_000)
     coordinator = _coordinator(hass, _entry(boot_time=boot.isoformat()))
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
     coordinator._boot_time = boot
     coordinator._last_uptime = 500_000
 
@@ -293,10 +305,10 @@ async def test_a_reboot_inside_an_offline_gap_is_detected(hass):
     """Failure Mode 1: the shortfall test is what sees it."""
     boot = NOW - timedelta(days=6)
     coordinator = _coordinator(hass, _entry(boot_time=boot.isoformat()))
-    coordinator._stored_last_uptime = 432_000
-    coordinator._stored_written_at = NOW - timedelta(days=1)
-    coordinator._drift_sum_wall = 200_000.0
-    coordinator._drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
+    coordinator._system_latch.stored_counter = 432_000
+    coordinator._system_latch.stored_written_at = NOW - timedelta(days=1)
+    coordinator._system_latch.drift_sum_wall = 200_000.0
+    coordinator._system_latch.drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
 
     # Home Assistant was away a day; the router rebooted eight hours ago.
     _poll(coordinator, 28_800, NOW)
@@ -306,7 +318,7 @@ async def test_a_reboot_inside_an_offline_gap_is_detected(hass):
     # twenty minutes late.
     expected = NOW - timedelta(seconds=28_800 / (1 - ZTE_RATE))
     assert coordinator._boot_time == expected.replace(microsecond=0)
-    assert coordinator._startup_reconciled
+    assert coordinator._system_latch.startup_reconciled
 
 
 @pytest.mark.asyncio
@@ -314,8 +326,8 @@ async def test_a_simultaneous_cold_start_is_detected(hass):
     """Failure Mode 2: mains restored, both devices boot together."""
     boot = NOW - timedelta(days=5)
     coordinator = _coordinator(hass, _entry(boot_time=boot.isoformat()))
-    coordinator._stored_last_uptime = 400_000
-    coordinator._stored_written_at = NOW - timedelta(minutes=30)
+    coordinator._system_latch.stored_counter = 400_000
+    coordinator._system_latch.stored_written_at = NOW - timedelta(minutes=30)
 
     _poll(coordinator, 45, NOW)
 
@@ -327,13 +339,13 @@ async def test_a_clean_restart_preserves_the_timestamp_exactly(hass):
     """No reboot, so the stored instant is kept — not recomputed."""
     boot = NOW - timedelta(days=5)
     coordinator = _coordinator(hass, _entry(boot_time=boot.isoformat()))
-    coordinator._stored_last_uptime = 400_000
-    coordinator._stored_written_at = NOW - timedelta(minutes=20)
+    coordinator._system_latch.stored_counter = 400_000
+    coordinator._system_latch.stored_written_at = NOW - timedelta(minutes=20)
 
     _poll(coordinator, 400_000 + 1200 * (1 - ZTE_RATE), NOW)
 
     assert coordinator._boot_time == boot
-    assert coordinator._startup_reconciled
+    assert coordinator._system_latch.startup_reconciled
 
 
 @pytest.mark.asyncio
@@ -341,10 +353,10 @@ async def test_the_plausibility_backstop_catches_a_stale_anchor(hass):
     """The failure the whole design exists to prevent, caught on any poll."""
     stale = NOW - timedelta(days=24)
     coordinator = _coordinator(hass, _entry(boot_time=stale.isoformat()))
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
     coordinator._boot_time = stale
-    coordinator._drift_sum_wall = 200_000.0
-    coordinator._drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
+    coordinator._system_latch.drift_sum_wall = 200_000.0
+    coordinator._system_latch.drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
 
     # Four days of counter against twenty-four days of anchor.
     _poll(coordinator, 4 * 86_400, NOW)
@@ -358,10 +370,10 @@ async def test_a_backward_candidate_is_never_treated_as_a_reboot(hass):
     """A reboot moves the boot instant forward. A backward move cannot be one."""
     boot = NOW - timedelta(hours=1)
     coordinator = _coordinator(hass, _entry(boot_time=boot.isoformat()))
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
     coordinator._boot_time = boot
-    coordinator._drift_sum_wall = 200_000.0
-    coordinator._drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
+    coordinator._system_latch.drift_sum_wall = 200_000.0
+    coordinator._system_latch.drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
 
     # A counter far larger than the anchor allows: the candidate lands earlier.
     _poll(coordinator, 10 * 86_400, NOW)
@@ -384,7 +396,7 @@ async def test_cold_start_retains_a_healthy_anchor(hass):
     _poll(coordinator, counter, NOW)
 
     assert coordinator._boot_time == boot
-    assert coordinator._startup_reconciled
+    assert coordinator._system_latch.startup_reconciled
 
 
 @pytest.mark.asyncio
@@ -422,10 +434,10 @@ async def test_an_unset_clock_defers_rather_than_latching(hass):
 
     _poll(coordinator, 3_600, datetime(1970, 1, 1, 0, 5, tzinfo=UTC))
     assert coordinator._boot_time == boot
-    assert not coordinator._startup_reconciled, "deferred, not skipped"
+    assert not coordinator._system_latch.startup_reconciled, "deferred, not skipped"
 
     _poll(coordinator, 3_600, NOW)
-    assert coordinator._startup_reconciled
+    assert coordinator._system_latch.startup_reconciled
 
 
 @pytest.mark.asyncio
@@ -437,7 +449,7 @@ async def test_an_implausible_counter_is_rejected(hass):
     _poll(coordinator, 20 * 365 * 86_400, NOW)
 
     assert coordinator._boot_time == boot
-    assert not coordinator._startup_reconciled
+    assert not coordinator._system_latch.startup_reconciled
 
 
 @pytest.mark.parametrize("bad", [None, -1, "abc", ""])
@@ -453,7 +465,7 @@ async def test_a_bad_reading_leaves_the_latch_alone(hass, bad):
     data = await coordinator._async_update_data()
 
     assert data["boot_time"] == boot
-    assert not coordinator._startup_reconciled
+    assert not coordinator._system_latch.startup_reconciled
 
 
 @pytest.mark.parametrize("value", ["2026-08-01T10:00:00", "not a datetime", ""])
@@ -472,7 +484,7 @@ async def test_a_naive_or_unparsable_anchor_is_treated_as_absent(hass, value):
 async def test_a_small_backward_step_is_logged_not_absorbed(hass, caplog):
     """Nothing establishes that this counter never steps back. Say so if it does."""
     coordinator = _coordinator(hass, _entry())
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
     coordinator._boot_time = NOW - timedelta(hours=2)
     coordinator._last_uptime = 7_200
 
@@ -488,11 +500,11 @@ async def test_a_move_without_a_counter_drop_is_flagged(hass, caplog):
     coordinator = _coordinator(
         hass, _entry(boot_time=(NOW - timedelta(days=24)).isoformat())
     )
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
     coordinator._boot_time = NOW - timedelta(days=24)
     coordinator._last_uptime = 4 * 86_400
-    coordinator._drift_sum_wall = 200_000.0
-    coordinator._drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
+    coordinator._system_latch.drift_sum_wall = 200_000.0
+    coordinator._system_latch.drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
 
     _poll(coordinator, 4 * 86_400 + 900, NOW)
 
@@ -508,16 +520,18 @@ async def test_a_move_without_a_counter_drop_is_flagged(hass, caplog):
 async def test_the_store_record_carries_the_accumulators(hass):
     """What a restart needs: the counter, when it was written, and the rate."""
     coordinator = _coordinator(hass, _entry())
-    coordinator._startup_reconciled = True
-    coordinator._drift_sum_wall = 100_000.0
-    coordinator._drift_sum_counter = 95_660.0
-    coordinator._drift_rate_min = 0.0424
-    coordinator._drift_rate_max = 0.0473
-    coordinator._drift_interval_count = 15
+    coordinator._system_latch.startup_reconciled = True
+    coordinator._system_latch.drift_sum_wall = 100_000.0
+    coordinator._system_latch.drift_sum_counter = 95_660.0
+    coordinator._system_latch.drift_rate_min = 0.0424
+    coordinator._system_latch.drift_rate_max = 0.0473
+    coordinator._system_latch.drift_interval_count = 15
 
     _poll(coordinator, 43_359, NOW)
 
-    record = coordinator._store.async_delay_save.call_args.args[0]()
+    record = coordinator._store.async_delay_save.call_args.args[0]()[
+        "last_system_uptime"
+    ]
     assert record["last_uptime"] == 43_359
     assert record["written_at"] == NOW.isoformat()
     assert record["sum_wall"] == pytest.approx(100_000.0, abs=1000)
@@ -537,7 +551,7 @@ async def test_an_unusable_store_record_falls_back_cleanly(hass, payload):
         store_cls.return_value.async_load = AsyncMock(return_value=payload)
         await coordinator.async_load_stored_uptime()
 
-    assert coordinator._stored_written_at is None
+    assert coordinator._system_latch.stored_written_at is None
 
 
 @pytest.mark.parametrize(
@@ -551,30 +565,35 @@ async def test_a_failing_store_load_never_reaches_setup(hass, failure):
         store_cls.return_value.async_load = AsyncMock(side_effect=failure)
         await coordinator.async_load_stored_uptime()
 
-    assert coordinator._stored_last_uptime is None
+    assert coordinator._system_latch.stored_counter is None
 
 
 @pytest.mark.asyncio
 async def test_a_full_store_record_is_read_back(hass):
-    """Fields are additive, so an older record without them still loads."""
+    """Fields are additive, so an older block without them still loads."""
     coordinator = _coordinator(hass, _entry())
+    block = {
+        "last_uptime": 43_359,
+        "written_at": "2026-09-01T15:10:00+00:00",
+        "sum_wall": 378_494.2,
+        "sum_counter": 362_079.5,
+        "rate_min": 0.0424,
+        "rate_max": 0.0473,
+        "interval_count": 15,
+    }
     with patch("custom_components.zte_router_5g.coordinator.Store") as store_cls:
         store_cls.return_value.async_load = AsyncMock(
-            return_value={
-                "last_uptime": 43_359,
-                "written_at": "2026-09-01T15:10:00+00:00",
-                "sum_wall": 378_494.2,
-                "sum_counter": 362_079.5,
-                "rate_min": 0.0424,
-                "rate_max": 0.0473,
-                "interval_count": 15,
-            }
+            return_value={"last_system_uptime": block}
         )
         await coordinator.async_load_stored_uptime()
 
-    assert coordinator._stored_last_uptime == 43_359
-    assert coordinator._stored_written_at == datetime(2026, 9, 1, 15, 10, tzinfo=UTC)
-    assert coordinator._drift_rate == pytest.approx(0.0434, abs=0.0005)
+    assert coordinator._system_latch.stored_counter == 43_359
+    assert coordinator._system_latch.stored_written_at == datetime(
+        2026, 9, 1, 15, 10, tzinfo=UTC
+    )
+    assert coordinator._drift_rate(coordinator._system_latch) == pytest.approx(
+        0.0434, abs=0.0005
+    )
 
 
 @pytest.mark.asyncio
@@ -593,7 +612,7 @@ async def test_the_store_is_keyed_to_the_entry(hass):
 async def test_the_counter_is_flushed_on_the_interval_not_every_poll(hass):
     """Write economy: the accumulators update in memory, not on disk."""
     coordinator = _coordinator(hass, _entry())
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
     coordinator._boot_time = NOW - timedelta(hours=1)
 
     _poll(coordinator, 3_600, NOW)
@@ -610,7 +629,7 @@ async def test_the_counter_is_flushed_on_the_interval_not_every_poll(hass):
 async def test_a_latch_drops_the_legacy_counter_from_entry_data(hass):
     """The key that caused the original defect must not survive the fix."""
     coordinator = _coordinator(hass, _entry(last_uptime=60))
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
     coordinator._boot_time = NOW - timedelta(days=5)
     coordinator._last_uptime = 400_000
 
@@ -629,11 +648,11 @@ async def test_a_latch_drops_the_legacy_counter_from_entry_data(hass):
 async def test_the_drift_picture_is_published(hass):
     """Every constant here came from one device; this is how another reports."""
     coordinator = _coordinator(hass, _entry())
-    coordinator._drift_sum_wall = 378_494.0
-    coordinator._drift_sum_counter = 362_079.0
-    coordinator._drift_rate_min = 0.0424
-    coordinator._drift_rate_max = 0.0473
-    coordinator._drift_interval_count = 15
+    coordinator._system_latch.drift_sum_wall = 378_494.0
+    coordinator._system_latch.drift_sum_counter = 362_079.0
+    coordinator._system_latch.drift_rate_min = 0.0424
+    coordinator._system_latch.drift_rate_max = 0.0473
+    coordinator._system_latch.drift_interval_count = 15
 
     published = coordinator.uptime_diagnostics
     assert published["drift_rate_pct"] == pytest.approx(4.337, abs=0.01)
@@ -641,8 +660,8 @@ async def test_the_drift_picture_is_published(hass):
     assert published["drift_intervals"] == 15
     assert published["drift_deficit_seconds"] == 16_415
 
-    state = coordinator.uptime_state
-    assert "boot_time" in state
+    state = coordinator.uptime_state["latches"]["last_system_uptime"]
+    assert "anchor" in state
     assert "stored_written_at" in state
     assert state["startup_reconciled"] is False
 
@@ -693,7 +712,7 @@ async def test_the_real_recorder_series_produces_no_false_alarm(hass):
     # One latch for the first poll, one for the reboot. Anything more is the
     # drift moving the timestamp, which is the defect being fixed.
     assert len(moves) <= 2, f"timestamp moved {len(moves)} times: {moves}"
-    assert coordinator._drift_rate == pytest.approx(
+    assert coordinator._drift_rate(coordinator._system_latch) == pytest.approx(
         fixture["measured"]["aggregate_drift_rate"], abs=0.01
     )
 
@@ -708,13 +727,13 @@ async def test_a_store_record_dated_ahead_of_now_falls_back(hass):
     """Only reachable from a clock that has since been corrected backwards."""
     boot = NOW - timedelta(days=4)
     coordinator = _coordinator(hass, _entry(boot_time=boot.isoformat()))
-    coordinator._stored_last_uptime = 400_000
-    coordinator._stored_written_at = NOW + timedelta(hours=2)
+    coordinator._system_latch.stored_counter = 400_000
+    coordinator._system_latch.stored_written_at = NOW + timedelta(hours=2)
 
     _poll(coordinator, 4 * 86_400 * (1 - ZTE_RATE), NOW)
 
     assert coordinator._boot_time == boot, "a healthy anchor was discarded"
-    assert coordinator._startup_reconciled
+    assert coordinator._system_latch.startup_reconciled
 
 
 @pytest.mark.asyncio
@@ -723,8 +742,8 @@ async def test_a_store_record_dated_ahead_still_relatches_a_stale_anchor(hass):
     coordinator = _coordinator(
         hass, _entry(boot_time=(NOW - timedelta(days=24)).isoformat())
     )
-    coordinator._stored_last_uptime = 400_000
-    coordinator._stored_written_at = NOW + timedelta(hours=2)
+    coordinator._system_latch.stored_counter = 400_000
+    coordinator._system_latch.stored_written_at = NOW + timedelta(hours=2)
 
     _poll(coordinator, 4 * 86_400, NOW)
 
@@ -748,10 +767,10 @@ async def test_the_plausibility_check_skips_a_future_anchor(hass):
     """It cannot divide by a non-positive elapsed, and must not try."""
     ahead = NOW + timedelta(hours=1)
     coordinator = _coordinator(hass, _entry())
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
     coordinator._boot_time = ahead
-    coordinator._drift_sum_wall = 200_000.0
-    coordinator._drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
+    coordinator._system_latch.drift_sum_wall = 200_000.0
+    coordinator._system_latch.drift_sum_counter = 200_000.0 * (1 - ZTE_RATE)
 
     _poll(coordinator, 3_600, NOW)
 
@@ -769,11 +788,11 @@ async def test_the_latched_instant_is_corrected_for_drift(hass, rate):
     the plausibility check's tolerance independent of the device.
     """
     coordinator = _coordinator(hass, _entry())
-    coordinator._startup_reconciled = True
+    coordinator._system_latch.startup_reconciled = True
     coordinator._boot_time = NOW - timedelta(days=30)
     coordinator._last_uptime = 500_000
-    coordinator._drift_sum_wall = 200_000.0
-    coordinator._drift_sum_counter = 200_000.0 * (1 - rate)
+    coordinator._system_latch.drift_sum_wall = 200_000.0
+    coordinator._system_latch.drift_sum_counter = 200_000.0 * (1 - rate)
 
     counter = 4 * 86_400
     _poll(coordinator, counter, NOW)

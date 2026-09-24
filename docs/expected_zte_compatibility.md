@@ -22,6 +22,8 @@ ZRM is designed specifically as a **cellular WAN, signal, data usage, and SMS mo
 
 _The ZTE MC7010 is currently the ONLY device verified on physical hardware by the integration maintainers._
 
+On the MC7010, Device Uptime reads the router's own uptime, `system_uptime`. A router that does not answer that key falls back to the data session's counter, so its Device Uptime moves at each data reconnect, the same as Connection Uptime. Turning the **Data Connection** switch off or on takes the MC7010 offline for up to about 40 s, and other controls are refused until it answers again.
+
 ---
 
 ## 🟡 Expected Compatible Hardware (`goform` API Family)

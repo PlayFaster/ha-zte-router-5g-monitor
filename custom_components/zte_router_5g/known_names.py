@@ -686,6 +686,9 @@ KNOWN_NAMES: Final[frozenset[str]] = frozenset(
         "success",
         "syn_done",
         "sysIdleTimeToSleep",
+        # Answered by the MC7010 on 2026-09-14 and 2026-09-23, with a session.
+        # Not in either router's web page code, so discovery never mined it.
+        "system_uptime",
         "systime_mode",
         "tcp_mss",
         "thermal_control_enable",

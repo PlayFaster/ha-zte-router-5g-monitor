@@ -947,6 +947,11 @@ def test_every_allowed_suppression_states_a_reason() -> None:
 # nothing, and an alias for it was added to the MC888 work before anyone
 # noticed — a second key in every request feeding the same nothing.
 POLLED_WITHOUT_AN_ENTITY: dict[str, str] = {
+    "flux_system_uptime": (
+        "Device uptime fallback. The coordinator's device latch reads it through "
+        "`const.DEVICE_UPTIME_KEYS`, a tuple this per-module sweep does not "
+        "follow across files. Not yet seen answered on any device."
+    ),
     "network_type": (
         "Contract key. `coordinator.CORE_CONCEPTS` judges payload drift on it, "
         "and `_classify_session` needs it to tell a dead session from a quiet "

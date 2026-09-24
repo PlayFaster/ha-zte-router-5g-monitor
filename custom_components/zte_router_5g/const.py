@@ -284,6 +284,23 @@ OUTAGE_CHECK_TIMEOUT = 2
 OUTAGE_REASON_DATA_CONNECT = "data_connect"
 OUTAGE_REASON_DATA_DISCONNECT = "data_disconnect"
 OUTAGE_REASON_REBOOT = "reboot"
+# The router's uptime, in preference order. `system_uptime` is the device's
+# own uptime: measured on the MC7010 on 2026-09-23 it ran on across a data
+# reconnect and reset only on reboot. `realtime_time` counts the data session:
+# blank or 0 while data is off, restarting at each reconnect. It is the
+# fallback for a device that answers no system key. `flux_system_uptime` is
+# not observed on any device; it follows the `flux_` spelling the MC888 Pro
+# uses for its session counter. The device latch picks one key per run; see
+# `ZTERouterDataUpdateCoordinator._device_uptime_seconds`.
+DEVICE_UPTIME_KEYS: tuple[str, ...] = (
+    "system_uptime",
+    "flux_system_uptime",
+    "realtime_time",
+    "flux_realtime_time",
+)
+# The data session's counter, feeding Connection Uptime and Connection Duration.
+CONNECTION_UPTIME_KEYS: tuple[str, ...] = ("realtime_time", "flux_realtime_time")
+
 # The `ppp_status` values that mean the data connection is up.
 DATA_CONNECTED_STATES: frozenset[str] = frozenset(
     {"ppp_connected", "ipv6_connected", "ipv4_ipv6_connected"}

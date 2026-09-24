@@ -95,6 +95,7 @@ _CORE_PARAMS: list[str] = [
     "network_type",
     "signalbar",
     "wa_inner_version",
+    "system_uptime",
     "realtime_time",
     "wan_connect_status",
     # --- Signal and radio ---
@@ -209,6 +210,7 @@ _CORE_PARAMS: list[str] = [
     "flux_realtime_tx_thrpt",
     "flux_realtime_rx_thrpt",
     "flux_realtime_time",
+    "flux_system_uptime",
     # These three feed `DATA_LIMIT_SETTING`, an all-or-nothing form the router
     # refuses if a field is missing. A wrong spelling here does not blank a
     # sensor, it makes the write impossible.
@@ -528,7 +530,7 @@ _TOKEN_READS: dict[str, tuple[str, ...]] = {
 _CONTRACT_CONCEPTS: dict[str, tuple[str, ...]] = {
     "network_type": ("network_type", "strBearer"),
     "signal_bars": ("signalbar",),
-    "uptime": ("realtime_time", "flux_realtime_time"),
+    "uptime": ("system_uptime", "realtime_time", "flux_realtime_time"),
     "connection_state": ("wan_connect_status", "ppp_status"),
 }
 

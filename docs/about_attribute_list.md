@@ -108,7 +108,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 | Data Connection | Switch | `data_connection` | Turns the router's mobile data connection on or off, like the switch in the router's own web page. Home Assistant keeps reaching the router over your network while data is off. Turning it off or on can take up to a minute, and other controls are refused until it completes. |
 
-## System (37)
+## System (39)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -119,9 +119,11 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Web Page Auto-Wake | Binary sensor | `web_wake` | Whether the router's web management interface automatically wakes from sleep when accessed. |
 | APN Interface Version | Sensor | `apn_interface_version` | Which version of the router's own APN configuration format is in use. Only of interest when an APN change is not taking effect. |
 | Battery | Sensor | `battery_value` | Battery charge level for portable ZTE models. Mains-powered units lacking a battery report 100%. |
+| Connection Duration | Sensor | `connection_duration` | How long the router's current mobile data connection has been up. The Connection Uptime sensor expresses the same fact as a timestamp. Empty while data is off. |
 | Connection Failure Count | Sensor | `connection_failure_count` | How many times the router has failed to establish the mobile data connection since it last restarted. A rising count with the connection apparently up means it is dropping and recovering. |
+| Connection Uptime | Sensor | `connection_uptime` | The moment the router's current mobile data connection started, held steady like Device Uptime. It moves each time the data connection reconnects, and is empty while data is off. |
 | Firmware Update State | Sensor | `current_upgrade_state` | Whether a firmware update is running. The value is the router's own, reported unchanged. |
-| Device Uptime | Sensor | `device_uptime` | The moment the router last booted, held steady between reboots rather than recalculated each poll. It only moves when the router's own uptime counter drops, so a genuine restart is easy to trigger automations on. |
+| Device Uptime | Sensor | `device_uptime` | The moment the router last booted, held steady between reboots rather than recalculated each poll. It only moves when the router's own uptime counter drops, so a genuine restart is easy to trigger automations on. A router that does not report its own uptime shows its last data connection instead, the same as Connection Uptime. |
 | Firmware Changes | Sensor | `firmware_changes` | How many times the router's firmware version has changed since this integration started watching. The version sensor itself keeps no long-term history, so this is what makes an operator's silent update visible months later. The versions and dates are on the Firmware Version sensor's history attribute. |
 | IMEI | Sensor | `imei` | International Mobile Equipment Identity - the modem's unique 15-digit hardware serial, used by networks to identify the device itself rather than the SIM. This integration also uses it as the stable identity for your router, so entity history survives an IP change. |
 | Modem State | Sensor | `modem_state` | What the modem itself reports about its own startup, separately from whether a connection is up. Useful when the router answers but nothing is passing traffic. |

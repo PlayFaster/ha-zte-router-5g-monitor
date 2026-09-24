@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.2-dev7\] - 2026-09-24 - Device Uptime from system_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei](#342-dev7---2026-09-24---device-uptime-from-system_uptime-connection-uptime-sensors-uptime-latch-ported-from-huawei)
   - [\[3.4.2-dev6\] - 2026-09-23 - Follow-Up Refresh After an Unsettled Data Window; Counter Reset Wording Corrected](#342-dev6---2026-09-23---follow-up-refresh-after-an-unsettled-data-window-counter-reset-wording-corrected)
   - [\[3.4.2-dev5\] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics](#342-dev5---2026-09-23---data-connection-turn-on-outage-window-window-waits-for-the-drop-data-connection-diagnostics)
   - [\[3.4.2-dev3\] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test\_guards.md](#342-dev3---2026-09-23---agentsmd-guard-test-table-trimmed-rationale-moved-to-docstest_guardsmd)
@@ -309,6 +310,66 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.2-dev7] - 2026-09-24 - Device Uptime from system_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei
+
+### Summary
+
+Device Uptime and Uptime Duration read `realtime_time`, which is the data session's counter, not the router's uptime. On the MC7010 it reads blank or 0 while data is off and counts from each reconnect, so every data reconnect moved the reported boot time. Kees48's MC888 Pro downloads show the same: the boot time equalled the reconnect time. The router's uptime is `system_uptime`. Measured on the MC7010 on 2026-09-23, it read 1400 with data off and 1479 after data was turned on and 78 s of wall time had passed, while `realtime_time` went from blank to 71; a reboot resets it. Device Uptime and Uptime Duration now read `system_uptime`, and two new sensors, Connection Uptime and Connection Duration, report the data session. The uptime latch now runs twice, once per counter, and for that it takes the structure the Huawei project already uses for its three latches.
+
+### Changed
+
+- **Device Uptime and Uptime Duration read `system_uptime`.** The keys are tried in the order `system_uptime`, `flux_system_uptime`, `realtime_time`, `flux_realtime_time` (`DEVICE_UPTIME_KEYS`). The first that answers is kept for the run, and a blank reading of it is no reading. Falling back per poll would switch counters mid-run: a booting router can answer `system_uptime` blank while `realtime_time` answers, and the switch would read as a counter drop and a reboot that did not happen. A router that answers no system key uses the session counter, as before; on such a router Device Uptime equals Connection Uptime. Whether the MC888 Pro answers `system_uptime` is not known. The key chosen is published as `coordinator.uptime.source` in the diagnostics download.
+- **Uptime Duration's entity key stays `realtime_time`**, so its entity ID survives the change of source.
+- **On upgrade Device Uptime steps once**, from the last data reconnect to the router's boot, when the system latch cold-starts against `system_uptime`.
+
+### Added
+
+- **Connection Uptime** (`connection_uptime`, enabled): the moment the current data connection started, held by its own latch. Empty while data is off.
+- **Connection Duration** (`connection_duration`, disabled by default): the data session counter, `realtime_time` / `flux_realtime_time`. Empty while data is off.
+- **`system_uptime` and `flux_system_uptime` are requested in the batch poll.** `system_uptime` joins the `uptime` contract concept; it needs a session, measured blank without one. `flux_system_uptime` has not been seen answered on any device and is requested as a fallback only.
+- **`system_uptime` added to `KNOWN_NAMES`**, so discovery asks for it. It appears in neither router's web-page code, which is why weeks of discovery on the MC888 Pro never asked; the MC7010 answered it on 2026-09-14 and 2026-09-23.
+
+### Uptime Latch Ported from the Huawei Project
+
+The latch took months of iterations, and the Huawei project already runs it for three counters. ZTE's single latch is replaced by Huawei's structure, ported verbatim:
+
+- `_UptimeLatch` is a dataclass holding one latch's state. Two instances run: `_system_latch` (`boot_time`, store block `last_system_uptime`) and `_conn_latch` (`connection_start`, store block `last_conn_uptime`). Nothing is shared between them.
+- The coordinator's latch methods take the latch as a parameter. `_drift_rate`, `_record_drift_sample`, `_derived_boot`, `_apply_uptime`, `_apply_runtime_uptime`, `_reconcile_startup_uptime`, `_floor_test`, `_shortfall_test`, `_cold_start_implausible`, `_check_anchor_plausible`, `_finish_startup`, `_log_reconciliation`, `_latch_boot_time`, `_maybe_persist_counter`, `_write_counter`, `_restore_latch`, `uptime_diagnostics` and `_latch_rate_pct` are identical to Huawei's, compared line by line. `_store_record` and `uptime_diagnostics` differ in docstring wording only. `async_load_stored_uptime` adds the legacy-record step below. `uptime_state` adds `source`.
+- `_boot_time` and `_last_uptime` stay as property views onto the system latch, as Huawei keeps its six older names.
+- Huawei's per-poll loop is `_apply_uptime_readings`, verbatim apart from being a method. The anchors are written to `entry.data` once per poll, and the legacy `last_uptime` key is dropped there.
+
+What changes in ZTE's behavior with the port, all taken from Huawei:
+
+- A stored counter without a usable `written_at` now takes the floor test (did the counter go backwards?) rather than the cold-start comparison.
+- Log lines name the latch, "System boot time" or "Connection start time", and say "reset" where ZTE's said "reboot".
+- The store is one record with a block per latch. The flat record written before this version came from `realtime_time`, now the connection latch's counter, so it is restored into that latch; the system latch starts with nothing learned.
+- `coordinator.uptime` in the diagnostics download becomes Huawei's shape: the system latch's drift summary, `source`, and a `latches` block per latch.
+
+The algorithm and its constants are unchanged; every constant was already identical in the two projects. Huawei's `pauses` handling and floor test serve its `TotalConnectTime` counter; no ZTE latch pauses, and those paths are covered by tests that drive them directly rather than removed from the shared code.
+
+A mixin that ran the old ZTE latch twice was written first in this version and replaced before release, because it gave ZTE a third shape of the mechanism beside Huawei's.
+
+### Hardware Check
+
+- **[G] Reboot and recovery reads `system_uptime`**, in `DEVICE_UPTIME_KEYS` order, for "uptime reset". It read `realtime_time`, which is 0 before and blank after a reboot with data off, and failed on a router that had rebooted.
+- **The diagnostics check treats `connection_start` as volatile**, as it already treats `boot_time` through its `_time` suffix. Both are derived from a drifting counter, and two passes seconds apart differed by 3 s.
+- **[G] leaves the data-session keys out of its recovery baseline** (`DATA_SESSION_KEYS`): the `realtime_*` and `flux_realtime_*` counters, `wan_ipaddr` and `ipv6_wan_ipaddr`. Under manual dial a reboot leaves data off, and those keys stay blank; counted as lost, they failed the check.
+
+### Documentation
+
+- README: entity counts 123 → 125 and System 47 → 49, Connection Uptime and Connection Duration in the System row and the history table, and one note in the Auto-Reboot example: with Connection Mode Status at `manual_dial` the router does not reconnect data after a reboot.
+- `docs/all_sensors.md`, `docs/about_attribute_list.md`: the two new sensors and Device Uptime's amended `about` text.
+- `docs/expected_zte_compatibility.md`: which uptime key the MC7010 uses, and that the Data Connection switch takes it offline in both directions.
+- The device behaviour reference in the shared notes gains a section on data connection and uptime counters, with the measured outage timings for both dial modes, the reboot timings, the uptime keys, and what Kees48's MC888 Pro downloads show. Three hypotheses are recorded as closed.
+
+### Tests
+
+- The existing latch tests address the system latch's fields; their assertions are unchanged apart from the store record's and `uptime_state`'s new shapes.
+- Source selection: `system_uptime` preferred; the session counter used when no system key answers; a blank reading of the chosen key is no reading; nothing chosen while every key is blank.
+- Both latches: written in one record; the pre-dev7 flat record restored into the connection latch; each writes its own `entry.data` key and drops `last_uptime`; each names itself in the log; the connection start moves at a reconnect and is empty while data is off.
+- The four uptime sensors, `uptime_at_change` reading the system counter, and the download's `source` and connection block.
+- The floor test, a pausing latch's rate, one-sided plausibility and floor path, an anchorless latch, and unusable store blocks.
 
 ## [3.4.2-dev6] - 2026-09-23 - Follow-Up Refresh After an Unsettled Data Window; Counter Reset Wording Corrected
 

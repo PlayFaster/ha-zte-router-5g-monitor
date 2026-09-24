@@ -421,7 +421,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **123 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **125 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -431,7 +431,7 @@ This integration provides **123 entities** (depending on your firmware) organize
 
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
-| ⚙️ **System** | 47 | 35 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 30, including the five temperature sensors, Uptime Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
+| ⚙️ **System** | 49 | 37 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, Connection Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 31, including the five temperature sensors, Uptime Duration, Connection Duration, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
 | 📶 **Signal** | 56 | 51 Sensors, 1 Binary Sensor, 3 Selects, 1 Switch | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, **Data Connection**, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
 | 📈 **Data** | 15 | 14 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 4: Monthly Upload/Download/Total (Legacy GB sensors), Data Limit Switch |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
@@ -544,6 +544,7 @@ The following sensors have **no LTS** to avoid unnecessary database growth:
 | Upload / Download Speed | Instantaneous readings — history at poll intervals has limited analytical value |
 | Session Sent / Received | Resets on every reconnect — not meaningful for long-term trends |
 | Uptime Duration | Resets on reboot; predictable pattern adds no insight |
+| Connection Duration | Resets at each data reconnect; Connection Uptime shows the same as a timestamp |
 | Battery | Always 100% when plugged in |
 | Legacy RSSI / RSCP (disabled) | Legacy metrics disabled by default |
 | Projected Cycle Usage | An estimate of where the cycle ends up, useful now rather than as a history |
@@ -1542,6 +1543,8 @@ actions:
 > [!WARNING]
 >
 > This reboots your router unattended. Keep the trigger duration generous and `mode: single`, or a flapping connection can put the router into a reboot loop that stops it recovering on its own.
+
+With **Connection Mode Status** at `manual_dial`, the router does not reconnect data after a reboot. Turn **Data Connection** back on, or set the router's connection mode to automatic.
 
 ```yaml
 alias: "ZTE Reboot: Auto-Reboot on Prolonged Outage"

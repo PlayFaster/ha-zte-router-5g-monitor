@@ -97,6 +97,7 @@ try:
     )
     from custom_components.zte_router_5g.const import (
         APN_PROFILE_SLOTS,
+        DEVICE_UPTIME_KEYS,
         DISCOVERY_CANDIDATES,
         DISCOVERY_SETTLE_SECONDS,
         OUTAGE_CAP_DATA_DISCONNECT,
@@ -1820,16 +1821,62 @@ async def check_delete_all_sms(api: ZTERouterAPI, report: Report) -> None:
     )
 
 
+# Keys that describe the data session, not the router. They are blank while
+# data is off, and under manual dial a reboot leaves data off: measured on the
+# MC7010 on 2026-09-23, both reboots returned `ppp_disconnected`. Counted as
+# lost, they failed the recovery check on a router that had recovered.
+DATA_SESSION_KEYS = frozenset(
+    {
+        "realtime_time",
+        "realtime_tx_bytes",
+        "realtime_rx_bytes",
+        "realtime_tx_thrpt",
+        "realtime_rx_thrpt",
+        "flux_realtime_time",
+        "flux_realtime_tx_bytes",
+        "flux_realtime_rx_bytes",
+        "flux_realtime_tx_thrpt",
+        "flux_realtime_rx_thrpt",
+        "wan_ipaddr",
+        "ipv6_wan_ipaddr",
+    }
+)
+
+
+def settled_keys(payload: dict[str, Any]) -> set[str]:
+    """The keys carrying a value, less those that follow the data session."""
+    return {
+        key
+        for key, value in payload.items()
+        if value not in (None, "") and key not in DATA_SESSION_KEYS
+    }
+
+
+def router_uptime(payload: dict[str, Any]) -> str | None:
+    """The router's own uptime from a read, in `DEVICE_UPTIME_KEYS` order.
+
+    `realtime_time` is the data session's counter. It read 0 before and blank
+    after a reboot with data off, which failed "uptime reset" on a router that
+    had rebooted. It is kept as the last fallback for a device that answers no
+    system key.
+    """
+    for key in DEVICE_UPTIME_KEYS:
+        value = payload.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
 async def _core_baseline(api: ZTERouterAPI) -> set[str]:
     """Return the core keys that carry a value while the router is settled.
 
     The raw count of empty keys says almost nothing on this device: a healthy
     MC7010 answers ~25 of 80 core keys empty, because unused APN slots and the
     5G metrics are legitimately blank on LTE. Only the *delta* against a
-    settled reading identifies a key that has genuinely gone missing.
+    settled reading identifies a key that has genuinely gone missing. The
+    data-session keys are left out; see `DATA_SESSION_KEYS`.
     """
-    settled = await api.get_all_data()
-    return {key for key, value in settled.items() if value not in (None, "")}
+    return settled_keys(await api.get_all_data())
 
 
 async def _watch_recovery(
@@ -1929,8 +1976,8 @@ async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
     print(_cyan("\n[G] Reboot and recovery"))
 
     baseline = await _core_baseline(api)
-    before = await api.get_params(["realtime_time"])
-    uptime_before = str(before.get("realtime_time") or "?")
+    before = await api.get_params(list(DEVICE_UPTIME_KEYS))
+    uptime_before = router_uptime(before) or "?"
     print(f"    uptime now: {uptime_before}s")
     print(f"    baseline  : {len(baseline)} core keys carry a value when settled")
     print("    cost      : the connection drops for a few minutes")
@@ -1965,8 +2012,8 @@ async def check_reboot(api: ZTERouterAPI, report: Report) -> None:
         await asyncio.sleep(REBOOT_POLL)
         try:
             await api.login()
-            uptime_after = str(
-                (await api.get_params(["realtime_time"])).get("realtime_time")
+            uptime_after = (
+                router_uptime(await api.get_params(list(DEVICE_UPTIME_KEYS))) or "?"
             )
             break
         except Exception:  # noqa: BLE001 - absence is expected while it boots

@@ -1044,13 +1044,16 @@ async def test_reboot_detection_boundary(
     ):
         await async_setup_entry(mock_hass, mock_config_entry)
         coordinator = mock_config_entry.runtime_data
+        # Both latches write the store on this poll; the mocked hass cannot
+        # schedule two debounced saves on a real `Store`.
+        coordinator._store = MagicMock()
         original_boot = datetime(2026, 1, 1, 0, 0, 0, tzinfo=UTC)
         coordinator._boot_time = original_boot
         coordinator._last_uptime = 100
         # This case is about the running-session margin, so startup
         # reconciliation is already done. The first poll of a session takes the
         # startup path instead, which is covered in `test_uptime_latch.py`.
-        coordinator._startup_reconciled = True
+        coordinator._system_latch.startup_reconciled = True
 
         coordinator.api.get_all_data = AsyncMock(
             return_value={"realtime_time": str(uptime), "network_type": "LTE"}
