@@ -876,12 +876,16 @@ REFUSABLE_NAMES: Final[frozenset[str]] = frozenset(
 )
 
 
-# Names another project expects from ZTE hardware we do not own.
+# Names no device has been seen to answer, probed as candidates.
 #
-# Taken from `Kajkac/ZTE-MC-Home-assistant-repo`'s `SENSOR_NAMES` map on
+# Most were taken from `Kajkac/ZTE-MC-Home-assistant-repo`'s `SENSOR_NAMES` map on
 # 2026-09-02, which carries 219 names shared across its MC801, MC888, MC889
 # and G5 Ultra support. Of those, 168 already appear above and 30 are names
-# this integration polls directly, leaving the 21 here.
+# this integration polls directly, leaving 21. Five more, added 2026-09-24, are
+# `flux_` spellings of names the MC7010 answered in the variant probe
+# (`.notes/info/zte_data_elements/variant_name_probe_20260924.md`): the MC888
+# Pro spells its session and monthly counters with `flux_`, and these ask
+# whether it spells the new counters that way too. Each is marked below.
 #
 # Kept as a separate set because the evidence behind them is weaker than for
 # `KNOWN_NAMES`: nothing here has been seen answered by a device. Probing them
@@ -901,6 +905,11 @@ EXPECTED_NAMES: Final[frozenset[str]] = frozenset(
         "Nr_pci",
         "Nr_signal_strength",
         "Nr_snr",
+        "flux_device_uptime",  # flux_ variant, 2026-09-24
+        "flux_ppp_connect_time",  # flux_ variant, 2026-09-24
+        "flux_total_rx_bytes",  # flux_ variant, 2026-09-24
+        "flux_total_time",  # flux_ variant, 2026-09-24
+        "flux_total_tx_bytes",  # flux_ variant, 2026-09-24
         "ip_passthrough_enabled",
         "nr_rsrp",
         "nr_rsrq",

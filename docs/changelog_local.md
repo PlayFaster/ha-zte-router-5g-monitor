@@ -353,6 +353,7 @@ All changes to this project will be documented in this file. This is the detaile
 ### Added
 
 - **Seven names added to `KNOWN_NAMES`**, found answering on the MC7010 by a probe of 4,399 names derived from those it already answers: `ppp_connect_time`, `total_rx_bytes`, `total_tx_bytes`, `total_time`, `device_uptime`, `nr_ca_pcell_bandwidth` and `wan_netmask`. Discovery now asks every device for them. No sensor reads them. Method and findings: `.notes/info/zte_data_elements/variant_name_probe_20260924.md`.
+- **Five `flux_` variants added to `EXPECTED_NAMES`**: `flux_total_rx_bytes`, `flux_total_tx_bytes`, `flux_total_time`, `flux_ppp_connect_time` and `flux_device_uptime`. No device has answered them; the MC888 Pro spells its session and monthly counters with `flux_`, and discovery now asks whether it spells these the same way. Kept in `EXPECTED_NAMES`, which holds names no device has been seen to answer, each marked with its source; the header comment now covers both sources.
 
 ### Hardware Check
 
