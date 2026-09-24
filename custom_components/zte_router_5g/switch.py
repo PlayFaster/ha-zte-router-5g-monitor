@@ -16,7 +16,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import ZTEConnectionError, ZTERouterExpectedUnavailableError
+from .api import ZTERouterExpectedUnavailableError
 from .const import (
     CONF_STOP_POLLING,
     DATA_CONNECTED_STATES,
@@ -342,21 +342,7 @@ class ZTERouterSwitch(
         passes it on.
         """
         try:
-            try:
-                return await setter(self.coordinator.api, state, self.coordinator.data)
-            except ZTEConnectionError as err:
-                # PROTOTYPE 3.4.3: one retry of a refused write, rebuilt from
-                # scratch so it carries a fresh login and a fresh `AD`. A
-                # replay of the old payload was measured to fail.
-                if "Router rejected" not in str(err):
-                    raise
-                _LOGGER.warning(
-                    "%s: %s refused, retrying once: %s",
-                    self._entry.title,
-                    self.entity_description.key,
-                    err,
-                )
-                return await setter(self.coordinator.api, state, self.coordinator.data)
+            return await setter(self.coordinator.api, state, self.coordinator.data)
         except Exception as err:
             if isinstance(err, ZTERouterExpectedUnavailableError):
                 raise expected_outage_error(err) from err

@@ -144,9 +144,11 @@ It cannot simply be added to that list, because **`{"result":"failure"}` is also
 
 Consequence, verified on hardware 2026-07-30: reads recover from a stolen session and **writes did not**. Signing into the router's web page ended Home Assistant's session, and every write then failed until some read happened to trip the all-empty rule and re-login. The user-visible form was a switch that failed on every attempt until **Refresh Now** was pressed.
 
-The fix is ordering, not detection. `_ensure_session()` performs one short authenticated read **before** the write derives its `AD`, so `_request`'s existing read-side recovery does the work. It is called from `get_ad()`, the single choke point every write passes through.
+The fix is ordering, not detection. Since 3.4.3-dev2 `ad_suffix()` **logs in before every write** except `LOGOUT`, then `_ensure_session()` reads `loginfo` as before. Measured on an MC7010 on 2026-09-24: after a login from another device took the session, `loginfo` still answered `ok` for several seconds, and 6 of 99 writes sent on the old session were refused. With a login before each write, none of 145 were, across ten phone takeovers. A login takes about 120 ms, and 30 back-to-back login-and-write cycles were all accepted.
 
-Recovering _after_ a refused write was implemented first and **verified not to work** — the session was renewed, the payload replayed, and the router refused it again. The reason is not established. A plausible explanation (that `RD` rotates on re-login, staling the `AD`) was **disproved** by `scripts/hardware_check.py`, which observed `RD` surviving a re-login. Do not reinstate post-hoc retry on the strength of a fresh theory; run the script.
+**Logins are serialised.** Two logins started together from one client had one refused with result `3` in each of three pairs; ten pairs run one after the other were all accepted. `login()` holds `_login_lock`, and a caller that waited logs in again rather than reusing the session just made.
+
+**A refused write is rebuilt and sent once more**, for the commands that set a complete state (`_retry_once_on_refusal`, listed in `RETRIED_ON_REFUSAL`). Recovering _after_ a refused write was implemented first and failed on hardware: the session was renewed and the **same payload** replayed. On 2026-09-24 that difference was measured directly. Replaying the old payload, `AD` included, was accepted 7 times in 17; building the write again, with a fresh login and a fresh `AD`, was accepted 20 times in 20, three of them after a phone takeover. Only an explicit `{"result":"failure"}` triggers it: a timeout may mean the write landed. `SEND_SMS` and `DELETE_SMS` are never retried, and `reboot()` keeps its own single retry.
 
 ### Proactive session reset
 
@@ -182,7 +184,7 @@ MD5 here is a vendor protocol requirement, not a security choice (`# noqa: S324`
 
 **`RD` is not static, and no retry decision may assume it is.** Measured on MC7010 firmware `V1.0.0B03` (2026-07-29), `cmd=RD` returned the identical value across logins and across a deliberately invalidated session, and an earlier revision of this document concluded from that the token is constant per router. Measured again on 2026-09-13, it is not: two consecutive reads return the same value and a three-second pause changes nothing, but **a write changes it**, and a browser capture of three deletes in one session carries three different `RD` values. What triggers the rotation is not established from five samples.
 
-Nothing depends on the answer, because **no recovery path re-sends a write.** `replayable` excludes every write and the one retry loop in a write path re-_reads_; `test_no_recovery_path_ever_re_sends_a_write` asserts it. A resent `SEND_SMS` delivers the message twice and the response cannot say whether it did.
+Nothing depends on the answer, because **no recovery path replays a write's payload.** `replayable` excludes every write, and `test_no_recovery_path_ever_re_sends_a_write` asserts it. The one-retry wrapper does not replay: it builds the write again, deriving a new `AD` from a fresh `RD`, and it never wraps `SEND_SMS`, whose resend would deliver the message twice with no way to tell.
 
 **Both inputs are required, and an absent one must raise rather than hash to a token.** A missing `wa_inner_version` **or** a missing `RD` yields a well-formed but wrong token. Sent, it draws `{"result":"failure"}` — which reads to the user as the router refusing a command it never had a chance to accept. `get_ad` raises `ZTEConnectionError` on either, naming the real cause.
 

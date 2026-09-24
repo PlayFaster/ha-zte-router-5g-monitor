@@ -10,6 +10,32 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 
 
 @pytest.fixture
+def real_prewrite_login() -> None:
+    """Request this to keep the login `ad_suffix` makes before every write."""
+
+
+@pytest.fixture(autouse=True)
+def _stub_prewrite_login(request: pytest.FixtureRequest):
+    """Stub the login made before every write, unless a test asks for it.
+
+    Since 3.4.3-dev2 every write logs in first. Tests that feed a fixed
+    sequence of mocked replies were written before that login existed, and it
+    would consume replies meant for the write. The login itself is asserted by
+    the tests that request `real_prewrite_login`.
+    """
+    if "real_prewrite_login" in request.fixturenames:
+        yield
+        return
+    from unittest.mock import patch
+
+    with patch(
+        "custom_components.zte_router_5g.api.ZTERouterAPI._login_before_write",
+        new=AsyncMock(),
+    ):
+        yield
+
+
+@pytest.fixture
 def mock_config_entry():
     """Fixture to mock a ConfigEntry."""
     entry = MockConfigEntry(

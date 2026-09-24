@@ -2,11 +2,12 @@
 
 import asyncio
 import base64
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Awaitable, Callable, Iterator, Sequence
 import contextlib
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone
+import functools
 import hashlib
 import logging
 from math import ceil
@@ -709,6 +710,16 @@ class ZTEAuthError(Exception):
     """Raised when the session is not usable."""
 
 
+class ZTEWriteRefusedError(ZTEConnectionError):
+    """Raised when the router answers a write with an explicit refusal.
+
+    A subclass of `ZTEConnectionError`, so every existing handler still
+    catches it. It exists so the one-retry wrapper can tell a refusal, which
+    means the command was not carried out, from a timeout or a transport
+    error, after which the command may have landed.
+    """
+
+
 class ZTERouterExpectedUnavailableError(ZTEConnectionError):
     """Raised in place of a request while the router is known to be offline.
 
@@ -729,6 +740,48 @@ class ZTERouterExpectedUnavailableError(ZTEConnectionError):
             f"Router expected to be unavailable ({reason}); "
             f"about {seconds_remaining}s remaining"
         )
+
+
+# The write methods `_retry_once_on_refusal` wraps, by name. Read by the tests
+# that assert `send_sms`, `delete_sms` and `reboot` are never among them.
+RETRIED_ON_REFUSAL: set[str] = set()
+
+
+def _retry_once_on_refusal[**P, T](
+    method: Callable[P, Awaitable[T]],
+) -> Callable[P, Awaitable[T]]:
+    """Run a write once more, rebuilt from scratch, when the router refuses it.
+
+    Measured on an MC7010 on 2026-09-24, after a login from another device
+    took the session: resending the refused payload with its old `AD` token
+    succeeded 7 times in 17, and building the write again, which logs in and
+    derives a fresh token through `ad_suffix`, succeeded 20 times in 20.
+
+    Only an explicit refusal is retried. A timeout or a transport error may
+    mean the write landed, and an outage refusal sent nothing. Applied only to
+    writes that set a complete state, so a second send cannot do anything the
+    first did not. `SEND_SMS` and `DELETE_SMS` are never wrapped, and
+    `REBOOT_DEVICE` keeps its own single retry in `reboot()`.
+    """
+
+    @functools.wraps(method)
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        api = cast("ZTERouterAPI", args[0])
+        try:
+            return await method(*args, **kwargs)
+        except ZTEWriteRefusedError as err:
+            api.session_check_stats["write_retries"] += 1
+            _LOGGER.warning(
+                "%s refused; retrying once with a fresh login: %s",
+                method.__name__,
+                err,
+            )
+            result = await method(*args, **kwargs)
+            api.session_check_stats["write_retries_succeeded"] += 1
+            return result
+
+    RETRIED_ON_REFUSAL.add(method.__name__)
+    return wrapper
 
 
 # Set while the expected-outage window's own check or closing poll runs, so
@@ -1167,6 +1220,10 @@ class ZTERouterAPI:
             "not_confirmed": 0,
             "relogin_confirmed": 0,
             "relogin_failed": 0,
+            # Writes the router refused and `_retry_once_on_refusal` sent again,
+            # and how many of those the second send carried out.
+            "write_retries": 0,
+            "write_retries_succeeded": 0,
         }
         # The sent and draft totals either side of the most recent `SEND_SMS`.
         # Counts only. See `_classify_send`, and the MC888 Pro that stores
@@ -1183,6 +1240,14 @@ class ZTERouterAPI:
         # A poll holds it for the length of a batch; a write waits a bounded
         # time and then goes ahead anyway. See `WRITE_LOCK_WAIT_SECONDS`.
         self._write_lock = asyncio.Lock()
+        # One login at a time. Measured on an MC7010 on 2026-09-24: two logins
+        # started together from one client had one refused with result `3` in
+        # each of three pairs, and ten pairs run one after the other were all
+        # accepted. The fresh login before every write made the overlap
+        # possible, against a poll logging in at the same moment. Never held
+        # while `_write_lock` is wanted: a login's own requests are
+        # unauthenticated reads and a direct POST, so it takes no other lock.
+        self._login_lock = asyncio.Lock()
         # The open expected-outage window, if any. Opened and closed by the
         # coordinator, which owns the timer; read here, by the gate.
         self.expected_outage: ExpectedOutage | None = None
@@ -1521,7 +1586,7 @@ class ZTERouterAPI:
         working commands into errors.
         """
         if self._is_refusal(data):
-            raise ZTEConnectionError(
+            raise ZTEWriteRefusedError(
                 f"Router rejected {cmd}: result={data['result']!r}. The command "
                 f"was not carried out — this API answers 200 OK for a refused "
                 f"write."
@@ -2747,6 +2812,15 @@ class ZTERouterAPI:
         return cast(str, data.get("LD", "").upper())
 
     async def login(self, timeout_sec: int | None = None) -> None:
+        """Log in, waiting for any login already in progress to finish first.
+
+        The caller that waited logs in again rather than reusing the session
+        just made, so a write still sends on a login of its own.
+        """
+        async with self._login_lock:
+            await self._login_unlocked(timeout_sec=timeout_sec)
+
+    async def _login_unlocked(self, timeout_sec: int | None = None) -> None:
         """Clean login that resets the internal session state.
 
         The only site that establishes a session. Callers do not assign the
@@ -4170,6 +4244,7 @@ class ZTERouterAPI:
                 return False
         return isinstance(answer, dict)
 
+    @_retry_once_on_refusal
     async def set_data_connection(self, on: bool) -> dict[str, Any]:
         """Turn the router's data connection on or off.
 
@@ -4720,19 +4795,29 @@ class ZTERouterAPI:
         the data connection was going down.
         """
         self.refuse_during_outage()
-        # PROTOTYPE 3.4.3: a fresh login before every write. `loginfo` was
-        # measured on 2026-09-24 answering `ok` for several seconds after a
-        # takeover from another device, and writes sent in that gap were
-        # refused. Not before LOGOUT, which would end the session it made.
+        # A fresh login before every write. Measured on an MC7010 on
+        # 2026-09-24: after a login from another device took the session,
+        # `loginfo` still answered `ok` for several seconds, and 6 of 99
+        # writes sent on the old session were refused. With a login first,
+        # 0 of 89 were. A login takes about 120 ms, and 30 back-to-back
+        # login-and-write cycles all succeeded. Not before `LOGOUT`, which
+        # would end the session it had just made. A failed login does not
+        # stop the write: the write then reports its own outcome.
         if goform_id != "LOGOUT":
-            try:
-                await self.login(timeout_sec=timeout_sec)
-            except (ZTEAuthError, ZTEConnectionError, ZTECredentialsError) as err:
-                _LOGGER.debug("Pre-write login failed before %s: %s", goform_id, err)
+            await self._login_before_write(goform_id, timeout_sec=timeout_sec)
         if not self._token_required(goform_id):
             await self._ensure_session(timeout_sec=timeout_sec)
             return ""
         return "&AD=" + await self.get_ad(timeout_sec=timeout_sec)
+
+    async def _login_before_write(
+        self, goform_id: str, timeout_sec: int | None = None
+    ) -> None:
+        """Log in afresh for a write. A failed login does not stop the write."""
+        try:
+            await self.login(timeout_sec=timeout_sec)
+        except (ZTEAuthError, ZTEConnectionError, ZTECredentialsError) as err:
+            _LOGGER.debug("Pre-write login failed before %s: %s", goform_id, err)
 
     def _login_password(self, password: str, ld: str) -> str:
         """Encode the password the way this firmware's own login form does.
@@ -5077,6 +5162,7 @@ class ZTERouterAPI:
             _LOGGER.debug("Failed to get RD: %s", e)
             return ""
 
+    @_retry_once_on_refusal
     async def set_apn(self, index: int, pdp_type: str) -> dict[str, Any]:
         """Set the default APN profile index and PDP type."""
         ad = await self.ad_suffix("APN_PROC_EX")
@@ -5146,6 +5232,7 @@ class ZTERouterAPI:
 
         return None
 
+    @_retry_once_on_refusal
     async def set_apn_mode(
         self, mode: str, current: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -5205,6 +5292,7 @@ class ZTERouterAPI:
         await self._require_write_success(res, "APN_PROC_EX")
         return cast(dict[str, Any], res)
 
+    @_retry_once_on_refusal
     async def set_odu_led_switch(self, status: str) -> dict[str, Any]:
         """Set the ODU LED switch status (1 = On, 0 = Off)."""
         ad = await self.ad_suffix("ODU_LED_SWITCH_SET")
@@ -5253,6 +5341,7 @@ class ZTERouterAPI:
         ),
     }
 
+    @_retry_once_on_refusal
     async def set_data_volume_settings(
         self,
         current: dict[str, Any],
@@ -5349,6 +5438,7 @@ class ZTERouterAPI:
             current, data_volume_limit_switch=status
         )
 
+    @_retry_once_on_refusal
     async def set_bearer_preference(self, preference: str) -> dict[str, Any]:
         """Set the network bearer preference (e.g. 4G_AND_5G, Only_5G, Only_LTE)."""
         ad = await self.ad_suffix("SET_BEARER_PREFERENCE")

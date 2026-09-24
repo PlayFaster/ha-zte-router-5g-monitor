@@ -325,6 +325,9 @@
       },
       "system_wifi_enabled": {
         "default": "mdi:wifi-check"
+      },
+      "system_wan_netmask": {
+        "default": "mdi:ip-network-outline"
       }
     },
     "button": {

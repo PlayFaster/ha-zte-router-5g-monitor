@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.3-dev2\] - 2026-09-24 - Login Before Every Write; Serialised Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed](#343-dev2---2026-09-24---login-before-every-write-serialised-logins-one-rebuilt-retry-on-a-refused-write-dev1-test-failures-fixed)
   - [\[3.4.3-dev1\] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default](#343-dev1---2026-09-24---outage-hold-20-s-total-connected-time-total-byte-counters-and-wan-netmask-sensors-mc888-pro-device-uptime-off-by-default)
   - [\[3.4.3-dev0\] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff](#343-dev0---2026-09-24---timestamp-and-duration-related-doc-updates-plus-ci-bump-ruff)
   - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
@@ -314,6 +315,54 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.3-dev2] - 2026-09-24 - Login Before Every Write; Serialised Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed
+
+### Fixed
+
+- **A write sent after another device took the session was refused.** Measured on the MC7010 with the LED written every 5 s and one phone login per run: 6 of 99 writes were refused, all straight after a phone login. The pre-write check read `loginfo` as `ok` before every refused write; in one run it caught the takeover about 10 s late. `ad_suffix()` now logs in before every write except `LOGOUT`, and `_ensure_session()` still reads `loginfo` afterwards for the `SEND_SMS` block. A failed pre-write login does not stop the write, which then reports its own outcome.
+- **Two logins at once from Home Assistant had one refused.** Found in the dev2 live check: a pre-write login and a poll's login 30 ms apart, the second answered with result `3`, and that poll held its last values. Reproduced by script: overlapping pairs had one login refused in each of three pairs; ten serialised pairs were all accepted. `login()` now holds `_login_lock`, and a caller that waited logs in again.
+- **dev1 left two tests failing,** reported as a pass. `Fix and Validate All` on dev1 printed `Pytest: 2 failed, 1942 passed` in `.reports/summary_fix_and_validate.txt`; the runner's own step list showed the step as PASS, and that list was read instead of the summary. `flux_total_rx_bytes`, `flux_total_tx_bytes` and `flux_total_time` left `EXPECTED_NAMES`, since a polled name is never probed; WAN Netmask gained an icon.
+
+### Added
+
+- **One rebuilt retry on an explicit refusal** (`_retry_once_on_refusal`), for the writes that set a complete state: `set_data_connection`, `set_apn`, `set_apn_mode`, `set_odu_led_switch`, `set_data_volume_settings`, `set_bearer_preference`. The write is built again, so it carries a fresh login and a fresh `AD`. Measured: replaying a refused payload with its old `AD` was accepted 7 times in 17; rebuilding it was accepted 20 times in 20, three of them after a phone takeover. Only `ZTEWriteRefusedError` triggers it, a new subclass of `ZTEConnectionError` raised by `_require_success`: a timeout, a transport error or an outage refusal is not retried. `send_sms`, `delete_sms`, `delete_all`, `reboot` and `logout` are not wrapped; `reboot()` keeps its own single retry, which now gets a fresh login per attempt.
+- **Retry counters** `write_retries` and `write_retries_succeeded` in `session_check_stats`, published in the diagnostics download under `session_flag.checks`.
+
+### Changed
+
+- The switch-level retry added by the prototype is removed; the decision sits in `api.py`, where the SMS exclusion is enforced once.
+- `tests/conftest.py` stubs `_login_before_write` for every test unless it requests `real_prewrite_login`. Tests that feed a fixed sequence of mocked replies predate the login and would otherwise lose a reply to it.
+- `docs/zte_how_to_access.md`, `docs/DEVELOPMENT.md` and `AGENTS.md` replace "no write is ever resent" and the `loginfo`-first recovery with the login before every write, serialised logins and the rebuilt retry.
+
+### Tests
+
+- `tests/test_write_retry.py`: a login precedes every write, not `LOGOUT`; a failed login does not stop the write; logins never overlap; the retried set is exactly the six setters; a refusal is a `ZTEConnectionError`; a refusal then a success is counted; a timeout and an outage refusal are not retried; a refused `send_sms` is sent once.
+- `test_a_refused_write_is_still_reported_not_retried` is rewritten as `test_a_refused_write_is_rebuilt_once_then_reported`: it encoded the old rule.
+- Each change disabled in turn: no pre-write login, no login lock, no retry, retry on any connection error. Each fails at least one new test; restored, all 1,954 pass.
+
+### Checked Live on the MC7010
+
+| Check | Result |
+| :-- | :-- |
+| 30 back-to-back LED writes | 30 of 30 |
+| 3-minute control run, no phone | 28 of 28 |
+| Network mode and APN mode written at their current values | Both accepted |
+| Data off and on through the switch | Both windows closed on the router's answer, 20.2 s and 22.2 s, target state reached |
+| Retry counters in the diagnostics download | Present, both 0 |
+| Two phone runs of 3 minutes, two phone logins each | 56 of 56 writes accepted; no retry, no refused login |
+
+The prototype runs before it: three phone runs, six takeovers, 89 writes, none refused. A third dev2 phone run was not done.
+
+### Not Resolved
+
+- **The router twice stopped answering for about 10 s during phone runs,** once in a prototype run and once in a dev2 run; both times the next request succeeded. The cause is not established. A third instance stopped the first dev2 validation run's diagnostics check before any check ran; the rerun passed 63 of 63.
+
+### Validation
+
+`Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: every step passed, including 1,954 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 63 of 63. The first run failed one lint rule, a missing test docstring, since fixed.
+- **The MC888 Pro is untested** with a login before every write. The next issue #79 download settles it.
+- `scripts/hardware_check.py` rung [0] still passes, now because the write logs in first rather than because the pre-write check detects the dead session. Its docstring describes the old mechanism.
 
 ## [3.4.3-dev1] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default
 

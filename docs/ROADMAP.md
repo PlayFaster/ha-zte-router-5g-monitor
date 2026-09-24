@@ -43,16 +43,6 @@ The README carries an auto-reboot example with the necessary glitch guards. A sh
 
 **Would be justified by:** anyone asking for it, or evidence that the README example is being copied incorrectly. Blueprints are supported well below the current HA floor, so nothing blocks it.
 
-### Projection accuracy from cycle history
-
-#### **Value ⭐⭐ · Effort Medium**
-
-`Projected Cycle Usage` extrapolates from the cycle in flight alone, which is why it is volatile in the first few days. Storing the previous two or three cycle totals would let the estimate lean on them early and shed them as real usage accumulates — blended into the **unobserved remainder** only, so the prior's influence decays with the days remaining rather than needing a tuned constant.
-
-`helpers.project_cycle_usage()` already accepts a `prior_rate` argument. What is missing is the store. **Design detail is `.notes/info/data_cycle_and_projection_plan.md` §2.4**; that file is reference and this entry owns the work.
-
-**Would be justified by:** the early-cycle volatility actually causing a bad automation decision. It is a known cosmetic weakness until then.
-
 ---
 
 ## Revisit
@@ -101,6 +91,12 @@ Not doing it. This one really can strand the user: it changes the router's LAN r
 
 **Detail.** `opms_wan_mode` ships read-only, so the mode is visible without offering a switch that can cut the management path. This is the one declined write where the reachability objection genuinely applies.
 
+### Projection accuracy from cycle history
+
+Not doing it. `Projected Cycle Usage` extrapolates from the cycle in flight, so it is volatile in the first few days and settles as usage accumulates. Leaning on stored totals from earlier cycles would smooth those days, at the cost of a persistent cycle-history store, a fallback for a missing or corrupt store, and tests for both.
+
+**Detail.** The entry's own trigger was early-cycle volatility causing a bad automation decision, and none has been reported. `helpers.project_cycle_usage()` keeps its `prior_rate` argument; the design is in `.notes/info/data_cycle_and_projection_plan.md` §2.4 should the trigger ever occur.
+
 ### DNS and static address binding
 
 Not doing it. Both are network plumbing set once at installation, and neither belongs in a monitoring integration's entity list.
@@ -117,7 +113,6 @@ Forward work only. Declined and Revisit items are recorded above and are not wor
 | :------------------------------- | :---- | :----- | :----- |
 | Billing-cycle write controls     | Maybe | ⭐⭐⭐ | Low    |
 | SMS feature-group toggle         | Maybe | ⭐⭐⭐ | Medium |
-| Projection accuracy from history | Maybe | ⭐⭐   | Medium |
 | Reboot-on-degradation blueprint  | Maybe | ⭐⭐   | Low    |
 
 **Current state.** 121 entities across five sub-devices, 108 carrying `about` notes. 1420 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
@@ -143,6 +138,7 @@ Items that were on this roadmap and have since been built. Detail is in `CHANGEL
 
 ## Version Control
 
+- **v3.6.0** (2026-09-24) - Moved **Projection accuracy from cycle history** from Maybe to Declined. Its trigger, early-cycle volatility causing a bad automation decision, has not occurred, and the estimate settles within days on its own; a persistent cycle-history store and its failure handling are not justified by that.
 - **v3.5.0** (2026-09-05) — Moved **Long-term history for key text sensors** and **Entity defaults matched to the router model** to Done, at `[3.3.10-dev8]` and `[3.3.10-dev7]`. The history item built both mechanisms its entry left open rather than choosing between them. The defaults item departs from its entry twice, both recorded in the Done row: the overlay enables as well as disables, and the regenerate-and-compare test the v3.3.0 entry proposed was dropped as invalid — its inputs are untracked, it assumes a list that is derivable where the criterion is judgement, and it would have reproduced the one stale entry that actually occurred.
 - **v3.4.0** (2026-09-02) — **Cross-model verification moved to Done, and Custom triggers removed.** The verification item's blocker was a volunteer diagnostics download, and three arrived from an MC888 Pro through issue #56; both outcomes it named followed — the README compatibility claim became evidence-backed, and ten alias spellings shipped in `[3.3.9-dev11]`. Recorded with the MC889 gap stated, since no download exists for that model. **Blocked is now empty and its heading is removed**, per `roadmap_format.md` — an absent group means empty. **Custom triggers for `zte_router_5g_sms_received` is deleted rather than filed under a group.** It restated the blocker and the analysis pointer of the family-wide item at `.shared/issues/x_project/custom_trigger_options.md`, which carries a `zte_router_5g` cell and owns the work. Declined would have been untrue — nothing has been decided against — and the format has no group for an item another tracker owns, so the transfer is recorded here instead. **"Refresh Now" always re-logs in stays in Revisit.** Its trigger is a silent logged-out fault, which `roadmap_format.md` requires to be realistically achievable for Revisit rather than Declined; it has occurred twice, and every session fault found during 3.3.9 was a _false_ report of session loss, which re-logging in does not address.
 - **v3.3.0** (2026-09-02) — Added **Entity defaults matched to the router model** to Maybe, after reading `Kajkac/ZTE-MC-Home-assistant-repo`'s per-model disable lists directly. Recorded with the measurement that argues against building it now: on the reference MC7010, nine sensor descriptions read only empty keys and all nine are already disabled by category, while no binary sensor, switch, select or number is both enabled and fed solely by empty keys — so the feature would currently suppress nothing. Entered as a Maybe rather than declined because the condition it addresses is real and unmeasurable on one device: it needs downloads from several models to be worth more than the category defaults. Notes the failure mode observed in the reference implementation, whose MC801A and MC888 lists are byte-identical and whose G5 Ultra list is derived from MC801A, and states that any version here would be generated from downloads and guarded by a regenerate-and-compare test.

@@ -907,9 +907,6 @@ EXPECTED_NAMES: Final[frozenset[str]] = frozenset(
         "Nr_snr",
         "flux_device_uptime",  # flux_ variant, 2026-09-24
         "flux_ppp_connect_time",  # flux_ variant, 2026-09-24
-        "flux_total_rx_bytes",  # flux_ variant, 2026-09-24
-        "flux_total_time",  # flux_ variant, 2026-09-24
-        "flux_total_tx_bytes",  # flux_ variant, 2026-09-24
         "ip_passthrough_enabled",
         "nr_rsrp",
         "nr_rsrq",
