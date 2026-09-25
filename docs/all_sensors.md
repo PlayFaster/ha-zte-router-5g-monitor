@@ -32,10 +32,10 @@ A complete list of the static entities and service actions provided by the integ
 | Download Speed | `realtime_rx_thrpt` | Sensor | B/s | - | - |
 | Session Sent | `realtime_tx_bytes` | Sensor | B | - | - |
 | Upload Speed | `realtime_tx_thrpt` | Sensor | B/s | - | - |
-| Total Data | `total_data_bytes` | Sensor | B | - | **Disabled by default.** LTS: `total_increasing` |
+| Total Data | `total_data_bytes` | Sensor | B | - | LTS: `total_increasing` |
 | Total Received | `total_rx_bytes` | Sensor | B | - | **Disabled by default.** LTS: `total_increasing` |
 | Total Sent | `total_tx_bytes` | Sensor | B | - | **Disabled by default.** LTS: `total_increasing` |
-| Data Limit Switch | `data_limit_switch` | Switch | - | Config | **Disabled by default.** |
+| Data Limit Switch | `data_limit_switch` | Switch | - | Config | - |
 
 ## SMS Sub-Device (5 Entities)
 
@@ -152,7 +152,7 @@ A complete list of the static entities and service actions provided by the integ
 | SIM PUK Attempts Remaining | `sim_puk_attempts` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Time Server (SNTP) | `sntp_server` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Router Timezone | `sntp_timezone` | Sensor | - | Diagnostic | **Disabled by default.** |
-| Total Connected Time | `total_time` | Sensor | s | - | **Disabled by default.** LTS: `total_increasing` |
+| Total Connected Time | `total_time` | Sensor | s | - | - |
 | Firmware Update Result | `upgrade_result` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Firmware Version | `wa_inner_version` | Sensor | - | Diagnostic | - |
 | WAN IP Changes | `wan_ip_changes` | Sensor | - | Diagnostic | **Disabled by default.** LTS: `total_increasing` |
@@ -279,3 +279,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.4.2-dev7** (2026-09-23) — Added Connection Uptime and Connection Duration (System), which report the mobile data session. Device Uptime and Uptime Duration now read the router's `system_uptime` where it answers. System 47 → 49, total 123 → 125.
 - **v3.4.2-dev8** (2026-09-24) — Uptime Duration and Connection Duration display in minutes with one decimal place, from hours. No entity count change.
 - **v3.4.3-dev1** (2026-09-24) - Added Total Connected Time and WAN Netmask (System) and Total Received, Total Sent and Total Data (Data), all disabled by default. System 49 → 51, Data 15 → 18, total 125 → 130.
+- **v3.4.4-dev1** (2026-09-25) - Total Data, Data Limit Switch and Total Connected Time enabled by default on new installs. Total Connected Time no longer records long-term statistics. The three duration sensors display in hours. No entity count change.

@@ -263,7 +263,7 @@ Monitor monthly data consumption, active session totals, and upload/download spe
 
 - **Monthly Data Usage**: Track your monthly download, upload and total data usage. See the [Data Usage Alert](#-data-usage-alert) example.
 - **Session Usage**: Track your download and upload for the current data connection. It starts again from zero each time the connection reconnects.
-- **Lifetime Totals** _(disabled by default)_: **Total Received**, **Total Sent** and **Total Data**, running totals kept by the router that do not reset on the billing day.
+- **Lifetime Totals**: **Total Data**, and **Total Received** and **Total Sent** _(disabled by default)_, running totals kept by the router that do not reset on the billing day.
 - **Allowance & Threshold Info**: Visibility to the allowance limits and warning thresholds you set in the router web UI.
 
 - **Projected Cycle Usage** (`sensor.zte_5g_data_projected_cycle_usage`): An estimate of where you will finish the cycle at your current rate. See [Data Usage Projection](#-data-usage-projection) below.
@@ -341,7 +341,7 @@ Reboot router hardware directly from Home Assistant and monitor data integrity w
 </summary><br>
 
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
-- **Uptime and Connection Time**: **Device Uptime** is when the router last booted, and **Connection Uptime** is when its current mobile data connection started. Each has a matching duration sensor, disabled by default, if you prefer a running time to a timestamp. **Total Connected Time** adds up data-connection time across connections. Some routers do not report their own uptime; on those, Device Uptime follows the data connection, the same as Connection Uptime, so a reconnect moves it as a reboot would.
+- **Uptime and Connection Time**: **Device Uptime** is when the router last booted, and **Connection Uptime** is when its current mobile data connection started. Each has a matching duration sensor, disabled by default, if you prefer a running time to a timestamp. **Total Connected Time** adds up data-connection time across connections. The duration sensors display in hours and minutes. Some routers do not report their own uptime; on those, Device Uptime follows the data connection, the same as Connection Uptime, so a reconnect moves it as a reboot would.
 - **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
 - **Router and SIM State**: **Operator Provisioned** reports whether the router refuses to hand over its remote-management (TR-069) settings, which is usual on an operator-supplied unit and explains why some settings cannot be changed locally.
 - **Firmware Update State** and **Firmware Update Result** report whether an update is running and how the last one ended. Both off by default.
@@ -434,9 +434,9 @@ This integration provides **125 entities** (depending on your firmware) organize
 
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
-| ⚙️ **System** | 51 | 39 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, Connection Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 33, including the five temperature sensors, Uptime Duration, Connection Duration, Total Connected Time, WAN Netmask, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
+| ⚙️ **System** | 51 | 39 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, Connection Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 32, including the five temperature sensors, Uptime Duration, Connection Duration, WAN Netmask, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
 | 📶 **Signal** | 56 | 51 Sensors, 1 Binary Sensor, 3 Selects, 1 Switch | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, **Data Connection**, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
-| 📈 **Data** | 18 | 17 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 7: Monthly Upload/Download/Total (Legacy GB sensors), Total Received, Total Sent, Total Data, Data Limit Switch |
+| 📈 **Data** | 18 | 17 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 5: Monthly Upload/Download/Total (Legacy GB sensors), Total Received, Total Sent |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
 | 🛠️ **Actions** | 5 | — | Send, Delete, Bulk-Delete and List SMS, **Reset Entities** | — |
 
@@ -636,7 +636,7 @@ Several settings are exposed as control entities so you can drive them from dash
 - **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off or on takes up to a minute, and other controls show an error until it completes. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error). **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): In Manual mode, switch the active APN profile.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
-- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The values are the router's own, and its web page shows them under different names:
+- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The options are read from the router's own web files, so they are the ones its network mode page offers and differ between models. Until that list has been read, shortly after setup, only the current mode is shown and it cannot be changed. On the MC7010 the values and the names its web page shows are:
 
 ![Signal Config with APN](.github/images/zte_5g_signal_config_apn_dropdown.png)
 
@@ -699,7 +699,7 @@ Several settings are exposed as control entities so you can drive them from dash
 &nbsp; &nbsp; ➕ &nbsp; &nbsp; Click to Expand for Details:
 </summary><br>
 
-**Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`, on the **Data** device, _disabled by default_): Turn the router's own data cap on or off.
+**Data Limit Switch** (`switch.zte_5g_data_data_limit_switch`, on the **Data** device): Turn the router's own data cap on or off.
 
 - The cap itself, its units and the alert threshold are set on the router — see [Data Usage Tracking](#-data-usage-tracking).
 

@@ -77,6 +77,26 @@ def test_a_pass_that_emits_extra_notes_is_not_a_difference() -> None:
     assert _outcome(report, "same set of fields")
 
 
+def test_notes_differing_in_text_are_not_a_structural_difference() -> None:
+    """Two passes re-probe singly over a different number of rounds.
+
+    Measured 2026-09-25 on 3.4.4-dev1: one pass wrote "758 names re-probed
+    singly over 3 rounds, resolving 2" and the other "over 2 rounds, resolving
+    1". Compared as a set, the notes list is one leaf, and the structural check
+    reported it although the field-set check already excluded it.
+    """
+    values = {"lan_netmask": "ip-1"}
+    first = _artefact(["758 names re-probed singly over 3 rounds, resolving 2"], values)
+    second = _artefact(
+        ["758 names re-probed singly over 2 rounds, resolving 1"], values
+    )
+    report = Report()
+
+    check_stability(first, second, report)
+
+    assert _outcome(report, "no structural difference")
+
+
 def test_renumbered_pseudonyms_are_not_a_difference() -> None:
     """Tokens are allocated in first-seen order and only within one download.
 

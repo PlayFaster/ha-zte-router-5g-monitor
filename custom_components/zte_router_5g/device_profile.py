@@ -37,7 +37,11 @@ from typing import Any
 # older cached one unreadable. A profile carrying a different number is
 # discarded and re-learned rather than migrated: it describes a device that is
 # still there to be asked again.
-PROFILE_VERSION = 1
+#
+# 2 (3.4.4): adds `device_config` and `menus`. A version 1 profile has no
+# `AUTO_MODES`, so kept until the firmware changed it would leave Network Mode
+# Selection offering only the current value on every upgraded install.
+PROFILE_VERSION = 2
 
 # The file a fact is read from, when the parser needs to name one. Everything
 # else is found by searching every source the crawl returned, because which
@@ -554,6 +558,86 @@ def parse_session_flag(sources: dict[str, str]) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# The model-specific directory: option lists, flags and menus
+# ---------------------------------------------------------------------------
+
+# `js/config/cpe/MF253V/config.js`: the directory `DEVICE` names. The general
+# `js/config/config.js` does not match, having nothing between `config/` and
+# the file name.
+_DEVICE_CONFIG = re.compile(r"^js/config/.+/config\.js$")
+_DEVICE_MENU = re.compile(r"^js/config/.+/(menu(?:_\w+)?)\.js$")
+
+# `AUTO_MODES:[{name:"auto",value:"4G_AND_5G"},...]` — a named array of
+# `{name, value}` objects, which is how the device file lists every option set
+# its pages offer. Bounded so a malformed file cannot run the match on.
+_OPTION_LIST = re.compile(
+    r"""\b([A-Za-z_]\w{1,48})\s*:\s*\[((?:\s*\{[^{}]{0,200}\}\s*,?){1,80})\]"""
+)
+_OPTION_VALUE = re.compile(r"""\bvalue\s*:\s*["']([^"']{0,60})["']""")
+_MENU_PATH = re.compile(r"""\bpath\s*:\s*["']([\w./-]{1,80})["']""")
+
+# How `main.js` picks a CPE's menu from `opms_wan_mode`, read from the served
+# file on 2026-09-25. Anything not listed falls to the gateway menu, as there.
+_MENU_BY_MODE: dict[str, str] = {
+    "LTE_BRIDGE": "menu_bridge",
+    "AUTO_PPPOE": "menu_pppoe",
+    "AUTO_DHCP": "menu_pppoe",
+    "PPPOE": "menu_pppoe",
+    "DHCP": "menu_pppoe",
+    "STATIC": "menu_pppoe",
+}
+
+
+def parse_device_config(sources: dict[str, str]) -> dict[str, Any]:
+    """The option lists and flags the model-specific `config.js` declares.
+
+    `AUTO_MODES` is the list the router's own network mode page offers, and so
+    the only values Network Mode Selection offers. Kept in the router's order.
+    A list that does not parse is absent, never guessed: the select then offers
+    only the router's current value.
+    """
+    path = next((p for p in sorted(sources) if _DEVICE_CONFIG.match(p)), None)
+    if path is None:
+        return {}
+    text = sources[path]
+    lists: dict[str, list[str]] = {}
+    for match in _OPTION_LIST.finditer(text):
+        values = _OPTION_VALUE.findall(match.group(2))
+        if values:
+            lists[match.group(1)] = values
+    flags = {m.group(1): _flag_value(m.group(2)) for m in _FLAG.finditer(text)}
+    result: dict[str, Any] = {"path": path, "option_lists": lists, "flags": flags}
+    if lists.get("AUTO_MODES"):
+        result["auto_modes"] = lists["AUTO_MODES"]
+    return result
+
+
+def parse_menus(sources: dict[str, str]) -> dict[str, list[str]]:
+    """Each device menu's page paths, in order, one entry per page path."""
+    menus: dict[str, list[str]] = {}
+    for path in sorted(sources):
+        match = _DEVICE_MENU.match(path)
+        if match:
+            menus[match.group(1)] = list(
+                dict.fromkeys(_MENU_PATH.findall(sources[path]))
+            )
+    return menus
+
+
+def menu_for_mode(opms_wan_mode: Any) -> str:
+    """The menu a CPE's web page shows in this WAN mode."""
+    return _MENU_BY_MODE.get(str(opms_wan_mode or ""), "menu_4ggateway")
+
+
+def auto_modes(profile: dict[str, Any]) -> list[str] | None:
+    """The learned network mode options, or None where none were learned."""
+    modes = profile.get("device_config", {}).get("auto_modes")
+    if isinstance(modes, list) and modes and all(isinstance(m, str) for m in modes):
+        return modes
+    return None
+
+
 def parse_profile(sources: dict[str, Any], version: str = "") -> dict[str, Any]:
     """Everything the parser can read, with what it could not read named.
 
@@ -570,6 +654,8 @@ def parse_profile(sources: dict[str, Any], version: str = "") -> dict[str, Any]:
     commands = parse_commands(text_sources)
     login = parse_login(text_sources)
     session_flag = parse_session_flag(text_sources)
+    device_config = parse_device_config(text_sources)
+    menus = parse_menus(text_sources)
 
     unlearned: list[str] = []
     if not token.get("digest_function"):
@@ -590,6 +676,8 @@ def parse_profile(sources: dict[str, Any], version: str = "") -> dict[str, Any]:
         unlearned.append("login.password_branches")
     if not session_flag.get("key"):
         unlearned.append("session_flag.key")
+    if "auto_modes" not in device_config:
+        unlearned.append("device_config.auto_modes")
 
     return {
         "profile_version": PROFILE_VERSION,
@@ -600,5 +688,7 @@ def parse_profile(sources: dict[str, Any], version: str = "") -> dict[str, Any]:
         "commands": commands,
         "login": login,
         "session_flag": session_flag,
+        "device_config": device_config,
+        "menus": menus,
         "unlearned": unlearned,
     }

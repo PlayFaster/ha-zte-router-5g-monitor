@@ -165,6 +165,9 @@ def _coordinator(api: Any = None) -> Any:
     coordinator.entry.entry_id = "abc"
     coordinator.hass = MagicMock()
     coordinator._profile_store = None
+    # A real coordinator always has `data`; `None` until the first poll. Read
+    # since 3.4.4 to decide whether to re-render entities after a learn.
+    coordinator.data = None
     coordinator.async_load_profile = (
         ZTERouterDataUpdateCoordinator.async_load_profile.__get__(coordinator)
     )
@@ -345,7 +348,9 @@ def test_the_download_names_the_gap_between_the_cache_and_the_device() -> None:
     section = _profile_section(coordinator, MC888)
 
     assert section["reparsed"]["matches_in_force"] is True
-    assert section["reparsed"]["unlearned"] == []
+    # The fixture carries the write-path files only (3.4.4: see
+    # `test_nothing_is_left_unlearned_on_either_device`).
+    assert section["reparsed"]["unlearned"] == ["device_config.auto_modes"]
     assert section["digest_learned"] == "sha256"
     assert section["digest_from_model_string"] == "sha256"
     assert section["digest_agrees_with_model_heuristic"] is True

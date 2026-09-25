@@ -912,6 +912,7 @@ def check_stability(
         path
         for path in set(left) & set(right)
         if _comparable(left[path]) != _comparable(right[path])
+        and not _NOTE_PATH.match(path)
         and not _VOLATILE.search(path)
     ]
     report.record(

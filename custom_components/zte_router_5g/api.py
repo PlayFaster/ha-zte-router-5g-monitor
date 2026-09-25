@@ -47,7 +47,7 @@ from .const import (
     WRITE_LOCK_WAIT_SECONDS,
 )
 from .helpers import is_gsm7
-from .known_names import EXPECTED_NAMES, KNOWN_NAMES, REFUSABLE_NAMES
+from .known_names import EXPECTED_NAMES, GENERATED_NAMES, KNOWN_NAMES, REFUSABLE_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -3800,7 +3800,9 @@ class ZTERouterAPI:
             # what a device mentions conflates "not referenced here" with "not
             # supported here", which is the same conflation `probed_no_answer`
             # exists to avoid one layer down.
-            candidates = (mined | KNOWN_NAMES | EXPECTED_NAMES) - set(self.goform_ids)
+            candidates = (mined | KNOWN_NAMES | EXPECTED_NAMES | GENERATED_NAMES) - set(
+                self.goform_ids
+            )
             # Held out of the chunked phases entirely. A declined name replaces
             # the whole response, so one of these inside a chunk costs every
             # other name in it — measured on the reference MC7010, two chunks
@@ -3808,9 +3810,11 @@ class ZTERouterAPI:
             refusable = sorted((candidates & REFUSABLE_NAMES) - requested)
             candidates -= REFUSABLE_NAMES
             unknown = sorted(candidates - requested - set(static))
-            result["names_from_union_only"] = len(
-                (KNOWN_NAMES - mined) - requested - set(static)
-            )
+            # Counted from the names actually probed, so every shared list is
+            # included and nothing held out is. Until 3.4.4 this counted
+            # `KNOWN_NAMES` alone, leaving out `EXPECTED_NAMES`.
+            union_only = set(unknown) - mined
+            result["names_from_union_only"] = len(union_only)
 
             # The static list is not belt-and-braces: 52 of its 62 names do not
             # appear in the mined artefact at all, so the two sources barely
@@ -3861,6 +3865,18 @@ class ZTERouterAPI:
             )
             result["mined_names_probed"] = len(unknown)
             result["mined_names_answered"] = len(mined_found)
+            # Per source, so a download shows what each shared list found.
+            result["names_from_union_by_source"] = {
+                source: {
+                    "probed": len(union_only & names),
+                    "answered": len(union_only & names & set(mined_found)),
+                }
+                for source, names in (
+                    ("known", KNOWN_NAMES),
+                    ("expected", EXPECTED_NAMES),
+                    ("generated", GENERATED_NAMES),
+                )
+            }
 
             # Three outcomes, three fields, because collapsing any two of them
             # asserts something that was never measured.

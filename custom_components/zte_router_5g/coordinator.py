@@ -1993,6 +1993,11 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             if not profile.get("unlearned")
             else "not learned: " + ", ".join(profile["unlearned"]),
         )
+        # Entities that read the profile, such as Network Mode Selection's
+        # options, are otherwise re-rendered only by the next poll: up to one
+        # polling interval late, and not at all while polling is paused.
+        if self.data is not None:
+            self.async_update_listeners()
         if self._profile_store is None:  # pragma: no cover - set up before this
             return
         try:

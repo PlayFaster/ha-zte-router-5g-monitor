@@ -522,7 +522,7 @@ All are `POST`, all carry `Content-Type: application/x-www-form-urlencoded`, all
 | `APN_PROC_EX` | Set default APN profile, or switch auto/manual | `apn_mode`, `apn_action`, `set_default_flag`, `pdp_type`, `index` | `api.py:721`, `api.py:737` |
 | `ODU_LED_SWITCH_SET` | Outdoor-unit LED on/off | `ODU_led_switch` (`1`/`0`) | `api.py:749` |
 | `DATA_LIMIT_SETTING` | **The entire data-volume form** — see below | `data_volume_limit_switch`, `data_volume_limit_unit`, `data_volume_limit_size`, `data_volume_alert_percent`, `wan_auto_clear_flow_data_switch`, `traffic_clear_date` | `api.py:763` |
-| `SET_BEARER_PREFERENCE` | Network mode | `BearerPreference` (`4G_AND_5G`, `Only_5G`, `Only_LTE`) | `api.py:778` |
+| `SET_BEARER_PREFERENCE` | Network mode | `BearerPreference`, one of the device's own `AUTO_MODES` (on the MC7010 `4G_AND_5G`, `LTE_AND_5G`, `Only_5G`, `Only_LTE`) | `api.py:set_bearer_preference` |
 
 **`sms_time` format**: `yy;mm;dd;HH;MM;SS;+0` — semicolon-delimited, unlike the comma-delimited format the router _returns_ on received messages. The two are not interchangeable.
 
@@ -571,6 +571,21 @@ Three consequences worth knowing before touching this code:
 | `Only_5G`    | 5G SA   |
 | `Only_LTE`   | 4G Only |
 
+**The list is the device's own.** The values come from `AUTO_MODES` in the model-specific `js/config/<DEVICE>/config.js` (on both routers seen, `js/config/cpe/MF253V/config.js`), which the network mode page builds its menu from; the table above is the MC7010's list, each entry an object `{name:"auto",value:"4G_AND_5G"}`. The MC888 Pro reads `WL_AND_5G`, a value outside that list, and its own list has not yet been read. Since 3.4.4 the integration offers only the learned list, adding the current value where the list lacks it, and writes nothing outside the list.
+
+### The model-specific directory
+
+`js/config/config.js` names it: `DEVICE:"cpe/MF253V"`. Nothing refers to its files by name, because `main.js` composes the paths at run time, so a crawl that follows references never reaches them. The integration fetches four files from it, all served without a login (MC7010, 2026-09-25):
+
+| File | Holds |
+| :-- | :-- |
+| `config.js` | Option lists (`AUTO_MODES`, `VPN_TYPE_MODES`, `sysLogModes`, `BSP_THERMAL_TYPE_MODES`, `FREQUENCY_TYPE_4G`) and feature flags (`HAS_FOTA`, `HAS_BATTERY`, `WIFI_SWITCH_SUPPORT`, …) that override the general `config.js` |
+| `menu_bridge.js` | The settings pages for `opms_wan_mode` `LTE_BRIDGE` (33 distinct pages on the MC7010) |
+| `menu_pppoe.js` | The pages for `AUTO_PPPOE`, `AUTO_DHCP`, `PPPOE`, `DHCP` and `STATIC` |
+| `menu_4ggateway.js` | The pages for every other mode, including `AUTO_LTE_GATEWAY` and `PPP` |
+
+A non-CPE build loads `menu.js` from the same directory instead. The diagnostics download publishes the option lists, the flags and the page list of the menu for the current `opms_wan_mode`.
+
 ### `DATA_LIMIT_SETTING` is all-or-nothing
 
 This command is **not** a data-limit toggle despite its use here. It writes the complete data-volume configuration, and **the router refuses a partial payload**:
@@ -599,7 +614,7 @@ Two consequences:
 
 **Delete-all is currently a client-side loop** (`delete_all`): query the message list, collect the IDs, and issue one `DELETE_SMS` with them joined and terminated as above.
 
-A native **`ALL_DELETE_SMS`** does exist. It takes `which_cgi`, which both clients source from a caller-supplied `e.location`, and on the MC7010 that value is **`native_inbox`** — read from `js/sms/smslist.js`, reached by `js/config/config.js` → `DEVICE = cpe/MF253V` → `js/config/cpe/MF253V/menu.js`. An earlier revision of this document asserted that no bulk-delete command existed; that was wrong.
+A native **`ALL_DELETE_SMS`** does exist. It takes `which_cgi`, which both clients source from a caller-supplied `e.location`, and on the MC7010 that value is **`native_inbox`** — read from `js/sms/smslist.js`, reached by `js/config/config.js` → `DEVICE = cpe/MF253V` → the device menu for the current WAN mode, such as `js/config/cpe/MF253V/menu_bridge.js`. An earlier revision of this document asserted that no bulk-delete command existed; that was wrong.
 
 Two cautions if it is adopted. `native_inbox` names the **device inbox only** — `js/sms/sim_messages.js` contains no delete-all call, and drafts carry `tag: "3"` rather than sitting in the inbox, so a bulk call may leave both behind where the current loop removes them. And its success handler polls `sms_cmd_status_info` exactly as `DELETE_SMS` does, so it inherits the same completion ambiguity.
 

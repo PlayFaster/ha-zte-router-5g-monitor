@@ -526,9 +526,11 @@ def test_sensor_extra_attributes_type_error_caught(mock_coordinator, mock_config
         # Data rate (B/s -> Mbit/s), precision 2
         ("realtime_tx_thrpt", UnitOfDataRate.MEGABITS_PER_SECOND, 2),
         ("realtime_rx_thrpt", UnitOfDataRate.MEGABITS_PER_SECOND, 2),
-        # Duration (s -> h), precision 1
-        ("realtime_time", UnitOfTime.MINUTES, 1),
-        ("connection_duration", UnitOfTime.MINUTES, 1),
+        # Duration (s -> h), no precision set, so the frontend shows hours
+        # and minutes (3.4.4; minutes at one decimal from 3.4.2-dev8)
+        ("realtime_time", UnitOfTime.HOURS, None),
+        ("connection_duration", UnitOfTime.HOURS, None),
+        ("total_time", UnitOfTime.HOURS, None),
     ],
 )
 def test_sensor_suggested_unit_and_precision(key, suggested_unit, precision):

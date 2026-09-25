@@ -55,6 +55,11 @@ def _discovery_result() -> dict[str, object]:
         "mined_names_probed": 501,
         "mined_names_answered": 90,
         "names_from_union_only": 102,
+        "names_from_union_by_source": {
+            "known": {"probed": 90, "answered": 10},
+            "expected": {"probed": 12, "answered": 0},
+            "generated": {"probed": 0, "answered": 0},
+        },
         "probed_no_answer": ["absent_key"],
         "not_reprobed": ["never_asked_key"],
         "refused": ["declined_key"],
