@@ -23,6 +23,7 @@ from homeassistant.util import dt as dt_util
 from . import device_profile
 from ._compat import device_by_identifier
 from .api import (
+    POLL_UNIVERSE,
     SMS_STORE_ALL,
     SMS_STORE_SIM,
     ExpectedOutage,
@@ -56,6 +57,7 @@ from .const import (
 )
 from .helpers import get_first, get_router_model, sms_instant
 from .observations import ObservationRecorder
+from .poll_plan import PollPlan, Reader
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -334,6 +336,15 @@ class _UptimeLatch:
     drift_rate_max: float | None = None
 
 
+def _state_keys_reader(keys: tuple[str, ...]) -> Callable[[Any], Any]:
+    """A reader over a switch's or binary sensor's `state_keys`."""
+
+    def read(data: Any) -> Any:
+        return [data.get(k) for k in keys]
+
+    return read
+
+
 class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
     """Class to manage fetching ZTE Router data with resilience and pausing."""
 
@@ -348,6 +359,16 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # payload check. Not persisted: a restart re-learns it on the first
         # poll, which is the conservative direction.
         self._payload_high_water = 0
+        # 3.4.4-dev2: which names each poll asks for. A narrowed poll asks for
+        # fewer names than a full one, so the sparse check keeps one high-water
+        # mark per poll kind and swaps them in `_sparse_payload_finding`.
+        self.poll_plan = PollPlan(POLL_UNIVERSE)
+        self._poll_kind = "full"
+        self._high_water_kind = "full"
+        self._high_water_by_kind: dict[str, int] = {}
+        self._poll_store: Store[dict[str, Any]] | None = None
+        self._poll_firmware = ""
+        self._poll_previous: dict[str, Any] = {}
         # Serializes a diagnostics discovery probe against the poll; both use
         # the same API client and the same session.
         self._async_update_lock = asyncio.Lock()
@@ -849,12 +870,26 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         A ``ZTEAuthError`` from any of the four propagates, so the caller can
         renew the session and retry the whole set once.
         """
-        data = await self.api.get_all_data()
+        names, full = self.poll_plan.names(dt_util.utcnow())
+        self._poll_kind = "full" if full else "narrowed"
+        self.poll_plan.last_requested = (
+            len(names) if names is not None else len(POLL_UNIVERSE)
+        )
+        _LOGGER.debug(
+            "%s: %s poll, %d names%s",
+            self.entry.title,
+            self._poll_kind,
+            self.poll_plan.last_requested,
+            f" ({', '.join(sorted(self.poll_plan.full_reasons))})"
+            if self.poll_plan.full_reasons
+            else "",
+        )
+        data = await self.api.get_all_data(names)
         # Merged under the core payload rather than over it, so a stale cached
         # extended value can never mask a fresh core one if the two ever come
         # to share a key.
         extended = await self._fetch_optional(
-            ENDPOINT_EXTENDED, self.api.get_extended_data, {}
+            ENDPOINT_EXTENDED, lambda: self.api.get_extended_data(names), {}
         )
         data = {**extended, **data}
         sms_cap = await self._fetch_optional(
@@ -956,6 +991,14 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                         self.entry.title,
                     )
                 self._record_health_success(data)
+                # Never fails a poll: a fault here leaves the plan as it was,
+                # and the owed full poll stays owed.
+                try:
+                    await self._update_poll_plan(data)
+                except Exception as err:  # noqa: BLE001 - see above
+                    _LOGGER.debug(
+                        "%s: poll plan not updated: %s", self.entry.title, err
+                    )
                 self._check_new_sms(messages)
                 await self._read_provisioning(forced=forced)
                 await self._observe(data)
@@ -1923,6 +1966,105 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         if observed and observed != self.observations.session_lifetimes():
             await self.observations.async_save_session_lifetimes(observed)
 
+    def request_full_poll(self, reason: str) -> None:
+        """Owe a full poll: every name, cleared only when one succeeds."""
+        self.poll_plan.request_full(reason)
+
+    def _poll_readers(self) -> list[Reader]:
+        """Each entity description's unique id and the callables reading data.
+
+        Imported here, not at module level, because the platforms import this
+        module. Entities built as classes outside a description read names in
+        `poll_plan.ALWAYS_POLLED`.
+        """
+        from .binary_sensor import BINARY_SENSORS
+        from .select import SELECT_TYPES
+        from .sensor import SENSOR_TYPES
+        from .switch import SWITCH_TYPES
+
+        prefix = getattr(self.entry, "unique_id", None) or self.entry.entry_id
+        readers: list[Reader] = []
+        for description in (
+            *SENSOR_TYPES,
+            *SWITCH_TYPES,
+            *SELECT_TYPES,
+            *BINARY_SENSORS,
+        ):
+            fns: list[Callable[[Any], Any]] = []
+            for attr in ("value_fn", "extra_attrs_fn"):
+                fn = getattr(description, attr, None)
+                if callable(fn):
+                    fns.append(fn)
+            keys: tuple[str, ...] = tuple(getattr(description, "state_keys", ()) or ())
+            if keys:
+                fns.append(_state_keys_reader(keys))
+            if getattr(description, "counts_changes_of", None) is not None:
+                continue
+            readers.append((f"{prefix}_{description.key}", tuple(fns)))
+        return readers
+
+    def _disabled_unique_ids(self) -> set[str]:
+        """Unique ids of this entry's entities disabled in the registry."""
+        try:
+            from homeassistant.helpers import entity_registry as er
+
+            registry = er.async_get(self.hass)
+            return {
+                entry.unique_id
+                for entry in er.async_entries_for_config_entry(
+                    registry, self.entry.entry_id
+                )
+                if entry.disabled_by is not None
+            }
+        except Exception:  # noqa: BLE001 - no registry means nothing skipped
+            return set()
+
+    async def _update_poll_plan(self, data: dict[str, Any]) -> None:
+        """Learn from a successful poll and schedule the next full one.
+
+        A full poll whose extended half came from the cache does not count, and
+        nothing is learned from a cached payload; once the endpoint's strikes
+        are spent its failure is its own and the poll counts (plan §9.3).
+        """
+        plan = self.poll_plan
+        now = dt_util.utcnow()
+        failures = self._endpoint_failures.get(ENDPOINT_EXTENDED, 0)
+        fresh = failures == 0 or failures > FETCH_STRIKE_LIMIT
+        full = self._poll_kind == "full"
+        firmware = str(data.get("wa_inner_version") or "")
+        if firmware and firmware != self._poll_firmware:
+            if self._poll_firmware:
+                # Names learned on another firmware describe one that is gone.
+                plan.answered.clear()
+                plan.request_full("firmware changed")
+            self._poll_firmware = firmware
+        previous = self._poll_previous
+        uptime = data.get("uptime_seconds")
+        if (
+            isinstance(uptime, int)
+            and isinstance(previous.get("uptime"), int)
+            and uptime < previous["uptime"]
+        ):
+            plan.request_full("reboot")
+        link = str(data.get("ppp_status") or "")
+        was = str(previous.get("link") or "")
+        if previous and link.endswith("_connected") and not was.endswith("_connected"):
+            plan.request_full("data connection returned")
+        self._poll_previous = {"uptime": uptime, "link": link}
+        if fresh:
+            readers = self._poll_readers()
+            plan.disabled = self._disabled_unique_ids()
+            # Readers are learned on a full poll, and on the first poll after
+            # a restart that started narrowed from stored names: until they
+            # are, every name counts as unowned and is polled.
+            if full or not plan.consumers:
+                plan.learn_readers(readers, data)
+            if plan.learn_answers(readers, data) and self._poll_store is not None:
+                self._poll_store.async_delay_save(
+                    lambda: plan.to_store(self._poll_firmware), 10
+                )
+        plan.after_poll(data, full=full, fresh=fresh, now=now)
+
     async def async_load_profile(self) -> None:
         """Read the cached device profile. Never raises, never fetches.
 
@@ -1936,6 +2078,21 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         checked once by `async_learn_profile`, which is the only thing that
         can act on the answer.
         """
+        self._poll_store = Store(
+            self.hass, PROFILE_STORAGE_VERSION, f"{DOMAIN}_{self.entry.entry_id}_poll"
+        )
+        try:
+            stored_plan = await self._poll_store.async_load()
+        except Exception:  # noqa: BLE001 - no storage fault fails setup
+            stored_plan = None
+        self._poll_firmware = self.poll_plan.load(
+            stored_plan if isinstance(stored_plan, dict) else {}
+        )
+        # Readers are learned from the descriptions alone, against an empty
+        # payload, so the first poll after a restart is narrowed; reads that
+        # depend on a value are added on the next full poll.
+        with contextlib.suppress(Exception):
+            self.poll_plan.learn_readers(self._poll_readers(), {})
         self._profile_store = Store(
             self.hass,
             PROFILE_STORAGE_VERSION,
@@ -1993,6 +2150,11 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             if not profile.get("unlearned")
             else "not learned: " + ", ".join(profile["unlearned"]),
         )
+        # Entities that read the profile, such as Network Mode Selection's
+        # options, are otherwise re-rendered only by the next poll: up to one
+        # polling interval late, and not at all while polling is paused.
+        if self.data is not None:
+            self.async_update_listeners()
         if self._profile_store is None:  # pragma: no cover - set up before this
             return
         try:
@@ -2325,6 +2487,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         most this entry has seen, so the finding fires only on a collapse
         against the device's own history.
         """
+        if self._poll_kind != self._high_water_kind:
+            self._high_water_by_kind[self._high_water_kind] = self._payload_high_water
+            self._payload_high_water = self._high_water_by_kind.get(self._poll_kind, 0)
+            self._high_water_kind = self._poll_kind
         populated = sum(1 for value in data.values() if value not in ("", None))
         if populated > self._payload_high_water:
             self._payload_high_water = populated

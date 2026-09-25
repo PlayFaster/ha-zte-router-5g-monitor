@@ -171,7 +171,12 @@ _VOLATILE = re.compile(
     r"|^/observations/series/[^/]+/(oldest|newest)$"
     r"|^/session_flag/checks/"
     r"|^/unauthenticated_keys/|^/discovery/sessionless_measurement$"
-    r"|^/discovery/canary_pool/served_without_a_session$)"
+    r"|^/discovery/canary_pool/served_without_a_session$"
+    # How requests went rather than what the download holds, 3.4.4-dev2: a
+    # request that drew no answer in one pass is counted in `endpoint_failures`
+    # (measured 0 then 1 for `sms_messages`), and the poll plan's counters
+    # follow how many polls each pass ran.
+    r"|^/coordinator/endpoint_failures/|^/coordinator/poll_plan/)"
 )
 
 # A pseudonym assigned by `diagnostics._Tokenizer`. Its docstring is explicit
@@ -430,6 +435,34 @@ async def produce_complete(label: str) -> dict[str, Any]:
             )
         )
     return retaken
+
+
+async def retake_on_difference(
+    first: dict[str, Any], second: dict[str, Any]
+) -> frozenset[str]:
+    """Take a third pass when two differ; return the differences it excuses.
+
+    A deterministic regression differs in every pass; a one-off event, such as
+    one request that drew no answer, does not recur on the same path. Only a
+    path differing between passes 1 and 2 and again between passes 2 and 3
+    fails. The count, refused-name and device-profile checks compare passes 1
+    and 2 directly and are not retaken.
+    """
+    differing = structural_differences(first, second)
+    if not differing:
+        return frozenset()
+    print(
+        _cyan(
+            f"           {len(differing)} path(s) differ between runs 1 and 2 — "
+            "taking a third pass to see whether they recur"
+        )
+    )
+    await asyncio.sleep(SETTLE_SECONDS)
+    third = await produce_complete("run 3")
+    excused = frozenset(differing - structural_differences(second, third))
+    for path in sorted(excused):
+        print(_cyan(f"  warning: {path} differed once and not again; excused"))
+    return excused
 
 
 async def produce(label: str, sabotage_at: int = 0) -> dict[str, Any]:
@@ -867,8 +900,28 @@ def _describe(path: str, one: Any, two: Any) -> str:
     return f"{path}: {one!r} vs {two!r}"
 
 
+def structural_differences(first: dict[str, Any], second: dict[str, Any]) -> set[str]:
+    """The paths the two structural checks would report between two passes."""
+    left = dict(_stability_leaves(first))
+    right = dict(_stability_leaves(second))
+
+    def kept(path: str) -> bool:
+        return not _NOTE_PATH.match(path) and not _VOLATILE.search(path)
+
+    fields = {p for p in set(left) ^ set(right) if kept(p)}
+    values = {
+        p
+        for p in set(left) & set(right)
+        if kept(p) and _comparable(left[p]) != _comparable(right[p])
+    }
+    return fields | values
+
+
 def check_stability(
-    first: dict[str, Any], second: dict[str, Any], report: Report
+    first: dict[str, Any],
+    second: dict[str, Any],
+    report: Report,
+    excused: frozenset[str] = frozenset(),
 ) -> None:
     """Diff two consecutive downloads, ignoring what the device changes itself.
 
@@ -890,15 +943,22 @@ def check_stability(
     # measurement the router declined to allow produces an *absent* list
     # rather than a different one, so the two passes differ in their set of
     # paths as well as in their values.
+    # `excused`: paths that differed between passes 1 and 2 and not between
+    # passes 2 and 3, a one-off event rather than a change of structure
+    # (3.4.4-dev2). The caller prints them as warnings.
     fields_left = {
         path
         for path in left
-        if not _NOTE_PATH.match(path) and not _VOLATILE.search(path)
+        if not _NOTE_PATH.match(path)
+        and not _VOLATILE.search(path)
+        and path not in excused
     }
     fields_right = {
         path
         for path in right
-        if not _NOTE_PATH.match(path) and not _VOLATILE.search(path)
+        if not _NOTE_PATH.match(path)
+        and not _VOLATILE.search(path)
+        and path not in excused
     }
 
     report.record(
@@ -912,7 +972,9 @@ def check_stability(
         path
         for path in set(left) & set(right)
         if _comparable(left[path]) != _comparable(right[path])
+        and not _NOTE_PATH.match(path)
         and not _VOLATILE.search(path)
+        and path not in excused
     ]
     report.record(
         not structural,
@@ -1312,7 +1374,8 @@ async def main() -> int:
                     "from that rather than from an unstable pass"
                 )
             )
-        check_stability(first, second, report)
+        excused = await retake_on_difference(first, second)
+        check_stability(first, second, report, excused)
         if args.keep:
             print(f"\nsaved -> {_save(second, 'run2', first['entry']['title'])}")
 

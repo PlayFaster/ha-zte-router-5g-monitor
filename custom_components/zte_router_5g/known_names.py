@@ -35,10 +35,19 @@ Provenance, and the two kinds are not equivalent:
 
 Write commands are excluded: `run_discovery` never probes a name that appears
 as a `goformId`, because reading one is at best meaningless and at worst a
-write. Add to this list by observation — a name that some device actually
-answered or that its web UI actually referenced — never by invention.
+write.
+
+Three sets, by provenance. `KNOWN_NAMES` is observed. `EXPECTED_NAMES` is
+reported by another project. `GENERATED_NAMES` is neither: it applies prefix
+patterns seen across the family to names already known. Until 3.4.4 this module
+added names by observation only; that rule was changed by owner decision,
+because ZTE firmware spells one element under many prefixes (`Z5g_rsrp`,
+`nr5g_rsrp`, `5g_rsrp`, `Nr_...`) and a spelling following an observed pattern
+is worth one probe on a model not yet seen. Generated names reach the
+diagnostics download only, never the poll.
 """
 
+import re
 from typing import Final
 
 KNOWN_NAMES: Final[frozenset[str]] = frozenset(
@@ -921,5 +930,66 @@ EXPECTED_NAMES: Final[frozenset[str]] = frozenset(
         "wifi_chip2_ssid1_access_sta_num",
         "wifi_chip2_ssid2_access_sta_num",
         "wifi_chip_temp",
+        # Reported 2026-09-25 by `tpoechtrager/ZTE-Web-Script` and
+        # `nicjac/python-zte-mc801a`; all twelve blank on the MC7010 that day.
+        "5g_band_lock",
+        "5g_ca_pcell_band",
+        "5g_ca_pcell_bandwidth",
+        "5g_pci",
+        "5g_pci_lock",
+        "5g_rsrq",
+        "5g_snr",
+        "band_list",
+        "network_mode",
+        "rrc_stat",
+        "wan_network_type",
+        "z5g_snr",
     }
 )
+
+
+# ---------------------------------------------------------------------------
+# Generated spellings
+# ---------------------------------------------------------------------------
+#
+# Built from rules over the two sets above, not listed by hand, so what the set
+# reaches is stated here and pinned by a test rather than grown silently.
+
+# The 5G prefix families seen across the downloads held and other projects.
+# Case matters: on the MC7010 `Z5g_rsrq` answers and `z5g_rsrq` does not.
+_5G_PREFIXES: Final = ("5g_", "z5g_", "Z5g_", "nr5g_", "nr_", "Nr_")
+_5G_NAME: Final = re.compile(r"^(?:5g_|z5g_|Z5g_|nr5g_|nr_|Nr_)(.+)$")
+
+# Signal, cell and band names the MC888 Pro also answers with a `network_`
+# prefix (`network_lte_rsrp`, `network_cell_id`, `network_rssi`). Data counters
+# and settings are not matched: nothing shows `network_` on them.
+_NETWORK_PREFIXED: Final = re.compile(
+    r"^(lte_(rsrp|rsrq|snr|sinr|rssi|pci|ca_|band)|Z5g_|nr5g_|nr_ca|5g_"
+    r"|wan_active_|rmcc|rmnc|cell_id|rssi|rscp|ecio|sinr|signalbar|Z_)"
+)
+
+
+def _generate(vocabulary: frozenset[str]) -> frozenset[str]:
+    """The generated spellings, less every name already in the vocabulary.
+
+    Three rules, each on evidence of the prefix: every 5G suffix under every
+    5G prefix; the bare form of a name known only with `flux_`; `network_` in
+    front of a known signal or cell name. `network_` is not applied to a
+    generated name, and no `4g_` form is made, because nothing shows either.
+    """
+    suffixes = {m.group(1) for n in vocabulary if (m := _5G_NAME.match(n))}
+    generated = {prefix + suffix for prefix in _5G_PREFIXES for suffix in suffixes}
+    generated |= {
+        n.removeprefix("flux_")
+        for n in vocabulary
+        if n.startswith("flux_") and n.removeprefix("flux_")
+    }
+    generated |= {
+        "network_" + n
+        for n in vocabulary
+        if _NETWORK_PREFIXED.match(n) and not n.startswith("network_")
+    }
+    return frozenset(generated - vocabulary)
+
+
+GENERATED_NAMES: Final[frozenset[str]] = _generate(KNOWN_NAMES | EXPECTED_NAMES)

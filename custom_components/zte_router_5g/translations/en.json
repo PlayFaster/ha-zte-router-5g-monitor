@@ -501,6 +501,12 @@
     "router_restarting": {
       "message": "The router is restarting. Try again in about {seconds} seconds."
     },
+    "select_option_not_offered": {
+      "message": "{option} is not one of the options the router offers for {entity}."
+    },
+    "select_options_not_learned": {
+      "message": "{entity} cannot be changed yet: the router's own list of options has not been read. It is read in the background after setup; try again shortly, or download diagnostics if this persists."
+    },
     "select_set_failed": {
       "message": "Could not change {entity} on the router: {error}"
     },

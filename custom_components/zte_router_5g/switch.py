@@ -155,7 +155,6 @@ SWITCH_TYPES: tuple[ZTESwitchEntityDescription, ...] = (
         translation_key="data_limit_switch",
         entity_category=EntityCategory.CONFIG,
         group="data",
-        entity_registry_enabled_default=False,
         value_fn=lambda data: (
             str(get_first(data, _ALIAS_LIMIT_SWITCH) or "").strip().lower()
             in ("1", "on", "true")

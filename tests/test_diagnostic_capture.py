@@ -1884,6 +1884,54 @@ async def test_names_another_project_expects_are_probed_too(mock_aiohttp_client)
     assert not unasked, f"never put to the device: {sorted(unasked)[:5]}"
 
 
+@pytest.mark.asyncio
+async def test_generated_names_are_probed_and_counted_by_source(mock_aiohttp_client):
+    """3.4.4: generated spellings reach the probe, and each list is counted.
+
+    `names_from_union_only` counted `KNOWN_NAMES` alone until 3.4.4, so the
+    names `EXPECTED_NAMES` added were probed but never counted.
+    """
+    from custom_components.zte_router_5g.api import _EXTENDED_PARAMS
+    from custom_components.zte_router_5g.const import DISCOVERY_CANDIDATES
+    from custom_components.zte_router_5g.known_names import GENERATED_NAMES
+
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.cookies = {"stok": "live"}
+    api.session_active = True
+    mock_aiohttp_client.get_response = MockResponse(
+        json_data={_CORE_PARAMS[0]: "value", "wan_connect_status": "connected"}
+    )
+    asked: set[str] = set()
+    answering = "nr5g_band_lock"
+
+    async def _record(chunk, canaries=()):
+        asked.update(chunk)
+        return {answering: "1,3"} if answering in chunk else {}
+
+    with (
+        patch.object(api, "logout", AsyncMock()),
+        patch.object(api, "login", AsyncMock()),
+        patch.object(api, "_probe_chunk", side_effect=_record),
+        patch.object(api, "mine_candidate_names", AsyncMock(return_value=(set(), []))),
+    ):
+        result = await api.run_discovery()
+
+    probed_generated = (
+        GENERATED_NAMES
+        - set(_CORE_PARAMS)
+        - set(_EXTENDED_PARAMS)
+        - set(DISCOVERY_CANDIDATES)
+    )
+    assert not probed_generated - asked
+    by_source = result["names_from_union_by_source"]
+    assert by_source["generated"]["probed"] == len(probed_generated)
+    assert by_source["generated"]["answered"] == 1
+    assert by_source["expected"]["probed"] > 0
+    assert result["names_from_union_only"] == sum(
+        entry["probed"] for entry in by_source.values()
+    )
+
+
 def test_the_three_name_sets_do_not_overlap() -> None:
     """Each set carries different evidence, so a name belongs to one.
 

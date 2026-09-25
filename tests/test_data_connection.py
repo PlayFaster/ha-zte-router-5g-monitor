@@ -657,6 +657,9 @@ async def test_a_real_select_write_shows_the_outage_message(
     from custom_components.zte_router_5g.select import SELECT_TYPES
 
     api, session = _real_api()
+    # A learned list, so the refusal under test is the outage one and not
+    # the 3.4.4 "options not learned" one, which is checked first.
+    api.profile = {"device_config": {"auto_modes": ["4G_AND_5G", "LTE_AND_5G"]}}
     mock_coordinator.api = api
     mock_coordinator.data = {}
     description = next(

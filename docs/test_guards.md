@@ -250,6 +250,14 @@ Every translation_key used in code must resolve in both files. Compared against 
 
 A key in the request that nothing reads is a round trip for nothing. The alias sweeps run one way — every key an entity names must be polled. Nothing ran the other way, so `net_select_mode` sat in `_CORE_PARAMS` unread, and `network_net_select_mode` was added beside it to let a second device answer the same unread key. A key counts as read when an entity names it, when it belongs to an alias tuple some entity uses, when it feeds the data-volume write form, when it belongs to a prefix-matched family, or when it is listed above with the reason it is requested anyway.
 
+### `test_every_internal_read_is_always_polled`
+
+Since 3.4.4-dev2 a narrowed poll asks only for names that answered, names an unresolved entity needs, and `poll_plan.ALWAYS_POLLED`. The plan learns which names an entity reads by running its description's readers, so a read anywhere else is invisible to it, and a narrowed poll would drop the name while the session checks, the uptime latch, change history or a write path still read it. The test scans the modules that read the payload directly, `coordinator.py`, `observations.py`, `__init__.py`, `helpers.py`, `api.py` outside its poll lists, `const.py` and `binary_sensor.py`, for string constants that are poll names, and fails on any not in `ALWAYS_POLLED`.
+
+### `test_the_sensor_attribute_reads_are_always_polled`
+
+The same gap one level down: `sensor.py`'s `extra_state_attributes` reads names outside `value_fn`. Found in dev2 when the SNTP sensor's attributes read `sntp_server1`, `sntp_server2` and `sntp_dst_enable`, which no reader recorded.
+
 ### `test_sms_sender_number_is_never_recorded`
 
 The SMS sender's number is third-party personal data. Recording it would write someone else's phone number into the user's database on every poll.

@@ -36,6 +36,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from . import device_profile, web_sources
+from .api import widen_aliases
 from .const import DISCOVERY_VALUE_SAFE
 from .coordinator import ZTERouterDataUpdateCoordinator
 
@@ -95,6 +96,9 @@ CELL_KEYS = {
     "network_Z5g_PCI",
     "network_Z5g_CELL_ID",
 }
+# 3.4.4-dev2: the generated spellings of the same values, which the widened
+# alias tuples request, are cell identifiers too.
+CELL_KEYS |= set(widen_aliases(tuple(sorted(CELL_KEYS))))
 
 # The SMS block is the highest-sensitivity content in the payload: it is data
 # about a *third party* who never consented to appear in a bug report.
@@ -143,6 +147,14 @@ _ENUM_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_\-]*$")
 _APN_PROFILE_SEP = "($)"
 
 _LONG_DIGITS_RE = re.compile(r"\b\d{15,}\b")
+# Phone numbers by shape, whatever the key is called. `wps_alert_sms_number`
+# was published as it stood from 3.3.23 to 3.4.2: its name matched no phone
+# pattern and its value was shorter than the identifier sweep. International:
+# `+` and 8 to 15 digits; a counter never carries a `+`. National: a whole
+# value of 10 or 11 digits starting with `0`; no counter or identifier in any
+# download held starts with `0`, and the match is on the whole value only.
+_INTL_PHONE_RE = re.compile(r"(?<![\w+])\+\d{8,15}\b")
+_NATIONAL_PHONE_RE = re.compile(r"^\s*0\d{9,10}\s*$")
 _PDP_RE = re.compile(r"\b(IPv4v6|IPv6|IPv4|PPP|IP)\b")
 
 REDACTED = "**REDACTED**"
@@ -218,8 +230,13 @@ def _sweep(value: str, tokenizer: _Tokenizer) -> str:
     `test_byte_counters_are_not_mistaken_for_identifiers` pins an 11-digit
     one, so anything below 12 would mask ordinary sensor data.
     """
+    if _NATIONAL_PHONE_RE.match(value):
+        return tokenizer.token("phone", value.strip())
     value = _IP_RE.sub(lambda m: tokenizer.token("ip", m.group(0)), value)
     value = _MAC_RE.sub(lambda m: tokenizer.token("mac", m.group(0)), value)
+    # Before the identifier rule, which would otherwise take a 15-digit number
+    # as an `id` token and leave its `+` behind.
+    value = _INTL_PHONE_RE.sub(lambda m: tokenizer.token("phone", m.group(0)), value)
     return _LONG_DIGITS_RE.sub(lambda m: tokenizer.token("id", m.group(0)), value)
 
 
@@ -601,6 +618,16 @@ async def async_get_config_entry_diagnostics(
     tokenizer = _Tokenizer()
     errors: list[str] = []
 
+    # A full poll first, so the `data` section holds every spelling the router
+    # answers rather than the last narrowed poll's share (3.4.4 plan §9.9).
+    # A download never fails for it: a poll that cannot run leaves the data
+    # as it was, and the reason is recorded.
+    try:
+        coordinator.request_full_poll("diagnostics download")
+        await coordinator.async_force_refresh()
+    except Exception as err:  # noqa: BLE001 - see `_guarded`
+        errors.append(f"full poll before download: {type(err).__name__}: {err}")
+
     # deepcopy first — diagnostics is a read path and must never mutate the
     # live coordinator payload the entities are serving from.
     raw = deepcopy(coordinator.data) if coordinator.data else {}
@@ -701,6 +728,9 @@ async def async_get_config_entry_diagnostics(
             # two timestamps.
             "uptime": _guarded("uptime", lambda: coordinator.uptime_state, errors),
             "endpoint_failures": coordinator.endpoint_failures,
+            "poll_plan": _guarded(
+                "poll_plan", lambda: _json_safe(coordinator.poll_plan.summary()), errors
+            ),
         },
         "data": payload,
         # Counted here so a vocabulary mismatch is visible without diffing two
@@ -844,7 +874,9 @@ _DENY_NAME_RE = re.compile(
     # inconsistent as well as revealing: an MC7010 answered `profile_name_ui`
     # and `m_profile_name` with the operator's own APN profile name, and
     # `rplmn_num` carries MCC and MNC in one value.
-    r"|profile_name|provider|spn|plmn|fullname|shortname)"
+    r"|profile_name|provider|spn|plmn|fullname|shortname"
+    # Phone numbers by name: the router's `*_alert_sms_number` family.
+    r"|phone|sms_number)"
 )
 
 # Decimal degrees, as a pair or alone: a coordinate is location whatever the
@@ -966,6 +998,7 @@ DISCOVERY_METADATA_PUBLISHED = frozenset(
         "mined_names",
         "mined_names_answered",
         "mined_names_probed",
+        "names_from_union_by_source",
         "names_from_union_only",
         "not_reprobed",
         "notes",
@@ -1071,6 +1104,30 @@ def _sources_are_warranted(coordinator: Any) -> str | None:
     return None
 
 
+def _device_files_summary(profile: dict[str, Any], coordinator: Any) -> dict[str, Any]:
+    """What the model-specific files declare, as learned values.
+
+    The network mode options, every option list and flag of the device
+    `config.js`, and the page list of the menu the router's own web page shows
+    in its current WAN mode, chosen as `main.js` chooses it. Values, never
+    script text. Recorded so a download from an unseen model shows them; no
+    entity is changed by the flags in 3.4.4.
+    """
+    device_config = profile.get("device_config", {})
+    menus = profile.get("menus", {})
+    data = getattr(coordinator, "data", None) or {}
+    menu = device_profile.menu_for_mode(data.get("opms_wan_mode"))
+    return {
+        "config_file": device_config.get("path"),
+        "auto_modes": device_config.get("auto_modes"),
+        "option_lists": _json_safe(device_config.get("option_lists", {})),
+        "flags": _json_safe(device_config.get("flags", {})),
+        "menus_read": sorted(menus),
+        "current_menu": menu,
+        "current_menu_pages": menus.get(menu),
+    }
+
+
 def _profile_section(coordinator: Any, sources: dict[str, str]) -> dict[str, Any]:
     """The profile in force, what this download's own crawl reads, and the gap.
 
@@ -1100,6 +1157,7 @@ def _profile_section(coordinator: Any, sources: dict[str, str]) -> dict[str, Any
         return section
     firmware = in_force.get("firmware", "")
     fresh = device_profile.parse_profile(sources, firmware)
+    section["device"] = _device_files_summary(fresh, coordinator)
     section["reparsed"] = {
         "unlearned": fresh.get("unlearned", []),
         "token": _json_safe(fresh.get("token", {})),

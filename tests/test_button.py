@@ -24,6 +24,8 @@ async def test_refresh_button_press(mock_coordinator, mock_config_entry):
 
     await button.async_press()
     mock_coordinator.async_force_refresh.assert_called_once()
+    # 3.4.4-dev2: Refresh Now asks every spelling again.
+    mock_coordinator.request_full_poll.assert_called_once_with("refresh now")
 
 
 def test_refresh_button_device_info(mock_coordinator, mock_config_entry):

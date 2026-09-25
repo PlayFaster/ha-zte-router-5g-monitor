@@ -1275,7 +1275,10 @@ async def test_get_all_data_requests_every_aliased_key(mock_aiohttp_client):
     requested = set(_requested_params(mock_aiohttp_client))
     # Both halves of the split poll count — an alias satisfied by either is
     # reachable, and which batch a key sits in is a separate decision.
-    requested |= set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+    # 3.4.4-dev2: the generated spellings are asked in the extended batch.
+    from custom_components.zte_router_5g.api import POLL_UNIVERSE
+
+    requested |= set(POLL_UNIVERSE)
 
     # Derived from the alias tuples themselves rather than restated here, so a
     # new `_ALIAS_*` constant is covered the moment it is added. The previous

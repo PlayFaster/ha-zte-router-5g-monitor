@@ -346,9 +346,16 @@ def test_the_session_flag_is_the_one_the_device_trusts_itself() -> None:
 
 
 def test_nothing_is_left_unlearned_on_either_device() -> None:
-    """The measurement this whole section rests on."""
-    assert device_profile.parse_profile(MC7010, "v")["unlearned"] == []
-    assert device_profile.parse_profile(MC888, "v")["unlearned"] == []
+    """The measurement this whole section rests on.
+
+    Updated in 3.4.4: these fixtures carry the write-path files only, not the
+    model-specific `config.js`, so the network mode list added in 3.4.4 is the
+    one thing they cannot supply. The live MC7010 learns it, checked by
+    `diag_check.py`; the parsing is tested in `test_network_mode_options.py`.
+    """
+    write_path_only = ["device_config.auto_modes"]
+    assert device_profile.parse_profile(MC7010, "v")["unlearned"] == write_path_only
+    assert device_profile.parse_profile(MC888, "v")["unlearned"] == write_path_only
 
 
 def test_an_empty_crawl_names_everything_it_could_not_learn() -> None:
@@ -366,6 +373,7 @@ def test_an_empty_crawl_names_everything_it_could_not_learn() -> None:
         "commands",
         "login.password_branches",
         "session_flag.key",
+        "device_config.auto_modes",
     }
 
 
@@ -373,7 +381,9 @@ def test_a_non_text_source_is_skipped_rather_than_crashing_the_parse() -> None:
     """The crawl records a failed fetch as a note, not as a body."""
     sources: dict[str, object] = dict(MC7010)
     sources["js/broken.js"] = {"status": 404}
-    assert device_profile.parse_profile(sources)["unlearned"] == []
+    assert device_profile.parse_profile(sources)["unlearned"] == [
+        "device_config.auto_modes"
+    ]  # write-path fixture, 3.4.4
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +593,9 @@ async def test_learning_from_handed_sources_fetches_nothing() -> None:
         ),
         patch.object(api, "get_version", new=AsyncMock(return_value="FW1")),
     ):
-        assert (await api.learn_profile(MC7010))["unlearned"] == []
+        assert (await api.learn_profile(MC7010))["unlearned"] == [
+            "device_config.auto_modes"
+        ]  # write-path fixture, 3.4.4
 
 
 # ---------------------------------------------------------------------------

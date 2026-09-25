@@ -15,7 +15,8 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import ZTERouterExpectedUnavailableError
+from . import device_profile
+from .api import ZTERouterExpectedUnavailableError, widen_aliases
 from .const import APN_PROFILE_SLOTS, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .entity_defaults import default_enabled
@@ -31,7 +32,7 @@ PARALLEL_UPDATES = 1
 
 # The MC888 Pro answers `network_net_select`; the bare spelling leads because
 # the reference MC7010 answers on it. See `helpers.get_first`.
-_ALIAS_NET_SELECT: Final = ("net_select", "network_net_select")
+_ALIAS_NET_SELECT: Final = widen_aliases(("net_select", "network_net_select"))
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -49,6 +50,11 @@ class ZTESelectEntityDescription(SelectEntityDescription):
     # normal, so `unknown` is the correct reading rather than a fault. Read by
     # `check_sensor_manifest.py --verify-ha`, which otherwise reports it stuck.
     unknown_is_valid: bool = False
+    # Where the options come from the router's own web files rather than from
+    # `options_fn`: given the learned device profile, the list, or None where
+    # none was learned. A value outside the router's own list is never written,
+    # because the router's page would never send it (3.4.4 plan §3.3).
+    learned_options_fn: Callable[[dict[str, Any]], list[str] | None] | None = None
 
 
 def _get_apn_profiles(data: Any) -> list[tuple[int, str, str]]:
@@ -172,17 +178,16 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
     ZTESelectEntityDescription(
         key="net_select",
         about=(
-            "Which mobile technologies the router may use. These are the "
-            "router's own web page settings under different names: 4G_AND_5G is "
-            "Auto, LTE_AND_5G is 5G NSA, Only_5G is 5G SA, Only_LTE is 4G Only. "
-            "Auto lets it fall back when a signal weakens; the Only options lock "
-            "it. Locking to 5G can drop the connection entirely where 5G "
-            "coverage is marginal, so prefer Auto unless you are testing."
+            "Which mobile technologies the router may use, such as 4G only, 5G "
+            "only, or both. Values starting with Only lock the router to one "
+            "technology. Where 5G coverage is marginal, locking to 5G can drop the "
+            "connection entirely."
         ),
         translation_key="signal_net_select_mode",
         entity_category=EntityCategory.CONFIG,
         group="signal",
-        options_fn=lambda data: ["4G_AND_5G", "LTE_AND_5G", "Only_5G", "Only_LTE"],
+        options_fn=lambda data: [],
+        learned_options_fn=device_profile.auto_modes,
         value_fn=lambda data: get_first(data, _ALIAS_NET_SELECT) if data else None,
         setter_fn=lambda api, option, data: api.set_bearer_preference(option),
     ),
@@ -231,12 +236,38 @@ class ZTERouterSelect(
         self._entry = entry
         self._attr_unique_id = f"{entry.unique_id}_{description.key}"
 
+    def _learned_options(self) -> list[str] | None:
+        """The router's own option list, or None where it has not been learned."""
+        learned_fn = self.entity_description.learned_options_fn
+        if learned_fn is None:
+            return None
+        profile = getattr(self.coordinator.api, "profile", None)
+        return learned_fn(profile if isinstance(profile, dict) else {})
+
     @property
     def options(self) -> list[str]:
         """Return the list of available options."""
         if not self.coordinator.data:
             return []
-        return self.entity_description.options_fn(self.coordinator.data)
+        if self.entity_description.learned_options_fn is None:
+            return self.entity_description.options_fn(self.coordinator.data)
+        # The router's list, with its current value added where the list lacks
+        # it, so the state is always one of the options. Nothing learned: the
+        # current value alone, which shows the state and allows no change.
+        current = self.current_option
+        options = list(self._learned_options() or [])
+        if current and current not in options:
+            options.append(current)
+        return options
+
+    @property
+    def available(self) -> bool:
+        """Unavailable where there is no option at all to show."""
+        if not super().available:
+            return False
+        if self.entity_description.learned_options_fn is None:
+            return True
+        return bool(self.options)
 
     @property
     def current_option(self) -> str | None:
@@ -273,6 +304,21 @@ class ZTERouterSelect(
         expectation turns out to be wrong, a read-back becomes available here
         and this paragraph is what says so.
         """
+        if self.entity_description.learned_options_fn is not None:
+            learned = self._learned_options()
+            placeholders = {"entity": self.entity_description.key, "option": option}
+            if learned is None:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="select_options_not_learned",
+                    translation_placeholders=placeholders,
+                )
+            if option not in learned:
+                raise HomeAssistantError(
+                    translation_domain=DOMAIN,
+                    translation_key="select_option_not_offered",
+                    translation_placeholders=placeholders,
+                )
         try:
             await self.entity_description.setter_fn(
                 self.coordinator.api, option, self.coordinator.data

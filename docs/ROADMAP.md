@@ -35,6 +35,28 @@ Two of the three polled endpoints exist solely for SMS, so a user who never send
 
 Needs a `CONF_ENABLE_SMS` option, guards on both `_fetch_optional` calls, and an exclusion in `_degraded_endpoints()` — without the last, Integration Health reports "degraded" for a capability the user deliberately switched off. `dev_standards` §15.
 
+### Device capabilities learned at setup
+
+#### **Value ⭐ · Effort Medium**
+
+The device profile learns how a router builds a write from the router's own scripts. The device-specific `config.js` those scripts load also declares capabilities, such as `WIFI_SWITCH_SUPPORT`, `HAS_BATTERY` and `HAS_FOTA`, alongside the option lists 3.4.4 reads. Where a router's live readings do not settle whether it has a feature, those declarations could decide which entities start enabled, as a fallback beside the per-model overlay.
+
+The profile is learned after the first poll, and Home Assistant fixes an entity's default when the entity is first registered, at setup. Using the declarations for defaults therefore needs one extra read of the router during setup, before the platforms load. Setup is already the slowest step, so the cost is acceptable.
+
+**Limited benefit today.** On both supported routers the live readings already show which features exist, and the per-model overlay sets the defaults from them. The gain is on models nobody has measured.
+
+**Would be justified by:** a third model whose first-install defaults are wrong, or the per-model overlay growing an entry per model.
+
+### Per-band and per-network Wi-Fi detail
+
+#### **Value ⭐⭐ · Effort Medium**
+
+Wi-Fi Clients Connected and Wi-Fi Enabled report totals. The MC888 Pro also answers per-radio, per-network keys: `wifi_chip1_*` and `wifi_chip2_*`, most likely the 2.4 GHz and 5 GHz radios, each with `ssid1` and `ssid2`, the main and a second network, carrying clients connected, on or off, and the client limit. It answers `guest_switch` and mesh keys as well. From these, sensors for clients per band and each network's state would be possible, disabled by default.
+
+**The keys are known from one router, through its diagnostics downloads.** Testing is the constraint: the reference MC7010 has no Wi-Fi, so nothing could be checked on hardware here, and every value's meaning would rest on a reporter's downloads.
+
+**Would be justified by:** a user asking for it who can supply downloads, or a second Wi-Fi model that answers the same keys.
+
 ### Encrypted SMS sending
 
 #### **Value ⭐⭐ · Effort Medium**
@@ -125,6 +147,8 @@ Forward work only. Declined and Revisit items are recorded above and are not wor
 | SMS feature-group toggle         | Maybe | ⭐⭐⭐ | Medium |
 | Reboot-on-degradation blueprint  | Maybe | ⭐⭐   | Low    |
 | Encrypted SMS sending            | Maybe | ⭐⭐   | Medium |
+| Per-band Wi-Fi detail            | Maybe | ⭐⭐   | Medium |
+| Device capabilities at setup     | Maybe | ⭐     | Medium |
 
 **Current state.** 121 entities across five sub-devices, 108 carrying `about` notes. 1420 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
@@ -149,6 +173,8 @@ Items that were on this roadmap and have since been built. Detail is in `CHANGEL
 
 ## Version Control
 
+- **v3.9.0** (2026-09-25) - Added **Device capabilities learned at setup** to Maybe: the router's declared capabilities as a fallback for entity defaults, at the cost of one extra read during setup.
+- **v3.8.0** (2026-09-25) - Added **Per-band and per-network Wi-Fi detail** to Maybe, from the Wi-Fi keys the MC888 Pro answers in its diagnostics downloads.
 - **v3.7.0** (2026-09-24) - Added **Encrypted SMS sending** to Maybe, from the assessment of recent releases of two other ZTE projects.
 - **v3.6.0** (2026-09-24) - Moved **Projection accuracy from cycle history** from Maybe to Declined. Its trigger, early-cycle volatility causing a bad automation decision, has not occurred, and the estimate settles within days on its own; a persistent cycle-history store and its failure handling are not justified by that.
 - **v3.5.0** (2026-09-05) — Moved **Long-term history for key text sensors** and **Entity defaults matched to the router model** to Done, at `[3.3.10-dev8]` and `[3.3.10-dev7]`. The history item built both mechanisms its entry left open rather than choosing between them. The defaults item departs from its entry twice, both recorded in the Done row: the overlay enables as well as disables, and the regenerate-and-compare test the v3.3.0 entry proposed was dropped as invalid — its inputs are untracked, it assumes a list that is derivable where the criterion is judgement, and it would have reproduced the one stale entry that actually occurred.

@@ -82,8 +82,17 @@ _KNOWN_MODULES: tuple[str, ...] = (
 )
 
 # Given `DEVICE:"cpe/MF253V"`, the files that directory is known to hold.
+# On a CPE the loader picks one of three menus from `opms_wan_mode`, so all
+# three are fetched: the crawl runs without a login and does not read the mode,
+# and a menu the router does not serve is recorded missing like any other file.
+# Measured 2026-09-25 on the MC7010: all three return 200 without a cookie.
 
-_DEVICE_MODULES: tuple[str, ...] = ("config.js", "menu_bridge.js")
+_DEVICE_MODULES: tuple[str, ...] = (
+    "config.js",
+    "menu_bridge.js",
+    "menu_4ggateway.js",
+    "menu_pppoe.js",
+)
 
 # A library is followed, because it names modules, but not returned: jQuery and
 # Knockout are a megabyte that tells us nothing about this firmware.

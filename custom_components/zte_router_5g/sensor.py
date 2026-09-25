@@ -30,6 +30,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
+from .api import widen_aliases
 from .const import (
     PROJECTION_CONFIDENCE_LOW,
     PROJECTION_CONFIDENCE_MEDIUM,
@@ -160,23 +161,31 @@ def _safe_str(val: Any) -> str | None:
 # Cross-model key aliases. The first entry is the spelling the MC7010 uses, so
 # its execution path is unchanged; later entries only come into play on
 # hardware that does not populate the first.
-_ALIAS_5G_RSRP: Final = ("Z5g_rsrp", "5g_rsrp", "nr5g_rsrp")
-_ALIAS_5G_SINR: Final = ("Z5g_SINR", "Z5g_snr", "5g_sinr", "nr5g_sinr")
-_ALIAS_5G_PCI: Final = ("nr5g_pci", "Z5g_CELL_ID", "network_Z5g_PCI")
-_ALIAS_MONTHLY_TX: Final = ("monthly_tx_bytes", "flux_monthly_tx_bytes")
-_ALIAS_MONTHLY_RX: Final = ("monthly_rx_bytes", "flux_monthly_rx_bytes")
-_ALIAS_TOTAL_TX: Final = ("total_tx_bytes", "flux_total_tx_bytes")
-_ALIAS_TOTAL_RX: Final = ("total_rx_bytes", "flux_total_rx_bytes")
-_ALIAS_TOTAL_TIME: Final = ("total_time", "flux_total_time")
+_ALIAS_5G_RSRP: Final = widen_aliases(("Z5g_rsrp", "5g_rsrp", "nr5g_rsrp"))
+_ALIAS_5G_SINR: Final = widen_aliases(("Z5g_SINR", "Z5g_snr", "5g_sinr", "nr5g_sinr"))
+_ALIAS_5G_PCI: Final = widen_aliases(("nr5g_pci", "Z5g_CELL_ID", "network_Z5g_PCI"))
+_ALIAS_MONTHLY_TX: Final = widen_aliases(("monthly_tx_bytes", "flux_monthly_tx_bytes"))
+_ALIAS_MONTHLY_RX: Final = widen_aliases(("monthly_rx_bytes", "flux_monthly_rx_bytes"))
+_ALIAS_TOTAL_TX: Final = widen_aliases(("total_tx_bytes", "flux_total_tx_bytes"))
+_ALIAS_TOTAL_RX: Final = widen_aliases(("total_rx_bytes", "flux_total_rx_bytes"))
+_ALIAS_TOTAL_TIME: Final = widen_aliases(("total_time", "flux_total_time"))
 
 # The `flux_` prefix is a parallel vocabulary across this API, not a quirk of
 # the monthly counters. The bare spelling leads because the reference MC7010
 # answers on it; order is the tie-break, see `get_first`.
-_ALIAS_REALTIME_TX_BYTES: Final = ("realtime_tx_bytes", "flux_realtime_tx_bytes")
-_ALIAS_REALTIME_RX_BYTES: Final = ("realtime_rx_bytes", "flux_realtime_rx_bytes")
-_ALIAS_REALTIME_TX_THRPT: Final = ("realtime_tx_thrpt", "flux_realtime_tx_thrpt")
-_ALIAS_REALTIME_RX_THRPT: Final = ("realtime_rx_thrpt", "flux_realtime_rx_thrpt")
-_ALIAS_REALTIME_TIME: Final = ("realtime_time", "flux_realtime_time")
+_ALIAS_REALTIME_TX_BYTES: Final = widen_aliases(
+    ("realtime_tx_bytes", "flux_realtime_tx_bytes")
+)
+_ALIAS_REALTIME_RX_BYTES: Final = widen_aliases(
+    ("realtime_rx_bytes", "flux_realtime_rx_bytes")
+)
+_ALIAS_REALTIME_TX_THRPT: Final = widen_aliases(
+    ("realtime_tx_thrpt", "flux_realtime_tx_thrpt")
+)
+_ALIAS_REALTIME_RX_THRPT: Final = widen_aliases(
+    ("realtime_rx_thrpt", "flux_realtime_rx_thrpt")
+)
+_ALIAS_REALTIME_TIME: Final = widen_aliases(("realtime_time", "flux_realtime_time"))
 
 # Alternate spellings mined from the router's own web UI on 2026-09-01. Each
 # answered the identical value to the key it leads at the moment it was
@@ -184,26 +193,36 @@ _ALIAS_REALTIME_TIME: Final = ("realtime_time", "flux_realtime_time")
 # `network_type` reported `ENDC`, so it is a fallback rather than a proven
 # duplicate — which is what a fallback is for: the leader wins whenever it
 # carries a value.
-_ALIAS_NETWORK_TYPE: Final = ("network_type", "strBearer")
-_ALIAS_PROVIDER: Final = ("network_provider", "strFullName", "strShortName")
-_ALIAS_WAN_APN: Final = ("wan_apn", "wan_apn_ui")
-_ALIAS_HARDWARE: Final = ("hardware_version", "hardwarenumber")
-_ALIAS_LIMIT_SIZE: Final = ("data_volume_limit_size", "flux_data_volume_limit_size")
-_ALIAS_LIMIT_UNIT: Final = ("data_volume_limit_unit", "flux_data_volume_limit_unit")
-_ALIAS_ALERT_PERCENT: Final = (
-    "data_volume_alert_percent",
-    "flux_data_volume_alert_percent",
+_ALIAS_NETWORK_TYPE: Final = widen_aliases(("network_type", "strBearer"))
+_ALIAS_PROVIDER: Final = widen_aliases(
+    ("network_provider", "strFullName", "strShortName")
+)
+_ALIAS_WAN_APN: Final = widen_aliases(("wan_apn", "wan_apn_ui"))
+_ALIAS_HARDWARE: Final = widen_aliases(("hardware_version", "hardwarenumber"))
+_ALIAS_LIMIT_SIZE: Final = widen_aliases(
+    ("data_volume_limit_size", "flux_data_volume_limit_size")
+)
+_ALIAS_LIMIT_UNIT: Final = widen_aliases(
+    ("data_volume_limit_unit", "flux_data_volume_limit_unit")
+)
+_ALIAS_ALERT_PERCENT: Final = widen_aliases(
+    (
+        "data_volume_alert_percent",
+        "flux_data_volume_alert_percent",
+    )
 )
 
 # Day of the month on which the router zeroes its monthly counters. Three
 # spellings are in circulation across the goform family; `traffic_clear_date` is
 # the one a live MC7010 probe answered on, so it leads. Order is the tie-break —
 # see `get_first`.
-_ALIAS_CLEAR_DAY: Final = (
-    "traffic_clear_date",
-    "data_volume_clear_date",
-    "data_volume_clear_day",
-    "flux_clear_date",
+_ALIAS_CLEAR_DAY: Final = widen_aliases(
+    (
+        "traffic_clear_date",
+        "data_volume_clear_date",
+        "data_volume_clear_day",
+        "flux_clear_date",
+    )
 )
 
 
@@ -216,26 +235,40 @@ _ALIAS_CLEAR_DAY: Final = (
 # The family is partial. `network_lte_rsrq`, `network_lte_snr` and
 # `network_lte_rssi` appear in no mined set from either device, so three of the
 # four primary signal metrics have no `network_` equivalent to fall back to.
-_ALIAS_LTE_RSRP: Final = ("lte_rsrp", "network_lte_rsrp")
-_ALIAS_CA_PCELL_BAND: Final = ("lte_ca_pcell_band", "network_lte_ca_pcell_band")
-_ALIAS_CA_PCELL_BW: Final = (
-    "lte_ca_pcell_bandwidth",
-    "network_lte_ca_pcell_bandwidth",
+_ALIAS_LTE_RSRP: Final = widen_aliases(("lte_rsrp", "network_lte_rsrp"))
+_ALIAS_CA_PCELL_BAND: Final = widen_aliases(
+    ("lte_ca_pcell_band", "network_lte_ca_pcell_band")
 )
-_ALIAS_CA_SCELL_BAND: Final = ("lte_ca_scell_band", "network_lte_ca_scell_band")
-_ALIAS_CA_SCELL_BW: Final = (
-    "lte_ca_scell_bandwidth",
-    "network_lte_ca_scell_bandwidth",
+_ALIAS_CA_PCELL_BW: Final = widen_aliases(
+    (
+        "lte_ca_pcell_bandwidth",
+        "network_lte_ca_pcell_bandwidth",
+    )
 )
-_ALIAS_NET_SELECT: Final = ("net_select", "network_net_select")
-_ALIAS_NET_SELECT_MODE: Final = ("net_select_mode", "network_net_select_mode")
-_ALIAS_AUTO_CLEAR_SWITCH: Final = (
-    "wan_auto_clear_flow_data_switch",
-    "flux_auto_clear_flow_data_switch",
+_ALIAS_CA_SCELL_BAND: Final = widen_aliases(
+    ("lte_ca_scell_band", "network_lte_ca_scell_band")
 )
-_ALIAS_LIMIT_SWITCH: Final = (
-    "data_volume_limit_switch",
-    "flux_data_volume_limit_switch",
+_ALIAS_CA_SCELL_BW: Final = widen_aliases(
+    (
+        "lte_ca_scell_bandwidth",
+        "network_lte_ca_scell_bandwidth",
+    )
+)
+_ALIAS_NET_SELECT: Final = widen_aliases(("net_select", "network_net_select"))
+_ALIAS_NET_SELECT_MODE: Final = widen_aliases(
+    ("net_select_mode", "network_net_select_mode")
+)
+_ALIAS_AUTO_CLEAR_SWITCH: Final = widen_aliases(
+    (
+        "wan_auto_clear_flow_data_switch",
+        "flux_auto_clear_flow_data_switch",
+    )
+)
+_ALIAS_LIMIT_SWITCH: Final = widen_aliases(
+    (
+        "data_volume_limit_switch",
+        "flux_data_volume_limit_switch",
+    )
 )
 
 
@@ -249,22 +282,26 @@ _ALIAS_LIMIT_SWITCH: Final = (
 # `network_rssi` and `network_sinr` are adopted separately, in
 # [3.3.10-dev4]. They belong to the generic half of this family rather than
 # to the LTE half - see `_ALIAS_RSSI`.
-_ALIAS_CELL_ID: Final = ("cell_id", "network_cell_id")
-_ALIAS_LTE_PCI: Final = ("lte_pci", "network_Z_PCI")
-_ALIAS_ACTIVE_BAND: Final = ("wan_active_band", "network_ZCELLINFO_band")
-_ALIAS_ACTIVE_CHANNEL: Final = ("wan_active_channel", "network_Z_dl_earfcn")
-_ALIAS_NR_BAND: Final = ("nr5g_action_band", "network_Z5g_CELLINFO_band")
-_ALIAS_NR_CHANNEL: Final = ("nr5g_action_channel", "network_Z5g_dlEarfcn")
-_ALIAS_SIGNALBAR: Final = ("signalbar", "network_signalbar")
-_ALIAS_RMCC: Final = ("rmcc", "network_rmcc")
-_ALIAS_RMNC: Final = ("rmnc", "network_rmnc")
-_ALIAS_ROAMING: Final = ("simcard_roam", "network_simcard_roam")
+_ALIAS_CELL_ID: Final = widen_aliases(("cell_id", "network_cell_id"))
+_ALIAS_LTE_PCI: Final = widen_aliases(("lte_pci", "network_Z_PCI"))
+_ALIAS_ACTIVE_BAND: Final = widen_aliases(("wan_active_band", "network_ZCELLINFO_band"))
+_ALIAS_ACTIVE_CHANNEL: Final = widen_aliases(
+    ("wan_active_channel", "network_Z_dl_earfcn")
+)
+_ALIAS_NR_BAND: Final = widen_aliases(("nr5g_action_band", "network_Z5g_CELLINFO_band"))
+_ALIAS_NR_CHANNEL: Final = widen_aliases(
+    ("nr5g_action_channel", "network_Z5g_dlEarfcn")
+)
+_ALIAS_SIGNALBAR: Final = widen_aliases(("signalbar", "network_signalbar"))
+_ALIAS_RMCC: Final = widen_aliases(("rmcc", "network_rmcc"))
+_ALIAS_RMNC: Final = widen_aliases(("rmnc", "network_rmnc"))
+_ALIAS_ROAMING: Final = widen_aliases(("simcard_roam", "network_simcard_roam"))
 
 # Two close matches rather than members of a prefix family: the same field
 # under a different prefix each, found by comparing the names the MC888
 # answered against the names it left empty.
-_ALIAS_MODEM_STATE: Final = ("modem_main_state", "mc_modem_main_state")
-_ALIAS_PIN_ATTEMPTS: Final = ("pinnumber", "sim_pinnumber")
+_ALIAS_MODEM_STATE: Final = widen_aliases(("modem_main_state", "mc_modem_main_state"))
+_ALIAS_PIN_ATTEMPTS: Final = widen_aliases(("pinnumber", "sim_pinnumber"))
 
 # The `network_` family splits the way the bare vocabulary does, into names
 # carrying a technology (`network_lte_rsrp`, `network_Z5g_PCI`) and names
@@ -285,7 +322,7 @@ _ALIAS_PIN_ATTEMPTS: Final = ("pinnumber", "sim_pinnumber")
 # `network_sinr` gets no tuple. There is no bare `sinr` in any vocabulary
 # either device publishes, and inventing one to lead with would put a name in
 # the poll that no firmware has ever been seen to use.
-_ALIAS_RSSI: Final = ("rssi", "network_rssi")
+_ALIAS_RSSI: Final = widen_aliases(("rssi", "network_rssi"))
 
 # The 5G band locks. Neither bare spelling has been populated by any device
 # seen so far, so unlike every other tuple here the alternate is the only
@@ -297,8 +334,12 @@ _ALIAS_RSSI: Final = ("rssi", "network_rssi")
 # of a router with nothing locked - a router free to use every band it
 # supports reports every band it supports under both - and not evidence that
 # they report anything other than the lock.
-_ALIAS_NSA_BAND_LOCK: Final = ("nr5g_nsa_band_lock", "Z5g_lockband_nsa_mask")
-_ALIAS_SA_BAND_LOCK: Final = ("nr5g_sa_band_lock", "Z5g_lockband_sa_mask")
+_ALIAS_NSA_BAND_LOCK: Final = widen_aliases(
+    ("nr5g_nsa_band_lock", "Z5g_lockband_nsa_mask")
+)
+_ALIAS_SA_BAND_LOCK: Final = widen_aliases(
+    ("nr5g_sa_band_lock", "Z5g_lockband_sa_mask")
+)
 
 
 def _scell_field(data: dict[str, Any], index: int) -> float | None:
@@ -648,8 +689,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="system_uptime_duration",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        suggested_unit_of_measurement=UnitOfTime.MINUTES,
-        suggested_display_precision=1,
+        suggested_unit_of_measurement=UnitOfTime.HOURS,
         entity_registry_enabled_default=False,
         group="system",
         min_limit=0,
@@ -680,8 +720,7 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         translation_key="system_connection_duration",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        suggested_unit_of_measurement=UnitOfTime.MINUTES,
-        suggested_display_precision=1,
+        suggested_unit_of_measurement=UnitOfTime.HOURS,
         entity_registry_enabled_default=False,
         group="system",
         min_limit=0,
@@ -699,11 +738,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         ),
         translation_key="system_total_connected_time",
         device_class=SensorDeviceClass.DURATION,
-        state_class=SensorStateClass.TOTAL_INCREASING,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        suggested_unit_of_measurement=UnitOfTime.MINUTES,
-        suggested_display_precision=1,
-        entity_registry_enabled_default=False,
+        suggested_unit_of_measurement=UnitOfTime.HOURS,
         group="system",
         min_limit=0,
         value_fn=lambda data: _safe_int(get_first(data, _ALIAS_TOTAL_TIME)),
@@ -1979,7 +2015,6 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         native_unit_of_measurement=UnitOfInformation.BYTES,
         suggested_unit_of_measurement=UnitOfInformation.GIGABYTES,
         suggested_display_precision=1,
-        entity_registry_enabled_default=False,
         group="data",
         min_limit=0,
         value_fn=_total_data_bytes,
