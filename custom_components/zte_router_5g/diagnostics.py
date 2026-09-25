@@ -36,6 +36,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from . import device_profile, web_sources
+from .api import widen_aliases
 from .const import DISCOVERY_VALUE_SAFE
 from .coordinator import ZTERouterDataUpdateCoordinator
 
@@ -95,6 +96,9 @@ CELL_KEYS = {
     "network_Z5g_PCI",
     "network_Z5g_CELL_ID",
 }
+# 3.4.4-dev2: the generated spellings of the same values, which the widened
+# alias tuples request, are cell identifiers too.
+CELL_KEYS |= set(widen_aliases(tuple(sorted(CELL_KEYS))))
 
 # The SMS block is the highest-sensitivity content in the payload: it is data
 # about a *third party* who never consented to appear in a bug report.
@@ -614,6 +618,16 @@ async def async_get_config_entry_diagnostics(
     tokenizer = _Tokenizer()
     errors: list[str] = []
 
+    # A full poll first, so the `data` section holds every spelling the router
+    # answers rather than the last narrowed poll's share (3.4.4 plan §9.9).
+    # A download never fails for it: a poll that cannot run leaves the data
+    # as it was, and the reason is recorded.
+    try:
+        coordinator.request_full_poll("diagnostics download")
+        await coordinator.async_force_refresh()
+    except Exception as err:  # noqa: BLE001 - see `_guarded`
+        errors.append(f"full poll before download: {type(err).__name__}: {err}")
+
     # deepcopy first — diagnostics is a read path and must never mutate the
     # live coordinator payload the entities are serving from.
     raw = deepcopy(coordinator.data) if coordinator.data else {}
@@ -714,6 +728,9 @@ async def async_get_config_entry_diagnostics(
             # two timestamps.
             "uptime": _guarded("uptime", lambda: coordinator.uptime_state, errors),
             "endpoint_failures": coordinator.endpoint_failures,
+            "poll_plan": _guarded(
+                "poll_plan", lambda: _json_safe(coordinator.poll_plan.summary()), errors
+            ),
         },
         "data": payload,
         # Counted here so a vocabulary mismatch is visible without diffing two

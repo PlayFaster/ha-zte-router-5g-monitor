@@ -27,6 +27,10 @@ def finder(hass):
     """A coordinator reduced to the one method under test."""
     coordinator = ZTERouterDataUpdateCoordinator.__new__(ZTERouterDataUpdateCoordinator)
     coordinator._payload_high_water = 0
+    # 3.4.4-dev2: one high-water mark per poll kind.
+    coordinator._poll_kind = "full"
+    coordinator._high_water_kind = "full"
+    coordinator._high_water_by_kind = {}
     return coordinator
 
 
@@ -89,6 +93,8 @@ def test_the_finding_reaches_the_health_snapshot(hass) -> None:
     """A finding must publish, not merely be computed."""
     coordinator = ZTERouterDataUpdateCoordinator.__new__(ZTERouterDataUpdateCoordinator)
     coordinator._payload_high_water = 82
+    coordinator._poll_kind = coordinator._high_water_kind = "full"
+    coordinator._high_water_by_kind = {}
     coordinator._drift_baseline = set()
     coordinator._drift_strikes = 0
     coordinator.last_update_success_time = None

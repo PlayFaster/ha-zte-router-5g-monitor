@@ -124,6 +124,10 @@ class ZTERefreshButton(ZTEButton):
             self.coordinator.api.refuse_during_outage()
         except ZTERouterExpectedUnavailableError as err:
             raise expected_outage_error(err) from err
+        # A full poll: what a user presses after changing something is the
+        # moment to ask every spelling again (3.4.4 plan §9.2 row 9). Control
+        # changes call `async_force_refresh` too, and stay narrowed.
+        self.coordinator.request_full_poll("refresh now")
         await self.coordinator.async_force_refresh()
 
 

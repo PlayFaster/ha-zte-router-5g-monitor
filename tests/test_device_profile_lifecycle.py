@@ -165,6 +165,9 @@ def _coordinator(api: Any = None) -> Any:
     coordinator.entry.entry_id = "abc"
     coordinator.hass = MagicMock()
     coordinator._profile_store = None
+    # 3.4.4-dev2: `async_load_profile` also loads the poll plan's store.
+    coordinator.poll_plan = MagicMock()
+    coordinator.poll_plan.load.return_value = ""
     # A real coordinator always has `data`; `None` until the first poll. Read
     # since 3.4.4 to decide whether to re-render entities after a learn.
     coordinator.data = None

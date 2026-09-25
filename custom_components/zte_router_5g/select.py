@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import device_profile
-from .api import ZTERouterExpectedUnavailableError
+from .api import ZTERouterExpectedUnavailableError, widen_aliases
 from .const import APN_PROFILE_SLOTS, DOMAIN
 from .coordinator import ZTERouterDataUpdateCoordinator
 from .entity_defaults import default_enabled
@@ -32,7 +32,7 @@ PARALLEL_UPDATES = 1
 
 # The MC888 Pro answers `network_net_select`; the bare spelling leads because
 # the reference MC7010 answers on it. See `helpers.get_first`.
-_ALIAS_NET_SELECT: Final = ("net_select", "network_net_select")
+_ALIAS_NET_SELECT: Final = widen_aliases(("net_select", "network_net_select"))
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -13,6 +13,7 @@ that caused it instead.
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 import sys
 from typing import Any
@@ -21,7 +22,14 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from scripts.diag_check import Report, check_stability, unanswered_files, unasked_count
+from scripts.diag_check import (
+    Report,
+    check_stability,
+    retake_on_difference,
+    structural_differences,
+    unanswered_files,
+    unasked_count,
+)
 
 
 def _artefact(
@@ -318,3 +326,84 @@ def test_a_web_file_with_no_answer_marks_the_pass_incomplete() -> None:
 
     assert unanswered_files(artefact) == ["js/c.js"]
     assert unanswered_files({}) == []
+
+
+# ---------------------------------------------------------------------------
+# The retake (3.4.4-dev2)
+# ---------------------------------------------------------------------------
+
+
+def test_runtime_health_counters_are_not_compared() -> None:
+    """A request that drew no answer in one pass is not a structural change.
+
+    Measured 2026-09-25: `/coordinator/endpoint_failures/sms_messages` read 0
+    in one pass and 1 in the other.
+    """
+    values = {"lan_netmask": "ip-1"}
+    first = {
+        **_artefact([], values),
+        "coordinator": {"endpoint_failures": {"sms_messages": 0}},
+    }
+    second = {
+        **_artefact([], values),
+        "coordinator": {"endpoint_failures": {"sms_messages": 1}},
+    }
+    assert structural_differences(first, second) == set()
+
+
+def test_a_one_off_difference_is_excused_by_the_third_pass(monkeypatch) -> None:
+    """It differs between runs 1 and 2 and not between runs 2 and 3."""
+    first = _artefact([], {"a_value": "x"})
+    second = _artefact([], {"a_value": "y"})
+    third = _artefact([], {"a_value": "y"})
+    monkeypatch.setattr("scripts.diag_check.produce_complete", _returns(third))
+    monkeypatch.setattr("scripts.diag_check.SETTLE_SECONDS", 0)
+    excused = asyncio.run(retake_on_difference(first, second))
+    assert excused == {"/discovery/values/a_value"}
+    report = Report()
+    check_stability(first, second, report, excused)
+    assert _outcome(report, "no structural difference")
+
+
+def test_a_difference_that_recurs_still_fails(monkeypatch) -> None:
+    """A deterministic regression differs in every pass."""
+    first = _artefact([], {"a_value": "x"})
+    second = _artefact([], {"a_value": "y"})
+    third = _artefact([], {"a_value": "z"})
+    monkeypatch.setattr("scripts.diag_check.produce_complete", _returns(third))
+    monkeypatch.setattr("scripts.diag_check.SETTLE_SECONDS", 0)
+    excused = asyncio.run(retake_on_difference(first, second))
+    assert excused == frozenset()
+    report = Report()
+    check_stability(first, second, report, excused)
+    assert not _outcome(report, "no structural difference")
+
+
+def test_no_difference_takes_no_third_pass(monkeypatch) -> None:
+    """The retake costs a pass only on a run that would otherwise fail."""
+    same = _artefact([], {"a_value": "x"})
+    monkeypatch.setattr(
+        "scripts.diag_check.produce_complete", _returns(None, fail=True)
+    )
+    assert asyncio.run(retake_on_difference(same, same)) == frozenset()
+
+
+def test_a_count_difference_is_not_retaken() -> None:
+    """The count checks compare runs 1 and 2 directly, whatever the retake says."""
+    first = _artefact([], {})
+    second = _artefact([], {})
+    second["discovery"]["mined_names_answered"] = 3
+    report = Report()
+    check_stability(
+        first, second, report, frozenset({"/discovery/mined_names_answered"})
+    )
+    assert not _outcome(report, "`mined_names_answered` is stable")
+
+
+def _returns(value: Any, *, fail: bool = False) -> Any:
+    async def produce(label: str) -> Any:
+        if fail:
+            raise AssertionError("took a third pass")
+        return value
+
+    return produce

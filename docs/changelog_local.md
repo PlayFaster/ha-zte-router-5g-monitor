@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.4-dev2\] - 2026-09-25 - Each Poll Asks Only What the Router Answers; Generated Spellings in the Alias Tuples; Diagnostics Check Retakes a Differing Pass](#344-dev2---2026-09-25---each-poll-asks-only-what-the-router-answers-generated-spellings-in-the-alias-tuples-diagnostics-check-retakes-a-differing-pass)
   - [\[3.4.4-dev1\] - 2026-09-25 - Network Mode Options Read from the Router; Diagnostics Probe Reported and Generated Spellings; Duration Sensors in Hours](#344-dev1---2026-09-25---network-mode-options-read-from-the-router-diagnostics-probe-reported-and-generated-spellings-duration-sensors-in-hours)
   - [\[3.4.3-dev4\] - 2026-09-24 - Diagnostics Download Re-Fetches a Dropped Web File; Diagnostics Check Compares Name Lists as Sets and Refuses to Run While Home Assistant Polls](#343-dev4---2026-09-24---diagnostics-download-re-fetches-a-dropped-web-file-diagnostics-check-compares-name-lists-as-sets-and-refuses-to-run-while-home-assistant-polls)
   - [\[3.4.3-dev3\] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date](#343-dev3---2026-09-24---stand-alone-scripts-load-probatio-first-session-and-router-behavior-documentation-brought-up-to-date)
@@ -318,6 +319,62 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.4-dev2] - 2026-09-25 - Each Poll Asks Only What the Router Answers; Generated Spellings in the Alias Tuples; Diagnostics Check Retakes a Differing Pass
+
+Plan: `.notes/issues/plans_status/v344_plan.md` §9.
+
+### Changed
+
+- **Each poll asks only for what the router answers.** A new `poll_plan.PollPlan` chooses the names for each poll. A narrowed poll asks for the names read outside any entity (`poll_plan.ALWAYS_POLLED`: session checks, the uptime latch, change history, the write paths, the SMS counters, class-built binary sensors), every name that has answered on this firmware, and a rotating fifth of the names that have never answered where the entity reading them has not found its value under another spelling. A name no entity was seen to read is asked on every poll. A name only disabled entities read is not asked.
+- **A full poll asks for every name,** on the first poll with nothing stored, every 30th poll, at least daily, on Refresh Now, before a diagnostics download, and after a reboot, a firmware change or the data connection returning. An owed full poll is cleared only when one succeeds with a fresh extended batch; while that endpoint has strikes left a cached extended batch does not count, and once they are spent the poll counts, so a failing endpoint cannot force a full poll on every poll. Nothing is learned from a cached payload.
+- **A name that answered once stays in the poll,** including a 5G value blank on LTE: the API answers blank for a known name with no value, so the value is read on the first poll after 5G returns. When `network_type` moves from LTE (`LTE-NSA`, `LTE`) to a 5G value (`ENDC`, `EN-DC`, or any value not recognized), the next poll asks every 5G name not yet answered.
+- **Which entity reads which name is recorded, not declared.** Each description's readers run against a recording payload, empty (a whole alias tuple is walked) and on a full poll against the real payload (reads behind a condition). Learned from the descriptions at startup, so the first poll after a restart is already narrowed.
+- **What answered is stored per entry,** in `zte_router_5g_<entry>_poll` with the firmware it answered on, written by a delayed save only when a new name answers. A firmware change discards it and owes a full poll.
+- **The alias tuples include the generated spellings of their values.** `api.widen_aliases` appends, after the spellings already known, the 90 names of `known_names.GENERATED_NAMES` that spell a value already polled (`api.spelling_family` folds the `network_`, `flux_` and 5G prefixes). They are asked in the extended batch on a full poll and kept only where they answer. A router answering a known spelling reads as before.
+- **Refresh Now makes a full poll.** Control changes and SMS services, which also force a refresh, stay narrowed.
+- **The sparse-payload check keeps one high-water mark per poll kind,** so a narrowed poll is not judged against a full poll's population.
+- **A diagnostics download asks for a full poll first,** so its `data` section holds every spelling the router answers; a poll that cannot run is recorded in `errors` and the download is still produced. `coordinator.poll_plan` publishes the plan's counts.
+- **`scripts/diag_check.py` retakes a differing pass.** When runs 1 and 2 differ structurally a third pass is taken, and only a path differing again between runs 2 and 3 fails; each excused path is printed as a warning. `/coordinator/endpoint_failures/` and `/coordinator/poll_plan/` are no longer compared. The count, refused-name and device-profile checks still compare runs 1 and 2 directly.
+
+### Fixed During the Cycle
+
+- **A fault in the poll plan failed the whole poll.** Found in the live check: the diagnostics check's stub config entry has no `unique_id`, `_update_poll_plan` raised, and a paused entry's forced poll returned empty data. The plan update is now guarded and never fails a poll; the reader prefix falls back to the entry id.
+- **A restart began with a full poll** although stored names existed: they loaded after the first poll, and the poll counter and daily clock started at zero. They now load at startup, the clocks start at the first poll, and the readers are learned from the descriptions before it.
+- **The widened 5G PCI tuple brought cell-identifier spellings the sanitizer did not tokenize.** `_ALIAS_5G_PCI` includes `Z5g_CELL_ID`, so its generated spellings include `5g_cell_id`, `nr_CELL_ID` and others, which `diagnostics.CELL_KEYS` enumerated by exact name and would have published as answered. Found by `test_every_classified_concept_covers_all_its_aliases`; `CELL_KEYS` now includes the generated spellings of its members.
+- **The SNTP sensor's attributes read `sntp_server1`, `sntp_server2` and `sntp_dst_enable` outside `value_fn`.** Found by `test_the_sensor_attribute_reads_are_always_polled`; added to `ALWAYS_POLLED`.
+
+### Deviations From the Plan
+
+- The answered names are kept in their own store, keyed to the firmware, rather than inside the device profile, so learning them does not re-crawl the web files; `PROFILE_VERSION` is unchanged.
+- Readers are recorded at run time rather than declared on each description; a name no reader was seen to read is always asked, which is the safe direction for a missed declaration.
+- The 5G sweep after an LTE-to-5G change runs on the next poll rather than the same one, because the change is known only once the poll has answered.
+
+### Checked Live on the MC7010
+
+| Check | Result |
+| :-- | :-- |
+| First poll with nothing stored | Full, 272 names, 0.44 s |
+| Following polls, polling unpaused at 30 s | Narrowed, 150 names, about 0.13 s; 3.4.4-dev1 asked 186 on every poll |
+| Six entities disabled, then re-enabled | 150 → 148-149 names; re-enabling reloaded the entry |
+| Restart with the store written | First poll narrowed, 151 names |
+| Refresh Now | Full, 272 names, reason `refresh now` |
+| Network Mode Selection set to its current value | Narrowed |
+| Entity availability against a 3.4.4-dev1 baseline of 130 entities | No entity changed between available and unknown or unavailable |
+| Diagnostics check | 65 of 65; the download's data section 279 keys from a full poll; one pass 64 s |
+
+### Tests
+
+- `test_poll_plan.py`: the first poll is full; a resolved value's unanswered spelling is dropped; internal and unowned names are always asked; rotation one poll in five; disabled-only names skipped even on a full poll; the 30th poll and a day's age; an owed full poll stays owed until a fresh one; a rejected placeholder does not resolve; stored names make the first poll narrowed; a malformed store; the 5G canary, with `LTE-NSA` as LTE; the 5G sweep; the recording payload; the widened aliases and spelling families; every internal read and every sensor-attribute read is always polled.
+- `test_poll_plan_coordinator.py`: narrowing after the first poll; Refresh Now; a cached full poll stays owed; an endpoint past its strikes does not force full polls; reboot, data return and firmware change; a plan fault never fails a poll; stored names load before the first poll; a store that cannot be read; the delayed save; the registry's disabled entities; one high-water mark per poll kind; paused entries still skip scheduled polls.
+- `test_diag_check_stability.py`: runtime counters are not compared; a one-off difference is excused by the third pass; a recurring one fails; no difference takes no third pass; a count difference is not retaken.
+- `test_button.py`, `test_diagnostics_artefact.py`: Refresh Now and a download ask for a full poll; a failed poll does not fail the download.
+- Fifteen mutations, one per change: every one fails its tests; restored, all pass.
+- Updated where they encoded the old behavior: `test_unauthenticated_key_measurement.py`, `test_api.py` and `test_sensor.py` count the generated spellings as requested; the sparse-payload fixtures set the poll kind; the device-profile lifecycle helper carries a poll plan; two suppressions are on the reviewed allow-list with their reasons.
+
+### Validation
+
+`Fix and Validate All`, run in the devcontainer after a restart onto the final code and read from `.reports/summary_fix_and_validate.txt` (written 2026-09-25 22:48): every step passes, the fault drill skipped as usual. 2,067 tests at 100% coverage, the hardware check at 24 of 24, the diagnostics check at 65 of 65, and the sensor manifest in sync at 130 entities. The first run failed 8 tests on fixtures and alias checks that did not know the poll plan or the generated spellings, one of which found the cell-identifier gap above; all are fixed.
 
 ## [3.4.4-dev1] - 2026-09-25 - Network Mode Options Read from the Router; Diagnostics Probe Reported and Generated Spellings; Duration Sensors in Hours
 

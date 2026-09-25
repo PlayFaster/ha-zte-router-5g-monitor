@@ -606,6 +606,12 @@ async def test_every_live_entity_has_an_icon_or_a_device_class(
 # reason for each finding, per the chore. Copying Huawei's entries would have
 # been meaningless: they describe that project's library.
 ALLOWED_SUPPRESSIONS: dict[tuple[str, str], str] = {
+    ("poll_plan.py", "noqa: BLE001"): (
+        "3.4.4-dev2. `_call` runs every entity's reader against a recording "
+        "payload, including an empty one no entity is written for; any "
+        "fault means that reader records no more and accepts no value, and "
+        "the poll plan must never fail a poll."
+    ),
     ("diag_check.py", "noqa: F401"): (
         "C-036. `import homeassistant` is made for its side effect: Home "
         "Assistant installs probatio as `voluptuous` when it is first "

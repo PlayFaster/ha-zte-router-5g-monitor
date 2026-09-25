@@ -373,3 +373,22 @@ async def test_a_name_that_answered_is_in_neither_absence_field(diagnostics_entr
     answered = set(discovery["values"])
     assert not answered & set(discovery["probed_no_answer"])
     assert not answered & set(discovery["not_reprobed"])
+
+
+async def test_a_download_asks_for_a_full_poll_first(diagnostics_entry) -> None:
+    """3.4.4-dev2: the `data` section holds every spelling the router answers."""
+    coordinator = diagnostics_entry.runtime_data
+    coordinator.async_force_refresh = AsyncMock()
+    await async_get_config_entry_diagnostics(None, diagnostics_entry)
+    coordinator.request_full_poll.assert_called_once_with("diagnostics download")
+    coordinator.async_force_refresh.assert_awaited_once()
+
+
+async def test_a_full_poll_that_fails_does_not_fail_the_download(
+    diagnostics_entry,
+) -> None:
+    """The reason is recorded and the download is still produced."""
+    coordinator = diagnostics_entry.runtime_data
+    coordinator.async_force_refresh = AsyncMock(side_effect=OSError("silent"))
+    result = await async_get_config_entry_diagnostics(None, diagnostics_entry)
+    assert any("full poll before download" in e for e in result["errors"])

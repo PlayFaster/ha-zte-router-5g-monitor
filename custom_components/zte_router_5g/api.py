@@ -403,6 +403,63 @@ _EXTENDED_PARAMS: list[str] = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Generated spellings of polled values (3.4.4-dev2)
+# ---------------------------------------------------------------------------
+
+_FAMILY = re.compile(r"^(?:network_|flux_)?(?:(5g_|z5g_|Z5g_|nr5g_|nr_|Nr_)(.+))?(.*)$")
+
+
+def spelling_family(name: str) -> str:
+    """The value a name spells, whatever its prefix.
+
+    `Z5g_rsrp`, `nr5g_rsrp` and `network_Z5g_rsrp` are one value;
+    `network_lte_rsrp` and `lte_rsrp` are one value; `flux_total_time` and
+    `total_time` are one value. Suffix case is folded for the 5G families
+    only, where `Z5g_SINR` and `nr5g_sinr` are the same reading.
+    """
+    # The pattern's every part is optional, so it matches any string.
+    match = cast(re.Match[str], _FAMILY.match(name))
+    if match.group(2):
+        return "5g:" + match.group(2).lower()
+    return match.group(3)
+
+
+# The generated spellings (`known_names.GENERATED_NAMES`) of values this
+# integration already polls: asked on a full poll, and only while they answer
+# afterwards, so a model spelling a value differently is found without costing
+# every other model on every poll.
+_POLLED_FAMILIES = frozenset(
+    spelling_family(n) for n in (*_CORE_PARAMS, *_EXTENDED_PARAMS)
+)
+_WIDENED_PARAMS: list[str] = sorted(
+    n for n in GENERATED_NAMES if spelling_family(n) in _POLLED_FAMILIES
+)
+_WIDENED_BY_FAMILY: dict[str, tuple[str, ...]] = {}
+for _name in _WIDENED_PARAMS:
+    _WIDENED_BY_FAMILY[spelling_family(_name)] = (
+        *_WIDENED_BY_FAMILY.get(spelling_family(_name), ()),
+        _name,
+    )
+
+# Every name any poll can ask for, in request order.
+POLL_UNIVERSE: tuple[str, ...] = tuple(
+    dict.fromkeys((*_CORE_PARAMS, *_EXTENDED_PARAMS, *_WIDENED_PARAMS))
+)
+
+
+def widen_aliases(aliases: tuple[str, ...]) -> tuple[str, ...]:
+    """An alias tuple with the generated spellings of its values appended.
+
+    The spellings the integration already knows stay first, in their order, so
+    a router answering one of them reads exactly as before.
+    """
+    extra: list[str] = []
+    for family in dict.fromkeys(spelling_family(a) for a in aliases):
+        extra += [n for n in _WIDENED_BY_FAMILY.get(family, ()) if n not in aliases]
+    return (*aliases, *dict.fromkeys(extra))
+
+
 # `result` values a login is accepted on. Shares its members with
 # `_is_refusal`, which decides the same question for writes, but is a separate
 # constant on purpose: a login carrying no `result` at all has established
@@ -4134,17 +4191,23 @@ class ZTERouterAPI:
                 request.append(sentinel)
         return await self._batch_get(request, timeout_sec=timeout_sec)
 
-    async def get_all_data(self) -> dict[str, Any]:
+    async def get_all_data(self, names: frozenset[str] | None = None) -> dict[str, Any]:
         """Fetch the mandatory core payload.
 
         Failure here is a whole-integration failure and belongs on the global
         strike path — everything an enabled-by-default entity needs is in this
         request, as is the device identity latched into `entry.data`.
-        """
-        async with self._write_lock:
-            return await self._batch_get(_CORE_PARAMS, starts_cycle=True)
 
-    async def get_extended_data(self) -> dict[str, Any]:
+        `names` narrows the request to the poll plan's names; `None` asks for
+        everything.
+        """
+        params = [n for n in _CORE_PARAMS if names is None or n in names]
+        async with self._write_lock:
+            return await self._batch_get(params, starts_cycle=True)
+
+    async def get_extended_data(
+        self, names: frozenset[str] | None = None
+    ) -> dict[str, Any]:
         """Fetch the optional diagnostic payload.
 
         A second request rather than a longer first one: the router bounds a
@@ -4156,8 +4219,15 @@ class ZTERouterAPI:
         fed from here unavailable. It must therefore stay free of anything an
         enabled-by-default entity needs.
         """
+        params = [
+            n
+            for n in (*_EXTENDED_PARAMS, *_WIDENED_PARAMS)
+            if names is None or n in names
+        ]
+        if not params:
+            return {}
         async with self._write_lock:
-            return await self._batch_get(_EXTENDED_PARAMS)
+            return await self._batch_get(params)
 
     async def get_sms_capacity(self, timeout_sec: int | None = None) -> dict[str, Any]:
         """Get SMS capacity information."""

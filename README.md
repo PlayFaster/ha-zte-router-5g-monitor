@@ -603,7 +603,7 @@ Several settings are exposed as control entities so you can drive them from dash
 
 - **Pause Polling** (`switch.zte_5g_system_pause_polling`): Halt all polling when you need exclusive access to the router's web UI.
 - **Polling Interval** (`number.zte_5g_system_polling_interval`): Adjust the scan interval slider (30s to 1 hour, default `180` seconds).
-- **Refresh Now** (`button.zte_5g_system_refresh_now`): Trigger an immediate refresh (data fetch). **This works even while Pause Polling is on** — an explicit action always fetches, while scheduled polls stay paused.
+- **Refresh Now** (`button.zte_5g_system_refresh_now`): Trigger an immediate refresh (data fetch). **This works even while Pause Polling is on** — an explicit action always fetches, while scheduled polls stay paused. Refresh Now asks the router for every value it may report, including ones it has not reported before, where a scheduled poll asks mainly for the values your router is known to answer.
 - **Reboot** (`button.zte_5g_system_reboot`): Reboot the router hardware directly from Home Assistant. The router is unreachable for a minute or two, and other controls show an error until it answers again. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error).
 - **ODU LED Switch** (`switch.zte_5g_system_odu_led_switch`, _disabled by default_): Turn the physical status LEDs of the outdoor unit on or off.
 

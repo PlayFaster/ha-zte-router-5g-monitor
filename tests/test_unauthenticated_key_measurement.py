@@ -245,7 +245,10 @@ def test_every_new_alias_is_requested() -> None:
     """An alias tuple naming a key nobody asks for can never resolve."""
     from custom_components.zte_router_5g import sensor
 
-    requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS)
+    # 3.4.4-dev2: generated spellings are requested from `POLL_UNIVERSE`.
+    from custom_components.zte_router_5g.api import POLL_UNIVERSE
+
+    requested = set(_CORE_PARAMS) | set(_EXTENDED_PARAMS) | set(POLL_UNIVERSE)
     tuples = [
         getattr(sensor, name) for name in dir(sensor) if name.startswith("_ALIAS_")
     ]

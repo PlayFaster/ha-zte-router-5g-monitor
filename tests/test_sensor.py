@@ -10,6 +10,7 @@ from custom_components.zte_router_5g.api import (
     _CONTRACT_CONCEPTS,
     _CORE_PARAMS,
     _EXTENDED_PARAMS,
+    POLL_UNIVERSE,
     ZTERouterAPI,
 )
 from custom_components.zte_router_5g.const import DOMAIN
@@ -826,7 +827,10 @@ def test_every_aliased_key_is_requested_by_the_batch_poll():
         + _ALIAS_MONTHLY_RX
         + _ALIAS_CLEAR_DAY
     ):
-        assert f'"{alias}"' in source, f"{alias} is aliased but never requested"
+        # 3.4.4-dev2: generated spellings are requested from `POLL_UNIVERSE`.
+        assert f'"{alias}"' in source or alias in POLL_UNIVERSE, (
+            f"{alias} is aliased but never requested"
+        )
 
 
 # --- Monthly reset day (`_clear_day`) ---
