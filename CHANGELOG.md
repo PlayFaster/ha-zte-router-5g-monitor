@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.4.4] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion
+
+### Summary
+
+- **Intelligent Hybrid Polling**: The integration now learns which parameters your specific router model answers and polls only those keys, reducing network traffic and router request load.
+- **Router-Learned Network Mode Selection**: Network Mode Selection now reads the exact mode options supported by your router's firmware, preventing "Unknown" states and eliminating hardcoded mode lists.
+
+### Added
+
+- **Intelligent Parameter Polling**: Automatically discovers and polls only the parameters your router model supports on steady-state polls, reducing request volume by ~20%–35%. Unresolved parameters are polled in background rotation (1 in 5 polls), with automatic 5G parameter sweeps on LTE-to-5G network transitions and periodic full polls every 30 cycles or on Refresh Now.
+- **Router-Sourced Network Mode Options**: `select.<name>_signal_network_mode_selection` reads available modes directly from the router's internal device configuration files, supporting model-specific modes and refusing unsupported writes.
+- **Expanded Diagnostics Discovery**: Probes 181 additional rule-generated spelling variants (`5g_`, `z5g_`, `nr5g_`, `nr_`, `network_`, `flux_`), plus 12 parameter names reported by community ZTE tools during diagnostics capture without impacting steady-state polling.
+- **Value-Based Data Sanitization**: Diagnostics redaction sweeps automatically tokenize international and national phone numbers matching number shape across all data fields regardless of key name.
+
+### Changed
+
+- **Default Entity Enablement**: Total Data (`sensor.<name>_data_total_data_bytes`), Data Limit Switch (`switch.<name>_data_data_limit_switch`), and Total Connected Time (`sensor.<name>_system_total_time`) are now enabled by default on new setups (existing setups can apply these defaults via the `reset_entities` action).
+- **Duration Sensor Display Units**: Suggested display units for Uptime Duration (`sensor.<name>_system_realtime_time`), Connection Duration (`sensor.<name>_system_connection_duration`), and Total Connected Time (`sensor.<name>_system_total_time`) are set to hours (`h`) with no fixed precision, allowing Home Assistant frontend to display readable hours and minutes (e.g. `20 hours 15 minutes`).
+
+---
+
 ## [3.4.3] - 2026-09-24 - Release: Data Connection Switch, Write Command Resilience, Expected Outage Awareness, Uptime and Connection Time Tracking, and Total Data Counters
 
 ### Summary
@@ -932,6 +953,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.4.4\] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion](#344---2026-09-26---release-intelligent-hybrid-polling-router-learned-network-modes-and-diagnostics-vocabulary-expansion)
   - [\[3.4.3\] - 2026-09-24 - Release: Data Connection Switch, Write Command Resilience, Expected Outage Awareness, Uptime and Connection Time Tracking, and Total Data Counters](#343---2026-09-24---release-data-connection-switch-write-command-resilience-expected-outage-awareness-uptime-and-connection-time-tracking-and-total-data-counters)
   - [\[3.4.2\] - 2026-09-24 - Pre-Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---pre-release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
   - [\[3.4.1\] - 2026-09-23 - Pre-Release: Data Connection Switch, Outage Protection Windows, and Connection State Tracking](#341---2026-09-23---pre-release-data-connection-switch-outage-protection-windows-and-connection-state-tracking)

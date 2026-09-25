@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.4\] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion](#344---2026-09-26---release-intelligent-hybrid-polling-router-learned-network-modes-and-diagnostics-vocabulary-expansion)
   - [\[3.4.4-dev2\] - 2026-09-25 - Each Poll Asks Only What the Router Answers; Generated Spellings in the Alias Tuples; Diagnostics Check Retakes a Differing Pass](#344-dev2---2026-09-25---each-poll-asks-only-what-the-router-answers-generated-spellings-in-the-alias-tuples-diagnostics-check-retakes-a-differing-pass)
   - [\[3.4.4-dev1\] - 2026-09-25 - Network Mode Options Read from the Router; Diagnostics Probe Reported and Generated Spellings; Duration Sensors in Hours](#344-dev1---2026-09-25---network-mode-options-read-from-the-router-diagnostics-probe-reported-and-generated-spellings-duration-sensors-in-hours)
   - [\[3.4.3-dev4\] - 2026-09-24 - Diagnostics Download Re-Fetches a Dropped Web File; Diagnostics Check Compares Name Lists as Sets and Refuses to Run While Home Assistant Polls](#343-dev4---2026-09-24---diagnostics-download-re-fetches-a-dropped-web-file-diagnostics-check-compares-name-lists-as-sets-and-refuses-to-run-while-home-assistant-polls)
@@ -320,6 +321,25 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.4.4] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion
+
+### Summary
+
+- **Intelligent Hybrid Polling**: The integration now learns which parameters your specific router model answers and polls only those keys, reducing network traffic and router request load.
+- **Router-Learned Network Mode Selection**: Network Mode Selection now reads the exact mode options supported by your router's firmware, preventing "Unknown" states and eliminating hardcoded mode lists.
+
+### Added
+
+- **Intelligent Parameter Polling**: Automatically discovers and polls only the parameters your router model supports on steady-state polls, reducing request volume by ~20%–35%. Unresolved parameters are polled in background rotation (1 in 5 polls), with automatic 5G parameter sweeps on LTE-to-5G network transitions and periodic full polls every 30 cycles or on Refresh Now.
+- **Router-Sourced Network Mode Options**: `select.<name>_signal_network_mode_selection` reads available modes directly from the router's internal device configuration files, supporting model-specific modes and refusing unsupported writes.
+- **Expanded Diagnostics Discovery**: Probes 181 additional rule-generated spelling variants (`5g_`, `z5g_`, `nr5g_`, `nr_`, `network_`, `flux_`), plus 12 parameter names reported by community ZTE tools during diagnostics capture without impacting steady-state polling.
+- **Value-Based Data Sanitization**: Diagnostics redaction sweeps automatically tokenize international and national phone numbers matching number shape across all data fields regardless of key name.
+
+### Changed
+
+- **Default Entity Enablement**: Total Data (`sensor.<name>_data_total_data_bytes`), Data Limit Switch (`switch.<name>_data_data_limit_switch`), and Total Connected Time (`sensor.<name>_system_total_time`) are now enabled by default on new setups (existing setups can apply these defaults via the `reset_entities` action).
+- **Duration Sensor Display Units**: Suggested display units for Uptime Duration (`sensor.<name>_system_realtime_time`), Connection Duration (`sensor.<name>_system_connection_duration`), and Total Connected Time (`sensor.<name>_system_total_time`) are set to hours (`h`) with no fixed precision, allowing Home Assistant frontend to display readable hours and minutes (e.g. `20 hours 15 minutes`).
+
 ## [3.4.4-dev2] - 2026-09-25 - Each Poll Asks Only What the Router Answers; Generated Spellings in the Alias Tuples; Diagnostics Check Retakes a Differing Pass
 
 Plan: `.notes/issues/plans_status/v344_plan.md` §9.
@@ -362,6 +382,40 @@ Plan: `.notes/issues/plans_status/v344_plan.md` §9.
 | Network Mode Selection set to its current value | Narrowed |
 | Entity availability against a 3.4.4-dev1 baseline of 130 entities | No entity changed between available and unknown or unavailable |
 | Diagnostics check | 65 of 65; the download's data section 279 keys from a full poll; one pass 64 s |
+
+### Poll Records
+
+Measured on the MC7010 on 2026-09-25. The 3.4.3 and 3.4.4-dev1 figures are computed from the code, splitting the lists as `_split_by_url_budget` does against the MC7010's address; the dev2 names and times are from the live log, and their characters and requests are computed the same way from the names the plan chose. "Every entity" is the development instance with all 130 entities enabled; "default entities" is the same instance after resetting to the default enabled set, 63 of 130 disabled.
+
+| Measure | 3.4.3 and dev1, every poll | dev2 narrowed, every entity | dev2 full, every entity | dev2 narrowed, default entities | dev2 full, default entities |
+| :-- | --: | --: | --: | --: | --: |
+| Names a poll can ask for | 186 | 272 | 272 | 272 | 272 |
+| Names asked (unique) | 186 | 150 | 272 | 122 | 199 |
+| Names sent, core + extended | 116 + 70 | 90 + 62 | 116 + 160 | 84 + 40 | 108 + 95 |
+| `cmd` characters | 2,933 | 2,258 | 4,319 | 1,838 | 3,062 |
+| Batch requests | 3 | 2 | 4 | 2 | 3 |
+| URL characters per batch request | 1,586, 527, 1,137 | 1,520, 950 | 1,586, 527, 1,572, 1,056 | 1,420, 630 | 1,575, 388, 1,416 |
+| Requests per poll, with the 2 SMS requests | 5 | 4 | 6 | 4 | 5 |
+| Poll time, live | not recorded | about 0.13 s | 0.44 s | 0.12 to 0.17 s | 0.21 s |
+
+A name in both the core and extended lists is sent twice; four such names account for the difference between names sent and names asked. The URL limit is 1,600 characters. Over 30 polls at the 180-second default, 90 minutes, with one full poll among them:
+
+| | 3.4.3 and dev1 | dev2, every entity | dev2, default entities |
+| :-- | --: | --: | --: |
+| Requests | 150 | 122 (-19%) | 121 (-19%) |
+| `cmd` characters | 87,990 | 69,801 (-21%) | 56,364 (-36%) |
+
+| Diagnostics discovery | 3.4.3-dev2 | 3.4.4-dev1 | 3.4.4-dev2 | 3.4.4-dev2, default entities |
+| :-- | --: | --: | --: | --: |
+| Names asked, polled names excluded | 1,169 | 1,359 | 1,359 | 1,359 |
+| `names_from_union_only` | 107, known only | 319 | 319 | 319 |
+| Answered from the shared lists | not counted | known 16, expected 1, generated 1 | the same | the same |
+| Names with a value | 126 | 130 | 130 | 130 |
+| Names re-probed singly | 608 | 750 | 750 | 750 |
+| Web files fetched | 45 | 47 | 47 | 47 |
+| One diagnostics pass | not recorded | 52.8 s | 64.1 s | 64.1 s |
+
+Discovery does not depend on which entities are enabled: it probes names outside the poll lists, and `diag_check.py` builds its coordinator without the entity registry. The default-entities column repeats the dev2 figures for that reason and was not re-measured.
 
 ### Tests
 
