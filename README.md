@@ -636,22 +636,35 @@ Several settings are exposed as control entities so you can drive them from dash
 - **Data Connection** (`switch.zte_5g_signal_data_connection`): Turn the router's mobile data connection on or off, like the switch in the router's own web page. Turning it off or on takes up to a minute, and other controls show an error until it completes. See [that error](#-the-router-is-restarting-or-the-router-is-disconnecting-its-data-connection-error). **Data Connection Status** and **Connection Mode Status** show the connection's state and whether the router reconnects by itself.
 - **APN Profile** (`select.zte_5g_signal_apn_profile`): In Manual mode, switch the active APN profile.
 - **APN Selection Mode** (`select.zte_5g_signal_apn_selection_mode`): Toggle between `auto` and `manual` APN mode.
-- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Select the preferred connection type. The options are read from the router's own web files, so they are the ones its network mode page offers and differ between models. Until that list has been read, shortly after setup, only the current mode is shown and it cannot be changed. On the MC7010 the values and the names its web page shows are:
+- **Network Mode Selection** (`select.zte_5g_signal_network_mode_selection`): Choose which mobile technologies the router may use. The list shows the options your router's own network mode page offers, read from the router, so it differs between models. The drop-down shows each option under the router's internal name; your router's web page shows the same option under a friendlier label. Two related sensors report on the same page: **Network Mode** shows the option in use, and **Network Mode Config** shows whether the router chooses your mobile operator automatically (`auto_select`) or uses one you picked by hand on its page (`manual_select`).
 
 ![Signal Config with APN](.github/images/zte_5g_signal_config_apn_dropdown.png)
 
-| Selector value | Router web page | Meaning |
+Your router offers some of these, not all. If the drop-down shows the value on the left, your router's web page may show it under the label in the middle, and either way it means what the right-hand column says.
+
+| Drop-down shows | Router web page may show | Meaning |
 | :-- | :-- | :-- |
-| `4G_AND_5G` | **Auto** | Let the router choose, falling back as signal changes |
-| `LTE_AND_5G` | **5G NSA** | 5G anchored to an LTE carrier |
-| `Only_5G` | **5G SA** | 5G standalone, no LTE anchor |
-| `Only_LTE` | **4G Only** | LTE only, 5G disabled |
+| `4G_AND_5G` | **Auto** | The router uses 5G where it can and falls back to 4G |
+| `WL_AND_5G` | **5G NSA/LTE/3G** | The router uses 5G where it can and falls back to 4G, then 3G |
+| `LTE_AND_5G` | **5G NSA** | 5G anchored to a 4G carrier (non-standalone) |
+| `Only_5G` | **5G SA** | 5G standalone only, with no 4G anchor |
+| `WCDMA_AND_LTE` | **LTE/3G** | 4G, falling back to 3G, with 5G off |
+| `Only_LTE` | **4G Only** or **LTE Only** | 4G only, with 5G and 3G off |
+| `Only_WCDMA` | **3G Only** | 3G only |
+
+**The automatic option differs by model.** On the MC7010 it is `4G_AND_5G`, shown as **Auto**. On the MC888 Pro it is `WL_AND_5G`, shown as **5G NSA/LTE/3G**. Choose the automatic/default option unless you have a reason to restrict the router.
+
+A value not in this table is one your router offers that has not been seen before. It still works: the integration offers only what your router's page offers.
+
+**Automatic operator selection is where this drop-down applies.** With Network Mode Config at `auto_select`, the router picks your operator and the drop-down sets which technologies it may use: the automatic option allows all of them, the others restrict it. Picking an operator by hand is done on the router's own page, which lists the networks it finds. On the MC7010 that list showed 4G networks only, and choosing one set the mode to `Only_LTE`. **Choosing a different option here while Network Mode Config shows `manual_select` returns the router to automatic operator selection**, and the operator you picked is no longer used.
+
+---
 
 > [!WARNING]
 >
-> The two `Only_` values lock the radio. Where 5G coverage is marginal, `Only_5G` can drop the connection entirely and it may not recover on its own — prefer `4G_AND_5G` unless you are deliberately testing.
+> Values starting with `Only_` lock the radio to one technology. Where that technology's coverage is marginal, the router can lose its connection entirely and may not recover on its own. `Only_5G` is the most likely to do this.
 >
-> This is a risk of dropping your WAN/internet connection. This integration will allow you to change the setting back, even if there is no connection, but NOT if you are accessing remotely (e.g. VPN) and depend on this connection for remote access.
+> This is a risk of dropping your internet connection. The integration will let you change the setting back even with no connection, but **not** if you are reaching Home Assistant remotely (for example over a VPN) through this router.
 
 #### **How APN selection behaves**
 

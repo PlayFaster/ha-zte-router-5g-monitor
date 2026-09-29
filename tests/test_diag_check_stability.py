@@ -351,18 +351,62 @@ def test_runtime_health_counters_are_not_compared() -> None:
     assert structural_differences(first, second) == set()
 
 
-def test_a_one_off_difference_is_excused_by_the_third_pass(monkeypatch) -> None:
-    """It differs between runs 1 and 2 and not between runs 2 and 3."""
-    first = _artefact([], {"a_value": "x"})
-    second = _artefact([], {"a_value": "y"})
-    third = _artefact([], {"a_value": "y"})
+def _retake(monkeypatch, first: Any, second: Any, third: Any) -> frozenset[str]:
     monkeypatch.setattr("scripts.diag_check.produce_complete", _returns(third))
     monkeypatch.setattr("scripts.diag_check.SETTLE_SECONDS", 0)
-    excused = asyncio.run(retake_on_difference(first, second))
+    return asyncio.run(retake_on_difference(first, second))
+
+
+def test_a_one_off_loss_in_pass_1_is_excused_by_the_third_pass(monkeypatch) -> None:
+    """Pass 1 lost the value; passes 2 and 3 agree on it."""
+    first = _artefact([], {"a_value": ""})
+    second = _artefact([], {"a_value": "y"})
+    third = _artefact([], {"a_value": "y"})
+    excused = _retake(monkeypatch, first, second, third)
     assert excused == {"/discovery/values/a_value"}
     report = Report()
     check_stability(first, second, report, excused)
     assert _outcome(report, "no structural difference")
+
+
+def test_a_one_off_loss_in_pass_2_is_excused_by_the_third_pass(monkeypatch) -> None:
+    """Pass 2 lost the path; passes 1 and 3 hold it."""
+    first = _artefact([], {"a_value": "x"})
+    second = _artefact([], {})
+    third = _artefact([], {"a_value": "x"})
+    assert _retake(monkeypatch, first, second, third) == {"/discovery/values/a_value"}
+
+
+def test_a_list_missing_members_in_one_pass_is_excused(monkeypatch) -> None:
+    """A name list short of a member in pass 2 only is a loss, not a change."""
+    first = _artefact([], {"names": ["a", "b"]})
+    second = _artefact([], {"names": ["a"]})
+    third = _artefact([], {"names": ["b", "a"]})
+    assert _retake(monkeypatch, first, second, third) == {"/discovery/values/names"}
+
+
+def test_an_odd_pass_holding_more_is_not_excused(monkeypatch) -> None:
+    """Pass 1 holds a value the other two lack, so the fault is in two passes."""
+    first = _artefact([], {"a_value": "x"})
+    second = _artefact([], {"a_value": ""})
+    third = _artefact([], {"a_value": ""})
+    assert _retake(monkeypatch, first, second, third) == frozenset()
+
+
+def test_an_odd_value_that_is_not_a_loss_is_not_excused(monkeypatch) -> None:
+    """A changed value in one pass is not lost data."""
+    first = _artefact([], {"a_value": "x"})
+    second = _artefact([], {"a_value": "y"})
+    third = _artefact([], {"a_value": "y"})
+    assert _retake(monkeypatch, first, second, third) == frozenset()
+
+
+def test_data_missing_in_passes_1_and_3_fails(monkeypatch) -> None:
+    """Lost in two passes of three is a fault, whichever pass holds it."""
+    first = _artefact([], {})
+    second = _artefact([], {"a_value": "y"})
+    third = _artefact([], {})
+    assert _retake(monkeypatch, first, second, third) == frozenset()
 
 
 def test_a_difference_that_recurs_still_fails(monkeypatch) -> None:

@@ -81,6 +81,38 @@ def test_a_phone_field_is_withheld_by_its_name(name: str) -> None:
     assert INTL not in str(value)
 
 
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("ip_passthrough_enabled", "1"),
+        ("wifi_chip1_ssid1_access_sta_num", "3"),
+        ("wifi_chip2_ssid2_access_sta_num", "0"),
+    ],
+)
+def test_pass_through_and_client_counts_publish(name: str, value: str) -> None:
+    """`pass` and `ssid` in these names carry no secret, so the value publishes."""
+    assert _gate_discovery_value(name, value, _Tokenizer()) == (value, "published")
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "passthrough_password",
+        "ip_passthrough_key_",
+        "wifi_chip1_ssid1_password_encode",
+        "wifi_chip1_ssid1_ssid",
+        "wifi_chip1_ssid1_access_sta_num_password",
+    ],
+)
+def test_a_pass_through_or_ssid_name_with_a_credential_term_is_withheld(
+    name: str,
+) -> None:
+    """The exemption removes `passthrough` only; any other deny term still withholds."""
+    value, verdict = _gate_discovery_value(name, "hunter2", _Tokenizer())
+    assert verdict == "denied-name"
+    assert "hunter2" not in str(value)
+
+
 # ---------------------------------------------------------------------------
 # Vocabulary
 # ---------------------------------------------------------------------------
@@ -149,3 +181,13 @@ def test_the_generated_set_is_pinned() -> None:
 def test_a_name_the_mc7010_answered_is_reached() -> None:
     """`nr5g_band_lock` answered on the MC7010 in the dev1 live check."""
     assert "nr5g_band_lock" in GENERATED_NAMES
+
+
+def test_the_neighbor_cell_list_is_tokenized_in_the_download() -> None:
+    """Neighbor PCIs are cell identifiers, as the serving PCI is."""
+    from custom_components.zte_router_5g.diagnostics import _sanitize_payload
+
+    raw = "9360,4,-12,-96,-65;1275,208,-9,-89,-61"
+    clean = _sanitize_payload({"ngbr_cell_info": raw}, _Tokenizer())
+    assert clean["ngbr_cell_info"] != raw
+    assert "208" not in str(clean["ngbr_cell_info"])

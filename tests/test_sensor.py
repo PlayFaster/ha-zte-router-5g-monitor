@@ -100,8 +100,10 @@ def test_sensor_monthly_total_sum(mock_coordinator, mock_config_entry):
 @pytest.mark.parametrize(
     ("key", "data", "expected"),
     [
-        ("total_time", {"total_time": "36426"}, 36426),
-        ("total_time", {"total_time": "", "flux_total_time": "3582116"}, 3582116),
+        ("total_time", {"total_connected_seconds": 36426}, 36426),
+        ("total_time", {"total_connected_seconds": 315_360_000}, 315_360_000),
+        ("total_time", {"total_connected_seconds": 315_360_001}, None),
+        ("total_time", {"total_connected_seconds": None}, None),
         ("total_rx_bytes", {"total_rx_bytes": "2298214830130"}, 2298214830130),
         (
             "total_rx_bytes",
@@ -1875,3 +1877,53 @@ def test_the_new_diagnostic_sensors_are_disabled_by_default() -> None:
     # problem can turn them on.
     assert by_key["upgrade_result"].entity_registry_enabled_default is False
     assert by_key["current_upgrade_state"].entity_registry_enabled_default is False
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"), [("5", 5), ("0", 0), ("", None), ("x", None)]
+)
+def test_login_attempts_remaining(mock_coordinator, mock_config_entry, raw, expected):
+    """The attempts left read as a number; blank or unreadable is unknown."""
+    mock_coordinator.data = {"psw_fail_num_str": raw}
+    description = next(d for d in SENSOR_TYPES if d.key == "psw_fail_num_str")
+    assert description.entity_registry_enabled_default is False
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    assert sensor.native_value == expected
+
+
+NGBR = "9360,4,-12,-96,-65;9360,352,-13,-95,-73;1275,208,-9,-89,-61"
+
+
+@pytest.mark.parametrize(
+    ("raw", "count", "cells"),
+    [
+        (
+            NGBR,
+            3,
+            [
+                {"earfcn": 9360, "pci": 4, "rsrq": -12, "rsrp": -96},
+                {"earfcn": 9360, "pci": 352, "rsrq": -13, "rsrp": -95},
+                {"earfcn": 1275, "pci": 208, "rsrq": -9, "rsrp": -89},
+            ],
+        ),
+        # Malformed entries are skipped: four fields, six fields, not numeric.
+        (
+            "9360,4,-12,-96;9360,4,-12,-96,-65,1;x,4,-12,-96,-65;1275,24,-16,-97,-70",
+            1,
+            [{"earfcn": 1275, "pci": 24, "rsrq": -16, "rsrp": -97}],
+        ),
+        (";", 0, None),
+        ("", None, None),
+        ("  ", None, None),
+        (None, None, None),
+    ],
+)
+def test_neighbor_cells(mock_coordinator, mock_config_entry, raw, count, cells):
+    """The count is the state; the cells, without the fifth field, the attribute."""
+    mock_coordinator.data = {"ngbr_cell_info": raw} if raw is not None else {"x": "1"}
+    description = next(d for d in SENSOR_TYPES if d.key == "ngbr_cell_info")
+    assert description.entity_registry_enabled_default is False
+    sensor = ZTERouterSensor(mock_coordinator, mock_config_entry, description)
+    assert sensor.native_value == count
+    assert sensor.extra_state_attributes.get("cells") == cells
+    assert "cells" in ZTERouterSensor._unrecorded_attributes

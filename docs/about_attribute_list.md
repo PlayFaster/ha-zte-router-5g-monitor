@@ -51,13 +51,13 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Recent Msg | Sensor | `msg_recent` | The most recently received message. Sender, date and storage index are in the attributes; the index is what the delete action needs to remove this specific message. |
 | Total Msg | Sensor | `msg_total` | Total messages held across every storage area - router memory and SIM, inbox, sent and drafts. The breakdown per area is in this sensor's attributes. Storage filling up stops new messages arriving. |
 
-## Signal (55)
+## Signal (56)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
 | APN Selection Mode | Select | `apn_mode` | Whether the router picks the APN itself (auto, using the network's default) or uses the profile you chose (manual). Auto is right for almost everyone. To switch to manual, choose an APN Profile instead - that sets the mode and the profile together, which is what the router requires. |
 | APN Profile | Select | `apn_profile` | Which stored APN profile to connect with. The APN is the gateway your SIM's network expects; the wrong one usually means no data at all rather than slow data. Choosing one here also switches APN Selection Mode to manual. While the mode is auto the router uses the network's default APN, which may not be in this list - the Network APN sensor is the authoritative answer to what is actually in use. Note the Default profile stores no APN, so selecting it leaves Network APN reading unknown - the router's own page shows an empty field for the same reason. New profiles are added on the router's own web page, not here. |
-| Network Mode Selection | Select | `net_select` | Which mobile technologies the router may use, such as 4G only, 5G only, or both. Values starting with Only lock the router to one technology. Where 5G coverage is marginal, locking to 5G can drop the connection entirely. |
+| Network Mode Selection | Select | `net_select` | Which mobile technologies the router may use, such as 4G only, 5G only, or both. Values starting with Only lock the router to one technology. Where 5G coverage is marginal, locking to 5G can drop the connection entirely. If you picked your mobile operator by hand on the router's page, changing this may return it to automatic operator selection. |
 | 5G RSRP Antenna 1 | Sensor | `5g_rsrp_antenna_1` | Reference signal strength at the first 5G receiver, in dBm. The two receivers see the same cell through different antennas, so a persistent gap between them points at placement or an obstruction rather than at the network. |
 | 5G RSRP Antenna 2 | Sensor | `5g_rsrp_antenna_2` | Reference signal strength at the second 5G receiver, in dBm. Compare with the first: a steady difference is an antenna or placement effect, not a change in coverage. |
 | APN Changes | Sensor | `apn_changes` | How many times the APN in use has changed. Usually zero - a change you did not make points at the operator reprovisioning the connection. |
@@ -83,10 +83,11 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | LTE SNR | Sensor | `lte_snr` | Signal-to-Noise Ratio for 4G, in dB - how far the wanted signal rises above the background noise. This is the best predictor of achievable speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 | MDM MCC | Sensor | `mdm_mcc` | Mobile Country Code - a three-digit code identifying the country of the network the modem is attached to (for example 272 = Ireland). |
 | MDM MNC | Sensor | `mdm_mnc` | Mobile Network Code - identifies the individual operator within that country. Together with the MCC it uniquely names the network you are on. |
-| Network Mode | Sensor | `net_select` | The network technology the router is currently allowed to use, as chosen by the Network Mode control. Restricting it can stabilize a connection that keeps switching between 4G and 5G. |
-| Network Mode Config | Sensor | `net_select_config` | Whether the router picks its network mode itself or holds the one you chose - the Automatic or Manual setting on its own network selection page. Automatic lets it fall back as coverage changes; Manual keeps the Network Mode you set until you change it. |
+| Network Mode | Sensor | `net_select` | The network technology the router is currently allowed to use, as chosen by Network Mode Selection or set by picking an operator by hand. Restricting it can stabilize a connection that keeps switching between 4G and 5G. |
+| Network Mode Config | Sensor | `net_select_config` | Whether the router chooses your mobile operator itself (auto_select) or uses one you picked by hand on its network selection page (manual_select). Manual selection may limit the router to the technologies of the network you picked, such as 4G only, and changing Network Mode Selection may return it to automatic. |
 | Network Provider | Sensor | `network_provider` | The mobile network the router is registered to. This can differ from the SIM's home network while roaming. |
 | Network Type | Sensor | `network_type` | The connection technology in use. ENDC and LTE-NSA are both 5G non-standalone, where a 4G anchor carries the connection alongside a 5G carrier: ENDC means the 5G carrier is actually in use, LTE-NSA means the router is attached for 5G but is running on the 4G anchor alone, which is what weak 5G coverage looks like. Plain LTE means no 5G at all. |
+| Neighbor Cells | Sensor | `ngbr_cell_info` | How many other 4G cells the router can hear besides the one it uses. The attributes list each cell's channel (EARFCN), cell ID (PCI), quality (RSRQ, dB) and strength (RSRP, dBm), including the cell in use. Useful when aiming an antenna or choosing a location. Not every model reports neighbor cells. |
 | 5G Active Band | Sensor | `nr5g_action_band` | The active 5G NR band. Bands below 1 GHz reach furthest, mid-band (around 3.5 GHz) is the usual balance of speed and coverage, and high bands are fastest over the shortest distance. |
 | 5G Active Channel | Sensor | `nr5g_action_channel` | The 5G channel number in use within the active band, expressed as an NR-ARFCN. Useful when comparing your connection against neighboring cells. |
 | 5G NSA Band Lock | Sensor | `nr5g_nsa_band_lock` | The 5G bands the router may use in non-standalone mode, where 5G runs alongside a 4G anchor. The counterpart to LTE Band Lock. |
@@ -111,7 +112,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | 5G SNR | Sensor | `z5g_sinr` | Signal-to-Noise Ratio for the 5G carrier, in dB - how far the wanted signal rises above everything competing with it. This is the best predictor of achievable 5G speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
 | Data Connection | Switch | `data_connection` | Turns the router's mobile data connection on or off, like the switch in the router's own web page. Home Assistant keeps reaching the router over your network while data is off. Turning it off or on can take up to a minute, and other controls are refused until it completes. |
 
-## System (41)
+## System (42)
 
 | Entity | Platform | Key | Note |
 | :-- | :-- | :-- | :-- |
@@ -138,6 +139,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | Ambient Modem Temperature | Sensor | `pm_sensor_ambient` | Internal air temperature inside the modem, away from the radio itself. Read alongside the power amplifier temperature it indicates whether the unit as a whole is running hot or just the transmitter. Not reported by all models. |
 | Modem Temperature | Sensor | `pm_sensor_mdm` | Temperature of the 4G/LTE cellular baseband module. Not reported by all models. |
 | Power Amplifier Temperature | Sensor | `pm_sensor_pa1` | Temperature of the RF power amplifier driving the transmit signal, typically the warmest component in the unit. Not reported by all models. |
+| Login Attempts Remaining | Sensor | `psw_fail_num_str` | How many more wrong passwords the router's login accepts before it locks every client out, usually for five minutes. Starts at 5 and returns to 5 after a successful login. A login that clashes with another session also uses an attempt, so a fall does not always mean a wrong password. |
 | Uptime Duration | Sensor | `realtime_time` | How long the router has been running since its last boot. The Device Uptime sensor expresses the same fact as a timestamp. A router that does not report its own uptime shows how long its data connection has been up instead. |
 | SIM ICCID | Sensor | `sim_iccid` | Integrated Circuit Card ID - the SIM card's own serial number, printed on the card itself. Useful for identifying which SIM is in the router without opening it. |
 | SIM IMSI | Sensor | `sim_imsi` | International Mobile Subscriber Identity - the unique number identifying your SIM's subscription on the network, as distinct from the IMEI which identifies the hardware. |

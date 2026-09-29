@@ -181,7 +181,9 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
             "Which mobile technologies the router may use, such as 4G only, 5G "
             "only, or both. Values starting with Only lock the router to one "
             "technology. Where 5G coverage is marginal, locking to 5G can drop the "
-            "connection entirely."
+            "connection entirely. If you picked your mobile operator by hand on "
+            "the router's page, changing this may return it to automatic operator "
+            "selection."
         ),
         translation_key="signal_net_select_mode",
         entity_category=EntityCategory.CONFIG,
@@ -292,12 +294,15 @@ class ZTERouterSelect(
         read-back would risk a needless re-login and would report a
         slow-but-successful change as a failure.
 
-        Neither half has been observed. The two writes issued on the reference
-        MC7010 on 2026-09-14 were effectively no-ops — `apn_mode` auto to auto,
-        and `net_select` `auto_select` to `4G_AND_5G`, which is Auto to Auto —
-        so neither exercised a change that would take the connection down.
-        Settling it needs a restricting bearer value (`Only_LTE` or `Only_5G`)
-        or a real APN change, and neither has been run.
+        The two writes issued on the reference MC7010 on 2026-09-14 were
+        effectively no-ops, `apn_mode` auto to auto and `net_select` Auto to
+        Auto. On 2026-09-27 two writes changed the bearer, from the `Only_LTE`
+        a hand-picked operator had set to `LTE_AND_5G`, and the connection read
+        `pdp_connected` throughout: the blank answers expected above were not
+        seen. Each write also returned operator selection, `net_select_mode`,
+        from `manual_select` to `auto_select` (v345_plan E8). A write of a
+        restricting value, `Only_LTE` or `Only_5G`, and a real APN change have
+        still not been run, so the read-back remains untested either way.
 
         Until then the debounced refresh is the instrument, on the grounds that
         it cannot report a false failure whatever the router does. If the

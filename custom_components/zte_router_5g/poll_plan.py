@@ -48,6 +48,15 @@ ALWAYS_POLLED: Final[frozenset[str]] = frozenset(
         "ppp_status",
         "dial_mode",
         "modem_main_state",
+        # Total Connected Time, checked by the coordinator against its last
+        # accepted reading (coordinator).
+        "total_time",
+        "flux_total_time",
+        # Neighbor Cells' attribute, read outside its value (sensor).
+        "ngbr_cell_info",
+        # Login protection (api): the attempts left and the lock's seconds left.
+        "psw_fail_num_str",
+        "login_lock_time",
         # Identity and outage checks.
         "imei",
         "wa_inner_version",
@@ -119,6 +128,10 @@ ALWAYS_POLLED_PREFIXES: Final[tuple[str, ...]] = ("APN_config",)
 FULL_POLL_EVERY: Final = 30
 FULL_POLL_MAX_AGE: Final = timedelta(hours=24)
 ROTATION: Final = 5
+# The full poll a diagnostics download asks for, which also reads the names only
+# disabled entities read: the download is where a value such as the MC888 Pro's
+# `flux_total_time` is looked for, whether or not its entity is enabled.
+DIAGNOSTICS_REASON: Final = "diagnostics download"
 
 # `network_type` spellings, measured across the downloads held on 2026-09-25:
 # `ENDC` (MC7010) and `EN-DC` (MC888 Pro) with a 5G leg, `LTE-NSA` with none.
@@ -245,9 +258,10 @@ class PollPlan:
         """The names for the next poll, and whether it is a full poll.
 
         `None` means everything. A full poll still skips names only disabled
-        entities read.
+        entities read, except the one before a diagnostics download.
         """
         full = self._full_due(now)
+        every = full and DIAGNOSTICS_REASON in self.full_reasons
         keep: list[str] = []
         unresolved: list[str] = []
         for name in self.universe:
@@ -259,6 +273,8 @@ class PollPlan:
                 keep.append(name)
                 continue
             if not live:
+                if every:
+                    keep.append(name)
                 continue
             if full or name in self.answered:
                 keep.append(name)

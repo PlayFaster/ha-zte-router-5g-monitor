@@ -12,6 +12,7 @@ import pytest
 from custom_components.zte_router_5g import api
 from custom_components.zte_router_5g.poll_plan import (
     ALWAYS_POLLED,
+    DIAGNOSTICS_REASON,
     FULL_POLL_EVERY,
     ROTATION,
     PollPlan,
@@ -342,3 +343,43 @@ async def test_an_extended_batch_with_nothing_asked_sends_nothing() -> None:
     )
     assert result == {}
     client._batch_get.assert_not_awaited()
+
+
+def test_the_login_protection_names_are_asked_on_every_narrowed_poll() -> None:
+    """Read by an entity and blank now, they are still asked on every poll."""
+    lock = ("psw_fail_num_str", "login_lock_time")
+    assert set(lock) <= ALWAYS_POLLED
+    readers = [*READERS, ("e_lock", (lambda data: [data.get(n) for n in lock],))]
+    data = {**DATA, "psw_fail_num_str": "", "login_lock_time": ""}
+    plan = PollPlan([*UNIVERSE, *lock])
+    plan.names(NOW)
+    plan.learn_readers(readers, data)
+    plan.learn_answers(readers, data)
+    plan.after_poll(data, full=True, fresh=True, now=NOW)
+    for _ in range(ROTATION):
+        names, full = plan.names(NOW)
+        assert not full
+        assert names is not None
+        assert set(lock) <= names
+        plan.after_poll(data, full=False, fresh=True, now=NOW)
+
+
+def test_the_full_poll_before_a_diagnostics_download_asks_disabled_only_names() -> None:
+    """The download is where a disabled entity's value is looked for (I8)."""
+    plan = _learned()
+    plan.disabled = {"e_rsrp"}
+    plan.request_full(DIAGNOSTICS_REASON)
+    names, full = plan.names(NOW)
+    assert full
+    assert names is not None
+    assert "lte_rsrp" in names
+    plan.after_poll(DATA, full=True, fresh=True, now=NOW)
+    names, full = plan.names(NOW)
+    assert not full
+    assert names is not None
+    assert "lte_rsrp" not in names
+
+
+def test_every_always_polled_name_is_in_the_poll_universe() -> None:
+    """A name outside the universe is never asked, however it is listed."""
+    assert set() == ALWAYS_POLLED - set(api.POLL_UNIVERSE)

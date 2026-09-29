@@ -39,6 +39,7 @@ from . import device_profile, web_sources
 from .api import widen_aliases
 from .const import DISCOVERY_VALUE_SAFE
 from .coordinator import ZTERouterDataUpdateCoordinator
+from .poll_plan import DIAGNOSTICS_REASON
 
 # Values with no cross-reference worth preserving — blanked outright.
 TO_REDACT = {
@@ -95,6 +96,10 @@ CELL_KEYS = {
     "network_Z_PCI",
     "network_Z5g_PCI",
     "network_Z5g_CELL_ID",
+    # The neighbor cells' channels and PCIs, polled since 3.4.5 for the
+    # Neighbor Cells sensor. The serving PCI is a cell identifier here, so its
+    # neighbors are too; the list is tokenized whole.
+    "ngbr_cell_info",
 }
 # 3.4.4-dev2: the generated spellings of the same values, which the widened
 # alias tuples request, are cell identifiers too.
@@ -623,7 +628,7 @@ async def async_get_config_entry_diagnostics(
     # A download never fails for it: a poll that cannot run leaves the data
     # as it was, and the reason is recorded.
     try:
-        coordinator.request_full_poll("diagnostics download")
+        coordinator.request_full_poll(DIAGNOSTICS_REASON)
         await coordinator.async_force_refresh()
     except Exception as err:  # noqa: BLE001 - see `_guarded`
         errors.append(f"full poll before download: {type(err).__name__}: {err}")
@@ -879,6 +884,22 @@ _DENY_NAME_RE = re.compile(
     r"|phone|sms_number)"
 )
 
+# Names the deny terms catch but which carry no secret. `pass` matches
+# `ip_passthrough_enabled`, whose value says whether IP pass-through is on; such
+# a name publishes only where it matches no deny term once `passthrough` is
+# removed. `ssid` matches the Wi-Fi client counts, which are numbers of
+# connected clients per network, never the network's name.
+_PASSTHROUGH_RE = re.compile(r"(?i)passthrough")
+_CLIENT_COUNT_RE = re.compile(r"(?i)^wifi_chip\d+_ssid\d+_access_sta_num$")
+
+
+def _denied_name(key: str) -> bool:
+    """True where the name alone withholds the value."""
+    if _CLIENT_COUNT_RE.match(key):
+        return False
+    return bool(_DENY_NAME_RE.search(_PASSTHROUGH_RE.sub("", key)))
+
+
 # Decimal degrees, as a pair or alone: a coordinate is location whatever the
 # key is called.
 _GEO_RE = re.compile(r"^-?\d{1,3}\.\d{4,}$")
@@ -955,7 +976,7 @@ def _gate_discovery_value(
     if key in DISCOVERY_VALUE_SAFE:
         return _sweep(value, tokenizer), "vetted"
 
-    if _DENY_NAME_RE.search(key):
+    if _denied_name(key):
         return _classify(value), "denied-name"
 
     swept = _sweep(value, tokenizer)

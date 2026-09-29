@@ -85,6 +85,37 @@ class ZTESensorEntityDescription(SensorEntityDescription):
     counts_changes_of: str | None = None
 
 
+def _neighbor_cells(raw: Any) -> list[dict[str, int]] | None:
+    """Parse `ngbr_cell_info`, or None where it is blank or not answered.
+
+    Entries are separated by `;` and hold five comma-separated fields. The
+    first four match the serving cell's EARFCN and PCI and sit beside
+    `lte_rsrq` and `lte_rsrp` (v345_plan E4); the fifth is RSSI-shaped but
+    unconfirmed, so it is left out. An entry without five numeric fields is
+    skipped rather than misread. Blank is both "no neighbors" and "not
+    answered", so it reads unknown; `0` comes only from a non-blank value.
+    """
+    if raw in (None, "") or not str(raw).strip():
+        return None
+    cells = []
+    for entry in str(raw).split(";"):
+        fields = entry.split(",")
+        if len(fields) != 5:
+            continue
+        try:
+            earfcn, pci, rsrq, rsrp = (int(f.strip()) for f in fields[:4])
+        except ValueError:
+            continue
+        cells.append({"earfcn": earfcn, "pci": pci, "rsrq": rsrq, "rsrp": rsrp})
+    return cells
+
+
+def _neighbor_count(data: Any) -> int | None:
+    """The number of well-formed neighbor-cell entries."""
+    cells = _neighbor_cells(data.get("ngbr_cell_info"))
+    return None if cells is None else len(cells)
+
+
 def _get_bytes_to_gb(val: Any) -> float | None:
     """Convert bytes string to rounded GB float."""
     if val in [None, ""]:
@@ -168,7 +199,6 @@ _ALIAS_MONTHLY_TX: Final = widen_aliases(("monthly_tx_bytes", "flux_monthly_tx_b
 _ALIAS_MONTHLY_RX: Final = widen_aliases(("monthly_rx_bytes", "flux_monthly_rx_bytes"))
 _ALIAS_TOTAL_TX: Final = widen_aliases(("total_tx_bytes", "flux_total_tx_bytes"))
 _ALIAS_TOTAL_RX: Final = widen_aliases(("total_rx_bytes", "flux_total_rx_bytes"))
-_ALIAS_TOTAL_TIME: Final = widen_aliases(("total_time", "flux_total_time"))
 
 # The `flux_` prefix is a parallel vocabulary across this API, not a quirk of
 # the monthly counters. The bare spelling leads because the reference MC7010
@@ -660,6 +690,22 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         value_fn=lambda data: _safe_str(data.get("wan_netmask")),
     ),
     ZTESensorEntityDescription(
+        key="psw_fail_num_str",
+        about=(
+            "How many more wrong passwords the router's login accepts before it "
+            "locks every client out, usually for five minutes. Starts at 5 and "
+            "returns to 5 after a successful login. A login that clashes with "
+            "another session also uses an attempt, so a fall does not always "
+            "mean a wrong password."
+        ),
+        translation_key="system_login_attempts_remaining",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="system",
+        min_limit=0,
+        value_fn=lambda data: _safe_int(data.get("psw_fail_num_str")),
+    ),
+    ZTESensorEntityDescription(
         key="lan_ipaddr",
         translation_key="system_lan_ipaddr",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -742,7 +788,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         suggested_unit_of_measurement=UnitOfTime.HOURS,
         group="system",
         min_limit=0,
-        value_fn=lambda data: _safe_int(get_first(data, _ALIAS_TOTAL_TIME)),
+        # Ten years: above it a reading is corrupt, whatever the history.
+        max_limit=315_360_000,
+        # Checked by the coordinator against the last accepted reading; see
+        # `_checked_total_time`.
+        value_fn=lambda data: _safe_int(data.get("total_connected_seconds")),
     ),
     ZTESensorEntityDescription(
         key="last_updated",
@@ -1076,6 +1126,21 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         max_limit=-30,
         group="signal",
         value_fn=lambda data: _safe_float(get_first(data, _ALIAS_LTE_RSRP)),
+    ),
+    ZTESensorEntityDescription(
+        key="ngbr_cell_info",
+        about=(
+            "How many other 4G cells the router can hear besides the one it uses. "
+            "The attributes list each cell's channel (EARFCN), cell ID (PCI), "
+            "quality (RSRQ, dB) and strength (RSRP, dBm), including the cell in "
+            "use. Useful when aiming an antenna or choosing a "
+            "location. Not every model reports neighbor cells."
+        ),
+        translation_key="signal_neighbor_cells",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        group="signal",
+        value_fn=_neighbor_count,
     ),
     ZTESensorEntityDescription(
         key="lte_rsrq",
@@ -1419,8 +1484,9 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="net_select",
         about=(
             "The network technology the router is currently allowed to use, as chosen "
-            "by the Network Mode control. Restricting it can stabilize a connection "
-            "that keeps switching between 4G and 5G."
+            "by Network Mode Selection or set by picking an operator by hand. "
+            "Restricting it can stabilize a connection that keeps switching between "
+            "4G and 5G."
         ),
         translation_key="signal_net_select",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -1430,10 +1496,11 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
     ZTESensorEntityDescription(
         key="net_select_config",
         about=(
-            "Whether the router picks its network mode itself or holds the one "
-            "you chose - the Automatic or Manual setting on its own network "
-            "selection page. Automatic lets it fall back as coverage changes; "
-            "Manual keeps the Network Mode you set until you change it."
+            "Whether the router chooses your mobile operator itself (auto_select) "
+            "or uses one you picked by hand on its network selection page "
+            "(manual_select). Manual selection may limit the router to the "
+            "technologies of the network you picked, such as 4G only, and changing "
+            "Network Mode Selection may return it to automatic."
         ),
         translation_key="signal_net_select_config",
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -2390,6 +2457,9 @@ class ZTERouterSensor(
             "sms_sim_rev_total",
             "sms_sim_send_total",
             "sms_sim_draftbox_total",
+            # The neighbor cells change on almost every poll; the count is the
+            # recorded state (Section 14).
+            "cells",
         }
     )
 
@@ -2525,6 +2595,10 @@ class ZTERouterSensor(
                         "cycle_start": result.cycle_start.date().isoformat(),
                         "cycle_source": result.cycle_source,
                     }
+            elif key == "ngbr_cell_info":
+                cells = _neighbor_cells(data.get("ngbr_cell_info"))
+                if cells:
+                    detail = {"cells": cells}
             elif key == "sntp_server":
                 detail = {
                     "sntp_server1": data.get("sntp_server1"),

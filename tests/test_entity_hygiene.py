@@ -197,6 +197,8 @@ def test_every_attribute_the_sensor_emits_is_unrecorded() -> None:
         "cycle_day",
         "cycle_start",
         "cycle_source",
+        # The neighbor cells, which change on almost every poll.
+        "cells",
     }
     assert emitted == set(ZTERouterSensor._unrecorded_attributes)
 

@@ -88,6 +88,24 @@ This is why `logout()` (`api.py:391`) runs on unload and why it is best-effort �
 
 It is also why you cannot verify a logout by checking whether the web UI is reachable: the web UI can **always** be logged into, and doing so terminates whatever session existed. The only sound verification is to replay the old `stok` against an authenticated `cmd` and confirm it is rejected.
 
+### Login attempts and the lockout
+
+Measured on the MC7010 on 2026-09-26 (`.notes/issues/plans_status/v345_plan.md` §7.5). Five failed logins lock the router's login for 300 s. Two names report it, both answering **without a session**, and the router's own login page reads them to draw its countdown (`js/login.js`):
+
+- **`psw_fail_num_str`** is the number of attempts **remaining**, `5` when none are used (`MAX_LOGIN_COUNT` in `js/config/config.js`). Only a correct login restores it.
+- **`login_lock_time`** is the seconds left in a 300 s window that every login attempt restarts. `-1` means no window is running. It counts while a session is held too, so a value near `300` in a diagnostics download only means a login a few seconds before.
+
+| Event | `psw_fail_num_str` | `login_lock_time` |
+| :-- | :-- | :-- |
+| No login attempt for over 300 s | `5` | `-1` |
+| Any login attempt, failed or correct | | restarts at `300` and counts down one per second, whether or not a session is held |
+| Each failed login | falls by 1, from `5` to `0` | restarts at `300` |
+| A correct login while `psw_fail_num_str` is `0` and `login_lock_time` is above `0` | refused; unchanged | not restarted; runs on |
+| `login_lock_time` reaches `-1` with no further attempt | unchanged, including `0` | `-1` |
+| A correct login otherwise | returns to `5` | restarts at `300` |
+
+A lockout is therefore `psw_fail_num_str` `0` **with** `login_lock_time` above `0`. `0` with `-1` is not a lock: the next correct login succeeds. A refused login during the lock does not extend it. An earlier probe, on 2026-09-09, found neither name moving after two failures; it read them from a held session, and is superseded.
+
 ### Session expiry — three different signatures
 
 The router does not return `401`. Expiry is detected by pattern. `_request` owns the first two; the third is scored and acted on by `_session_rejected`, which returns whether a re-login is worth attempting and raises for everything a re-login cannot fix:
@@ -478,7 +496,7 @@ The 2026-07-29 discovery run probed 183 candidate names. These answered with a v
 | `night_mode_switch` | State for the `SET_DEVICE_LED` night-mode scheduler. |
 | `DIAG_CHECK`, `DIAG_URL`, `LocalDomain` | Vendor diagnostic and LAN-domain fields. |
 
-Full probe results, and the router-facing agent's answers on encodings and write semantics, are in `.notes/info/zte_element_discovery_report.md`.
+Full probe results, and the router-facing agent's answers on encodings and write semantics, are in `.notes/info/zte_data_elements/zte_element_discovery_report.md`. The names answered on the MC7010 as of 2026-09-26 that the integration does not use, and why, are in `.notes/info/zte_data_elements/answered_not_used_20260926.md`.
 
 ### `cmd=sms_capacity_info`
 
@@ -571,7 +589,23 @@ Three consequences worth knowing before touching this code:
 | `Only_5G`    | 5G SA   |
 | `Only_LTE`   | 4G Only |
 
-**The list is the device's own.** The values come from `AUTO_MODES` in the model-specific `js/config/<DEVICE>/config.js` (on both routers seen, `js/config/cpe/MF253V/config.js`), which the network mode page builds its menu from; the table above is the MC7010's list, each entry an object `{name:"auto",value:"4G_AND_5G"}`. The MC888 Pro reads `WL_AND_5G`, a value outside that list, and its own list has not yet been read. Since 3.4.4 the integration offers only the learned list, adding the current value where the list lacks it, and writes nothing outside the list.
+**The list is the device's own.** The values come from `AUTO_MODES` in the model-specific `js/config/<DEVICE>/config.js` (on both routers seen, `js/config/cpe/MF253V/config.js`), which the network mode page builds its menu from; the table above is the MC7010's list, each entry an object `{name:"auto",value:"4G_AND_5G"}`. The MC888 Pro's own list, read from its issue #79 3.4.4 download, is `WL_AND_5G`, `LTE_AND_5G`, `Only_5G`, `WCDMA_AND_LTE`, `Only_LTE`, `Only_WCDMA`, which its page shows as 5G NSA/LTE/3G, 5G NSA, 5G SA, LTE/3G, LTE Only and 3G Only. Since 3.4.4 the integration offers only the learned list, adding the current value where the list lacks it, and writes nothing outside the list.
+
+### Operator selection and the network mode
+
+The same page carries a second setting: whether the router chooses the mobile operator itself or uses one picked from its network search. Measured on the MC7010 on 2026-09-27 (`.notes/issues/plans_status/v345_plan.md` §9):
+
+| Name | Values | What it is |
+| :-- | :-- | :-- |
+| `net_select_mode` | `auto_select`, `manual_select` | Operator selection. Unchanged when the mode is restricted |
+| `m_netselect_result` | `manual_success`, blank | The outcome of a manual operator pick; blank under automatic selection |
+| `m_netselect_contents` | blank | The search results are not kept after a pick |
+
+- **Under `auto_select`, `net_select` restricts the technologies** the router may use; the automatic option allows all of them.
+- **Picking an operator by hand set `net_select` to `Only_LTE`.** The router's search listed 4G networks only with the owner's ISP.
+- **A `SET_BEARER_PREFERENCE` write while in `manual_select` ends manual selection.** Twice, a write from `Only_LTE` to `LTE_AND_5G` returned `net_select_mode` to `auto_select` and cleared `m_netselect_result`, and the picked operator was no longer used. Whether the router or the ISP imposes this is not established.
+
+The integration reports `net_select_mode` as Network Mode Config and does not write it: selecting an operator needs the router's search, its results and a pick, which the integration does not implement.
 
 ### The model-specific directory
 
@@ -748,6 +782,26 @@ Comma-separated fields, one semicolon-terminated group per secondary cell. Obser
 **Positions 4 and 5 are the other way round from the discovery report**, which listed `[earfcn],[band_number]` and so read the sample as EARFCN 20 on band 6300. EARFCN 6300 sits inside band 20's allocation (6150–6449) and `20` is not a valid EARFCN, so the report's ordering is wrong. Corroborated twice on live hardware: band 20's bit is set in `lte_band_lock`, and field 6 (`10`) matches `lte_ca_pcell_bandwidth` of `10.0`.
 
 **Position 3 is deliberately unnamed.** The report called it `dl_bandwidth_code`, which the data contradicts — a bandwidth code of `2` means 5 MHz, disagreeing with field 6, and a bandwidth would not change between polls while the band and channel do not. It is more likely an SCell activation state or a MIMO layer count, but that is a guess and the integration publishes the string raw.
+
+### `ngbr_cell_info`
+
+Neighbor cells, one entry per `;`, each five comma-separated fields: EARFCN, PCI, RSRQ, RSRP, and a fifth RSSI-shaped field. The serving cell appears among them: on 2026-09-26 the entry `9360,4,…` matched `wan_active_channel` `9360` and `lte_pci` `4`, with its third and fourth fields beside `lte_rsrq` and `lte_rsrp` across 30 samples. Up to seven entries were seen, on EARFCN `9360` and `1275`. The fifth field is unconfirmed, because `rssi` reads blank on the MC7010. No script in the 17 files the crawl reaches reads it.
+
+### `ip_passthrough_enabled`
+
+`1` in `LTE_BRIDGE` and `0` in router mode (`PPP`), measured 2026-09-26: it follows `opms_wan_mode`. Blank without a session.
+
+### `nr5g_action_nsa_band`
+
+The NR band in use without its prefix: `1` while `nr5g_action_band` reads `n1`.
+
+### `date_month`
+
+`20261001` in every MC7010 download taken in September 2026, and `0` on the MC888 Pro. The data page reads it as its "month" field. The reading as the next data-counter reset date rests on one month of samples.
+
+### `ppp_connect_time`
+
+Moves on every reconnect, so it tracks the connection start. Labeled `Z`, but an hour ahead of the connection latch's anchor while the router's clock is on UTC+1, which suggests local time labeled as UTC. Unconfirmed on a second offset.
 
 ### `lte_band_lock`
 

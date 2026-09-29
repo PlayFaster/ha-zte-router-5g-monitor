@@ -14,6 +14,8 @@ from custom_components.zte_router_5g.api import (
     _EXTENDED_PARAMS,
     ZTEAuthError,
     ZTEConnectionError,
+    ZTECredentialsError,
+    ZTELoginRefusedError,
     ZTERouterAPI,
     ZTEWriteRefusedError,
 )
@@ -2691,3 +2693,81 @@ async def test_a_send_is_left_alone_when_only_the_second_reading_fails(
         )
 
     assert api.last_send is None
+
+
+def _guarded_login_gets(attempts: str, lock: str) -> list[MockResponse]:
+    """LD, then the version read carrying the login counters, then a login."""
+    counters = {"psw_fail_num_str": attempts, "login_lock_time": lock}
+    return [
+        MockResponse(json_data={"LD": "test_ld"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010_V", **counters}),
+        MockResponse(json_data={"RD": "test_rd"}),
+        MockResponse(json_data={"wa_inner_version": "MC7010_V", **counters}),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("attempts", "lock"), [("1", "-1"), ("0", "240")])
+async def test_login_is_withheld_on_the_last_attempt_or_a_running_lock(
+    mock_aiohttp_client, attempts, lock
+):
+    """No login request is sent; the refusal is a connection error."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.side_effect = _guarded_login_gets(attempts, lock)
+    with pytest.raises(ZTELoginRefusedError) as err:
+        await api.login()
+    assert isinstance(err.value, ZTEConnectionError)
+    assert not isinstance(err.value, ZTECredentialsError)
+    assert err.value.attempts == int(attempts)
+    mock_aiohttp_client.post.assert_not_called()
+    assert not api.session_active
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("attempts", "lock"),
+    [("5", "-1"), ("2", "-1"), ("0", "-1"), ("0", "0"), ("", ""), ("x", "y")],
+)
+async def test_login_proceeds_on_every_other_reading(
+    mock_aiohttp_client, attempts, lock
+):
+    """Blank, non-numeric, and a spent count with no lock running proceed."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.side_effect = _guarded_login_gets(attempts, lock)
+    mock_aiohttp_client.post.return_value = MockResponse(
+        cookies={"stok": _stok_cookie()}
+    )
+    await api.login()
+    assert api.session_active
+
+
+@pytest.mark.asyncio
+async def test_login_proceeds_when_the_counters_cannot_be_read(mock_aiohttp_client):
+    """An unreadable version read leaves the counters unread, and login goes on."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    api.login_guard = {"attempts": 1, "lock_seconds": -1}
+    with (
+        patch.object(api, "get_ld", return_value="LD"),
+        patch.object(api, "get_version", return_value=None),
+        patch.object(api, "_attempt_login", side_effect=ZTEConnectionError("post")),
+        pytest.raises(ZTEConnectionError, match="post"),
+    ):
+        await api.login()
+
+
+@pytest.mark.asyncio
+async def test_the_version_read_asks_for_the_login_counters(mock_aiohttp_client):
+    """The counters ride on the version read, costing no request of their own."""
+    api = ZTERouterAPI(mock_aiohttp_client, "192.168.0.1", "admin", "password")
+    mock_aiohttp_client.get.return_value = MockResponse(
+        json_data={
+            "wa_inner_version": "v",
+            "psw_fail_num_str": "4",
+            "login_lock_time": "-1",
+        }
+    )
+    await api.get_version()
+    url = str(mock_aiohttp_client.get.call_args.args[0])
+    assert "psw_fail_num_str" in url
+    assert "login_lock_time" in url
+    assert api.login_guard == {"attempts": 4, "lock_seconds": -1}

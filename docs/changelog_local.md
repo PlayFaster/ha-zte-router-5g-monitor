@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.5-dev1\] - 2026-09-28 - Login Lockout Protection; Login Attempts Remaining and Neighbor Cells Sensors; Total Connected Time Guard](#345-dev1---2026-09-28---login-lockout-protection-login-attempts-remaining-and-neighbor-cells-sensors-total-connected-time-guard)
   - [\[3.4.4\] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion](#344---2026-09-26---release-intelligent-hybrid-polling-router-learned-network-modes-and-diagnostics-vocabulary-expansion)
   - [\[3.4.4-dev2\] - 2026-09-25 - Each Poll Asks Only What the Router Answers; Generated Spellings in the Alias Tuples; Diagnostics Check Retakes a Differing Pass](#344-dev2---2026-09-25---each-poll-asks-only-what-the-router-answers-generated-spellings-in-the-alias-tuples-diagnostics-check-retakes-a-differing-pass)
   - [\[3.4.4-dev1\] - 2026-09-25 - Network Mode Options Read from the Router; Diagnostics Probe Reported and Generated Spellings; Duration Sensors in Hours](#344-dev1---2026-09-25---network-mode-options-read-from-the-router-diagnostics-probe-reported-and-generated-spellings-duration-sensors-in-hours)
@@ -320,6 +321,45 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.5-dev1] - 2026-09-28 - Login Lockout Protection; Login Attempts Remaining and Neighbor Cells Sensors; Total Connected Time Guard
+
+Plan: `.notes/issues/plans_status/v345_plan_new_format.md`.
+
+### Added
+
+- **The integration does not spend the router's last login attempt.** Before each login, `psw_fail_num_str` (attempts left) and `login_lock_time` are read without a session, on the version read every login already makes. With one attempt left, or none left while a lock runs, the login is withheld and raises `ZTELoginRefusedError`, a connection error, so a correct password is never sent to reauthentication. A blank, non-numeric or unread count proceeds.
+- **Integration Health reports a login lockout,** at once rather than after the strike budget: "Login lockout in progress" with the seconds left, or "Login withheld" with one attempt left. A count below 5 with no lockout is not reported, since a login clash also spends an attempt.
+- **Login Attempts Remaining**, a diagnostic sensor, disabled by default.
+- **Neighbor Cells**, a diagnostic sensor, disabled by default: the number of entries in `ngbr_cell_info`, with each cell's EARFCN, PCI, RSRQ and RSRP in the unrecorded `cells` attribute. The fifth field, RSSI-shaped but unconfirmed, is left out; a malformed entry is skipped; blank reads unknown. The MC888 Pro does not answer it.
+
+### Changed
+
+- **Total Connected Time is checked against its last accepted reading.** A fall is accepted as a restart; a rise no greater than the wall-clock time since, plus 5% and 120 s, is accepted; a greater rise reads unknown, as the measured 2,678,229,665 s would. The baseline is stored beside the uptime counters, so the first reading after a Home Assistant restart is checked too. A reading above ten years reads unknown.
+- **The full poll before a diagnostics download also asks the names only disabled entities read.**
+- **The diagnostics download publishes `ip_passthrough_enabled` and the Wi-Fi client counts** (`wifi_chipN_ssidN_access_sta_num`). A name is exempt from the `pass` deny term only where it matches no deny term once `passthrough` is removed.
+- **`ngbr_cell_info` joins the poll** and leaves the discovery candidates; the download tokenizes it as a cell identifier, as it does the serving PCI.
+- **`scripts/diag_check.py` excuses a differing path only where one pass lost data:** pass 3 matches pass 1 or pass 2, and the odd pass has the path absent, its value empty or a list short of members. An odd pass holding more, or three different values, fails.
+- **The Network Mode, Network Mode Selection and Network Mode Config notes** describe operator selection: picking an operator by hand may limit the router to 4G, and changing Network Mode Selection returns operator selection to automatic. The `async_select_option` docstring records the 2026-09-27 writes.
+
+### Fixed During the Cycle
+
+- **The two new sensors read unknown on the live check.** Their names were in the discovery vocabulary but not in the poll universe, which is built from `_CORE_PARAMS` and `_EXTENDED_PARAMS`; unit tests supply the payload directly and did not see it. Both are now in `_EXTENDED_PARAMS`, and `test_every_always_polled_name_is_in_the_poll_universe` fails where an always-polled name cannot be asked.
+
+### Checked Live on the MC7010
+
+| Check | Result |
+| :-- | :-- |
+| Login Attempts Remaining | `5` |
+| Neighbor Cells | `8`, with the cells listed |
+| Total Connected Time | 31.46 h, accepted |
+| Network Mode notes | Read as agreed in each entity's information |
+| Four wrong logins, then a reload | Login withheld; Health "1 attempt left"; the counter stayed at 1 |
+| A fifth wrong login, then a reload | Health "Login lockout in progress ... 137 s more" |
+| After the lock ran out | The integration logged in; Health off; attempts back to 5 |
+| Diagnostics download | Full poll, 0 disabled names skipped; `ip_passthrough_enabled` published; `ngbr_cell_info` tokenized |
+
+The Wi-Fi client counts did not answer on the MC7010, so their publishing is covered by unit tests only.
 
 ## [3.4.4] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion
 

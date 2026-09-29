@@ -465,6 +465,10 @@ def test_every_flux_spelling_requested_is_aliased_somewhere() -> None:
     )
 
     consumed |= set(DEVICE_UPTIME_KEYS) | set(CONNECTION_UPTIME_KEYS)
+    # Total Connected Time, checked by the coordinator before the sensor reads it.
+    from custom_components.zte_router_5g.coordinator import TOTAL_TIME_KEYS
+
+    consumed |= set(TOTAL_TIME_KEYS)
 
     # The diagnostics download resolves the usage vocabulary itself: those
     # concepts have no entity, so `sensor._ALIAS_*` does not cover them.

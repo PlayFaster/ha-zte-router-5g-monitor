@@ -832,3 +832,106 @@ async def test_a_stale_anchor_is_corrected_once_and_stays_corrected(hass, rate):
 
     assert len(moves) == 1, f"{len(moves)} moves at rate {rate:.2%}"
     assert "last_uptime" not in coordinator.entry.data
+
+
+# ---------------------------------------------------------------------------
+# Total Connected Time guard (v345_plan I7)
+# ---------------------------------------------------------------------------
+
+
+def _total(coordinator, raw, now):
+    return coordinator._checked_total_time(raw, now)
+
+
+@pytest.mark.asyncio
+async def test_total_time_accepts_a_rise_within_elapsed_time(hass):
+    """A rise no greater than the time since the last reading is accepted."""
+    coordinator = _coordinator(hass, _entry())
+    assert _total(coordinator, "36000", NOW) == 36_000
+    assert _total(coordinator, "36960", NOW + POLL) == 36_960
+    assert _total(coordinator, "36960", NOW + 2 * POLL) == 36_960
+
+
+@pytest.mark.asyncio
+async def test_total_time_accepts_a_fall_as_a_restart(hass):
+    """A fall is the router starting its total again, and becomes the baseline."""
+    coordinator = _coordinator(hass, _entry())
+    _total(coordinator, "3582116", NOW)
+    assert _total(coordinator, "120", NOW + POLL) == 120
+    assert coordinator._total_time_baseline == (120, NOW + POLL)
+
+
+@pytest.mark.asyncio
+async def test_total_time_rejects_the_measured_jump_until_the_counter_falls(hass):
+    """The measured 2,678,229,665 s reads unknown and leaves the baseline."""
+    coordinator = _coordinator(hass, _entry())
+    _total(coordinator, "36000", NOW)
+    assert _total(coordinator, "2678229665", NOW + POLL) is None
+    assert _total(coordinator, "2678229665", NOW + 2 * POLL) is None
+    assert coordinator._total_time_baseline == (36_000, NOW)
+    assert _total(coordinator, "500", NOW + 3 * POLL) == 500
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("raw", ["", None, "junk", "-5"])
+async def test_total_time_blank_or_unusable_reads_unknown(hass, raw):
+    """Blank changes nothing, so the next good reading is still checked."""
+    coordinator = _coordinator(hass, _entry())
+    _total(coordinator, "36000", NOW)
+    assert _total(coordinator, raw, NOW + POLL) is None
+    assert coordinator._total_time_baseline == (36_000, NOW)
+
+
+@pytest.mark.asyncio
+async def test_total_time_reads_either_spelling_as_one_value(hass):
+    """The MC7010 answers `total_time` and the MC888 Pro `flux_total_time`."""
+    coordinator = _coordinator(hass, _entry())
+    data = {**GOOD_DATA, "total_time": "", "flux_total_time": "3582116"}
+    coordinator._postprocess_payload(data, {}, [])
+    assert data["total_connected_seconds"] == 3_582_116
+    data = {**GOOD_DATA, "total_time": "3582200"}
+    coordinator._postprocess_payload(data, {}, [])
+    assert data["total_connected_seconds"] == 3_582_200
+
+
+@pytest.mark.asyncio
+async def test_total_time_baseline_survives_a_home_assistant_restart(hass):
+    """The first reading after a restart is checked against the stored one."""
+    first = _coordinator(hass, _entry())
+    _total(first, "36000", NOW)
+    record = first._store.async_delay_save.call_args.args[0]()
+    assert record["total_time"] == {"value": 36_000, "at": NOW.isoformat()}
+
+    second = _coordinator(hass, _entry())
+    with patch("custom_components.zte_router_5g.coordinator.Store") as store_cls:
+        store_cls.return_value.async_load = AsyncMock(return_value=record)
+        await second.async_load_stored_uptime()
+    assert second._total_time_baseline == (36_000, NOW)
+    assert _total(second, "2678229665", NOW + POLL) is None
+    # A rise across a long restart gap is within the elapsed time.
+    assert _total(second, "43000", NOW + timedelta(hours=2)) == 43_000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "block",
+    ["junk", {"value": "x", "at": NOW.isoformat()}, {"value": 5, "at": "nope"}],
+)
+async def test_a_malformed_total_time_baseline_is_dropped(hass, block):
+    """A bad stored baseline leaves the guard to start from the next reading."""
+    coordinator = _coordinator(hass, _entry())
+    with patch("custom_components.zte_router_5g.coordinator.Store") as store_cls:
+        store_cls.return_value.async_load = AsyncMock(
+            return_value={"total_time": block}
+        )
+        await coordinator.async_load_stored_uptime()
+    assert coordinator._total_time_baseline is None
+
+
+@pytest.mark.asyncio
+async def test_total_time_is_checked_before_the_store_loads(hass):
+    """The guard works without a store; the baseline is simply not saved."""
+    coordinator = _coordinator(hass, _entry())
+    coordinator._store = None
+    assert _total(coordinator, "36000", NOW) == 36_000
+    assert coordinator._total_time_baseline == (36_000, NOW)
