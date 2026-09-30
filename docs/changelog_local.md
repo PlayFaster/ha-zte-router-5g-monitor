@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.5-dev2\] - 2026-09-29 - Mypy Strict Passes Against Home Assistant Core dev](#345-dev2---2026-09-29---mypy-strict-passes-against-home-assistant-core-dev)
   - [\[3.4.5-dev1\] - 2026-09-28 - Login Lockout Protection; Login Attempts Remaining and Neighbor Cells Sensors; Total Connected Time Guard](#345-dev1---2026-09-28---login-lockout-protection-login-attempts-remaining-and-neighbor-cells-sensors-total-connected-time-guard)
   - [\[3.4.4\] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion](#344---2026-09-26---release-intelligent-hybrid-polling-router-learned-network-modes-and-diagnostics-vocabulary-expansion)
   - [\[3.4.4-dev2\] - 2026-09-25 - Each Poll Asks Only What the Router Answers; Generated Spellings in the Alias Tuples; Diagnostics Check Retakes a Differing Pass](#344-dev2---2026-09-25---each-poll-asks-only-what-the-router-answers-generated-spellings-in-the-alias-tuples-diagnostics-check-retakes-a-differing-pass)
@@ -321,6 +322,21 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
 
 ---
+
+## [3.4.5-dev2] - 2026-09-29 - Mypy Strict Passes Against Home Assistant Core dev
+
+### Bumps
+
+- **Validate Bump**: Update `ruff` from 0.16.8 to 0.16.9
+- **Validate Bump**: Bumped PHACC `pytest-homeassistant-custom-component` from 0.13.366 to 0.13.367
+
+### Shared
+
+- `pyproject.toml`: Two Mypy overrides in the synced `pyproject.toml`** to suppress clear 12 errors related to `probatio` vs  `voluptuous`.
+
+### Changed
+
+- **Two Mypy overrides in the synced `pyproject.toml`** clear 12 errors that core `dev` (`3e98d8595c2`) raised in unchanged code. `voluptuous` is treated as untyped, since core now types schemas as probatio (core #182112) while the integration's `import voluptuous` is aliased to probatio only at runtime. `homeassistant.components.binary_sensor` and `homeassistant.components.button` count their implicit re-exports of the device-class enums as exports, since core moved the enums into `const` modules (core #182211). No integration code changes, and the 2025.2.0 floor is unchanged. Mypy Strict: no issues in 22 source files.
 
 ## [3.4.5-dev1] - 2026-09-28 - Login Lockout Protection; Login Attempts Remaining and Neighbor Cells Sensors; Total Connected Time Guard
 
