@@ -481,7 +481,6 @@ DISCOVERY_CANDIDATES: list[str] = [
     "lte_snr_4",
     "network_information",
     "network_provider_fullname",
-    "ngbr_cell_info",
     "nr5g_action_nsa_band",
     "nr5g_cell_id",
     "nr_ca_pcell_band",

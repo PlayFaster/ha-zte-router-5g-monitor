@@ -131,6 +131,9 @@
       "signal_lte_rsrp": {
         "default": "mdi:signal"
       },
+      "signal_neighbor_cells": {
+        "default": "mdi:radio-tower"
+      },
       "signal_lte_rsrq": {
         "default": "mdi:signal"
       },
@@ -307,6 +310,9 @@
       },
       "system_upgrade_result": {
         "default": "mdi:package-variant-closed-check"
+      },
+      "system_login_attempts_remaining": {
+        "default": "mdi:lock-alert-outline"
       },
       "system_wa_inner_version": {
         "default": "mdi:information-outline"

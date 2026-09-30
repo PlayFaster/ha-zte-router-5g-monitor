@@ -10,9 +10,9 @@ A complete list of the static entities and service actions provided by the integ
 | :-- | :-- | :-- |
 | **Data** | 18 | Data entities. |
 | **SMS** | 5 | SMS entities. |
-| **Signal** | 56 | Signal entities. |
-| **System** | 51 | System entities. |
-| **Total** | **130** | Total static entities. |
+| **Signal** | 57 | Signal entities. |
+| **System** | 52 | System entities. |
+| **Total** | **132** | Total static entities. |
 
 ## Data Sub-Device (18 Entities)
 
@@ -47,7 +47,7 @@ A complete list of the static entities and service actions provided by the integ
 | Total Msg | `msg_total` | Sensor | - | - | LTS: `measurement` |
 | Unread Msg | `sms_unread_num` | Sensor | - | - | LTS: `measurement` |
 
-## Signal Sub-Device (56 Entities)
+## Signal Sub-Device (57 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -84,6 +84,7 @@ A complete list of the static entities and service actions provided by the integ
 | Network Mode Config | `net_select_config` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Network Provider | `network_provider` | Sensor | - | Diagnostic | - |
 | Network Type | `network_type` | Sensor | - | - | - |
+| Neighbor Cells | `ngbr_cell_info` | Sensor | - | Diagnostic | **Disabled by default.** |
 | 5G Active Band | `nr5g_action_band` | Sensor | - | Diagnostic | - |
 | 5G Active Channel | `nr5g_action_channel` | Sensor | - | Diagnostic | - |
 | 5G NSA Band Lock | `nr5g_nsa_band_lock` | Sensor | - | Diagnostic | **Disabled by default.** |
@@ -108,7 +109,7 @@ A complete list of the static entities and service actions provided by the integ
 | 5G SNR | `z5g_sinr` | Sensor | dB | - | LTS: `measurement` |
 | Data Connection | `data_connection` | Switch | - | Config | - |
 
-## System Sub-Device (51 Entities)
+## System Sub-Device (52 Entities)
 
 | Name | Key | Type | Unit | Category | Notes |
 | :-- | :-- | :-- | :-- | :-- | :-- |
@@ -144,6 +145,7 @@ A complete list of the static entities and service actions provided by the integ
 | Ambient Modem Temperature | `pm_sensor_ambient` | Sensor | °C | Diagnostic | **Disabled by default.** LTS: `measurement` |
 | Modem Temperature | `pm_sensor_mdm` | Sensor | °C | Diagnostic | **Disabled by default.** LTS: `measurement` |
 | Power Amplifier Temperature | `pm_sensor_pa1` | Sensor | °C | Diagnostic | **Disabled by default.** LTS: `measurement` |
+| Login Attempts Remaining | `psw_fail_num_str` | Sensor | - | Diagnostic | **Disabled by default.** |
 | Uptime Duration | `realtime_time` | Sensor | s | - | **Disabled by default.** |
 | SIM ICCID | `sim_iccid` | Sensor | - | Diagnostic | **Disabled by default.** |
 | SIM IMSI | `sim_imsi` | Sensor | - | Diagnostic | **Disabled by default.** |

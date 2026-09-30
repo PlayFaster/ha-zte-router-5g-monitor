@@ -26,11 +26,11 @@
     },
     "pytest-homeassistant-custom-component": {
       "pins": ["dockerfile", "requirements_test"],
-      "version": "0.13.366"
+      "version": "0.13.367"
     },
     "ruff": {
       "pins": ["pre-commit", "dockerfile", "requirements_test"],
-      "version": "0.16.8"
+      "version": "0.16.9"
     },
     "yamllint": {
       "pins": ["pre-commit", "dockerfile", "requirements_test"],

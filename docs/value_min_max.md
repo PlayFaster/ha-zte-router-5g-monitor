@@ -65,10 +65,11 @@ We use a **Declarative Validation** approach. Limits are defined directly within
 | System | `pm_sensor_ambient` | `-40` | `125` | °C |
 | System | `pm_sensor_mdm` | `-40` | `125` | °C |
 | System | `pm_sensor_pa1` | `-40` | `125` | °C |
+| System | `psw_fail_num_str` | `0` | — | — |
 | System | `realtime_time` | `0` | — | s |
 | System | `sim_pin_attempts` | `0` | `10` | — |
 | System | `sim_puk_attempts` | `0` | `10` | — |
-| System | `total_time` | `0` | — | s |
+| System | `total_time` | `0` | `315360000` | s |
 | System | `wifi_clients` | `0` | `256` | — |
 
 <!-- GENERATED:end -->

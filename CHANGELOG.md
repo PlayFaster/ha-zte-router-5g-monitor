@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [3.4.5] - 2026-09-30 - Release: Login Lockout Protection, Login Attempts Remaining and Neighbor Cells Sensors, and Total Connected Time Guard
+
+### Summary
+
+- **Login Lockout Protection**: The integration now reads remaining login attempts before authenticating and withholds requests when only one attempt remains, preventing integration logins from triggering a 5-minute router lockout.
+- **Integration Health Lockout Alerts**: Integration Health alerts immediately when a login lockout is active with the remaining unlock seconds, or when logins are withheld.
+- **New Diagnostic Sensors**: Added Login Attempts Remaining and Neighbor Cells diagnostic sensors (both disabled by default).
+- **Total Connected Time Guard**: Added validation to reject corrupted billion-second counter jumps and impossible duration values.
+- **Diagnostics Visibility**: Restored visibility of IP pass-through status and Wi-Fi client counts in diagnostic downloads, and ensured disabled entity parameters are polled before capture.
+
+### Added
+
+- **Pre-Login Lockout Guard**: Inspects router authentication attempts before logging in and withholds requests when exactly 1 attempt remains or during an active lockout, preventing accidental lockout triggers while avoiding false reauthentication flows.
+- **Lockout Health Alerts**: Integration Health instantly reports active router lockouts with countdown timers (`Login lockout in progress`) or withheld requests (`Login withheld`), bypassing normal strike budgets.
+- **Login Attempts Remaining Sensor (`sensor.<name>_system_login_attempts_remaining`)**: Diagnostic sensor tracking remaining password attempts allowed by the router before locking (disabled by default).
+- **Neighbor Cells Sensor (`sensor.<name>_system_neighbor_cells`)**: Diagnostic sensor reporting the number of detected neighbor cellular towers, with EARFCN, PCI, RSRQ, and RSRP exposed in attributes to aid outdoor antenna aiming (disabled by default).
+
+### Changed
+
+- **Total Connected Time Validation**: `sensor.<name>_system_total_time` validates counter progression against elapsed wall-clock time and a 10-year ceiling, marking corrupted counter jumps as unknown while preserving valid reboot resets.
+- **Diagnostics Sanitizer Exemptions**: Diagnostic downloads now publish IP pass-through state (`ip_passthrough_enabled`) and Wi-Fi connected client counts (`wifi_chipN_ssidN_access_sta_num`) while keeping passwords and SSIDs redacted.
+- **Complete Diagnostics for Disabled Entities**: Full polling cycles preceding diagnostic downloads now query parameters used exclusively by disabled entities.
+- **Network Mode Documentation**: Updated about notes for Network Mode, Network Mode Selection, and Network Mode Config to clarify operator selection behaviors.
+
+---
+
 ## [3.4.4] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion
 
 ### Summary
@@ -953,6 +979,7 @@ Entry structure — headers, titles, category headings and the split between thi
 ---
 
 - [Changelog](#changelog)
+  - [\[3.4.5\] - 2026-09-30 - Release: Login Lockout Protection, Login Attempts Remaining and Neighbor Cells Sensors, and Total Connected Time Guard](#345---2026-09-30---release-login-lockout-protection-login-attempts-remaining-and-neighbor-cells-sensors-and-total-connected-time-guard)
   - [\[3.4.4\] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion](#344---2026-09-26---release-intelligent-hybrid-polling-router-learned-network-modes-and-diagnostics-vocabulary-expansion)
   - [\[3.4.3\] - 2026-09-24 - Release: Data Connection Switch, Write Command Resilience, Expected Outage Awareness, Uptime and Connection Time Tracking, and Total Data Counters](#343---2026-09-24---release-data-connection-switch-write-command-resilience-expected-outage-awareness-uptime-and-connection-time-tracking-and-total-data-counters)
   - [\[3.4.2\] - 2026-09-24 - Pre-Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---pre-release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)

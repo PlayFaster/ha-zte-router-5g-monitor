@@ -127,6 +127,8 @@ _VOLATILE = re.compile(
     r"|/connection_start$"
     # The session counter as Connection Duration reads it, 3.4.2-dev8.
     r"|/connection_seconds$"
+    # Total Connected Time as the coordinator accepted it, 3.4.5-dev1.
+    r"|/total_connected_seconds$"
     # This script's own bookkeeping, and the free-text notes, which are a
     # list compared by position: a pass emitting one extra note shifts every
     # entry after it and reports a dozen differences for one real one. The
@@ -437,16 +439,47 @@ async def produce_complete(label: str) -> dict[str, Any]:
     return retaken
 
 
+_ABSENT = object()
+
+
+def _lost(odd: Any, kept: Any) -> bool:
+    """True where the odd pass holds less at a path than the two that agree."""
+    if odd is _ABSENT or odd in (None, "") or odd == frozenset():
+        return kept not in (_ABSENT, None, "", frozenset())
+    return isinstance(odd, frozenset) and isinstance(kept, frozenset) and odd < kept
+
+
+def excused_by_third_pass(
+    first: dict[str, Any],
+    second: dict[str, Any],
+    third: dict[str, Any],
+    differing: set[str],
+) -> frozenset[str]:
+    """The differing paths where one pass lost data the other two hold."""
+    one, two, three = (dict(_stability_leaves(p)) for p in (first, second, third))
+    excused = set()
+    for path in differing:
+        a, b, c = (
+            _comparable(leaves[path]) if path in leaves else _ABSENT
+            for leaves in (one, two, three)
+        )
+        if (c == a and _lost(b, a)) or (c == b and _lost(a, b)):
+            excused.add(path)
+    return frozenset(excused)
+
+
 async def retake_on_difference(
     first: dict[str, Any], second: dict[str, Any]
 ) -> frozenset[str]:
     """Take a third pass when two differ; return the differences it excuses.
 
     A deterministic regression differs in every pass; a one-off event, such as
-    one request that drew no answer, does not recur on the same path. Only a
-    path differing between passes 1 and 2 and again between passes 2 and 3
-    fails. The count, refused-name and device-profile checks compare passes 1
-    and 2 directly and are not retaken.
+    one request that drew no answer, loses data in one pass only. A path is
+    excused where pass 3 matches pass 1 or pass 2 and the odd pass lost data
+    there: the path absent, its value empty, or a list holding fewer members.
+    Where the odd pass holds more, or all three differ, the path fails, so a
+    fault present in two passes is not excused. The count, refused-name and
+    device-profile checks compare passes 1 and 2 directly and are not retaken.
     """
     differing = structural_differences(first, second)
     if not differing:
@@ -459,7 +492,7 @@ async def retake_on_difference(
     )
     await asyncio.sleep(SETTLE_SECONDS)
     third = await produce_complete("run 3")
-    excused = frozenset(differing - structural_differences(second, third))
+    excused = excused_by_third_pass(first, second, third, differing)
     for path in sorted(excused):
         print(_cyan(f"  warning: {path} differed once and not again; excused"))
     return excused

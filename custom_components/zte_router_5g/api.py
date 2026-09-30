@@ -13,7 +13,7 @@ import logging
 from math import ceil
 import re
 from time import monotonic
-from typing import Any, NamedTuple, cast
+from typing import Any, Final, NamedTuple, cast
 import urllib.parse
 
 import aiohttp
@@ -300,6 +300,13 @@ _EXTENDED_PARAMS: list[str] = [
     "opms_wan_mode",
     "opms_wan_auto_mode",
     "apn_interface_version",
+    # The login counters, for Login Attempts Remaining and Integration Health's
+    # lockout finding; the pre-login check reads them on the version read.
+    "psw_fail_num_str",
+    "login_lock_time",
+    # The neighbor cells the router hears, for the Neighbor Cells sensor. The
+    # MC888 Pro does not answer it.
+    "ngbr_cell_info",
     # Whether the router reconnects by itself (`auto_dial`) or waits to be
     # told (`manual_dial`). Probed only by the diagnostics discovery pass
     # until the Connection Mode Status sensor needed it. Blank without
@@ -765,6 +772,42 @@ class ZTEConnectionError(Exception):
 
 class ZTEAuthError(Exception):
     """Raised when the session is not usable."""
+
+
+# The router's login counters, read without a session. `psw_fail_num_str` is
+# the wrong passwords left before a lockout, 5 when clear; `login_lock_time` is
+# the seconds left of a running lockout, `-1` when none runs. A login clash
+# also spends an attempt, so a count below 5 is not evidence of a wrong
+# password (v345_plan I4, E7).
+LOGIN_GUARD_NAMES: Final[tuple[str, str]] = ("psw_fail_num_str", "login_lock_time")
+
+
+class ZTELoginRefusedError(ZTEConnectionError):
+    """Raised in place of a login the router's counters say must not be sent.
+
+    With one attempt left, a login that failed for any reason, a clash
+    included, would lock every client out; while a lockout runs, a login
+    cannot succeed and may extend it. A connection failure rather than a
+    credentials error, so a correct password is never sent to reauthentication.
+    """
+
+    def __init__(self, attempts: int | None, lock_seconds: int | None) -> None:
+        """Keep the counters for Integration Health."""
+        self.attempts = attempts
+        self.lock_seconds = lock_seconds
+        if attempts == 0 and lock_seconds is not None and lock_seconds > 0:
+            text = f"login locked by the router, {lock_seconds} s left"
+        else:
+            text = f"login withheld: {attempts} attempt(s) left before a lockout"
+        super().__init__(text)
+
+
+def _guard_int(value: Any) -> int | None:
+    """A login counter as a number, or None where blank or not numeric."""
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
 
 
 class ZTEWriteRefusedError(ZTEConnectionError):
@@ -1305,6 +1348,11 @@ class ZTERouterAPI:
         # while `_write_lock` is wanted: a login's own requests are
         # unauthenticated reads and a direct POST, so it takes no other lock.
         self._login_lock = asyncio.Lock()
+        # The login counters as last read by `get_version`; None where unread.
+        self.login_guard: dict[str, int | None] = {
+            "attempts": None,
+            "lock_seconds": None,
+        }
         # The open expected-outage window, if any. Opened and closed by the
         # coordinator, which owns the timer; read here, by the gate.
         self.expected_outage: ExpectedOutage | None = None
@@ -2859,10 +2907,17 @@ class ZTERouterAPI:
             "goform/goform_get_cmd_process?isTest=false&multi_data=1&cmd="
             + ",".join(spellings)
         )
+        # The login counters ride on this read, which every login makes without
+        # a session already, so the pre-login check costs no request of its own.
+        path += "," + ",".join(LOGIN_GUARD_NAMES)
         try:
             data = await self._request(
                 "GET", path, timeout_sec=timeout_sec, authenticated=False
             )
+            self.login_guard = {
+                "attempts": _guard_int(data.get("psw_fail_num_str")),
+                "lock_seconds": _guard_int(data.get("login_lock_time")),
+            }
             return cast("str | None", _first_spelling(data, spellings))
         except (ZTEAuthError, ZTEConnectionError) as e:
             _LOGGER.debug("Failed to get version: %s", e)
@@ -2885,6 +2940,20 @@ class ZTERouterAPI:
         async with self._login_lock:
             await self._login_unlocked(timeout_sec=timeout_sec)
 
+    def _refuse_unsafe_login(self) -> None:
+        """Withhold the login where the counters, read and numeric, forbid it.
+
+        One attempt left: a failed login would lock every client out. None left
+        with a lock running: the login cannot succeed. Blank, non-numeric or
+        unread counters proceed, since the counters are absent on some models
+        and a missing reading must not stop every login.
+        """
+        attempts = self.login_guard["attempts"]
+        lock_seconds = self.login_guard["lock_seconds"]
+        running = attempts == 0 and lock_seconds is not None and lock_seconds > 0
+        if attempts == 1 or running:
+            raise ZTELoginRefusedError(attempts, lock_seconds)
+
     async def _login_unlocked(self, timeout_sec: int | None = None) -> None:
         """Clean login that resets the internal session state.
 
@@ -2902,7 +2971,9 @@ class ZTERouterAPI:
         self._clear_session(clear_cookies=True)
 
         ld = await self.get_ld(timeout_sec=tout)
+        self.login_guard = {"attempts": None, "lock_seconds": None}
         version = await self.get_version(timeout_sec=tout)
+        self._refuse_unsafe_login()
 
         if not self.password:
             raise ZTECredentialsError("No password provided")

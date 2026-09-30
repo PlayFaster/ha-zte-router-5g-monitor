@@ -149,6 +149,9 @@
       "signal_lte_rsrp": {
         "name": "LTE RSRP"
       },
+      "signal_neighbor_cells": {
+        "name": "Neighbor Cells"
+      },
       "signal_lte_rsrq": {
         "name": "LTE RSRQ"
       },
@@ -370,6 +373,9 @@
       },
       "system_wan_netmask": {
         "name": "WAN Netmask"
+      },
+      "system_login_attempts_remaining": {
+        "name": "Login Attempts Remaining"
       },
       "system_total_connected_time": {
         "name": "Total Connected Time"

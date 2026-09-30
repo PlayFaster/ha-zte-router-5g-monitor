@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
 from time import monotonic
-from typing import Any
+from typing import Any, Final
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST
@@ -30,6 +30,7 @@ from .api import (
     ZTEAuthError,
     ZTECredentialsError,
     ZTERouterAPI,
+    widen_aliases,
 )
 from .const import (
     CONF_SCAN_INTERVAL,
@@ -145,6 +146,14 @@ UPTIME_STORAGE_VERSION = 1
 PROFILE_STORAGE_VERSION = 1
 UPTIME_WRITE_INTERVAL = timedelta(minutes=20)
 UPTIME_SAVE_DELAY = 60
+
+# Total Connected Time's spellings, one value (v345_plan I7).
+TOTAL_TIME_KEYS: Final = widen_aliases(("total_time", "flux_total_time"))
+# A rise in Total Connected Time is accepted up to the wall-clock time since the
+# last accepted reading, plus this fraction and these seconds: the router's
+# counter and Home Assistant's clock tick independently, and a poll lands late.
+TOTAL_TIME_RISE_MARGIN = 0.05
+TOTAL_TIME_RISE_SLACK_SECONDS = 120
 
 
 # Optional endpoints that hold their own last-good payload and strike count, so
@@ -412,6 +421,10 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
 
         # Populated by `async_load_stored_uptime` during setup.
         self._store: Store[dict[str, Any]] | None = None
+        # The last accepted Total Connected Time and when it was read. Stored
+        # beside the uptime counters, so the first reading after a Home
+        # Assistant restart is checked against it rather than accepted.
+        self._total_time_baseline: tuple[int, datetime] | None = None
         # The key the system latch reads, chosen on the first poll that
         # answers one of `DEVICE_UPTIME_KEYS`. See `_device_uptime_raw`.
         self._uptime_source: str | None = None
@@ -1139,6 +1152,9 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         # Connection Duration's value: `None` while data is off, when the
         # counter reads blank or 0 (3.4.2-dev8).
         data["connection_seconds"] = _counter_seconds(conn_raw)
+        data["total_connected_seconds"] = self._checked_total_time(
+            get_first(data, TOTAL_TIME_KEYS), dt_util.utcnow()
+        )
 
         # Identify if hardware metadata has changed
         new_model = get_router_model(data)
@@ -1743,6 +1759,38 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         record = self._store_record()
         self._store.async_delay_save(lambda: record, UPTIME_SAVE_DELAY)
 
+    def _checked_total_time(self, raw: Any, now: datetime) -> int | None:
+        """Total Connected Time, or None where the reading cannot be true.
+
+        A fall is a restart of the router's total and becomes the baseline. A
+        rise no greater than the wall-clock time since the accepted reading,
+        plus a margin, is accepted. A greater rise, such as the 2,678,229,665 s
+        an MC7010 reported (v345_plan E3), reads unknown and leaves the
+        baseline, so the value stays unknown until the counter falls or time
+        catches up. Blank or unusable reads unknown and changes nothing.
+        """
+        value = _counter_seconds(raw)
+        if value is None:
+            return None
+        baseline = self._total_time_baseline
+        if baseline is not None and value >= baseline[0]:
+            elapsed = max((now - baseline[1]).total_seconds(), 0.0)
+            allowed = (
+                elapsed * (1 + TOTAL_TIME_RISE_MARGIN) + TOTAL_TIME_RISE_SLACK_SECONDS
+            )
+            if value - baseline[0] > allowed:
+                _LOGGER.debug(
+                    "%s: Total Connected Time rose %s s in %.0f s; ignored",
+                    self.entry.title,
+                    value - baseline[0],
+                    elapsed,
+                )
+                return None
+        self._total_time_baseline = (value, now)
+        if self._store is not None:
+            self._store.async_delay_save(self._store_record, UPTIME_SAVE_DELAY)
+        return value
+
     def _store_record(self) -> dict[str, Any]:
         """Return the persisted form of both latches.
 
@@ -1769,6 +1817,9 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             if latch.drift_rate_max is not None:
                 block["rate_max"] = round(latch.drift_rate_max, 6)
             record[latch.counter_key] = block
+        if self._total_time_baseline is not None:
+            value, at = self._total_time_baseline
+            record["total_time"] = {"value": value, "at": at.isoformat()}
         return record
 
     async def async_load_stored_uptime(self) -> None:
@@ -1814,6 +1865,16 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
             if isinstance(block, dict):
                 self._restore_latch(latch, block)
         self._drop_anchorless_counters()
+        self._restore_total_time(stored.get("total_time"))
+
+    def _restore_total_time(self, block: Any) -> None:
+        """Restore Total Connected Time's baseline; a malformed one is dropped."""
+        if not isinstance(block, dict):
+            return
+        at = dt_util.parse_datetime(str(block.get("at")))
+        value = block.get("value")
+        if at is not None and isinstance(value, int) and value >= 0:
+            self._total_time_baseline = (value, dt_util.as_utc(at))
 
     def _drop_anchorless_counters(self) -> None:
         """Cold-start any latch that has a stored counter but no anchor.
@@ -2568,6 +2629,29 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
                 "consecutive_failures": 0,
             }
 
+    def _login_lockout_issue(self) -> str | None:
+        """The router's login counters as a finding, where they block a login.
+
+        Read without a session before the login that failed, so they describe
+        this cycle. Reported at once rather than after the strike budget: a
+        lockout is certain, not a blip. Attempts below 5 with no lockout are not
+        reported, since a login clash spends an attempt as a wrong password does.
+        """
+        guard = getattr(self.api, "login_guard", None) or {}
+        attempts = guard.get("attempts")
+        lock_seconds = guard.get("lock_seconds")
+        if attempts == 0 and isinstance(lock_seconds, int) and lock_seconds > 0:
+            return (
+                f"Login lockout in progress: the router refuses every login for "
+                f"{lock_seconds} s more"
+            )
+        if attempts == 1:
+            return (
+                "Login withheld: 1 attempt left before the router locks every "
+                "client out"
+            )
+        return None
+
     def _record_health_failure(self, err: Exception) -> None:
         """Refresh the health snapshot after a failed cycle.
 
@@ -2580,10 +2664,17 @@ class ZTERouterDataUpdateCoordinator(DataUpdateCoordinator):
         """
         try:
             cold_start = self.data is None
-            problem = cold_start or self.consecutive_failures >= FETCH_STRIKE_LIMIT
+            lockout = self._login_lockout_issue()
+            problem = (
+                cold_start
+                or self.consecutive_failures >= FETCH_STRIKE_LIMIT
+                or lockout is not None
+            )
 
             issues: list[str] = []
-            if problem:
+            if lockout:
+                issues.append(lockout)
+            if problem and not lockout:
                 if cold_start:
                     issues.append(
                         f"Cannot reach the router — no data has been fetched "

@@ -247,3 +247,64 @@ async def test_never_crashes_the_update_it_diagnoses(health, coordinator) -> Non
     assert data["network_type"] == "ENDC"
     assert health.available is True
     assert health.extra_state_attributes["severity"] == "unknown"
+
+
+async def test_reports_a_running_login_lockout_at_once(health, coordinator) -> None:
+    """A lockout is reported on the first failure, with the seconds left."""
+    await coordinator._async_update_data()
+    coordinator.data = dict(GOOD_DATA)
+    coordinator.api.login_guard = {"attempts": 0, "lock_seconds": 240}
+    coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("locked"))
+    await coordinator._async_update_data()
+
+    assert coordinator.consecutive_failures < FETCH_STRIKE_LIMIT
+    assert health.is_on is True
+    issues = health.extra_state_attributes["issues"]
+    assert any("Login lockout in progress" in i and "240 s" in i for i in issues)
+
+
+async def test_reports_a_withheld_login_with_one_attempt_left(
+    health, coordinator
+) -> None:
+    """The last attempt is protected, and the finding says so."""
+    coordinator.api.login_guard = {"attempts": 1, "lock_seconds": -1}
+    coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("held"))
+    with pytest.raises(UpdateFailed):
+        await coordinator._async_update_data()
+    assert any("1 attempt left" in i for i in health.extra_state_attributes["issues"])
+
+
+@pytest.mark.parametrize(
+    "guard",
+    [
+        {"attempts": 3, "lock_seconds": -1},
+        {"attempts": 0, "lock_seconds": -1},
+        {"attempts": None, "lock_seconds": None},
+    ],
+)
+async def test_attempts_below_five_are_not_reported(health, coordinator, guard) -> None:
+    """A clash spends an attempt too, so a low count alone is no finding."""
+    await coordinator._async_update_data()
+    coordinator.data = dict(GOOD_DATA)
+    coordinator.api.login_guard = guard
+    coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("down"))
+    await coordinator._async_update_data()
+    assert health.is_on is False
+    assert not any("Login" in i for i in health.extra_state_attributes["issues"])
+
+
+async def test_the_lockout_finding_clears_when_the_lock_ends(
+    health, coordinator
+) -> None:
+    """Once the timer reads -1 the login proceeds, and success clears it."""
+    await coordinator._async_update_data()
+    coordinator.data = dict(GOOD_DATA)
+    coordinator.api.login_guard = {"attempts": 0, "lock_seconds": 5}
+    coordinator.api.get_all_data = AsyncMock(side_effect=ZTEConnectionError("locked"))
+    await coordinator._async_update_data()
+    assert health.is_on is True
+
+    coordinator.api.login_guard = {"attempts": 5, "lock_seconds": -1}
+    coordinator.api.get_all_data = AsyncMock(return_value=dict(GOOD_DATA))
+    await coordinator._async_update_data()
+    assert health.is_on is False
