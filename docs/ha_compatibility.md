@@ -2,7 +2,7 @@
 
 What Home Assistant versions this integration supports and the status of any changing core APIs.
 
-**Reviewed 2026-09-23.**
+**Reviewed 2026-09-30.**
 
 > [!IMPORTANT]
 >
@@ -15,7 +15,7 @@ What Home Assistant versions this integration supports and the status of any cha
 | Type | Version / Status | Note |
 | :-- | :-- | :-- |
 | **Minimum** | **2025.2.0** | Declared in `README.md` |
-| **Tested against** | **2026.9.3** | `pytest-homeassistant-custom-component` 0.13.366 (development container) |
+| **Tested against** | **2026.9.4** | `pytest-homeassistant-custom-component` 0.13.367 (development container) |
 | **Enforced by** | `hacs.json` | `"homeassistant": "2025.2.0"` |
 | **Functional floor** | `ConfigFlowResult`, action schemas | Established in HA 2024.8 |
 | **Python** | 3.13 or later | Required by Home Assistant 2025.2.0. Tests run on Python 3.14 |
@@ -32,12 +32,15 @@ What Home Assistant versions this integration supports and the status of any cha
 | `BaseTrackerEntity.battery_level` | 2026.6 | **2027.7** | None — no tracker platform | **N/A** |
 | `TrackerEntity.location_name` | 2026.6 | **2027.7** | None — no tracker platform | **N/A** |
 | `voluptuous` imports | N/A (replaced by probatio in 2026.9) | None announced | Config flow and schemas | **Compatible**: HA aliases `voluptuous` to probatio via `install_as_voluptuous()` |
+| Flow and service schema types (probatio) | 2026.10, type hints only | None announced | `voluptuous` imports in the config flow, services and schemas | **Compliant**: runtime is unaffected, and a shared `pyproject.toml` override makes Mypy treat `voluptuous` as untyped. Mypy Strict passes against core `dev`. |
+| Device-class enums in `const` modules | 2026.10, type hints only | None announced | `BinarySensorDeviceClass`, `ButtonDeviceClass` imported from the platform package | **Compliant**: the package re-export still works, and a shared `pyproject.toml` override makes Mypy count it as an export. Mypy Strict passes against core `dev`. |
 
 ---
 
 ## Upcoming milestones
 
 - **Home Assistant 2027.8:** When core removes the legacy `via_device` tuple and `async_get_device` identifier lookups, the legacy branches in `_compat.py` can be retired. Until then, `_compat.py` provides transparent backward and forward compatibility without raising warnings.
+- **Home Assistant 2026.10:** core types flow and service schemas as probatio and moves the device-class enums to `const` modules. This affects type checking only. The two Mypy overrides in the shared `pyproject.toml` are removed when the integration imports probatio directly or the floor passes the move.
 
 ---
 
@@ -49,3 +52,4 @@ What Home Assistant versions this integration supports and the status of any cha
 | **v1.1.0** | 2026-09-23 | Claude | Compatibility audit: tested-against updated to 2026.9.3; `voluptuous` → probatio row added. |
 | **v1.1.1** | 2026-09-23 | Claude | Added Python row to supported versions; recorded the planned 2025.2.0 minimum for the next release. |
 | **v1.2.0** | 2026-09-23 | Claude | Minimum raised from 2024.8.0 to 2025.2.0 (Python 3.13); planned-floor milestone removed. |
+| **v1.3.0** | 2026-09-30 | Claude | Compatibility audit: tested-against updated to 2026.9.4 (`pytest-homeassistant-custom-component` 0.13.367); rows for probatio-typed schemas and `const`-module device classes; 2026.10 milestone. |

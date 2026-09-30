@@ -75,7 +75,7 @@ A Home Assistant integration for **ZTE 5G CPE Routers** providing Signal Stats, 
 > A **Diagnostic Download** is the primary troubleshooting step for issues:
 >
 > - **Model Verification**: Sharing a download helps map supported parameter dictionaries for new hardware models.
-> 🔒 **Privacy**: Passwords, credentials, subscriber identifiers (IMSI/ICCID), carrier names, and SMS messages are automatically redacted or pseudonymized before saving.
+> 🔒 **Privacy**: Passwords, credentials, subscriber identifiers (IMSI/ICCID), carrier names, phone numbers, and SMS messages are automatically redacted or pseudonymized before saving, whatever field they appear in.
 >
 > - **Duration**: Discovery may take a minute or two in the background without a progress indicator.
 >
@@ -129,6 +129,7 @@ Track signal strength metrics (SNR, RSRP, RSRQ, RSSI), serving cell tower detail
 - **Cell Tower Info**: Monitor Cell ID, eNodeB ID, PCI, and active bands. See the [Cell Tower Change Alert](#-cell-tower-change-alert) example.
 - **Connection Type**: Track Carrier Aggregation and ENDC status plus LTE and 5G bands in use. See the [Signal Quality Alert](#-signal-quality-alert) example.
 - **Per-Carrier and Per-Antenna Detail** _(disabled by default)_: RSRP, RSRQ, SNR and RSSI for the aggregated secondary cell, RSRP for each of the two 5G receivers, and the 5G NSA and SA band locks. Confirmed on the MC7010; other models report a subset.
+- **Neighbor Cells** _(disabled by default)_: How many other 4G cells your router can hear, with each one's channel, cell ID, quality (RSRQ) and strength (RSRP) as attributes. Useful when aiming an antenna or choosing a location. The MC7010 reports it; the MC888 Pro does not.
 
 ![Signal Sensors](.github/images/zte_5g_signal_sensors.png)
 
@@ -190,7 +191,7 @@ Which of them your router fills in depends on its firmware. Enable the ones you 
 | `CA Secondary Cell RSRP`, `CA Secondary Cell RSRQ`, `CA Secondary Cell SNR`, `CA Secondary Cell RSSI` | The aggregated second carrier, separately from the primary. Its SNR is often the better of the two, which the headline `LTE SNR` does not show |
 | `5G RSRP Antenna 1`, `5G RSRP Antenna 2` | The two 5G receivers separately. A steady gap between them points at placement or an obstruction rather than at the network |
 | `5G NSA Band Lock`, `5G SA Band Lock` | Which 5G bands the router may use, alongside the existing `LTE Band Lock Mask` |
-| `Roaming State`, `Network Mode Config` | Whether the SIM is roaming, and whether the router picks its network mode itself |
+| `Roaming State`, `Network Mode Config` | Whether the SIM is roaming, and whether the router chooses your mobile operator itself or uses one you picked by hand |
 | `RSSI`, `SINR` | Signal strength and signal-to-noise for whichever radio is serving, where the router reports them without naming the technology. On firmware that leaves `LTE RSSI` and `LTE SNR` blank (such as the MC888 Pro), these two carry those readings |
 
 ---
@@ -341,12 +342,16 @@ Reboot router hardware directly from Home Assistant and monitor data integrity w
 </summary><br>
 
 - **Router Management**: Reboot the device directly from the HA UI, manually or from an automation. See the [Auto-Reboot on a Prolonged Outage](#-auto-reboot-on-a-prolonged-outage) example.
-- **Uptime and Connection Time**: **Device Uptime** is when the router last booted, and **Connection Uptime** is when its current mobile data connection started. Each has a matching duration sensor, disabled by default, if you prefer a running time to a timestamp. **Total Connected Time** adds up data-connection time across connections. The duration sensors display in hours and minutes. Some routers do not report their own uptime; on those, Device Uptime follows the data connection, the same as Connection Uptime, so a reconnect moves it as a reboot would.
-- **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
+- **Uptime and Connection Time**:
+  - **Device Uptime** is when the router last booted
+  - **Connection Uptime** is when its current mobile data connection started. Each has a matching duration sensor, disabled by default, if you prefer a running time to a timestamp.
+  - **Total Connected Time** adds up data-connection time across connections. The duration sensors display in hours and minutes. Some routers do not report their own uptime; on those, Device Uptime follows the data connection, the same as Connection Uptime, so a reconnect moves it as a reboot would.
+- **Self-Diagnosis**: An **Integration Health** binary sensor reports if the integration is experiencing issues, including data fetches that _succeeded_ but return nothing usable, and a router login lockout. See [Self-Diagnosis](#-self-diagnosis) and the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
 - **Router and SIM State**: **Operator Provisioned** reports whether the router refuses to hand over its remote-management (TR-069) settings, which is usual on an operator-supplied unit and explains why some settings cannot be changed locally.
 - **Firmware Update State** and **Firmware Update Result** report whether an update is running and how the last one ended. Both off by default.
 - **WiFi Clients Connected** and **WiFi Enabled** report how many devices are on your WiFi and whether the radios are on. On by default, for routers with WiFi.
 - _Disabled by default_: **Modem State**, **Connection Failure Count**, **SIM Lock State**, and **SIM PIN Attempts Remaining** and **SIM PUK Attempts Remaining** — a locked SIM presents as no service, which otherwise reads as a coverage fault.
+- _Disabled by default_: **Login Attempts Remaining** — how many wrong passwords the router's login accepts before it locks everyone out for five minutes. It returns to 5 after a correct login.
 
 | System Control | System Diagnostics |
 | :-: | :-: |
@@ -372,6 +377,7 @@ This integration features **dynamic polling**, the ability to pause polling comp
 - **Configurable Update Interval**: Dynamically adjust the scan interval (30s to 1 hour, default `180` seconds) via a number entity or automation. See the [Dynamic Polling Interval](#-dynamic-polling-interval) example.
 - **Actions Always Fetch**: Pressing **Refresh Now**, making a settings change (switch/select) or an SMS action fetches immediately **even while paused** — only scheduled polls are suppressed. See the [Morning Signal Report](#-morning-signal-report) example.
 - **Standard System Option**: Also honors Home Assistant's **System options > Enable polling for changes** toggle.
+- **Polls Ask for What Your Router Answers**: After the first poll, scheduled polls ask mainly for the values your router model has answered. See [Data Polling & 3-Strike Resilience](#-data-polling--3-strike-resilience).
 - **Every Poll Is a Point Sample**: Router signal readings move every few seconds, and each poll captures one instant rather than an average.
 
 ![System Configuration Controls](.github/images/zte_5g_system_config.png)
@@ -424,7 +430,7 @@ With SMS count and text sensors, plus monitoring and control via events and acti
 
 ## 🔍 What You Get
 
-This integration provides **125 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
+This integration provides **132 entities** (depending on your firmware) organized into four logical devices: **System**, **Signal**, **Data**, and **SMS**.
 
 <details>
 
@@ -434,8 +440,8 @@ This integration provides **125 entities** (depending on your firmware) organize
 
 | Sub-Device | Entities | Entity Types | Key Metrics | Disabled by Default |
 | :-- | --: | :-- | :-- | :-- |
-| ⚙️ **System** | 51 | 39 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, Connection Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 32, including the five temperature sensors, Uptime Duration, Connection Duration, WAN Netmask, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
-| 📶 **Signal** | 56 | 51 Sensors, 1 Binary Sensor, 3 Selects, 1 Switch | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, **Data Connection**, APN Profile, APN Mode, Network Mode Selection | 24, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes |
+| ⚙️ **System** | 52 | 40 Sensors, 7 Binary Sensors, 2 Switches, 1 Number, 2 Buttons | Firmware, IP Addresses, Uptime, Connection Uptime, **Integration Health**, **Operator Provisioned**, **Firmware Changes**, Refresh Now, Reboot, Polling Controls | 33, including the five temperature sensors, Uptime Duration, Connection Duration, WAN Netmask, IMEI, SIM IMSI, SIM ICCID, Modem State, Connection Failure Count, SIM Lock State, SIM PIN and PUK Attempts Remaining, Login Attempts Remaining, WAN IP Changes, WAN Mode Changes, Firmware Update State, Firmware Update Result |
+| 📶 **Signal** | 57 | 52 Sensors, 1 Binary Sensor, 3 Selects, 1 Switch | RSRP, RSRQ, SNR, PCI, Cell ID, Primary/Secondary Bands, **Data Connection**, APN Profile, APN Mode, Network Mode Selection | 25, including the four Carrier Aggregation Secondary Cell metrics, both 5G RSRP Antenna sensors, both 5G Band Lock sensors, RSSI, SINR, Roaming State, Network Mode Config, LTE Band Lock Mask, APN Changes, Cell Changes, Provider Changes, Neighbor Cells |
 | 📈 **Data** | 18 | 17 Sensors, 1 Switch | Monthly Usage, **Projected Cycle Usage**, **Allowance**, **Reset Day**, **Alert Threshold**, Live Speed, Session Data | 5: Monthly Upload/Download/Total (Legacy GB sensors), Total Received, Total Sent |
 | ✉️ **SMS** | 5 | 3 Sensors, 1 Binary Sensor, 1 Button | Unread Count, Total Msg, Recent Msg, **SMS Storage Full**, Delete All (one-click) | None |
 | 🛠️ **Actions** | 5 | — | Send, Delete, Bulk-Delete and List SMS, **Reset Entities** | — |
@@ -1948,6 +1954,7 @@ The **Integration Health** binary sensor (System device) reports:
 - **Total outage** — the router unreachable. Flagged on the **first** failure at startup (there are no held values, so waiting would leave you with no explanation), or on the **third** consecutive failure at runtime. A success clears it in the same cycle.
 - **Degraded capability** — an optional endpoint that has exhausted its own strike budget.
 - **Firmware API changes (`drift`)** — a successful response containing none of the fields the integration expects, which usually means a router firmware update renamed or changed them.
+- **Login lockout** — the router locks every login for five minutes after five wrong passwords. While a lockout runs, Integration Health reports it with the seconds left. When only one attempt is left, the integration sends no login of its own and reports that the login is withheld, so it never spends the last attempt. A correct sign-in at the router's own page returns the count to five.
 
 It is deliberately **available at all times**, including when every other entity has gone unavailable — a health sensor that disappears during an outage cannot explain the silence. See the [Integration Health Problem Alert](#-integration-health-problem-alert) example.
 

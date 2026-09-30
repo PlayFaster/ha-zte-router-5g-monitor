@@ -150,7 +150,7 @@ Forward work only. Declined and Revisit items are recorded above and are not wor
 | Per-band Wi-Fi detail            | Maybe | ⭐⭐   | Medium |
 | Device capabilities at setup     | Maybe | ⭐     | Medium |
 
-**Current state.** 121 entities across five sub-devices, 108 carrying `about` notes. 1420 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
+**Current state.** 132 entities across four sub-devices, 123 carrying `about` notes. 2129 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
 ---
 
@@ -173,6 +173,7 @@ Items that were on this roadmap and have since been built. Detail is in `CHANGEL
 
 ## Version Control
 
+- **v3.9.1** (2026-09-30) - Current state updated to 132 entities across four sub-devices, 123 carrying `about` notes, and 2129 tests.
 - **v3.9.0** (2026-09-25) - Added **Device capabilities learned at setup** to Maybe: the router's declared capabilities as a fallback for entity defaults, at the cost of one extra read during setup.
 - **v3.8.0** (2026-09-25) - Added **Per-band and per-network Wi-Fi detail** to Maybe, from the Wi-Fi keys the MC888 Pro answers in its diagnostics downloads.
 - **v3.7.0** (2026-09-24) - Added **Encrypted SMS sending** to Maybe, from the assessment of recent releases of two other ZTE projects.

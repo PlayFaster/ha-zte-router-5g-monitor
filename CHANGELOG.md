@@ -19,11 +19,11 @@ All notable changes to this project will be documented in this file.
 - **Pre-Login Lockout Guard**: Inspects router authentication attempts before logging in and withholds requests when exactly 1 attempt remains or during an active lockout, preventing accidental lockout triggers while avoiding false reauthentication flows.
 - **Lockout Health Alerts**: Integration Health instantly reports active router lockouts with countdown timers (`Login lockout in progress`) or withheld requests (`Login withheld`), bypassing normal strike budgets.
 - **Login Attempts Remaining Sensor (`sensor.<name>_system_login_attempts_remaining`)**: Diagnostic sensor tracking remaining password attempts allowed by the router before locking (disabled by default).
-- **Neighbor Cells Sensor (`sensor.<name>_system_neighbor_cells`)**: Diagnostic sensor reporting the number of detected neighbor cellular towers, with EARFCN, PCI, RSRQ, and RSRP exposed in attributes to aid outdoor antenna aiming (disabled by default).
+- **Neighbor Cells Sensor (`sensor.<name>_signal_neighbor_cells`)**: Diagnostic sensor reporting the number of detected neighbor cellular towers, with EARFCN, PCI, RSRQ, and RSRP exposed in attributes to aid outdoor antenna aiming (disabled by default).
 
 ### Changed
 
-- **Total Connected Time Validation**: `sensor.<name>_system_total_time` validates counter progression against elapsed wall-clock time and a 10-year ceiling, marking corrupted counter jumps as unknown while preserving valid reboot resets.
+- **Total Connected Time Validation**: `sensor.<name>_system_total_connected_time` validates counter progression against elapsed wall-clock time and a 10-year ceiling, marking corrupted counter jumps as unknown while preserving valid reboot resets.
 - **Diagnostics Sanitizer Exemptions**: Diagnostic downloads now publish IP pass-through state (`ip_passthrough_enabled`) and Wi-Fi connected client counts (`wifi_chipN_ssidN_access_sta_num`) while keeping passwords and SSIDs redacted.
 - **Complete Diagnostics for Disabled Entities**: Full polling cycles preceding diagnostic downloads now query parameters used exclusively by disabled entities.
 - **Network Mode Documentation**: Updated about notes for Network Mode, Network Mode Selection, and Network Mode Config to clarify operator selection behaviors.
@@ -46,8 +46,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- **Default Entity Enablement**: Total Data (`sensor.<name>_data_total_data_bytes`), Data Limit Switch (`switch.<name>_data_data_limit_switch`), and Total Connected Time (`sensor.<name>_system_total_time`) are now enabled by default on new setups (existing setups can apply these defaults via the `reset_entities` action).
-- **Duration Sensor Display Units**: Suggested display units for Uptime Duration (`sensor.<name>_system_realtime_time`), Connection Duration (`sensor.<name>_system_connection_duration`), and Total Connected Time (`sensor.<name>_system_total_time`) are set to hours (`h`) with no fixed precision, allowing Home Assistant frontend to display readable hours and minutes (e.g. `20 hours 15 minutes`).
+- **Default Entity Enablement**: Total Data (`sensor.<name>_data_total_data`), Data Limit Switch (`switch.<name>_data_data_limit_switch`), and Total Connected Time (`sensor.<name>_system_total_connected_time`) are now enabled by default on new setups (existing setups can apply these defaults via the `reset_entities` action).
+- **Duration Sensor Display Units**: Suggested display units for Uptime Duration (`sensor.<name>_system_uptime_duration`), Connection Duration (`sensor.<name>_system_connection_duration`), and Total Connected Time (`sensor.<name>_system_total_connected_time`) are set to hours (`h`) with no fixed precision, allowing Home Assistant frontend to display readable hours and minutes (e.g. `20 hours 15 minutes`).
 
 ---
 
@@ -75,8 +75,8 @@ All notable changes to this project will be documented in this file.
 - **Automatic Write Rebuilding & Retry**: Stateful configuration actions (APN, data connection, LED switch, volume limits, network modes) automatically re-authenticate and rebuild the payload once if the router refuses the initial write.
 - **Connection Uptime Sensor (`sensor.<name>_system_connection_uptime`)**: Tracks the exact timestamp when the current cellular data connection started, clearing when mobile data is disconnected.
 - **Connection Duration Sensor (`sensor.<name>_system_connection_duration`)**: Displays active cellular data session duration in minutes (disabled by default).
-- **Total Connected Time Sensor (`sensor.<name>_system_total_time`)**: Tracks cumulative cellular connection duration across multiple connections without resetting on brief data disconnects, displayed in minutes (disabled by default; reset behavior depends on router model).
-- **Total Data Counters (`sensor.<name>_data_total_rx_bytes`, `sensor.<name>_data_total_tx_bytes`, `sensor.<name>_data_total_data_bytes`)**: Running total of bytes downloaded, uploaded, and combined traffic kept by the router separate from monthly counters, stored in bytes and displayed in GB (disabled by default).
+- **Total Connected Time Sensor (`sensor.<name>_system_total_connected_time`)**: Tracks cumulative cellular connection duration across multiple connections without resetting on brief data disconnects, displayed in minutes (disabled by default; reset behavior depends on router model).
+- **Total Data Counters (`sensor.<name>_data_total_rx_bytes`, `sensor.<name>_data_total_tx_bytes`, `sensor.<name>_data_total_data`)**: Running total of bytes downloaded, uploaded, and combined traffic kept by the router separate from monthly counters, stored in bytes and displayed in GB (disabled by default).
 - **WAN Netmask Sensor (`sensor.<name>_system_wan_netmask`)**: Diagnostic subnet mask for the active mobile network interface (disabled by default).
 
 ### Fixed

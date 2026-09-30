@@ -5,6 +5,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.6-dev1\] - 2026-09-30 - Documentation Reconciled After 3.4.5](#346-dev1---2026-09-30---documentation-reconciled-after-345)
   - [\[3.4.5\] - 2026-09-30 - Release: Login Lockout Protection, Login Attempts Remaining and Neighbor Cells Sensors, and Total Connected Time Guard](#345---2026-09-30---release-login-lockout-protection-login-attempts-remaining-and-neighbor-cells-sensors-and-total-connected-time-guard)
   - [\[3.4.5-dev2\] - 2026-09-29 - Mypy Strict Passes Against Home Assistant Core dev](#345-dev2---2026-09-29---mypy-strict-passes-against-home-assistant-core-dev)
   - [\[3.4.5-dev1\] - 2026-09-28 - Login Lockout Protection; Login Attempts Remaining and Neighbor Cells Sensors; Total Connected Time Guard](#345-dev1---2026-09-28---login-lockout-protection-login-attempts-remaining-and-neighbor-cells-sensors-total-connected-time-guard)
@@ -324,6 +325,24 @@ All changes to this project will be documented in this file. This is the detaile
 
 ---
 
+## [3.4.6-dev1] - 2026-09-30 - Documentation Reconciled After 3.4.5
+
+### Summary
+
+The README now describes the 3.4.4 and 3.4.5 behavior it had left out, and the entity counts and several statements that had gone stale are corrected. No code changes.
+
+### Changed
+
+- **`README.md`**: Entity counts are 132 (System 52, Signal 57) with the disabled-by-default lists updated. New entries for the Neighbor Cells and Login Attempts Remaining sensors, the Total Connected Time guard, the login lockout reports in Self-Diagnosis, phone numbers in the Privacy note, and the learned-poll behavior in Dynamic Polling.
+- **Network Mode Config wording**: The README described it as the router's network mode; it reports operator selection, as `AGENTS.md` already said.
+- **`docs/DEVELOPMENT.md`**: A pitfall on type-only upstream changes, cleared in the Mypy configuration and not in the imports. Entries for the Wi-Fi client counts, published only by unit test, and the unconfirmed fifth neighbor-cell field.
+- **`docs/ha_compatibility.md`**: Ledger rows for the probatio-typed schemas and the `const`-module device classes, the 2026.10 milestone, and tested against 2026.9.4.
+- **`docs/ROADMAP.md` and `.notes/proj_structure.md`**: Current-state figures; four test files added to the structure table.
+
+### Fixed
+
+- **Entity IDs in earlier entries**: The 3.4.3 to 3.4.5 entries gave IDs that do not exist. Neighbor Cells is `sensor.<name>_signal_neighbor_cells`, Total Connected Time is `sensor.<name>_system_total_connected_time`, Total Data is `sensor.<name>_data_total_data` and Uptime Duration is `sensor.<name>_system_uptime_duration`. Corrected in this file and in `CHANGELOG.md`.
+
 ## [3.4.5] - 2026-09-30 - Release: Login Lockout Protection, Login Attempts Remaining and Neighbor Cells Sensors, and Total Connected Time Guard
 
 ### Summary
@@ -339,11 +358,11 @@ All changes to this project will be documented in this file. This is the detaile
 - **Pre-Login Lockout Guard**: Inspects router authentication attempts before logging in and withholds requests when exactly 1 attempt remains or during an active lockout, preventing accidental lockout triggers while avoiding false reauthentication flows.
 - **Lockout Health Alerts**: Integration Health instantly reports active router lockouts with countdown timers (`Login lockout in progress`) or withheld requests (`Login withheld`), bypassing normal strike budgets.
 - **Login Attempts Remaining Sensor (`sensor.<name>_system_login_attempts_remaining`)**: Diagnostic sensor tracking remaining password attempts allowed by the router before locking (disabled by default).
-- **Neighbor Cells Sensor (`sensor.<name>_system_neighbor_cells`)**: Diagnostic sensor reporting the number of detected neighbor cellular towers, with EARFCN, PCI, RSRQ, and RSRP exposed in attributes to aid outdoor antenna aiming (disabled by default).
+- **Neighbor Cells Sensor (`sensor.<name>_signal_neighbor_cells`)**: Diagnostic sensor reporting the number of detected neighbor cellular towers, with EARFCN, PCI, RSRQ, and RSRP exposed in attributes to aid outdoor antenna aiming (disabled by default).
 
 ### Changed
 
-- **Total Connected Time Validation**: `sensor.<name>_system_total_time` validates counter progression against elapsed wall-clock time and a 10-year ceiling, marking corrupted counter jumps as unknown while preserving valid reboot resets.
+- **Total Connected Time Validation**: `sensor.<name>_system_total_connected_time` validates counter progression against elapsed wall-clock time and a 10-year ceiling, marking corrupted counter jumps as unknown while preserving valid reboot resets.
 - **Diagnostics Sanitizer Exemptions**: Diagnostic downloads now publish IP pass-through state (`ip_passthrough_enabled`) and Wi-Fi connected client counts (`wifi_chipN_ssidN_access_sta_num`) while keeping passwords and SSIDs redacted.
 - **Complete Diagnostics for Disabled Entities**: Full polling cycles preceding diagnostic downloads now query parameters used exclusively by disabled entities.
 - **Network Mode Documentation**: Updated about notes for Network Mode, Network Mode Selection, and Network Mode Config to clarify operator selection behaviors.
@@ -418,8 +437,8 @@ The Wi-Fi client counts did not answer on the MC7010, so their publishing is cov
 
 ### Changed
 
-- **Default Entity Enablement**: Total Data (`sensor.<name>_data_total_data_bytes`), Data Limit Switch (`switch.<name>_data_data_limit_switch`), and Total Connected Time (`sensor.<name>_system_total_time`) are now enabled by default on new setups (existing setups can apply these defaults via the `reset_entities` action).
-- **Duration Sensor Display Units**: Suggested display units for Uptime Duration (`sensor.<name>_system_realtime_time`), Connection Duration (`sensor.<name>_system_connection_duration`), and Total Connected Time (`sensor.<name>_system_total_time`) are set to hours (`h`) with no fixed precision, allowing Home Assistant frontend to display readable hours and minutes (e.g. `20 hours 15 minutes`).
+- **Default Entity Enablement**: Total Data (`sensor.<name>_data_total_data`), Data Limit Switch (`switch.<name>_data_data_limit_switch`), and Total Connected Time (`sensor.<name>_system_total_connected_time`) are now enabled by default on new setups (existing setups can apply these defaults via the `reset_entities` action).
+- **Duration Sensor Display Units**: Suggested display units for Uptime Duration (`sensor.<name>_system_uptime_duration`), Connection Duration (`sensor.<name>_system_connection_duration`), and Total Connected Time (`sensor.<name>_system_total_connected_time`) are set to hours (`h`) with no fixed precision, allowing Home Assistant frontend to display readable hours and minutes (e.g. `20 hours 15 minutes`).
 
 ## [3.4.4-dev2] - 2026-09-25 - Each Poll Asks Only What the Router Answers; Generated Spellings in the Alias Tuples; Diagnostics Check Retakes a Differing Pass
 
