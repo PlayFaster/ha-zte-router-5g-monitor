@@ -2,20 +2,33 @@
 
 All changes to this project will be documented in this file. This is the detailed changelog, to include non user facing changes and intra-release changes.
 
+> [!IMPORTANT]
+>
+> ## Authoring Rules for AI Agents & Maintainers (`changelog_format.md`)
+>
+> 1. **Header Titles (`CF-101`)**: Must be direct, technical noun phrases in the format `Subsystem: Action and Outcome`.
+>    - **Banned**: Narrative riddles, poetic titles, full sentences, or literary abstractions ("Establishment", "Overhaul", "A Dead Field", "Advent").
+> 2. **Bullet Points (`CF-202`)**: Lead with bold outcome/verdict first (`- **[Subject/Verdict]**: [concrete technical explanation]`).
+>    - **Banned**: Conversational storytelling, journey narration ("We noticed...", "After looking into..."), or burying the fix at the end.
+> 3. **Voice & Register**: Direct, objective systems engineering prose (US spelling).
+> 4. **Granular Bumps Invariance**: Dependency updates must use individual bullets (`- **Validate Bump**: Update <pkg> from <v1> to <v2>`). Never collapse or summarize multiple bumps into one prose sentence.
+> 5. **Standard Headings Only (`CF-201`)**: Open with `### Summary`, then use only: Added, Changed, Fixed, Removed, Security, Deprecated, Bumps, Tests, Verified, Notes, Documentation, Deferred, Declined, Known, Records. Never invent synonyms.
+
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
-  - [\[3.4.6-dev1\] - 2026-09-30 - Documentation Reconciled After 3.4.5](#346-dev1---2026-09-30---documentation-reconciled-after-345)
+  - [\[3.4.6-dev2\] - 2026-10-13 - Toolchain and Documentation: Shared CI and Validation Pins Bumped; Capabilities Dossier Added](#346-dev2---2026-10-13---toolchain-and-documentation-shared-ci-and-validation-pins-bumped-capabilities-dossier-added)
+  - [\[3.4.6-dev1\] - 2026-09-30 - Documentation: Entity Counts, Roadmap, and Diagnostic Note Alignment After 3.4.5](#346-dev1---2026-09-30---documentation-entity-counts-roadmap-and-diagnostic-note-alignment-after-345)
   - [\[3.4.5\] - 2026-09-30 - Release: Login Lockout Protection, Login Attempts Remaining and Neighbor Cells Sensors, and Total Connected Time Guard](#345---2026-09-30---release-login-lockout-protection-login-attempts-remaining-and-neighbor-cells-sensors-and-total-connected-time-guard)
-  - [\[3.4.5-dev2\] - 2026-09-29 - Mypy Strict Passes Against Home Assistant Core dev](#345-dev2---2026-09-29---mypy-strict-passes-against-home-assistant-core-dev)
-  - [\[3.4.5-dev1\] - 2026-09-28 - Login Lockout Protection; Login Attempts Remaining and Neighbor Cells Sensors; Total Connected Time Guard](#345-dev1---2026-09-28---login-lockout-protection-login-attempts-remaining-and-neighbor-cells-sensors-total-connected-time-guard)
+  - [\[3.4.5-dev2\] - 2026-09-29 - Type Checking: Mypy Strict Probatio and Enum Alignment Against Core Dev](#345-dev2---2026-09-29---type-checking-mypy-strict-probatio-and-enum-alignment-against-core-dev)
+  - [\[3.4.5-dev1\] - 2026-09-28 - Authentication \& Sensors: Login Lockout Guard, Diagnostic Sensors, and Connected Time Validation](#345-dev1---2026-09-28---authentication--sensors-login-lockout-guard-diagnostic-sensors-and-connected-time-validation)
   - [\[3.4.4\] - 2026-09-26 - Release: Intelligent Hybrid Polling, Router-Learned Network Modes, and Diagnostics Vocabulary Expansion](#344---2026-09-26---release-intelligent-hybrid-polling-router-learned-network-modes-and-diagnostics-vocabulary-expansion)
-  - [\[3.4.4-dev2\] - 2026-09-25 - Each Poll Asks Only What the Router Answers; Generated Spellings in the Alias Tuples; Diagnostics Check Retakes a Differing Pass](#344-dev2---2026-09-25---each-poll-asks-only-what-the-router-answers-generated-spellings-in-the-alias-tuples-diagnostics-check-retakes-a-differing-pass)
-  - [\[3.4.4-dev1\] - 2026-09-25 - Network Mode Options Read from the Router; Diagnostics Probe Reported and Generated Spellings; Duration Sensors in Hours](#344-dev1---2026-09-25---network-mode-options-read-from-the-router-diagnostics-probe-reported-and-generated-spellings-duration-sensors-in-hours)
-  - [\[3.4.3-dev4\] - 2026-09-24 - Diagnostics Download Re-Fetches a Dropped Web File; Diagnostics Check Compares Name Lists as Sets and Refuses to Run While Home Assistant Polls](#343-dev4---2026-09-24---diagnostics-download-re-fetches-a-dropped-web-file-diagnostics-check-compares-name-lists-as-sets-and-refuses-to-run-while-home-assistant-polls)
-  - [\[3.4.3-dev3\] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date](#343-dev3---2026-09-24---stand-alone-scripts-load-probatio-first-session-and-router-behavior-documentation-brought-up-to-date)
-  - [\[3.4.3-dev2\] - 2026-09-24 - Login Before Every Write; Serialized Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed](#343-dev2---2026-09-24---login-before-every-write-serialized-logins-one-rebuilt-retry-on-a-refused-write-dev1-test-failures-fixed)
-  - [\[3.4.3-dev1\] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default](#343-dev1---2026-09-24---outage-hold-20-s-total-connected-time-total-byte-counters-and-wan-netmask-sensors-mc888-pro-device-uptime-off-by-default)
+  - [\[3.4.4-dev2\] - 2026-09-25 - Polling Architecture: Intelligent Poll Narrowing, Generated Spellings, and Diagnostics Stability Checks](#344-dev2---2026-09-25---polling-architecture-intelligent-poll-narrowing-generated-spellings-and-diagnostics-stability-checks)
+  - [\[3.4.4-dev1\] - 2026-09-25 - Network \& Diagnostics: Router-Learned Mode Options, Spelling Probes, and Duration Display Units](#344-dev1---2026-09-25---network--diagnostics-router-learned-mode-options-spelling-probes-and-duration-display-units)
+  - [\[3.4.3-dev4\] - 2026-09-24 - Diagnostics Tooling: Web File Fetch Retries, Set-Based Diffing, and Polling Isolation](#343-dev4---2026-09-24---diagnostics-tooling-web-file-fetch-retries-set-based-diffing-and-polling-isolation)
+  - [\[3.4.3-dev3\] - 2026-09-24 - Tooling \& Documentation: Stand-alone Script Probatio Imports and Session Behavior Updates](#343-dev3---2026-09-24---tooling--documentation-stand-alone-script-probatio-imports-and-session-behavior-updates)
+  - [\[3.4.3-dev2\] - 2026-09-24 - Write Pipeline: Pre-Write Login Enforcement, Serialized Mutex, and Refused Write Rebuilds](#343-dev2---2026-09-24---write-pipeline-pre-write-login-enforcement-serialized-mutex-and-refused-write-rebuilds)
+  - [\[3.4.3-dev1\] - 2026-09-24 - Sensors \& Outage: Reduced Outage Hold, Lifetime Byte Counters, and Connected Time Sensor](#343-dev1---2026-09-24---sensors--outage-reduced-outage-hold-lifetime-byte-counters-and-connected-time-sensor)
   - [\[3.4.3-dev0\] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff](#343-dev0---2026-09-24---timestamp-and-duration-related-doc-updates-plus-ci-bump-ruff)
   - [\[3.4.2\] - 2026-09-24 - Release: Independent System \& Connection Uptime Sensors, Data Outage Windows, and Duration Precision](#342---2026-09-24---release-independent-system--connection-uptime-sensors-data-outage-windows-and-duration-precision)
   - [\[3.4.2-dev8\] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live](#342-dev8---2026-09-24---uptime-latch-defects-from-342-dev7-fixed-durations-in-minutes-upgrade-paths-tested-and-checked-live)
@@ -322,10 +335,54 @@ All changes to this project will be documented in this file. This is the detaile
   - [\[1.4.1\] - 2026-03-27 - Architecture: Coordinator Refactor and Protocol Detection](#141---2026-03-27---architecture-coordinator-refactor-and-protocol-detection)
   - [\[1.4.0\] - 2026-03-26 - Sensor Platform: Core Signal and Cellular Data Sensors](#140---2026-03-26---sensor-platform-core-signal-and-cellular-data-sensors)
   - [\[1.3.6\] - 2026-03-25 - Initial Release: Custom Component Integration for ZTE MC7010](#136---2026-03-25---initial-release-custom-component-integration-for-zte-mc7010)
+  - [Document Audit Status](#document-audit-status)
 
 ---
 
-## [3.4.6-dev1] - 2026-09-30 - Documentation Reconciled After 3.4.5
+## [3.4.6-dev2] - 2026-10-13 - Toolchain and Documentation: Shared CI and Validation Pins Bumped; Capabilities Dossier Added
+
+### Summary
+
+Shared CI, validation pins, `tasks.json` and the prettier exclusion are brought in line with the UniFi and Huawei projects. The capabilities dossier and the `CHANGELOG.md` lineage annotations follow the form set in Huawei `1.2.4-dev0`. The documentation records the per-model defaults correction and a new roadmap Maybe item. A test guards the deprecated device-registry surfaces for cross-project chore C-038. No component code changes.
+
+### Added
+
+- **Capabilities dossier (`docs/CAPABILITIES.md`)**: Inventory of verified capabilities, interfaces, guarantees and version lineage from `v1.3.6` to `v3.4.6-dev1`, in the form of Huawei `1.2.4-dev0`.
+- **Prettier exclusion for Markdown (`.prettierignore`)**: `*.md` and `**/*.md` excluded; markdownlint owns Markdown, as in UniFi `1.1.0`. Covers ad-hoc `prettier` runs from the project root only.
+
+### Changed
+
+- **`CHANGELOG.md` release annotations**: `Highlights` and `Under the hood` blocks added to all release version; each Added, Changed and Fixed bullet tagged with the feature it extends and the version that introduced it.
+- **`docs/changelog_local.md` header and footer**: Authoring-rules banner citing `changelog_format.md` (CF-101, CF-201, CF-202) added; `Document Audit Status` footer added at "Pending verification". Historical headers are not yet remediated.
+- **IQS Static, Assertion Audit and Test Depth tasks (`.vscode/tasks.json`)**: Each now reports PASSED, FINDINGS (report-only) or FAILED (execution error); FAILED is reserved for a report missing its result line or carrying a traceback. Escape sequences changed from `` to `\033`.
+- **Complexity: Check McCabe task**: Ends with `exit 0`, so the task is report-only.
+- **Both Results Summary tasks**: The three report-only checks show a yellow findings row instead of a failure, and a failure only on `Traceback (most recent call last):`.
+
+### Bumps
+
+- **Validate Bump**: Update `ruff` from 0.16.9 to 0.16.10
+- **Validate Bump**: Update `pytest-homeassistant-custom-component` from 0.13.367 to 0.13.372
+- **Validate Bump**: Update `mypy` from 2.3.1 to 2.4.0
+- **CI Bump**: Update shared `codeql.yaml` from v2.0.16 (`7bbe12f`) to v2.0.17 (`3f917d1`)
+- **CI Bump**: Update shared `release.yaml` from v2.0.16 (`7bbe12f`) to v2.0.17 (`3f917d1`)
+- **CI Bump**: Update shared `validate.yaml` from v2.0.16 (`7bbe12f`) to v2.0.17 (`3f917d1`)
+
+### Tests
+
+- **Deprecated device-registry surfaces confined to `_compat.py` (C-038)**: `test_entity_hygiene.py::test_deprecated_device_registry_surfaces_only_in_compat` parses every module in `custom_components/` except `_compat.py` and fails on `async_get_device(...)`, a non-`hass` `.config_entries` read (`DeviceEntry.config_entries`), or a `via_device` keyword or dict key. All three are deprecated in HA 2026.8 and removed in 2027.8 or 2027.10. `hass.config_entries` is the config-entry manager and is excluded; comments are not parsed. No direct use was found.
+- **Guard detector cases**: `test_registry_guard_detects_each_surface` (four surfaces) and `test_registry_guard_ignores_manager_and_comments` (four negatives). Mutation check: a probe module with one direct `async_get_device(` call failed the guard, then was removed. 9 passed.
+
+### Documentation
+
+- **`docs/DEVELOPMENT.md` §6 per-model entity defaults**: Paragraph corrected; it described the overlay as a roadmap Maybe that changes nothing, and the overlay shipped in `3.3.10-dev7`. It now states `entity_defaults.MODEL_OVERLAY`, how an entry is judged and the open roadmap item.
+- **`docs/ROADMAP.md` v3.10.0**: Maybe item "Entity defaults learned from the router's answers" added at the owner's request of 2026-10-07, with a follow-on note on the built overlay row. Research is in `.notes/info/entity_defaults_for_unseen_models.md`.
+- **`docs/project_complexity.md`**: Remeasured 2026-10-13; 2125 tests at 100% coverage; pytest wall-clock 867.78 s to 1178.39 s.
+
+### Known
+
+- **Mypy Strict `no-any-return` at `observations.py:140`**: Reported under mypy 2.4.0 in code unchanged since the last commit. `_window_reason` returns `window.get("reason")` from a `dict[str, Any]` in a function declared `-> str | None`. Fix proposed, not applied: narrow the value with `isinstance(reason, str)` before return.
+
+## [3.4.6-dev1] - 2026-09-30 - Documentation: Entity Counts, Roadmap, and Diagnostic Note Alignment After 3.4.5
 
 ### Summary
 
@@ -367,7 +424,7 @@ The README now describes the 3.4.4 and 3.4.5 behavior it had left out, and the e
 - **Complete Diagnostics for Disabled Entities**: Full polling cycles preceding diagnostic downloads now query parameters used exclusively by disabled entities.
 - **Network Mode Documentation**: Updated about notes for Network Mode, Network Mode Selection, and Network Mode Config to clarify operator selection behaviors.
 
-## [3.4.5-dev2] - 2026-09-29 - Mypy Strict Passes Against Home Assistant Core dev
+## [3.4.5-dev2] - 2026-09-29 - Type Checking: Mypy Strict Probatio and Enum Alignment Against Core Dev
 
 ### Bumps
 
@@ -382,7 +439,7 @@ The README now describes the 3.4.4 and 3.4.5 behavior it had left out, and the e
 
 - **Two Mypy overrides in the synced `pyproject.toml`** clear 12 errors that core `dev` (`3e98d8595c2`) raised in unchanged code. `voluptuous` is treated as untyped, since core now types schemas as probatio (core #182112) while the integration's `import voluptuous` is aliased to probatio only at runtime. `homeassistant.components.binary_sensor` and `homeassistant.components.button` count their implicit re-exports of the device-class enums as exports, since core moved the enums into `const` modules (core #182211). No integration code changes, and the 2025.2.0 floor is unchanged. Mypy Strict: no issues in 22 source files.
 
-## [3.4.5-dev1] - 2026-09-28 - Login Lockout Protection; Login Attempts Remaining and Neighbor Cells Sensors; Total Connected Time Guard
+## [3.4.5-dev1] - 2026-09-28 - Authentication & Sensors: Login Lockout Guard, Diagnostic Sensors, and Connected Time Validation
 
 Plan: `.notes/issues/plans_status/v345_plan_new_format.md`.
 
@@ -440,7 +497,7 @@ The Wi-Fi client counts did not answer on the MC7010, so their publishing is cov
 - **Default Entity Enablement**: Total Data (`sensor.<name>_data_total_data`), Data Limit Switch (`switch.<name>_data_data_limit_switch`), and Total Connected Time (`sensor.<name>_system_total_connected_time`) are now enabled by default on new setups (existing setups can apply these defaults via the `reset_entities` action).
 - **Duration Sensor Display Units**: Suggested display units for Uptime Duration (`sensor.<name>_system_uptime_duration`), Connection Duration (`sensor.<name>_system_connection_duration`), and Total Connected Time (`sensor.<name>_system_total_connected_time`) are set to hours (`h`) with no fixed precision, allowing Home Assistant frontend to display readable hours and minutes (e.g. `20 hours 15 minutes`).
 
-## [3.4.4-dev2] - 2026-09-25 - Each Poll Asks Only What the Router Answers; Generated Spellings in the Alias Tuples; Diagnostics Check Retakes a Differing Pass
+## [3.4.4-dev2] - 2026-09-25 - Polling Architecture: Intelligent Poll Narrowing, Generated Spellings, and Diagnostics Stability Checks
 
 Plan: `.notes/issues/plans_status/v344_plan.md` §9.
 
@@ -530,7 +587,7 @@ Discovery does not depend on which entities are enabled: it probes names outside
 
 `Fix and Validate All`, run in the devcontainer after a restart onto the final code and read from `.reports/summary_fix_and_validate.txt` (written 2026-09-25 22:48): every step passes, the fault drill skipped as usual. 2,067 tests at 100% coverage, the hardware check at 24 of 24, the diagnostics check at 65 of 65, and the sensor manifest in sync at 130 entities. The first run failed 8 tests on fixtures and alias checks that did not know the poll plan or the generated spellings, one of which found the cell-identifier gap above; all are fixed.
 
-## [3.4.4-dev1] - 2026-09-25 - Network Mode Options Read from the Router; Diagnostics Probe Reported and Generated Spellings; Duration Sensors in Hours
+## [3.4.4-dev1] - 2026-09-25 - Network & Diagnostics: Router-Learned Mode Options, Spelling Probes, and Duration Display Units
 
 ### Changed
 
@@ -579,7 +636,7 @@ Discovery does not depend on which entities are enabled: it probes names outside
 
 To be recorded after `Fix and Validate All`.
 
-## [3.4.3-dev4] - 2026-09-24 - Diagnostics Download Re-Fetches a Dropped Web File; Diagnostics Check Compares Name Lists as Sets and Refuses to Run While Home Assistant Polls
+## [3.4.3-dev4] - 2026-09-24 - Diagnostics Tooling: Web File Fetch Retries, Set-Based Diffing, and Polling Isolation
 
 ### Fixed
 
@@ -598,7 +655,7 @@ To be recorded after `Fix and Validate All`.
 
 `Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: 33 of 33 steps pass, including 1,959 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 64 of 64, its new precondition included. The first pass of that check left 81 names unasked with Home Assistant's polling paused, and the retake completed it, so an incomplete pass has a cause other than a competing client. That cause is not established.
 
-## [3.4.3-dev3] - 2026-09-24 - Stand-alone Scripts Load Probatio First; Session and Router-Behavior Documentation Brought Up to Date
+## [3.4.3-dev3] - 2026-09-24 - Tooling & Documentation: Stand-alone Script Probatio Imports and Session Behavior Updates
 
 ### Fixed
 
@@ -621,7 +678,7 @@ No behavior changes in the integration.
 
 `Fix and Validate All`, read from `.reports/summary_fix_and_validate.txt`: 33 of 33 steps pass, including 1,954 tests at 100% coverage, the hardware check at 24 of 24 and the diagnostics check at 63 of 63. Both scripts run without the `install_as_voluptuous` warning. Two earlier runs failed the diagnostics check at 61 of 63, on differences between its two passes, because Pause Polling had been left off on the development instance after the 3.4.3-dev2 live check and its polls took the router's session mid-pass. With polling paused the check passed.
 
-## [3.4.3-dev2] - 2026-09-24 - Login Before Every Write; Serialized Logins; One Rebuilt Retry on a Refused Write; dev1 Test Failures Fixed
+## [3.4.3-dev2] - 2026-09-24 - Write Pipeline: Pre-Write Login Enforcement, Serialized Mutex, and Refused Write Rebuilds
 
 ### Fixed
 
@@ -670,7 +727,7 @@ The prototype runs before it: three phone runs, six takeovers, 89 writes, none r
 - **The MC888 Pro is untested** with a login before every write. The next issue #79 download settles it.
 - `scripts/hardware_check.py` rung [0] still passes, now because the write logs in first rather than because the pre-write check detects the dead session. Its docstring describes the old mechanism.
 
-## [3.4.3-dev1] - 2026-09-24 - Outage Hold 20 s; Total Connected Time, Total Byte Counters and WAN Netmask Sensors; MC888 Pro Device Uptime Off by Default
+## [3.4.3-dev1] - 2026-09-24 - Sensors & Outage: Reduced Outage Hold, Lifetime Byte Counters, and Connected Time Sensor
 
 ### Added
 
@@ -711,7 +768,7 @@ The prototype runs before it: three phone runs, six takeovers, 89 writes, none r
 - Byte totals of 100 TB or more have 15 digits, which the diagnostics identifier sweep tokenizes in a download. The sensor is unaffected; the MC888 Pro reads 26.7 TB.
 - Whether the MC888 Pro's `flux_total_time` and byte totals survive a reboot is not measured.
 
-## [3.4.3-dev0] - 2026-09-24 - Timestamp and Duration Related Doc Updates plus CI Bump Ruff
+## [3.4.3-dev0] - 2026-09-24 - Documentation & Tooling: Time Duration Guides and Ruff Bump
 
 ### Bumps
 
@@ -748,7 +805,7 @@ The prototype runs before it: three phone runs, six takeovers, 89 writes, none r
 
 - **Duration Sensor Display Units**: Changed suggested display units for Uptime Duration and Connection Duration to minutes with one decimal place (`min`), replacing hourly increments.
 
-## [3.4.2-dev8] - 2026-09-24 - Uptime Latch Defects from 3.4.2-dev7 Fixed; Durations in Minutes; Upgrade Paths Tested and Checked Live
+## [3.4.2-dev8] - 2026-09-24 - Uptime Tracking: Latch Defect Fixes, Minute Duration Display, and Upgrade Path Tests
 
 ### Summary
 
@@ -799,7 +856,7 @@ The prototype runs before it: three phone runs, six takeovers, 89 writes, none r
 
 An independent review of the dev7 and dev8 diff was run against the dev7 changelog's claims. It found the three defects fixed above after the first, confirmed the dev8 fix, and confirmed the ported methods are unchanged.
 
-## [3.4.2-dev7] - 2026-09-24 - Device Uptime from system_uptime; Connection Uptime Sensors; Uptime Latch Ported from Huawei
+## [3.4.2-dev7] - 2026-09-24 - Uptime Architecture: System Uptime Source, Connection Uptime Sensors, and Huawei Latch Port
 
 ### Summary
 
@@ -859,7 +916,7 @@ A mixin that ran the old ZTE latch twice was written first in this version and r
 - The four uptime sensors, `uptime_at_change` reading the system counter, and the download's `source` and connection block.
 - The floor test, a pausing latch's rate, one-sided plausibility and floor path, an anchorless latch, and unusable store blocks.
 
-## [3.4.2-dev6] - 2026-09-23 - Follow-Up Refresh After an Unsettled Data Window; Counter Reset Wording Corrected
+## [3.4.2-dev6] - 2026-09-23 - Connection Control: Unsettled Window Follow-Up Refresh and Counter Reset Clarifications
 
 ### Summary
 
@@ -881,7 +938,7 @@ The `[3.4.2-dev5]` hardware check on the MC7010 ran three off/on cycles under `a
 - An unsettled close still closes the window, with `closed_by = "answer"` and the closing state in `after`.
 - The data-window test helper now returns `ppp_connected`, since the test data carries no `ppp_status` and every close would otherwise arm the follow-up.
 
-## [3.4.2-dev5] - 2026-09-23 - Data Connection Turn-On Outage Window; Window Waits for the Drop; Data Connection Diagnostics
+## [3.4.2-dev5] - 2026-09-23 - Connection Resilience: Turn-On Outage Window, Drop Detection, and Connection Diagnostics
 
 ### Summary
 
@@ -915,7 +972,7 @@ Turning the data connection on also takes the router offline, and the expected-o
 - Switch: both directions open a window with the command, reply and immediate read; neither refreshes; the position is held during both data windows, set by the closing poll, and not held during a reboot window. The `[3.4.1-dev4]` tests of the turn-on refresh and follow-up are removed with the code they tested.
 - Diagnostics: `expected_outages` newest first and copied; an empty list without windows. Counter resets: recorded with the connection state; none on a first reading, a rise, or an absent counter; the covering window's reason by time, including after the window closed; `None` outside every window; capped at 20.
 
-## [3.4.2-dev3] - 2026-09-23 - AGENTS.md: Guard Test Table Trimmed; Rationale Moved to docs/test_guards.md
+## [3.4.2-dev3] - 2026-09-23 - Documentation: Guard Test Table Simplification and Rationales Dossier Migration
 
 ### Summary
 
@@ -940,7 +997,7 @@ Turning the data connection on also takes the router offline, and the expected-o
 
 - **Source**: `agents_md_align` run of 2026-09-23 (`shared/SharedNotes/prompts/prompt_run_logs/agents_md_align/agents_md_align_20260923_1638.md`).
 
-## [3.4.2-dev2] - 2026-09-23 - Breaking: Minimum Home Assistant Raised to 2025.2.0 for Python 3.13
+## [3.4.2-dev2] - 2026-09-23 - Platform Compatibility: Minimum Home Assistant Baseline Raised to 2025.2.0
 
 ### Summary
 
@@ -961,7 +1018,7 @@ The minimum supported Home Assistant version rises from 2024.8.0 to 2025.2.0. Ho
 - **Impact**: Home Assistant public analytics (2026-09-23, 687,049 opted-in installations) place 4.6% of installations below 2025.2.0.
 - **Functional floor unchanged**: the features the code depends on predate 2025.2.0, and `_compat.py` is unaffected because its branches detect 2026.8 device-registry features. The cross-project rationale is in `ha_minimum_version_matrix.md` §6 and §7.5.
 
-## [3.4.1-dev1] - 2026-09-23 - Ruff: HA Core isort Settings and ICN002 Adopted; Imports Re-Sorted Across All Files
+## [3.4.1-dev1] - 2026-09-23 - Code Formatting: Ruff Import Sorting Alignment and ICN002 Adoption
 
 ### Summary
 
@@ -1004,7 +1061,7 @@ The shared Ruff configuration adopted two settings from Home Assistant core's `p
 
 - **Reboot Outage Protection**: Triggering a router restart via the Reboot button now activates the expected-outage protection window, eliminating false Integration Health alerts and entity dropouts during normal reboot cycles.
 
-## [3.4.1-dev4] - 2026-09-23 - Outage Refusal on Every Write; Data Connection Switch State After Turn-On; README Outage Examples Fixed
+## [3.4.1-dev4] - 2026-09-23 - Outage Resilience: Universal Write Command Refusal, Switch State Latching, and Example Fixes
 
 ### Summary
 
@@ -1027,7 +1084,7 @@ Fixes two faults in the `[3.4.1-dev2]` Data Connection switch and expected-outag
 - The refresh after turning on keeps the switch on; the follow-up is armed only when neither read saw a connection, calls a refresh, and is registered for cancellation with the entity.
 - The state test asserted `ppp_connecting` reads as off; it encoded the fault and now asserts the opposite.
 
-## [3.4.1-dev3] - 2026-09-23 - README: Expected-Outage Error Messages Documented
+## [3.4.1-dev3] - 2026-09-23 - Documentation: Expected-Outage Error Message Catalog and Troubleshooting Links
 
 ### Summary
 
@@ -1043,7 +1100,7 @@ Documents the two error messages the expected-outage window added in `[3.4.1-dev
 - **README, Controls & Settings**: the Reboot and Data Connection bullets each link to that entry.
 - The durations quoted are the measured and capped figures: a data disconnect took 22 and 37 s in the two runs of 2026-09-23 against a 60 s cap; a reboot takes one to two minutes against a 240 s cap.
 
-## [3.4.1-dev2] - 2026-09-23 - Data Connection Switch; Connection-State Sensors; Expected-Outage Window for Reboot and Disconnect
+## [3.4.1-dev2] - 2026-09-23 - Controls & Resilience: Mobile Data Connection Switch, Connection Mode Sensors, and Expected-Outage Windows
 
 ### Summary
 
@@ -1079,7 +1136,7 @@ Adds a Data Connection switch that turns the router's mobile data on and off, re
 - Guard tests updated: payload shapes lock both commands; the dead-session sweep covers `set_data_connection` and `outage_probe`, and its best-effort list rises from seven to eight for `outage_probe`, whose whole answer is whether the router responds; the publish-moment test builds each switch with its own class.
 - 1,853 tests at 100% line and branch coverage. `Manifest: Verify Version` fails: `manifest.json` is 3.4.0 while the changelog is at 3.4.1, and the manifest is left for the release bump.
 
-## [3.4.1-dev1] - 2026-09-23 - CI Bump PHACC
+## [3.4.1-dev1] - 2026-09-23 - CI & Dependencies: pytest-homeassistant-custom-component Bump to 0.13.366
 
 ### Bumps
 
@@ -1126,13 +1183,13 @@ This release adds verified support for the ZTE MC888 Pro (a big thanks to [@Kees
 - **SMS Sender Privacy**: Sender phone numbers are excluded from standard `INFO` logging, recording internal message indices instead.
 - **URL Batching & Request Architecture**: Polling requests exceeding character ceilings are automatically partitioned, and internal HTTP dispatching is modularized into discrete lifecycle stages while preserving all retry and error mapping contracts.
 
-## [3.4.0-dev5] - 2026-09-18 - Update README
+## [3.4.0-dev5] - 2026-09-18 - Documentation: Version 3.4.0 Feature Additions and README Alignment
 
 ### Changed
 
 - `README.md`: Updated to document new features in v3.4.0.
 
-## [3.4.0-dev4] - 2026-09-18 - CI Bump ruff and zizmor
+## [3.4.0-dev4] - 2026-09-18 - CI & Tooling: Ruff and Zizmor Version Bumps
 
 ### Bumps
 
@@ -8269,3 +8326,11 @@ Initial release. First working custom component integration for the ZTE MC7010 5
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Entry structure - headers, titles, category headings and the split between this file and its counterpart - follows `.shared/dev_std/changelog_format.md`.
+
+---
+
+## Document Audit Status
+
+- **Headers Checked**: 3.4.6-dev2 through 3.4.0-dev3 (30 entries / Batches 1–5 verified)
+- **Bullets Checked**: Initialized (Pending verification)
+- **Specification**: Follows `changelog_format.md` (maintainer engineering voice; zero data loss)

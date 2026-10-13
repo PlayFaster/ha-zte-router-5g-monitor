@@ -47,6 +47,28 @@ The profile is learned after the first poll, and Home Assistant fixes an entity'
 
 **Would be justified by:** a third model whose first-install defaults are wrong, or the per-model overlay growing an entry per model.
 
+Related: _Entity defaults learned from the router's answers_, which would use what the router answers and may use these declarations as one source. The research is in `.notes/info/entity_defaults_for_unseen_models.md`.
+
+### Entity defaults learned from the router's answers
+
+#### **Value ⭐⭐ · Effort Medium**
+
+For a router model with no `MODEL_OVERLAY` entry, take each entity's starting enabled state from what that router answers at setup, so a user on an unseen model starts with the entities that have values enabled and the ones that will stay blank disabled. `MODEL_OVERLAY` stays as the curated override. The first piece of work is a review of whether the idea is sound; it is built only if the review supports it.
+
+**What exists.** `entity_defaults.default_enabled(description, model)` is the single resolver, and it takes only the description's flag and the model string. A model absent from the overlay, which holds MC888 and MC7010 only, gets the flags written for the MC7010. What answers do feed is the `reset_entities` action (`enable_populated`), through the ever-populated record in `observations.py`, and polling since 3.4.4-dev2. Defaults are the one place a router's answers play no part unless the user runs the action.
+
+**Why this is a different question from the one parked on 2026-09-02.** That decision weighed a per-entry default against the MC7010 and found it would suppress nothing: nine sensor descriptions read only empty keys, and all nine were already disabled by category. That holds for the reference device and says nothing about a model nobody owns. The basis here is compatibility for unseen models. Cleaner or lighter polling is not the aim.
+
+**Constraints already recorded** (`divergence_review.md` §4.4, "open, not scheduled"): a key can read empty while the modem is initializing, so one poll must not suppress a working entity; a default can only be set when an entity is first created and never changes an existing one; and the evidence needs re-measurement and not latching. `entity_defaults.py` adds that being populated is not the criterion in either direction.
+
+**Pitfalls already met in building the overlay and the populated record:** a boolean entity answers `False` from an empty payload; a derived value such as `enodeb_id` is filled when its source field is empty, which made an overlay disable a sensor that worked; 5G and secondary-carrier entities read blank while the router is on LTE; and an overlay seeded from a measurement went stale when the code changed what it did with that measurement.
+
+**Both config flows already fetch data at setup.** `config_flow.py:107-108` logs in and calls `get_all_data()` before any entity exists, so evidence for first registration may already be in hand without changing the non-blocking startup. What that call returns is unread. The options considered, including awaiting the first poll and registering entities after it, are tabulated in the reference record.
+
+**Reference.** `.notes/info/entity_defaults_for_unseen_models.md` holds the full research: the current mechanism read from the code, every recorded position and its source, the hardware evidence held for the MC7010 and MC888 Pro, the lessons, the options, the questions to settle, and the Huawei project's findings from 2026-10-07. That file is reference; this entry owns the work.
+
+**Would be justified by:** the owner's request of 2026-10-07 to review the idea for unseen models, which is the review itself; a third model whose first-install defaults are wrong; or the overlay growing an entry per model. Related: _Device capabilities learned at setup_, which would supply declared capabilities as one source of evidence.
+
 ### Per-band and per-network Wi-Fi detail
 
 #### **Value ⭐⭐ · Effort Medium**
@@ -148,6 +170,7 @@ Forward work only. Declined and Revisit items are recorded above and are not wor
 | Reboot-on-degradation blueprint  | Maybe | ⭐⭐   | Low    |
 | Encrypted SMS sending            | Maybe | ⭐⭐   | Medium |
 | Per-band Wi-Fi detail            | Maybe | ⭐⭐   | Medium |
+| Entity defaults from router answers | Maybe | ⭐⭐ | Medium |
 | Device capabilities at setup     | Maybe | ⭐     | Medium |
 
 **Current state.** 132 entities across four sub-devices, 123 carrying `about` notes. 2129 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
@@ -167,12 +190,13 @@ Items that were on this roadmap and have since been built. Detail is in `CHANGEL
 | **Cross-model verification** | Original item, merged 2026-08-01 | Three diagnostics downloads arrived from an MC888 Pro through issue #56. The README moved from an inferred compatibility claim to **Diagnostic Capture Verified** for that model, and the prize the entry predicted — keys another model populates that this integration does not poll — produced ten alias spellings in `[3.3.9-dev11]`. **MC889 remains unverified**: no download exists for it, and no hardware is reachable. Whether the ten aliases populate on the MC888 is confirmed by the next download rather than by this item. |
 | **Band lock — read side** | Original item | `LTE Band Lock Mask` (`lte_band_lock`), disabled by default. `Network Mode Selection` covers the adjacent bearer preference. The write side is declined — see below. |
 | **Long-term history for key text sensors** | Added 2026-09-02 | `[3.3.10-dev8]`. Both approaches the entry left open were built, because they answer different questions: a per-device store holds the last 20 transitions of six values as `timestamp`, `from`, `to` and `uptime_at_change`, surfaced as unrecorded attributes; six `TOTAL_INCREASING` counters put the same changes into long-term statistics, with **Firmware Changes** enabled by default. Tracks `wa_inner_version`, `wan_ipaddr`, `wan_apn`, `cell_id`, `network_provider` and `opms_wan_mode`. **eNodeB ID is deliberately not tracked**: it is derived from the cell identity, so a change of mast already appears in the `cell_id` history. |
-| **Entity defaults matched to the router model** | Added 2026-08-01 | `[3.3.10-dev7]`, corrected at `[3.3.10-dev11]`. `entity_defaults.MODEL_OVERLAY` carries a per-model set matched as a family substring, longest first; `default_enabled` resolves it and both platform setup and the `reset_entities` action call that one function, so a reset cannot undo the overlay and an existing installation can adopt it. The MC888 entry disables five entities that firmware cannot fill and enables four it can. **Two departures from the entry as written**: the overlay enables as well as disables, because on that device RSSI and SINR are the only signal-quality figures it reports; and the list is curated rather than generated, the proposed regenerating test having been dropped as invalid — it would have re-derived the one stale entry that actually occurred, since the download shows `enodeb_id` empty and the derivation fills it. |
+| **Entity defaults matched to the router model** | Added 2026-08-01 | `[3.3.10-dev7]`, corrected at `[3.3.10-dev11]`. `entity_defaults.MODEL_OVERLAY` carries a per-model set matched as a family substring, longest first; `default_enabled` resolves it and both platform setup and the `reset_entities` action call that one function, so a reset cannot undo the overlay and an existing installation can adopt it. The MC888 entry disables five entities that firmware cannot fill and enables four it can. **Two departures from the entry as written**: the overlay enables as well as disables, because on that device RSSI and SINR are the only signal-quality figures it reports; and the list is curated rather than generated, the proposed regenerating test having been dropped as invalid — it would have re-derived the one stale entry that actually occurred, since the download shows `enodeb_id` empty and the derivation fills it. **Follow-on:** a default taken from the router's own answers for models with no overlay entry is the Maybe item _Entity defaults learned from the router's answers_. |
 
 ---
 
 ## Version Control
 
+- **v3.10.0** (2026-10-07) - Added **Entity defaults learned from the router's answers** to Maybe, at the owner's request, as a review for compatibility with unseen router models. It differs from the 2026-09-02 decision in its basis: that decision asked whether the feature would suppress anything on the reference MC7010, and this one asks what an unmeasured model should start with. The research behind it, including the Huawei project's findings, is in `.notes/info/entity_defaults_for_unseen_models.md`.
 - **v3.9.1** (2026-09-30) - Current state updated to 132 entities across four sub-devices, 123 carrying `about` notes, and 2129 tests.
 - **v3.9.0** (2026-09-25) - Added **Device capabilities learned at setup** to Maybe: the router's declared capabilities as a fallback for entity defaults, at the cost of one extra read during setup.
 - **v3.8.0** (2026-09-25) - Added **Per-band and per-network Wi-Fi detail** to Maybe, from the Wi-Fi keys the MC888 Pro answers in its diagnostics downloads.

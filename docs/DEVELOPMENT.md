@@ -524,7 +524,7 @@ Check `unlearned` before trusting the rest. It names every fact the parser could
 7. **Re-run `diag_check.py` and `hardware_check.py`** on the reference MC7010. Nothing in this procedure can be verified on the new model, so the only thing measurable here is that the reference device is unharmed.
 8. **Ask for one further download** after the release, to confirm the aliases populate. Until it arrives, the changelog says the model support is unverified rather than measured.
 
-**Not part of this procedure.** Per-model disabled-entity lists are a roadmap Maybe, gated on holding downloads from several models — on the reference device the category defaults already suppress every entity a per-model list would, so the feature currently changes nothing. See `docs/ROADMAP.md` and `.notes/info/other_zte_projects/divergence_review.md` §4.4.
+**Per-model entity defaults.** Which entities start enabled is `entity_defaults.MODEL_OVERLAY`, matched on the model string and applied only at first registration. An entry states the intended suite for that model and is seeded from a download of that model, never from inference. An entity is judged through its description's own `value_fn`, after any derivation, because an entry written from a raw field disables a sensor the derivation fills: that happened to `enodeb_id` in 3.3.10-dev10. A boolean entity is judged by whether a key it reads is present, since it answers `False` from an empty payload. A model with no entry gets the curated flags written for the MC7010. Whether such a model's defaults should instead come from what the router answers is the roadmap Maybe item _Entity defaults learned from the router's answers_; the research is in `.notes/info/entity_defaults_for_unseen_models.md`. See also `.notes/info/other_zte_projects/divergence_review.md` §4.4 for the constraints recorded on that idea.
 
 ### The counter read as uptime was the data session
 
@@ -628,3 +628,4 @@ A caution for whoever reads this next. Checking `known_names.EXPECTED_NAMES` for
 - **v3.4.5-plan** (2026-09-26) — Added the measured login lockout: five attempts, a 300 s window restarted by every attempt, a correct login refused during it, and both fields readable without a session.
 - **v3.4.5-plan** (2026-09-27) — Recorded that Network Mode Config reports operator selection, not a network mode setting.
 - **v3.4.6-dev1** (2026-09-30) — Added the Mypy-configuration pitfall (§5) and the Wi-Fi client count and neighbor-cell fifth field entries (§8).
+- **v3.4.6-dev2** (2026-10-07) — §6: corrected the paragraph on per-model entity defaults. It called them a roadmap Maybe that changes nothing; the overlay shipped in 3.3.10-dev7. It now states the overlay, how an entry is judged and the open roadmap item.
