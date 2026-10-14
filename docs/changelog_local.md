@@ -375,8 +375,9 @@ Shared CI, validation pins, `tasks.json` and the prettier exclusion are brought 
 ### Documentation
 
 - **`docs/DEVELOPMENT.md` §6 per-model entity defaults**: Paragraph corrected; it described the overlay as a roadmap Maybe that changes nothing, and the overlay shipped in `3.3.10-dev7`. It now states `entity_defaults.MODEL_OVERLAY`, how an entry is judged and the open roadmap item.
-- **`docs/ROADMAP.md` v3.10.0**: Maybe item "Entity defaults learned from the router's answers" added at the owner's request of 2026-10-07, with a follow-on note on the built overlay row. Research is in `.notes/info/entity_defaults_for_unseen_models.md`.
-- **`docs/project_complexity.md`**: Remeasured 2026-10-13; 2125 tests at 100% coverage; pytest wall-clock 867.78 s to 1178.39 s.
+- **`docs/ROADMAP.md` v3.10.0**: Maybe item "Entity defaults learned from the router's answers" added at the owner's request of 2026-10-07, with a follow-on note on the built overlay row. Research is in `.notes/info/entity_defaults/entity_defaults_for_unseen_models.md`.
+- **`docs/project_complexity.md`**: Remeasured 2026-10-13; 2,134 tests at 100% coverage (19,233 test lines); pytest wall-clock 960.53 s.
+- **Internal Note Cross-References Updated**: Path citations updated across `DEVELOPMENT.md`, `ROADMAP.md`, `zte_how_to_access.md`, `sms_delete_probe.txt`, and historical changelog entries to match restructured note directories (`.notes/info/data_projection/`, `.notes/info/other_router_access/`, and `.notes/issues/plans_status/complete/`).
 
 ### Known
 
@@ -1104,7 +1105,7 @@ Documents the two error messages the expected-outage window added in `[3.4.1-dev
 
 ### Summary
 
-Adds a Data Connection switch that turns the router's mobile data on and off, renames the misnamed "Bridge Mode" sensor to Data Connection Status as a breaking change, and adds a Connection Mode Status sensor. Adds one expected-outage window, used by the new switch and by the existing Reboot button: while the router is known to be offline, polls are skipped and every other router request is refused at once with an on-screen error. Plan: `.notes/issues/data_connection/v341_dev2_plan.md`.
+Adds a Data Connection switch that turns the router's mobile data on and off, renames the misnamed "Bridge Mode" sensor to Data Connection Status as a breaking change, and adds a Connection Mode Status sensor. Adds one expected-outage window, used by the new switch and by the existing Reboot button: while the router is known to be offline, polls are skipped and every other router request is refused at once with an on-screen error. Plan: `.notes/issues/plans_status/complete/v341_dev2_plan.md`.
 
 ### Added
 
@@ -2735,7 +2736,7 @@ The reporter's probe run established two stacked faults. The session check that 
 
 - **Every formula that passed is recorded, not only the one used.** A device accepting several says something different about its firmware than one accepting exactly one.
 
-- **`1g_login_baseline`, a read-only inventory.** After a login, both batches are read and the names of the populated keys recorded - names and counts, no values, plus the `model_name` and `wa_inner_version` identity pair. It is groundwork for drawing the session-check keys from the device rather than a hand-picked list; see `.notes/issues/other_router_access/model_agnostic_session_validation.md`.
+- **`1g_login_baseline`, a read-only inventory.** After a login, both batches are read and the names of the populated keys recorded - names and counts, no values, plus the `model_name` and `wa_inner_version` identity pair. It is groundwork for drawing the session-check keys from the device rather than a hand-picked list; see `.notes/info/other_router_access/model_agnostic_session_validation.md`.
 
 ### Changed
 
@@ -2904,7 +2905,7 @@ Four diagnostics downloads on issue #56 carried `last_delete: null` while the re
 
 ### Removal required
 
-`custom_components/zte_router_5g/sms_delete_probe.py` and its action are **diagnostic scaffolding for issue #56 and must not reach a stable release.** Removing them means deleting that module, its registration in `__init__.py`, its schema, its block in `services.yaml`, its `icons.json` entry, its two suppression allow-list entries and `tests/test_sms_delete_probe.py`. Recorded as outstanding work in `.notes/issues/other_router_access/`.
+`custom_components/zte_router_5g/sms_delete_probe.py` and its action are **diagnostic scaffolding for issue #56 and must not reach a stable release.** Removing them means deleting that module, its registration in `__init__.py`, its schema, its block in `services.yaml`, its `icons.json` entry, its two suppression allow-list entries and `tests/test_sms_delete_probe.py`. Recorded as outstanding work in `.notes/info/other_router_access/`.
 
 ### Verified
 
@@ -3658,7 +3659,7 @@ Measured on the reference MC7010 on 2026-09-02: a name this firmware does not ha
 
 A diagnostics download reported names as unsupported by the firmware when the pass had simply stopped asking about them. Three separate mechanisms produced that outcome: a re-probe queue capped at 120 names, with the discarded remainder published as established absences; a probe that could lose its session and had no way to recover, so every subsequent chunk read blank; and a candidate list drawn only from each device's own web UI, conflating "this firmware does not mention the name" with "this firmware does not answer it".
 
-Measured on the reference MC7010, the cap discarded about a hundred names on every pass, and an ordinary healthy pass loses its session twice through chunk timeouts alone. The MC888 Pro key conclusions in `.notes/issues/other_router_access/` were derived from downloads carrying all three defects and are withdrawn in §6 of that document.
+Measured on the reference MC7010, the cap discarded about a hundred names on every pass, and an ordinary healthy pass loses its session twice through chunk timeouts alone. The MC888 Pro key conclusions in `.notes/info/other_router_access/` were derived from downloads carrying all three defects and are withdrawn in §6 of that document.
 
 ### Added
 
@@ -4204,7 +4205,7 @@ Issue #56: an MC888 Pro on firmware `CR_xxxxMC888PROV1.0.1B04` answers a success
 
 ### Fixed
 
-- **Login on firmware that issues no session cookie**: A login is accepted on an explicit success `result` where no `stok` cookie is present. A response carrying neither a cookie nor a success `result` remains a connection error, and the credentials-rejection classification is unchanged. Analysis: `.notes/issues/other_router_access/mc888_pro_login_failed_missing_stok_56.md`.
+- **Login on firmware that issues no session cookie**: A login is accepted on an explicit success `result` where no `stok` cookie is present. A response carrying neither a cookie nor a success `result` remains a connection error, and the credentials-rejection classification is unchanged. Analysis: `.notes/info/other_router_access/mc888_pro_login_failed_missing_stok_56.md`.
 - **Session token recovery from three further sources**: `_extract_stok` sweeps the raw `Set-Cookie` headers case-insensitively, the session cookie jar, and a `stok` key in the response body, before concluding that no cookie was issued. `SimpleCookie` morsel names are case-sensitive and it drops headers it cannot parse; `session.post` follows redirects and `r.cookies` carries only the final response, so a token set on the intermediate `302` the reporter observed is reachable only through the jar. `login()` empties the jar before posting, so anything found there was set by that request.
 
 ### Changed

@@ -21,7 +21,7 @@ Two entities remain on the Data sub-device:
 - a **Number** for the reset day (1–31), writing `traffic_clear_date`
 - a **Switch** for `wan_auto_clear_flow_data_switch`, which decides whether monthly counters roll over at all
 
-Both keys are already polled, and the switch already drives the projection sensor's suppression logic. Neither has a user-facing control. **Design detail — the entity inventory, the write path and its risks — is `.notes/info/data_cycle_and_projection_plan.md` §8 and §2.2.** That file is reference; this entry owns the work.
+Both keys are already polled, and the switch already drives the projection sensor's suppression logic. Neither has a user-facing control. **Design detail — the entity inventory, the write path and its risks — is `.notes/info/data_projection/data_cycle_and_projection_plan.md` §8 and §2.2.** That file is reference; this entry owns the work.
 
 **Both ship disabled by default**, matching the existing Data Limit Switch. Changing the reset day moves the boundary that the projection sensor and every data-cap automation reason about — not dangerous, but not a display setting either.
 
@@ -149,7 +149,7 @@ Not doing it. This one really can strand the user: it changes the router's LAN r
 
 Not doing it. `Projected Cycle Usage` extrapolates from the cycle in flight, so it is volatile in the first few days and settles as usage accumulates. Leaning on stored totals from earlier cycles would smooth those days, at the cost of a persistent cycle-history store, a fallback for a missing or corrupt store, and tests for both.
 
-**Detail.** The entry's own trigger was early-cycle volatility causing a bad automation decision, and none has been reported. `helpers.project_cycle_usage()` keeps its `prior_rate` argument; the design is in `.notes/info/data_cycle_and_projection_plan.md` §2.4 should the trigger ever occur.
+**Detail.** The entry's own trigger was early-cycle volatility causing a bad automation decision, and none has been reported. `helpers.project_cycle_usage()` keeps its `prior_rate` argument; the design is in `.notes/info/data_projection/data_cycle_and_projection_plan.md` §2.4 should the trigger ever occur.
 
 ### DNS and static address binding
 

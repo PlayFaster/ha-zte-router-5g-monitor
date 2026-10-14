@@ -25,7 +25,7 @@ evidence, because the failing path raises before anything is recorded.
 
 Remove this file, its registration in `__init__.py`, its block in
 `services.yaml`, its translation entries and its tests once the fault is
-understood. `.notes/issues/other_router_access/` records that as outstanding
+understood. `.notes/info/other_router_access/` records that as outstanding
 work so it does not rest on memory.
 
 **What it does, in order.** Every probe that risks nothing runs first: they
@@ -1862,7 +1862,7 @@ async def _run_rungs(
         # --- 1g. What does this device answer on a session seconds old? -----
         # Names and counts only, no values. Groundwork for replacing the
         # hand-picked session-check key list with one drawn from the device
-        # itself; `.notes/issues/other_router_access/` carries that plan.
+        # itself; `.notes/info/other_router_access/` carries that plan.
         #
         # **This takes an inventory. It does not test discrimination.** Knowing
         # which of these keys go blank when the session dies would need a
