@@ -8,7 +8,7 @@ Format document `roadmap_format.md` used.
 
 ---
 
-## Maybe
+## To Be Done
 
 ### Billing-cycle write controls
 
@@ -25,7 +25,9 @@ Both keys are already polled, and the switch already drives the projection senso
 
 **Both ship disabled by default**, matching the existing Data Limit Switch. Changing the reset day moves the boundary that the projection sensor and every data-cap automation reason about — not dangerous, but not a display setting either.
 
-**Would be justified by:** anyone asking for either control, or a router whose monthly counters do not roll over as the projection sensor assumes — `wan_auto_clear_flow_data_switch` already drives that suppression logic, and today there is no way for a user to see or change it.
+**Next build.** Moved from Maybe on 2026-10-15 at the owner's direction; the build plan is not yet written. The write path, both polled keys and the write classification are in place (`api.set_data_volume_settings()`, `poll_plan.py`, `scripts/write_classification.py`); the Number needs a router-write path, as `number.py` holds only the local polling interval, following `switch.py`'s `setter_fn` pattern.
+
+## Maybe
 
 ### SMS feature-group toggle
 
@@ -35,25 +37,13 @@ Two of the three polled endpoints exist solely for SMS, so a user who never send
 
 Needs a `CONF_ENABLE_SMS` option, guards on both `_fetch_optional` calls, and an exclusion in `_degraded_endpoints()` — without the last, Integration Health reports "degraded" for a capability the user deliberately switched off. `dev_standards` §15.
 
-### Device capabilities learned at setup
-
-#### **Value ⭐ · Effort Medium**
-
-The device profile learns how a router builds a write from the router's own scripts. The device-specific `config.js` those scripts load also declares capabilities, such as `WIFI_SWITCH_SUPPORT`, `HAS_BATTERY` and `HAS_FOTA`, alongside the option lists 3.4.4 reads. Where a router's live readings do not settle whether it has a feature, those declarations could decide which entities start enabled, as a fallback beside the per-model overlay.
-
-The profile is learned after the first poll, and Home Assistant fixes an entity's default when the entity is first registered, at setup. Using the declarations for defaults therefore needs one extra read of the router during setup, before the platforms load. Setup is already the slowest step, so the cost is acceptable.
-
-**Limited benefit today.** On both supported routers the live readings already show which features exist, and the per-model overlay sets the defaults from them. The gain is on models nobody has measured.
-
-**Would be justified by:** a third model whose first-install defaults are wrong, or the per-model overlay growing an entry per model.
-
-Related: _Entity defaults learned from the router's answers_, which would use what the router answers and may use these declarations as one source. The research is in `.notes/info/entity_defaults_for_unseen_models.md`.
-
-### Entity defaults learned from the router's answers
+### Entity defaults learned from the router's answers and declarations
 
 #### **Value ⭐⭐ · Effort Medium**
 
-For a router model with no `MODEL_OVERLAY` entry, take each entity's starting enabled state from what that router answers at setup, so a user on an unseen model starts with the entities that have values enabled and the ones that will stay blank disabled. `MODEL_OVERLAY` stays as the curated override. The first piece of work is a review of whether the idea is sound; it is built only if the review supports it.
+For a router model with no `MODEL_OVERLAY` entry, on a new install, disable once the default-on entities that read blank in every settled full poll, so a user on an unmeasured model does not start with a block of `unknown` entities. MC7010 and MC888 Pro installs are untouched, and `MODEL_OVERLAY` stays as the curated override.
+
+**Approach documented and evidence-checked, 2026-10-15.** The full design is section 14 of the reference record below: new entries of unmeasured models only, once; disable only; evidence from full polls taken at least 120 s after the integration's first successful poll, in at least three samples over ten minutes, an entity disabled only if blank in all of them; computed and state-dependent entities never judged (5G, carrier aggregation, rates, WAN address, `apn_profile`, `firmware_changes`, `last_updated`); `disabled_by = INTEGRATION`, so one click or the `reset_entities` action restores it. Simulated on the held data as though each model were unmeasured, the rule disables exactly the MC7010 overlay's two entities on unredacted coordinator data, and the MC888 Pro overlay's four judged entities on its downloads (section 14.5). The feasibility checks behind it (replay, the config flow's fetch, a router reboot) are section 13. A second phase, a core and extras split with extras enabled by the same evidence, is section 14.7 and not designed.
 
 **What exists.** `entity_defaults.default_enabled(description, model)` is the single resolver, and it takes only the description's flag and the model string. A model absent from the overlay, which holds MC888 and MC7010 only, gets the flags written for the MC7010. What answers do feed is the `reset_entities` action (`enable_populated`), through the ever-populated record in `observations.py`, and polling since 3.4.4-dev2. Defaults are the one place a router's answers play no part unless the user runs the action.
 
@@ -63,39 +53,39 @@ For a router model with no `MODEL_OVERLAY` entry, take each entity's starting en
 
 **Pitfalls already met in building the overlay and the populated record:** a boolean entity answers `False` from an empty payload; a derived value such as `enodeb_id` is filled when its source field is empty, which made an overlay disable a sensor that worked; 5G and secondary-carrier entities read blank while the router is on LTE; and an overlay seeded from a measurement went stale when the code changed what it did with that measurement.
 
-**Both config flows already fetch data at setup.** `config_flow.py:107-108` logs in and calls `get_all_data()` before any entity exists, so evidence for first registration may already be in hand without changing the non-blocking startup. What that call returns is unread. The options considered, including awaiting the first poll and registering entities after it, are tabulated in the reference record.
+**The config flow's fetch is not enough.** `config_flow.py:107-108` logs in and calls `get_all_data()` before any entity exists, but measured on 2026-10-15 it returns the core batch only, 118 keys against the poll's 283, and 44 working entities read blank in it. Evidence is therefore taken from the coordinator's full polls after setup and applied to the registry once (reference record §13.2, §14.2).
 
-**Reference.** `.notes/info/entity_defaults_for_unseen_models.md` holds the full research: the current mechanism read from the code, every recorded position and its source, the hardware evidence held for the MC7010 and MC888 Pro, the lessons, the options, the questions to settle, and the Huawei project's findings from 2026-10-07. That file is reference; this entry owns the work.
+**Reference.** `.notes/info/entity_defaults/entity_defaults_for_unseen_models.md` holds the full research: the current mechanism read from the code, every recorded position and its source, the hardware evidence held for the MC7010 and MC888 Pro, the lessons, the options, the questions to settle, and the Huawei project's findings from 2026-10-07. That file is reference; this entry owns the work.
 
-**Would be justified by:** the owner's request of 2026-10-07 to review the idea for unseen models, which is the review itself; a third model whose first-install defaults are wrong; or the overlay growing an entry per model. Related: _Device capabilities learned at setup_, which would supply declared capabilities as one source of evidence.
+**Declared capabilities as one source.** Merged from _Device capabilities learned at setup_ on 2026-10-15. The device-specific `config.js` the device profile already reads declares capabilities such as `WIFI_SWITCH_SUPPORT`, `HAS_BATTERY` and `HAS_FOTA`; `device_profile.parse_device_config()` extracts them, but only after the first poll. Using them for defaults needs one extra read during setup, before the platforms load. On its own the gain is small, because the live readings of both supported routers already show which features exist; as one input beside the answers it separates capability from state, which the answers alone cannot.
+
+**Huawei's design for the same problem.** `huawei_router_5g` has a layered design, not built and not agreed: `shared/ProjNotes/Notes-ha-huawei-router-5g-monitor/info/entity_defaults_and_polling_design.md`, with the task `tasks/per_model_entity_defaults.md`. The two are separate builds, because the projects differ in execution. Elements of that design to weigh here: fail open, so a layer with weak or missing evidence leaves the curated default in place; a capability rule only where two models agree, or limited to the model that showed it; a replay of every rule against each held download, with a mutation that must fail a test; value evidence taken through each description's own `value_fn` after derivations; and state-dependent groups (5G, carrier aggregation, SMS text, rates and counters) excluded from value evidence.
+
+**Would be justified by:** a third model whose first-install defaults leave many entities `unknown`, or the overlay growing an entry per model. The owner's review of 2026-10-07 is done (reference record §13 and §14).
+
+---
+
+## Blocked
 
 ### Per-band and per-network Wi-Fi detail
 
-#### **Value ⭐⭐ · Effort Medium**
+#### **Value ⭐⭐ · Effort Medium once unblocked**
 
 Wi-Fi Clients Connected and Wi-Fi Enabled report totals. The MC888 Pro also answers per-radio, per-network keys: `wifi_chip1_*` and `wifi_chip2_*`, most likely the 2.4 GHz and 5 GHz radios, each with `ssid1` and `ssid2`, the main and a second network, carrying clients connected, on or off, and the client limit. It answers `guest_switch` and mesh keys as well. From these, sensors for clients per band and each network's state would be possible, disabled by default.
 
 **The keys are known from one router, through its diagnostics downloads.** Testing is the constraint: the reference MC7010 has no Wi-Fi, so nothing could be checked on hardware here, and every value's meaning would rest on a reporter's downloads.
 
-**Would be justified by:** a user asking for it who can supply downloads, or a second Wi-Fi model that answers the same keys.
+**Blocked by:** no Wi-Fi router to test on. The reference MC7010 has no Wi-Fi, so the meaning of every key would rest on one reporter's downloads. Unblocked by a user who can supply downloads, or a second Wi-Fi model that answers the same keys. Nothing else depends on it.
 
 ### Encrypted SMS sending
 
-#### **Value ⭐⭐ · Effort Medium**
+#### **Value ⭐⭐ · Effort Medium once unblocked**
 
 Newer MC888 and MC889 firmware is reported by another ZTE project to accept `SEND_SMS` only with the phone number and message encrypted, by RSA key exchange and AES-GCM. An MC888 Pro reporting to this project answers a send with success and keeps the message as a draft, which may be the same cause.
 
 The first step is read-only: the device's own web scripts, which the device profile already reads, would show whether that firmware encrypts SMS. Code follows only if they do. **Detail is `.notes/info/other_zte_projects/recent_release_assessment_20260924.md`.**
 
-**Would be justified by:** a device's web scripts showing SMS encryption, or a diagnostics download from an MC888 or MC889 whose sends are stored as drafts.
-
-### Reboot-on-degradation blueprint
-
-#### **Value ⭐⭐ · Effort Low**
-
-The README carries an auto-reboot example with the necessary glitch guards. A shipped blueprint would make it usable without copying YAML, and would put those guards beyond reach of a copy-paste error.
-
-**Would be justified by:** anyone asking for it, or evidence that the README example is being copied incorrectly. Blueprints are supported well below the current HA floor, so nothing blocks it.
+**Blocked by:** no MC888 or MC889 on newer firmware to read or test against. The reference MC7010 sends SMS unencrypted. Unblocked by a device's web scripts showing SMS encryption, or a diagnostics download from an MC888 or MC889 whose sends are stored as drafts. Nothing else depends on it.
 
 ---
 
@@ -151,6 +141,12 @@ Not doing it. `Projected Cycle Usage` extrapolates from the cycle in flight, so 
 
 **Detail.** The entry's own trigger was early-cycle volatility causing a bad automation decision, and none has been reported. `helpers.project_cycle_usage()` keeps its `prior_rate` argument; the design is in `.notes/info/data_projection/data_cycle_and_projection_plan.md` §2.4 should the trigger ever occur.
 
+### Reboot-on-degradation blueprint
+
+Not doing it. The README automation example "Auto-Reboot on a Prolonged Outage" meets the need, and a blueprint would add packaging only.
+
+**Detail.** The example carries the guards a blueprint would have locked in: a 30-minute trigger that ignores transitions from `unknown` and `unavailable`, conditions that the Data Connection switch is on and Integration Health is off, `mode: single` with a 10-minute hold after the reboot, and the reboot-loop and `manual_dial` warnings. The remaining benefit, use without copying YAML, does not justify a second artefact to maintain. Reconsidered only if users ask for a blueprint or the README example is shown to be copied incorrectly.
+
 ### DNS and static address binding
 
 Not doing it. Both are network plumbing set once at installation, and neither belongs in a monitoring integration's entity list.
@@ -165,13 +161,11 @@ Forward work only. Declined and Revisit items are recorded above and are not wor
 
 | Item                             | Group | Value  | Effort |
 | :------------------------------- | :---- | :----- | :----- |
-| Billing-cycle write controls     | Maybe | ⭐⭐⭐ | Low    |
+| Billing-cycle write controls     | To Be Done | ⭐⭐⭐ | Low    |
 | SMS feature-group toggle         | Maybe | ⭐⭐⭐ | Medium |
-| Reboot-on-degradation blueprint  | Maybe | ⭐⭐   | Low    |
-| Encrypted SMS sending            | Maybe | ⭐⭐   | Medium |
-| Per-band Wi-Fi detail            | Maybe | ⭐⭐   | Medium |
+| Encrypted SMS sending            | Blocked | ⭐⭐   | Medium |
+| Per-band Wi-Fi detail            | Blocked | ⭐⭐   | Medium |
 | Entity defaults from router answers | Maybe | ⭐⭐ | Medium |
-| Device capabilities at setup     | Maybe | ⭐     | Medium |
 
 **Current state.** 132 entities across four sub-devices, 123 carrying `about` notes. 2129 tests, 100% coverage, `ruff` and `mypy --strict` clean, hassfest passing. Conformant across the 21 `dev_standards` sections.
 
@@ -196,7 +190,11 @@ Items that were on this roadmap and have since been built. Detail is in `CHANGEL
 
 ## Version Control
 
-- **v3.10.0** (2026-10-07) - Added **Entity defaults learned from the router's answers** to Maybe, at the owner's request, as a review for compatibility with unseen router models. It differs from the 2026-09-02 decision in its basis: that decision asked whether the feature would suppress anything on the reference MC7010, and this one asks what an unmeasured model should start with. The research behind it, including the Huawei project's findings, is in `.notes/info/entity_defaults_for_unseen_models.md`.
+- **v3.14.0** (2026-10-15) - **Entity defaults learned from the router's answers and declarations**: approach documented from the feasibility checks (reference record §13 and §14): disable-only, new entries of unmeasured models only, settled full-poll evidence, an exclusion list; measured models untouched. The config flow's fetch measured as core-only and not used as evidence.
+- **v3.13.0** (2026-10-15) - Merged **Device capabilities learned at setup** into **Entity defaults learned from the router's answers and declarations**: declared capabilities are one source of evidence for the same defaults. Cross-referenced the `huawei_router_5g` design for the same problem, built separately, and listed its elements to weigh. Corrected the research record's path. At the owner's direction.
+- **v3.12.0** (2026-10-15) - Moved **Billing-cycle write controls** from Maybe to To Be Done, as the next build. Moved **Per-band and per-network Wi-Fi detail** and **Encrypted SMS sending** from Maybe to Blocked: each needs hardware this project does not have, the reference MC7010 having neither Wi-Fi nor SMS encryption. Both at the owner's direction.
+- **v3.11.0** (2026-10-15) - Moved **Reboot-on-degradation blueprint** from Maybe to Declined, at the owner's direction: the README example "Auto-Reboot on a Prolonged Outage" meets the need with its guards, and a blueprint would add packaging only.
+- **v3.10.0** (2026-10-07) - Added **Entity defaults learned from the router's answers** to Maybe, at the owner's request, as a review for compatibility with unseen router models. It differs from the 2026-09-02 decision in its basis: that decision asked whether the feature would suppress anything on the reference MC7010, and this one asks what an unmeasured model should start with. The research behind it, including the Huawei project's findings, is in `.notes/info/entity_defaults/entity_defaults_for_unseen_models.md`.
 - **v3.9.1** (2026-09-30) - Current state updated to 132 entities across four sub-devices, 123 carrying `about` notes, and 2129 tests.
 - **v3.9.0** (2026-09-25) - Added **Device capabilities learned at setup** to Maybe: the router's declared capabilities as a fallback for entity defaults, at the cost of one extra read during setup.
 - **v3.8.0** (2026-09-25) - Added **Per-band and per-network Wi-Fi detail** to Maybe, from the Wi-Fi keys the MC888 Pro answers in its diagnostics downloads.
