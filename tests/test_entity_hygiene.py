@@ -105,7 +105,7 @@ async def test_a_new_sms_logs_nothing_that_identifies_the_sender(
         domain=DOMAIN,
         version=2,
         title="ZTE 5G",
-        data={"imei": "864155042229309"},
+        data={"imei": "001010000000001"},
         options={
             CONF_HOST: "192.168.0.1",
             CONF_USERNAME: "admin",
@@ -116,7 +116,7 @@ async def test_a_new_sms_logs_nothing_that_identifies_the_sender(
     coordinator = ZTERouterDataUpdateCoordinator(hass, entry, AsyncMock())
     coordinator.last_sms_timestamp = "2026-01-01T00:00:00+00:00"
 
-    number = "+353871234567"
+    number = "+15555550123"
     with caplog.at_level(logging.DEBUG):
         coordinator._check_new_sms(
             [
@@ -343,9 +343,9 @@ async def _live_entities(hass: HomeAssistant):
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=2,
-        unique_id="864155042229309",
+        unique_id="001010000000001",
         title="ZTE 5G",
-        data={"model": "MC7010", "sw_version": "V1.0.0", "imei": "864155042229309"},
+        data={"model": "MC7010", "sw_version": "V1.0.0", "imei": "001010000000001"},
         options={
             CONF_HOST: "192.168.0.1",
             CONF_USERNAME: "admin",
@@ -380,7 +380,7 @@ async def _live_entities(hass: HomeAssistant):
             return_value=[
                 {
                     "id": "1",
-                    "number_decoded": "+353871234567",
+                    "number_decoded": "+15555550123",
                     "content_decoded": "hello",
                     "date_decoded": "2026-07-27T10:00:00+00:00",
                 }

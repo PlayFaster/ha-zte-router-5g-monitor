@@ -50,7 +50,7 @@ from .conftest import MockResponse
 def _dead_core(populated: dict[str, str] | None = None) -> dict[str, str]:
     """A dead-session response: every requested key echoed back, blank."""
     payload = dict.fromkeys(_CORE_PARAMS, "")
-    payload["imei"] = "864155042229309"
+    payload["imei"] = "001010000000001"
     payload["model_name"] = "MC7010"
     if populated:
         payload.update(populated)
@@ -94,13 +94,13 @@ def test_a_complete_dead_session_response_is_still_expired() -> None:
 
 def test_a_response_missing_most_of_its_request_is_not_ruled_on() -> None:
     """Losing most of what was asked for is truncation or drift, not expiry."""
-    partial = {"network_type": "", "signalbar": "", "imei": "864155042229309"}
+    partial = {"network_type": "", "signalbar": "", "imei": "001010000000001"}
     assert _classify_session(partial, _CORE_PARAMS) == "undecidable"
 
 
 def test_the_rule_is_skipped_when_the_request_is_unknown() -> None:
     """Every caller but the two batch reads passes no key list."""
-    partial = {"network_type": "", "signalbar": "", "imei": "864155042229309"}
+    partial = {"network_type": "", "signalbar": "", "imei": "001010000000001"}
     assert _classify_session(partial) == "expired"
 
 
@@ -274,7 +274,7 @@ async def test_login_metadata_never_carries_a_cookie_value(mock_aiohttp_client):
 
 def test_a_request_of_only_unauthenticated_keys_skips_the_guard() -> None:
     """Nothing authenticated was asked for, so there is no proportion to take."""
-    payload = {"network_type": "", "signalbar": "", "imei": "864155042229309"}
+    payload = {"network_type": "", "signalbar": "", "imei": "001010000000001"}
     assert _classify_session(payload, ["imei", "model_name"]) == "expired"
 
 
@@ -899,9 +899,9 @@ def test_a_carrier_identity_name_is_never_published(name) -> None:
         _Tokenizer,
     )
 
-    out = _sanitize_discovery({name: "3FWA.ie"}, _Tokenizer())
+    out = _sanitize_discovery({name: "INTERNET.example"}, _Tokenizer())
 
-    assert "3FWA.ie" not in json.dumps(out)
+    assert "INTERNET.example" not in json.dumps(out)
     assert out["verdicts"][name] == "denied-name"
 
 
@@ -1402,7 +1402,7 @@ async def test_an_unauthenticated_key_is_never_chosen_as_the_canary(
     api.last_activity = datetime.now(UTC)
     api.unauthenticated_keys = frozenset({"imei", "model_name"})
     payload = dict.fromkeys(_CORE_PARAMS, "")
-    payload["imei"] = "864155042229309"
+    payload["imei"] = "001010000000001"
     payload["signalbar"] = "4"
     mock_aiohttp_client.get.return_value = MockResponse(json_data=payload)
 

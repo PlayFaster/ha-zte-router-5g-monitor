@@ -9,7 +9,7 @@ send_sms:
           integration: zte_router_5g
     target:
       description: The phone number(s) to send the SMS to.
-      example: "+353871234567"
+      example: "+15555550123"
       required: true
       selector:
         text:

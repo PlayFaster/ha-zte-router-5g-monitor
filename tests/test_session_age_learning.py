@@ -187,10 +187,10 @@ def test_the_report_says_whether_the_flag_applies_to_this_device() -> None:
     assert report["confirmed_on_firmware"] is None
     assert report["checks"]["checks"] == 0
 
-    api._session_flag_seen_for = "IRL_H3G_MC7010DV1.0.0B03"
+    api._session_flag_seen_for = "xx_xxx_MC7010DV1.0.0B03"
     report = api.session_flag_report()
     assert report["supported"] is True
-    assert report["confirmed_on_firmware"] == "IRL_H3G_MC7010DV1.0.0B03"
+    assert report["confirmed_on_firmware"] == "xx_xxx_MC7010DV1.0.0B03"
 
 
 def test_a_rejection_survives_the_live_reads_that_build_a_download() -> None:

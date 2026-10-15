@@ -595,11 +595,12 @@ def _negative_dbm(value: Any) -> float | None:
 def _enodeb_from_cell(data: dict[str, Any]) -> str | None:
     """Return the eNodeB ID the router reports, or derive it from the cell id.
 
-    Measured on the reference MC7010 on 2026-09-04: it answers `cell_id` as
-    `c8751` and `enodeb_id` as `c87`, both hex strings with no prefix, and
-    `0xc8751 >> 8` is `0xc87`. The eNodeB ID is the top 20 bits of the 28-bit
-    E-UTRAN Cell Identity and the remaining 8 are the sector — 0x51, 81, on
-    that reading, so a high sector number is ordinary here.
+    Measured on the reference MC7010 on 2026-09-04: it answers `cell_id` and
+    `enodeb_id` as hex strings with no prefix, and the reported eNodeB ID was
+    the cell id shifted right by 8; for a cell id `12d687`, `0x12d687 >> 8` is
+    `0x12d6`. The eNodeB ID is the top 20 bits of the 28-bit E-UTRAN Cell
+    Identity and the remaining 8 are the sector, and the measured sector was
+    above 80, so a high sector number is ordinary here.
 
     The MC888 Pro leaves `enodeb_id` empty while populating a cell identity,
     which is the only case this derivation runs in. That device's cell id is
@@ -1060,7 +1061,8 @@ SENSOR_TYPES: Final[tuple[ZTESensorEntityDescription, ...]] = (
         key="mdm_mcc",
         about=(
             "Mobile Country Code - a three-digit code identifying the country of the "
-            "network the modem is attached to (for example 272 = Ireland)."
+            "network the modem is attached to (for example 001 is the test network "
+            "and 310 the United States)."
         ),
         translation_key="signal_mdm_mcc",
         entity_category=EntityCategory.DIAGNOSTIC,

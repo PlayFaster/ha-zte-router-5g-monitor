@@ -231,9 +231,9 @@ def test_select_device_info(mock_coordinator, mock_config_entry):
     )
     select = ZTERouterSelect(mock_coordinator, mock_config_entry, desc)
     info = select.device_info
-    assert info["identifiers"] == {("zte_router_5g", "864155042229309_signal")}
+    assert info["identifiers"] == {("zte_router_5g", "001010000000001_signal")}
     assert info["manufacturer"] == "ZTE"
-    assert_links_to_parent(info, "zte_router_5g", "864155042229309_system")
+    assert_links_to_parent(info, "zte_router_5g", "001010000000001_system")
 
 
 def test_select_device_info_system_group(mock_coordinator, mock_config_entry):
@@ -248,7 +248,7 @@ def test_select_device_info_system_group(mock_coordinator, mock_config_entry):
     )
     select = ZTERouterSelect(mock_coordinator, mock_config_entry, desc)
     info = select.device_info
-    assert info["identifiers"] == {("zte_router_5g", "864155042229309_signal")}
+    assert info["identifiers"] == {("zte_router_5g", "001010000000001_signal")}
 
 
 @pytest.mark.asyncio
@@ -331,30 +331,30 @@ def test_select_apn_profile_empty_data(mock_coordinator, mock_config_entry):
 # --- Auto mode: the indexed profile is not the one in use --------------------
 #
 # Observed live on the reference MC7010 (2026-07-31): `apn_mode=auto`,
-# `apn_index=5` (`open.internet.public`), while traffic actually ran over
-# `3FWA.ie` — slot 6. In auto the router uses the network's default APN and
+# `apn_index=5` (`data.example`), while traffic actually ran over
+# `INTERNET.example` — slot 6. In auto the router uses the network's default APN and
 # `apn_index` merely retains the last manual choice, so showing the indexed
 # profile states something untrue.
 
 _PROFILES = {
     "APN_config0": "Default($)($)manual($)*99#($)none($)($)($)IPv4v6",
-    "APN_config5": "open.internet.public($)open.internet.public($)manual",
-    "APN_config6": "3FWA.ie($)3fwa.ie($)manual",
+    "APN_config5": "data.example($)data.example($)manual",
+    "APN_config6": "INTERNET.example($)internet.example($)manual",
 }
 
 
 def test_auto_mode_reports_the_apn_actually_in_use():
     """`wan_apn` wins over `apn_index`, matched case-insensitively.
 
-    The router reports `3FWA.ie` for a profile storing `3fwa.ie`.
+    The router reports `INTERNET.example` for a profile storing `internet.example`.
     """
     data = {
         **_PROFILES,
         "apn_mode": "auto",
         "apn_index": "5",
-        "wan_apn": "3FWA.ie",
+        "wan_apn": "INTERNET.example",
     }
-    assert _get_current_apn_profile(data) == "3FWA.ie"
+    assert _get_current_apn_profile(data) == "INTERNET.example"
 
 
 def test_auto_mode_reports_nothing_when_the_default_is_not_a_stored_profile():
@@ -405,7 +405,7 @@ def test_a_slot_with_no_profile_name_is_skipped_not_listed_blank():
     resolve to no index at all.
     """
     data = {
-        "APN_config0": "($)three.ie($)($)($)($)($)($)IP",
+        "APN_config0": "($)web.example($)($)($)($)($)($)IP",
         "APN_config1": "home($)home.apn($)($)($)($)($)($)IP",
     }
 
@@ -419,6 +419,6 @@ def test_current_profile_is_unknown_when_the_active_slot_has_no_name():
     placeholder. An empty string here would render as a selected-but-blank
     option, which reads as a working control pointing at nothing.
     """
-    data = {"apn_index": "0", "APN_config0": "($)three.ie($)($)($)($)($)($)IP"}
+    data = {"apn_index": "0", "APN_config0": "($)web.example($)($)($)($)($)($)IP"}
 
     assert _get_current_apn_profile(data) is None

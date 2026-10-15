@@ -45,9 +45,9 @@ def entry():
     return MockConfigEntry(
         domain=DOMAIN,
         version=2,
-        unique_id="864155042229309",
+        unique_id="001010000000001",
         title="ZTE 5G",
-        data={"imei": "864155042229309"},
+        data={"imei": "001010000000001"},
         options={
             CONF_HOST: "192.168.0.1",
             CONF_USERNAME: "admin",
@@ -83,7 +83,7 @@ def test_declares_problem_device_class(health) -> None:
     assert (
         INTEGRATION_HEALTH_DESCRIPTION.device_class is BinarySensorDeviceClass.PROBLEM
     )
-    assert health.unique_id == "864155042229309_integration_health"
+    assert health.unique_id == "001010000000001_integration_health"
 
 
 def test_available_before_any_poll_has_happened(health, coordinator) -> None:

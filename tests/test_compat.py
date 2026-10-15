@@ -13,7 +13,7 @@ from custom_components.zte_router_5g import _compat
 from custom_components.zte_router_5g.const import DOMAIN
 from homeassistant.core import HomeAssistant
 
-IDENT = "864155042229309_system"
+IDENT = "001010000000001_system"
 ENTRY_ID = "entry-1"
 
 

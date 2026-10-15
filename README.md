@@ -762,7 +762,7 @@ There is also an SMS received event and four SMS actions to **send, read and del
 | Parameter | Required | Description |
 | :-- | :-- | :-- |
 | `entry_id` | No | The router to use. Optional if only one router is configured. |
-| `target` | **Yes** | Recipient phone number(s) (e.g. `+1234567878`). |
+| `target` | **Yes** | Recipient phone number(s) (e.g. `+15555550123`). |
 | `message` | **Yes** | Message content. Length limit depends on the characters used - see below. |
 
 > [!NOTE]
@@ -781,7 +781,7 @@ There is also an SMS received event and four SMS actions to **send, read and del
 ```yaml
 action: zte_router_5g.send_sms
 data:
-  target: "+1234567878"
+  target: "+15555550123"
   message: "ZTE Router Test SMS Message"
 ```
 

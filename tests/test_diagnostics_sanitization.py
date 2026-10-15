@@ -22,8 +22,8 @@ FAKE_LAN_IP = "192.0.2.11"
 FAKE_IMEI = "111222333444555"
 FAKE_IMSI = "999888777666555"
 FAKE_ICCID = "8935411234567890123"
-FAKE_MSISDN = "+15550001111"
-FAKE_SENDER = "+15550002222"
+FAKE_MSISDN = "+15555550101"
+FAKE_SENDER = "+15555550102"
 FAKE_SMS_BODY = "Your verification code is 447711 - do not share it"
 # Chosen so no fixture identifier is a substring of any legitimate value below.
 # The property test scans the whole serialized document, so a cell id that
@@ -49,9 +49,9 @@ ROUTER_PAYLOAD = {
     "lte_pci": "160",
     "wan_apn": FAKE_APN,
     "network_provider": FAKE_PROVIDER,
-    "mdm_mcc": "272",
-    "mdm_mnc": "02",
-    "rmcc": "272",
+    "mdm_mcc": "001",
+    "mdm_mnc": "01",
+    "rmcc": "001",
     "rmnc": "02",
     "APN_config0": (
         "MyProfile($)($)manual($)*99#($)PAP($)apnuser($)apnsecret($)IPv4v6($)auto"

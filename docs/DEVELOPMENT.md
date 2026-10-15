@@ -222,7 +222,7 @@ Only the function the device's own script names in its token expression distingu
 
 ### Resolve state from the authoritative field, not the convenient one
 
-`apn_index` looks like it names the APN in use. It does not. While the router is in **auto** mode it connects with the network-provided default and `apn_index` merely retains the last _manual_ choice — observed live as `apn_index=5` (`open.internet.public`) while traffic ran over `3FWA.ie`, which is slot 6. The authoritative value is `wan_apn`, the **Network APN** sensor.
+`apn_index` looks like it names the APN in use. It does not. While the router is in **auto** mode it connects with the network-provided default and `apn_index` merely retains the last _manual_ choice — observed live naming one stored profile while traffic ran over the APN of another. The authoritative value is `wan_apn`, the **Network APN** sensor.
 
 The cost of getting this wrong is not a wrong label. A fix that built the switch-to-manual payload from `apn_index` would have **activated a different APN than the one working** — a worse outcome than the refusal it was written to cure. It shipped in that state for about an hour, and was caught by the project owner describing how the router actually behaves, not by any test: every test agreed with the wrong model, because the model came from the same place the code did.
 
@@ -629,3 +629,4 @@ A caution for whoever reads this next. Checking `known_names.EXPECTED_NAMES` for
 - **v3.4.5-plan** (2026-09-27) — Recorded that Network Mode Config reports operator selection, not a network mode setting.
 - **v3.4.6-dev1** (2026-09-30) — Added the Mypy-configuration pitfall (§5) and the Wi-Fi client count and neighbor-cell fifth field entries (§8).
 - **v3.4.6-dev2** (2026-10-07) — §6: corrected the paragraph on per-model entity defaults. It called them a roadmap Maybe that changes nothing; the overlay shipped in 3.3.10-dev7. It now states the overlay, how an entry is judged and the open roadmap item.
+- **v3.4.6-dev3** (2026-10-15) — §5: the `apn_index` observation stated without example values; the observation is unchanged.

@@ -16,8 +16,8 @@ from custom_components.zte_router_5g.known_names import (
 )
 
 # Synthetic numbers only.
-INTL = "+15550003333"
-NATIONAL = "07700900123"
+INTL = "+15555550103"
+NATIONAL = "05555550123"
 
 
 # ---------------------------------------------------------------------------

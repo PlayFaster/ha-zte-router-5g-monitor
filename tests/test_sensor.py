@@ -195,7 +195,7 @@ def test_sensor_error_handling(mock_coordinator, mock_config_entry):
 
 def test_sensor_device_info(mock_coordinator, mock_config_entry):
     """Test device_info for main (system), signal, data, and sms groups."""
-    mac = "864155042229309"
+    mac = "001010000000001"
 
     # System (Root) group sensor
     description = next(d for d in SENSOR_TYPES if d.key == "device_uptime")
@@ -1575,20 +1575,20 @@ def test_enodeb_id_is_reported_when_the_router_gives_it() -> None:
     """The reported value always wins; the derivation is a fallback only."""
     description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
 
-    assert description.value_fn({"enodeb_id": "c87", "cell_id": "ffffff"}) == "c87"
+    assert description.value_fn({"enodeb_id": "12d6", "cell_id": "ffffff"}) == "12d6"
 
 
 def test_enodeb_id_is_derived_from_the_cell_identity() -> None:
     """Measured on the reference MC7010 on 2026-09-04.
 
-    That device answers `cell_id` as `c8751` and `enodeb_id` as `c87`, both
-    hex with no prefix, and `0xc8751 >> 8` is `0xc87`. The derived value is
+    That device answers `cell_id` as `12d687` and `enodeb_id` as `12d6`, both
+    hex with no prefix, and `0x12d687 >> 8` is `0x12d6`. The derived value is
     formatted the same way so it is indistinguishable from a native one.
     """
     description = next(d for d in SENSOR_TYPES if d.key == "enodeb_id")
 
-    assert description.value_fn({"cell_id": "c8751"}) == "c87"
-    assert description.value_fn({"enodeb_id": "", "cell_id": "c8751"}) == "c87"
+    assert description.value_fn({"cell_id": "12d687"}) == "12d6"
+    assert description.value_fn({"enodeb_id": "", "cell_id": "12d687"}) == "12d6"
 
 
 def test_enodeb_id_derives_through_the_cell_alias() -> None:

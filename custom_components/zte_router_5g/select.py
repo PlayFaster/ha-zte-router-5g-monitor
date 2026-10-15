@@ -78,8 +78,8 @@ def _get_current_apn_profile(data: Any) -> str | None:
 
     While the router is in **auto** mode it uses the network-provided default
     APN, and `apn_index` retains whatever was last chosen manually. Observed
-    live (2026-07-31): auto mode reporting `apn_index=5`
-    (`open.internet.public`) while traffic ran over `3FWA.ie`. Showing the
+    live (2026-07-31): auto mode reporting an `apn_index` that named one
+    profile while traffic ran over the APN of another. Showing the
     indexed profile there states something untrue.
 
     So in auto mode the active APN (`wan_apn`, the **Network APN** sensor) is
@@ -154,7 +154,7 @@ SELECT_TYPES: tuple[ZTESelectEntityDescription, ...] = (
         # In auto mode the network-provided APN need not exist in the stored
         # profile list, and `_get_current_apn_profile` returns None rather
         # than naming a profile that is not in use. Observed live on an
-        # MC7010: auto mode, active APN `3FWA.ie`, one stored profile
+        # MC7010: auto mode, an active APN not stored, one stored profile
         # (`Default`, empty APN field) — no match is possible.
         unknown_is_valid=True,
         setter_fn=lambda api, option, data: _set_apn_profile_option(api, option, data),

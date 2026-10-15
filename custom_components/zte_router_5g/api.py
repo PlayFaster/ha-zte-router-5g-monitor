@@ -5355,17 +5355,17 @@ class ZTERouterAPI:
         """Work out which stored profile a manual switch should select.
 
         **`apn_index` is not authoritative while the router is in auto mode.**
-        Observed live (2026-07-31): `apn_mode=auto`, `apn_index=5`
-        (`open.internet.public`), while the APN actually carrying traffic was
-        `3FWA.ie` — profile 6. `apn_index` there is a leftover manual choice,
+        Observed live (2026-07-31): `apn_mode=auto`, with `apn_index` naming one
+        stored profile while the APN actually carrying traffic was that of
+        another. `apn_index` there is a leftover manual choice,
         not a description of what the router is doing. Building a manual switch
         from it would silently activate a different APN than the one working,
         which is a worse failure than the refusal this method exists to fix.
 
         The authoritative value is `wan_apn` (the **Network APN** sensor), so
         the active APN is matched against the profiles' APN field first, case
-        insensitively — the router reports `3FWA.ie` for a profile storing
-        `3fwa.ie`.
+        insensitively, because the router was observed to report the active APN
+        in a different letter case from the profile storing it.
 
         Returns `None` when no profile can be justified, and the caller then
         refuses rather than guessing. That is the honest outcome: in auto mode

@@ -566,11 +566,11 @@ Only the complete form is verified to _apply_ — the mode changed and `wan_apn`
 
 ### `apn_index` is not authoritative, and `wan_apn` is
 
-Observed live on the reference MC7010 (2026-07-31): `apn_mode=auto`, `apn_index=5` (`open.internet.public`), while traffic was running over `3FWA.ie` — profile **6**.
+Observed live on the reference MC7010 (2026-07-31): `apn_mode=auto`, with `apn_index` naming one stored profile while traffic was running over the APN of another.
 
 In **auto** mode the router connects with the network-provided default APN and `apn_index` merely retains the last _manual_ choice. It describes a stored preference, not what the device is doing. **`wan_apn` — the `Network APN` sensor — is the authoritative value.**
 
-This is not cosmetic. Building a switch-to-manual payload from `apn_index` would activate a different APN than the one currently working, which is a worse failure than the refusal it was written to fix. `set_apn_mode()` therefore resolves the profile by matching `wan_apn` against each profile's APN field, case insensitively (the router reports `3FWA.ie` for a profile storing `3fwa.ie`).
+This is not cosmetic. Building a switch-to-manual payload from `apn_index` would activate a different APN than the one currently working, which is a worse failure than the refusal it was written to fix. `set_apn_mode()` therefore resolves the profile by matching `wan_apn` against each profile's APN field, case insensitively (the router was observed to report the active APN in a different letter case from the profile storing it).
 
 Three consequences worth knowing before touching this code:
 
@@ -785,7 +785,7 @@ Comma-separated fields, one semicolon-terminated group per secondary cell. Obser
 
 ### `ngbr_cell_info`
 
-Neighbor cells, one entry per `;`, each five comma-separated fields: EARFCN, PCI, RSRQ, RSRP, and a fifth RSSI-shaped field. The serving cell appears among them: on 2026-09-26 the entry `9360,4,…` matched `wan_active_channel` `9360` and `lte_pci` `4`, with its third and fourth fields beside `lte_rsrq` and `lte_rsrp` across 30 samples. Up to seven entries were seen, on EARFCN `9360` and `1275`. The fifth field is unconfirmed, because `rssi` reads blank on the MC7010. No script in the 17 files the crawl reaches reads it.
+Neighbor cells, one entry per `;`, each five comma-separated fields: EARFCN, PCI, RSRQ, RSRP, and a fifth RSSI-shaped field. The serving cell appears among them: on 2026-09-26 the entry `6300,101,…` matched `wan_active_channel` `6300` and `lte_pci` `101`, with its third and fourth fields beside `lte_rsrq` and `lte_rsrp` across 30 samples. Up to seven entries were seen, on two EARFCNs. The fifth field is unconfirmed, because `rssi` reads blank on the MC7010. No script in the 17 files the crawl reaches reads it.
 
 ### `ip_passthrough_enabled`
 

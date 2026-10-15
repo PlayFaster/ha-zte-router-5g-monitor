@@ -85,7 +85,7 @@ def mock_coordinator():
     # Add flat identity attributes for modern tests
     coordinator.model = "MC7010"
     coordinator.sw_version = "V1.0.0"
-    coordinator.imei = "864155042229309"
+    coordinator.imei = "001010000000001"
     # A diagnostics download crawls the files the router serves. Against a
     # `MagicMock` api that returns mock objects for every fetch, which land in
     # the file as values no encoder can serialize. An empty crawl is the honest

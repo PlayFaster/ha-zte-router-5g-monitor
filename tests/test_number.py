@@ -200,7 +200,7 @@ async def test_device_info_system_group(mock_coordinator, mock_config_entry):
     )
 
     info = number.device_info
-    assert info["identifiers"] == {(DOMAIN, "864155042229309_system")}
+    assert info["identifiers"] == {(DOMAIN, "001010000000001_system")}
     assert info["name"] == "My ZTE Router System"
     assert info["manufacturer"] == "ZTE"
     assert info["configuration_url"] == "http://192.168.0.1"
@@ -223,7 +223,7 @@ async def test_device_info_signal_group(mock_coordinator, mock_config_entry):
     number = ZTEPollingInterval(mock_coordinator, mock_config_entry, desc, 50)
 
     info = number.device_info
-    assert_links_to_parent(info, DOMAIN, "864155042229309_system")
+    assert_links_to_parent(info, DOMAIN, "001010000000001_system")
     assert info["name"] == "My ZTE Router Signal"
 
 

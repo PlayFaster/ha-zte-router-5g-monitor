@@ -312,10 +312,10 @@ def test_a_long_withheld_value_reports_as_a_blob() -> None:
     "value",
     [
         "MyHomeNetwork",
-        "internet.provider.ie",
+        "internet.example",
         "hunter2",
-        "27205",
-        "89353081234567890123",
+        "00101",
+        "8900100000000000001",
     ],
 )
 def test_no_withheld_value_survives_its_own_classification(value: str) -> None:

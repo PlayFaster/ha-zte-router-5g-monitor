@@ -116,7 +116,7 @@ async def test_the_session_flag_state_is_published(mock_coordinator, mock_config
     mock_coordinator.api.session_flag_report = MagicMock(
         return_value={
             "supported": True,
-            "confirmed_on_firmware": "IRL_H3G_MC7010DV1.0.0B03",
+            "confirmed_on_firmware": "xx_xxx_MC7010DV1.0.0B03",
             "checks": {"checks": 4, "not_confirmed": 1},
         }
     )
@@ -125,7 +125,7 @@ async def test_the_session_flag_state_is_published(mock_coordinator, mock_config
     result = await async_get_config_entry_diagnostics(None, mock_config_entry)
 
     assert result["session_flag"]["supported"] is True
-    assert result["session_flag"]["confirmed_on_firmware"].startswith("IRL")
+    assert result["session_flag"]["confirmed_on_firmware"].startswith("xx_xxx_")
     assert result["session_flag"]["checks"]["checks"] == 4
     assert "loginfo" not in str(result["session_flag"])
 
@@ -218,7 +218,7 @@ async def test_a_source_carrying_a_known_identifier_is_swept_and_named(
     embedding a subscriber identifier would otherwise reach a file written to
     be attached to a public issue.
     """
-    mock_coordinator.data = {"imei": "864155042229309"}
+    mock_coordinator.data = {"imei": "001010000000001"}
     mock_coordinator.api.write_failures = [{"cmd": "DELETE_SMS"}]
     crawled = {
         "files": {
@@ -227,7 +227,7 @@ async def test_a_source_carrying_a_known_identifier_is_swept_and_named(
         },
         "sources": {
             "js/service.js": 'if(e.result=="success"){ok()}',
-            "js/leaky.js": 'var d="864155042229309";',
+            "js/leaky.js": 'var d="001010000000001";',
         },
         "fetched": 2,
     }
@@ -242,7 +242,7 @@ async def test_a_source_carrying_a_known_identifier_is_swept_and_named(
     section = result["web_sources"]
     assert section["sources_swept"] == ["js/leaky.js"]
     assert section["sources_are_unswept"] is False
-    assert "864155042229309" not in json.dumps(result, default=str)
+    assert "001010000000001" not in json.dumps(result, default=str)
     # The clean file is still published exactly as the router served it.
     assert section["sources"]["js/service.js"] == 'if(e.result=="success"){ok()}'
 

@@ -609,7 +609,7 @@ async def test_switch_properties(
         False,
     )
     info_signal = switch_signal.device_info
-    assert_links_to_parent(info_signal, DOMAIN, "864155042229309_system")
+    assert_links_to_parent(info_signal, DOMAIN, "001010000000001_system")
 
 
 # ---------------------------------------------------------------------------

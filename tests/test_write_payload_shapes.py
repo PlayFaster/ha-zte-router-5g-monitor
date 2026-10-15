@@ -48,8 +48,8 @@ _FULL_DATA_VOLUME = {
 _APN_STATE = {
     "apn_mode": "manual",
     "apn_index": "1",
-    "wan_apn": "3broadband.ie",
-    "APN_config1": "3broadband.ie($)3broadband.ie($)manual($)*99#($)none($)($)($)IP",
+    "wan_apn": "mobile.example",
+    "APN_config1": "mobile.example($)mobile.example($)manual($)*99#($)none($)($)($)IP",
 }
 
 # The locked shapes. Each entry is (call, expected goformId, expected fields).
@@ -129,7 +129,7 @@ _WRITES: list[tuple[str, object, str, set[str]]] = [
     ),
     (
         "send_sms",  # NOT hardware-verified by script — costs money
-        lambda api: api.send_sms("+353871234567", "hello"),
+        lambda api: api.send_sms("+15555550123", "hello"),
         "SEND_SMS",
         {"Number", "MessageBody", "ID", "encode_type", "sms_time", "notCallback"},
     ),

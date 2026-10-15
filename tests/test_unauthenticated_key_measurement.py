@@ -324,7 +324,7 @@ def test_identifier_shaped_digit_runs_are_masked() -> None:
 
     tok = _Tokenizer()
     assert _sweep("272011234567890", tok) != "272011234567890"
-    assert _sweep("8935301234567890123", tok) != "8935301234567890123"
+    assert _sweep("8900100000000000001", tok) != "8900100000000000001"
 
 
 @pytest.mark.asyncio

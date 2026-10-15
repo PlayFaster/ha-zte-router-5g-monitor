@@ -144,12 +144,12 @@ def test_channel_resolvers_accept_float_shaped_strings():
 
 # --- Billing-cycle arithmetic ---
 
-_DUB = ZoneInfo("Europe/Dublin")
+_WET = ZoneInfo("WET")
 
 
 def _local(year, month, day, hour=0, minute=0):
     """Build a timezone-aware local datetime for the cycle tests."""
-    return datetime(year, month, day, hour, minute, tzinfo=_DUB)
+    return datetime(year, month, day, hour, minute, tzinfo=_WET)
 
 
 def test_cycle_bounds_mid_month_clear_day():
@@ -205,7 +205,7 @@ def test_cycle_bounds_clamps_in_a_leap_year():
 
 def test_cycle_bounds_length_is_calendar_days_across_a_dst_change():
     """A cycle containing a 23-hour day is still a whole number of days."""
-    # Europe/Dublin springs forward on 2026-03-29.
+    # WET springs forward on 2026-03-29.
     _start, _end, length = cycle_bounds(15, _local(2026, 4, 1))
     assert length == 31
 

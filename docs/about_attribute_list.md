@@ -12,7 +12,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 >
 > **These notes are never written to your database.** They are declared as _unrecorded attributes_, so Home Assistant shows them live in the entity's details but the recorder ignores them entirely — they cost nothing to carry, however often the entity updates. See `dev_standards.md` Section 14.
 
-**117 of the 130 entities carry a note.** The other 13 deliberately do not. They are listed in full at the end, so the omissions stay visible and deliberate rather than looking like gaps.
+**126 of the 132 entities carry a note.** The other 6 deliberately do not. They are listed in full at the end, so the omissions stay visible and deliberate rather than looking like gaps.
 
 ᴰ = **disabled by default.** Enable it from the entity's settings if you want it; it is hidden to keep the default entity list manageable.
 
@@ -81,7 +81,7 @@ Most entities in this integration carry a short built-in **`about`** note — a 
 | LTE RSRQ | Sensor | `lte_rsrq` | Reference Signal Received Quality - 4G signal quality rather than raw strength, in dB. It reflects how much interference and load the cell is carrying. Typically: better than -10 is excellent, -10 to -15 good, -15 to -20 fair, below -20 poor. Strong RSRP with poor RSRQ usually means a busy cell. |
 | LTE RSSI | Sensor | `lte_rssi` | Received Signal Strength Indicator - total received power across the 4G channel, including noise and interference, in dBm. Less diagnostic than RSRP, because it cannot separate your cell's signal from everything else on the frequency. |
 | LTE SNR | Sensor | `lte_snr` | Signal-to-Noise Ratio for 4G, in dB - how far the wanted signal rises above the background noise. This is the best predictor of achievable speed. Typically: above 20 is excellent, 13 to 20 good, 0 to 13 fair, below 0 poor. |
-| MDM MCC | Sensor | `mdm_mcc` | Mobile Country Code - a three-digit code identifying the country of the network the modem is attached to (for example 272 = Ireland). |
+| MDM MCC | Sensor | `mdm_mcc` | Mobile Country Code - a three-digit code identifying the country of the network the modem is attached to (for example 001 is the test network and 310 the United States). |
 | MDM MNC | Sensor | `mdm_mnc` | Mobile Network Code - identifies the individual operator within that country. Together with the MCC it uniquely names the network you are on. |
 | Network Mode | Sensor | `net_select` | The network technology the router is currently allowed to use, as chosen by Network Mode Selection or set by picking an operator by hand. Restricting it can stabilize a connection that keeps switching between 4G and 5G. |
 | Network Mode Config | Sensor | `net_select_config` | Whether the router chooses your mobile operator itself (auto_select) or uses one you picked by hand on its network selection page (manual_select). Manual selection may limit the router to the technologies of the network you picked, such as 4G only, and changing Network Mode Selection may return it to automatic. |
@@ -185,12 +185,14 @@ The following entities carry no `about` attribute (self-explanatory or intention
 
 _The `about=` fields and `_attr_about` declarations in `custom_components/zte_router_5g/` are the source of truth for these notes. Edit them there — this file is regenerated from the **live** entity attributes by `sensor_review` (`SCOPE=About`), which is what proves a note actually reaches the user rather than merely being declared. Do not hand-edit the tables._
 
-Created: 2026-07-28 Last Updated: 2026-07-30
+Created: 2026-07-28 Last Updated: 2026-10-15
 
 ---
 
 ## Version Control
 
+- **v1.8.0** (2026-10-15) — Regenerated from live via `sensor_review` (SCOPE=About) for build 3.4.6-dev3. Coverage **119 of 132 → 126 of 132**. Seven entities that already published a note live were still listed as without one: Best Connection, Integration Health, Operator Provisioned, Reboot, Refresh Now, Polling Interval and Pause Polling. Their notes are added to the Signal and System tables and the without-note list falls from 13 to 6. Every entity declaring a note publishes it; no delivery faults. The MDM MCC note was confirmed live in its placeholder-value wording.
+- **v1.7.0** (2026-10-14) — Synchronized header coverage count to **119 of 132** entities (13 deliberate omissions) following `sensor_review` (SOURCE=Via_HAB, SCOPE=Full). Verified 119 notes active in code and delivered live.
 - **v1.6.0** (2026-09-24) — Synchronized header coverage count to **117 of 130** entities (13 deliberate omissions). Updated `Uptime Duration` about note to prune editorial advice clause per `about_notes_review`.
 - **v1.5.0** (2026-08-01) — Regenerated from live via `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) after a Home Assistant restart, verified before the fetch by confirming `Signal Bars` published its post-edit text. Coverage unchanged at **86 of 92**; the six deliberate omissions are unchanged. Eight note texts refreshed, all of them this file lagging same-day code edits: `Signal Bars` and `5G SNR` no longer say SINR, since the integration reports what the router labels SNR and cannot verify what the modem computes; `LTE RSRP` no longer competes with SNR for "the single most useful number"; `Network APN` and `APN Profile` say `unknown` rather than "blank", which is what Home Assistant actually shows for an empty value; and three notes changed `neighbouring` to `neighboring` under the US-spelling rule. No note was found missing, and every entity declaring one publishes it — no delivery faults.
 - **v1.3.0** (2026-07-30) — Regenerated from live via `sensor_review` (SOURCE=Via_HAB, SCOPE=Full) against all 92 entities with the 34 disabled ones temporarily enabled. Coverage 84 of 91 → **85 of 92**. Added `Allowance` and `Alert Threshold`; removed `Data Volume Alert`, which was **renamed in code** rather than dropped in delivery — the review confirmed separately that every entity declaring a note publishes one. Nineteen note texts updated after a rewrite pass that removed vendor-blaming and outdated display advice. The seven deliberate omissions are unchanged.

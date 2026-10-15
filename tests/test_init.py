@@ -1392,7 +1392,7 @@ async def test_a_sent_sms_is_not_reported_as_failed_when_the_refresh_fails(
     mock_hass.config_entries.async_entries.return_value = [mock_config_entry]
 
     call = MagicMock(spec=ServiceCall)
-    call.data = {"target": ["07700900000"], "message": "hello"}
+    call.data = {"target": ["05555550123"], "message": "hello"}
 
     # Must not raise.
     await async_send_sms(mock_hass, call)

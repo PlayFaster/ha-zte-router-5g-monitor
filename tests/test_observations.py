@@ -10,6 +10,7 @@ that was populated yesterday and is merely absent today.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -21,6 +22,7 @@ from custom_components.zte_router_5g.observations import (
     RESET_CAP,
     TRACKED,
     ObservationRecorder,
+    _window_reason,
     entity_keys_with_values,
 )
 
@@ -50,7 +52,7 @@ def _poll(**overrides: Any) -> dict[str, Any]:
         "wa_inner_version": "V1.0.0B01",
         "wan_ipaddr": "10.0.0.1",
         "wan_apn": "internet",
-        "cell_id": "c8751",
+        "cell_id": "12d687",
         "network_provider": "Operator",
         "opms_wan_mode": "LTE_BRIDGE",
         "realtime_time": "76194",
@@ -719,3 +721,12 @@ def test_the_resets_are_capped(recorder: ObservationRecorder) -> None:
     resets = recorder.report()["counter_resets"]
     assert len(resets) == RESET_CAP
     assert resets[0]["counter_after"] == 3
+
+
+@pytest.mark.parametrize(("reason", "expected"), [("reboot", "reboot"), (123, None)])
+def test_window_reason_returns_only_text(reason: Any, expected: str | None) -> None:
+    """A stored reason that is not text is dropped rather than returned."""
+    moment = datetime(2000, 1, 1, 0, 2, tzinfo=UTC)
+    window = {"opened": "2000-01-01T00:00:00+00:00", "closed": None, "reason": reason}
+
+    assert _window_reason(moment, moment, [window]) == expected

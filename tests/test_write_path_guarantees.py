@@ -138,8 +138,8 @@ async def test_an_id_list_carrying_a_separator_is_encoded_once() -> None:
 async def test_a_number_carrying_a_plus_is_encoded_once() -> None:
     """An international number is the everyday case for this.
 
-    `+` is a space in a form body, so an unencoded `+353…` reaches the router as
-    ` 353…`; encoded twice it reaches it as a literal `%2B`. Both send the
+    `+` is a space in a form body, so an unencoded `+1555…` reaches the router as
+    ` 1555…`; encoded twice it reaches it as a literal `%2B`. Both send the
     message to the wrong place, and the API answers `success` either way.
     """
     api = _api()
@@ -155,10 +155,10 @@ async def test_a_number_carrying_a_plus_is_encoded_once() -> None:
         patch.object(api, "_send_counters", new=AsyncMock(return_value={})),
         patch.object(api, "_classify_send", new=AsyncMock(return_value=None)),
     ):
-        await api.send_sms("+353871234567", "hello")
+        await api.send_sms("+15555550123", "hello")
 
     body = sent[0]
-    assert "Number=%2B353871234567" in body
+    assert "Number=%2B15555550123" in body
     assert "%252B" not in body, "the plus was encoded twice"
 
 

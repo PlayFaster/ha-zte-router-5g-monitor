@@ -767,7 +767,7 @@ async def test_a_send_writes_the_spellings_the_script_names() -> None:
         patch.object(api, "_send_counters", new=AsyncMock(return_value={})),
         patch.object(api, "_classify_send", new=AsyncMock(return_value=None)),
     ):
-        await api.send_sms("+353871234567", "hello")
+        await api.send_sms("+15555550123", "hello")
 
     for name in ("Number", "MessageBody", "encode_type", "ID", "sms_time"):
         assert f"&zz_{name}=" in sent[0], name

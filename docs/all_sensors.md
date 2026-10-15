@@ -176,7 +176,7 @@ A complete list of the static entities and service actions provided by the integ
 
 - **Base Unique ID**: The IMEI of the router modem (preferred) or `host_{IP}` (fallback for firmware that does not expose IMEI).
 - **Entity Unique ID**: `{{base_id}}_{{key}}`.
-- **Device Identifiers**: `{{DOMAIN}}_{{base_id}}_{{group}}` (e.g., `zte_router_5g_864155042229309_signal`).
+- **Device Identifiers**: `{{DOMAIN}}_{{base_id}}_{{group}}` (e.g., `zte_router_5g_001010000000001_signal`).
 
 ### Missing Elements Troubleshooting
 
@@ -282,3 +282,4 @@ Fetch a list of SMS messages from the router. This service returns a response pa
 - **v3.4.2-dev8** (2026-09-24) — Uptime Duration and Connection Duration display in minutes with one decimal place, from hours. No entity count change.
 - **v3.4.3-dev1** (2026-09-24) - Added Total Connected Time and WAN Netmask (System) and Total Received, Total Sent and Total Data (Data), all disabled by default. System 49 → 51, Data 15 → 18, total 125 → 130.
 - **v3.4.4-dev1** (2026-09-25) - Total Data, Data Limit Switch and Total Connected Time enabled by default on new installs. Total Connected Time no longer records long-term statistics. The three duration sensors display in hours. No entity count change.
+- **v3.4.6-dev3** (2026-10-15) - Device-identifier example aligned with `example_values.md`.

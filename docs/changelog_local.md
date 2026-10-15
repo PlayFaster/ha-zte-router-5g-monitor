@@ -17,6 +17,7 @@ All changes to this project will be documented in this file. This is the detaile
 ---
 
 - [Internal Detailed Changelog: ZTE Router 5G Monitor](#internal-detailed-changelog-zte-router-5g-monitor)
+  - [\[3.4.6-dev3\] - 2026-10-15 - Example Values and Type Checking: Standard Placeholders Adopted; Stored Outage Reason Narrowed](#346-dev3---2026-10-15---example-values-and-type-checking-standard-placeholders-adopted-stored-outage-reason-narrowed)
   - [\[3.4.6-dev2\] - 2026-10-13 - Toolchain and Documentation: Shared CI and Validation Pins Bumped; Capabilities Dossier Added](#346-dev2---2026-10-13---toolchain-and-documentation-shared-ci-and-validation-pins-bumped-capabilities-dossier-added)
   - [\[3.4.6-dev1\] - 2026-09-30 - Documentation: Entity Counts, Roadmap, and Diagnostic Note Alignment After 3.4.5](#346-dev1---2026-09-30---documentation-entity-counts-roadmap-and-diagnostic-note-alignment-after-345)
   - [\[3.4.5\] - 2026-09-30 - Release: Login Lockout Protection, Login Attempts Remaining and Neighbor Cells Sensors, and Total Connected Time Guard](#345---2026-09-30---release-login-lockout-protection-login-attempts-remaining-and-neighbor-cells-sensors-and-total-connected-time-guard)
@@ -338,6 +339,30 @@ All changes to this project will be documented in this file. This is the detaile
   - [Document Audit Status](#document-audit-status)
 
 ---
+
+## [3.4.6-dev3] - 2026-10-15 - Example Values and Type Checking: Standard Placeholders Adopted; Stored Outage Reason Narrowed
+
+### Summary
+
+Example values in the component, tests and documents now use the shared placeholders of `example_values.md` v1.2.0, so every project in the suite draws on one set. The suite leak check's term list was extended and reports no finding for this repository. The stored outage reason is narrowed to text, which satisfies Mypy 2.4.0 Strict.
+
+### Changed
+
+- **`send_sms` action example (`services.yaml`, README)**: recipient shown as `+15555550123`.
+- **MDM MCC `about` note**: example reads "001 is the test network and 310 the United States"; `docs/about_attribute_list.md` regenerated.
+- **`docs/about_attribute_list.md` coverage**: regenerated from live by `sensor_review` (`SCOPE=About`); seven entities that publish a note (Best Connection, Integration Health, Operator Provisioned, Reboot, Refresh Now, Polling Interval, Pause Polling) now listed; coverage 126 of 132, with 6 deliberate omissions.
+- **Docstrings and comments (`api.py`, `select.py`, `sensor.py`)**: observations stated without example values; the eNodeB derivation illustrated with the standard cell placeholder.
+- **Reference documents (`DEVELOPMENT.md`, `zte_how_to_access.md`, `all_sensors.md`)**: example values aligned with the standard placeholders.
+- **Earlier entries of this file**: example values aligned with `example_values.md` §3, which names the category in place of a value; wording otherwise unchanged. Recorded as an owner-directed exception to `changelog_format.md` §3.
+
+### Fixed
+
+- **Stored outage reason (`observations.py`)**: `_window_reason` returns the stored reason only when it is a `str`, otherwise `None`; clears Mypy Strict `no-any-return` and guards a malformed persisted record.
+
+### Tests
+
+- **Fixtures on standard placeholders**: phone numbers in the `+155555501xx` range, the trunk-prefix form `05555550123`, `.example` APNs, the `001`/`00101` test network, the standard device and SIM test identifiers, the `xx_xxx_` firmware prefix, and `WET` for the DST test with its dates unchanged.
+- **`test_window_reason_returns_only_text`**: text reason returned, numeric reason dropped; fails against the previous return.
 
 ## [3.4.6-dev2] - 2026-10-13 - Toolchain and Documentation: Shared CI and Validation Pins Bumped; Capabilities Dossier Added
 
@@ -3328,7 +3353,7 @@ The entity count moves from 113 to 115.
 
 ### Changed
 
-- **eNodeB ID is derived when the router leaves it empty.** Measured on the reference MC7010 on 2026-09-04: it answers `cell_id` as `c8751` and `enodeb_id` as `c87`, both hex strings with no prefix, and `0xc8751 >> 8` is `0xc87` with sector `0x51`. The derivation runs only where the field is empty and formats its result the same way, so a derived value is indistinguishable from a native one. It resolves through the cell alias, since the MC888 populates `network_cell_id` and leaves `cell_id` empty.
+- **eNodeB ID is derived when the router leaves it empty.** Measured on the reference MC7010 on 2026-09-04: it answers `cell_id` and `enodeb_id` as hex strings with no prefix, and the eNodeB ID is the cell id shifted right by 8, the low 8 bits being the sector. The derivation runs only where the field is empty and formats its result the same way, so a derived value is indistinguishable from a native one. It resolves through the cell alias, since the MC888 populates `network_cell_id` and leaves `cell_id` empty.
 - **A switch whose state key is absent reports unavailable rather than Off.** Every switch `value_fn` resolves a missing value to `False`, so a router without the setting - the MC888 Pro is an indoor unit and answers nothing for `ODU_led_switch` - showed a control in a position it had never been told, and would have accepted a write built on it. Availability follows the same alias list the value does, so the data-limit switch stays available on a device answering only the `flux_` spelling.
 - **Two names added to the extended batch**, `wifi_access_sta_num` and `wifi_onoff_state`. It stays within its URL budget at one request.
 
@@ -3889,7 +3914,7 @@ The first discovery download from the reference MC7010 published the operator's 
 ### Testing
 
 - 1097 tests, 100% branch coverage, assertion audit passing. Seven carrier-identity names asserted withheld; `result` asserted neither mined nor harvested; each of the four aliases asserted to resolve when its primary is empty; the two new sensors asserted to publish the router's value unchanged.
-- **Hardware, 17 of 17.** Live verification confirmed the seven withheld verdicts and that `3FWA.ie` and `27205` are absent from the sanitized output.
+- **Hardware, 17 of 17.** Live verification confirmed the seven withheld verdicts and that the APN and the PLMN are absent from the sanitized output.
 
 ### Notes
 
@@ -5323,7 +5348,7 @@ Category E of `sensor_review.md` had two directions - does the documented entity
 
 ### Changed - documentation
 
-- **`all_sensors.md`** - `APN Profile` now records that it reads `unknown` in auto mode when the APN in use is not a stored profile. Observed live during the review: `apn_mode = auto`, `Network APN = 3FWA.ie`, not among the stored profiles. README and the entity's own note explained it; the manifest did not.
+- **`all_sensors.md`** - `APN Profile` now records that it reads `unknown` in auto mode when the APN in use is not a stored profile. Observed live during the review: `apn_mode = auto`, the network APN not among the stored profiles. README and the entity's own note explained it; the manifest did not.
 - **`about_attribute_list.md`** - eight note texts refreshed from live, all of them this file lagging same-day code edits. Coverage unchanged at 86 of 92, six deliberate omissions unchanged.
 - **`value_min_max.md`** - new Coverage section naming the two exemptions and the test that enforces the rest, plus a warning that this document describes the code and cannot be verified from a running instance.
 
@@ -5547,7 +5572,7 @@ The rc7 fix introduced a hazard, caught before release by the project owner's de
 
 ### Fixed - a hazard introduced by the previous entry
 
-- **`set_apn_mode` resolved the profile from `apn_index`, which is meaningless in auto mode.** Observed live: `apn_mode=auto`, `apn_index=5` (`open.internet.public`), traffic running over `3FWA.ie` - profile 6. Switching to manual would have activated a **different APN than the one working**. That is worse than the refusal rc7 set out to fix, and it existed for about an hour.
+- **`set_apn_mode` resolved the profile from `apn_index`, which is meaningless in auto mode.** Observed live: `apn_mode=auto`, `apn_index` naming one stored profile, traffic running over the APN of another. Switching to manual would have activated a **different APN than the one working**. That is worse than the refusal rc7 set out to fix, and it existed for about an hour.
   - `_resolve_apn_profile()` now matches `wan_apn` (the authoritative value) against each profile's APN field, case insensitively.
   - Falls back to `apn_index` **only while already manual**, where it genuinely is the selection - the branch that makes the `Default` profile work, since its empty APN leaves `wan_apn` blank.
   - Otherwise **refuses**, pointing at the APN Profile selector. The network default need not exist in the manual list at all; on the reference device it does only because a duplicate profile was added by hand. There is no honest automatic answer, so it does not invent one.
@@ -5566,13 +5591,13 @@ The rc7 fix introduced a hazard, caught before release by the project owner's de
 
 ### Added - attended coverage completed
 
-- **`set_apn`** round-trips between two stored profiles, verifying against `wan_apn` rather than `apn_index`, and restores the selection mode afterwards because `set_apn` forces manual as a side effect. The `Default` profile is skipped as a target, since its empty APN makes verification meaningless. **Passed**: `3fwa.ie` → `3broadband.ie` → `3fwa.ie`, mode restored to auto.
+- **`set_apn`** round-trips between two stored profiles, verifying against `wan_apn` rather than `apn_index`, and restores the selection mode afterwards because `set_apn` forces manual as a side effect. The `Default` profile is skipped as a target, since its empty APN makes verification meaningless. **Passed**: the active profile → a second stored profile → the active profile, mode restored to auto.
 - **`set_data_limit_switch`** round-trips the cap, and **only from ON**. Starting from on, the risky direction is merely restoring what was there, and a crash leaves the cap off - harmless. Starting from off, the same round trip would switch enforcement _on_ and a crash could strand it, against a cap and usage figure only the owner can judge; that direction is refused rather than offered with a warning. **Passed**: on → off → on. This is the switch that had never worked in any release.
 - `reboot` remains classified ATTENDED and deliberately unscripted.
 
 ### Verified state after all exercises
 
-`apn_mode=auto`, `wan_apn=3FWA.ie`, `net_select=4G_AND_5G`, all six data-volume fields at their original values, `ppp_connected`. Checked independently of the script.
+`apn_mode=auto`, `wan_apn` unchanged, `net_select=4G_AND_5G`, all six data-volume fields at their original values, `ppp_connected`. Checked independently of the script.
 
 ## [3.3.2-rc7] - 2026-07-31 - APN Mode Selection Read-Modify-Write Payload Construction
 
@@ -7914,7 +7939,7 @@ Sensor expansion and identity anchoring. Added 12 new sensors, configured out-of
 
 - **Stable device identity**: `unique_id` now uses IMEI (hardware-bound modem identifier) instead of host IP. `config_flow.py` `_validate_credentials` returns `imei`; `async_step_user` uses `info.get("imei") or host` as unique*id. Fallback to `host*{IP}` preserved for firmware that does not expose IMEI.
 - **`coordinator.mac` → `coordinator.imei`**: Renamed across `coordinator.py`, `__init__.py`, and all 5 platform `device_info` properties (`sensor.py`, `binary_sensor.py`, `button.py`, `switch.py`, `number.py`). Sub-device identifiers now use IMEI prefix.
-- **Tests updated**: `conftest.py` fixture renamed to `coordinator.imei = "864155042229309"`; device identifier assertions updated in `test_number.py`, `test_sensor.py`, `test_binary_sensor.py`, `test_button.py`.
+- **Tests updated**: `conftest.py` fixture `coordinator.imei` renamed to an IMEI value; device identifier assertions updated in `test_number.py`, `test_sensor.py`, `test_binary_sensor.py`, `test_button.py`.
 
 ## [3.0.0-dev14] - 2026-05-07 - Diagnostics and Security: Diagnostics Platform and Reauthentication Flow
 

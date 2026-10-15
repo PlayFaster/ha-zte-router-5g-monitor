@@ -86,9 +86,9 @@ def entry():
     return MockConfigEntry(
         domain=DOMAIN,
         version=2,
-        unique_id="864155042229309",
+        unique_id="001010000000001",
         title="ZTE 5G",
-        data={"imei": "864155042229309"},
+        data={"imei": "001010000000001"},
         options={
             CONF_HOST: "192.168.0.1",
             CONF_USERNAME: "admin",

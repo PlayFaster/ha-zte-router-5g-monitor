@@ -53,9 +53,9 @@ def live_entry():
         # Must match ZTEConfigFlow.VERSION — a lower version sends the entry
         # down HA's migration path, which this integration does not implement.
         version=2,
-        unique_id="864155042229309",
+        unique_id="001010000000001",
         title="ZTE 5G",
-        data={"model": "MC7010", "sw_version": "V1.0.0", "imei": "864155042229309"},
+        data={"model": "MC7010", "sw_version": "V1.0.0", "imei": "001010000000001"},
         options={
             CONF_HOST: "192.168.0.1",
             CONF_USERNAME: "admin",

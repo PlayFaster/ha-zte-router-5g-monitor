@@ -68,7 +68,7 @@ def _full_core_response(populated: dict[str, str] | None = None) -> dict[str, st
     response = dict.fromkeys(_CORE_PARAMS, "")
     response.update(
         {
-            "imei": "864155042229309",
+            "imei": "001010000000001",
             "model_name": "MC7010",
             "wa_inner_version": "xx_xxx_MC7010DV1.0.0B03",
         }
@@ -79,7 +79,7 @@ def _full_core_response(populated: dict[str, str] | None = None) -> dict[str, st
 
 
 DEAD_SESSION_CORE = {
-    "imei": "864155042229309",
+    "imei": "001010000000001",
     "model_name": "MC7010",
     "wa_inner_version": "xx_xxx_MC7010DV1.0.0B03",
     "network_type": "",
@@ -215,7 +215,7 @@ def test_a_response_without_unauthenticated_keys_is_undecidable() -> None:
 
 def test_a_response_of_only_unauthenticated_keys_is_undecidable() -> None:
     """Nothing authenticated was asked for, so nothing is proven either way."""
-    assert _classify_session({"imei": "864155042229309"}) == "undecidable"
+    assert _classify_session({"imei": "001010000000001"}) == "undecidable"
 
 
 def test_the_spellings_of_an_unauthenticated_concept_cannot_convict() -> None:
@@ -348,9 +348,9 @@ def coordinator(hass):
     entry = MockConfigEntry(
         domain=DOMAIN,
         version=2,
-        unique_id="864155042229309",
+        unique_id="001010000000001",
         title="ZTE 5G",
-        data={"imei": "864155042229309"},
+        data={"imei": "001010000000001"},
         options={
             CONF_HOST: "192.168.0.1",
             CONF_USERNAME: "admin",

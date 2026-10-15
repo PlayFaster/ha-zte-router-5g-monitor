@@ -317,7 +317,7 @@ def test_router_switch_device_info(mock_coordinator, mock_config_entry):
     desc = SWITCH_TYPES[0]
     switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
     info = switch.device_info
-    assert info["identifiers"] == {("zte_router_5g", "864155042229309_system")}
+    assert info["identifiers"] == {("zte_router_5g", "001010000000001_system")}
     assert info["manufacturer"] == "ZTE"
 
 
@@ -326,8 +326,8 @@ def test_router_switch_device_info_data_group(mock_coordinator, mock_config_entr
     desc = SWITCH_TYPES[1]
     switch = ZTERouterSwitch(mock_coordinator, mock_config_entry, desc)
     info = switch.device_info
-    assert info["identifiers"] == {("zte_router_5g", "864155042229309_data")}
-    assert_links_to_parent(info, DOMAIN, "864155042229309_system")
+    assert info["identifiers"] == {("zte_router_5g", "001010000000001_data")}
+    assert_links_to_parent(info, DOMAIN, "001010000000001_system")
 
 
 def test_pause_polling_switch_is_on(mock_coordinator, mock_config_entry):

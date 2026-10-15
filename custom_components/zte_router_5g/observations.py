@@ -137,7 +137,9 @@ def _window_reason(
         except (KeyError, TypeError, ValueError):
             continue
         if opened <= estimated <= until + RESET_WINDOW_MARGIN:
-            return window.get("reason")
+            # A persisted record is untrusted: only a text reason is returned.
+            reason = window.get("reason")
+            return reason if isinstance(reason, str) else None
     return None
 
 

@@ -52,9 +52,9 @@ def entry():
     return MockConfigEntry(
         domain=DOMAIN,
         version=2,
-        unique_id="864155042229309",
+        unique_id="001010000000001",
         title="ZTE 5G",
-        data={"imei": "864155042229309"},
+        data={"imei": "001010000000001"},
         options={
             CONF_HOST: "192.168.0.1",
             CONF_USERNAME: "admin",
@@ -460,7 +460,7 @@ async def test_extended_fetch_failure_leaves_core_data_intact(coordinator) -> No
 async def test_extended_fetch_holds_last_good_within_budget(coordinator) -> None:
     """A glitch must not blank diagnostics on the first failed cycle."""
     coordinator.api.get_extended_data = AsyncMock(
-        return_value={"sntp_timezone": "0-1", "battery_value": "100"}
+        return_value={"sntp_timezone": "UTC0", "battery_value": "100"}
     )
     await coordinator._async_update_data()
 
@@ -469,7 +469,7 @@ async def test_extended_fetch_holds_last_good_within_budget(coordinator) -> None
     )
     for _ in range(FETCH_STRIKE_LIMIT):
         data = await coordinator._async_update_data()
-        assert data["sntp_timezone"] == "0-1"
+        assert data["sntp_timezone"] == "UTC0"
         assert coordinator.endpoint_available(ENDPOINT_EXTENDED)
 
 
